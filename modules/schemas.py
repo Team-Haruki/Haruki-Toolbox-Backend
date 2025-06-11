@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Any, Dict, Optional
 
@@ -15,3 +16,21 @@ class SekaiInheritDataRetrieverResponse(BaseModel):
     suite: Optional[bytes] = None
     mysekai: Optional[bytes] = None
     policy: Optional[str] = None
+
+
+class APIResponse(BaseModel):
+    message: str
+
+
+class InheritInformation(BaseModel):
+    inherit_id: str
+    inherit_password: str
+
+
+class DataChunk(BaseModel):
+    request_url: str
+    upload_id: str
+    chunk_index: int
+    total_chunks: int
+    time: datetime
+    data: bytes
