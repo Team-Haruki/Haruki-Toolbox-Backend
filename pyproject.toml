@@ -1,6 +1,6 @@
 [project]
 name = "Haruki-Suite-Backend"
-version = "2.0.0"
+version = "2.0.1"
 description = "User data collection project"
 requires-python = ">=3.11"
 dependencies = [
@@ -14,7 +14,7 @@ dependencies = [
     "msgpack>=1.1.0",
     "orjson>=3.10.18",
     "pyjwt>=2.10.1",
-    "pymongo>=4.13.0",
+    "pymongo>=4.13.1",
     "redis>=6.2.0",
     "ruff>=0.11.13",
     "uvloop>=0.21.0",
