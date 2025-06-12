@@ -19,7 +19,8 @@ class SekaiInheritDataRetrieverResponse(BaseModel):
 
 
 class APIResponse(BaseModel):
-    message: str
+    status: Optional[int] = 200
+    message: Optional[str] = "success"
 
 
 class InheritInformation(BaseModel):

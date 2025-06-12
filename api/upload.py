@@ -110,6 +110,7 @@ async def script_upload_data(request: Request) -> APIResponse:
             f"收到 {user_id} 的 {server}_{upload_type} 分块抓包数据上传 ({upload_id}, script_version={script_version})"
         )
         await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/{upload_type}/{user_id}")
+        await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/{upload_type}/{user_id}", query_string="key=upload_time")
 
     for upid in list(data_chunks.keys()):
         chunks = data_chunks[upid]
@@ -133,6 +134,8 @@ async def proxy_suite(
     await logger.info(f"收到来自{server}服用户{user_id}的suite反代请求")
     result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.suite, PROXY, suite_collections)
     await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{user_id}")
+    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{user_id}",
+                              query_string="key=upload_time")
     return result
 
 
@@ -147,8 +150,12 @@ async def proxy_mysekai(
     server: SupportedMysekaiUploadServer, policy: UploadPolicy, user_id: int, request: Request
 ) -> Response:
     await logger.info(f"收到来自{server}服用户{user_id}的mysekai反代请求")
-    result = await handle_proxy_upload( request, server, policy, user_id, UploadDataType.mysekai, PROXY, mysekai_collections )
+    result = await handle_proxy_upload(
+        request, server, policy, user_id, UploadDataType.mysekai, PROXY, mysekai_collections
+    )
     await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}")
+    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}",
+                              query_string="key=upload_time")
     return result
 
 
@@ -168,6 +175,8 @@ async def upload_suite_data(
     data = await request.body()
     user_id = await handle_and_update_data(data, server, policy, suite_collections)
     await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{user_id}")
+    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{user_id}",
+                              query_string="key=upload_time")
     return APIResponse(message=f"{server.value.upper()} server user {user_id} successfully uploaded suite data.")
 
 
@@ -188,6 +197,8 @@ async def upload_mysekai_data(
     data = await request.body()
     await handle_and_update_data(data, server, policy, suite_collections, user_id=user_id)
     await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}")
+    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}",
+                              query_string="key=upload_time")
     return APIResponse(message=f"{server.value.upper()} server user {user_id} successfully uploaded mysekai data.")
 
 
@@ -216,8 +227,12 @@ async def submit_inherit(
             data=result.mysekai, server=server, policy=policy, collection=mysekai_collections, user_id=result.user_id
         )
         await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{result.user_id}")
+        await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{result.user_id}",
+                                  query_string="key=upload_time")
     await handle_and_update_data(
         data=result.suite, server=server, policy=policy, collection=suite_collections, user_id=result.user_id
     )
     await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{result.user_id}")
+    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{result.user_id}",
+                              query_string="key=upload_time")
     return APIResponse(message=f"{result.server.upper()} server user {result.user_id} successfully uploaded data.")
