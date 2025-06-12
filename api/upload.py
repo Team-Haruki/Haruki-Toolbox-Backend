@@ -1,16 +1,16 @@
-import re
 from typing import Dict, List
 from datetime import timedelta, datetime
 from fastapi import APIRouter, Depends, Response, Request, HTTPException
 
-from modules.api.exception import APIException
 from modules.logger import AsyncLogger
+from modules.api.exception import APIException
 from modules.cache_helpers import clear_cache_by_path
 from modules.api.handle_data import handle_and_update_data
 from modules.sekai_client.retriever import ProjectSekaiDataRetriever
 from modules.schemas import InheritInformation, DataChunk, APIResponse
 from modules.sekai_client.proxy_call import handle_proxy_upload, api_endpoint
 from modules.api.depends import reject_en_mysekai_inherit, require_upload_type, parse_json_body
+from modules.api.helpers import extract_upload_type_and_user_id, handle_upload, get_clear_cache_paths
 from modules.enums import (
     SupportedInheritUploadServer,
     SupportedMysekaiUploadServer,
@@ -46,24 +46,14 @@ async def script_upload_data(request: Request) -> APIResponse:
     total_chunks = int(request.headers["X-Total-Chunks"])
     policy = UploadPolicy(request.headers["X-Upload-Policy"])
 
-    if UploadDataType.suite.value in original_url:
-        upload_type = UploadDataType.suite
-        match = re.search(r"user/(\d+)", original_url)
-        if not match:
-            raise HTTPException(status_code=400, detail="无法获取用户ID")
-        user_id = match.group(1)
-    elif UploadDataType.mysekai.value in original_url:
-        upload_type = UploadDataType.mysekai
-        match = re.search(r"user/(\d+)", original_url)
-        if not match:
-            raise HTTPException(status_code=400, detail="无法获取用户ID")
-        user_id = match.group(1)
-    else:
+    extracted = extract_upload_type_and_user_id(original_url)
+    if not extracted:
         await logger.error(
             f"无法识别抓包数据类型: {original_url}, upload: {upload_id},"
             f" chunk: {chunk_index + 1}/{total_chunks} script_version:{script_version}"
         )
         raise HTTPException(status_code=400, detail="无法识别上传类型")
+    upload_type, user_id = extracted
 
     server = None
     for server, _tuple in api_endpoint:
@@ -99,21 +89,21 @@ async def script_upload_data(request: Request) -> APIResponse:
     if len(data_chunks[upload_id]) == total_chunks:
         chunks = sorted(data_chunks[upload_id], key=lambda c: c.chunk_index)
         payload = b"".join(c.data for c in chunks)
-        await handle_and_update_data(
+        result = await handle_and_update_data(
             payload,
             server,
             policy,
             suite_collections if upload_type == UploadDataType.suite else mysekai_collections,
             user_id=user_id,
         )
+        if result.status != 200:
+            raise APIException(result.status, result.error_message or "Unknown Error")
         data_chunks.pop(upload_id)
         await logger.info(
             f"收到 {user_id} 的 {server}_{upload_type} 分块抓包数据上传 ({upload_id}, script_version={script_version})"
         )
-        await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/{upload_type}/{user_id}")
-        await clear_cache_by_path(
-            namespace="public_access", path=f"/public/{server}/{upload_type}/{user_id}", query_string="key=upload_time"
-        )
+        for path in get_clear_cache_paths(server, upload_type, user_id):
+            await clear_cache_by_path(**path)
 
     for upid in list(data_chunks.keys()):
         chunks = data_chunks[upid]
@@ -136,10 +126,8 @@ async def proxy_suite(
 ) -> Response:
     await logger.info(f"收到来自{server}服用户{user_id}的suite反代请求")
     result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.suite, PROXY, suite_collections)
-    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{user_id}")
-    await clear_cache_by_path(
-        namespace="public_access", path=f"/public/{server}/suite/{user_id}", query_string="key=upload_time"
-    )
+    for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):
+        await clear_cache_by_path(**path)
     return result
 
 
@@ -157,10 +145,8 @@ async def proxy_mysekai(
     result = await handle_proxy_upload(
         request, server, policy, user_id, UploadDataType.mysekai, PROXY, mysekai_collections
     )
-    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}")
-    await clear_cache_by_path(
-        namespace="public_access", path=f"/public/{server}/mysekai/{user_id}", query_string="key=upload_time"
-    )
+    for path in get_clear_cache_paths(server, UploadDataType.mysekai, user_id):
+        await clear_cache_by_path(**path)
     return result
 
 
@@ -177,13 +163,8 @@ async def upload_suite_data(
     request: Request,
     _: None = require_upload_type(UploadDataType.suite),
 ) -> APIResponse:
-    data = await request.body()
-    user_id = await handle_and_update_data(data, server, policy, suite_collections)
-    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{user_id}")
-    await clear_cache_by_path(
-        namespace="public_access", path=f"/public/{server}/suite/{user_id}", query_string="key=upload_time"
-    )
-    return APIResponse(message=f"{server.value.upper()} server user {user_id} successfully uploaded suite data.")
+    result = await handle_upload(await request.body(), server, policy, mysekai_collections, UploadDataType.mysekai.value)
+    return APIResponse(message=f"{server.value.upper()} server user {result.user_id} successfully uploaded suite data.")
 
 
 @general_upload_api.post(
@@ -200,12 +181,7 @@ async def upload_mysekai_data(
     request: Request,
     _: None = require_upload_type(UploadDataType.mysekai),
 ) -> APIResponse:
-    data = await request.body()
-    await handle_and_update_data(data, server, policy, mysekai_collections, user_id=user_id)
-    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}")
-    await clear_cache_by_path(
-        namespace="public_access", path=f"/public/{server}/mysekai/{user_id}", query_string="key=upload_time"
-    )
+    await handle_upload(await request.body(), server, policy, mysekai_collections, UploadDataType.mysekai.value, user_id)
     return APIResponse(message=f"{server.value.upper()} server user {user_id} successfully uploaded mysekai data.")
 
 
@@ -227,21 +203,11 @@ async def submit_inherit(
         server=server, inherit=data, policy=policy, upload_type=upload_type, proxy=PROXY
     )
     result = await retriever.run()
-    if not result:
+    if retriever.is_error_exist:
         raise APIException(status=400, message=retriever.client.error_message)
     if upload_type == UploadDataType.mysekai:
-        await handle_and_update_data(
-            data=result.mysekai, server=server, policy=policy, collection=mysekai_collections, user_id=result.user_id
-        )
-        await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{result.user_id}")
-        await clear_cache_by_path(
-            namespace="public_access", path=f"/public/{server}/mysekai/{result.user_id}", query_string="key=upload_time"
-        )
-    await handle_and_update_data(
-        data=result.suite, server=server, policy=policy, collection=suite_collections, user_id=result.user_id
+        await handle_upload(result.mysekai, server, policy, mysekai_collections, upload_type, result.user_id)
+    await handle_upload(result.suite, server, policy, suite_collections, UploadDataType.suite, result.user_id)
+    return APIResponse(
+        message=f"{result.server.upper()} server user {result.user_id} successfully uploaded data."
     )
-    await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/suite/{result.user_id}")
-    await clear_cache_by_path(
-        namespace="public_access", path=f"/public/{server}/suite/{result.user_id}", query_string="key=upload_time"
-    )
-    return APIResponse(message=f"{result.server.upper()} server user {result.user_id} successfully uploaded data.")
