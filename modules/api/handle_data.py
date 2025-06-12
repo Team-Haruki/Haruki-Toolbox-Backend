@@ -1,10 +1,11 @@
 import time
 import asyncio
 import traceback
-from typing import TypeVar, Dict, Union, Optional
+from typing import TypeVar, Dict, Union, Optional, Tuple
 from pymongo.asynchronous.collection import AsyncCollection
 
 from ..mongo import update_data
+from ..schemas import HandleDataResult
 from ..sekai_client.cryptor import unpack
 from ..enums import UploadPolicy, SupportedSuiteUploadServer, SupportedMysekaiUploadServer, SupportedInheritUploadServer
 
@@ -30,14 +31,16 @@ async def handle_and_update_data(
     policy: UploadPolicy,
     collection: AsyncCollection,
     user_id: int = None,
-) -> Optional[int]:
+) -> Optional[HandleDataResult]:
     try:
         data = await asyncio.to_thread(unpack, data, SupportedSuiteUploadServer(str(server)))
         if not user_id:
             user_id = data.get("userGamedata", {}).get("userId", None)
         data = await pre_handle_data(data, user_id, policy, server)
+        if "httpStatus" in data:
+            return HandleDataResult(status=data.get("httpStatus", 403), error_message=data.get("errorCode", "error"))
         await update_data(user_id, data, collection)
-        return user_id
+        return HandleDataResult(user_id=user_id)
     except:
         traceback.print_exc()
         return None

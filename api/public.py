@@ -56,6 +56,7 @@ async def get_user(
             "userMysekaiCharacterTalks",
             "userChallengeLiveSoloStages",
             "userChallengeLiveSoloResults",
+            "userChallengeLiveSoloHighScoreRewards",
             "userMysekaiFixtureGameCharacterPerformanceBonuses",
         ]
         request_key = request.query_params.get("key")
