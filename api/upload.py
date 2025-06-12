@@ -3,6 +3,7 @@ from typing import Dict, List
 from datetime import timedelta, datetime
 from fastapi import APIRouter, Depends, Response, Request, HTTPException
 
+from modules.api.exception import APIException
 from modules.logger import AsyncLogger
 from modules.cache_helpers import clear_cache_by_path
 from modules.api.handle_data import handle_and_update_data
@@ -200,7 +201,7 @@ async def upload_mysekai_data(
     _: None = require_upload_type(UploadDataType.mysekai),
 ) -> APIResponse:
     data = await request.body()
-    await handle_and_update_data(data, server, policy, suite_collections, user_id=user_id)
+    await handle_and_update_data(data, server, policy, mysekai_collections, user_id=user_id)
     await clear_cache_by_path(namespace="public_access", path=f"/public/{server}/mysekai/{user_id}")
     await clear_cache_by_path(
         namespace="public_access", path=f"/public/{server}/mysekai/{user_id}", query_string="key=upload_time"
@@ -227,7 +228,7 @@ async def submit_inherit(
     )
     result = await retriever.run()
     if not result:
-        raise HTTPException(status_code=500, detail=result.error_message)
+        raise APIException(status=400, message=retriever.client.error_message)
     if upload_type == UploadDataType.mysekai:
         await handle_and_update_data(
             data=result.mysekai, server=server, policy=policy, collection=mysekai_collections, user_id=result.user_id
