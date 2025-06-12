@@ -12,7 +12,10 @@ public_api = APIRouter(prefix="/public/{server}/{data_type}")
 
 
 @public_api.get(
-    "/{user_id}", response_model=None, summary="获取玩家数据", description="根据传入的游戏服务器、玩家uid与获取数据的类型获取玩家的数据"
+    "/{user_id}",
+    response_model=None,
+    summary="获取玩家数据",
+    description="根据传入的游戏服务器、玩家uid与获取数据的类型获取玩家的数据",
 )
 @cache(expire=300, namespace="public_access", coder=ORJsonCoder, key_builder=cache_key_builder)  # type: ignore
 async def get_user(
