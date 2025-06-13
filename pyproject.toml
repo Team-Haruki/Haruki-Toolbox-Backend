@@ -1,6 +1,6 @@
 [project]
 name = "Haruki-Suite-Backend"
-version = "2.1.0"
+version = "2.2.0"
 description = "User data collection project"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,7 +11,7 @@ dependencies = [
     "fastapi-cache2>=0.2.2",
     "greenlet>=3.2.3",
     "hypercorn>=0.17.3",
-    "msgpack>=1.1.0",
+    "msgpack>=1.1.1",
     "orjson>=3.10.18",
     "pyjwt>=2.10.1",
     "pymongo>=4.13.1",

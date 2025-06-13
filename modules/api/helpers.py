@@ -1,10 +1,10 @@
 import re
 from typing import Optional, Tuple, Union
-from pymongo.asynchronous.collection import AsyncCollection
 
 from modules.api.exception import APIException
 from modules.cache_helpers import clear_cache_by_path
 from modules.api.handle_data import handle_and_update_data
+from modules.mongo import MongoDBManager
 from modules.schemas import HandleDataResult
 from modules.enums import (
     SupportedInheritUploadServer,
@@ -13,7 +13,6 @@ from modules.enums import (
     UploadDataType,
     UploadPolicy,
 )
-from utils import suite_collections, mysekai_collections
 
 
 def get_clear_cache_paths(
@@ -23,7 +22,11 @@ def get_clear_cache_paths(
 ) -> list:
     return [
         {"namespace": "public_access", "path": f"/public/{server}/{data_type}/{user_id}"},
-        {"namespace": "public_access", "path": f"/public/{server}/{data_type}/{user_id}", "query_string": "key=upload_time"},
+        {
+            "namespace": "public_access",
+            "path": f"/public/{server}/{data_type}/{user_id}",
+            "query_string": "key=upload_time",
+        },
     ]
 
 
@@ -31,11 +34,11 @@ async def handle_upload(
     data: bytes,
     server: Union[SupportedSuiteUploadServer, SupportedMysekaiUploadServer, SupportedInheritUploadServer],
     policy: UploadPolicy,
-    collection: AsyncCollection,
+    manager: MongoDBManager,
     data_type: UploadDataType,
     user_id: int = None,
 ) -> Optional[HandleDataResult]:
-    result = await handle_and_update_data(data, server, policy, collection, user_id=user_id)
+    result = await handle_and_update_data(data, server, policy, manager, data_type, user_id=user_id)
     if not user_id:
         user_id = result.user_id
     if result.status != 200:
