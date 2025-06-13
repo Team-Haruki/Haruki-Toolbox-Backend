@@ -2,11 +2,10 @@ from typing import Dict, Any
 from fastapi import APIRouter, Request
 from fastapi_cache.decorator import cache
 
-from modules.mongo import get_data
 from modules.api.exception import APIException
 from modules.cache_helpers import ORJsonCoder, cache_key_builder
 from modules.enums import SupportedSuiteUploadServer, UploadDataType, UploadPolicy
-from utils import suite_collections, mysekai_collections
+from utils import mongo
 
 public_api = APIRouter(prefix="/public/{server}/{data_type}")
 
@@ -21,9 +20,7 @@ public_api = APIRouter(prefix="/public/{server}/{data_type}")
 async def get_user(
     server: SupportedSuiteUploadServer, data_type: UploadDataType, user_id: int, request: Request
 ) -> Dict[str, Any]:
-    result = await get_data(
-        user_id, server, collection=mysekai_collections if data_type == UploadDataType.mysekai else suite_collections
-    )
+    result = await mongo.get_data(user_id, server, data_type)
     if not result:
         raise APIException(status=404, message="Player data not found.")
     elif result["policy"] == UploadPolicy.private:
@@ -46,6 +43,7 @@ async def get_user(
             "upload_time",
             "userProfile",
             "userCharacters",
+            "userWorldBlooms",
             "userBondsHonors",
             "userMusicResults",
             "userMysekaiGates",

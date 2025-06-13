@@ -18,7 +18,7 @@ from modules.enums import (
     UploadDataType,
     UploadPolicy,
 )
-from utils import suite_collections, mysekai_collections
+from utils import mongo
 from configs import PROXY
 
 logger = AsyncLogger(__name__, level="DEBUG")
@@ -93,7 +93,8 @@ async def script_upload_data(request: Request) -> APIResponse:
             payload,
             server,
             policy,
-            suite_collections if upload_type == UploadDataType.suite else mysekai_collections,
+            mongo,
+            upload_type,
             user_id=user_id,
         )
         if result.status != 200:
@@ -125,7 +126,7 @@ async def proxy_suite(
     server: SupportedSuiteUploadServer, policy: UploadPolicy, user_id: int, request: Request
 ) -> Response:
     await logger.info(f"收到来自{server}服用户{user_id}的suite反代请求")
-    result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.suite, PROXY, suite_collections)
+    result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.suite, PROXY, mongo)
     for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):
         await clear_cache_by_path(**path)
     return result
@@ -142,9 +143,7 @@ async def proxy_mysekai(
     server: SupportedMysekaiUploadServer, policy: UploadPolicy, user_id: int, request: Request
 ) -> Response:
     await logger.info(f"收到来自{server}服用户{user_id}的mysekai反代请求")
-    result = await handle_proxy_upload(
-        request, server, policy, user_id, UploadDataType.mysekai, PROXY, mysekai_collections
-    )
+    result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.mysekai, PROXY, mongo)
     for path in get_clear_cache_paths(server, UploadDataType.mysekai, user_id):
         await clear_cache_by_path(**path)
     return result
@@ -163,7 +162,7 @@ async def upload_suite_data(
     request: Request,
     _: None = require_upload_type(UploadDataType.suite),
 ) -> APIResponse:
-    result = await handle_upload(await request.body(), server, policy, mysekai_collections, UploadDataType.mysekai.value)
+    result = await handle_upload(await request.body(), server, policy, mongo, UploadDataType.suite.value)
     return APIResponse(message=f"{server.value.upper()} server user {result.user_id} successfully uploaded suite data.")
 
 
@@ -181,7 +180,7 @@ async def upload_mysekai_data(
     request: Request,
     _: None = require_upload_type(UploadDataType.mysekai),
 ) -> APIResponse:
-    await handle_upload(await request.body(), server, policy, mysekai_collections, UploadDataType.mysekai.value, user_id)
+    await handle_upload(await request.body(), server, policy, mongo, UploadDataType.mysekai.value, user_id)
     return APIResponse(message=f"{server.value.upper()} server user {user_id} successfully uploaded mysekai data.")
 
 
@@ -206,8 +205,6 @@ async def submit_inherit(
     if retriever.is_error_exist:
         raise APIException(status=400, message=retriever.client.error_message)
     if upload_type == UploadDataType.mysekai:
-        await handle_upload(result.mysekai, server, policy, mysekai_collections, upload_type, result.user_id)
-    await handle_upload(result.suite, server, policy, suite_collections, UploadDataType.suite, result.user_id)
-    return APIResponse(
-        message=f"{result.server.upper()} server user {result.user_id} successfully uploaded data."
-    )
+        await handle_upload(result.mysekai, server, policy, mongo, upload_type, result.user_id)
+    await handle_upload(result.suite, server, policy, mongo, UploadDataType.suite, result.user_id)
+    return APIResponse(message=f"{result.server.upper()} server user {result.user_id} successfully uploaded data.")
