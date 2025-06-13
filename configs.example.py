@@ -6,3 +6,4 @@ MYSEKAI_DB = "mysekai"
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 REDIS_PASSWORD = None
+WEBHOOK_JWT_SECRET = "secret"

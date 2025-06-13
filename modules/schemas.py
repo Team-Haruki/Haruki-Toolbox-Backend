@@ -35,3 +35,9 @@ class DataChunk(BaseModel):
     total_chunks: int
     time: datetime
     data: bytes
+
+
+class HandleDataResult(BaseModel):
+    status: Optional[int] = 200
+    error_message: Optional[str] = "error"
+    user_id: Optional[int] = None
