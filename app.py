@@ -1,3 +1,4 @@
+from pathlib import Path
 from redis.asyncio import Redis
 from fastapi import FastAPI, Request
 from fastapi_cache import FastAPICache
@@ -36,7 +37,6 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
-    root_path="/test",
 )
 app.include_router(webhook)
 app.include_router(public_api)
@@ -54,10 +54,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"],  # 与 Nginx 中一致
-    allow_headers=["Origin", "Content-Type", "Accept", "Authorization"],  # 明确指定允许的请求头
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+    allow_headers=["Origin", "Content-Type", "Accept", "Authorization"],
 )
-
+if (Path(__file__).parent / "friends/app.py").exists():
+    from friends.app import app as friends_app
+    app.mount("/misc", friends_app)
 @app.exception_handler(APIException)
 async def api_exception_handler(request: Request, exc: APIException) -> ORJSONResponse:
     return ORJSONResponse(
