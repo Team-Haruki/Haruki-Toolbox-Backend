@@ -3,7 +3,9 @@ from fastapi import FastAPI, Request
 from fastapi_cache import FastAPICache
 from contextlib import asynccontextmanager
 from fastapi.responses import ORJSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache.backends.redis import RedisBackend
+
 
 from api.webhook import webhook
 from api.public import public_api
@@ -41,7 +43,20 @@ app.include_router(public_api)
 app.include_router(private_api)
 app.include_router(ios_upload_api)
 app.include_router(general_upload_api)
-
+allowed_origins = [
+    "https://haruki.seiunx.com",
+    "https://3-3.dev",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"],  # 与 Nginx 中一致
+    allow_headers=["Origin", "Content-Type", "Accept", "Authorization"],  # 明确指定允许的请求头
+)
 
 @app.exception_handler(APIException)
 async def api_exception_handler(request: Request, exc: APIException) -> ORJSONResponse:
