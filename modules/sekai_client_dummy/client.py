@@ -5,7 +5,7 @@ from uuid import uuid4
 from base64 import b64decode
 from aiohttp import ClientSession
 from jwt import encode as encode_inherit
-from typing import Dict, Callable, Any, Union, List, Optional
+from typing import Dict, Callable, Any, Union, List, Tuple, Optional
 
 from .model import RequestData
 from ..logger import AsyncLogger
@@ -117,7 +117,7 @@ class ProjectSekaiClient(object):
         params: Dict[str, str] = None,
         data: bytes = None,
         custom_headers: Dict[str, str] = None,
-    ) -> Optional[bytes]:
+    ) -> Optional[Tuple[bytes, int]]:
         if custom_headers:
             headers = copy.deepcopy(self.headers)
             headers.update(custom_headers)
@@ -137,14 +137,14 @@ class ProjectSekaiClient(object):
                         and response.headers["X-Login-Bonus-Status"] == "true"
                     ):
                         self.login_bonus = True
-                    return await response.read()
+                    return await response.read(), response.status
                 else:
                     # await self.logger.debug(f'Calling api options: {options}')
                     await self.logger.error(
                         f"Error occurred while calling api, status: {response.status}",
                     )
                     await self.logger.error(await self.unpack_data(await response.read()))
-                    return await response.read()
+                    return await response.read(), response.status
         except asyncio.TimeoutError:
             self.is_error_exist = True
             self.error_message = "Game API request timed out."
@@ -171,7 +171,7 @@ class ProjectSekaiClient(object):
             await self.logger.info(start_message)
             if self.server == SupportedInheritUploadServer.en:
                 path += "&isAdult=True&tAge=16"
-            data = await self.call_api(
+            data, status = await self.call_api(
                 path, method="POST", data=b64decode(RequestData.General), custom_headers=inherit_token
             )
             await asyncio.sleep(1)
@@ -203,7 +203,7 @@ class ProjectSekaiClient(object):
         body = {"credential": self.credential, "deviceId": None}
         body = await self.pack_data(body)
         path = f"/"
-        result = await self.call_api(path=path, method="PUT", data=body)
+        result, status = await self.call_api(path=path, method="PUT", data=body)
         response = await self.unpack_data(result)
         await asyncio.sleep(1)
         await self.call_api(path="/system")

@@ -205,6 +205,10 @@ async def submit_inherit(
     if retriever.is_error_exist:
         raise APIException(status=400, message=retriever.client.error_message)
     if upload_type == UploadDataType.mysekai:
+        if not result.mysekai:
+            raise APIException(status=400, message="Retrieve mysekai data failed.")
         await handle_upload(result.mysekai, server, policy, mongo, upload_type, result.user_id)
+    if not result.suite:
+        raise APIException(status=400, message="Retrieve suite data failed.")
     await handle_upload(result.suite, server, policy, mongo, UploadDataType.suite, result.user_id)
     return APIResponse(message=f"{result.server.upper()} server user {result.user_id} successfully uploaded data.")

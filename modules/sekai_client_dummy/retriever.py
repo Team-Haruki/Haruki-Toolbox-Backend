@@ -44,7 +44,7 @@ class ProjectSekaiDataRetriever:
             return None
         await self.logger.info("Getting suite...")
         base_path = f""
-        suite = await self.client.call_api(path=base_path)
+        suite, status = await self.client.call_api(path=base_path)
         if suite:
             await asyncio.sleep(1)
             await self.logger.info("Calling suite...")
@@ -65,7 +65,7 @@ class ProjectSekaiDataRetriever:
                     await asyncio.create_task(self.refresh_home(friends=True))
                 else:
                     await asyncio.create_task(self.refresh_home())
-            return suite
+            return suite if status == 200 else None
         else:
             self.is_error_exist = True
             self.error_message = "Failed to retrieve suite, it may be due to API response timeout."
@@ -95,18 +95,18 @@ class ProjectSekaiDataRetriever:
     async def retrieve_mysekai(self) -> Optional[bytes]:
         if self.is_error_exist:
             return None
-        response = await self.client.call_api(path="/module-maintenance/MYSEKAI")
+        response, status = await self.client.call_api(path="/module-maintenance/MYSEKAI")
         response = await self.client.unpack_data(response)
         if response["isOngoing"] is True:
             return None
-        response = await self.client.call_api(path="/module-maintenance/MYSEKAI_ROOM")
+        response, status = await self.client.call_api(path="/module-maintenance/MYSEKAI_ROOM")
         response = await self.client.unpack_data(response)
         if response["isOngoing"] is True:
             return None
-        mysekai_data = await self.client.call_api(path=f"", method="POST", data=b64decode(RequestData.General))
+        mysekai_data, status = await self.client.call_api(path=f"", method="POST", data=b64decode(RequestData.General))
         await self.client.call_api(path=f"", method="POST", data=await self.client.pack_data(RequestData.MySekaiRoom))
         await self.client.call_api(path=f"")
-        return mysekai_data
+        return mysekai_data if status == 200 else None
 
     async def run(self) -> Optional[SekaiInheritDataRetrieverResponse]:
         await self.logger.start()
