@@ -21,7 +21,7 @@ from modules.enums import (
 from utils import mongo
 from configs import PROXY
 
-logger = AsyncLogger("DataUploadAPI", level="DEBUG")
+logger = AsyncLogger(__name__, level="DEBUG")
 ios_upload_api = APIRouter(prefix="/ios")
 general_upload_api = APIRouter(prefix="/general/{server}/{upload_type}/{policy}")
 CHUNK_EXPIRE = timedelta(minutes=3)
@@ -49,7 +49,7 @@ async def script_upload_data(request: Request) -> APIResponse:
     extracted = extract_upload_type_and_user_id(original_url)
     if not extracted:
         await logger.error(
-            f"Can't recognize target data type: {original_url}, upload: {upload_id},"
+            f"无法识别抓包数据类型: {original_url}, upload: {upload_id},"
             f" chunk: {chunk_index + 1}/{total_chunks} script_version:{script_version}"
         )
         raise HTTPException(status_code=400, detail="无法识别上传类型")
@@ -62,10 +62,10 @@ async def script_upload_data(request: Request) -> APIResponse:
             break
     if not server:
         await logger.error(
-            f"Can't recognize data target server: {original_url}, upload: {upload_id},"
+            f"无法识别抓包数据游戏服务器: {original_url}, upload: {upload_id},"
             f" chunk: {chunk_index + 1}/{total_chunks} script_version:{script_version}"
         )
-        raise HTTPException(status_code=400, detail="Can't recognize data target server")
+        raise HTTPException(status_code=400, detail="无法识别游戏服务器")
 
     now = datetime.now()
     body = await request.body()
@@ -81,7 +81,7 @@ async def script_upload_data(request: Request) -> APIResponse:
     )
 
     await logger.info(
-        f"Received chunked data upload for {server} server {upload_type} request from user {user_id}"
+        f"收到 {user_id} 的 {server}_{upload_type} 分块抓包数据块上传"
         f" ({chunk_index + 1}/{total_chunks} of {upload_id}, url={original_url},"
         f" script_version={script_version})"
     )
@@ -101,7 +101,7 @@ async def script_upload_data(request: Request) -> APIResponse:
             raise APIException(result.status, result.error_message or "Unknown Error")
         data_chunks.pop(upload_id)
         await logger.info(
-            f"Received chunked data upload for {server} server {upload_type} request from user {user_id} (upload ID: {upload_id}, script version: {script_version}))"
+            f"收到 {user_id} 的 {server}_{upload_type} 分块抓包数据上传 ({upload_id}, script_version={script_version})"
         )
         for path in get_clear_cache_paths(server, upload_type, user_id):
             await clear_cache_by_path(**path)
@@ -125,7 +125,7 @@ async def script_upload_data(request: Request) -> APIResponse:
 async def proxy_suite(
     server: SupportedSuiteUploadServer, policy: UploadPolicy, user_id: int, request: Request
 ) -> Response:
-    await logger.info(f"Received a suite proxy request from user {user_id} on {server} server.")
+    await logger.info(f"收到来自{server}服用户{user_id}的suite反代请求")
     result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.suite, PROXY, mongo)
     for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):
         await clear_cache_by_path(**path)
@@ -142,7 +142,7 @@ async def proxy_suite(
 async def proxy_mysekai(
     server: SupportedMysekaiUploadServer, policy: UploadPolicy, user_id: int, request: Request
 ) -> Response:
-    await logger.info(f"Received a mysekai proxy request from user {user_id} on {server} server")
+    await logger.info(f"收到来自{server}服用户{user_id}的mysekai反代请求")
     result = await handle_proxy_upload(request, server, policy, user_id, UploadDataType.mysekai, PROXY, mongo)
     for path in get_clear_cache_paths(server, UploadDataType.mysekai, user_id):
         await clear_cache_by_path(**path)
