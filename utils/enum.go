@@ -10,11 +10,11 @@ const (
 type SupportedDataUploadServer string
 
 const (
-	SupportedSuiteUploadServerJP SupportedDataUploadServer = "jp"
-	SupportedSuiteUploadServerEN SupportedDataUploadServer = "en"
-	SupportedSuiteUploadServerTW SupportedDataUploadServer = "tw"
-	SupportedSuiteUploadServerKR SupportedDataUploadServer = "kr"
-	SupportedSuiteUploadServerCN SupportedDataUploadServer = "cn"
+	SupportedDataUploadServerJP SupportedDataUploadServer = "jp"
+	SupportedDataUploadServerEN SupportedDataUploadServer = "en"
+	SupportedDataUploadServerTW SupportedDataUploadServer = "tw"
+	SupportedDataUploadServerKR SupportedDataUploadServer = "kr"
+	SupportedDataUploadServerCN SupportedDataUploadServer = "cn"
 )
 
 type SupportedInheritUploadServer string
