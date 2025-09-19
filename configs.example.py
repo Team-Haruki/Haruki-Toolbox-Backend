@@ -1,9 +1,0 @@
-PROXY = "http://127.0.0.1:7890"
-MONGODB_DB_URL = "mongodb://user:password@host"
-MONGODB_DB = "data"
-SUITE_DB = "suite"
-MYSEKAI_DB = "mysekai"
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_PASSWORD = None
-WEBHOOK_JWT_SECRET = "secret"
