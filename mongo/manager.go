@@ -20,6 +20,22 @@ type MongoDBManager struct {
 	webhookUserCollection *mongo.Collection
 }
 
+func getInt(m map[string]interface{}, key string) int {
+	if v, ok := m[key]; ok {
+		switch n := v.(type) {
+		case int:
+			return n
+		case int32:
+			return int(n)
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		}
+	}
+	return 0
+}
+
 func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUser, webhookUserUser string) (*MongoDBManager, error) {
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(dbURL))
 	if err != nil {
@@ -42,27 +58,91 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int, data map[st
 		collection = m.mysekaiCollection
 	}
 
-	updateDoc := bson.M{}
-	setDoc := bson.M{}
-	addToSetDoc := bson.M{}
+	var oldData map[string]interface{}
+	err := collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&oldData)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		oldData = make(map[string]interface{})
+	} else if err != nil {
+		return nil, err
+	}
+
+	finalData := bson.M{}
+
+	oldEvents, _ := oldData["userEvents"].(primitive.A)
+	newEvents, _ := data["userEvents"].([]interface{})
+	allEvents := append(oldEvents, newEvents...)
+
+	latestEvents := make(map[int]map[string]interface{})
+	for _, ev := range allEvents {
+		if e, ok := ev.(map[string]interface{}); ok {
+			eventID := int(e["eventId"].(int32))
+			if old, exists := latestEvents[eventID]; !exists {
+				latestEvents[eventID] = e
+			} else {
+				newPoint := getInt(e, "eventPoint")
+				oldPoint := getInt(old, "eventPoint")
+				if newPoint > oldPoint {
+					latestEvents[eventID] = e
+				} else if newPoint == oldPoint {
+					if len(e) > len(old) {
+						latestEvents[eventID] = e
+					}
+				}
+			}
+		}
+	}
+	if len(latestEvents) > 0 {
+		arr := make([]interface{}, 0, len(latestEvents))
+		for _, v := range latestEvents {
+			arr = append(arr, v)
+		}
+		finalData["userEvents"] = arr
+	}
+
+	oldBlooms, _ := oldData["userWorldBlooms"].(primitive.A)
+	newBlooms, _ := data["userWorldBlooms"].([]interface{})
+	allBlooms := append(oldBlooms, newBlooms...)
+
+	type bloomKey struct {
+		EventID, CharID int
+	}
+	latestBlooms := make(map[bloomKey]map[string]interface{})
+	for _, bv := range allBlooms {
+		if b, ok := bv.(map[string]interface{}); ok {
+			key := bloomKey{
+				EventID: int(b["eventId"].(int32)),
+				CharID:  int(b["gameCharacterId"].(int32)),
+			}
+			if old, exists := latestBlooms[key]; !exists {
+				latestBlooms[key] = b
+			} else {
+				newPoint := getInt(b, "worldBloomChapterPoint")
+				oldPoint := getInt(old, "worldBloomChapterPoint")
+				if newPoint > oldPoint {
+					latestBlooms[key] = b
+				} else if newPoint == oldPoint {
+					if len(b) > len(old) {
+						latestBlooms[key] = b
+					}
+				}
+			}
+		}
+	}
+	if len(latestBlooms) > 0 {
+		arr := make([]interface{}, 0, len(latestBlooms))
+		for _, v := range latestBlooms {
+			arr = append(arr, v)
+		}
+		finalData["userWorldBlooms"] = arr
+	}
 
 	for key, value := range data {
-		if key == "userEvents" || key == "userWorldBlooms" {
-			if arr, ok := value.([]interface{}); ok {
-				addToSetDoc[key] = bson.M{"$each": arr}
-			}
-		} else {
-			setDoc[key] = value
+		if key != "userEvents" && key != "userWorldBlooms" {
+			finalData[key] = value
 		}
 	}
 
-	if len(setDoc) > 0 {
-		updateDoc["$set"] = setDoc
-	}
-	if len(addToSetDoc) > 0 {
-		updateDoc["$addToSet"] = addToSetDoc
-	}
-
+	updateDoc := bson.M{"$set": finalData}
 	return collection.UpdateOne(ctx,
 		bson.M{"_id": userID},
 		updateDoc,
