@@ -1,19 +1,18 @@
 package sekai
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/mongo"
-	"io"
-	"net/http"
 	urlParse "net/url"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttpproxy"
 )
 
 // 允许透传的请求头
@@ -101,64 +100,79 @@ func HarukiSekaiProxyCallAPI(
 
 	url := fmt.Sprintf(baseURL+acquirePath[dataType], userID)
 
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	if params != nil {
-		q := req.URL.Query()
+	if params != nil && len(params) > 0 {
+		q := urlParse.Values{}
 		for k, v := range params {
 			q.Set(k, v)
 		}
-		req.URL.RawQuery = q.Encode()
+		url += "?" + q.Encode()
 	}
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	req.SetRequestURI(url)
+	req.Header.SetMethod(method)
 	for k, v := range filteredHeaders {
 		req.Header.Set(k, v)
 	}
+	if len(data) > 0 {
+		req.SetBody(data)
+	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &fasthttp.Client{}
 	if proxy != "" {
 		proxyURL, err := urlParse.Parse(proxy)
 		if err != nil {
 			return nil, fmt.Errorf("invalid proxy url: %v", err)
 		}
-		client.Transport = &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
+		switch proxyURL.Scheme {
+		case "http":
+			client.Dial = fasthttpproxy.FasthttpHTTPDialer(proxyURL.Host)
+		case "https":
+			client.Dial = fasthttpproxy.FasthttpHTTPDialer(proxyURL.Host)
+		case "socks5":
+			client.Dial = fasthttpproxy.FasthttpSocksDialer(proxyURL.Host)
+		default:
+			return nil, fmt.Errorf("unsupported proxy scheme: %s", proxyURL.Scheme)
 		}
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 
-	rawBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.DoTimeout(req, resp, 15*time.Second)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errCh:
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	rawBody := append([]byte(nil), resp.Body()...)
 	unpacked, err := Unpack(rawBody, server)
 	if err != nil {
 		return nil, err
 	}
 
 	unpackedMap := preHandle(unpacked.(map[string]interface{}), userID, policy, string(server))
-
 	if dataType == harukiUtils.UploadDataTypeSuite {
 		unpackedMap = cleanSuite(unpackedMap)
 	}
 
 	newHeaders := make(map[string]string)
-	for k, v := range resp.Header {
-		if len(v) > 0 {
-			newHeaders[k] = v[0]
-		}
+	for k, v := range resp.Header.All() {
+		newHeaders[string(append([]byte(nil), k...))] = string(append([]byte(nil), v...))
 	}
 
 	return &harukiUtils.SekaiDataRetrieverResponse{
 		RawBody:       rawBody,
 		DecryptedBody: unpackedMap,
-		StatusCode:    resp.StatusCode,
+		StatusCode:    resp.StatusCode(),
 		NewHeaders:    newHeaders,
 	}, nil
 }
@@ -191,9 +205,9 @@ func HandleProxyUpload(
 		}
 
 		headers := make(map[string]string)
-		c.Request().Header.VisitAll(func(k, v []byte) {
-			headers[string(k)] = string(v)
-		})
+		for k, v := range c.Request().Header.All() {
+			headers[string(append([]byte(nil), k...))] = string(append([]byte(nil), v...))
+		}
 
 		var body []byte
 		if c.Method() == fiber.MethodPost {
