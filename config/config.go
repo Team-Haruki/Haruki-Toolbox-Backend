@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	harukiLogger "haruki-suite/utils/logger"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -38,18 +38,22 @@ type BackendConfig struct {
 }
 
 type SekaiClientConfig struct {
-	ENServerAPIHost      string   `yaml:"en_server_api_host"`
-	ENServerAESKey       string   `yaml:"en_server_aes_key"`
-	ENServerAESIV        string   `yaml:"en_server_aes_iv"`
-	JPServerAPIHost      string   `yaml:"jp_server_api_host"`
-	TWServerAPIHost      string   `yaml:"tw_server_api_host"`
-	KRServerAPIHost      string   `yaml:"kr_server_api_host"`
-	CNServerAPIHost      string   `yaml:"cn_server_api_host"`
-	OtherServerAESKey    string   `yaml:"other_server_aes_key"`
-	OtherServerAESIV     string   `yaml:"other_server_aes_iv"`
-	JPServerInheritToken string   `yaml:"jp_server_inherit_token"`
-	ENServerInheritToken string   `yaml:"en_server_inherit_token"`
-	SuiteRemoveKeys      []string `yaml:"suite_remove_keys"`
+	ENServerAPIHost              string            `yaml:"en_server_api_host"`
+	ENServerAESKey               string            `yaml:"en_server_aes_key"`
+	ENServerAESIV                string            `yaml:"en_server_aes_iv"`
+	JPServerAPIHost              string            `yaml:"jp_server_api_host"`
+	TWServerAPIHost              string            `yaml:"tw_server_api_host"`
+	KRServerAPIHost              string            `yaml:"kr_server_api_host"`
+	CNServerAPIHost              string            `yaml:"cn_server_api_host"`
+	OtherServerAESKey            string            `yaml:"other_server_aes_key"`
+	OtherServerAESIV             string            `yaml:"other_server_aes_iv"`
+	JPServerInheritToken         string            `yaml:"jp_server_inherit_token"`
+	ENServerInheritToken         string            `yaml:"en_server_inherit_token"`
+	JPServerAppVersionUrl        string            `yaml:"jp_server_app_version_url"`
+	ENServerAppVersionUrl        string            `yaml:"en_server_app_version_url"`
+	JPServerInheritClientHeaders map[string]string `yaml:"jp_server_inherit_client_headers"`
+	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
+	SuiteRemoveKeys              []string          `yaml:"suite_remove_keys"`
 }
 type OthersConfig struct {
 	PublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
@@ -68,14 +72,17 @@ type Config struct {
 var Cfg Config
 
 func init() {
+	logger := harukiLogger.NewLogger("ConfigLoader", "DEBUG", nil)
 	f, err := os.Open("haruki-suite-configs.yaml")
 	if err != nil {
-		log.Fatalf("failed to open config file: %v", err)
+		logger.Errorf("Failed to open config file: %v", err)
+		os.Exit(1)
 	}
 	defer f.Close()
 
 	decoder := yaml.NewDecoder(f)
 	if err := decoder.Decode(&Cfg); err != nil {
-		log.Fatalf("failed to parse config: %v", err)
+		logger.Errorf("Failed to parse config: %v", err)
+		os.Exit(1)
 	}
 }
