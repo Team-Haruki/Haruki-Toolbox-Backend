@@ -1,29 +1,25 @@
-package sekaiclientdummy
+package sekai
 
 import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
+	"errors"
+	"haruki-suite/config"
 	"haruki-suite/utils"
 
 	"github.com/vgorin/cryptogo/pad"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-var (
-	generalAESKey, _ = hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-	generalAESIV, _  = hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-
-	enAESKey, _ = hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-	enAESIV, _  = hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-)
-
 func getCipher(server utils.SupportedDataUploadServer, encrypt bool) (cipher.BlockMode, error) {
 	var key, iv []byte
 	if server == utils.SupportedDataUploadServerEN {
-		key, iv = enAESKey, enAESIV
+		key, _ = hex.DecodeString(config.Cfg.SekaiClient.ENServerAESKey)
+		iv, _ = hex.DecodeString(config.Cfg.SekaiClient.ENServerAESIV)
 	} else {
-		key, iv = generalAESKey, generalAESIV
+		key, _ = hex.DecodeString(config.Cfg.SekaiClient.OtherServerAESKey)
+		iv, _ = hex.DecodeString(config.Cfg.SekaiClient.OtherServerAESIV)
 	}
 
 	block, err := aes.NewCipher(key)
@@ -38,9 +34,17 @@ func getCipher(server utils.SupportedDataUploadServer, encrypt bool) (cipher.Blo
 }
 
 func Pack(content interface{}, server utils.SupportedDataUploadServer) ([]byte, error) {
+	if content == nil {
+		return nil, errors.New("content cannot be nil")
+	}
+
 	packed, err := msgpack.Marshal(content)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(packed) == 0 {
+		return nil, errors.New("packed content is empty")
 	}
 
 	padded := pad.PKCS7Pad(packed, aes.BlockSize)
@@ -52,13 +56,22 @@ func Pack(content interface{}, server utils.SupportedDataUploadServer) ([]byte, 
 
 	encrypted := make([]byte, len(padded))
 	encrypter.CryptBlocks(encrypted, padded)
+
 	return encrypted, nil
 }
 
-func Unpack(content []byte, server utils.SupportedDataUploadServer, out interface{}) error {
+func Unpack(content []byte, server utils.SupportedDataUploadServer) (interface{}, error) {
+	if len(content) == 0 {
+		return nil, errors.New("content cannot be empty")
+	}
+
+	if len(content)%aes.BlockSize != 0 {
+		return nil, errors.New("content length is not a multiple of AES block size")
+	}
+
 	decrypter, err := getCipher(server, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	decrypted := make([]byte, len(content))
@@ -66,8 +79,13 @@ func Unpack(content []byte, server utils.SupportedDataUploadServer, out interfac
 
 	unpadded, err := pad.PKCS7Unpad(decrypted)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return msgpack.Unmarshal(unpadded, out)
+	var out interface{}
+	if err := msgpack.Unmarshal(unpadded, &out); err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }

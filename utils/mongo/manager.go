@@ -20,17 +20,17 @@ type MongoDBManager struct {
 	webhookUserCollection *mongo.Collection
 }
 
-func getInt(m map[string]interface{}, key string) int {
+func getInt(m map[string]interface{}, key string) int64 {
 	if v, ok := m[key]; ok {
 		switch n := v.(type) {
 		case int:
-			return n
+			return int64(n)
 		case int32:
-			return int(n)
+			return int64(n)
 		case int64:
-			return int(n)
+			return n
 		case float64:
-			return int(n)
+			return int64(n)
 		}
 	}
 	return 0
@@ -50,7 +50,7 @@ func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUs
 	}, nil
 }
 
-func (m *MongoDBManager) UpdateData(ctx context.Context, userID int, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
+func (m *MongoDBManager) UpdateData(ctx context.Context, userID int64, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
 	var collection *mongo.Collection
 	if dataType == utils.UploadDataTypeSuite {
 		collection = m.suiteCollection
@@ -72,10 +72,10 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int, data map[st
 	newEvents, _ := data["userEvents"].([]interface{})
 	allEvents := append(oldEvents, newEvents...)
 
-	latestEvents := make(map[int]map[string]interface{})
+	latestEvents := make(map[int64]map[string]interface{})
 	for _, ev := range allEvents {
 		if e, ok := ev.(map[string]interface{}); ok {
-			eventID := int(e["eventId"].(int32))
+			eventID := int64(e["eventId"].(int32))
 			if old, exists := latestEvents[eventID]; !exists {
 				latestEvents[eventID] = e
 			} else {
@@ -104,14 +104,14 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int, data map[st
 	allBlooms := append(oldBlooms, newBlooms...)
 
 	type bloomKey struct {
-		EventID, CharID int
+		EventID, CharID int64
 	}
 	latestBlooms := make(map[bloomKey]map[string]interface{})
 	for _, bv := range allBlooms {
 		if b, ok := bv.(map[string]interface{}); ok {
 			key := bloomKey{
-				EventID: int(b["eventId"].(int32)),
-				CharID:  int(b["gameCharacterId"].(int32)),
+				EventID: int64(b["eventId"].(int32)),
+				CharID:  int64(b["gameCharacterId"].(int32)),
 			}
 			if old, exists := latestBlooms[key]; !exists {
 				latestBlooms[key] = b
@@ -150,7 +150,7 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int, data map[st
 	)
 }
 
-func (m *MongoDBManager) GetData(ctx context.Context, userID int, server string, dataType utils.UploadDataType) (bson.M, error) {
+func (m *MongoDBManager) GetData(ctx context.Context, userID int64, server string, dataType utils.UploadDataType) (bson.M, error) {
 	var collection *mongo.Collection
 	if dataType == utils.UploadDataTypeSuite {
 		collection = m.suiteCollection
@@ -182,7 +182,7 @@ func (m *MongoDBManager) GetWebhookUser(ctx context.Context, id, credential stri
 	return result, err
 }
 
-func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int, server, dataType string) ([]bson.M, error) {
+func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, server, dataType string) ([]bson.M, error) {
 	var binding bson.M
 	err := m.webhookUserCollection.FindOne(ctx,
 		bson.M{"uid": fmt.Sprintf("%d", userID), "server": server, "type": dataType},
@@ -223,18 +223,18 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int, serv
 	return results, nil
 }
 
-func (m *MongoDBManager) AddWebhookPushUser(ctx context.Context, userID int, server, dataType, webhookID string) error {
+func (m *MongoDBManager) AddWebhookPushUser(ctx context.Context, userID string, server, dataType, webhookID string) error {
 	_, err := m.webhookUserCollection.UpdateOne(ctx,
-		bson.M{"uid": fmt.Sprintf("%d", userID), "server": server, "type": dataType},
+		bson.M{"uid": userID, "server": server, "type": dataType},
 		bson.M{"$addToSet": bson.M{"webhook_user_ids": webhookID}},
 		options.Update().SetUpsert(true),
 	)
 	return err
 }
 
-func (m *MongoDBManager) RemoveWebhookPushUser(ctx context.Context, userID int, server, dataType, webhookID string) error {
+func (m *MongoDBManager) RemoveWebhookPushUser(ctx context.Context, userID string, server, dataType, webhookID string) error {
 	_, err := m.webhookUserCollection.UpdateOne(ctx,
-		bson.M{"uid": fmt.Sprintf("%d", userID), "server": server, "type": dataType},
+		bson.M{"uid": userID, "server": server, "type": dataType},
 		bson.M{"$pull": bson.M{"webhook_user_ids": webhookID}},
 	)
 	return err

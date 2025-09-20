@@ -31,4 +31,4 @@ go.work.sum
 # .idea/
 # .vscode/
 
-utils/sekaiclient/
+haruki-suite-configs.yaml

@@ -1,4 +1,4 @@
-package sekaiclientdummy
+package sekai
 
 const General = "/6O9YhTzP+c8ty/uImK+2w=="
 
