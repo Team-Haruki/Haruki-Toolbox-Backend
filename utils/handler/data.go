@@ -38,13 +38,13 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, p
 func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server harukiUtils.SupportedDataUploadServer, policy harukiUtils.UploadPolicy, dataType harukiUtils.UploadDataType, userID int64) (*HandleDataResult, error) {
 	unpacked, err := harukiSekaiClient.Unpack(raw, server)
 	if err != nil {
-		h.Logger.Error("unpack failed: %v", err)
+		h.Logger.Errorf("unpack failed: %v", err)
 		return nil, err
 	}
 
 	unpackedMap, ok := unpacked.(map[string]interface{})
 	if !ok {
-		h.Logger.Error("unpack returned unexpected type %T", unpacked)
+		h.Logger.Errorf("unpack returned unexpected type %T", unpacked)
 		return nil, fmt.Errorf("invalid unpacked data type")
 	}
 
@@ -78,7 +78,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
-	h.Logger.Info("Calling back WebHook API: %s", url)
+	h.Logger.Infof("Calling back WebHook API: %s", url)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(nil))
 	req.Header.Set("User-Agent", fmt.Sprintf("Haruki-Suite/%s", harukiVersion.Version))
@@ -88,16 +88,16 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 
 	resp, err := h.HTTPClient.Do(req)
 	if err != nil {
-		h.Logger.Error("WebHook API call failed: %v", err)
+		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode == 200 {
-		h.Logger.Info("Called back WebHook API %s successfully.", url)
+		h.Logger.Infof("Called back WebHook API %s successfully.", url)
 	} else {
-		h.Logger.Error("Called back WebHook API %s failed, status code: %d", url, resp.StatusCode)
+		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, resp.StatusCode)
 	}
 }
 

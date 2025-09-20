@@ -26,18 +26,18 @@ func main() {
 		logFile, err = os.OpenFile(harukiConfig.Cfg.Backend.MainLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			mainLogger := harukiLogger.NewLogger("Main", harukiConfig.Cfg.Backend.LogLevel, os.Stdout)
-			mainLogger.Error("failed to open main log file: %v", err)
+			mainLogger.Errorf("failed to open main log file: %v", err)
 			os.Exit(1)
 		}
 		loggerWriter = io.MultiWriter(os.Stdout, logFile)
 		defer logFile.Close()
 	}
 	mainLogger := harukiLogger.NewLogger("Main", harukiConfig.Cfg.Backend.LogLevel, loggerWriter)
-	mainLogger.Info(fmt.Sprintf("========================= Haruki Suite Backend %s =========================", harukiVersion.Version))
-	mainLogger.Info("Powered By Haruki Dev Team")
-	mainLogger.Info("Haruki Suite Backend Main Access Log Level: ", harukiConfig.Cfg.Backend.LogLevel)
-	mainLogger.Info("Haruki Suite Backend Main Access Log Save Path: ", harukiConfig.Cfg.Backend.MainLogFile)
-	mainLogger.Info("Go Fiber Access Log Save Path: ", harukiConfig.Cfg.Backend.AccessLogPath)
+	mainLogger.Infof(fmt.Sprintf("========================= Haruki Suite Backend %s =========================", harukiVersion.Version))
+	mainLogger.Infof("Powered By Haruki Dev Team")
+	mainLogger.Infof("Haruki Suite Backend Main Access Log Level: %s", harukiConfig.Cfg.Backend.LogLevel)
+	mainLogger.Infof("Haruki Suite Backend Main Access Log Save Path: %s", harukiConfig.Cfg.Backend.MainLogFile)
+	mainLogger.Infof("Go Fiber Access Log Save Path: %s", harukiConfig.Cfg.Backend.AccessLogPath)
 	mongoManager, err := harukiMongo.NewMongoDBManager(
 		context.Background(),
 		harukiConfig.Cfg.MongoDB.URL,
@@ -48,13 +48,13 @@ func main() {
 		harukiConfig.Cfg.MongoDB.WebhookUser,
 	)
 	if err != nil {
-		mainLogger.Error("Failed to init MongoDB: %v", err)
+		mainLogger.Errorf("Failed to init MongoDB: %v", err)
 		os.Exit(1)
 	}
 
 	redisClient := harukiRedis.NewRedisClient(harukiConfig.Cfg.Redis)
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		mainLogger.Error("Failed to connect Redis: %v", err)
+		mainLogger.Errorf("Failed to connect Redis: %v", err)
 		os.Exit(1)
 	}
 
@@ -66,7 +66,7 @@ func main() {
 			var err error
 			accessLogFile, err = os.OpenFile(harukiConfig.Cfg.Backend.AccessLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
-				mainLogger.Error("Failed to open access log file: %v", err)
+				mainLogger.Errorf("Failed to open access log file: %v", err)
 				os.Exit(1)
 			}
 			loggerConfig.Output = accessLogFile
@@ -87,7 +87,7 @@ func main() {
 
 	addr := fmt.Sprintf("%s:%d", harukiConfig.Cfg.Backend.Host, harukiConfig.Cfg.Backend.Port)
 	if err := app.Listen(addr); err != nil {
-		mainLogger.Error("Failed to start server: %v", err)
+		mainLogger.Errorf("Failed to start server: %v", err)
 		os.Exit(1)
 	}
 }

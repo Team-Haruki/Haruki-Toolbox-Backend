@@ -11,7 +11,7 @@ type SekaiDataRetrieverResponse struct {
 
 type SekaiInheritDataRetrieverResponse struct {
 	Server  string `json:"server"`
-	UserID  int    `json:"user_id"`
+	UserID  int64  `json:"user_id"`
 	Suite   []byte `json:"suite,omitempty"`
 	Mysekai []byte `json:"mysekai,omitempty"`
 	Policy  string `json:"policy,omitempty"`

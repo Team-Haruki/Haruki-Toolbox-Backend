@@ -83,11 +83,11 @@ func (l *Logger) logf(level logLevel, format string, args ...interface{}) {
 	fmt.Fprint(l.writer, line)
 }
 
-func (l *Logger) Debug(format string, args ...interface{})    { l.logf(DEBUG, format, args...) }
-func (l *Logger) Info(format string, args ...interface{})     { l.logf(INFO, format, args...) }
-func (l *Logger) Warn(format string, args ...interface{})     { l.logf(WARN, format, args...) }
-func (l *Logger) Error(format string, args ...interface{})    { l.logf(ERROR, format, args...) }
-func (l *Logger) Critical(format string, args ...interface{}) { l.logf(CRITICAL, format, args...) }
-func (l *Logger) Exception(format string, args ...interface{}) {
+func (l *Logger) Debugf(format string, args ...interface{})    { l.logf(DEBUG, format, args...) }
+func (l *Logger) Infof(format string, args ...interface{})     { l.logf(INFO, format, args...) }
+func (l *Logger) Warnf(format string, args ...interface{})     { l.logf(WARN, format, args...) }
+func (l *Logger) Errorf(format string, args ...interface{})    { l.logf(ERROR, format, args...) }
+func (l *Logger) Criticalf(format string, args ...interface{}) { l.logf(CRITICAL, format, args...) }
+func (l *Logger) Exceptionf(format string, args ...interface{}) {
 	l.logf(ERROR, "[EXCEPTION] "+format, args...)
 }
