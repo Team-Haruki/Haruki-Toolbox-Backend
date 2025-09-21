@@ -21,12 +21,6 @@ type DataHandler struct {
 	Logger       harukiLogger.Logger
 }
 
-type HandleDataResult struct {
-	UserID       int64
-	Status       int
-	ErrorMessage string
-}
-
 func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, policy harukiUtils.UploadPolicy, server harukiUtils.SupportedDataUploadServer) map[string]interface{} {
 	data["upload_time"] = time.Now().Unix()
 	data["policy"] = string(policy)
@@ -35,7 +29,7 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, p
 	return data
 }
 
-func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server harukiUtils.SupportedDataUploadServer, policy harukiUtils.UploadPolicy, dataType harukiUtils.UploadDataType, userID int64) (*HandleDataResult, error) {
+func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server harukiUtils.SupportedDataUploadServer, policy harukiUtils.UploadPolicy, dataType harukiUtils.UploadDataType, userID *int64) (*harukiUtils.HandleDataResult, error) {
 	unpacked, err := harukiSekaiClient.Unpack(raw, server)
 	if err != nil {
 		h.Logger.Errorf("unpack failed: %v", err)
@@ -50,31 +44,38 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 
 	if status, ok := unpackedMap["httpStatus"]; ok {
 		errCode, _ := unpackedMap["errorCode"].(string)
-		return &HandleDataResult{
-			Status:       int(status.(float64)),
-			ErrorMessage: errCode,
-		}, nil
+		statusCode := int(status.(float64))
+		return &harukiUtils.HandleDataResult{
+			Status:       &statusCode,
+			ErrorMessage: &errCode,
+		}, fmt.Errorf("data retrieve error")
 	}
 
-	if userID == 0 {
+	if userID == nil {
 		if gameData, ok := unpackedMap["userGamedata"].(map[string]interface{}); ok {
 			if id, ok := gameData["userId"].(float64); ok {
-				userID = int64(id)
+				id64 := int64(id)
+				userID = &id64
 			}
 		}
 	}
 
-	data := h.PreHandleData(unpackedMap, userID, policy, server)
+	if userID == nil {
+		h.Logger.Errorf("userID is nil and cannot be retrieved from data")
+		return nil, fmt.Errorf("userID is nil and cannot be retrieved")
+	}
 
-	if _, err := h.MongoManager.UpdateData(ctx, userID, data, dataType); err != nil {
+	data := h.PreHandleData(unpackedMap, *userID, policy, server)
+
+	if _, err := h.MongoManager.UpdateData(ctx, *userID, data, dataType); err != nil {
 		return nil, err
 	}
 
 	if policy == harukiUtils.UploadPolicyPublic {
-		go h.CallWebhook(ctx, userID, string(server), dataType)
+		go h.CallWebhook(ctx, *userID, string(server), dataType)
 	}
 
-	return &HandleDataResult{UserID: userID}, nil
+	return &harukiUtils.HandleDataResult{UserID: userID}, nil
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {

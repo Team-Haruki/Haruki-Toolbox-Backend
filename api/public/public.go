@@ -49,7 +49,7 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				Message: "Invalid user_id, must be integer",
+				Message: "Invalid userId, it must be integer",
 			})
 		}
 
