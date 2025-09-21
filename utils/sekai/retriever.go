@@ -13,11 +13,11 @@ import (
 
 type HarukiSekaiDataRetriever struct {
 	client       *Client
-	policy       string
+	policy       harukiUtils.UploadPolicy
 	uploadType   harukiUtils.UploadDataType
 	logger       *harukiLogger.Logger
 	isErrorExist bool
-	errorMessage string
+	ErrorMessage string
 }
 
 func NewSekaiDataRetriever(
@@ -26,30 +26,27 @@ func NewSekaiDataRetriever(
 	versionURL string,
 	headers map[string]string,
 	inherit harukiUtils.InheritInformation,
-	policy string,
+	policy harukiUtils.UploadPolicy,
 	uploadType harukiUtils.UploadDataType,
 	proxy string,
-	jpSecret string,
-	enSecret string,
+	inheritJWTToken string,
 ) *HarukiSekaiDataRetriever {
 	client := NewSekaiClient(struct {
-		Server      harukiUtils.SupportedInheritUploadServer
-		API         string
-		VersionURL  string
-		Inherit     harukiUtils.InheritInformation
-		Headers     map[string]string
-		Proxy       string
-		JPJWTSecret string
-		ENJWTSecret string
+		Server          harukiUtils.SupportedInheritUploadServer
+		API             string
+		VersionURL      string
+		Inherit         harukiUtils.InheritInformation
+		Headers         map[string]string
+		Proxy           string
+		InheritJWTToken string
 	}{
-		Server:      server,
-		API:         api,
-		VersionURL:  versionURL,
-		Inherit:     inherit,
-		Headers:     headers,
-		Proxy:       proxy,
-		JPJWTSecret: jpSecret,
-		ENJWTSecret: enSecret,
+		Server:          server,
+		API:             api,
+		VersionURL:      versionURL,
+		Inherit:         inherit,
+		Headers:         headers,
+		Proxy:           proxy,
+		InheritJWTToken: inheritJWTToken,
 	})
 
 	return &HarukiSekaiDataRetriever{
@@ -58,13 +55,13 @@ func NewSekaiDataRetriever(
 		uploadType:   uploadType,
 		logger:       harukiLogger.NewLogger("SekaiDataRetriever", "DEBUG", nil),
 		isErrorExist: false,
-		errorMessage: "",
+		ErrorMessage: "",
 	}
 }
 
 func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, error) {
 	if r.isErrorExist {
-		return nil, fmt.Errorf(r.errorMessage)
+		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 	r.logger.Infof("%s server retrieving suite...", r.client.server)
 	basePath := fmt.Sprintf("/suite/user/%s", strconv.FormatInt(r.client.userID, 10))
@@ -75,8 +72,8 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 	}
 	if suite == nil {
 		r.isErrorExist = true
-		r.errorMessage = "failed to retrieve suite, API response timeout."
-		return nil, fmt.Errorf(r.errorMessage)
+		r.ErrorMessage = "failed to retrieve suite, API response timeout."
+		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -125,7 +122,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 
 func (r *HarukiSekaiDataRetriever) RefreshHome(ctx context.Context, friends bool, login bool) error {
 	if r.isErrorExist {
-		return fmt.Errorf(r.errorMessage)
+		return fmt.Errorf(r.ErrorMessage)
 	}
 	r.logger.Infof("%s server refreshing home...", strings.ToUpper(string(r.client.server)))
 
@@ -151,7 +148,7 @@ func (r *HarukiSekaiDataRetriever) RefreshHome(ctx context.Context, friends bool
 
 func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte, error) {
 	if r.isErrorExist {
-		return nil, fmt.Errorf(r.errorMessage)
+		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 
 	r.logger.Infof("%s server checking MySekai availability...", strings.ToUpper(string(r.client.server)))
@@ -195,13 +192,13 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiInheritDataRetrieverResponse, error) {
 	if err := r.client.Init(ctx); err != nil {
 		r.isErrorExist = true
-		r.errorMessage = err.Error()
+		r.ErrorMessage = err.Error()
 		return nil, err
 	}
 	if r.client.isErrorExist {
 		r.isErrorExist = true
-		r.errorMessage = r.client.errorMessage
-		return nil, fmt.Errorf(r.errorMessage)
+		r.ErrorMessage = r.client.errorMessage
+		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 
 	suite, _ := r.RetrieveSuite(ctx)
@@ -217,6 +214,6 @@ func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiI
 		UserID:  r.client.userID,
 		Suite:   suite,
 		Mysekai: mysekai,
-		Policy:  r.policy,
+		Policy:  string(r.policy),
 	}, nil
 }
