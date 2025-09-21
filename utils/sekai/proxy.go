@@ -38,7 +38,7 @@ var allowedHeaders = map[string]struct{}{
 	"x-install-id":      {},
 }
 
-func getAPIEndpoint() map[harukiUtils.SupportedDataUploadServer][2]string {
+func GetAPIEndpoint() map[harukiUtils.SupportedDataUploadServer][2]string {
 	return map[harukiUtils.SupportedDataUploadServer][2]string{
 		harukiUtils.SupportedDataUploadServerJP: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost), harukiConfig.Cfg.SekaiClient.JPServerAPIHost},
 		harukiUtils.SupportedDataUploadServerEN: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost), harukiConfig.Cfg.SekaiClient.ENServerAPIHost},
@@ -88,7 +88,7 @@ func HarukiSekaiProxyCallAPI(
 	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, string) map[string]interface{},
 ) (*harukiUtils.SekaiDataRetrieverResponse, error) {
 
-	apiEndpoint := getAPIEndpoint()
+	apiEndpoint := GetAPIEndpoint()
 	endpoint, ok := apiEndpoint[server]
 	if !ok {
 		return nil, fmt.Errorf("invalid server: %s", server)
