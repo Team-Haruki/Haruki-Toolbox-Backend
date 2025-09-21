@@ -17,33 +17,31 @@ import (
 )
 
 type Client struct {
-	server       harukiUtils.SupportedInheritUploadServer
-	api          string
-	versionURL   string
-	inherit      harukiUtils.InheritInformation
-	headers      map[string]string
-	proxy        string
-	userID       int64
-	credential   string
-	loginBonus   bool
-	isErrorExist bool
-	errorMessage string
-	jpJWTSecret  string
-	enJWTSecret  string
+	server          harukiUtils.SupportedInheritUploadServer
+	api             string
+	versionURL      string
+	inherit         harukiUtils.InheritInformation
+	headers         map[string]string
+	proxy           string
+	userID          int64
+	credential      string
+	loginBonus      bool
+	isErrorExist    bool
+	errorMessage    string
+	inheritJWTToken string
 
 	http   *resty.Client
 	logger *harukiLogger.Logger
 }
 
 func NewSekaiClient(cfg struct {
-	Server      harukiUtils.SupportedInheritUploadServer
-	API         string
-	VersionURL  string
-	Inherit     harukiUtils.InheritInformation
-	Headers     map[string]string
-	Proxy       string
-	JPJWTSecret string
-	ENJWTSecret string
+	Server          harukiUtils.SupportedInheritUploadServer
+	API             string
+	VersionURL      string
+	Inherit         harukiUtils.InheritInformation
+	Headers         map[string]string
+	Proxy           string
+	InheritJWTToken string
 }) *Client {
 	http := resty.New().
 		SetTimeout(60*time.Second).
@@ -54,16 +52,15 @@ func NewSekaiClient(cfg struct {
 	}
 
 	return &Client{
-		server:      cfg.Server,
-		api:         cfg.API,
-		versionURL:  cfg.VersionURL,
-		inherit:     cfg.Inherit,
-		headers:     cfg.Headers,
-		proxy:       cfg.Proxy,
-		jpJWTSecret: cfg.JPJWTSecret,
-		enJWTSecret: cfg.ENJWTSecret,
-		http:        http,
-		logger:      harukiLogger.NewLogger("SekaiClient", "DEBUG", nil),
+		server:          cfg.Server,
+		api:             cfg.API,
+		versionURL:      cfg.VersionURL,
+		inherit:         cfg.Inherit,
+		headers:         cfg.Headers,
+		proxy:           cfg.Proxy,
+		inheritJWTToken: cfg.InheritJWTToken,
+		http:            http,
+		logger:          harukiLogger.NewLogger("SekaiClient", "DEBUG", nil),
 	}
 }
 
@@ -143,15 +140,8 @@ func (c *Client) generateInheritToken() (string, error) {
 		"password":  c.inherit.InheritPassword,
 	}
 
-	secret := ""
-	if c.server == harukiUtils.SupportedInheritUploadServerJP {
-		secret = c.jpJWTSecret
-	} else {
-		secret = c.enJWTSecret
-	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, inheritPayload)
-	return token.SignedString([]byte(secret))
+	return token.SignedString([]byte(c.inheritJWTToken))
 }
 
 func (c *Client) callAPI(ctx context.Context, path, method string, body []byte, customHeaders map[string]string) ([]byte, int, error) {
@@ -306,9 +296,5 @@ func (c *Client) Init(ctx context.Context) error {
 	if err := c.Login(ctx); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (c *Client) Close() error {
 	return nil
 }
