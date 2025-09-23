@@ -5,6 +5,7 @@ import (
 	"fmt"
 	privateApi "haruki-suite/api/private"
 	publicApi "haruki-suite/api/public"
+	uploadApi "haruki-suite/api/upload"
 	webhookApi "haruki-suite/api/webhook"
 	harukiConfig "haruki-suite/config"
 	harukiLogger "haruki-suite/utils/logger"
@@ -78,6 +79,7 @@ func main() {
 	}
 	privateApi.RegisterRoutes(app, mongoManager, harukiConfig.Cfg.MongoDB.PrivateApiSecret, harukiConfig.Cfg.MongoDB.PrivateApiUserAgent)
 	webhookApi.RegisterRoutes(app, mongoManager, harukiConfig.Cfg.Webhook.JWTSecret)
+	uploadApi.RegisterRoutes(app, mongoManager, redisClient)
 	publicAPI := &publicApi.HarukiPublicAPI{
 		Mongo:       mongoManager,
 		Redis:       redisClient,
