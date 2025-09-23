@@ -8,6 +8,7 @@ import (
 )
 
 func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, client *redis.Client) {
-	registerIosRoutes(app, manager)
+	registerIOSRoutes(app, manager)
 	registerGeneralRoutes(app, manager, client)
+	registerInheritRoutes(app, manager, client)
 }

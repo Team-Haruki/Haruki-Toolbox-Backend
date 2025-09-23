@@ -31,7 +31,7 @@ type dataUploadHeader struct {
 	Policy        harukiUtils.UploadPolicy `header:"x-upload-policy"`
 }
 
-func registerIosRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager) {
+func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager) {
 	api := app.Group("/ios")
 	logger := harukiLogger.NewLogger("SekaiApi", "DEBUG", nil)
 	dataChunks := make(map[string][]harukiUtils.DataChunk)
@@ -110,7 +110,7 @@ func registerIosRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager) {
 				payload = append(payload, c.Data...)
 			}
 
-			dataHandler := harukiHandler.DataHandler{MongoManager: manager}
+			dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager}
 			result, err := dataHandler.HandleAndUpdateData(
 				context.Background(), payload, server, header.Policy, uploadType, &userId,
 			)
@@ -185,9 +185,9 @@ func registerIosRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager) {
 
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: manager}
+		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager}
 		proxyHandler := sekai.HandleProxyUpload(
-			manager,
+			mongoManager,
 			harukiConfig.Cfg.Proxy,
 			policy,
 			dataHandler.PreHandleData,
@@ -228,9 +228,9 @@ func registerIosRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager) {
 
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: manager}
+		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager}
 		proxyHandler := sekai.HandleProxyUpload(
-			manager,
+			mongoManager,
 			harukiConfig.Cfg.Proxy,
 			policy,
 			dataHandler.PreHandleData,
