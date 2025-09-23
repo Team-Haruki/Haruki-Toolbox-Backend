@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func RestoreCompactData(data map[string]interface{}) []map[string]interface{} {
@@ -66,24 +68,19 @@ func RestoreCompactData(data map[string]interface{}) []map[string]interface{} {
 	return result
 }
 
-func GetValueFromResult(result map[string]interface{}, key string) []map[string]interface{} {
+func GetValueFromResult(result bson.M, key string) interface{} {
 	if val, ok := result[key]; ok {
-		// val 必须是 []map[string]interface{}，否则返回空
-		if arr, ok2 := val.([]map[string]interface{}); ok2 {
-			return arr
-		}
-		return []map[string]interface{}{}
+		return val
 	}
-
-	// 尝试 compact 名
 	if len(key) == 0 {
-		return []map[string]interface{}{}
+		return []interface{}{}
 	}
 	compactName := fmt.Sprintf("compact%s%s", string(key[0]-32), key[1:])
 	if val, ok := result[compactName]; ok {
 		if compactData, ok2 := val.(map[string]interface{}); ok2 {
 			return RestoreCompactData(compactData)
 		}
+		return val
 	}
-	return []map[string]interface{}{}
+	return []interface{}{}
 }
