@@ -18,6 +18,7 @@ import (
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
 )
 
 const chunkExpire = time.Minute * 3
@@ -31,7 +32,7 @@ type dataUploadHeader struct {
 	Policy        harukiUtils.UploadPolicy `header:"x-upload-policy"`
 }
 
-func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager) {
+func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
 	api := app.Group("/ios")
 	logger := harukiLogger.NewLogger("SekaiApi", "DEBUG", nil)
 	dataChunks := make(map[string][]harukiUtils.DataChunk)
@@ -192,6 +193,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager)
 			policy,
 			dataHandler.PreHandleData,
 			dataHandler.CallWebhook,
+			redisClient,
 		)
 		// python
 		// for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):
@@ -235,6 +237,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager)
 			policy,
 			dataHandler.PreHandleData,
 			dataHandler.CallWebhook,
+			redisClient,
 		)
 		// python
 		// for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):

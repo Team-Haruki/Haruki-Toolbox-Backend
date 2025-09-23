@@ -81,15 +81,15 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 		}
 
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			suite := map[string]interface{}{
-				"userGamedata": map[string]interface{}{},
-			}
-			if gameData, ok := result["userGamedata"].(map[string]interface{}); ok {
+			suite := map[string]interface{}{}
+			if gameData, ok := result["userGamedata"].(map[string]interface{}); ok && len(gameData) > 0 {
+				filtered := map[string]interface{}{}
 				for _, key := range []string{"userId", "name", "deck", "exp", "totalExp"} {
 					if v, ok := gameData[key]; ok {
-						suite["userGamedata"].(map[string]interface{})[key] = v
+						filtered[key] = v
 					}
 				}
+				suite["userGamedata"] = filtered
 			}
 			allowedKeys := api.AllowedKeys
 			requestKey := c.Query("key")

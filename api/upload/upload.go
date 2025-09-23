@@ -7,8 +7,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, client *redis.Client) {
-	registerIOSRoutes(app, manager)
-	registerGeneralRoutes(app, manager, client)
-	registerInheritRoutes(app, manager, client)
+func RegisterRoutes(app *fiber.App, mongoDBManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
+	registerIOSRoutes(app, mongoDBManager, redisClient)
+	registerGeneralRoutes(app, mongoDBManager, redisClient)
+	registerInheritRoutes(app, mongoDBManager, redisClient)
 }
