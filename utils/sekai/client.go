@@ -7,6 +7,7 @@ import (
 	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -102,7 +103,7 @@ func (c *Client) parseAppVersion(ctx context.Context, retries int) error {
 
 	c.logger.Infof("Parsing %s server app version...", strings.ToUpper(string(c.server)))
 	for i := 0; i < retries; i++ {
-		resp, err := c.http.SetTimeout(5).R().
+		resp, err := c.http.SetTimeout(10 * time.Second).R().
 			SetContext(ctx).
 			Get(c.versionURL)
 		if err != nil {
@@ -183,15 +184,15 @@ func (c *Client) callAPI(ctx context.Context, path, method string, body []byte, 
 }
 
 func (c *Client) InheritAccount(ctx context.Context, returnUserID bool) error {
-	c.logger.Infof(" %s Server Sekai Client generating inherit token...", strings.ToUpper(string(c.server)))
+	c.logger.Infof("%s Server Sekai Client generating inherit token...", strings.ToUpper(string(c.server)))
 	token, err := c.generateInheritToken()
 	if err != nil {
 		return err
 	}
 	headers := map[string]string{"x-inherit-id-verify-token": token}
-	c.logger.Infof(" %s Server Sekai Client generated inherit token.", strings.ToUpper(string(c.server)))
+	c.logger.Infof("%s Server Sekai Client generated inherit token.", strings.ToUpper(string(c.server)))
 
-	c.logger.Infof(" %s Server Sekai Client inheriting account...", strings.ToUpper(string(c.server)))
+	c.logger.Infof("%s Server Sekai Client inheriting account...", strings.ToUpper(string(c.server)))
 	path := fmt.Sprintf("/inherit/user/%s?isExecuteInherit=%s",
 		c.inherit.InheritID,
 		map[bool]string{true: "True", false: "False"}[!returnUserID],
@@ -222,17 +223,25 @@ func (c *Client) InheritAccount(ctx context.Context, returnUserID bool) error {
 
 	if returnUserID {
 		if after, ok := unpacked["afterUserGamedata"].(map[string]interface{}); ok {
-			if uid, ok := after["userId"].(int64); ok {
-				c.userID = uid
-				c.logger.Infof(" %s Server Sekai Client retrieved user ID.", strings.ToUpper(string(c.server)))
-				return nil
+			if uidVal, exists := after["userId"]; exists {
+				switch uid := uidVal.(type) {
+				case int64:
+					c.userID = uid
+					return nil
+				case uint64:
+					if uid > math.MaxInt64 {
+						return fmt.Errorf("userId too large for int64: %v", uid)
+					}
+					c.userID = int64(uid)
+					return nil
+				}
 			}
 		}
 		return fmt.Errorf("failed to get userId")
 	} else {
 		if cred, ok := unpacked["credential"].(string); ok {
 			c.credential = cred
-			c.logger.Infof(" %s Server Sekai Client retrieved user credential.", strings.ToUpper(string(c.server)))
+			c.logger.Infof("%s Server Sekai Client retrieved user credential.", strings.ToUpper(string(c.server)))
 			return nil
 		}
 		return fmt.Errorf("failed to get credential")
@@ -244,7 +253,7 @@ func (c *Client) Login(ctx context.Context) error {
 		return fmt.Errorf("inherit failed")
 	}
 
-	c.logger.Infof(" %s Server Sekai Client logging in...", strings.ToUpper(string(c.server)))
+	c.logger.Infof("%s Server Sekai Client logging in...", strings.ToUpper(string(c.server)))
 	body := map[string]any{
 		"credential": c.credential,
 		"deviceId":   nil,
@@ -290,9 +299,11 @@ func (c *Client) Init(ctx context.Context) error {
 	if err := c.InheritAccount(ctx, true); err != nil {
 		return err
 	}
+	time.Sleep(1 * time.Second)
 	if err := c.InheritAccount(ctx, false); err != nil {
 		return err
 	}
+	time.Sleep(2 * time.Second)
 	if err := c.Login(ctx); err != nil {
 		return err
 	}
