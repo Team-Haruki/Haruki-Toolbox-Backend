@@ -11,6 +11,28 @@ import (
 	"time"
 )
 
+const (
+	JP harukiUtils.SupportedInheritUploadServer = "jp"
+	EN harukiUtils.SupportedInheritUploadServer = "en"
+)
+
+var (
+	Api = map[harukiUtils.SupportedInheritUploadServer]string{
+		JP: "",
+		EN: "",
+	}
+
+	Headers = map[harukiUtils.SupportedInheritUploadServer]map[string]string{
+		JP: {},
+		EN: {},
+	}
+
+	Version = map[harukiUtils.SupportedInheritUploadServer]string{
+		JP: "",
+		EN: "",
+	}
+)
+
 type HarukiSekaiDataRetriever struct {
 	client       *Client
 	policy       harukiUtils.UploadPolicy
@@ -22,9 +44,6 @@ type HarukiSekaiDataRetriever struct {
 
 func NewSekaiDataRetriever(
 	server harukiUtils.SupportedInheritUploadServer,
-	api string,
-	versionURL string,
-	headers map[string]string,
 	inherit harukiUtils.InheritInformation,
 	policy harukiUtils.UploadPolicy,
 	uploadType harukiUtils.UploadDataType,
@@ -41,10 +60,10 @@ func NewSekaiDataRetriever(
 		InheritJWTToken string
 	}{
 		Server:          server,
-		API:             api,
-		VersionURL:      versionURL,
+		API:             Api[server],
+		VersionURL:      Version[server],
 		Inherit:         inherit,
-		Headers:         headers,
+		Headers:         Headers[server],
 		Proxy:           proxy,
 		InheritJWTToken: inheritJWTToken,
 	})
