@@ -8,7 +8,6 @@ import (
 	harukiMongo "haruki-suite/utils/mongo"
 	harukiSekai "haruki-suite/utils/sekai"
 	"net/http"
-	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
@@ -17,10 +16,9 @@ import (
 func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
 	api := app.Group("/general/:server/:upload_type/:policy")
 
-	api.Post("/submit_inherit", requireUploadType(harukiUtils.UploadDataTypeMysekai), func(c *fiber.Ctx) error {
+	api.Post("/submit_inherit", func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
-		userIdStr := c.Params("user_id")
 		uploadTypeStr := c.Params("upload_type")
 
 		server, err := harukiUtils.ParseSupportedInheritUploadServer(serverStr)
@@ -38,13 +36,6 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			})
 		}
 		uploadType, err := harukiUtils.ParseUploadDataType(uploadTypeStr)
-		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
-			})
-		}
-		userId, err := strconv.ParseInt(userIdStr, 10, 64)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
@@ -97,27 +88,26 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 				mongoManager,
 				redisClient,
 				string(uploadType),
-				userId,
+				result.UserID,
 			)
 		}
-		if uploadType == harukiUtils.UploadDataTypeSuite {
-			if result.Suite == nil {
-				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-					Message: "Retrieve suite data failed.",
-					Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
-				})
-			}
-			_, uploadErr = HandleUpload(
-				context.Background(),
-				result.Suite,
-				string(server),
-				string(policy),
-				mongoManager,
-				redisClient,
-				string(uploadType),
-				userId,
-			)
+
+		if result.Suite == nil {
+			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+				Message: "Retrieve suite data failed.",
+				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+			})
 		}
+		_, uploadErr = HandleUpload(
+			context.Background(),
+			result.Suite,
+			string(server),
+			string(policy),
+			mongoManager,
+			redisClient,
+			string(uploadType),
+			result.UserID,
+		)
 
 		if uploadErr != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
