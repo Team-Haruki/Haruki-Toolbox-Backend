@@ -72,7 +72,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 	}
 
 	if policy == harukiUtils.UploadPolicyPublic {
-		go h.CallWebhook(ctx, *userID, string(server), dataType)
+		go h.CallWebhook(ctx, *userID, server, dataType)
 	}
 
 	return &harukiUtils.HandleDataResult{UserID: userID}, nil
@@ -102,8 +102,8 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	}
 }
 
-func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server string, dataType harukiUtils.UploadDataType) {
-	callbacks, err := h.MongoManager.GetWebhookPushAPI(ctx, userID, server, string(dataType))
+func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) {
+	callbacks, err := h.MongoManager.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
 	if err != nil || len(callbacks) == 0 {
 		return
 	}

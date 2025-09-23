@@ -85,7 +85,7 @@ func HarukiSekaiProxyCallAPI(
 	params map[string]string,
 	proxy string,
 	userID int64,
-	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, string) map[string]interface{},
+	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, harukiUtils.SupportedDataUploadServer) map[string]interface{},
 ) (*harukiUtils.SekaiDataRetrieverResponse, error) {
 
 	apiEndpoint := GetAPIEndpoint()
@@ -159,7 +159,7 @@ func HarukiSekaiProxyCallAPI(
 		return nil, err
 	}
 
-	unpackedMap := preHandle(unpacked.(map[string]interface{}), userID, policy, string(server))
+	unpackedMap := preHandle(unpacked.(map[string]interface{}), userID, policy, server)
 	if dataType == harukiUtils.UploadDataTypeSuite {
 		unpackedMap = cleanSuite(unpackedMap)
 	}
@@ -181,8 +181,8 @@ func HandleProxyUpload(
 	manager *harukiMongo.MongoDBManager,
 	proxy string,
 	policy harukiUtils.UploadPolicy,
-	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, string) map[string]interface{},
-	callWebhook func(context.Context, int64, string, harukiUtils.UploadDataType, *harukiMongo.MongoDBManager),
+	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, harukiUtils.SupportedDataUploadServer) map[string]interface{},
+	callWebhook func(context.Context, int64, harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType),
 ) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx := context.Background()
@@ -236,7 +236,7 @@ func HandleProxyUpload(
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 
-		go callWebhook(ctx, int64(userID), string(server), dataType, manager)
+		go callWebhook(ctx, int64(userID), server, dataType)
 
 		for k, v := range resp.NewHeaders {
 			c.Set(k, v)
