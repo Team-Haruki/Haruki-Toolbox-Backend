@@ -6,11 +6,14 @@ import (
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/mongo"
+	harukiRedis "haruki-suite/utils/redis"
 	urlParse "net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpproxy"
 )
@@ -183,15 +186,20 @@ func HandleProxyUpload(
 	policy harukiUtils.UploadPolicy,
 	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, harukiUtils.SupportedDataUploadServer) map[string]interface{},
 	callWebhook func(context.Context, int64, harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType),
+	redisClient *redis.Client,
 ) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx := context.Background()
 
 		serverStr := c.Params("server")
 		dataTypeStr := c.Params("data_type")
-		userID, err := c.ParamsInt("user_id")
-		if err != nil {
+		userIDStr := c.Params("user_id")
+		if userIDStr == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid user_id")
+		}
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid user_id format")
 		}
 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
@@ -225,18 +233,19 @@ func HandleProxyUpload(
 			body,
 			params,
 			proxy,
-			int64(userID),
+			userID,
 			preHandle,
 		)
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 
-		if _, err := manager.UpdateData(ctx, int64(userID), resp.DecryptedBody, dataType); err != nil {
+		if _, err := manager.UpdateData(ctx, userID, resp.DecryptedBody, dataType); err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 
-		go callWebhook(ctx, int64(userID), server, dataType)
+		go harukiRedis.ClearCache(ctx, redisClient, string(dataType), string(server), userID)
+		go callWebhook(ctx, userID, server, dataType)
 
 		for k, v := range resp.NewHeaders {
 			c.Set(k, v)
