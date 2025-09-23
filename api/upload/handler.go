@@ -36,8 +36,8 @@ func GetClearCachePaths(server string, dataType string, userID int64) []CachePat
 		},
 	}
 }
-func HandleUpload(ctx context.Context, data []byte, server string, policy string, mongoDBManager *harukiMongo.MongoDBManager, redisClient *redis.Client, dataType string, userID int64) (*harukiUtils.HandleDataResult, error) {
-	handler := &harukiDataHandler.DataHandler{MongoManager: mongoDBManager, HTTPClient: &http.Client{}, Logger: *harukiLogger.NewLogger("DataHandler", "DEBUG", nil)}
+func HandleUpload(ctx context.Context, data []byte, server string, policy string, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client, dataType string, userID int64) (*harukiUtils.HandleDataResult, error) {
+	handler := &harukiDataHandler.DataHandler{MongoManager: mongoManager, HTTPClient: &http.Client{}, Logger: *harukiLogger.NewLogger("DataHandler", "DEBUG", nil)}
 	result, err := handler.HandleAndUpdateData(ctx, data, harukiUtils.SupportedDataUploadServer(server), harukiUtils.UploadPolicy(policy), harukiUtils.UploadDataType(dataType), &userID)
 	if err != nil {
 		return result, err

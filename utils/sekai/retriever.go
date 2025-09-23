@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
@@ -16,20 +17,26 @@ const (
 	EN harukiUtils.SupportedInheritUploadServer = "en"
 )
 
+var thisProxy = harukiConfig.Cfg.Proxy
 var (
 	Api = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: "",
-		EN: "",
+		JP: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost),
+		EN: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost),
 	}
 
 	Headers = map[harukiUtils.SupportedInheritUploadServer]map[string]string{
-		JP: {},
-		EN: {},
+		JP: harukiConfig.Cfg.SekaiClient.JPServerInheritClientHeaders,
+		EN: harukiConfig.Cfg.SekaiClient.ENServerInheritClientHeaders,
 	}
 
 	Version = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: "",
-		EN: "",
+		JP: harukiConfig.Cfg.SekaiClient.JPServerAppVersionUrl,
+		EN: harukiConfig.Cfg.SekaiClient.ENServerAppVersionUrl,
+	}
+
+	InheritJWTToken = map[harukiUtils.SupportedInheritUploadServer]string{
+		JP: harukiConfig.Cfg.SekaiClient.JPServerInheritToken,
+		EN: harukiConfig.Cfg.SekaiClient.ENServerInheritToken,
 	}
 )
 
@@ -47,8 +54,6 @@ func NewSekaiDataRetriever(
 	inherit harukiUtils.InheritInformation,
 	policy harukiUtils.UploadPolicy,
 	uploadType harukiUtils.UploadDataType,
-	proxy string,
-	inheritJWTToken string,
 ) *HarukiSekaiDataRetriever {
 	client := NewSekaiClient(struct {
 		Server          harukiUtils.SupportedInheritUploadServer
@@ -64,8 +69,8 @@ func NewSekaiDataRetriever(
 		VersionURL:      Version[server],
 		Inherit:         inherit,
 		Headers:         Headers[server],
-		Proxy:           proxy,
-		InheritJWTToken: inheritJWTToken,
+		Proxy:           thisProxy,
+		InheritJWTToken: InheritJWTToken[server],
 	})
 
 	return &HarukiSekaiDataRetriever{
