@@ -112,12 +112,12 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 
 		if result.UserID != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, *result.UserID),
+				Message: fmt.Sprintf("%s server user %d successfully uploaded mysekai data.", serverStr, *result.UserID),
 			})
 		} else {
 			fmt.Println("Debug: UserID is nil")
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: fmt.Sprintf("%s server user with unknown ID successfully uploaded suite data.", serverStr),
+				Message: fmt.Sprintf("%s server user with unknown ID successfully uploaded mysekai data.", serverStr),
 			})
 		}
 	})
