@@ -1,0 +1,64 @@
+name: Build HarukiToolboxBackend
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build for Multiple Platforms
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.ref_name }}
+    strategy:
+      matrix:
+        platform: [windows-x64, linux-x64, linux-arm64, macos-arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.25.1
+
+      - name: Build Executable
+        run: |
+          mkdir -p dist
+          BIN_NAME=HarukiToolboxBackend-${VERSION}-${{ matrix.platform }}
+          case "${{ matrix.platform }}" in
+            windows-x64)
+              GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X=haruki-suite/version.Version=${VERSION}" -o dist/${BIN_NAME}-Windows-x64.exe ./main.go
+              ;;
+            linux-x64)
+              GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X=haruki-suite/version.Version=${VERSION}" -o dist/${BIN_NAME}-Linux-amd64 ./main.go
+              ;;
+            linux-arm64)
+              GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X=haruki-suite/version.Version=${VERSION}" -o dist/${BIN_NAME}-Linux-arm64 ./main.go
+              ;;
+            macos-arm64)
+              GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X=haruki-suite/version.Version=${VERSION}" -o dist/${BIN_NAME}-macOS-arm64 ./main.go
+              ;;
+          esac
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: HarukiToolboxBackend-${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/HarukiToolboxBackend-${{ github.ref_name }}.exe
+            dist/HarukiToolboxBackend-${{ github.ref_name }}
+            dist/HarukiToolboxBackend-${{ github.ref_name }}
+            dist/HarukiToolboxBackend-${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
