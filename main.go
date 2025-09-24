@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
@@ -59,7 +60,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 20 * 1024 * 1024,
+	})
+
+	allowedOrigins := make(map[string]struct{})
+	for _, origin := range harukiConfig.Cfg.Backend.AllowCORS {
+		allowedOrigins[origin] = struct{}{}
+	}
+
+	app.Use(cors.New(cors.Config{
+		AllowOriginsFunc: func(origin string) bool {
+			_, ok := allowedOrigins[origin]
+			return ok
+		},
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowCredentials: true,
+	}))
+
 	var accessLogFile *os.File
 	if harukiConfig.Cfg.Backend.AccessLog != "" {
 		loggerConfig := logger.Config{Format: harukiConfig.Cfg.Backend.AccessLog}
