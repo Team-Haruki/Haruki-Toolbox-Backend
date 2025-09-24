@@ -24,13 +24,13 @@ jobs:
 
       - name: Build Docker image
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository }}/haruki-toolbox-backend
+          IMAGE_NAME=ghcr.io/$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')/haruki-toolbox-backend
           VERSION=${{ github.ref_name }}
           docker build -t $IMAGE_NAME:$VERSION -t $IMAGE_NAME:latest .
 
       - name: Push Docker image
         run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository }}/haruki-toolbox-backend
+          IMAGE_NAME=ghcr.io/$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')/haruki-toolbox-backend
           VERSION=${{ github.ref_name }}
           docker push $IMAGE_NAME:$VERSION
           docker push $IMAGE_NAME:latest
