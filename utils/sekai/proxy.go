@@ -235,7 +235,7 @@ func HandleProxyUpload(
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 
-		if _, err := manager.UpdateData(ctx, userID, resp.DecryptedBody, dataType); err != nil {
+		if _, err := manager.UpdateData(ctx, string(server), userID, resp.DecryptedBody, dataType); err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 
