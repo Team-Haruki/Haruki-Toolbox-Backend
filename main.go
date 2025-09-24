@@ -107,8 +107,15 @@ func main() {
 	publicAPI.RegisterRoutes(app)
 
 	addr := fmt.Sprintf("%s:%d", harukiConfig.Cfg.Backend.Host, harukiConfig.Cfg.Backend.Port)
-	if err := app.Listen(addr); err != nil {
-		mainLogger.Errorf("Failed to start server: %v", err)
-		os.Exit(1)
+	if harukiConfig.Cfg.Backend.SSL {
+		if err := app.ListenTLS(addr, harukiConfig.Cfg.Backend.SSLCert, harukiConfig.Cfg.Backend.SSLKey); err != nil {
+			mainLogger.Errorf("Failed to start HTTPS server: %v", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := app.Listen(addr); err != nil {
+			mainLogger.Errorf("Failed to start HTTP server: %v", err)
+			os.Exit(1)
+		}
 	}
 }
