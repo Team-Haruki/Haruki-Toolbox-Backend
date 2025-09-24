@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
 )
@@ -47,7 +47,7 @@ func CacheKeyBuilder(c *fiber.Ctx, namespace string) string {
 }
 
 func SetCache(ctx context.Context, client *redis.Client, key string, value interface{}, ttl time.Duration) error {
-	data, err := json.Marshal(value)
+	data, err := sonic.Marshal(value)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func GetCache(ctx context.Context, client *redis.Client, key string, out interfa
 	if err != nil {
 		return false, err
 	}
-	return true, json.Unmarshal([]byte(val), out)
+	return true, sonic.Unmarshal([]byte(val), out)
 }
 
 func DeleteCache(ctx context.Context, client *redis.Client, key string) error {

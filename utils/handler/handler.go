@@ -2,9 +2,8 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	harukiUtils "haruki-suite/utils"
+	"haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiMongo "haruki-suite/utils/mongo"
 	harukiSekai "haruki-suite/utils/sekai"
@@ -15,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"encoding/json"
+
 	"github.com/go-resty/resty/v2"
 )
 
@@ -24,7 +25,7 @@ type DataHandler struct {
 	Logger       *harukiLogger.Logger
 }
 
-func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, policy harukiUtils.UploadPolicy, server harukiUtils.SupportedDataUploadServer) map[string]interface{} {
+func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, policy utils.UploadPolicy, server utils.SupportedDataUploadServer) map[string]interface{} {
 	data["upload_time"] = time.Now().Unix()
 	data["policy"] = string(policy)
 	data["_id"] = userID
@@ -32,7 +33,7 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, p
 	return data
 }
 
-func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server harukiUtils.SupportedDataUploadServer, policy harukiUtils.UploadPolicy, dataType harukiUtils.UploadDataType, userID *int64) (*harukiUtils.HandleDataResult, error) {
+func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, policy utils.UploadPolicy, dataType utils.UploadDataType, userID *int64) (*utils.HandleDataResult, error) {
 	unpacked, err := harukiSekai.Unpack(raw, server)
 	if err != nil {
 		h.Logger.Errorf("unpack failed: %v", err)
@@ -48,7 +49,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 	if status, ok := unpackedMap["httpStatus"]; ok {
 		errCode, _ := unpackedMap["errorCode"].(string)
 		statusCode := int(status.(float64))
-		return &harukiUtils.HandleDataResult{
+		return &utils.HandleDataResult{
 			Status:       &statusCode,
 			ErrorMessage: &errCode,
 		}, fmt.Errorf("data retrieve error")
@@ -95,11 +96,11 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		return nil, err
 	}
 
-	if policy == harukiUtils.UploadPolicyPublic {
+	if policy == utils.UploadPolicyPublic {
 		go h.CallWebhook(ctx, *userID, server, dataType)
 	}
 
-	return &harukiUtils.HandleDataResult{UserID: userID}, nil
+	return &utils.HandleDataResult{UserID: userID}, nil
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
@@ -127,7 +128,7 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	}
 }
 
-func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) {
+func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
 	callbacks, err := h.MongoManager.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
 
 	if err != nil || len(callbacks) == 0 {

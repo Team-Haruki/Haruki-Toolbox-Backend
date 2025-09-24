@@ -5,8 +5,6 @@ import (
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/mongo"
 
-	"net/http"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -17,7 +15,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if jwtToken == "" {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Missing X-Haruki-Suite-Webhook-Token header",
-				Status:  harukiRootApi.IntPtr(http.StatusUnauthorized),
+				Status:  harukiRootApi.IntPtr(fiber.StatusUnauthorized),
 			})
 		}
 
@@ -30,7 +28,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if err != nil || !token.Valid {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Invalid or expired JWT",
-				Status:  harukiRootApi.IntPtr(http.StatusForbidden),
+				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 			})
 		}
 
@@ -38,7 +36,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if !ok {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Invalid token claims",
-				Status:  harukiRootApi.IntPtr(http.StatusForbidden),
+				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 			})
 		}
 
@@ -47,7 +45,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if !okID || !okCred {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Invalid token payload",
-				Status:  harukiRootApi.IntPtr(http.StatusForbidden),
+				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 			})
 		}
 
@@ -55,7 +53,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if err != nil || user == nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Webhook user not found or credential mismatch",
-				Status:  harukiRootApi.IntPtr(http.StatusForbidden),
+				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 			})
 		}
 
@@ -73,7 +71,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Failed to fetch subscribers",
-				Status:  harukiRootApi.IntPtr(http.StatusInternalServerError),
+				Status:  harukiRootApi.IntPtr(fiber.StatusInternalServerError),
 			})
 		}
 		return c.JSON(users)
@@ -87,7 +85,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 				Message: err.Error(),
 			})
 		}
@@ -96,7 +94,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 				Message: err.Error(),
 			})
 		}
@@ -105,7 +103,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Failed to register webhook push user",
-				Status:  harukiRootApi.IntPtr(http.StatusInternalServerError),
+				Status:  harukiRootApi.IntPtr(fiber.StatusInternalServerError),
 			})
 		}
 		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{Message: "Registered webhook push user successfully."})
@@ -119,7 +117,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 				Message: err.Error(),
 			})
 		}
@@ -128,7 +126,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 				Message: err.Error(),
 			})
 		}
@@ -137,7 +135,7 @@ func RegisterRoutes(app *fiber.App, manager *harukiMongo.MongoDBManager, secret 
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Failed to unregister webhook push user",
-				Status:  harukiRootApi.IntPtr(http.StatusInternalServerError),
+				Status:  harukiRootApi.IntPtr(fiber.StatusInternalServerError),
 			})
 		}
 		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{Message: "Unregistered webhook push user successfully."})

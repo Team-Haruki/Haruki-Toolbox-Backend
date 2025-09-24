@@ -2,7 +2,6 @@ package api
 
 import (
 	Utils "haruki-suite/utils"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,7 +10,7 @@ import (
 )
 
 func JSONResponse(c *fiber.Ctx, resp Utils.APIResponse) error {
-	status := http.StatusOK
+	status := fiber.StatusOK
 	if resp.Status != nil {
 		status = *resp.Status
 	}
