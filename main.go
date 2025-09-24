@@ -34,7 +34,7 @@ func main() {
 		defer logFile.Close()
 	}
 	mainLogger := harukiLogger.NewLogger("Main", harukiConfig.Cfg.Backend.LogLevel, loggerWriter)
-	mainLogger.Infof(fmt.Sprintf("========================= Haruki Suite Backend %s =========================", harukiVersion.Version))
+	mainLogger.Infof(fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
 	mainLogger.Infof("Powered By Haruki Dev Team")
 	mainLogger.Infof("Haruki Suite Backend Main Access Log Level: %s", harukiConfig.Cfg.Backend.LogLevel)
 	mainLogger.Infof("Haruki Suite Backend Main Access Log Save Path: %s", harukiConfig.Cfg.Backend.MainLogFile)

@@ -105,7 +105,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			string(policy),
 			mongoManager,
 			redisClient,
-			string(uploadType),
+			string(harukiUtils.UploadDataTypeSuite),
 			result.UserID,
 		)
 

@@ -66,5 +66,6 @@ func GetCache(ctx context.Context, client *redis.Client, key string, out interfa
 }
 
 func DeleteCache(ctx context.Context, client *redis.Client, key string) error {
+	fmt.Println("Clear cache key: ", key)
 	return client.Del(ctx, key).Err()
 }

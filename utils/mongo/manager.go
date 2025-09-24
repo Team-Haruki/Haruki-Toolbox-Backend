@@ -3,8 +3,8 @@ package manager
 import (
 	"context"
 	"errors"
-	"fmt"
 	"haruki-suite/utils"
+	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -185,7 +185,7 @@ func (m *MongoDBManager) GetWebhookUser(ctx context.Context, id, credential stri
 func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, server, dataType string) ([]bson.M, error) {
 	var binding bson.M
 	err := m.webhookUserCollection.FindOne(ctx,
-		bson.M{"uid": fmt.Sprintf("%d", userID), "server": server, "type": dataType},
+		bson.M{"uid": strconv.FormatInt(userID, 10), "server": server, "type": dataType},
 	).Decode(&binding)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return []bson.M{}, nil
@@ -201,10 +201,13 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, se
 
 	var ids []primitive.ObjectID
 	for _, v := range webhookIDs {
-		if s, ok := v.(string); ok {
-			if oid, err := primitive.ObjectIDFromHex(s); err == nil {
+		switch val := v.(type) {
+		case string:
+			if oid, err := primitive.ObjectIDFromHex(val); err == nil {
 				ids = append(ids, oid)
 			}
+		case primitive.ObjectID:
+			ids = append(ids, val)
 		}
 	}
 

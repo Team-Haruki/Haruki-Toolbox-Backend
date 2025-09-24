@@ -283,7 +283,7 @@ func (c *Client) Login(ctx context.Context) error {
 
 	if st, ok := unpacked["sessionToken"].(string); ok {
 		c.headers["X-Session-Token"] = st
-		c.logger.Infof(" %s Server Sekai Client logged in.", strings.ToUpper(string(c.server)))
+		c.logger.Infof("%s Server Sekai Client logged in.", strings.ToUpper(string(c.server)))
 		return nil
 	}
 	return fmt.Errorf("login response missing sessionToken")

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	harukiUtils "haruki-suite/utils"
@@ -10,14 +9,16 @@ import (
 	harukiSekaiClient "haruki-suite/utils/sekai"
 	harukiVersion "haruki-suite/version"
 	"io"
-	"net/http"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 type DataHandler struct {
 	MongoManager *harukiMongo.MongoDBManager
-	HTTPClient   *http.Client
+	RestyClient  *resty.Client
 	Logger       harukiLogger.Logger
 }
 
@@ -81,37 +82,42 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
 	h.Logger.Infof("Calling back WebHook API: %s", url)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(nil))
-	req.Header.Set("User-Agent", fmt.Sprintf("Haruki-Suite/%s", harukiVersion.Version))
+	request := h.RestyClient.R().
+		SetContext(ctx).
+		SetHeader("User-Agent", fmt.Sprintf("Haruki-Suite/%s", harukiVersion.Version))
 	if bearer != "" {
-		req.Header.Set("Authorization", "Bearer "+bearer)
+		request.SetHeader("Authorization", "Bearer "+bearer)
 	}
 
-	resp, err := h.HTTPClient.Do(req)
+	resp, err := request.Post(url)
 	if err != nil {
 		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	io.Copy(io.Discard, resp.RawBody())
+	resp.RawBody().Close()
 
-	if resp.StatusCode == 200 {
+	if resp.StatusCode() == 200 {
 		h.Logger.Infof("Called back WebHook API %s successfully.", url)
 	} else {
-		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, resp.StatusCode)
+		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, resp.StatusCode())
 	}
 }
 
 func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) {
 	callbacks, err := h.MongoManager.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
+
 	if err != nil || len(callbacks) == 0 {
 		return
 	}
 
 	var wg sync.WaitGroup
 	for _, cb := range callbacks {
-		url := fmt.Sprintf(cb["callback_url"].(string), userID, server, dataType)
-		bearer, _ := cb["bearer"].(string)
+		url := cb["callback_url"].(string)
+		url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
+		url = strings.ReplaceAll(url, "{server}", string(server))
+		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
+		bearer, _ := cb["Bearer"].(string)
 
 		wg.Add(1)
 		go func(u, b string) {

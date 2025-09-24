@@ -8,14 +8,14 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	harukiMongo "haruki-suite/utils/mongo"
 	harukiRedis "haruki-suite/utils/redis"
-	"net/http"
 	"strconv"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/redis/go-redis/v9"
 )
 
 func HandleUpload(ctx context.Context, data []byte, server string, policy string, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client, dataType string, userID int64) (*harukiUtils.HandleDataResult, error) {
-	handler := &harukiDataHandler.DataHandler{MongoManager: mongoManager, HTTPClient: &http.Client{}, Logger: *harukiLogger.NewLogger("DataHandler", "DEBUG", nil)}
+	handler := &harukiDataHandler.DataHandler{MongoManager: mongoManager, RestyClient: resty.New(), Logger: *harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil)}
 	result, err := handler.HandleAndUpdateData(ctx, data, harukiUtils.SupportedDataUploadServer(server), harukiUtils.UploadPolicy(policy), harukiUtils.UploadDataType(dataType), &userID)
 	if err != nil {
 		return result, err
