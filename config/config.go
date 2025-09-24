@@ -29,12 +29,13 @@ type WebhookConfig struct {
 }
 
 type BackendConfig struct {
-	Host          string `yaml:"host"`
-	Port          int    `yaml:"port"`
-	LogLevel      string `yaml:"log_level"`
-	MainLogFile   string `yaml:"main_log_file"`
-	AccessLog     string `yaml:"access_log"`
-	AccessLogPath string `yaml:"access_log_path"`
+	Host          string   `yaml:"host"`
+	Port          int      `yaml:"port"`
+	LogLevel      string   `yaml:"log_level"`
+	MainLogFile   string   `yaml:"main_log_file"`
+	AccessLog     string   `yaml:"access_log"`
+	AccessLogPath string   `yaml:"access_log_path"`
+	AllowCORS     []string `yaml:"allow_cors"`
 }
 
 type SekaiClientConfig struct {
