@@ -1,0 +1,104 @@
+proxy: "http://127.0.0.1:6152"
+
+mongodb:
+  url: "mongodb://user:password@host:port"
+  db: "data"
+  suite: "suite"
+  mysekai: "mysekai"
+  webhook: "webhook"
+  webhook_user: "webhook_user"
+  private_api_secret: "Bearer jaklwfgawujfhgwaf"
+  private_api_user_agent: "Specific UA"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""   # 为空表示无密码
+
+webhook:
+  jwt_secret: "" # Webhook签名私钥
+
+backend:
+  host: "0.0.0.0"
+  port: 9999
+  ssl: false
+  ssl_cert: ""
+  ssl_key: ""
+  log_level: "INFO"
+  main_log_file: "main.log"
+  access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"
+  access_log_path: "access.log"
+  allow_cors:
+    - "https://example.com"
+
+
+sekai_client:
+  en_server_api_host: ""
+  en_server_aes_key: ""
+  en_server_aes_iv: ""
+  jp_server_api_host: ""
+  tw_server_api_host: ""
+  kr_server_api_host: ""
+  cn_server_api_host: ""
+  other_server_aes_key: ""
+  other_server_aes_iv: ""
+  jp_server_inherit_token: ""
+  en_server_inherit_token: ""
+  jp_server_app_version_url: ""
+  en_server_app_version_url: ""
+  jp_server_inherit_client_headers:
+    Host: ""
+    # Add more here
+  en_server_inherit_client_headers:
+    Host: ""
+    # Add more here
+  suite_remove_keys:
+    - "userInherit"
+    - "userMaterials"
+    - "userActionSets"
+    - "userInformations"
+    - "userProfileHonors"
+    - "userCustomProfiles"
+    - "userEventExchanges"
+    - "userMissionStatuses"
+    - "userBillingShopItems"
+    - "userReleaseConditions"
+    - "userCostume3dStatuses"
+    - "userCostume3dShopItems"
+    - "userCustomProfileCards"
+    - "userUnitEpisodeStatuses"
+    - "userCustomProfileGachas"
+    - "userEventEpisodeStatuses"
+    - "userSpecialEpisodeStatuses"
+    - "userCustomProfileResources"
+    - "userArchiveEventEpisodeStatuses"
+    - "userCustomProfileResourceUsages"
+    - "userCharacterProfileEpisodeStatuses"
+
+others:
+  public_api_allowed_keys:
+    - "userDecks"
+    - "userCards"
+    - "userAreas"
+    - "userHonors"
+    - "userMusics"
+    - "userEvents"
+    - "upload_time"
+    - "userProfile"
+    - "userCharacters"
+    - "userWorldBlooms"
+    - "userBondsHonors"
+    - "userMusicResults"
+    - "userMysekaiGates"
+    - "userProfileHonors"
+    - "userMysekaiCanvases"
+    - "userRankMatchSeasons"
+    - "userMysekaiMaterials"
+    - "userMusicAchievements"
+    - "userMysekaiCharacterTalks"
+    - "userWorldBloomSupportDecks"
+    - "userChallengeLiveSoloDecks"
+    - "userChallengeLiveSoloStages"
+    - "userChallengeLiveSoloResults"
+    - "userChallengeLiveSoloHighScoreRewards"
+    - "userMysekaiFixtureGameCharacterPerformanceBonuses"
