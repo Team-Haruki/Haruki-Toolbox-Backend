@@ -88,7 +88,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 				mongoManager,
 				redisClient,
 				string(uploadType),
-				result.UserID,
+				&result.UserID,
 			)
 		}
 
@@ -106,7 +106,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			mongoManager,
 			redisClient,
 			string(harukiUtils.UploadDataTypeSuite),
-			result.UserID,
+			&result.UserID,
 		)
 
 		if uploadErr != nil {
