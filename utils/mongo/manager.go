@@ -75,7 +75,7 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int64, data map[
 	latestEvents := make(map[int64]map[string]interface{})
 	for _, ev := range allEvents {
 		if e, ok := ev.(map[string]interface{}); ok {
-			eventID := int64(e["eventId"].(int32))
+			eventID := getInt(e, "eventId")
 			if old, exists := latestEvents[eventID]; !exists {
 				latestEvents[eventID] = e
 			} else {
@@ -110,8 +110,8 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int64, data map[
 	for _, bv := range allBlooms {
 		if b, ok := bv.(map[string]interface{}); ok {
 			key := bloomKey{
-				EventID: int64(b["eventId"].(int32)),
-				CharID:  int64(b["gameCharacterId"].(int32)),
+				EventID: getInt(b, "eventId"),
+				CharID:  getInt(b, "gameCharacterId"),
 			}
 			if old, exists := latestBlooms[key]; !exists {
 				latestBlooms[key] = b
