@@ -55,10 +55,6 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dist/HarukiToolboxBackend-${{ github.ref_name }}.exe
-            dist/HarukiToolboxBackend-${{ github.ref_name }}
-            dist/HarukiToolboxBackend-${{ github.ref_name }}
-            dist/HarukiToolboxBackend-${{ github.ref_name }}
+          files: dist/HarukiToolboxBackend-${{ github.ref_name }}-*
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
