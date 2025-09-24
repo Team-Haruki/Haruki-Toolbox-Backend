@@ -92,7 +92,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 
 	data := h.PreHandleData(unpackedMap, *userID, policy, server)
 
-	if _, err := h.MongoManager.UpdateData(ctx, *userID, data, dataType); err != nil {
+	if _, err := h.MongoManager.UpdateData(ctx, string(server), *userID, data, dataType); err != nil {
 		return nil, err
 	}
 

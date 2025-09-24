@@ -50,7 +50,7 @@ func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUs
 	}, nil
 }
 
-func (m *MongoDBManager) UpdateData(ctx context.Context, userID int64, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
+func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID int64, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
 	var collection *mongo.Collection
 	if dataType == utils.UploadDataTypeSuite {
 		collection = m.suiteCollection
@@ -144,7 +144,7 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, userID int64, data map[
 
 	updateDoc := bson.M{"$set": finalData}
 	return collection.UpdateOne(ctx,
-		bson.M{"_id": userID},
+		bson.M{"_id": userID, "server": server},
 		updateDoc,
 		options.Update().SetUpsert(true),
 	)
