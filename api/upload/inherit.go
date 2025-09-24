@@ -7,7 +7,6 @@ import (
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/mongo"
 	harukiSekai "haruki-suite/utils/sekai"
-	"net/http"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
@@ -25,28 +24,28 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 		policy, err := harukiUtils.ParseUploadPolicy(policyStr)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 		uploadType, err := harukiUtils.ParseUploadDataType(uploadTypeStr)
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 		data := new(harukiUtils.InheritInformation)
 		if c.BodyParser(data) != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Validation error: " + err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusUnprocessableEntity),
+				Status:  harukiRootApi.IntPtr(fiber.StatusUnprocessableEntity),
 			})
 		}
 
@@ -54,7 +53,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			uploadType == harukiUtils.UploadDataTypeMysekai {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Haruki Inherit can not accept EN server's mysekai data upload request at this time.",
-				Status:  harukiRootApi.IntPtr(http.StatusForbidden),
+				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 			})
 		}
 
@@ -68,7 +67,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 
@@ -77,7 +76,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			if result.Mysekai == nil {
 				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 					Message: "Retrieve mysekai data failed.",
-					Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 				})
 			}
 			_, uploadErr = HandleUpload(
@@ -95,7 +94,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if result.Suite == nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Retrieve suite data failed.",
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 		_, uploadErr = HandleUpload(
@@ -112,7 +111,7 @@ func registerInheritRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if uploadErr != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: uploadErr.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{

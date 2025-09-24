@@ -3,7 +3,6 @@ package sekai
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -117,7 +117,7 @@ func (c *Client) parseAppVersion(ctx context.Context, retries int) error {
 				DataVersion  string `json:"dataVersion"`
 				AssetVersion string `json:"assetVersion"`
 			}
-			if err := json.Unmarshal(resp.Body(), &data); err != nil {
+			if err := sonic.Unmarshal(resp.Body(), &data); err != nil {
 				c.logger.Errorf("Failed to unmarshal %s server app version json: %v", strings.ToUpper(string(c.server)), err)
 				continue
 			}

@@ -6,7 +6,6 @@ import (
 	harukiRootApi "haruki-suite/api"
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/mongo"
-	"net/http"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -20,7 +19,7 @@ func requireUploadType(expectedType harukiUtils.UploadDataType) fiber.Handler {
 		if uploadType != expectedType {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "Invalid upload_type: expected " + string(expectedType),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 
@@ -39,7 +38,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 
@@ -57,7 +56,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 
@@ -82,7 +81,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 
@@ -107,7 +106,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		if err != nil {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(http.StatusBadRequest),
+				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
 			})
 		}
 
