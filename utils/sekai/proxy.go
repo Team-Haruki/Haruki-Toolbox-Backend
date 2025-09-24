@@ -5,6 +5,7 @@ import (
 	"fmt"
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
+	harukiHttp "haruki-suite/utils/http"
 	harukiMongo "haruki-suite/utils/mongo"
 	harukiRedis "haruki-suite/utils/redis"
 	urlParse "net/url"
@@ -14,8 +15,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
-	"github.com/valyala/fasthttp"
-	"github.com/valyala/fasthttp/fasthttpproxy"
 )
 
 // 允许透传的请求头
@@ -111,52 +110,14 @@ func HarukiSekaiProxyCallAPI(
 		url += "?" + q.Encode()
 	}
 
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
+	client := harukiHttp.NewClient(proxy, 15*time.Second)
 
-	req.SetRequestURI(url)
-	req.Header.SetMethod(method)
-	for k, v := range filteredHeaders {
-		req.Header.Set(k, v)
-	}
-	if len(data) > 0 {
-		req.SetBody(data)
+	statusCode, respHeaders, respBody, err := client.Request(ctx, method, url, filteredHeaders, data)
+	if err != nil {
+		return nil, err
 	}
 
-	client := &fasthttp.Client{}
-	if proxy != "" {
-		proxyURL, err := urlParse.Parse(proxy)
-		if err != nil {
-			return nil, fmt.Errorf("invalid proxy url: %v", err)
-		}
-		switch proxyURL.Scheme {
-		case "http":
-			client.Dial = fasthttpproxy.FasthttpHTTPDialer(proxyURL.Host)
-		case "https":
-			client.Dial = fasthttpproxy.FasthttpHTTPDialer(proxyURL.Host)
-		case "socks5":
-			client.Dial = fasthttpproxy.FasthttpSocksDialer(proxyURL.Host)
-		default:
-			return nil, fmt.Errorf("unsupported proxy scheme: %s", proxyURL.Scheme)
-		}
-	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- client.DoTimeout(req, resp, 15*time.Second)
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errCh:
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	rawBody := append([]byte(nil), resp.Body()...)
+	rawBody := append([]byte(nil), respBody...)
 	unpacked, err := Unpack(rawBody, server)
 	if err != nil {
 		return nil, err
@@ -168,14 +129,14 @@ func HarukiSekaiProxyCallAPI(
 	}
 
 	newHeaders := make(map[string]string)
-	for k, v := range resp.Header.All() {
-		newHeaders[string(append([]byte(nil), k...))] = string(append([]byte(nil), v...))
+	for k, v := range respHeaders {
+		newHeaders[k] = v
 	}
 
 	return &harukiUtils.SekaiDataRetrieverResponse{
 		RawBody:       rawBody,
 		DecryptedBody: unpackedMap,
-		StatusCode:    resp.StatusCode(),
+		StatusCode:    statusCode,
 		NewHeaders:    newHeaders,
 	}, nil
 }
