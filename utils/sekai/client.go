@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	harukiUtils "haruki-suite/utils"
+	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
 	"math"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -23,7 +23,6 @@ type Client struct {
 	versionURL      string
 	inherit         harukiUtils.InheritInformation
 	headers         map[string]string
-	proxy           string
 	userID          int64
 	credential      string
 	loginBonus      bool
@@ -31,8 +30,8 @@ type Client struct {
 	errorMessage    string
 	inheritJWTToken string
 
-	http   *resty.Client
-	logger *harukiLogger.Logger
+	httpClient *harukiHttp.Client
+	logger     *harukiLogger.Logger
 }
 
 func NewSekaiClient(cfg struct {
@@ -44,13 +43,7 @@ func NewSekaiClient(cfg struct {
 	Proxy           string
 	InheritJWTToken string
 }) *Client {
-	http := resty.New().
-		SetTimeout(60*time.Second).
-		SetHeader("Content-Type", "application/octet-stream")
-
-	if cfg.Proxy != "" {
-		http.SetProxy(cfg.Proxy)
-	}
+	http := harukiHttp.NewClient(cfg.Proxy, 15*time.Second)
 
 	return &Client{
 		server:          cfg.Server,
@@ -58,9 +51,8 @@ func NewSekaiClient(cfg struct {
 		versionURL:      cfg.VersionURL,
 		inherit:         cfg.Inherit,
 		headers:         cfg.Headers,
-		proxy:           cfg.Proxy,
 		inheritJWTToken: cfg.InheritJWTToken,
-		http:            http,
+		httpClient:      http,
 		logger:          harukiLogger.NewLogger("SekaiClient", "DEBUG", nil),
 	}
 }
@@ -73,15 +65,13 @@ func (c *Client) getCookies(ctx context.Context, retries int) error {
 	c.logger.Infof("Parsing JP server cookies...")
 	url := "https://issue.sekai.colorfulpalette.org/api/signature"
 	for i := 0; i < retries; i++ {
-		resp, err := c.http.R().
-			SetContext(ctx).
-			Post(url)
+		status, headers, _, err := c.httpClient.Request(ctx, "POST", url, nil, nil)
 		if err != nil {
-			c.logger.Warnf("Resty returned error while parsing cookies: %v, retrying...", err)
+			c.logger.Warnf("HTTP client returned error while parsing cookies: %v, retrying...", err)
 			continue
 		}
-		if resp.StatusCode() == 200 {
-			if cookie := resp.Header().Get("Set-Cookie"); cookie != "" {
+		if status == 200 {
+			if cookie, ok := headers["Set-Cookie"]; ok && cookie != "" {
 				c.headers["Cookie"] = cookie
 				c.logger.Infof("JP server cookies parsed.")
 				return nil
@@ -89,7 +79,7 @@ func (c *Client) getCookies(ctx context.Context, retries int) error {
 			c.logger.Errorf("Failed to parse JP server cookies, empty Set-Cookie header")
 			continue
 		}
-		c.logger.Errorf("Failed to parse JP server cookies, status=%d", resp.StatusCode())
+		c.logger.Errorf("Failed to parse JP server cookies, status=%d", status)
 	}
 	c.isErrorExist = true
 	c.errorMessage = "failed to parse cookies after retries"
@@ -103,21 +93,19 @@ func (c *Client) parseAppVersion(ctx context.Context, retries int) error {
 
 	c.logger.Infof("Parsing %s server app version...", strings.ToUpper(string(c.server)))
 	for i := 0; i < retries; i++ {
-		resp, err := c.http.SetTimeout(10 * time.Second).R().
-			SetContext(ctx).
-			Get(c.versionURL)
+		status, _, body, err := c.httpClient.Request(ctx, "GET", c.versionURL, nil, nil)
 		if err != nil {
-			c.logger.Warnf("Resty returned error while parsing %s server version: %v, retrying...", strings.ToUpper(string(c.server)), err)
+			c.logger.Warnf("HTTP client returned error while parsing %s server version: %v, retrying...", strings.ToUpper(string(c.server)), err)
 			continue
 		}
-		if resp.StatusCode() == 200 {
+		if status == 200 {
 			var data struct {
 				AppVersion   string `json:"appVersion"`
 				AppHash      string `json:"appHash"`
 				DataVersion  string `json:"dataVersion"`
 				AssetVersion string `json:"assetVersion"`
 			}
-			if err := sonic.Unmarshal(resp.Body(), &data); err != nil {
+			if err := sonic.Unmarshal(body, &data); err != nil {
 				c.logger.Errorf("Failed to unmarshal %s server app version json: %v", strings.ToUpper(string(c.server)), err)
 				continue
 			}
@@ -128,7 +116,7 @@ func (c *Client) parseAppVersion(ctx context.Context, retries int) error {
 			c.logger.Infof("Parsed %s server app version.", strings.ToUpper(string(c.server)))
 			return nil
 		}
-		c.logger.Errorf("Game version API returned error, status=%d", resp.StatusCode())
+		c.logger.Errorf("Game version API returned error, status=%d", status)
 	}
 	c.isErrorExist = true
 	c.errorMessage = "failed to parse game version after retries"
@@ -159,28 +147,23 @@ func (c *Client) callAPI(ctx context.Context, path, method string, body []byte, 
 	}
 	headers["X-Request-Id"] = uuid.NewString()
 
-	req := c.http.R().
-		SetContext(ctx).
-		SetHeaders(headers).
-		SetBody(body)
-
 	url := c.api + path
-	resp, err := req.Execute(method, url)
+	status, respHeaders, respBody, err := c.httpClient.Request(ctx, method, url, headers, body)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	if resp.StatusCode() == 200 {
-		if st := resp.Header().Get("X-Session-Token"); st != "" {
+	if status == 200 {
+		if st, ok := respHeaders["X-Session-Token"]; ok && st != "" {
 			c.headers["X-Session-Token"] = st
 		}
-		if resp.Header().Get("X-Login-Bonus-Status") == "true" {
+		if v, ok := respHeaders["X-Login-Bonus-Status"]; ok && v == "true" {
 			c.loginBonus = true
 		}
-		return resp.Body(), resp.StatusCode(), nil
+		return respBody, status, nil
 	}
 
-	return resp.Body(), resp.StatusCode(), fmt.Errorf("API error: %d", resp.StatusCode())
+	return respBody, status, fmt.Errorf("API error: %d", status)
 }
 
 func (c *Client) InheritAccount(ctx context.Context, returnUserID bool) error {

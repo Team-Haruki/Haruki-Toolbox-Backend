@@ -6,6 +6,7 @@ import (
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiHandler "haruki-suite/utils/handler"
+	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiMongo "haruki-suite/utils/mongo"
 	"haruki-suite/utils/sekai"
@@ -14,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
 )
@@ -99,11 +99,9 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 			Data:        chunkCopy,
 		})
 
-		// ✅ 先返回响应
 		go func(header *dataUploadHeader, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string) {
 			chunks := dataChunks[header.UploadId]
 			if len(chunks) == header.TotalChunks {
-				// 排序拼接
 				sort.Slice(chunks, func(x, y int) bool {
 					return chunks[x].ChunkIndex < chunks[y].ChunkIndex
 				})
@@ -130,7 +128,6 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 			}
 		}(header, userId, server, string(uploadType))
 
-		// 马上返回
 		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{Message: "Successfully uploaded data."})
 	})
 
@@ -163,7 +160,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, RestyClient: resty.New()}
+		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, HttpClient: &harukiHttp.Client{Proxy: harukiConfig.Cfg.Proxy, Timeout: 15 * time.Second}, Logger: logger}
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
@@ -208,7 +205,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, RestyClient: resty.New(), Logger: logger}
+		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, HttpClient: &harukiHttp.Client{Proxy: harukiConfig.Cfg.Proxy, Timeout: 15 * time.Second}, Logger: logger}
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,

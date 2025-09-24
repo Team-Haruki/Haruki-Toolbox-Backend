@@ -4,24 +4,22 @@ import (
 	"context"
 	"fmt"
 	"haruki-suite/utils"
+	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiMongo "haruki-suite/utils/mongo"
 	harukiSekai "haruki-suite/utils/sekai"
 	harukiVersion "haruki-suite/version"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"encoding/json"
-
-	"github.com/go-resty/resty/v2"
 )
 
 type DataHandler struct {
 	MongoManager *harukiMongo.MongoDBManager
-	RestyClient  *resty.Client
+	HttpClient   *harukiHttp.Client
 	Logger       *harukiLogger.Logger
 }
 
@@ -106,25 +104,23 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
 	h.Logger.Infof("Calling back WebHook API: %s", url)
 
-	request := h.RestyClient.R().
-		SetContext(ctx).
-		SetHeader("User-Agent", fmt.Sprintf("Haruki-Suite/%s", harukiVersion.Version))
+	headers := map[string]string{
+		"User-Agent": fmt.Sprintf("Haruki-Suite/%s", harukiVersion.Version),
+	}
 	if bearer != "" {
-		request.SetHeader("Authorization", "Bearer "+bearer)
+		headers["Authorization"] = "Bearer " + bearer
 	}
 
-	resp, err := request.Post(url)
+	statusCode, _, _, err := h.HttpClient.Request(ctx, "POST", url, headers, nil)
 	if err != nil {
 		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return
 	}
-	io.Copy(io.Discard, resp.RawBody())
-	resp.RawBody().Close()
 
-	if resp.StatusCode() == 200 {
+	if statusCode == 200 {
 		h.Logger.Infof("Called back WebHook API %s successfully.", url)
 	} else {
-		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, resp.StatusCode())
+		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, statusCode)
 	}
 }
 
