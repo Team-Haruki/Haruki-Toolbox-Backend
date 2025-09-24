@@ -14,6 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type HarukiPublicAPI struct {
@@ -82,28 +83,40 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 
 		if dataType == harukiUtils.UploadDataTypeSuite {
 			suite := map[string]interface{}{}
-			if gameData, ok := result["userGamedata"].(map[string]interface{}); ok && len(gameData) > 0 {
+			var filteredUserGamedata map[string]interface{}
+			if gameData, ok := result["userGamedata"].(primitive.M); ok && len(gameData) > 0 {
 				filtered := map[string]interface{}{}
 				for _, key := range []string{"userId", "name", "deck", "exp", "totalExp"} {
 					if v, ok := gameData[key]; ok {
 						filtered[key] = v
 					}
 				}
-				suite["userGamedata"] = filtered
+				filteredUserGamedata = filtered
 			}
 			allowedKeys := api.AllowedKeys
 			requestKey := c.Query("key")
 			if requestKey != "" {
 				keys := strings.Split(requestKey, ",")
+				includeUserGamedata := false
+				for _, key := range keys {
+					if key == "userGamedata" {
+						includeUserGamedata = true
+						break
+					}
+				}
 				if len(keys) == 1 {
 					key := keys[0]
-					if !harukiUtils.ArrayContains(allowedKeys, key) {
+					if !harukiUtils.ArrayContains(allowedKeys, key) && key != "userGamedata" {
 						return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 							Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 							Message: "Invalid request key",
 						})
 					}
-					resp = harukiUtils.GetValueFromResult(result, key)
+					if key == "userGamedata" {
+						resp = filteredUserGamedata
+					} else {
+						resp = harukiUtils.GetValueFromResult(result, key)
+					}
 				} else {
 					for _, key := range keys {
 						if key == "userGamedata" {
@@ -117,10 +130,16 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 						}
 						suite[key] = harukiUtils.GetValueFromResult(result, key)
 					}
+					if includeUserGamedata && filteredUserGamedata != nil {
+						suite["userGamedata"] = filteredUserGamedata
+					}
 					resp = suite
 				}
 			} else {
 				for _, key := range allowedKeys {
+					if key == "userGamedata" {
+						continue
+					}
 					suite[key] = harukiUtils.GetValueFromResult(result, key)
 				}
 				resp = suite

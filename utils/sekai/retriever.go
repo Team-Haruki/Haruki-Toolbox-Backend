@@ -87,7 +87,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 	if r.isErrorExist {
 		return nil, fmt.Errorf(r.ErrorMessage)
 	}
-	r.logger.Infof("%s server retrieving suite...", r.client.server)
+	r.logger.Infof("%s server retrieving suite...", strings.ToUpper(string(r.client.server)))
 	basePath := fmt.Sprintf("/suite/user/%s", strconv.FormatInt(r.client.userID, 10))
 
 	suite, status, err := r.client.callAPI(ctx, basePath, "GET", nil, nil)

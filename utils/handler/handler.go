@@ -79,7 +79,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 				h.Logger.Debugf("userId raw type: %T, value: %v", v, v)
 			}
 		}
-		h.Logger.Debugf("Extracted userId: %d", extracted)
+
 		if extracted == 0 {
 			return nil, fmt.Errorf("failed to extract userId from unpacked data")
 		}
