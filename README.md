@@ -1,7 +1,7 @@
-# Haruki Suite DB API
+# Haruki Toolbox Backend
 
-**Haruki Suite DB API** is a companion project for [HarukiBot](https://github.com/Team-Haruki), collecting user-submitted suite and mysekai data, and optionally provides public APIs for querying.
-It also utilizes `fastapi-cache2` for efficient caching to speed up API responses.
+**Haruki Toolbox Backend API** is a companion project for [HarukiBot](https://github.com/Team-Haruki), collecting user-submitted suite and mysekai data, and optionally provides public APIs for querying.
+It also utilizes Redis for efficient caching to speed up API responses.
 
 ## Requirements
 + `MongoDB`
@@ -9,21 +9,13 @@ It also utilizes `fastapi-cache2` for efficient caching to speed up API response
 
 ## How to Use
 
-1. Rename `configs.example.py` to `configs.py` and then configure it.
-2. Install [uv](https://github.com/astral-sh/uv) to manage and install project dependencies.
-3. Run the following command to install dependencies:
-   ```bash
-   uv sync
-   ```
-4. (Optional) If you're on **Linux/macOS**, it's recommended to install [uvloop](https://github.com/MagicStack/uvloop) for better performance:
-   ```bash
-   uv add uvloop
-   ```
-5. If you need to change the listening address or other server settings, edit the `hypercorn.toml` file. If you have installed uvloop, uncomment the `worker_class` line in `hypercorn.toml` to enable it. 
-6. Finally, run the server using:
-   ```bash
-   uv run hypercorn app:app --config hypercorn.toml
-   ```
+1. Go to release page to download `HarukiToolboxBackend`
+2. Download `haruki-suite-configs.example.yaml`, and rename it to `haruki-suite-configs.yaml`
+3. Make a new directory or use an exists directory
+4. Put `HarukiToolboxBackend` and `haruki-suite-configs.yaml` in the same directory
+5. Edit `haruki-suite-configs.yaml` and configure it
+6. Open Terminal, and `cd` to the directory
+7. Run `HarukiToolboxBackend`
 
 ## License
 
