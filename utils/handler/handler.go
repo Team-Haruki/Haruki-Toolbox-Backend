@@ -2,13 +2,15 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiMongo "haruki-suite/utils/mongo"
-	harukiSekaiClient "haruki-suite/utils/sekai"
+	harukiSekai "haruki-suite/utils/sekai"
 	harukiVersion "haruki-suite/version"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +21,7 @@ import (
 type DataHandler struct {
 	MongoManager *harukiMongo.MongoDBManager
 	RestyClient  *resty.Client
-	Logger       harukiLogger.Logger
+	Logger       *harukiLogger.Logger
 }
 
 func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, policy harukiUtils.UploadPolicy, server harukiUtils.SupportedDataUploadServer) map[string]interface{} {
@@ -31,7 +33,7 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, p
 }
 
 func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server harukiUtils.SupportedDataUploadServer, policy harukiUtils.UploadPolicy, dataType harukiUtils.UploadDataType, userID *int64) (*harukiUtils.HandleDataResult, error) {
-	unpacked, err := harukiSekaiClient.Unpack(raw, server)
+	unpacked, err := harukiSekai.Unpack(raw, server)
 	if err != nil {
 		h.Logger.Errorf("unpack failed: %v", err)
 		return nil, err
@@ -53,17 +55,38 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 	}
 
 	if userID == nil {
+		var extracted int64 = 0
 		if gameData, ok := unpackedMap["userGamedata"].(map[string]interface{}); ok {
-			if id, ok := gameData["userId"].(float64); ok {
-				id64 := int64(id)
-				userID = &id64
+			switch v := gameData["userId"].(type) {
+			case json.Number:
+				if id64, err := v.Int64(); err == nil {
+					extracted = id64
+				} else if u64, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
+					extracted = int64(u64)
+				}
+			case string:
+				if u64, err := strconv.ParseUint(v, 10, 64); err == nil {
+					extracted = int64(u64)
+				}
+			case float64:
+				extracted = int64(v)
+			case int64:
+				extracted = v
+			case uint64:
+				extracted = int64(v)
+			default:
+				h.Logger.Debugf("userId raw type: %T, value: %v", v, v)
 			}
 		}
+		h.Logger.Debugf("Extracted userId: %d", extracted)
+		if extracted == 0 {
+			return nil, fmt.Errorf("failed to extract userId from unpacked data")
+		}
+		userID = new(int64)
+		*userID = extracted
 	}
-
 	if userID == nil {
-		h.Logger.Errorf("userID is nil and cannot be retrieved from data")
-		return nil, fmt.Errorf("userID is nil and cannot be retrieved")
+		return nil, fmt.Errorf("failed to extract userId from unpacked data")
 	}
 
 	data := h.PreHandleData(unpackedMap, *userID, policy, server)

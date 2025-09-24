@@ -51,7 +51,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			mongoManager,
 			redisClient,
 			string(harukiUtils.UploadDataTypeSuite),
-			0,
+			nil,
 		)
 
 		if err != nil {
@@ -61,9 +61,16 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			})
 		}
 
-		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-			Message: fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, result.UserID),
-		})
+		if result.UserID != nil {
+			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+				Message: fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, *result.UserID),
+			})
+		} else {
+			fmt.Println("Debug: UserID is nil")
+			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+				Message: fmt.Sprintf("%s server user with unknown ID successfully uploaded suite data.", serverStr),
+			})
+		}
 	})
 
 	api.Post("/:user_id/upload", requireUploadType(harukiUtils.UploadDataTypeMysekai), func(c *fiber.Ctx) error {
@@ -94,7 +101,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			mongoManager,
 			redisClient,
 			string(harukiUtils.UploadDataTypeMysekai),
-			userId,
+			&userId,
 		)
 
 		if err != nil {
@@ -104,9 +111,16 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			})
 		}
 
-		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-			Message: fmt.Sprintf("%s server user %d successfully uploaded mysekai data.", serverStr, result.UserID),
-		})
+		if result.UserID != nil {
+			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+				Message: fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, *result.UserID),
+			})
+		} else {
+			fmt.Println("Debug: UserID is nil")
+			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+				Message: fmt.Sprintf("%s server user with unknown ID successfully uploaded suite data.", serverStr),
+			})
+		}
 	})
 
 }

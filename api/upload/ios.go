@@ -17,6 +17,7 @@ import (
 
 	"net/http"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"
 )
@@ -34,7 +35,7 @@ type dataUploadHeader struct {
 
 func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
 	api := app.Group("/ios")
-	logger := harukiLogger.NewLogger("SekaiApi", "DEBUG", nil)
+	logger := harukiLogger.NewLogger("HarukiSekaiProxy", "DEBUG", nil)
 	dataChunks := make(map[string][]harukiUtils.DataChunk)
 
 	api.Post("/script/upload", func(c *fiber.Ctx) error {
@@ -186,7 +187,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager}
+		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, RestyClient: resty.New()}
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
@@ -194,6 +195,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 			dataHandler.PreHandleData,
 			dataHandler.CallWebhook,
 			redisClient,
+			harukiUtils.UploadDataTypeSuite,
 		)
 		// python
 		// for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):
@@ -230,7 +232,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager}
+		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, RestyClient: resty.New(), Logger: logger}
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
@@ -238,6 +240,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 			dataHandler.PreHandleData,
 			dataHandler.CallWebhook,
 			redisClient,
+			harukiUtils.UploadDataTypeMysekai,
 		)
 		// python
 		// for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):

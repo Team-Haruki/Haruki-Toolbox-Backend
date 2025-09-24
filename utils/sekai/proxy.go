@@ -187,12 +187,12 @@ func HandleProxyUpload(
 	preHandle func(map[string]interface{}, int64, harukiUtils.UploadPolicy, harukiUtils.SupportedDataUploadServer) map[string]interface{},
 	callWebhook func(context.Context, int64, harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType),
 	redisClient *redis.Client,
+	dataType harukiUtils.UploadDataType,
 ) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx := context.Background()
 
 		serverStr := c.Params("server")
-		dataTypeStr := c.Params("data_type")
 		userIDStr := c.Params("user_id")
 		if userIDStr == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid user_id")
@@ -203,11 +203,6 @@ func HandleProxyUpload(
 		}
 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
-		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, err.Error())
-		}
-
-		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
