@@ -160,7 +160,11 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, HttpClient: &harukiHttp.Client{Proxy: harukiConfig.Cfg.Proxy, Timeout: 15 * time.Second}, Logger: logger}
+		dataHandler := harukiHandler.DataHandler{
+            MongoManager: mongoManager,
+            HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
+            Logger:       logger,
+        }
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
@@ -170,10 +174,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 			redisClient,
 			harukiUtils.UploadDataTypeSuite,
 		)
-		// python
-		// for path in get_clear_cache_paths(server, UploadDataType.suite, user_id):
-		// await clear_cache_by_path(**path)
-		return proxyHandler(c)
+			return proxyHandler(c)
 	})
 
 	api.Post("/proxy/:server/:policy/user/:user_id/mysekai", func(c *fiber.Ctx) error {
@@ -205,7 +206,11 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 
-		dataHandler := harukiHandler.DataHandler{MongoManager: mongoManager, HttpClient: &harukiHttp.Client{Proxy: harukiConfig.Cfg.Proxy, Timeout: 15 * time.Second}, Logger: logger}
+		dataHandler := harukiHandler.DataHandler{
+            MongoManager: mongoManager,
+            HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
+            Logger:       logger,
+        }
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
