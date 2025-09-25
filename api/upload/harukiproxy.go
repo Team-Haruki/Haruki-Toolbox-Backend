@@ -6,43 +6,85 @@ import (
 	harukiRootApi "haruki-suite/api"
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/mongo"
+	"regexp"
 	"strconv"
-	"time"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/hashicorp/go-version"
 	"github.com/redis/go-redis/v9"
 )
 
-func requireUploadType(expectedType harukiUtils.UploadDataType) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		uploadType := harukiUtils.UploadDataType(c.Params("upload_type"))
+var harukiProxyClientUserAgent *string
+var harukiProxyClientVersion *string
+var harukiProxyClientSecret *string
 
-		if uploadType != expectedType {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: "Invalid upload_type: expected " + string(expectedType),
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-			})
+func validateHarukiProxyClientHeader() fiber.Handler {
+	if harukiProxyClientUserAgent != nil && harukiProxyClientVersion != nil && harukiProxyClientSecret != nil {
+		return func(c *fiber.Ctx) error {
+			requestUserAgent := c.Get("User-Agent")
+			requestSecret := c.Get("X-Haruki-Toolbox-Secret")
+
+			if requestSecret != *harukiProxyClientSecret {
+				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+					Message: "Invalid HarukiProxy Secret",
+					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
+				})
+			}
+
+			re := regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
+			matches := re.FindStringSubmatch(requestUserAgent)
+			if len(matches) < 3 {
+				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+					Message: "Invalid User-Agent format",
+					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
+				})
+			}
+
+			uaName := matches[1]
+			if *harukiProxyClientUserAgent != uaName {
+				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+					Message: "Invalid User-Agent name",
+					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
+				})
+			}
+
+			clientVerStr := matches[2]
+			clientVerStr = strings.TrimPrefix(clientVerStr, "v")
+			minVerStr := strings.TrimPrefix(*harukiProxyClientVersion, "v")
+			clientVer, err1 := version.NewVersion(clientVerStr)
+			minVer, err2 := version.NewVersion(minVerStr)
+			if err1 != nil || err2 != nil {
+				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+					Message: "Invalid version string",
+					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
+				})
+			}
+			if clientVer.LessThan(minVer) {
+				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+					Message: fmt.Sprintf("Client version %s is below minimum required %s", clientVerStr, *harukiProxyClientVersion),
+					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
+				})
+			}
+
+			return c.Next()
 		}
+	}
 
+	return func(c *fiber.Ctx) error {
 		return c.Next()
 	}
 }
 
-func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
-	api := app.Group("/general/:server/:upload_type/:policy")
+func registerHarukiProxyRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client, proxyUserAgent, proxyVersion, proxySecret *string) {
+	api := app.Group("/harukiproxy/:server/:upload_type/:policy", validateHarukiProxyClientHeader())
 
-	deadline := time.Date(2025, 9, 26, 12, 0, 0, 0, time.FixedZone("CST", 8*3600))
-	api.Use(func(c *fiber.Ctx) error {
-		if time.Now().After(deadline) {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: "This API has expired and no longer accepts requests.",
-				Status:  harukiRootApi.IntPtr(fiber.StatusGone),
-			})
-		}
-		return c.Next()
-	})
+	if proxyUserAgent != nil && proxyVersion != nil && proxySecret != nil {
+		harukiProxyClientUserAgent = proxyUserAgent
+		harukiProxyClientSecret = proxySecret
+	}
 
-	api.Post("/upload", requireUploadType(harukiUtils.UploadDataTypeSuite), func(c *fiber.Ctx) error {
+	api.Post("/upload", func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
 
@@ -84,7 +126,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		}
 	})
 
-	api.Post("/:user_id/upload", requireUploadType(harukiUtils.UploadDataTypeMysekai), func(c *fiber.Ctx) error {
+	api.Post("/:user_id/upload", func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
 		userIdStr := c.Params("user_id")
