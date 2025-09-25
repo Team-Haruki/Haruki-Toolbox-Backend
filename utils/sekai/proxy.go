@@ -196,8 +196,9 @@ func HandleProxyUpload(
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 
-		go manager.UpdateData(ctx, string(server), userID, resp.DecryptedBody, dataType)
-
+		if _, err := manager.UpdateData(ctx, string(server), userID, resp.DecryptedBody, dataType); err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
 		go harukiRedis.ClearCache(ctx, redisClient, string(dataType), string(server), userID)
 		go callWebhook(ctx, userID, server, dataType)
 
