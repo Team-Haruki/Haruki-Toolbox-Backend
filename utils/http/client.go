@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"time"
 
@@ -17,7 +18,9 @@ type Client struct {
 }
 
 func NewClient(proxy string, timeout time.Duration) *Client {
-	return &Client{Proxy: proxy, Timeout: timeout, client: &fasthttp.Client{}}
+	client := &Client{Proxy: proxy, Timeout: timeout, client: &fasthttp.Client{}}
+	client.init()
+	return client
 }
 
 func (c *Client) init() error {
@@ -26,6 +29,13 @@ func (c *Client) init() error {
 	}
 	c.client = &fasthttp.Client{}
 	if c.Proxy == "" {
+		d := &net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+		c.client.Dial = func(addr string) (net.Conn, error) {
+			return d.Dial("tcp", addr)
+		}
 		return nil
 	}
 
@@ -45,10 +55,6 @@ func (c *Client) init() error {
 }
 
 func (c *Client) Request(ctx context.Context, method, uri string, headers map[string]string, body []byte) (int, map[string]string, []byte, error) {
-	if err := c.init(); err != nil {
-		return 0, nil, nil, err
-	}
-
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
