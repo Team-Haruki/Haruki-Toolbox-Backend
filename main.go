@@ -98,7 +98,7 @@ func main() {
 	}
 	privateApi.RegisterRoutes(app, mongoManager, harukiConfig.Cfg.MongoDB.PrivateApiSecret, harukiConfig.Cfg.MongoDB.PrivateApiUserAgent)
 	webhookApi.RegisterRoutes(app, mongoManager, harukiConfig.Cfg.Webhook.JWTSecret)
-	uploadApi.RegisterRoutes(app, mongoManager, redisClient)
+	uploadApi.RegisterRoutes(app, mongoManager, redisClient, &harukiConfig.Cfg.HarukiProxy.UserAgent, &harukiConfig.Cfg.HarukiProxy.Version, &harukiConfig.Cfg.HarukiProxy.Secret)
 	publicAPI := &publicApi.HarukiPublicAPI{
 		Mongo:       mongoManager,
 		Redis:       redisClient,

@@ -41,6 +41,12 @@ type BackendConfig struct {
 	AllowCORS     []string `yaml:"allow_cors"`
 }
 
+type HarukiProxyConfig struct {
+	UserAgent string `yaml:"user_agent"`
+	Version   string `yaml:"version"`
+	Secret    string `yaml:"secret"`
+}
+
 type SekaiClientConfig struct {
 	ENServerAPIHost              string            `yaml:"en_server_api_host"`
 	ENServerAESKey               string            `yaml:"en_server_aes_key"`
@@ -71,6 +77,7 @@ type Config struct {
 	Backend     BackendConfig     `yaml:"backend"`
 	Others      OthersConfig      `yaml:"others"`
 	SekaiClient SekaiClientConfig `yaml:"sekai_client"`
+	HarukiProxy HarukiProxyConfig `yaml:"haruki_proxy"`
 }
 
 var Cfg Config

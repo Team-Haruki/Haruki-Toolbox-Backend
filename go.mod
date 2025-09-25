@@ -8,6 +8,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.9
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/go-version v1.7.0
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
 	github.com/vmihailenco/msgpack/v5 v5.4.1
