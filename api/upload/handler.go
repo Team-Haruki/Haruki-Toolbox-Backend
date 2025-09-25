@@ -17,7 +17,11 @@ import (
 )
 
 func HandleUpload(ctx context.Context, data []byte, server string, policy string, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client, dataType string, userID *int64) (*harukiUtils.HandleDataResult, error) {
-	handler := &harukiDataHandler.DataHandler{MongoManager: mongoManager, HttpClient: &harukiHttp.Client{Proxy: harukiConfig.Cfg.Proxy, Timeout: 15 * time.Second}, Logger: harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil)}
+    handler := &harukiDataHandler.DataHandler{
+        MongoManager: mongoManager,
+        HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
+        Logger:       harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil),
+    }
 	result, err := handler.HandleAndUpdateData(ctx, data, harukiUtils.SupportedDataUploadServer(server), harukiUtils.UploadPolicy(policy), harukiUtils.UploadDataType(dataType), userID)
 	if err != nil {
 		return result, err
