@@ -6,8 +6,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func RestoreCompactData(data map[string]interface{}) []map[string]interface{} {
-	enumRaw, _ := data["__ENUM__"].(map[string]interface{})
+func RestoreCompactData(data bson.M) []map[string]interface{} {
+	enumRaw, _ := data["__ENUM__"].(bson.M)
+
 	var columnLabels []string
 	var columns [][]interface{}
 
@@ -17,36 +18,63 @@ func RestoreCompactData(data map[string]interface{}) []map[string]interface{} {
 		}
 		columnLabels = append(columnLabels, key)
 
-		if enumColumnRaw, ok := enumRaw[key]; ok {
-			enumColumn, _ := enumColumnRaw.([]interface{})
-			var columnValues []interface{}
-			dataColumn, _ := value.([]interface{})
-			for _, v := range dataColumn {
-				if v == nil {
-					columnValues = append(columnValues, nil)
-				} else {
-					index, ok := v.(int)
-					if !ok {
-						// 尝试 float64 转 int（JSON 解析后可能是 float64）
-						if f, okf := v.(float64); okf {
-							index = int(f)
-						} else {
-							index = 0
-						}
+		var dataColumn []interface{}
+		switch v := value.(type) {
+		case []interface{}:
+			dataColumn = v
+		case bson.A:
+			dataColumn = v
+		default:
+			dataColumn = []interface{}{}
+		}
+
+		if enumRaw != nil {
+			if enumColumnRaw, ok := enumRaw[key]; ok {
+				var enumSlice []interface{}
+				switch e := enumColumnRaw.(type) {
+				case []interface{}:
+					enumSlice = e
+				case bson.A:
+					enumSlice = e
+				default:
+					enumSlice = nil
+				}
+
+				columnValues := make([]interface{}, 0, len(dataColumn))
+				for _, v := range dataColumn {
+					if v == nil {
+						columnValues = append(columnValues, nil)
+						continue
 					}
-					if index >= 0 && index < len(enumColumn) {
-						columnValues = append(columnValues, enumColumn[index])
+					var index int
+					switch t := v.(type) {
+					case int:
+						index = t
+					case int32:
+						index = int(t)
+					case int64:
+						index = int(t)
+					case float64:
+						index = int(t)
+					default:
+						index = 0
+					}
+					if index >= 0 && index < len(enumSlice) {
+						columnValues = append(columnValues, enumSlice[index])
 					} else {
 						columnValues = append(columnValues, nil)
 					}
 				}
+				columns = append(columns, columnValues)
+				continue
 			}
-			columns = append(columns, columnValues)
-		} else {
-			// 普通列
-			colSlice, _ := value.([]interface{})
-			columns = append(columns, colSlice)
 		}
+
+		columns = append(columns, dataColumn)
+	}
+
+	if len(columns) == 0 {
+		return []map[string]interface{}{}
 	}
 
 	numEntries := len(columns[0])
@@ -56,11 +84,15 @@ func RestoreCompactData(data map[string]interface{}) []map[string]interface{} {
 		}
 	}
 
-	var result []map[string]interface{}
+	result := make([]map[string]interface{}, 0, numEntries)
 	for i := 0; i < numEntries; i++ {
-		entry := map[string]interface{}{}
+		entry := make(map[string]interface{}, len(columnLabels))
 		for j, key := range columnLabels {
-			entry[key] = columns[j][i]
+			if i < len(columns[j]) {
+				entry[key] = columns[j][i]
+			} else {
+				entry[key] = nil
+			}
 		}
 		result = append(result, entry)
 	}
@@ -76,11 +108,23 @@ func GetValueFromResult(result bson.M, key string) interface{} {
 		return []interface{}{}
 	}
 	compactName := fmt.Sprintf("compact%s%s", string(key[0]-32), key[1:])
-	if val, ok := result[compactName]; ok {
-		if compactData, ok2 := val.(map[string]interface{}); ok2 {
-			return RestoreCompactData(compactData)
-		}
-		return val
+	val, ok := result[compactName]
+	if !ok {
+		return []interface{}{}
 	}
-	return []interface{}{}
+
+	switch m := val.(type) {
+	case bson.M:
+		return RestoreCompactData(m)
+	case map[string]interface{}:
+		return RestoreCompactData(m)
+	case bson.D:
+		bm := make(bson.M, len(m))
+		for _, elem := range m {
+			bm[elem.Key] = elem.Value
+		}
+		return RestoreCompactData(bm)
+	default:
+		return []interface{}{}
+	}
 }
