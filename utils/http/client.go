@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -34,10 +33,7 @@ func (c *Client) init() error {
 		c.client.SetTimeout(15 * time.Second)
 	}
 	if c.Proxy != "" {
-		err := c.client.SetProxy(c.Proxy)
-		if err != nil {
-			return fmt.Errorf("invalid proxy url: %v", err)
-		}
+		c.client.SetProxy(c.Proxy)
 	}
 	return nil
 }
