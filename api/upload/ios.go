@@ -132,6 +132,10 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 	})
 
 	api.Get("/proxy/:server/:policy/suite/user/:user_id", func(c *fiber.Ctx) error {
+		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+			Message: "This endpoint is temporarily disabled",
+			Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
+		})
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
@@ -161,10 +165,10 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 
 		dataHandler := harukiHandler.DataHandler{
-            MongoManager: mongoManager,
-            HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
-            Logger:       logger,
-        }
+			MongoManager: mongoManager,
+			HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
+			Logger:       logger,
+		}
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
@@ -174,7 +178,7 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 			redisClient,
 			harukiUtils.UploadDataTypeSuite,
 		)
-			return proxyHandler(c)
+		return proxyHandler(c)
 	})
 
 	api.Post("/proxy/:server/:policy/user/:user_id/mysekai", func(c *fiber.Ctx) error {
@@ -207,10 +211,10 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 
 		dataHandler := harukiHandler.DataHandler{
-            MongoManager: mongoManager,
-            HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
-            Logger:       logger,
-        }
+			MongoManager: mongoManager,
+			HttpClient:   harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
+			Logger:       logger,
+		}
 		proxyHandler := sekai.HandleProxyUpload(
 			mongoManager,
 			harukiConfig.Cfg.Proxy,
