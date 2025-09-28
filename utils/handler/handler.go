@@ -46,7 +46,29 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 
 	if status, ok := unpackedMap["httpStatus"]; ok {
 		errCode, _ := unpackedMap["errorCode"].(string)
-		statusCode := int(status.(float64))
+		var statusCode int
+		switch v := status.(type) {
+		case float64:
+			statusCode = int(v)
+		case int:
+			statusCode = v
+		case int32:
+			statusCode = int(v)
+		case int64:
+			statusCode = int(v)
+		case uint16:
+			statusCode = int(v)
+		case uint32:
+			statusCode = int(v)
+		case uint64:
+			statusCode = int(v)
+		case json.Number:
+			if i64, err := v.Int64(); err == nil {
+				statusCode = int(i64)
+			}
+		default:
+			h.Logger.Debugf("unexpected httpStatus type: %T, value: %v", v, v)
+		}
 		return &utils.HandleDataResult{
 			Status:       &statusCode,
 			ErrorMessage: &errCode,
