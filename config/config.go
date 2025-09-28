@@ -41,6 +41,14 @@ type BackendConfig struct {
 	AllowCORS     []string `yaml:"allow_cors"`
 }
 
+type SMTPConfig struct {
+	SMTPAddr string `yaml:"smtp_addr"`
+	SMTPPort int    `yaml:"smtp_port"`
+	SMTPMail string `yaml:"smtp_mail"`
+	SMTPPass string `yaml:"smtp_pass"`
+	MailName string `yaml:"mail_name"`
+}
+
 type HarukiProxyConfig struct {
 	UserAgent string `yaml:"user_agent"`
 	Version   string `yaml:"version"`
@@ -75,6 +83,7 @@ type Config struct {
 	Redis       RedisConfig       `yaml:"redis"`
 	Webhook     WebhookConfig     `yaml:"webhook"`
 	Backend     BackendConfig     `yaml:"backend"`
+	SMTP        SMTPConfig        `yaml:"smtp"`
 	Others      OthersConfig      `yaml:"others"`
 	SekaiClient SekaiClientConfig `yaml:"sekai_client"`
 	HarukiProxy HarukiProxyConfig `yaml:"haruki_proxy"`
