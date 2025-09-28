@@ -34,7 +34,7 @@ func GetClearCachePaths(server string, dataType string, userID int64) []CachePat
 }
 
 func CacheKeyBuilder(c *fiber.Ctx, namespace string) string {
-	fullPath := c.Path() // 请求路径
+	fullPath := c.Path()
 	queryString := c.Context().QueryArgs().String()
 
 	queryHash := "none"
