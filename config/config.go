@@ -28,6 +28,13 @@ type WebhookConfig struct {
 	JWTSecret string `yaml:"jwt_secret"`
 }
 
+type UserSystemConfig struct {
+	DBType           string     `yaml:"db_type"`
+	DBURL            string     `yaml:"db_url"`
+	CloudflareSecret string     `yaml:"cloudflare_secret"`
+	SMTP             SMTPConfig `yaml:"smtp"`
+}
+
 type BackendConfig struct {
 	Host          string   `yaml:"host"`
 	Port          int      `yaml:"port"`
@@ -83,7 +90,7 @@ type Config struct {
 	Redis       RedisConfig       `yaml:"redis"`
 	Webhook     WebhookConfig     `yaml:"webhook"`
 	Backend     BackendConfig     `yaml:"backend"`
-	SMTP        SMTPConfig        `yaml:"smtp"`
+	UserSystem  UserSystemConfig  `yaml:"usersystem"`
 	Others      OthersConfig      `yaml:"others"`
 	SekaiClient SekaiClientConfig `yaml:"sekai_client"`
 	HarukiProxy HarukiProxyConfig `yaml:"haruki_proxy"`

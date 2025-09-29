@@ -5,7 +5,7 @@ import (
 	"fmt"
 	harukiRootApi "haruki-suite/api"
 	harukiUtils "haruki-suite/utils"
-	harukiMongo "haruki-suite/utils/mongo"
+	harukiMongo "haruki-suite/utils/database/mongo"
 	"regexp"
 	"strconv"
 	"strings"
