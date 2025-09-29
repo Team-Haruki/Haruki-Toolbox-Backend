@@ -3,7 +3,7 @@ package webhook
 import (
 	harukiRootApi "haruki-suite/api"
 	harukiUtils "haruki-suite/utils"
-	harukiMongo "haruki-suite/utils/mongo"
+	harukiMongo "haruki-suite/utils/database/mongo"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"

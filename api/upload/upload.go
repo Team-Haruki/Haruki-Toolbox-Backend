@@ -1,7 +1,7 @@
 package upload
 
 import (
-	harukiMongo "haruki-suite/utils/mongo"
+	harukiMongo "haruki-suite/utils/database/mongo"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/redis/go-redis/v9"

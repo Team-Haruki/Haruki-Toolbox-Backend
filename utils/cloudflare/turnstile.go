@@ -2,6 +2,7 @@ package cloudflare
 
 import (
 	"fmt"
+	"haruki-suite/config"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -10,9 +11,9 @@ import (
 
 const verifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-func VerifyTurnstile(secret, response, remoteIP string) (*TurnstileResponse, error) {
+func VerifyTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 	payload := map[string]string{
-		"secret":   secret,
+		"secret":   config.Cfg.UserSystem.CloudflareSecret,
 		"response": response,
 	}
 	if remoteIP != "" {
