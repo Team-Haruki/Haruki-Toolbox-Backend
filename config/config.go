@@ -29,13 +29,14 @@ type WebhookConfig struct {
 }
 
 type UserSystemConfig struct {
-	DBType           string     `yaml:"db_type"`
-	DBURL            string     `yaml:"db_url"`
-	CloudflareSecret string     `yaml:"cloudflare_secret"`
-	SMTP             SMTPConfig `yaml:"smtp"`
-	SessionSignToken string     `yaml:"session_sign_token"`
-	AvatarSaveDir    string     `yaml:"avatar_save_dir"`
-	FrontendURL      string     `yaml:"frontend_url"`
+	DBType                    string     `yaml:"db_type"`
+	DBURL                     string     `yaml:"db_url"`
+	CloudflareSecret          string     `yaml:"cloudflare_secret"`
+	SMTP                      SMTPConfig `yaml:"smtp"`
+	SessionSignToken          string     `yaml:"session_sign_token"`
+	AvatarSaveDir             string     `yaml:"avatar_save_dir"`
+	FrontendURL               string     `yaml:"frontend_url"`
+	SocialPlatformVerifyToken string     `yaml:"social_platform_verify_token"`
 }
 
 type BackendConfig struct {
