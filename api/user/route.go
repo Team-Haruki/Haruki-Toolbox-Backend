@@ -1,18 +1,16 @@
 package user
 
 import (
-	"haruki-suite/utils/database/postgresql"
+	"haruki-suite/utils/database"
 	"haruki-suite/utils/sekaiapi"
 	smtp2 "haruki-suite/utils/smtp"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/redis/go-redis/v9"
 )
 
 type HarukiToolboxUserRouterHelpers struct {
 	Router         fiber.Router
-	DBClient       *postgresql.Client
-	RedisClient    *redis.Client
+	DBManager      *database.HarukiToolboxDBManager
 	SMTPClient     *smtp2.HarukiSMTPClient
 	SessionHandler *SessionHandler
 	SekaiAPIClient *sekaiapi.HarukiSekaiAPIClient
@@ -20,15 +18,13 @@ type HarukiToolboxUserRouterHelpers struct {
 
 func NewHarukiToolboxUserSystemHelpers(
 	router fiber.Router,
-	dbClient *postgresql.Client,
-	redisClient *redis.Client,
+	dbManager *database.HarukiToolboxDBManager,
 	smtpClient *smtp2.HarukiSMTPClient,
 	sessionHandler *SessionHandler,
 	sekaiAPIClient *sekaiapi.HarukiSekaiAPIClient) *HarukiToolboxUserRouterHelpers {
 	return &HarukiToolboxUserRouterHelpers{
 		Router:         router,
-		DBClient:       dbClient,
-		RedisClient:    redisClient,
+		DBManager:      dbManager,
 		SMTPClient:     smtpClient,
 		SessionHandler: sessionHandler,
 		SekaiAPIClient: sekaiAPIClient,

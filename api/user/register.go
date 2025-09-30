@@ -36,8 +36,12 @@ func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
 		}
 
 		redisKey := "email:verify:" + req.Email
-		otp, err := helper.RedisClient.Get(context.Background(), redisKey).Result()
-		if err != nil || otp != req.OneTimePassword {
+		var otp string
+		exists, err := helper.DBManager.Redis.GetCache(context.Background(), redisKey, &otp)
+		if err != nil {
+			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "redis error", nil)
+		}
+		if !exists || otp != req.OneTimePassword {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid or expired verification code", nil)
 		}
 
@@ -48,7 +52,7 @@ func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
 
 		uid := fmt.Sprintf("%010d", time.Now().UnixNano()%1e10)
 
-		user, err := helper.DBClient.User.Create().
+		user, err := helper.DBManager.DB.User.Create().
 			SetID(uid).
 			SetName(req.Name).
 			SetEmail(req.Email).
@@ -59,7 +63,7 @@ func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create user", nil)
 		}
 
-		emailInfo, err := helper.DBClient.EmailInfo.Create().
+		emailInfo, err := helper.DBManager.DB.EmailInfo.Create().
 			SetEmail(req.Email).
 			SetVerified(true).
 			SetUser(user).
@@ -68,7 +72,7 @@ func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create email info", nil)
 		}
 
-		helper.RedisClient.Del(context.Background(), redisKey)
+		helper.DBManager.Redis.DeleteCache(context.Background(), redisKey)
 
 		signedToken, err := helper.SessionHandler.IssueSession(uid)
 

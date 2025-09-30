@@ -7,7 +7,6 @@ import (
 	"haruki-suite/utils/cloudflare"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/user"
-	"haruki-suite/utils/database/redis"
 	"haruki-suite/utils/smtp"
 	"math/big"
 	"strings"
@@ -42,7 +41,7 @@ func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper HarukiT
 	}
 
 	code := GenerateCode(false)
-	if err := redis.SetCache(context.Background(), helper.RedisClient, "email:verify:"+email, code, 5*time.Minute); err != nil {
+	if err := helper.DBManager.Redis.SetCache(context.Background(), "email:verify:"+email, code, 5*time.Minute); err != nil {
 		return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
 	}
 
@@ -57,7 +56,7 @@ func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper HarukiT
 func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper HarukiToolboxUserRouterHelpers) error {
 	ctx := context.Background()
 	var code string
-	found, err := redis.GetCache(ctx, helper.RedisClient, "email:verify:"+email, &code)
+	found, err := helper.DBManager.Redis.GetCache(ctx, "email:verify:"+email, &code)
 	if err != nil || !found {
 		return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
 	}
@@ -66,7 +65,7 @@ func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper Haru
 		return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid verification code", nil)
 	}
 
-	redis.DeleteCache(ctx, helper.RedisClient, "email:verify:"+email)
+	helper.DBManager.Redis.DeleteCache(ctx, "email:verify:"+email)
 
 	return nil
 }
@@ -80,7 +79,7 @@ func RegisterEmailRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		ctx := context.Background()
-		exists, err := helper.DBClient.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
+		exists, err := helper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query database", nil)
 		}
@@ -102,14 +101,14 @@ func RegisterEmailRoutes(helper HarukiToolboxUserRouterHelpers) {
 		}
 		userID := c.Locals("userID").(string)
 		ctx := context.Background()
-		if _, err := helper.DBClient.User.
+		if _, err := helper.DBManager.DB.User.
 			Update().
 			Where(user.IDEQ(userID)).
 			SetEmail(req.Email).
 			Save(ctx); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update user email", nil)
 		}
-		if _, err := helper.DBClient.EmailInfo.
+		if _, err := helper.DBManager.DB.EmailInfo.
 			Update().
 			Where(emailinfo.HasUserWith(user.IDEQ(userID))).
 			SetEmail(req.Email).

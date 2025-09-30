@@ -1,8 +1,9 @@
-package private
+package user
 
 import (
 	"fmt"
 	harukiRootApi "haruki-suite/api"
+	"haruki-suite/api/public"
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/database/mongo"
 	"strconv"
@@ -23,7 +24,7 @@ func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Ha
 			})
 		}
 
-		if requiredAgentKeyword != "" && !harukiUtils.StringContains(userAgent, requiredAgentKeyword) {
+		if requiredAgentKeyword != "" && !public.StringContains(userAgent, requiredAgentKeyword) {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 				Message: "User-Agent not allowed",

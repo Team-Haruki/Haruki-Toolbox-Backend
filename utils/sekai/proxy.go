@@ -17,29 +17,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// 允许透传的请求头
-var allowedHeaders = map[string]struct{}{
-	"user-agent":        {},
-	"cookie":            {},
-	"x-forwarded-for":   {},
-	"accept-language":   {},
-	"accept":            {},
-	"accept-encoding":   {},
-	"x-devicemodel":     {},
-	"x-app-hash":        {},
-	"x-operatingsystem": {},
-	"x-kc":              {},
-	"x-unity-version":   {},
-	"x-app-version":     {},
-	"x-platform":        {},
-	"x-session-token":   {},
-	"x-asset-version":   {},
-	"x-request-id":      {},
-	"x-data-version":    {},
-	"content-type":      {},
-	"x-install-id":      {},
-}
-
 func GetAPIEndpoint() map[harukiUtils.SupportedDataUploadServer][2]string {
 	return map[harukiUtils.SupportedDataUploadServer][2]string{
 		harukiUtils.SupportedDataUploadServerJP: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost), harukiConfig.Cfg.SekaiClient.JPServerAPIHost},
@@ -48,11 +25,6 @@ func GetAPIEndpoint() map[harukiUtils.SupportedDataUploadServer][2]string {
 		harukiUtils.SupportedDataUploadServerKR: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.KRServerAPIHost), harukiConfig.Cfg.SekaiClient.KRServerAPIHost},
 		harukiUtils.SupportedDataUploadServerCN: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.CNServerAPIHost), harukiConfig.Cfg.SekaiClient.CNServerAPIHost},
 	}
-}
-
-var acquirePath = map[harukiUtils.UploadDataType]string{
-	harukiUtils.UploadDataTypeSuite:   "/suite/user/%d",
-	harukiUtils.UploadDataTypeMysekai: "/user/%d/mysekai?isForceAllReloadOnlyMySekai=True",
 }
 
 func cleanSuite(suite map[string]interface{}) map[string]interface{} {

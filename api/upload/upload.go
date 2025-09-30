@@ -9,7 +9,6 @@ import (
 
 func RegisterRoutes(app *fiber.App, mongoDBManager *harukiMongo.MongoDBManager, redisClient *redis.Client, harukiProxyUA, harukiProxyVersion, harukiProxySecret *string) {
 	registerIOSRoutes(app, mongoDBManager, redisClient)
-	registerGeneralRoutes(app, mongoDBManager, redisClient)
 	registerInheritRoutes(app, mongoDBManager, redisClient)
 	registerHarukiProxyRoutes(app, mongoDBManager, redisClient, harukiProxyUA, harukiProxyVersion, harukiProxySecret)
 }

@@ -23,7 +23,7 @@ func RegisterLoginRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid Turnstile challenge"})
 		}
 
-		user, err := helper.DBClient.User.
+		user, err := helper.DBManager.DB.User.
 			Query().
 			Where(userSchema.EmailEQ(payload.Email)).
 			WithEmailInfo().
