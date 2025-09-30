@@ -4,16 +4,14 @@ import (
 	"context"
 	"haruki-suite/utils"
 	"haruki-suite/utils/cloudflare"
-	userDB "haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
-	"net/http"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func RegisterLoginRoute(app *fiber.App, db *userDB.Client) {
-	app.Post("/api/user/login", func(c *fiber.Ctx) error {
+func RegisterLoginRoutes(helper HarukiToolboxUserRouterHelpers) {
+	helper.Router.Post("/api/user/login", func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		var payload LoginPayload
 		if err := c.BodyParser(&payload); err != nil {
@@ -25,7 +23,7 @@ func RegisterLoginRoute(app *fiber.App, db *userDB.Client) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid Turnstile challenge"})
 		}
 
-		user, err := db.User.
+		user, err := helper.DBClient.User.
 			Query().
 			Where(userSchema.EmailEQ(payload.Email)).
 			WithEmailInfo().
@@ -34,16 +32,16 @@ func RegisterLoginRoute(app *fiber.App, db *userDB.Client) {
 			WithGameAccountBindings().
 			Only(ctx)
 		if err != nil {
-			return UpdatedDataResponse[string](c, http.StatusUnauthorized, "Invalid email or password", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Invalid email or password", nil)
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(payload.Password)); err != nil {
-			return UpdatedDataResponse[string](c, http.StatusUnauthorized, "Invalid email or password", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Invalid email or password", nil)
 		}
 
-		sessionToken, err := IssueSession(user.UserID)
+		sessionToken, err := helper.SessionHandler.IssueSession(user.ID)
 		if err != nil {
-			return UpdatedDataResponse[string](c, http.StatusInternalServerError, "Could not issue session", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Could not issue session", nil)
 		}
 
 		var emailInfo EmailInfo
@@ -63,7 +61,7 @@ func RegisterLoginRoute(app *fiber.App, db *userDB.Client) {
 		if user.Edges.SocialPlatformInfo != nil {
 			socialPlatformInfo = &SocialPlatformInfo{
 				Platform: user.Edges.SocialPlatformInfo.Platform,
-				UserID:   user.Edges.SocialPlatformInfo.UserID,
+				UserID:   user.Edges.SocialPlatformInfo.PlatformUserID,
 				Verified: user.Edges.SocialPlatformInfo.Verified,
 			}
 		}
@@ -88,15 +86,15 @@ func RegisterLoginRoute(app *fiber.App, db *userDB.Client) {
 				gameAccountBindings = append(gameAccountBindings, GameAccountBinding{
 					ID:       g.ID,
 					Server:   utils.SupportedDataUploadServer(g.Server),
-					UserID:   g.UserID,
+					UserID:   g.GameUserID,
 					Verified: g.Verified,
 				})
 			}
 		}
 
-		ud := UserData{
+		ud := HarukiToolboxUserData{
 			Name:                        user.Name,
-			UserID:                      user.UserID,
+			UserID:                      user.ID,
 			AvatarPath:                  user.AvatarPath,
 			EmailInfo:                   emailInfo,
 			SocialPlatformInfo:          socialPlatformInfo,
@@ -104,7 +102,7 @@ func RegisterLoginRoute(app *fiber.App, db *userDB.Client) {
 			GameAccountBindings:         gameAccountBindings,
 			SessionToken:                sessionToken,
 		}
-		resp := RegisterOrLoginSuccessResponse{Status: http.StatusOK, Message: "login success", UserData: ud}
-		return ResponseWithStruct(c, http.StatusOK, &resp)
+		resp := RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
+		return ResponseWithStruct(c, fiber.StatusOK, &resp)
 	})
 }

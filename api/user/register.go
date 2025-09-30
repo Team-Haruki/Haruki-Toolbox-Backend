@@ -4,21 +4,18 @@ import (
 	"context"
 	"fmt"
 	"haruki-suite/utils/cloudflare"
-	"haruki-suite/utils/database/postgresql"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func RegisterRegisterRoutes(router fiber.Router, redisClient *redis.Client, postgresClient *postgresql.Client) {
-	router.Post("/api/user/register", func(c *fiber.Ctx) error {
+func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
+	helper.Router.Post("/api/user/register", func(c *fiber.Ctx) error {
 		var req RegisterPayload
 		if err := c.BodyParser(&req); err != nil {
-			return UpdatedDataResponse[string](c, 400, "invalid request payload", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request payload", nil)
 		}
 
 		xff := c.Get("X-Forwarded-For")
@@ -35,47 +32,47 @@ func RegisterRegisterRoutes(router fiber.Router, redisClient *redis.Client, post
 
 		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, remoteIP)
 		if err != nil || vresp == nil || !vresp.Success {
-			return UpdatedDataResponse[string](c, 400, "invalid challenge token", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid challenge token", nil)
 		}
 
 		redisKey := "email:verify:" + req.Email
-		otp, err := redisClient.Get(context.Background(), redisKey).Result()
+		otp, err := helper.RedisClient.Get(context.Background(), redisKey).Result()
 		if err != nil || otp != req.OneTimePassword {
-			return UpdatedDataResponse[string](c, 400, "invalid or expired verification code", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid or expired verification code", nil)
 		}
 
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return UpdatedDataResponse[string](c, 500, "failed to hash password", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to hash password", nil)
 		}
 
 		uid := fmt.Sprintf("%010d", time.Now().UnixNano()%1e10)
 
-		user, err := postgresClient.User.Create().
-			SetUserID(uid).
+		user, err := helper.DBClient.User.Create().
+			SetID(uid).
 			SetName(req.Name).
 			SetEmail(req.Email).
 			SetPasswordHash(string(passwordHash)).
 			SetNillableAvatarPath(nil).
 			Save(context.Background())
 		if err != nil {
-			return UpdatedDataResponse[string](c, 500, "failed to create user", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create user", nil)
 		}
 
-		emailInfo, err := postgresClient.EmailInfo.Create().
+		emailInfo, err := helper.DBClient.EmailInfo.Create().
 			SetEmail(req.Email).
 			SetVerified(true).
 			SetUser(user).
 			Save(context.Background())
 		if err != nil {
-			return UpdatedDataResponse[string](c, 500, "failed to create email info", nil)
+			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create email info", nil)
 		}
 
-		redisClient.Del(context.Background(), redisKey)
+		helper.RedisClient.Del(context.Background(), redisKey)
 
-		signedToken, err := IssueSession(uid)
+		signedToken, err := helper.SessionHandler.IssueSession(uid)
 
-		ud := UserData{
+		ud := HarukiToolboxUserData{
 			Name:                        user.Name,
 			UserID:                      uid,
 			AvatarPath:                  nil,
@@ -85,7 +82,7 @@ func RegisterRegisterRoutes(router fiber.Router, redisClient *redis.Client, post
 			GameAccountBindings:         nil,
 			SessionToken:                signedToken,
 		}
-		resp := RegisterOrLoginSuccessResponse{Status: http.StatusOK, Message: "register success", UserData: ud}
-		return ResponseWithStruct(c, http.StatusOK, &resp)
+		resp := RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "register success", UserData: ud}
+		return ResponseWithStruct(c, fiber.StatusOK, &resp)
 	})
 }

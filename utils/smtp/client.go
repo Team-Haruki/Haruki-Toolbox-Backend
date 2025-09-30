@@ -61,22 +61,22 @@ func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []by
 	return nil
 }
 
-type SMTPClient struct {
+type HarukiSMTPClient struct {
 	Addr string
 	Auth smtp.Auth
 	From string
 }
 
-func NewSMTPClient(addr, from, password, host string) *SMTPClient {
+func NewSMTPClient(addr, from, password, host string) *HarukiSMTPClient {
 	auth := smtp.PlainAuth("", from, password, host)
-	return &SMTPClient{
+	return &HarukiSMTPClient{
 		Addr: addr,
 		Auth: auth,
 		From: from,
 	}
 }
 
-func (c *SMTPClient) Send(to []string, subject, body string, displayName string) error {
+func (c *HarukiSMTPClient) Send(to []string, subject, body string, displayName string) error {
 	headers := make(map[string]string)
 
 	if displayName != "" {
