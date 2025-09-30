@@ -13,10 +13,10 @@ type User struct {
 func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name"),
-		field.String("email").Unique(),
+		field.String("user_id"),
+		field.String("email"),
 		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
-		field.String("session_token"),
 	}
 }
 

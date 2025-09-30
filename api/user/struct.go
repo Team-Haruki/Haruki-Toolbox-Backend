@@ -39,6 +39,7 @@ type SendEmailPayload struct {
 }
 
 type VerifyEmailPayload struct {
+	Email           string `json:"email"`
 	OneTimePassword string `json:"oneTimePassword"`
 }
 
