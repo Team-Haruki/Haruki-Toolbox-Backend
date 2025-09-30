@@ -27,12 +27,10 @@ func requireUploadType(expectedType harukiUtils.UploadDataType) fiber.Handler {
 		return c.Next()
 	}
 }
-
-func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
-	api := app.Group("/general/:server/:upload_type/:policy")
-
+func ExpiredMiddleware() fiber.Handler {
 	deadline := time.Date(2025, 9, 26, 12, 0, 0, 0, time.FixedZone("CST", 8*3600))
-	api.Use(func(c *fiber.Ctx) error {
+
+	return func(c *fiber.Ctx) error {
 		if time.Now().After(deadline) {
 			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 				Message: "This API has expired and no longer accepts requests.",
@@ -40,9 +38,13 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			})
 		}
 		return c.Next()
-	})
+	}
+}
 
-	api.Post("/upload", requireUploadType(harukiUtils.UploadDataTypeSuite), func(c *fiber.Ctx) error {
+func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client) {
+	api := app.Group("/general/:server/:upload_type/:policy")
+
+	api.Post("/upload", requireUploadType(harukiUtils.UploadDataTypeSuite), ExpiredMiddleware(), func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
 
@@ -84,7 +86,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 		}
 	})
 
-	api.Post("/:user_id/upload", requireUploadType(harukiUtils.UploadDataTypeMysekai), func(c *fiber.Ctx) error {
+	api.Post("/:user_id/upload", requireUploadType(harukiUtils.UploadDataTypeMysekai), ExpiredMiddleware(), func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
 		userIdStr := c.Params("user_id")
