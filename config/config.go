@@ -33,6 +33,9 @@ type UserSystemConfig struct {
 	DBURL            string     `yaml:"db_url"`
 	CloudflareSecret string     `yaml:"cloudflare_secret"`
 	SMTP             SMTPConfig `yaml:"smtp"`
+	SessionSignToken string     `yaml:"session_sign_token"`
+	AvatarSaveDir    string     `yaml:"avatar_save_dir"`
+	FrontendURL      string     `yaml:"frontend_url"`
 }
 
 type BackendConfig struct {

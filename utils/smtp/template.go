@@ -31,7 +31,7 @@ const VerificationCodeTemplate = `<!DOCTYPE html>
     </tr>
     <tr>
       <td style="padding: 20px; text-align: center; font-size: 14px; color: #999;">
-        该验证码有效期为 <b>5 分钟</b>，请勿泄露给他人。
+        该验证码有效期为 <b>5分钟</b>，请勿泄露给他人。
       </td>
     </tr>
   </table>
@@ -74,6 +74,11 @@ const ResetPasswordTemplate = `<!DOCTYPE html>
         <div style="font-family: monospace; font-size: 12px; border: 1px solid #ddd; padding: 10px; word-break: break-all; display: inline-block; max-width: 100%;">
           {{LINK}}
         </div>
+      </td>
+    </tr>
+	<tr>
+      <td style="padding: 20px; text-align: center; font-size: 14px; color: #999;">
+        该重置链接有效期为 <b>30分钟</b>，请勿泄露给他人。
       </td>
     </tr>
   </table>

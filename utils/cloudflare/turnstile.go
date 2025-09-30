@@ -11,7 +11,7 @@ import (
 
 const verifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-func VerifyTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
+func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 	payload := map[string]string{
 		"secret":   config.Cfg.UserSystem.CloudflareSecret,
 		"response": response,
