@@ -37,6 +37,10 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 	logger := harukiLogger.NewLogger("HarukiSekaiIOS", "DEBUG", nil)
 
 	api.Post("/script/upload", func(c *fiber.Ctx) error {
+		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
+			Message: "This endpoint is temporarily disabled",
+			Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
+		})
 		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
 		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
 		header := &dataUploadHeader{
@@ -132,10 +136,6 @@ func registerIOSRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager,
 	})
 
 	api.Get("/proxy/:server/:policy/suite/user/:user_id", func(c *fiber.Ctx) error {
-		return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-			Message: "This endpoint is temporarily disabled",
-			Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
-		})
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 		policyStr := c.Params("policy")
