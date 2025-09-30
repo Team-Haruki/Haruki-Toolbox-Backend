@@ -13,7 +13,7 @@ type User struct {
 func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name"),
-		field.String("user_id"),
+		field.String("id").NotEmpty().Unique().Immutable(),
 		field.String("email"),
 		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
