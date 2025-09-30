@@ -106,7 +106,7 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 				}
 				if len(keys) == 1 {
 					key := keys[0]
-					if !harukiUtils.ArrayContains(allowedKeys, key) && key != "userGamedata" {
+					if !ArrayContains(allowedKeys, key) && key != "userGamedata" {
 						return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 							Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 							Message: "Invalid request key",
@@ -115,20 +115,20 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 					if key == "userGamedata" {
 						resp = filteredUserGamedata
 					} else {
-						resp = harukiUtils.GetValueFromResult(result, key)
+						resp = GetValueFromResult(result, key)
 					}
 				} else {
 					for _, key := range keys {
 						if key == "userGamedata" {
 							continue
 						}
-						if !harukiUtils.ArrayContains(allowedKeys, key) {
+						if !ArrayContains(allowedKeys, key) {
 							return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
 								Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
 								Message: fmt.Sprintf("Invalid request key: %s", key),
 							})
 						}
-						suite[key] = harukiUtils.GetValueFromResult(result, key)
+						suite[key] = GetValueFromResult(result, key)
 					}
 					if includeUserGamedata && filteredUserGamedata != nil {
 						suite["userGamedata"] = filteredUserGamedata
@@ -140,7 +140,7 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 					if key == "userGamedata" {
 						continue
 					}
-					suite[key] = harukiUtils.GetValueFromResult(result, key)
+					suite[key] = GetValueFromResult(result, key)
 				}
 				resp = suite
 			}

@@ -261,7 +261,7 @@ func (m *MongoDBManager) GetWebhookSubscribers(ctx context.Context, webhookID st
 
 func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server string, fixtureID int) ([]bson.M, error) {
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"server": server, "policy": "private"}}},
+		{{Key: "$match", Value: bson.M{"server": server}}},
 		{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts"}},
 		{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts"}},
 		{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts.mysekaiFixtures"}},

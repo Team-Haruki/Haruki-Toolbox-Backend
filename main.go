@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	privateApi "haruki-suite/api/private"
 	publicApi "haruki-suite/api/public"
 	uploadApi "haruki-suite/api/upload"
+	privateApi "haruki-suite/api/user"
 	webhookApi "haruki-suite/api/webhook"
 	harukiConfig "haruki-suite/config"
 	harukiMongo "haruki-suite/utils/database/mongo"

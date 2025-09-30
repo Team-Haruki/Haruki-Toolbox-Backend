@@ -12,36 +12,8 @@ import (
 	"time"
 )
 
-const (
-	JP harukiUtils.SupportedInheritUploadServer = "jp"
-	EN harukiUtils.SupportedInheritUploadServer = "en"
-)
-
-var thisProxy = harukiConfig.Cfg.Proxy
-var (
-	Api = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost),
-		EN: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost),
-	}
-
-	Headers = map[harukiUtils.SupportedInheritUploadServer]map[string]string{
-		JP: harukiConfig.Cfg.SekaiClient.JPServerInheritClientHeaders,
-		EN: harukiConfig.Cfg.SekaiClient.ENServerInheritClientHeaders,
-	}
-
-	Version = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: harukiConfig.Cfg.SekaiClient.JPServerAppVersionUrl,
-		EN: harukiConfig.Cfg.SekaiClient.ENServerAppVersionUrl,
-	}
-
-	InheritJWTToken = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: harukiConfig.Cfg.SekaiClient.JPServerInheritToken,
-		EN: harukiConfig.Cfg.SekaiClient.ENServerInheritToken,
-	}
-)
-
 type HarukiSekaiDataRetriever struct {
-	client       *Client
+	client       *HarukiSekaiClient
 	policy       harukiUtils.UploadPolicy
 	uploadType   harukiUtils.UploadDataType
 	logger       *harukiLogger.Logger

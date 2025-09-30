@@ -24,7 +24,7 @@ func RegisterAuthorizeSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers
 		}
 
 		ctx := c.Context()
-		client := helper.DBClient.AuthorizeSocialPlatformInfo
+		client := helper.DBManager.DB.AuthorizeSocialPlatformInfo
 
 		existing, err := client.Query().
 			Where(
@@ -89,7 +89,7 @@ func RegisterAuthorizeSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers
 		}
 
 		ctx := c.Context()
-		client := helper.DBClient.AuthorizeSocialPlatformInfo
+		client := helper.DBManager.DB.AuthorizeSocialPlatformInfo
 
 		_, err = client.Delete().
 			Where(

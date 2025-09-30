@@ -36,7 +36,7 @@ func RegisterAccountRoutes(helper HarukiToolboxUserRouterHelpers) {
 
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
-		_, err = helper.DBClient.User.
+		_, err = helper.DBManager.DB.User.
 			Update().Where(user.IDEQ(userID)).
 			SetName(payload.Name).
 			SetAvatarPath(avatarPath).
@@ -63,7 +63,7 @@ func RegisterAccountRoutes(helper HarukiToolboxUserRouterHelpers) {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 
-		_, err = helper.DBClient.User.
+		_, err = helper.DBManager.DB.User.
 			Update().Where(user.IDEQ(userID)).
 			SetPasswordHash(string(hashedPassword)).
 			Save(ctx)

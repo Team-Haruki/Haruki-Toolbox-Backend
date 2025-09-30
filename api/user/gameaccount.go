@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	"haruki-suite/utils/database/redis"
 	"strconv"
 	"time"
 
@@ -24,7 +23,7 @@ func RegisterGameAccountBindingRoutes(helper HarukiToolboxUserRouterHelpers) {
 		}
 		code := GenerateCode(true)
 		storageKey := fmt.Sprintf("%s:game-account:verify:%s:%s", userID, string(req.Server), req.UserID)
-		if err := redis.SetCache(ctx, helper.RedisClient, storageKey, code, 5*time.Minute); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
 		}
 
@@ -52,7 +51,7 @@ func RegisterGameAccountBindingRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
-		existing, err := helper.DBClient.GameAccountBinding.
+		existing, err := helper.DBManager.DB.GameAccountBinding.
 			Query().
 			Where(
 				gameaccountbinding.ServerEQ(serverStr),
@@ -79,7 +78,8 @@ func RegisterGameAccountBindingRoutes(helper HarukiToolboxUserRouterHelpers) {
 
 		storageKey := fmt.Sprintf("%s:game-account:verify:%s:%d", userID, serverStr, gameUserID)
 		var code string
-		if _, err := redis.GetCache(ctx, helper.RedisClient, storageKey, &code); err != nil {
+		ok, err := helper.DBManager.Redis.GetCache(ctx, storageKey, &code)
+		if err != nil || !ok {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
 		}
 
@@ -115,7 +115,7 @@ func RegisterGameAccountBindingRoutes(helper HarukiToolboxUserRouterHelpers) {
 				SetMysekai(req.MySekai).
 				Save(ctx)
 		} else {
-			_, err = helper.DBClient.GameAccountBinding.
+			_, err = helper.DBManager.DB.GameAccountBinding.
 				Create().
 				SetServer(serverStr).
 				SetGameUserID(gameUserID).
@@ -143,7 +143,7 @@ func RegisterGameAccountBindingRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid game_user_id", nil)
 		}
 
-		existing, err := helper.DBClient.GameAccountBinding.
+		existing, err := helper.DBManager.DB.GameAccountBinding.
 			Query().
 			Where(
 				gameaccountbinding.ServerEQ(serverStr),
@@ -160,7 +160,7 @@ func RegisterGameAccountBindingRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusForbidden, "not authorized to delete this binding", nil)
 		}
 
-		err = helper.DBClient.GameAccountBinding.DeleteOne(existing).Exec(ctx)
+		err = helper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to delete binding", nil)
 		}

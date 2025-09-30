@@ -6,7 +6,6 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils/cloudflare"
 	"haruki-suite/utils/database/postgresql/user"
-	"haruki-suite/utils/database/redis"
 	"haruki-suite/utils/smtp"
 	"strings"
 	"time"
@@ -41,7 +40,7 @@ func RegisterResetPasswordRoutes(helper HarukiToolboxUserRouterHelpers) {
 		resetURL := fmt.Sprintf("%s/user/reset-password/%s?email=%s", config.Cfg.UserSystem.FrontendURL, resetSecret, payload.Email)
 		key := "resetpw:" + payload.Email
 		ctx := context.Background()
-		if err := helper.RedisClient.Set(ctx, key, resetSecret, 30*time.Minute).Err(); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, key, resetSecret, 30*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to store secret", nil)
 		}
 
@@ -61,7 +60,7 @@ func RegisterResetPasswordRoutes(helper HarukiToolboxUserRouterHelpers) {
 		key := "resetpw:" + payload.Email
 		ctx := context.Background()
 		var secret string
-		found, err := redis.GetCache(ctx, helper.RedisClient, key, &secret)
+		found, err := helper.DBManager.Redis.GetCache(ctx, key, &secret)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to retrieve secret", nil)
 		}
@@ -77,7 +76,7 @@ func RegisterResetPasswordRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to hash password", nil)
 		}
 
-		_, err = helper.DBClient.User.
+		_, err = helper.DBManager.DB.User.
 			Update().
 			Where(user.EmailEQ(payload.Email)).
 			SetPasswordHash(string(hashed)).
@@ -86,7 +85,7 @@ func RegisterResetPasswordRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
 		}
 
-		redis.DeleteCache(ctx, helper.RedisClient, key)
+		helper.DBManager.Redis.DeleteCache(ctx, key)
 		return UpdatedDataResponse[string](c, fiber.StatusOK, "Password reset successfully", nil)
 	})
 }

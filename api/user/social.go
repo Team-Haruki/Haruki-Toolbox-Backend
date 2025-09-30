@@ -6,7 +6,6 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
-	"haruki-suite/utils/database/redis"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,7 +18,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 	social.Post("/send-qq-mail", helper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		var req SendQQMailPayload
 		ctx := context.Background()
-		exists, err := helper.DBClient.SocialPlatformInfo.Query().
+		exists, err := helper.DBManager.DB.SocialPlatformInfo.Query().
 			Where(socialplatforminfo.PlatformEQ(
 				string(SocialPlatformQQ)),
 				socialplatforminfo.PlatformUserID(req.QQ)).
@@ -50,7 +49,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 		}
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
-		if _, err := helper.DBClient.SocialPlatformInfo.
+		if _, err := helper.DBManager.DB.SocialPlatformInfo.
 			Update().
 			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
 			SetPlatform(string(SocialPlatformQQ)).
@@ -80,16 +79,16 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 		code := GenerateCode(false)
 		storageKey := fmt.Sprintf("%s:verify:%s", req.Platform, req.UserID)
 		statusToken := uuid.NewString()
-		if err := redis.SetCache(ctx, helper.RedisClient, storageKey, code, 5*time.Minute); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
 		}
-		if err := redis.SetCache(ctx, helper.RedisClient, statusToken, "false", 5*time.Minute); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, statusToken, "false", 5*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save status token", nil)
 		}
-		if err := redis.SetCache(ctx, helper.RedisClient, storageKey+":"+"userID", userID, 5*time.Minute); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, storageKey+":"+"userID", userID, 5*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save userID mapping", nil)
 		}
-		if err := redis.SetCache(ctx, helper.RedisClient, storageKey+":"+"statusToken", statusToken, 5*time.Minute); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, storageKey+":"+"statusToken", statusToken, 5*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save status token mapping", nil)
 		}
 
@@ -107,7 +106,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 		userID := c.Locals("userID").(string)
 		ctx := context.Background()
 		var status string
-		found, err := redis.GetCache(ctx, helper.RedisClient, statusToken, &status)
+		found, err := helper.DBManager.Redis.GetCache(ctx, statusToken, &status)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to get status", nil)
 		}
@@ -118,7 +117,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "You have not verified yet", nil)
 		}
 		if status == "true" {
-			info, err := helper.DBClient.SocialPlatformInfo.Query().Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).Only(ctx)
+			info, err := helper.DBManager.DB.SocialPlatformInfo.Query().Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).Only(ctx)
 			if err != nil {
 				return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to get social platform info", nil)
 			}
@@ -152,7 +151,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 
 		storageKey := fmt.Sprintf("%s:verify:%s", req.Platform, req.UserID)
 		var code string
-		found, err := redis.GetCache(ctx, helper.RedisClient, storageKey, &code)
+		found, err := helper.DBManager.Redis.GetCache(ctx, storageKey, &code)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to get verification key", nil)
 		}
@@ -164,7 +163,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 		}
 
 		var userID string
-		found, err = redis.GetCache(ctx, helper.RedisClient, storageKey+":"+"userID", &userID)
+		found, err = helper.DBManager.Redis.GetCache(ctx, storageKey+":"+"userID", &userID)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to get userID", nil)
 		}
@@ -172,7 +171,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "userID mapping expired or not found", nil)
 		}
 		var statusToken string
-		found, err = redis.GetCache(ctx, helper.RedisClient, storageKey+":"+"statusToken", &statusToken)
+		found, err = helper.DBManager.Redis.GetCache(ctx, storageKey+":"+"statusToken", &statusToken)
 		if err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to get status token", nil)
 		}
@@ -180,7 +179,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "status token mapping expired or not found", nil)
 		}
 
-		if _, err := helper.DBClient.SocialPlatformInfo.
+		if _, err := helper.DBManager.DB.SocialPlatformInfo.
 			Update().
 			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
 			SetPlatform(string(req.Platform)).
@@ -190,7 +189,7 @@ func RegisterSocialPlatformRoutes(helper HarukiToolboxUserRouterHelpers) {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update social platform info", nil)
 		}
 
-		if err := redis.SetCache(ctx, helper.RedisClient, statusToken, "true", 5*time.Minute); err != nil {
+		if err := helper.DBManager.Redis.SetCache(ctx, statusToken, "true", 5*time.Minute); err != nil {
 			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save status token", nil)
 		}
 

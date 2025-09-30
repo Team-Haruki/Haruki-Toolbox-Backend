@@ -1,9 +1,10 @@
-package upload
+package user
 
 import (
 	"context"
 	"fmt"
 	harukiRootApi "haruki-suite/api"
+	"haruki-suite/api/upload"
 	harukiUtils "haruki-suite/utils"
 	harukiMongo "haruki-suite/utils/database/mongo"
 	"strconv"
@@ -54,7 +55,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			})
 		}
 
-		result, err := HandleUpload(
+		result, err := upload.HandleUpload(
 			context.Background(),
 			c.Request().Body(),
 			serverStr,
@@ -104,7 +105,7 @@ func registerGeneralRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBMana
 			})
 		}
 
-		result, err := HandleUpload(
+		result, err := upload.HandleUpload(
 			context.Background(),
 			c.Request().Body(),
 			serverStr,
