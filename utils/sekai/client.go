@@ -238,8 +238,9 @@ func (c *Client) Login(ctx context.Context) error {
 
 	c.logger.Infof("%s Server Sekai Client logging in...", strings.ToUpper(string(c.server)))
 	body := map[string]any{
-		"credential": c.credential,
-		"deviceId":   nil,
+		"credential":      c.credential,
+		"deviceId":        nil,
+		"authTriggerType": "normal",
 	}
 	packed, err := Pack(body, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
