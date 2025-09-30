@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
 
@@ -12,7 +13,15 @@ type SocialPlatformInfo struct {
 func (SocialPlatformInfo) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("platform"),
-		field.String("user_id"),
+		field.String("platform_user_id"),
 		field.Bool("verified").Default(false),
+	}
+}
+
+func (SocialPlatformInfo) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.From("user", User.Type).
+			Ref("social_platform_info").
+			Unique(),
 	}
 }

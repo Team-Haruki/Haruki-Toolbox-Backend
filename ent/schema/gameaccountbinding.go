@@ -13,7 +13,7 @@ type GameAccountBinding struct {
 func (GameAccountBinding) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("server").Comment("jp | en | tw | kr | cn"),
-		field.Int("user_id"),
+		field.Int("game_user_id"),
 		field.Bool("verified").Default(false),
 		field.JSON("suite", &SuiteDataPrivacySettings{}).Optional(),
 		field.JSON("mysekai", &MysekaiDataPrivacySettings{}).Optional(),
