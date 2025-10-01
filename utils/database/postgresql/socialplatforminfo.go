@@ -23,11 +23,12 @@ type SocialPlatformInfo struct {
 	PlatformUserID string `json:"platform_user_id,omitempty"`
 	// Verified holds the value of the "verified" field.
 	Verified bool `json:"verified,omitempty"`
+	// UserSocialPlatformInfo holds the value of the "user_social_platform_info" field.
+	UserSocialPlatformInfo string `json:"user_social_platform_info,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SocialPlatformInfoQuery when eager-loading is set.
-	Edges                     SocialPlatformInfoEdges `json:"edges"`
-	user_social_platform_info *string
-	selectValues              sql.SelectValues
+	Edges        SocialPlatformInfoEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // SocialPlatformInfoEdges holds the relations/edges for other nodes in the graph.
@@ -59,9 +60,7 @@ func (*SocialPlatformInfo) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case socialplatforminfo.FieldID:
 			values[i] = new(sql.NullInt64)
-		case socialplatforminfo.FieldPlatform, socialplatforminfo.FieldPlatformUserID:
-			values[i] = new(sql.NullString)
-		case socialplatforminfo.ForeignKeys[0]: // user_social_platform_info
+		case socialplatforminfo.FieldPlatform, socialplatforminfo.FieldPlatformUserID, socialplatforminfo.FieldUserSocialPlatformInfo:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -102,12 +101,11 @@ func (_m *SocialPlatformInfo) assignValues(columns []string, values []any) error
 			} else if value.Valid {
 				_m.Verified = value.Bool
 			}
-		case socialplatforminfo.ForeignKeys[0]:
+		case socialplatforminfo.FieldUserSocialPlatformInfo:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field user_social_platform_info", values[i])
 			} else if value.Valid {
-				_m.user_social_platform_info = new(string)
-				*_m.user_social_platform_info = value.String
+				_m.UserSocialPlatformInfo = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -158,6 +156,9 @@ func (_m *SocialPlatformInfo) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("verified=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Verified))
+	builder.WriteString(", ")
+	builder.WriteString("user_social_platform_info=")
+	builder.WriteString(_m.UserSocialPlatformInfo)
 	builder.WriteByte(')')
 	return builder.String()
 }

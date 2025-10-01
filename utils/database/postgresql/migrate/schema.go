@@ -88,7 +88,7 @@ var (
 		{Name: "platform", Type: field.TypeString},
 		{Name: "platform_user_id", Type: field.TypeString},
 		{Name: "verified", Type: field.TypeBool, Default: false},
-		{Name: "user_social_platform_info", Type: field.TypeString, Unique: true, Nullable: true},
+		{Name: "user_social_platform_info", Type: field.TypeString, Unique: true},
 	}
 	// SocialPlatformInfosTable holds the schema information for the "social_platform_infos" table.
 	SocialPlatformInfosTable = &schema.Table{
@@ -100,7 +100,7 @@ var (
 				Symbol:     "social_platform_infos_users_social_platform_info",
 				Columns:    []*schema.Column{SocialPlatformInfosColumns[4]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.NoAction,
 			},
 		},
 	}

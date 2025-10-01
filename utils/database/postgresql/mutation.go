@@ -1925,6 +1925,42 @@ func (m *SocialPlatformInfoMutation) ResetVerified() {
 	m.verified = nil
 }
 
+// SetUserSocialPlatformInfo sets the "user_social_platform_info" field.
+func (m *SocialPlatformInfoMutation) SetUserSocialPlatformInfo(s string) {
+	m.user = &s
+}
+
+// UserSocialPlatformInfo returns the value of the "user_social_platform_info" field in the mutation.
+func (m *SocialPlatformInfoMutation) UserSocialPlatformInfo() (r string, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserSocialPlatformInfo returns the old "user_social_platform_info" field's value of the SocialPlatformInfo entity.
+// If the SocialPlatformInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SocialPlatformInfoMutation) OldUserSocialPlatformInfo(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserSocialPlatformInfo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserSocialPlatformInfo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserSocialPlatformInfo: %w", err)
+	}
+	return oldValue.UserSocialPlatformInfo, nil
+}
+
+// ResetUserSocialPlatformInfo resets all changes to the "user_social_platform_info" field.
+func (m *SocialPlatformInfoMutation) ResetUserSocialPlatformInfo() {
+	m.user = nil
+}
+
 // SetUserID sets the "user" edge to the User entity by id.
 func (m *SocialPlatformInfoMutation) SetUserID(id string) {
 	m.user = &id
@@ -1933,6 +1969,7 @@ func (m *SocialPlatformInfoMutation) SetUserID(id string) {
 // ClearUser clears the "user" edge to the User entity.
 func (m *SocialPlatformInfoMutation) ClearUser() {
 	m.cleareduser = true
+	m.clearedFields[socialplatforminfo.FieldUserSocialPlatformInfo] = struct{}{}
 }
 
 // UserCleared reports if the "user" edge to the User entity was cleared.
@@ -1998,7 +2035,7 @@ func (m *SocialPlatformInfoMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SocialPlatformInfoMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
 	if m.platform != nil {
 		fields = append(fields, socialplatforminfo.FieldPlatform)
 	}
@@ -2007,6 +2044,9 @@ func (m *SocialPlatformInfoMutation) Fields() []string {
 	}
 	if m.verified != nil {
 		fields = append(fields, socialplatforminfo.FieldVerified)
+	}
+	if m.user != nil {
+		fields = append(fields, socialplatforminfo.FieldUserSocialPlatformInfo)
 	}
 	return fields
 }
@@ -2022,6 +2062,8 @@ func (m *SocialPlatformInfoMutation) Field(name string) (ent.Value, bool) {
 		return m.PlatformUserID()
 	case socialplatforminfo.FieldVerified:
 		return m.Verified()
+	case socialplatforminfo.FieldUserSocialPlatformInfo:
+		return m.UserSocialPlatformInfo()
 	}
 	return nil, false
 }
@@ -2037,6 +2079,8 @@ func (m *SocialPlatformInfoMutation) OldField(ctx context.Context, name string) 
 		return m.OldPlatformUserID(ctx)
 	case socialplatforminfo.FieldVerified:
 		return m.OldVerified(ctx)
+	case socialplatforminfo.FieldUserSocialPlatformInfo:
+		return m.OldUserSocialPlatformInfo(ctx)
 	}
 	return nil, fmt.Errorf("unknown SocialPlatformInfo field %s", name)
 }
@@ -2066,6 +2110,13 @@ func (m *SocialPlatformInfoMutation) SetField(name string, value ent.Value) erro
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetVerified(v)
+		return nil
+	case socialplatforminfo.FieldUserSocialPlatformInfo:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserSocialPlatformInfo(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SocialPlatformInfo field %s", name)
@@ -2124,6 +2175,9 @@ func (m *SocialPlatformInfoMutation) ResetField(name string) error {
 		return nil
 	case socialplatforminfo.FieldVerified:
 		m.ResetVerified()
+		return nil
+	case socialplatforminfo.FieldUserSocialPlatformInfo:
+		m.ResetUserSocialPlatformInfo()
 		return nil
 	}
 	return fmt.Errorf("unknown SocialPlatformInfo field %s", name)

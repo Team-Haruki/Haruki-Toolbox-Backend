@@ -572,7 +572,9 @@ func (_q *UserQuery) loadSocialPlatformInfo(ctx context.Context, query *SocialPl
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
 	}
-	query.withFKs = true
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(socialplatforminfo.FieldUserSocialPlatformInfo)
+	}
 	query.Where(predicate.SocialPlatformInfo(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.SocialPlatformInfoColumn), fks...))
 	}))
@@ -581,13 +583,10 @@ func (_q *UserQuery) loadSocialPlatformInfo(ctx context.Context, query *SocialPl
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.user_social_platform_info
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "user_social_platform_info" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		fk := n.UserSocialPlatformInfo
+		node, ok := nodeids[fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "user_social_platform_info" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "user_social_platform_info" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}
