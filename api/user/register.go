@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"fmt"
+	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
 	"strings"
 	"time"
@@ -11,11 +12,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
-	helper.Router.Post("/api/user/register", func(c *fiber.Ctx) error {
-		var req RegisterPayload
+func registerRegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	apiHelper.Router.Post("/api/user/register", func(c *fiber.Ctx) error {
+		var req harukiAPIHelper.RegisterPayload
 		if err := c.BodyParser(&req); err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request payload", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request payload", nil)
 		}
 
 		xff := c.Get("X-Forwarded-For")
@@ -32,27 +33,27 @@ func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
 
 		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, remoteIP)
 		if err != nil || vresp == nil || !vresp.Success {
-			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid challenge token", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid challenge token", nil)
 		}
 
 		redisKey := "email:verify:" + req.Email
 		var otp string
-		exists, err := helper.DBManager.Redis.GetCache(context.Background(), redisKey, &otp)
+		exists, err := apiHelper.DBManager.Redis.GetCache(context.Background(), redisKey, &otp)
 		if err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "redis error", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "redis error", nil)
 		}
 		if !exists || otp != req.OneTimePassword {
-			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid or expired verification code", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid or expired verification code", nil)
 		}
 
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to hash password", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to hash password", nil)
 		}
 
 		uid := fmt.Sprintf("%010d", time.Now().UnixNano()%1e10)
 
-		user, err := helper.DBManager.DB.User.Create().
+		user, err := apiHelper.DBManager.DB.User.Create().
 			SetID(uid).
 			SetName(req.Name).
 			SetEmail(req.Email).
@@ -60,33 +61,33 @@ func RegisterRegisterRoutes(helper HarukiToolboxUserRouterHelpers) {
 			SetNillableAvatarPath(nil).
 			Save(context.Background())
 		if err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create user", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create user", nil)
 		}
 
-		emailInfo, err := helper.DBManager.DB.EmailInfo.Create().
+		emailInfo, err := apiHelper.DBManager.DB.EmailInfo.Create().
 			SetEmail(req.Email).
 			SetVerified(true).
 			SetUser(user).
 			Save(context.Background())
 		if err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create email info", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create email info", nil)
 		}
 
-		helper.DBManager.Redis.DeleteCache(context.Background(), redisKey)
+		apiHelper.DBManager.Redis.DeleteCache(context.Background(), redisKey)
 
-		signedToken, err := helper.SessionHandler.IssueSession(uid)
+		signedToken, err := apiHelper.SessionHandler.IssueSession(uid)
 
-		ud := HarukiToolboxUserData{
+		ud := harukiAPIHelper.HarukiToolboxUserData{
 			Name:                        user.Name,
 			UserID:                      uid,
 			AvatarPath:                  nil,
-			EmailInfo:                   EmailInfo{Email: emailInfo.Email, Verified: emailInfo.Verified},
+			EmailInfo:                   harukiAPIHelper.EmailInfo{Email: emailInfo.Email, Verified: emailInfo.Verified},
 			SocialPlatformInfo:          nil,
 			AuthorizeSocialPlatformInfo: nil,
 			GameAccountBindings:         nil,
 			SessionToken:                signedToken,
 		}
-		resp := RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "register success", UserData: ud}
-		return ResponseWithStruct(c, fiber.StatusOK, &resp)
+		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "register success", UserData: ud}
+		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
 	})
 }

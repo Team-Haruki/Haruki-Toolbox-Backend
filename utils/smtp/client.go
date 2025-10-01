@@ -3,6 +3,7 @@ package smtp
 import (
 	"crypto/tls"
 	"fmt"
+	"haruki-suite/config"
 	"net/smtp"
 	"strings"
 	"time"
@@ -67,12 +68,13 @@ type HarukiSMTPClient struct {
 	From string
 }
 
-func NewSMTPClient(addr, from, password, host string) *HarukiSMTPClient {
-	auth := smtp.PlainAuth("", from, password, host)
+func NewSMTPClient(cfg config.SMTPConfig) *HarukiSMTPClient {
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPAddr, cfg.SMTPPort)
+	auth := smtp.PlainAuth("", cfg.SMTPMail, cfg.SMTPPass, cfg.SMTPAddr)
 	return &HarukiSMTPClient{
 		Addr: addr,
 		Auth: auth,
-		From: from,
+		From: cfg.SMTPMail,
 	}
 }
 

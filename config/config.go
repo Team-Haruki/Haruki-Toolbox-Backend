@@ -84,6 +84,11 @@ type SekaiClientConfig struct {
 	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
 	SuiteRemoveKeys              []string          `yaml:"suite_remove_keys"`
 }
+
+type SekaiAPIConfig struct {
+	APIEndpoint string `yaml:"api_endpoint"`
+	APIToken    string `yaml:"api_token"`
+}
 type OthersConfig struct {
 	PublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
 }
@@ -94,9 +99,10 @@ type Config struct {
 	Redis       RedisConfig       `yaml:"redis"`
 	Webhook     WebhookConfig     `yaml:"webhook"`
 	Backend     BackendConfig     `yaml:"backend"`
-	UserSystem  UserSystemConfig  `yaml:"usersystem"`
+	UserSystem  UserSystemConfig  `yaml:"user_system"`
 	Others      OthersConfig      `yaml:"others"`
 	SekaiClient SekaiClientConfig `yaml:"sekai_client"`
+	SekaiAPI    SekaiAPIConfig    `yaml:"sekai_api"`
 	HarukiProxy HarukiProxyConfig `yaml:"haruki_proxy"`
 }
 
