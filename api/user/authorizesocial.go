@@ -3,15 +3,32 @@ package user
 import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
+	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id", apiHelper.SessionHandler.VerifySessionToken)
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id")
 
-	r.Put("/", func(c *fiber.Ctx) error {
+	verifyUserHasVerifiedSocialPlatform := func(c *fiber.Ctx) error {
+		toolboxUserID := c.Params("toolbox_user_id")
+		ctx := c.Context()
+		client := apiHelper.DBManager.DB.SocialPlatformInfo
+
+		info, err := client.Query().
+			Where(
+				socialplatforminfo.UserSocialPlatformInfoEQ(toolboxUserID),
+				socialplatforminfo.Verified(true),
+			).First(ctx)
+		if err != nil || info == nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "user has no verified social platform info", nil)
+		}
+		return c.Next()
+	}
+
+	r.Put("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform, func(c *fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		idParam := c.Params("id")
 		userAccountID, err := strconv.Atoi(idParam)
@@ -76,12 +93,12 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 			})
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
-			AuthorizeSocialPlatformInfo: resp,
+			AuthorizeSocialPlatformInfo: &resp,
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "authorized social platform updated", &ud)
 	})
 
-	r.Delete("/", func(c *fiber.Ctx) error {
+	r.Delete("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform, func(c *fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		idParam := c.Params("id")
 		authorizeSocialPlatformAccountID, err := strconv.Atoi(idParam)
@@ -119,7 +136,7 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 			})
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
-			AuthorizeSocialPlatformInfo: resp,
+			AuthorizeSocialPlatformInfo: &resp,
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "authorized social platform updated", &ud)
 	})

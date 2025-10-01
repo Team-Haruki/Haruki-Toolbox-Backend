@@ -78,14 +78,14 @@ func registerRegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		signedToken, err := apiHelper.SessionHandler.IssueSession(uid)
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
-			Name:                        user.Name,
-			UserID:                      uid,
+			Name:                        &user.Name,
+			UserID:                      &uid,
 			AvatarPath:                  nil,
-			EmailInfo:                   harukiAPIHelper.EmailInfo{Email: emailInfo.Email, Verified: emailInfo.Verified},
+			EmailInfo:                   &harukiAPIHelper.EmailInfo{Email: emailInfo.Email, Verified: emailInfo.Verified},
 			SocialPlatformInfo:          nil,
 			AuthorizeSocialPlatformInfo: nil,
 			GameAccountBindings:         nil,
-			SessionToken:                signedToken,
+			SessionToken:                &signedToken,
 		}
 		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "register success", UserData: ud}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)

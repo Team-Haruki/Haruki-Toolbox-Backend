@@ -107,3 +107,25 @@ func ArrayContains(arr []string, s string) bool {
 func StringContains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+func ClearUserSessions(redisClient *redis.Client, userID string) error {
+	ctx := context.Background()
+	var cursor uint64
+	prefix := userID + ":"
+	for {
+		keys, newCursor, err := redisClient.Scan(ctx, cursor, prefix+"*", 100).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			if err := redisClient.Del(ctx, keys...).Err(); err != nil {
+				return err
+			}
+		}
+		cursor = newCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return nil
+}

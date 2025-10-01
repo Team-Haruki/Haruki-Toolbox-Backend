@@ -54,21 +54,23 @@ func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper *haruki
 	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "verification code sent", nil)
 }
 
-func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
 	ctx := context.Background()
 	var code string
 	found, err := helper.DBManager.Redis.GetCache(ctx, "email:verify:"+email, &code)
-	if err != nil || !found {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
+	if err != nil {
+		return false, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to check redis", nil)
+	}
+	if !found {
+		return false, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
 	}
 
 	if oneTimePassword != code {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid verification code", nil)
+		return false, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid verification code", nil)
 	}
 
-	helper.DBManager.Redis.DeleteCache(ctx, "email:verify:"+email)
-
-	return nil
+	_ = helper.DBManager.Redis.DeleteCache(ctx, "email:verify:"+email)
+	return true, nil
 }
 
 func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
@@ -96,9 +98,12 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err := c.BodyParser(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
-		result := VerifyEmailHandler(c, req.Email, req.OneTimePassword, apiHelper)
-		if result != nil {
-			return result
+		ok, err := VerifyEmailHandler(c, req.Email, req.OneTimePassword, apiHelper)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification failed", nil)
 		}
 		userID := c.Locals("userID").(string)
 		ctx := context.Background()
@@ -119,11 +124,12 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		}
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
-			EmailInfo: harukiAPIHelper.EmailInfo{
+			EmailInfo: &harukiAPIHelper.EmailInfo{
 				Email:    req.Email,
 				Verified: true,
 			},
 		}
+		harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "email verified", &ud)
 	})
 }

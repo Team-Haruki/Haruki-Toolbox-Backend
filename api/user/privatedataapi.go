@@ -5,6 +5,7 @@ import (
 	harukiApiHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/user"
 	"strconv"
 	"strings"
 
@@ -59,23 +60,29 @@ func registerPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelp
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "game account not found", nil)
 		}
 
-		user, err := gameAccountBinding.QueryUser().Only(c.Context())
+		dbUser, err := gameAccountBinding.QueryUser().WithSocialPlatformInfo().Only(c.Context())
 		if err != nil {
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "game account not found", nil)
 		}
 
 		if platform != "" && platformUserID != "" {
-			if user.Edges.SocialPlatformInfo == nil || user.Edges.SocialPlatformInfo.Platform != platform || user.Edges.SocialPlatformInfo.PlatformUserID != platformUserID {
+			authorized := false
+			if dbUser.Edges.SocialPlatformInfo != nil && dbUser.Edges.SocialPlatformInfo.Platform == platform && dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
+				authorized = true
+			} else {
 				count, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
 					Where(
 						authorizesocialplatforminfo.PlatformEQ(platform),
 						authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
-						authorizesocialplatforminfo.UserIDEQ(user.ID),
+						authorizesocialplatforminfo.HasUserWith(user.IDEQ(dbUser.ID)),
 					).
 					Count(c.Context())
-				if err != nil || count == 0 {
-					return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are forbid to access this user data", nil)
+				if err == nil && count > 0 {
+					authorized = true
 				}
+			}
+			if !authorized {
+				return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are forbid to access this user data", nil)
 			}
 		}
 

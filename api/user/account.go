@@ -16,41 +16,53 @@ import (
 )
 
 func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id", apiHelper.SessionHandler.VerifySessionToken)
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
-	r.Put("/profile", func(c *fiber.Ctx) error {
+	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		var payload harukiAPIHelper.UpdateProfilePayload
 		if err := c.BodyParser(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
 
-		decodedAvatar, err := base64.StdEncoding.DecodeString(payload.AvatarBase64)
-		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
-		}
-
-		filename := uuid.NewString() + ".png"
-		avatarPath := filepath.Join(config.Cfg.UserSystem.AvatarSaveDir, filename)
-		if err := os.WriteFile(avatarPath, decodedAvatar, 0644); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to save avatar", nil)
-		}
-
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
-		_, err = apiHelper.DBManager.DB.User.
-			Update().Where(user.IDEQ(userID)).
-			SetName(payload.Name).
-			SetAvatarPath(avatarPath).
-			Save(ctx)
+		ub := apiHelper.DBManager.DB.User.Update().Where(user.IDEQ(userID))
+
+		var avatarPath string
+		if payload.AvatarBase64 != nil {
+			decodedAvatar, err := base64.StdEncoding.DecodeString(*payload.AvatarBase64)
+			if err != nil {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
+			}
+
+			filename := uuid.NewString() + ".png"
+			avatarPath = filepath.Join(config.Cfg.UserSystem.AvatarSaveDir, filename)
+			if err := os.WriteFile(avatarPath, decodedAvatar, 0644); err != nil {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to save avatar", nil)
+			}
+			ub = ub.SetAvatarPath(avatarPath)
+		}
+
+		if payload.Name != nil {
+			ub = ub.SetName(*payload.Name)
+		}
+
+		_, err := ub.Save(ctx)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to update user profile", nil)
 		}
 
-		ud := harukiAPIHelper.HarukiToolboxUserData{Name: payload.Name, AvatarPath: &avatarPath}
+		ud := harukiAPIHelper.HarukiToolboxUserData{}
+		if payload.Name != nil {
+			ud.Name = payload.Name
+		}
+		if payload.AvatarBase64 != nil {
+			ud.AvatarPath = &avatarPath
+		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "profile updated", &ud)
 	})
 
-	r.Put("/change-password", func(c *fiber.Ctx) error {
+	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		var payload harukiAPIHelper.ChangePasswordPayload
 		if err := c.BodyParser(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
@@ -71,7 +83,7 @@ func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to update password", nil)
 		}
-
+		harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
 	})
 

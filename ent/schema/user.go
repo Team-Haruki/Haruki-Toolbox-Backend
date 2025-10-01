@@ -24,7 +24,7 @@ func (User) Fields() []ent.Field {
 func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("email_info", EmailInfo.Type).Unique(),
-		edge.To("social_platform_info", SocialPlatformInfo.Type).Unique(),
+		edge.To("social_platform_info", SocialPlatformInfo.Type).Unique(), // User -> SocialPlatformInfo
 		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type),
 		edge.To("game_account_bindings", GameAccountBinding.Type),
 	}

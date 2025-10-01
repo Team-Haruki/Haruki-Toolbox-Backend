@@ -18,6 +18,9 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 
 	social.Post("/send-qq-mail", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		var req harukiAPIHelper.SendQQMailPayload
+		if err := c.BodyParser(&req); err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+		}
 		ctx := context.Background()
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
 			Where(socialplatforminfo.PlatformEQ(
@@ -40,22 +43,25 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 
 	social.Post("/verify-qq-mail", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		var req harukiAPIHelper.VerifyQQMailPayload
-		email := fmt.Sprintf("%s@qq.com", req.QQ)
 		if err := c.BodyParser(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
-		result := VerifyEmailHandler(c, email, req.OneTimePassword, apiHelper)
-		if result != nil {
-			return result
+		email := fmt.Sprintf("%s@qq.com", req.QQ)
+		ok, err := VerifyEmailHandler(c, email, req.OneTimePassword, apiHelper)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification failed", nil)
 		}
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.
-			Update().
-			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
-			SetPlatform(string(harukiAPIHelper.SocialPlatformQQ)).
-			SetUserID(req.QQ).
+			Create().
+			SetPlatform("qq").
+			SetPlatformUserID(req.QQ).
 			SetVerified(true).
+			SetUserID(userID).
 			Save(ctx); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update social platform info", nil)
 		}
@@ -76,6 +82,16 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		var req harukiAPIHelper.GenerateSocialPlatformCodePayload
 		if err := c.BodyParser(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+		}
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(string(req.Platform)),
+				socialplatforminfo.PlatformUserID(req.UserID)).
+			Exist(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query database", nil)
+		}
+		if exists {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "binding already exists", nil)
 		}
 		code := GenerateCode(false)
 		storageKey := fmt.Sprintf("%s:verify:%s", req.Platform, req.UserID)
@@ -134,6 +150,32 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "get status failed", nil)
 	})
 
+	social.Delete("/clear", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+		ctx := context.Background()
+		userID := c.Locals("userID").(string)
+
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.
+			Query().
+			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
+			Exist(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query social platform info", nil)
+		}
+		if !exists {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "no social platform info found", nil)
+		}
+
+		_, err = apiHelper.DBManager.DB.SocialPlatformInfo.
+			Delete().
+			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
+			Exec(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to clear social platform info", nil)
+		}
+
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "social platform info cleared successfully", nil)
+	})
+
 	apiHelper.Router.Post("/api/verify-social-platform", func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		authHeader := c.Get("Authorization")
@@ -150,7 +192,7 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
-		storageKey := fmt.Sprintf("%s:verify:%s", req.Platform, req.UserID)
+		storageKey := fmt.Sprintf("%s:verify:%s", string(req.Platform), req.UserID)
 		var code string
 		found, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
 		if err != nil {
@@ -181,11 +223,11 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 
 		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.
-			Update().
-			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
+			Create().
 			SetPlatform(string(req.Platform)).
-			SetUserID(req.UserID).
+			SetPlatformUserID(req.UserID).
 			SetVerified(true).
+			SetUserID(userID).
 			Save(ctx); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update social platform info", nil)
 		}
