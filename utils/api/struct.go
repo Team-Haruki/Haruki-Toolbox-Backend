@@ -1,4 +1,4 @@
-package user
+package api
 
 import (
 	entSchema "haruki-suite/ent/schema"
@@ -156,7 +156,7 @@ type AuthorizeSocialPlatformInfo struct {
 type GameAccountBinding struct {
 	ID       int                                   `json:"id"`
 	Server   utils.SupportedDataUploadServer       `json:"server"`
-	UserID   int                                   `json:"userId"`
+	UserID   string                                `json:"userId"`
 	Verified bool                                  `json:"verified"`
 	Suite    *entSchema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
 	Mysekai  *entSchema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/user"
@@ -27,7 +28,7 @@ func GenerateCode(antiCensor bool) string {
 	return code
 }
 
-func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper HarukiToolboxUserRouterHelpers) error {
+func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
 	xForwardedFor := c.Get("X-Forwarded-For")
 	clientIP := ""
 	if xForwardedFor != "" {
@@ -37,32 +38,32 @@ func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper HarukiT
 
 	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
 	if err != nil || !resp.Success {
-		return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "captcha verify failed", nil)
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "captcha verify failed", nil)
 	}
 
 	code := GenerateCode(false)
 	if err := helper.DBManager.Redis.SetCache(context.Background(), "email:verify:"+email, code, 5*time.Minute); err != nil {
-		return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
 	}
 
 	body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
 	if err := helper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
-		return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to send email", nil)
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to send email", nil)
 	}
 
-	return UpdatedDataResponse[string](c, fiber.StatusOK, "verification code sent", nil)
+	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "verification code sent", nil)
 }
 
-func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper HarukiToolboxUserRouterHelpers) error {
+func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
 	ctx := context.Background()
 	var code string
 	found, err := helper.DBManager.Redis.GetCache(ctx, "email:verify:"+email, &code)
 	if err != nil || !found {
-		return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
 	}
 
 	if oneTimePassword != code {
-		return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid verification code", nil)
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid verification code", nil)
 	}
 
 	helper.DBManager.Redis.DeleteCache(ctx, "email:verify:"+email)
@@ -70,59 +71,59 @@ func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper Haru
 	return nil
 }
 
-func RegisterEmailRoutes(helper HarukiToolboxUserRouterHelpers) {
-	email := helper.Router.Group("/api/email")
+func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	email := apiHelper.Router.Group("/api/email")
 
 	email.Post("/send", func(c *fiber.Ctx) error {
-		var req SendEmailPayload
+		var req harukiAPIHelper.SendEmailPayload
 		if err := c.BodyParser(&req); err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		ctx := context.Background()
-		exists, err := helper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
+		exists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
 		if err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query database", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query database", nil)
 		}
 		if exists {
-			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already exists", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already exists", nil)
 		}
-		return SendEmailHandler(c, req.Email, req.ChallengeToken, helper)
+		return SendEmailHandler(c, req.Email, req.ChallengeToken, apiHelper)
 
 	})
 
-	email.Post("/verify", helper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
-		var req VerifyEmailPayload
+	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+		var req harukiAPIHelper.VerifyEmailPayload
 		if err := c.BodyParser(&req); err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
-		result := VerifyEmailHandler(c, req.Email, req.OneTimePassword, helper)
+		result := VerifyEmailHandler(c, req.Email, req.OneTimePassword, apiHelper)
 		if result != nil {
 			return result
 		}
 		userID := c.Locals("userID").(string)
 		ctx := context.Background()
-		if _, err := helper.DBManager.DB.User.
+		if _, err := apiHelper.DBManager.DB.User.
 			Update().
 			Where(user.IDEQ(userID)).
 			SetEmail(req.Email).
 			Save(ctx); err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update user email", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update user email", nil)
 		}
-		if _, err := helper.DBManager.DB.EmailInfo.
+		if _, err := apiHelper.DBManager.DB.EmailInfo.
 			Update().
 			Where(emailinfo.HasUserWith(user.IDEQ(userID))).
 			SetEmail(req.Email).
 			SetVerified(true).
 			Save(ctx); err != nil {
-			return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update email info", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update email info", nil)
 		}
 
-		ud := HarukiToolboxUserData{
-			EmailInfo: EmailInfo{
+		ud := harukiAPIHelper.HarukiToolboxUserData{
+			EmailInfo: harukiAPIHelper.EmailInfo{
 				Email:    req.Email,
 				Verified: true,
 			},
 		}
-		return UpdatedDataResponse(c, fiber.StatusOK, "email verified", &ud)
+		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "email verified", &ud)
 	})
 }

@@ -3,68 +3,47 @@ package upload
 import (
 	"context"
 	"fmt"
-	harukiRootApi "haruki-suite/api"
 	harukiUtils "haruki-suite/utils"
-	harukiMongo "haruki-suite/utils/database/mongo"
+	harukiAPIHelper "haruki-suite/utils/api"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/hashicorp/go-version"
-	"github.com/redis/go-redis/v9"
 )
 
-var harukiProxyClientUserAgent *string
-var harukiProxyClientVersion *string
-var harukiProxyClientSecret *string
-
-func validateHarukiProxyClientHeader() fiber.Handler {
-	if harukiProxyClientUserAgent != nil && harukiProxyClientVersion != nil && harukiProxyClientSecret != nil {
+func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	if apiHelper.HarukiProxyUserAgent != "" && apiHelper.HarukiProxyVersion != "" && apiHelper.HarukiProxySecret != "" {
 		return func(c *fiber.Ctx) error {
 			requestUserAgent := c.Get("User-Agent")
 			requestSecret := c.Get("X-Haruki-Toolbox-Secret")
 
-			if requestSecret != *harukiProxyClientSecret {
-				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-					Message: "Invalid HarukiProxy Secret",
-					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				})
+			if requestSecret != apiHelper.HarukiProxySecret {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid HarukiProxy Secret", nil)
 			}
 
 			re := regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
 			matches := re.FindStringSubmatch(requestUserAgent)
 			if len(matches) < 3 {
-				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-					Message: "Invalid User-Agent format",
-					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				})
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid User-Agent format", nil)
 			}
 
 			uaName := matches[1]
-			if *harukiProxyClientUserAgent != uaName {
-				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-					Message: "Invalid User-Agent name",
-					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				})
+			if apiHelper.HarukiProxyUserAgent != uaName {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid User-Agent name", nil)
 			}
 
 			clientVerStr := matches[2]
 			clientVerStr = strings.TrimPrefix(clientVerStr, "v")
-			minVerStr := strings.TrimPrefix(*harukiProxyClientVersion, "v")
+			minVerStr := strings.TrimPrefix(apiHelper.HarukiProxyVersion, "v")
 			clientVer, err1 := version.NewVersion(clientVerStr)
 			minVer, err2 := version.NewVersion(minVerStr)
 			if err1 != nil || err2 != nil {
-				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-					Message: "Invalid version string",
-					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				})
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid version string", nil)
 			}
 			if clientVer.LessThan(minVer) {
-				return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-					Message: fmt.Sprintf("Client version %s is below minimum required %s", clientVerStr, *harukiProxyClientVersion),
-					Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				})
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, fmt.Sprintf("Client version %s is below minimum required %s", clientVerStr, apiHelper.HarukiProxyVersion), nil)
 			}
 
 			return c.Next()
@@ -76,104 +55,42 @@ func validateHarukiProxyClientHeader() fiber.Handler {
 	}
 }
 
-func registerHarukiProxyRoutes(app *fiber.App, mongoManager *harukiMongo.MongoDBManager, redisClient *redis.Client, proxyUserAgent, proxyVersion, proxySecret *string) {
-	api := app.Group("/harukiproxy/:server/:upload_type/:policy", validateHarukiProxyClientHeader())
-
-	if proxyUserAgent != nil && proxyVersion != nil && proxySecret != nil {
-		harukiProxyClientUserAgent = proxyUserAgent
-		harukiProxyClientSecret = proxySecret
-	}
+func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/harukiproxy/:server/:user_id/:data_type", validateHarukiProxyClientHeader(apiHelper))
 
 	api.Post("/upload", func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
-		policyStr := c.Params("policy")
+		gameUserIDStr := c.Params("user_id")
+		dataTypeStr := c.Params("data_type")
 
-		_, err := harukiUtils.ParseUploadPolicy(policyStr)
+		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
+		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		gameUserIDInt, err := strconv.Atoi(gameUserIDStr)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid user_id", nil)
+		}
+		gameUserID := int64(gameUserIDInt)
 
-		result, err := HandleUpload(
+		_, err = HandleUpload(
 			context.Background(),
 			c.Request().Body(),
-			serverStr,
-			policyStr,
-			mongoManager,
-			redisClient,
-			string(harukiUtils.UploadDataTypeSuite),
+			server,
+			dataType,
+			&gameUserID,
 			nil,
+			apiHelper,
 		)
 
 		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
-		if result.UserID != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, *result.UserID),
-			})
-		} else {
-			fmt.Println("Debug: UserID is nil")
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: fmt.Sprintf("%s server user with unknown ID successfully uploaded suite data.", serverStr),
-			})
-		}
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)
 	})
-
-	api.Post("/:user_id/upload", func(c *fiber.Ctx) error {
-		serverStr := c.Params("server")
-		policyStr := c.Params("policy")
-		userIdStr := c.Params("user_id")
-
-		_, err := harukiUtils.ParseUploadPolicy(policyStr)
-		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-			})
-		}
-
-		userId, err := strconv.ParseInt(userIdStr, 10, 64)
-		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: err.Error(),
-			})
-		}
-
-		result, err := HandleUpload(
-			context.Background(),
-			c.Request().Body(),
-			serverStr,
-			policyStr,
-			mongoManager,
-			redisClient,
-			string(harukiUtils.UploadDataTypeMysekai),
-			&userId,
-		)
-
-		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: err.Error(),
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-			})
-		}
-
-		if result.UserID != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: fmt.Sprintf("%s server user %d successfully uploaded mysekai data.", serverStr, *result.UserID),
-			})
-		} else {
-			fmt.Println("Debug: UserID is nil")
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Message: fmt.Sprintf("%s server user with unknown ID successfully uploaded mysekai data.", serverStr),
-			})
-		}
-	})
-
 }

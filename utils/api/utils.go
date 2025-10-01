@@ -1,8 +1,9 @@
-package user
+package api
 
 import (
 	"context"
 	"haruki-suite/config"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -32,7 +33,10 @@ func ResponseWithStruct[T any](c *fiber.Ctx, status int, data T) error {
 // ====================== Session Helper Functions ======================
 
 func NewSessionHandler(redisClient *redis.Client, sessionSignKey string) *SessionHandler {
-	return &SessionHandler{RedisClient: redisClient, SessionSignKey: sessionSignKey}
+	return &SessionHandler{
+		RedisClient:    redisClient,
+		SessionSignKey: sessionSignKey,
+	}
 }
 
 func (s *SessionHandler) IssueSession(userID string) (string, error) {
@@ -87,4 +91,19 @@ func (s *SessionHandler) VerifySessionToken(c *fiber.Ctx) error {
 
 	c.Locals("userID", claims.UserID)
 	return c.Next()
+}
+
+// ====================== Other Helper Functions ======================
+
+func ArrayContains(arr []string, s string) bool {
+	for _, v := range arr {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func StringContains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

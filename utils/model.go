@@ -3,10 +3,9 @@ package utils
 import "time"
 
 type SekaiDataRetrieverResponse struct {
-	RawBody       []byte                 `json:"raw_body"`
-	DecryptedBody map[string]interface{} `json:"decrypted_body"`
-	StatusCode    int                    `json:"status_code"`
-	NewHeaders    map[string]string      `json:"new_headers,omitempty"`
+	RawBody    []byte            `json:"raw_body"`
+	StatusCode int               `json:"status_code"`
+	NewHeaders map[string]string `json:"new_headers,omitempty"`
 }
 
 type SekaiInheritDataRetrieverResponse struct {
@@ -14,12 +13,6 @@ type SekaiInheritDataRetrieverResponse struct {
 	UserID  int64  `json:"user_id"`
 	Suite   []byte `json:"suite,omitempty"`
 	Mysekai []byte `json:"mysekai,omitempty"`
-	Policy  string `json:"policy,omitempty"`
-}
-
-type APIResponse struct {
-	Status  *int   `json:"status,omitempty"`  // 可选
-	Message string `json:"message,omitempty"` // 默认值可在构造函数中设置
 }
 
 type InheritInformation struct {

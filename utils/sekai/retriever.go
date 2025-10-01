@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
@@ -14,7 +13,6 @@ import (
 
 type HarukiSekaiDataRetriever struct {
 	client       *HarukiSekaiClient
-	policy       harukiUtils.UploadPolicy
 	uploadType   harukiUtils.UploadDataType
 	logger       *harukiLogger.Logger
 	isErrorExist bool
@@ -24,7 +22,6 @@ type HarukiSekaiDataRetriever struct {
 func NewSekaiDataRetriever(
 	server harukiUtils.SupportedInheritUploadServer,
 	inherit harukiUtils.InheritInformation,
-	policy harukiUtils.UploadPolicy,
 	uploadType harukiUtils.UploadDataType,
 ) *HarukiSekaiDataRetriever {
 	client := NewSekaiClient(struct {
@@ -47,7 +44,6 @@ func NewSekaiDataRetriever(
 
 	return &HarukiSekaiDataRetriever{
 		client:       client,
-		policy:       policy,
 		uploadType:   uploadType,
 		logger:       harukiLogger.NewLogger("SekaiDataRetriever", "DEBUG", nil),
 		isErrorExist: false,
@@ -210,6 +206,5 @@ func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiI
 		UserID:  r.client.userID,
 		Suite:   suite,
 		Mysekai: mysekai,
-		Policy:  string(r.policy),
 	}, nil
 }
