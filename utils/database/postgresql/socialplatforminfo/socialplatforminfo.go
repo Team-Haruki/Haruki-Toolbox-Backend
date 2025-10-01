@@ -18,6 +18,8 @@ const (
 	FieldPlatformUserID = "platform_user_id"
 	// FieldVerified holds the string denoting the verified field in the database.
 	FieldVerified = "verified"
+	// FieldUserSocialPlatformInfo holds the string denoting the user_social_platform_info field in the database.
+	FieldUserSocialPlatformInfo = "user_social_platform_info"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// Table holds the table name of the socialplatforminfo in the database.
@@ -37,23 +39,13 @@ var Columns = []string{
 	FieldPlatform,
 	FieldPlatformUserID,
 	FieldVerified,
-}
-
-// ForeignKeys holds the SQL foreign-keys that are owned by the "social_platform_infos"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"user_social_platform_info",
+	FieldUserSocialPlatformInfo,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -86,6 +78,11 @@ func ByPlatformUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByVerified orders the results by the verified field.
 func ByVerified(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVerified, opts...).ToFunc()
+}
+
+// ByUserSocialPlatformInfo orders the results by the user_social_platform_info field.
+func ByUserSocialPlatformInfo(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUserSocialPlatformInfo, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

@@ -69,6 +69,11 @@ func Verified(v bool) predicate.SocialPlatformInfo {
 	return predicate.SocialPlatformInfo(sql.FieldEQ(FieldVerified, v))
 }
 
+// UserSocialPlatformInfo applies equality check predicate on the "user_social_platform_info" field. It's identical to UserSocialPlatformInfoEQ.
+func UserSocialPlatformInfo(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldEQ(FieldUserSocialPlatformInfo, v))
+}
+
 // PlatformEQ applies the EQ predicate on the "platform" field.
 func PlatformEQ(v string) predicate.SocialPlatformInfo {
 	return predicate.SocialPlatformInfo(sql.FieldEQ(FieldPlatform, v))
@@ -207,6 +212,71 @@ func VerifiedEQ(v bool) predicate.SocialPlatformInfo {
 // VerifiedNEQ applies the NEQ predicate on the "verified" field.
 func VerifiedNEQ(v bool) predicate.SocialPlatformInfo {
 	return predicate.SocialPlatformInfo(sql.FieldNEQ(FieldVerified, v))
+}
+
+// UserSocialPlatformInfoEQ applies the EQ predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoEQ(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldEQ(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoNEQ applies the NEQ predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoNEQ(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldNEQ(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoIn applies the In predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoIn(vs ...string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldIn(FieldUserSocialPlatformInfo, vs...))
+}
+
+// UserSocialPlatformInfoNotIn applies the NotIn predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoNotIn(vs ...string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldNotIn(FieldUserSocialPlatformInfo, vs...))
+}
+
+// UserSocialPlatformInfoGT applies the GT predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoGT(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldGT(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoGTE applies the GTE predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoGTE(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldGTE(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoLT applies the LT predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoLT(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldLT(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoLTE applies the LTE predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoLTE(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldLTE(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoContains applies the Contains predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoContains(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldContains(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoHasPrefix applies the HasPrefix predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoHasPrefix(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldHasPrefix(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoHasSuffix applies the HasSuffix predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoHasSuffix(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldHasSuffix(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoEqualFold applies the EqualFold predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoEqualFold(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldEqualFold(FieldUserSocialPlatformInfo, v))
+}
+
+// UserSocialPlatformInfoContainsFold applies the ContainsFold predicate on the "user_social_platform_info" field.
+func UserSocialPlatformInfoContainsFold(v string) predicate.SocialPlatformInfo {
+	return predicate.SocialPlatformInfo(sql.FieldContainsFold(FieldUserSocialPlatformInfo, v))
 }
 
 // HasUser applies the HasEdge predicate on the "user" edge.

@@ -24,7 +24,6 @@ type SocialPlatformInfoQuery struct {
 	inters     []Interceptor
 	predicates []predicate.SocialPlatformInfo
 	withUser   *UserQuery
-	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -370,18 +369,11 @@ func (_q *SocialPlatformInfoQuery) prepareQuery(ctx context.Context) error {
 func (_q *SocialPlatformInfoQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SocialPlatformInfo, error) {
 	var (
 		nodes       = []*SocialPlatformInfo{}
-		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
 			_q.withUser != nil,
 		}
 	)
-	if _q.withUser != nil {
-		withFKs = true
-	}
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, socialplatforminfo.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SocialPlatformInfo).scanValues(nil, columns)
 	}
@@ -413,10 +405,7 @@ func (_q *SocialPlatformInfoQuery) loadUser(ctx context.Context, query *UserQuer
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*SocialPlatformInfo)
 	for i := range nodes {
-		if nodes[i].user_social_platform_info == nil {
-			continue
-		}
-		fk := *nodes[i].user_social_platform_info
+		fk := nodes[i].UserSocialPlatformInfo
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
@@ -466,6 +455,9 @@ func (_q *SocialPlatformInfoQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != socialplatforminfo.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withUser != nil {
+			_spec.Node.AddColumnOnce(socialplatforminfo.FieldUserSocialPlatformInfo)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

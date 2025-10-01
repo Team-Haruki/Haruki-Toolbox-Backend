@@ -70,17 +70,23 @@ func (_u *SocialPlatformInfoUpdate) SetNillableVerified(v *bool) *SocialPlatform
 	return _u
 }
 
-// SetUserID sets the "user" edge to the User entity by ID.
-func (_u *SocialPlatformInfoUpdate) SetUserID(id string) *SocialPlatformInfoUpdate {
-	_u.mutation.SetUserID(id)
+// SetUserSocialPlatformInfo sets the "user_social_platform_info" field.
+func (_u *SocialPlatformInfoUpdate) SetUserSocialPlatformInfo(v string) *SocialPlatformInfoUpdate {
+	_u.mutation.SetUserSocialPlatformInfo(v)
 	return _u
 }
 
-// SetNillableUserID sets the "user" edge to the User entity by ID if the given value is not nil.
-func (_u *SocialPlatformInfoUpdate) SetNillableUserID(id *string) *SocialPlatformInfoUpdate {
-	if id != nil {
-		_u = _u.SetUserID(*id)
+// SetNillableUserSocialPlatformInfo sets the "user_social_platform_info" field if the given value is not nil.
+func (_u *SocialPlatformInfoUpdate) SetNillableUserSocialPlatformInfo(v *string) *SocialPlatformInfoUpdate {
+	if v != nil {
+		_u.SetUserSocialPlatformInfo(*v)
 	}
+	return _u
+}
+
+// SetUserID sets the "user" edge to the User entity by ID.
+func (_u *SocialPlatformInfoUpdate) SetUserID(id string) *SocialPlatformInfoUpdate {
+	_u.mutation.SetUserID(id)
 	return _u
 }
 
@@ -127,7 +133,18 @@ func (_u *SocialPlatformInfoUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *SocialPlatformInfoUpdate) check() error {
+	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
+		return errors.New(`postgresql: clearing a required unique edge "SocialPlatformInfo.user"`)
+	}
+	return nil
+}
+
 func (_u *SocialPlatformInfoUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(socialplatforminfo.Table, socialplatforminfo.Columns, sqlgraph.NewFieldSpec(socialplatforminfo.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -236,17 +253,23 @@ func (_u *SocialPlatformInfoUpdateOne) SetNillableVerified(v *bool) *SocialPlatf
 	return _u
 }
 
-// SetUserID sets the "user" edge to the User entity by ID.
-func (_u *SocialPlatformInfoUpdateOne) SetUserID(id string) *SocialPlatformInfoUpdateOne {
-	_u.mutation.SetUserID(id)
+// SetUserSocialPlatformInfo sets the "user_social_platform_info" field.
+func (_u *SocialPlatformInfoUpdateOne) SetUserSocialPlatformInfo(v string) *SocialPlatformInfoUpdateOne {
+	_u.mutation.SetUserSocialPlatformInfo(v)
 	return _u
 }
 
-// SetNillableUserID sets the "user" edge to the User entity by ID if the given value is not nil.
-func (_u *SocialPlatformInfoUpdateOne) SetNillableUserID(id *string) *SocialPlatformInfoUpdateOne {
-	if id != nil {
-		_u = _u.SetUserID(*id)
+// SetNillableUserSocialPlatformInfo sets the "user_social_platform_info" field if the given value is not nil.
+func (_u *SocialPlatformInfoUpdateOne) SetNillableUserSocialPlatformInfo(v *string) *SocialPlatformInfoUpdateOne {
+	if v != nil {
+		_u.SetUserSocialPlatformInfo(*v)
 	}
+	return _u
+}
+
+// SetUserID sets the "user" edge to the User entity by ID.
+func (_u *SocialPlatformInfoUpdateOne) SetUserID(id string) *SocialPlatformInfoUpdateOne {
+	_u.mutation.SetUserID(id)
 	return _u
 }
 
@@ -306,7 +329,18 @@ func (_u *SocialPlatformInfoUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *SocialPlatformInfoUpdateOne) check() error {
+	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
+		return errors.New(`postgresql: clearing a required unique edge "SocialPlatformInfo.user"`)
+	}
+	return nil
+}
+
 func (_u *SocialPlatformInfoUpdateOne) sqlSave(ctx context.Context) (_node *SocialPlatformInfo, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(socialplatforminfo.Table, socialplatforminfo.Columns, sqlgraph.NewFieldSpec(socialplatforminfo.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
 	if !ok {

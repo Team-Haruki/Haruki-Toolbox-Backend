@@ -46,17 +46,15 @@ func (_c *SocialPlatformInfoCreate) SetNillableVerified(v *bool) *SocialPlatform
 	return _c
 }
 
-// SetUserID sets the "user" edge to the User entity by ID.
-func (_c *SocialPlatformInfoCreate) SetUserID(id string) *SocialPlatformInfoCreate {
-	_c.mutation.SetUserID(id)
+// SetUserSocialPlatformInfo sets the "user_social_platform_info" field.
+func (_c *SocialPlatformInfoCreate) SetUserSocialPlatformInfo(v string) *SocialPlatformInfoCreate {
+	_c.mutation.SetUserSocialPlatformInfo(v)
 	return _c
 }
 
-// SetNillableUserID sets the "user" edge to the User entity by ID if the given value is not nil.
-func (_c *SocialPlatformInfoCreate) SetNillableUserID(id *string) *SocialPlatformInfoCreate {
-	if id != nil {
-		_c = _c.SetUserID(*id)
-	}
+// SetUserID sets the "user" edge to the User entity by ID.
+func (_c *SocialPlatformInfoCreate) SetUserID(id string) *SocialPlatformInfoCreate {
+	_c.mutation.SetUserID(id)
 	return _c
 }
 
@@ -117,6 +115,12 @@ func (_c *SocialPlatformInfoCreate) check() error {
 	if _, ok := _c.mutation.Verified(); !ok {
 		return &ValidationError{Name: "verified", err: errors.New(`postgresql: missing required field "SocialPlatformInfo.verified"`)}
 	}
+	if _, ok := _c.mutation.UserSocialPlatformInfo(); !ok {
+		return &ValidationError{Name: "user_social_platform_info", err: errors.New(`postgresql: missing required field "SocialPlatformInfo.user_social_platform_info"`)}
+	}
+	if len(_c.mutation.UserIDs()) == 0 {
+		return &ValidationError{Name: "user", err: errors.New(`postgresql: missing required edge "SocialPlatformInfo.user"`)}
+	}
 	return nil
 }
 
@@ -169,7 +173,7 @@ func (_c *SocialPlatformInfoCreate) createSpec() (*SocialPlatformInfo, *sqlgraph
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.user_social_platform_info = &nodes[0]
+		_node.UserSocialPlatformInfo = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
