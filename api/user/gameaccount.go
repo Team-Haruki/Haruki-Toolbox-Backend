@@ -3,8 +3,10 @@ package user
 import (
 	"context"
 	"fmt"
+	"haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/user"
 	"strconv"
 	"time"
 
@@ -13,9 +15,9 @@ import (
 )
 
 func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account", apiHelper.SessionHandler.VerifySessionToken)
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
 
-	r.Post("/generate-verification-code", func(c *fiber.Ctx) error {
+	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		var req harukiAPIHelper.GameAccountBindingPayload
@@ -36,7 +38,7 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, resp)
 	})
 
-	r.Put("/:server/:game_user_id", func(c *fiber.Ctx) error {
+	r.Put("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
@@ -129,11 +131,30 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save binding", nil)
 		}
-
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "binding created successfully", nil)
+		bindings, err := apiHelper.DBManager.DB.GameAccountBinding.
+			Query().
+			Where(gameaccountbinding.HasUserWith(user.IDEQ(userID))).
+			All(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query bindings", nil)
+		}
+		var resp []harukiAPIHelper.GameAccountBinding
+		for _, b := range bindings {
+			resp = append(resp, harukiAPIHelper.GameAccountBinding{
+				Server:   utils.SupportedDataUploadServer(b.Server),
+				UserID:   b.GameUserID,
+				Verified: b.Verified,
+				Suite:    b.Suite,
+				Mysekai:  b.Mysekai,
+			})
+		}
+		ud := harukiAPIHelper.HarukiToolboxUserData{
+			GameAccountBindings: &resp,
+		}
+		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "binding updated successfully", &ud)
 	})
 
-	r.Delete("/:server/:game_user_id", func(c *fiber.Ctx) error {
+	r.Delete("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
@@ -166,6 +187,26 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to delete binding", nil)
 		}
 
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "binding deleted successfully", nil)
+		bindings, err := apiHelper.DBManager.DB.GameAccountBinding.
+			Query().
+			Where(gameaccountbinding.HasUserWith(user.IDEQ(userID))).
+			All(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query bindings", nil)
+		}
+		var resp []harukiAPIHelper.GameAccountBinding
+		for _, b := range bindings {
+			resp = append(resp, harukiAPIHelper.GameAccountBinding{
+				Server:   utils.SupportedDataUploadServer(b.Server),
+				UserID:   b.GameUserID,
+				Verified: b.Verified,
+				Suite:    b.Suite,
+				Mysekai:  b.Mysekai,
+			})
+		}
+		ud := harukiAPIHelper.HarukiToolboxUserData{
+			GameAccountBindings: &resp,
+		}
+		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "binding deleted successfully", &ud)
 	})
 }

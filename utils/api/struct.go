@@ -93,8 +93,8 @@ type GenerateSocialPlatformCodePayload struct {
 }
 
 type UpdateProfilePayload struct {
-	Name         string `json:"name"`
-	AvatarBase64 string `json:"avatarBase64"`
+	Name         *string `json:"name"`
+	AvatarBase64 *string `json:"avatarBase64"`
 }
 
 type AuthorizeSocialPlatformPayload struct {
@@ -119,14 +119,14 @@ type RegisterOrLoginSuccessResponse struct {
 }
 
 type HarukiToolboxUserData struct {
-	Name                        string                        `json:"name"`
-	UserID                      string                        `json:"userId"`
-	AvatarPath                  *string                       `json:"avatarPath,omitempty"`
-	EmailInfo                   EmailInfo                     `json:"emailInfo"`
-	SocialPlatformInfo          *SocialPlatformInfo           `json:"socialPlatformInfo,omitempty"`
-	AuthorizeSocialPlatformInfo []AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitempty"`
-	GameAccountBindings         []GameAccountBinding          `json:"gameAccountBindings,omitempty"`
-	SessionToken                string                        `json:"sessionToken"`
+	Name                        *string                        `json:"name,omitempty"`
+	UserID                      *string                        `json:"userId,omitempty"`
+	AvatarPath                  *string                        `json:"avatarPath,omitempty"`
+	EmailInfo                   *EmailInfo                     `json:"emailInfo,omitempty"`
+	SocialPlatformInfo          *SocialPlatformInfo            `json:"socialPlatformInfo,omitempty"`
+	AuthorizeSocialPlatformInfo *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitempty"`
+	GameAccountBindings         *[]GameAccountBinding          `json:"gameAccountBindings,omitempty"`
+	SessionToken                *string                        `json:"sessionToken,omitempty"`
 }
 
 type EmailInfo struct {
@@ -154,7 +154,6 @@ type AuthorizeSocialPlatformInfo struct {
 }
 
 type GameAccountBinding struct {
-	ID       int                                   `json:"id"`
 	Server   utils.SupportedDataUploadServer       `json:"server"`
 	UserID   string                                `json:"userId"`
 	Verified bool                                  `json:"verified"`

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	harukiRedis "haruki-suite/utils/database/redis"
 	"strconv"
 	"strings"
@@ -44,12 +45,31 @@ func registerPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			return c.JSON(resp)
 		}
 
+		record, err := apiHelper.DBManager.DB.GameAccountBinding.
+			Query().
+			Where(
+				gameaccountbinding.ServerEQ(string(server)),
+				gameaccountbinding.GameUserIDEQ(userIDStr),
+			).
+			WithUser().
+			Only(ctx)
+
 		result, err := apiHelper.DBManager.Mongo.GetData(c.Context(), userID, string(server), dataType)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err), nil)
 		}
 		if result == nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "Player data not found.", nil)
+		}
+
+		if dataType == harukiUtils.UploadDataTypeSuite {
+			if record.Suite == nil || !record.Suite.AllowPublicApi {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
+			}
+		} else if dataType == harukiUtils.UploadDataTypeMysekai {
+			if record.Mysekai == nil || !record.Mysekai.AllowPublicApi {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
+			}
 		}
 
 		if dataType == harukiUtils.UploadDataTypeSuite {

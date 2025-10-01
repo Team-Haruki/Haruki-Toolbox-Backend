@@ -21,6 +21,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -62,6 +63,10 @@ func main() {
 	entClient, err := dbManager.Open(harukiConfig.Cfg.UserSystem.DBType, harukiConfig.Cfg.UserSystem.DBURL)
 	if err != nil {
 		mainLogger.Errorf("Failed to init PostgreSQL: %v", err)
+		os.Exit(1)
+	}
+	if err := entClient.Schema.Create(context.Background()); err != nil {
+		mainLogger.Errorf("Failed creating schema resources: %v", err)
 		os.Exit(1)
 	}
 	defer entClient.Close()

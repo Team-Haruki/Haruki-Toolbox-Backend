@@ -72,6 +72,14 @@ func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Incorrect reset code", nil)
 		}
 
+		u, err := apiHelper.DBManager.DB.User.
+			Query().
+			Where(user.EmailEQ(payload.Email)).
+			Only(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to locate user", nil)
+		}
+
 		hashed, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to hash password", nil)
@@ -84,6 +92,10 @@ func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			Save(ctx)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
+		}
+
+		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, u.ID); err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to clear user sessions", nil)
 		}
 
 		apiHelper.DBManager.Redis.DeleteCache(ctx, key)

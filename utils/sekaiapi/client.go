@@ -30,9 +30,8 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (
 	if server == utils.SupportedDataUploadServerEN || server == utils.SupportedDataUploadServerKR {
 		url = fmt.Sprintf("%s/api/%s/user/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
 	} else {
-		url = fmt.Sprintf("%s/api/%s/user/%%user_id/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
+		url = fmt.Sprintf("%s/api/%s/user/%%25user_id/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
 	}
-
 	resp, err := c.httpClient.R().
 		SetHeader("X-Haruki-Sekai-Token", c.harukiSekaiAPIToken).
 		SetHeader("Accept", "application/json").
@@ -40,11 +39,11 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (
 	if err != nil {
 		return false, nil, fmt.Errorf("请求失败: %v", err)
 	}
-
 	switch resp.StatusCode() {
 	case 200:
 		return true, resp.Body(), nil
 	case 404:
+		fmt.Println("Get User Profile Not Found")
 		return true, nil, fmt.Errorf("this user does not exist, please check your userID if is corrent")
 	case 500:
 		return false, nil, fmt.Errorf("api is busy, please try again later, if this problem still consist, please contact Haruki Dev Team")

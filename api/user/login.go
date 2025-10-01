@@ -66,7 +66,6 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				Verified: user.Edges.SocialPlatformInfo.Verified,
 			}
 		}
-
 		var authorizeSocialPlatformInfo []harukiAPIHelper.AuthorizeSocialPlatformInfo
 		if user.Edges.AuthorizedSocialPlatforms != nil && len(user.Edges.AuthorizedSocialPlatforms) > 0 {
 			authorizeSocialPlatformInfo = make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(user.Edges.AuthorizedSocialPlatforms))
@@ -85,23 +84,24 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			gameAccountBindings = make([]harukiAPIHelper.GameAccountBinding, 0, len(user.Edges.GameAccountBindings))
 			for _, g := range user.Edges.GameAccountBindings {
 				gameAccountBindings = append(gameAccountBindings, harukiAPIHelper.GameAccountBinding{
-					ID:       g.ID,
 					Server:   utils.SupportedDataUploadServer(g.Server),
 					UserID:   g.GameUserID,
 					Verified: g.Verified,
+					Suite:    g.Suite,
+					Mysekai:  g.Mysekai,
 				})
 			}
 		}
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
-			Name:                        user.Name,
-			UserID:                      user.ID,
+			Name:                        &user.Name,
+			UserID:                      &user.ID,
 			AvatarPath:                  user.AvatarPath,
-			EmailInfo:                   emailInfo,
+			EmailInfo:                   &emailInfo,
 			SocialPlatformInfo:          socialPlatformInfo,
-			AuthorizeSocialPlatformInfo: authorizeSocialPlatformInfo,
-			GameAccountBindings:         gameAccountBindings,
-			SessionToken:                sessionToken,
+			AuthorizeSocialPlatformInfo: &authorizeSocialPlatformInfo,
+			GameAccountBindings:         &gameAccountBindings,
+			SessionToken:                &sessionToken,
 		}
 		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
