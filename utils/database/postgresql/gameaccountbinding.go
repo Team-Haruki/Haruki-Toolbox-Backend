@@ -22,7 +22,7 @@ type GameAccountBinding struct {
 	// jp | en | tw | kr | cn
 	Server string `json:"server,omitempty"`
 	// GameUserID holds the value of the "game_user_id" field.
-	GameUserID int `json:"game_user_id,omitempty"`
+	GameUserID string `json:"game_user_id,omitempty"`
 	// Verified holds the value of the "verified" field.
 	Verified bool `json:"verified,omitempty"`
 	// Suite holds the value of the "suite" field.
@@ -65,9 +65,9 @@ func (*GameAccountBinding) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case gameaccountbinding.FieldVerified:
 			values[i] = new(sql.NullBool)
-		case gameaccountbinding.FieldID, gameaccountbinding.FieldGameUserID:
+		case gameaccountbinding.FieldID:
 			values[i] = new(sql.NullInt64)
-		case gameaccountbinding.FieldServer:
+		case gameaccountbinding.FieldServer, gameaccountbinding.FieldGameUserID:
 			values[i] = new(sql.NullString)
 		case gameaccountbinding.ForeignKeys[0]: // user_game_account_bindings
 			values[i] = new(sql.NullString)
@@ -99,10 +99,10 @@ func (_m *GameAccountBinding) assignValues(columns []string, values []any) error
 				_m.Server = value.String
 			}
 		case gameaccountbinding.FieldGameUserID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
+			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field game_user_id", values[i])
 			} else if value.Valid {
-				_m.GameUserID = int(value.Int64)
+				_m.GameUserID = value.String
 			}
 		case gameaccountbinding.FieldVerified:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -178,7 +178,7 @@ func (_m *GameAccountBinding) String() string {
 	builder.WriteString(_m.Server)
 	builder.WriteString(", ")
 	builder.WriteString("game_user_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.GameUserID))
+	builder.WriteString(_m.GameUserID)
 	builder.WriteString(", ")
 	builder.WriteString("verified=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Verified))

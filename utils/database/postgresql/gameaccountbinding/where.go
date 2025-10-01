@@ -60,7 +60,7 @@ func Server(v string) predicate.GameAccountBinding {
 }
 
 // GameUserID applies equality check predicate on the "game_user_id" field. It's identical to GameUserIDEQ.
-func GameUserID(v int) predicate.GameAccountBinding {
+func GameUserID(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldEQ(FieldGameUserID, v))
 }
 
@@ -135,43 +135,68 @@ func ServerContainsFold(v string) predicate.GameAccountBinding {
 }
 
 // GameUserIDEQ applies the EQ predicate on the "game_user_id" field.
-func GameUserIDEQ(v int) predicate.GameAccountBinding {
+func GameUserIDEQ(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldEQ(FieldGameUserID, v))
 }
 
 // GameUserIDNEQ applies the NEQ predicate on the "game_user_id" field.
-func GameUserIDNEQ(v int) predicate.GameAccountBinding {
+func GameUserIDNEQ(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldNEQ(FieldGameUserID, v))
 }
 
 // GameUserIDIn applies the In predicate on the "game_user_id" field.
-func GameUserIDIn(vs ...int) predicate.GameAccountBinding {
+func GameUserIDIn(vs ...string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldIn(FieldGameUserID, vs...))
 }
 
 // GameUserIDNotIn applies the NotIn predicate on the "game_user_id" field.
-func GameUserIDNotIn(vs ...int) predicate.GameAccountBinding {
+func GameUserIDNotIn(vs ...string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldNotIn(FieldGameUserID, vs...))
 }
 
 // GameUserIDGT applies the GT predicate on the "game_user_id" field.
-func GameUserIDGT(v int) predicate.GameAccountBinding {
+func GameUserIDGT(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldGT(FieldGameUserID, v))
 }
 
 // GameUserIDGTE applies the GTE predicate on the "game_user_id" field.
-func GameUserIDGTE(v int) predicate.GameAccountBinding {
+func GameUserIDGTE(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldGTE(FieldGameUserID, v))
 }
 
 // GameUserIDLT applies the LT predicate on the "game_user_id" field.
-func GameUserIDLT(v int) predicate.GameAccountBinding {
+func GameUserIDLT(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldLT(FieldGameUserID, v))
 }
 
 // GameUserIDLTE applies the LTE predicate on the "game_user_id" field.
-func GameUserIDLTE(v int) predicate.GameAccountBinding {
+func GameUserIDLTE(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldLTE(FieldGameUserID, v))
+}
+
+// GameUserIDContains applies the Contains predicate on the "game_user_id" field.
+func GameUserIDContains(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldContains(FieldGameUserID, v))
+}
+
+// GameUserIDHasPrefix applies the HasPrefix predicate on the "game_user_id" field.
+func GameUserIDHasPrefix(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldHasPrefix(FieldGameUserID, v))
+}
+
+// GameUserIDHasSuffix applies the HasSuffix predicate on the "game_user_id" field.
+func GameUserIDHasSuffix(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldHasSuffix(FieldGameUserID, v))
+}
+
+// GameUserIDEqualFold applies the EqualFold predicate on the "game_user_id" field.
+func GameUserIDEqualFold(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldEqualFold(FieldGameUserID, v))
+}
+
+// GameUserIDContainsFold applies the ContainsFold predicate on the "game_user_id" field.
+func GameUserIDContainsFold(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldContainsFold(FieldGameUserID, v))
 }
 
 // VerifiedEQ applies the EQ predicate on the "verified" field.
