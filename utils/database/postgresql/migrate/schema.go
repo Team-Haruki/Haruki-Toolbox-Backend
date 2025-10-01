@@ -62,7 +62,7 @@ var (
 	GameAccountBindingsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "server", Type: field.TypeString},
-		{Name: "game_user_id", Type: field.TypeInt},
+		{Name: "game_user_id", Type: field.TypeString},
 		{Name: "verified", Type: field.TypeBool, Default: false},
 		{Name: "suite", Type: field.TypeJSON, Nullable: true},
 		{Name: "mysekai", Type: field.TypeJSON, Nullable: true},

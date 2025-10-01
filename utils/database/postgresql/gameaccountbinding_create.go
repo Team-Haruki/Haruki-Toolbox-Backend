@@ -28,7 +28,7 @@ func (_c *GameAccountBindingCreate) SetServer(v string) *GameAccountBindingCreat
 }
 
 // SetGameUserID sets the "game_user_id" field.
-func (_c *GameAccountBindingCreate) SetGameUserID(v int) *GameAccountBindingCreate {
+func (_c *GameAccountBindingCreate) SetGameUserID(v string) *GameAccountBindingCreate {
 	_c.mutation.SetGameUserID(v)
 	return _c
 }
@@ -161,7 +161,7 @@ func (_c *GameAccountBindingCreate) createSpec() (*GameAccountBinding, *sqlgraph
 		_node.Server = value
 	}
 	if value, ok := _c.mutation.GameUserID(); ok {
-		_spec.SetField(gameaccountbinding.FieldGameUserID, field.TypeInt, value)
+		_spec.SetField(gameaccountbinding.FieldGameUserID, field.TypeString, value)
 		_node.GameUserID = value
 	}
 	if value, ok := _c.mutation.Verified(); ok {

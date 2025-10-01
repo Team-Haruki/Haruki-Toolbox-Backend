@@ -44,23 +44,16 @@ func (_u *GameAccountBindingUpdate) SetNillableServer(v *string) *GameAccountBin
 }
 
 // SetGameUserID sets the "game_user_id" field.
-func (_u *GameAccountBindingUpdate) SetGameUserID(v int) *GameAccountBindingUpdate {
-	_u.mutation.ResetGameUserID()
+func (_u *GameAccountBindingUpdate) SetGameUserID(v string) *GameAccountBindingUpdate {
 	_u.mutation.SetGameUserID(v)
 	return _u
 }
 
 // SetNillableGameUserID sets the "game_user_id" field if the given value is not nil.
-func (_u *GameAccountBindingUpdate) SetNillableGameUserID(v *int) *GameAccountBindingUpdate {
+func (_u *GameAccountBindingUpdate) SetNillableGameUserID(v *string) *GameAccountBindingUpdate {
 	if v != nil {
 		_u.SetGameUserID(*v)
 	}
-	return _u
-}
-
-// AddGameUserID adds value to the "game_user_id" field.
-func (_u *GameAccountBindingUpdate) AddGameUserID(v int) *GameAccountBindingUpdate {
-	_u.mutation.AddGameUserID(v)
 	return _u
 }
 
@@ -172,10 +165,7 @@ func (_u *GameAccountBindingUpdate) sqlSave(ctx context.Context) (_node int, err
 		_spec.SetField(gameaccountbinding.FieldServer, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.GameUserID(); ok {
-		_spec.SetField(gameaccountbinding.FieldGameUserID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedGameUserID(); ok {
-		_spec.AddField(gameaccountbinding.FieldGameUserID, field.TypeInt, value)
+		_spec.SetField(gameaccountbinding.FieldGameUserID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
@@ -256,23 +246,16 @@ func (_u *GameAccountBindingUpdateOne) SetNillableServer(v *string) *GameAccount
 }
 
 // SetGameUserID sets the "game_user_id" field.
-func (_u *GameAccountBindingUpdateOne) SetGameUserID(v int) *GameAccountBindingUpdateOne {
-	_u.mutation.ResetGameUserID()
+func (_u *GameAccountBindingUpdateOne) SetGameUserID(v string) *GameAccountBindingUpdateOne {
 	_u.mutation.SetGameUserID(v)
 	return _u
 }
 
 // SetNillableGameUserID sets the "game_user_id" field if the given value is not nil.
-func (_u *GameAccountBindingUpdateOne) SetNillableGameUserID(v *int) *GameAccountBindingUpdateOne {
+func (_u *GameAccountBindingUpdateOne) SetNillableGameUserID(v *string) *GameAccountBindingUpdateOne {
 	if v != nil {
 		_u.SetGameUserID(*v)
 	}
-	return _u
-}
-
-// AddGameUserID adds value to the "game_user_id" field.
-func (_u *GameAccountBindingUpdateOne) AddGameUserID(v int) *GameAccountBindingUpdateOne {
-	_u.mutation.AddGameUserID(v)
 	return _u
 }
 
@@ -414,10 +397,7 @@ func (_u *GameAccountBindingUpdateOne) sqlSave(ctx context.Context) (_node *Game
 		_spec.SetField(gameaccountbinding.FieldServer, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.GameUserID(); ok {
-		_spec.SetField(gameaccountbinding.FieldGameUserID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedGameUserID(); ok {
-		_spec.AddField(gameaccountbinding.FieldGameUserID, field.TypeInt, value)
+		_spec.SetField(gameaccountbinding.FieldGameUserID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)

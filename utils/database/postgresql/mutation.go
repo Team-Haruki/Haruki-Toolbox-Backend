@@ -1055,21 +1055,20 @@ func (m *EmailInfoMutation) ResetEdge(name string) error {
 // GameAccountBindingMutation represents an operation that mutates the GameAccountBinding nodes in the graph.
 type GameAccountBindingMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int
-	server          *string
-	game_user_id    *int
-	addgame_user_id *int
-	verified        *bool
-	suite           **schema.SuiteDataPrivacySettings
-	mysekai         **schema.MysekaiDataPrivacySettings
-	clearedFields   map[string]struct{}
-	user            *string
-	cleareduser     bool
-	done            bool
-	oldValue        func(context.Context) (*GameAccountBinding, error)
-	predicates      []predicate.GameAccountBinding
+	op            Op
+	typ           string
+	id            *int
+	server        *string
+	game_user_id  *string
+	verified      *bool
+	suite         **schema.SuiteDataPrivacySettings
+	mysekai       **schema.MysekaiDataPrivacySettings
+	clearedFields map[string]struct{}
+	user          *string
+	cleareduser   bool
+	done          bool
+	oldValue      func(context.Context) (*GameAccountBinding, error)
+	predicates    []predicate.GameAccountBinding
 }
 
 var _ ent.Mutation = (*GameAccountBindingMutation)(nil)
@@ -1207,13 +1206,12 @@ func (m *GameAccountBindingMutation) ResetServer() {
 }
 
 // SetGameUserID sets the "game_user_id" field.
-func (m *GameAccountBindingMutation) SetGameUserID(i int) {
-	m.game_user_id = &i
-	m.addgame_user_id = nil
+func (m *GameAccountBindingMutation) SetGameUserID(s string) {
+	m.game_user_id = &s
 }
 
 // GameUserID returns the value of the "game_user_id" field in the mutation.
-func (m *GameAccountBindingMutation) GameUserID() (r int, exists bool) {
+func (m *GameAccountBindingMutation) GameUserID() (r string, exists bool) {
 	v := m.game_user_id
 	if v == nil {
 		return
@@ -1224,7 +1222,7 @@ func (m *GameAccountBindingMutation) GameUserID() (r int, exists bool) {
 // OldGameUserID returns the old "game_user_id" field's value of the GameAccountBinding entity.
 // If the GameAccountBinding object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *GameAccountBindingMutation) OldGameUserID(ctx context.Context) (v int, err error) {
+func (m *GameAccountBindingMutation) OldGameUserID(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldGameUserID is only allowed on UpdateOne operations")
 	}
@@ -1238,28 +1236,9 @@ func (m *GameAccountBindingMutation) OldGameUserID(ctx context.Context) (v int, 
 	return oldValue.GameUserID, nil
 }
 
-// AddGameUserID adds i to the "game_user_id" field.
-func (m *GameAccountBindingMutation) AddGameUserID(i int) {
-	if m.addgame_user_id != nil {
-		*m.addgame_user_id += i
-	} else {
-		m.addgame_user_id = &i
-	}
-}
-
-// AddedGameUserID returns the value that was added to the "game_user_id" field in this mutation.
-func (m *GameAccountBindingMutation) AddedGameUserID() (r int, exists bool) {
-	v := m.addgame_user_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetGameUserID resets all changes to the "game_user_id" field.
 func (m *GameAccountBindingMutation) ResetGameUserID() {
 	m.game_user_id = nil
-	m.addgame_user_id = nil
 }
 
 // SetVerified sets the "verified" field.
@@ -1539,7 +1518,7 @@ func (m *GameAccountBindingMutation) SetField(name string, value ent.Value) erro
 		m.SetServer(v)
 		return nil
 	case gameaccountbinding.FieldGameUserID:
-		v, ok := value.(int)
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -1573,21 +1552,13 @@ func (m *GameAccountBindingMutation) SetField(name string, value ent.Value) erro
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *GameAccountBindingMutation) AddedFields() []string {
-	var fields []string
-	if m.addgame_user_id != nil {
-		fields = append(fields, gameaccountbinding.FieldGameUserID)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *GameAccountBindingMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case gameaccountbinding.FieldGameUserID:
-		return m.AddedGameUserID()
-	}
 	return nil, false
 }
 
@@ -1596,13 +1567,6 @@ func (m *GameAccountBindingMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *GameAccountBindingMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case gameaccountbinding.FieldGameUserID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddGameUserID(v)
-		return nil
 	}
 	return fmt.Errorf("unknown GameAccountBinding numeric field %s", name)
 }
