@@ -17,6 +17,7 @@ func (User) Fields() []ent.Field {
 		field.String("email"),
 		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
+		field.Bool("allow_cn_mysekai").Default(false),
 	}
 }
 
