@@ -55,6 +55,20 @@ func (_c *UserCreate) SetNillableAvatarPath(v *string) *UserCreate {
 	return _c
 }
 
+// SetAllowCnMysekai sets the "allow_cn_mysekai" field.
+func (_c *UserCreate) SetAllowCnMysekai(v bool) *UserCreate {
+	_c.mutation.SetAllowCnMysekai(v)
+	return _c
+}
+
+// SetNillableAllowCnMysekai sets the "allow_cn_mysekai" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAllowCnMysekai(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetAllowCnMysekai(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *UserCreate) SetID(v string) *UserCreate {
 	_c.mutation.SetID(v)
@@ -136,6 +150,7 @@ func (_c *UserCreate) Mutation() *UserMutation {
 
 // Save creates the User in the database.
 func (_c *UserCreate) Save(ctx context.Context) (*User, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -161,6 +176,14 @@ func (_c *UserCreate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_c *UserCreate) defaults() {
+	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
+		v := user.DefaultAllowCnMysekai
+		_c.mutation.SetAllowCnMysekai(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.Name(); !ok {
@@ -171,6 +194,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.PasswordHash(); !ok {
 		return &ValidationError{Name: "password_hash", err: errors.New(`postgresql: missing required field "User.password_hash"`)}
+	}
+	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
+		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := user.IDValidator(v); err != nil {
@@ -227,6 +253,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AvatarPath(); ok {
 		_spec.SetField(user.FieldAvatarPath, field.TypeString, value)
 		_node.AvatarPath = &value
+	}
+	if value, ok := _c.mutation.AllowCnMysekai(); ok {
+		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
+		_node.AllowCnMysekai = value
 	}
 	if nodes := _c.mutation.EmailInfoIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -313,6 +343,7 @@ func (_c *UserCreateBulk) Save(ctx context.Context) ([]*User, error) {
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*UserMutation)
 				if !ok {

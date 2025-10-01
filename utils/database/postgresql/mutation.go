@@ -2213,6 +2213,7 @@ type UserMutation struct {
 	email                              *string
 	password_hash                      *string
 	avatar_path                        *string
+	allow_cn_mysekai                   *bool
 	clearedFields                      map[string]struct{}
 	email_info                         *int
 	clearedemail_info                  bool
@@ -2490,6 +2491,42 @@ func (m *UserMutation) ResetAvatarPath() {
 	delete(m.clearedFields, user.FieldAvatarPath)
 }
 
+// SetAllowCnMysekai sets the "allow_cn_mysekai" field.
+func (m *UserMutation) SetAllowCnMysekai(b bool) {
+	m.allow_cn_mysekai = &b
+}
+
+// AllowCnMysekai returns the value of the "allow_cn_mysekai" field in the mutation.
+func (m *UserMutation) AllowCnMysekai() (r bool, exists bool) {
+	v := m.allow_cn_mysekai
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowCnMysekai returns the old "allow_cn_mysekai" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldAllowCnMysekai(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowCnMysekai is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowCnMysekai requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowCnMysekai: %w", err)
+	}
+	return oldValue.AllowCnMysekai, nil
+}
+
+// ResetAllowCnMysekai resets all changes to the "allow_cn_mysekai" field.
+func (m *UserMutation) ResetAllowCnMysekai() {
+	m.allow_cn_mysekai = nil
+}
+
 // SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by id.
 func (m *UserMutation) SetEmailInfoID(id int) {
 	m.email_info = &id
@@ -2710,7 +2747,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -2722,6 +2759,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.avatar_path != nil {
 		fields = append(fields, user.FieldAvatarPath)
+	}
+	if m.allow_cn_mysekai != nil {
+		fields = append(fields, user.FieldAllowCnMysekai)
 	}
 	return fields
 }
@@ -2739,6 +2779,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.PasswordHash()
 	case user.FieldAvatarPath:
 		return m.AvatarPath()
+	case user.FieldAllowCnMysekai:
+		return m.AllowCnMysekai()
 	}
 	return nil, false
 }
@@ -2756,6 +2798,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldPasswordHash(ctx)
 	case user.FieldAvatarPath:
 		return m.OldAvatarPath(ctx)
+	case user.FieldAllowCnMysekai:
+		return m.OldAllowCnMysekai(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -2792,6 +2836,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAvatarPath(v)
+		return nil
+	case user.FieldAllowCnMysekai:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowCnMysekai(v)
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
@@ -2862,6 +2913,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldAvatarPath:
 		m.ResetAvatarPath()
+		return nil
+	case user.FieldAllowCnMysekai:
+		m.ResetAllowCnMysekai()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
