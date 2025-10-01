@@ -20,6 +20,8 @@ const (
 	FieldPasswordHash = "password_hash"
 	// FieldAvatarPath holds the string denoting the avatar_path field in the database.
 	FieldAvatarPath = "avatar_path"
+	// FieldAllowCnMysekai holds the string denoting the allow_cn_mysekai field in the database.
+	FieldAllowCnMysekai = "allow_cn_mysekai"
 	// EdgeEmailInfo holds the string denoting the email_info edge name in mutations.
 	EdgeEmailInfo = "email_info"
 	// EdgeSocialPlatformInfo holds the string denoting the social_platform_info edge name in mutations.
@@ -67,6 +69,7 @@ var Columns = []string{
 	FieldEmail,
 	FieldPasswordHash,
 	FieldAvatarPath,
+	FieldAllowCnMysekai,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -80,6 +83,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultAllowCnMysekai holds the default value on creation for the "allow_cn_mysekai" field.
+	DefaultAllowCnMysekai bool
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -110,6 +115,11 @@ func ByPasswordHash(opts ...sql.OrderTermOption) OrderOption {
 // ByAvatarPath orders the results by the avatar_path field.
 func ByAvatarPath(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAvatarPath, opts...).ToFunc()
+}
+
+// ByAllowCnMysekai orders the results by the allow_cn_mysekai field.
+func ByAllowCnMysekai(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowCnMysekai, opts...).ToFunc()
 }
 
 // ByEmailInfoField orders the results by email_info field.

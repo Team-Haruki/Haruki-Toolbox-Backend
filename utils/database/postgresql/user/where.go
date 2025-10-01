@@ -84,6 +84,11 @@ func AvatarPath(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAvatarPath, v))
 }
 
+// AllowCnMysekai applies equality check predicate on the "allow_cn_mysekai" field. It's identical to AllowCnMysekaiEQ.
+func AllowCnMysekai(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAllowCnMysekai, v))
+}
+
 // NameEQ applies the EQ predicate on the "name" field.
 func NameEQ(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldName, v))
@@ -352,6 +357,16 @@ func AvatarPathEqualFold(v string) predicate.User {
 // AvatarPathContainsFold applies the ContainsFold predicate on the "avatar_path" field.
 func AvatarPathContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldAvatarPath, v))
+}
+
+// AllowCnMysekaiEQ applies the EQ predicate on the "allow_cn_mysekai" field.
+func AllowCnMysekaiEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAllowCnMysekai, v))
+}
+
+// AllowCnMysekaiNEQ applies the NEQ predicate on the "allow_cn_mysekai" field.
+func AllowCnMysekaiNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAllowCnMysekai, v))
 }
 
 // HasEmailInfo applies the HasEdge predicate on the "email_info" edge.

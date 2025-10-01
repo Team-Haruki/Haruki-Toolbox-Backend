@@ -93,6 +93,20 @@ func (_u *UserUpdate) ClearAvatarPath() *UserUpdate {
 	return _u
 }
 
+// SetAllowCnMysekai sets the "allow_cn_mysekai" field.
+func (_u *UserUpdate) SetAllowCnMysekai(v bool) *UserUpdate {
+	_u.mutation.SetAllowCnMysekai(v)
+	return _u
+}
+
+// SetNillableAllowCnMysekai sets the "allow_cn_mysekai" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAllowCnMysekai(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetAllowCnMysekai(*v)
+	}
+	return _u
+}
+
 // SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
 func (_u *UserUpdate) SetEmailInfoID(id int) *UserUpdate {
 	_u.mutation.SetEmailInfoID(id)
@@ -270,6 +284,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AvatarPathCleared() {
 		_spec.ClearField(user.FieldAvatarPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.AllowCnMysekai(); ok {
+		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 	}
 	if _u.mutation.EmailInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -501,6 +518,20 @@ func (_u *UserUpdateOne) ClearAvatarPath() *UserUpdateOne {
 	return _u
 }
 
+// SetAllowCnMysekai sets the "allow_cn_mysekai" field.
+func (_u *UserUpdateOne) SetAllowCnMysekai(v bool) *UserUpdateOne {
+	_u.mutation.SetAllowCnMysekai(v)
+	return _u
+}
+
+// SetNillableAllowCnMysekai sets the "allow_cn_mysekai" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAllowCnMysekai(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetAllowCnMysekai(*v)
+	}
+	return _u
+}
+
 // SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
 func (_u *UserUpdateOne) SetEmailInfoID(id int) *UserUpdateOne {
 	_u.mutation.SetEmailInfoID(id)
@@ -708,6 +739,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.AvatarPathCleared() {
 		_spec.ClearField(user.FieldAvatarPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.AllowCnMysekai(); ok {
+		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 	}
 	if _u.mutation.EmailInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
