@@ -48,7 +48,7 @@ func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			}
 			_, uploadErr = HandleUpload(
 				context.Background(),
-				c.Request().Body(),
+				result.Mysekai,
 				harukiUtils.SupportedDataUploadServer(serverStr),
 				harukiUtils.UploadDataTypeMysekai,
 				&result.UserID,
@@ -62,7 +62,7 @@ func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		}
 		_, uploadErr = HandleUpload(
 			context.Background(),
-			c.Request().Body(),
+			result.Suite,
 			harukiUtils.SupportedDataUploadServer(serverStr),
 			harukiUtils.UploadDataTypeSuite,
 			&result.UserID,

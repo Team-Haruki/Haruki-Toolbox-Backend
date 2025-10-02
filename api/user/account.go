@@ -3,10 +3,12 @@ package user
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/user"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"haruki-suite/config"
 
@@ -28,19 +30,35 @@ func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		userID := c.Locals("userID").(string)
 		ub := apiHelper.DBManager.DB.User.Update().Where(user.IDEQ(userID))
 
-		var avatarPath string
+		var avatarFileName string
 		if payload.AvatarBase64 != nil {
-			decodedAvatar, err := base64.StdEncoding.DecodeString(*payload.AvatarBase64)
+			base64Data := *payload.AvatarBase64
+			ext := ".png"
+			if strings.Contains(base64Data, ";base64,") {
+				parts := strings.SplitN(base64Data, ";base64,", 2)
+				mimeType := parts[0]
+				base64Data = parts[1]
+				switch mimeType {
+				case "data:image/png":
+					ext = ".png"
+				case "data:image/jpeg":
+					ext = ".jpg"
+				default:
+					ext = ".png"
+				}
+			}
+
+			decodedAvatar, err := base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
 			}
 
-			filename := uuid.NewString() + ".png"
-			avatarPath = filepath.Join(config.Cfg.UserSystem.AvatarSaveDir, filename)
-			if err := os.WriteFile(avatarPath, decodedAvatar, 0644); err != nil {
+			avatarFileName = uuid.NewString() + ext
+			savePath := filepath.Join(config.Cfg.UserSystem.AvatarSaveDir, avatarFileName)
+			if err := os.WriteFile(savePath, decodedAvatar, 0644); err != nil {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to save avatar", nil)
 			}
-			ub = ub.SetAvatarPath(avatarPath)
+			ub = ub.SetAvatarPath(avatarFileName)
 		}
 
 		if payload.Name != nil {
@@ -57,7 +75,8 @@ func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			ud.Name = payload.Name
 		}
 		if payload.AvatarBase64 != nil {
-			ud.AvatarPath = &avatarPath
+			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.FrontendURL, "/"), avatarFileName)
+			ud.AvatarPath = &url
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "profile updated", &ud)
 	})

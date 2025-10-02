@@ -13,6 +13,12 @@ type HarukiSekaiAPIClient struct {
 	harukiSekaiAPIToken    string
 }
 
+type HarukiSekaiAPIResult struct {
+	ServerAvailable bool
+	AccountExists   bool
+	Body            bool
+}
+
 func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient {
 	return &HarukiSekaiAPIClient{
 		httpClient:             resty.New(),
@@ -21,10 +27,10 @@ func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient
 	}
 }
 
-func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (bool, []byte, error) {
+func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, error) {
 	server, err := utils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
-		return false, nil, err
+		return nil, nil, err
 	}
 	var url string
 	if server == utils.SupportedDataUploadServerEN || server == utils.SupportedDataUploadServerKR {
@@ -37,20 +43,38 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (
 		SetHeader("Accept", "application/json").
 		Get(url)
 	if err != nil {
-		return false, nil, fmt.Errorf("请求失败: %v", err)
+		return nil, nil, fmt.Errorf("请求失败: %v", err)
 	}
 	switch resp.StatusCode() {
 	case 200:
-		return true, resp.Body(), nil
+		return &HarukiSekaiAPIResult{
+			ServerAvailable: true,
+			AccountExists:   true,
+			Body:            true,
+		}, resp.Body(), nil
 	case 404:
-		fmt.Println("Get User Profile Not Found")
-		return true, nil, fmt.Errorf("this user does not exist, please check your userID if is corrent")
+		return &HarukiSekaiAPIResult{
+			ServerAvailable: true,
+			AccountExists:   false,
+			Body:            false,
+		}, nil, fmt.Errorf("this user does not exist, please check your userID if is corrent")
 	case 500:
-		return false, nil, fmt.Errorf("api is busy, please try again later, if this problem still consist, please contact Haruki Dev Team")
+		return &HarukiSekaiAPIResult{
+			ServerAvailable: false,
+			AccountExists:   false,
+			Body:            false,
+		}, nil, fmt.Errorf("api is busy, please try again later, if this problem still consist, please contact Haruki Dev Team")
 	case 503:
-		return false, nil, fmt.Errorf("the game server you query is under maintenance")
+		return &HarukiSekaiAPIResult{
+			ServerAvailable: false,
+			AccountExists:   false,
+			Body:            false,
+		}, nil, fmt.Errorf("the game server you query is under maintenance")
 	default:
-		return false, nil, fmt.Errorf("api request failed, status code: %d", resp.StatusCode())
+		return &HarukiSekaiAPIResult{
+			ServerAvailable: false,
+			AccountExists:   false,
+			Body:            false,
+		}, nil, fmt.Errorf("api request failed, status code: %d", resp.StatusCode())
 	}
-
 }

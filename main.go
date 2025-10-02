@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	harukiApi "haruki-suite/api"
 	harukiConfig "haruki-suite/config"
@@ -75,6 +77,26 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		BodyLimit: 30 * 1024 * 1024,
+	})
+	app.Use(func(c *fiber.Ctx) error {
+		nonceBytes := make([]byte, 16)
+		if _, err := rand.Read(nonceBytes); err != nil {
+			return err
+		}
+		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
+		c.Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"script-src 'self' https://challenges.cloudflare.com 'nonce-"+nonce+"'; "+
+				"frame-src https://challenges.cloudflare.com; "+
+				"style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data: https:; "+
+				"connect-src 'self' https://your-api-domain.com; "+
+				"object-src 'none'; "+
+				"base-uri 'self'; "+
+				"form-action 'self';",
+		)
+		c.Locals("cspNonce", nonce)
+		return c.Next()
 	})
 	allowedOrigins := make(map[string]struct{})
 	for _, origin := range harukiConfig.Cfg.Backend.AllowCORS {

@@ -122,6 +122,7 @@ type HarukiToolboxUserData struct {
 	Name                        *string                        `json:"name,omitempty"`
 	UserID                      *string                        `json:"userId,omitempty"`
 	AvatarPath                  *string                        `json:"avatarPath,omitempty"`
+	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitempty"`
 	EmailInfo                   *EmailInfo                     `json:"emailInfo,omitempty"`
 	SocialPlatformInfo          *SocialPlatformInfo            `json:"socialPlatformInfo,omitempty"`
 	AuthorizeSocialPlatformInfo *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitempty"`

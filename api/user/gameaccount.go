@@ -7,7 +7,6 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
-	"strconv"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -44,11 +43,6 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
-		gameUserID, err := strconv.Atoi(gameUserIDStr)
-		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid game_user_id", nil)
-		}
-
 		var req harukiAPIHelper.GameAccountBindingPayload
 		if err := c.BodyParser(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
@@ -58,7 +52,7 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			Query().
 			Where(
 				gameaccountbinding.ServerEQ(serverStr),
-				gameaccountbinding.GameUserID(strconv.Itoa(gameUserID)),
+				gameaccountbinding.GameUserID(gameUserIDStr),
 			).
 			WithUser().
 			Only(ctx)
@@ -79,23 +73,32 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			}
 		}
 
-		storageKey := fmt.Sprintf("%s:game-account:verify:%s:%d", userID, serverStr, gameUserID)
+		storageKey := fmt.Sprintf("%s:game-account:verify:%s:%s", userID, serverStr, gameUserIDStr)
 		var code string
 		ok, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
 		if err != nil || !ok {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
 		}
 
-		ok, result, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
+		resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
+		if resultInfo == nil && err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, fmt.Sprintf("request sekai account profile failed: %v", err), nil)
+		}
+		if !resultInfo.ServerAvailable {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "server unavailable or under maintenance", nil)
+		}
+		if !resultInfo.AccountExists {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "game account not found", nil)
+		}
+		if !resultInfo.Body || len(body) == 0 {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "empty user profile response", nil)
+		}
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to get user profile", nil)
 		}
-		if !ok {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "failed to get user profile", nil)
-		}
 
 		var data map[string]interface{}
-		if err := sonic.Unmarshal(result, &data); err != nil {
+		if err := sonic.Unmarshal(body, &data); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to parse profile", nil)
 		}
 
@@ -121,7 +124,7 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			_, err = apiHelper.DBManager.DB.GameAccountBinding.
 				Create().
 				SetServer(serverStr).
-				SetGameUserID(strconv.Itoa(gameUserID)).
+				SetGameUserID(gameUserIDStr).
 				SetVerified(true).
 				SetSuite(req.Suite).
 				SetMysekai(req.MySekai).
@@ -160,16 +163,11 @@ func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
-		gameUserID, err := strconv.Atoi(gameUserIDStr)
-		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid game_user_id", nil)
-		}
-
 		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
 			Query().
 			Where(
 				gameaccountbinding.ServerEQ(serverStr),
-				gameaccountbinding.GameUserID(strconv.Itoa(gameUserID)),
+				gameaccountbinding.GameUserID(gameUserIDStr),
 			).
 			WithUser().
 			Only(ctx)
