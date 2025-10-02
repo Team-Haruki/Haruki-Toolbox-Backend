@@ -108,7 +108,7 @@ var (
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "name", Type: field.TypeString},
-		{Name: "email", Type: field.TypeString},
+		{Name: "email", Type: field.TypeString, Unique: true},
 		{Name: "password_hash", Type: field.TypeString},
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},

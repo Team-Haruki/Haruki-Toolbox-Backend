@@ -21,15 +21,6 @@ type TurnstileResponse struct {
 }
 
 func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
-	return &TurnstileResponse{
-		Success:     true,
-		ChallengeTS: time.Now().Format(time.RFC3339),
-		Hostname:    "debug.local",
-		ErrorCodes:  nil,
-		Action:      "dummy",
-		Cdata:       "debug",
-	}, nil
-
 	payload := map[string]string{
 		"secret":   config.Cfg.UserSystem.CloudflareSecret,
 		"response": response,
