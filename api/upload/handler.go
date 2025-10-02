@@ -125,9 +125,17 @@ func HandleUpload(
 	}
 
 	if dataType == harukiUtils.UploadDataTypeMysekai {
-		allowPublicAPI = settings.Mysekai.AllowPublicApi
+		if settings.Mysekai != nil {
+			allowPublicAPI = settings.Mysekai.AllowPublicApi
+		} else {
+			allowPublicAPI = false
+		}
 	} else {
-		allowPublicAPI = settings.Suite.AllowPublicApi
+		if settings.Suite != nil {
+			allowPublicAPI = settings.Suite.AllowPublicApi
+		} else {
+			allowPublicAPI = false
+		}
 	}
 
 	if dataType == harukiUtils.UploadDataTypeMysekai && server == harukiUtils.SupportedDataUploadServerCN {

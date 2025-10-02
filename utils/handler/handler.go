@@ -37,8 +37,8 @@ func cleanSuite(suite map[string]interface{}) map[string]interface{} {
 	return suite
 }
 func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) (map[string]interface{}, error) {
-	if dataType == utils.UploadDataTypeSuite && parsedUserID != nil && expectedUserID != parsedUserID {
-		return nil, fmt.Errorf("invalid userID: %d, expected: %d", parsedUserID, expectedUserID)
+	if dataType == utils.UploadDataTypeSuite && parsedUserID != nil && expectedUserID != nil && *expectedUserID != *parsedUserID {
+		return nil, fmt.Errorf("invalid userID: %s, expected: %s", strconv.FormatInt(*parsedUserID, 10), strconv.FormatInt(*expectedUserID, 10))
 	}
 	if dataType == utils.UploadDataTypeMysekai {
 		updatedResources, ok := data["updatedResources"].(map[string]interface{})
@@ -80,15 +80,18 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 					return nil, fmt.Errorf("uid does not match expectedUserID")
 				}
 				data["uid"] = uid
-				ok, body, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
-				if err != nil {
+				resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
+				if resultInfo == nil && err != nil {
 					return nil, err
 				}
-				if !ok {
+				if !resultInfo.ServerAvailable {
 					return nil, fmt.Errorf("sekai api is unavailable")
 				}
-				if body == nil {
-					return nil, fmt.Errorf("illegal request")
+				if !resultInfo.AccountExists {
+					return nil, fmt.Errorf("game account not found")
+				}
+				if err != nil {
+					return nil, err
 				}
 			} else {
 				return nil, fmt.Errorf("invalid imagePath format")

@@ -2,6 +2,8 @@ package user
 
 import (
 	"context"
+	"fmt"
+	"haruki-suite/config"
 	"haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
@@ -73,7 +75,7 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				authorizeSocialPlatformInfo = append(authorizeSocialPlatformInfo, harukiAPIHelper.AuthorizeSocialPlatformInfo{
 					ID:       a.ID,
 					Platform: a.Platform,
-					UserID:   a.UserID,
+					UserID:   a.PlatformUserID,
 					Comment:  a.Comment,
 				})
 			}
@@ -93,10 +95,12 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			}
 		}
 
+		avatarURL := fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			Name:                        &user.Name,
 			UserID:                      &user.ID,
-			AvatarPath:                  user.AvatarPath,
+			AvatarPath:                  &avatarURL,
+			AllowCNMysekai:              &user.AllowCnMysekai,
 			EmailInfo:                   &emailInfo,
 			SocialPlatformInfo:          socialPlatformInfo,
 			AuthorizeSocialPlatformInfo: &authorizeSocialPlatformInfo,

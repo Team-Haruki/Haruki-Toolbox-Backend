@@ -81,6 +81,7 @@ func registerRegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			Name:                        &user.Name,
 			UserID:                      &uid,
 			AvatarPath:                  nil,
+			AllowCNMysekai:              &user.AllowCnMysekai,
 			EmailInfo:                   &harukiAPIHelper.EmailInfo{Email: emailInfo.Email, Verified: emailInfo.Verified},
 			SocialPlatformInfo:          nil,
 			AuthorizeSocialPlatformInfo: nil,
