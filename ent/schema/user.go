@@ -14,7 +14,7 @@ func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("name"),
 		field.String("id").NotEmpty().Unique().Immutable(),
-		field.String("email"),
+		field.String("email").Unique(),
 		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),

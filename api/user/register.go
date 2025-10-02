@@ -10,6 +10,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+
+	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/utils/database/postgresql/user"
 )
 
 func registerRegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
@@ -44,6 +47,22 @@ func registerRegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 		if !exists || otp != req.OneTimePassword {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid or expired verification code", nil)
+		}
+
+		userExists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(req.Email)).Exist(context.Background())
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "database error", nil)
+		}
+		if userExists {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already in use", nil)
+		}
+
+		emailVerifiedExists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email), emailinfo.Verified(true)).Exist(context.Background())
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "database error", nil)
+		}
+		if emailVerifiedExists {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already verified", nil)
 		}
 
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)

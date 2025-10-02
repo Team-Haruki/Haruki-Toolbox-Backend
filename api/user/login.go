@@ -95,7 +95,12 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			}
 		}
 
-		avatarURL := fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
+		var avatarURL string
+		if user.AvatarPath != nil {
+			avatarURL = fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
+		} else {
+			avatarURL = ""
+		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			Name:                        &user.Name,
 			UserID:                      &user.ID,
