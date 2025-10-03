@@ -140,6 +140,7 @@ func main() {
 		harukiConfig.Cfg.HarukiProxy.UserAgent,
 		harukiConfig.Cfg.HarukiProxy.Version,
 		harukiConfig.Cfg.HarukiProxy.Secret,
+		harukiConfig.Cfg.HarukiProxy.UnpackKey,
 		harukiConfig.Cfg.Webhook.JWTSecret,
 	)
 	harukiApi.RegisterRoutes(apiHelper)

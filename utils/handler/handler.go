@@ -48,7 +48,7 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 
 		photos, ok := updatedResources["userMysekaiPhotos"].([]interface{})
 		if !ok || len(photos) == 0 {
-			return nil, fmt.Errorf("no userMysekaiPhotos found")
+			return nil, fmt.Errorf("no userMysekaiPhotos found, it seems you may not have taken a photo yet")
 		}
 
 		firstPhoto, ok := photos[0].(map[string]interface{})
@@ -56,14 +56,14 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 			return nil, fmt.Errorf("invalid photo data")
 		}
 
-		imagePath, _ := firstPhoto["imagePath"].(string)
-		if imagePath == "" {
+		imagePath, ok := firstPhoto["imagePath"].(string)
+		if imagePath == "" || !ok {
 			return nil, fmt.Errorf("missing imagePath")
 		}
 
-		hashPattern := regexp.MustCompile(`^[a-f0-9]{64}/[a-f0-9]{64}$`)
-		if hashPattern.MatchString(imagePath) {
-			if server == utils.SupportedDataUploadServerJP || server == utils.SupportedDataUploadServerEN {
+		if server == utils.SupportedDataUploadServerJP || server == utils.SupportedDataUploadServerEN {
+			hashPattern := regexp.MustCompile(`^[a-f0-9]{64}/[a-f0-9]{64}$`)
+			if hashPattern.MatchString(imagePath) {
 			} else {
 				return nil, fmt.Errorf("invalid server: %s", server)
 			}
@@ -76,13 +76,15 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 				if err != nil {
 					return nil, fmt.Errorf("invalid uid format")
 				}
-				if uidInt != *expectedUserID {
-					return nil, fmt.Errorf("uid does not match expectedUserID")
+				if expectedUserID == nil || uidInt != *expectedUserID {
+					return nil, fmt.Errorf("userId %s does not match expected UserId %d", uid, *expectedUserID)
 				}
-				data["uid"] = uid
 				resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
-				if resultInfo == nil && err != nil {
-					return nil, err
+				if resultInfo == nil {
+					if err != nil {
+						return nil, err
+					}
+					return nil, fmt.Errorf("failed to get user profile")
 				}
 				if !resultInfo.ServerAvailable {
 					return nil, fmt.Errorf("sekai api is unavailable")
@@ -90,15 +92,17 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 				if !resultInfo.AccountExists {
 					return nil, fmt.Errorf("game account not found")
 				}
-				if err != nil {
-					return nil, err
-				}
 			} else {
 				return nil, fmt.Errorf("invalid imagePath format")
 			}
 		}
 	}
 	if dataType == utils.UploadDataTypeSuite {
+		_, ok := data["userGamedata"]
+		_, ok2 := data["userProfile"]
+		if !ok && !ok2 {
+			return nil, fmt.Errorf("invalid data, it seems you may have uploaded a wrong suite data")
+		}
 		data = cleanSuite(data)
 	}
 	data["upload_time"] = time.Now().Unix()

@@ -23,7 +23,7 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 
 		result, err := cloudflare.ValidateTurnstile(payload.ChallengeToken, c.Get("X-Forwarded-For"))
 		if err != nil || result == nil || !result.Success {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid Turnstile challenge"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid Turnstile challenge"})
 		}
 
 		user, err := apiHelper.DBManager.DB.User.
@@ -35,11 +35,11 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			WithGameAccountBindings().
 			Only(ctx)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Invalid email or password", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid email or password", nil)
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(payload.Password)); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Invalid email or password", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid email or password", nil)
 		}
 
 		sessionToken, err := apiHelper.SessionHandler.IssueSession(user.ID)

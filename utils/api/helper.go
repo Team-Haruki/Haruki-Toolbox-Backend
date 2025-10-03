@@ -20,6 +20,7 @@ type HarukiToolboxRouterHelpers struct {
 	HarukiProxyUserAgent string
 	HarukiProxyVersion   string
 	HarukiProxySecret    string
+	HarukiProxyUnpackKey string
 	WebhookJWTSecret     string
 }
 
@@ -35,6 +36,7 @@ func NewHarukiToolboxDBHelpers(
 	harukiProxyUserAgent string,
 	harukiProxyVersion string,
 	harukiProxySecret string,
+	HarukiProxyUnpackKey string,
 	webhookJWTSecret string,
 ) *HarukiToolboxRouterHelpers {
 	return &HarukiToolboxRouterHelpers{
@@ -49,6 +51,7 @@ func NewHarukiToolboxDBHelpers(
 		HarukiProxyUserAgent: harukiProxyUserAgent,
 		HarukiProxyVersion:   harukiProxyVersion,
 		HarukiProxySecret:    harukiProxySecret,
+		HarukiProxyUnpackKey: HarukiProxyUnpackKey,
 		WebhookJWTSecret:     webhookJWTSecret,
 	}
 }
