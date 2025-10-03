@@ -6,7 +6,7 @@ user_system:
   cloudflare_secret: ""
   smtp:
     smtp_addr: ""
-    smtp_port: 465
+    smtp_port: 25
     smtp_mail: ""
     smtp_pass: ""
     mail_name: ""
