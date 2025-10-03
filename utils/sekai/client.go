@@ -17,23 +17,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type Client struct {
-	server          harukiUtils.SupportedInheritUploadServer
-	api             string
-	versionURL      string
-	inherit         harukiUtils.InheritInformation
-	headers         map[string]string
-	userID          int64
-	credential      string
-	loginBonus      bool
-	isErrorExist    bool
-	errorMessage    string
-	inheritJWTToken string
-
-	httpClient *harukiHttp.Client
-	logger     *harukiLogger.Logger
-}
-
 func NewSekaiClient(cfg struct {
 	Server          harukiUtils.SupportedInheritUploadServer
 	API             string
@@ -42,10 +25,10 @@ func NewSekaiClient(cfg struct {
 	Headers         map[string]string
 	Proxy           string
 	InheritJWTToken string
-}) *Client {
+}) *HarukiSekaiClient {
 	http := harukiHttp.NewClient(cfg.Proxy, 15*time.Second)
 
-	return &Client{
+	return &HarukiSekaiClient{
 		server:          cfg.Server,
 		api:             cfg.API,
 		versionURL:      cfg.VersionURL,
@@ -57,7 +40,7 @@ func NewSekaiClient(cfg struct {
 	}
 }
 
-func (c *Client) getCookies(ctx context.Context, retries int) error {
+func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	if c.server != harukiUtils.SupportedInheritUploadServerJP {
 		return nil
 	}
@@ -86,7 +69,7 @@ func (c *Client) getCookies(ctx context.Context, retries int) error {
 	return fmt.Errorf(c.errorMessage)
 }
 
-func (c *Client) parseAppVersion(ctx context.Context, retries int) error {
+func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) error {
 	if c.isErrorExist {
 		return fmt.Errorf("client error while parsing cookies")
 	}
@@ -123,7 +106,7 @@ func (c *Client) parseAppVersion(ctx context.Context, retries int) error {
 	return fmt.Errorf(c.errorMessage)
 }
 
-func (c *Client) generateInheritToken() (string, error) {
+func (c *HarukiSekaiClient) generateInheritToken() (string, error) {
 	inheritPayload := jwt.MapClaims{
 		"inheritId": c.inherit.InheritID,
 		"password":  c.inherit.InheritPassword,
@@ -133,7 +116,7 @@ func (c *Client) generateInheritToken() (string, error) {
 	return token.SignedString([]byte(c.inheritJWTToken))
 }
 
-func (c *Client) callAPI(ctx context.Context, path, method string, body []byte, customHeaders map[string]string) ([]byte, int, error) {
+func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, body []byte, customHeaders map[string]string) ([]byte, int, error) {
 	if c.isErrorExist {
 		return nil, 0, fmt.Errorf("client in error state: %s", c.errorMessage)
 	}
@@ -166,7 +149,7 @@ func (c *Client) callAPI(ctx context.Context, path, method string, body []byte, 
 	return respBody, status, fmt.Errorf("API error: %d", status)
 }
 
-func (c *Client) InheritAccount(ctx context.Context, returnUserID bool) error {
+func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID bool) error {
 	c.logger.Infof("%s Server Sekai Client generating inherit token...", strings.ToUpper(string(c.server)))
 	token, err := c.generateInheritToken()
 	if err != nil {
@@ -231,7 +214,7 @@ func (c *Client) InheritAccount(ctx context.Context, returnUserID bool) error {
 	}
 }
 
-func (c *Client) Login(ctx context.Context) error {
+func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 	if c.credential == "" {
 		return fmt.Errorf("inherit failed")
 	}
@@ -273,7 +256,7 @@ func (c *Client) Login(ctx context.Context) error {
 	return fmt.Errorf("login response missing sessionToken")
 }
 
-func (c *Client) Init(ctx context.Context) error {
+func (c *HarukiSekaiClient) Init(ctx context.Context) error {
 	if err := c.getCookies(ctx, 4); err != nil {
 		return err
 	}

@@ -3,12 +3,15 @@ package handler
 import (
 	"context"
 	"fmt"
+	harukiConfig "haruki-suite/config"
 	"haruki-suite/utils"
+	"haruki-suite/utils/database"
 	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
-	harukiMongo "haruki-suite/utils/mongo"
 	harukiSekai "haruki-suite/utils/sekai"
+	"haruki-suite/utils/sekaiapi"
 	harukiVersion "haruki-suite/version"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,20 +21,97 @@ import (
 )
 
 type DataHandler struct {
-	MongoManager *harukiMongo.MongoDBManager
-	HttpClient   *harukiHttp.Client
-	Logger       *harukiLogger.Logger
+	DBManager      *database.HarukiToolboxDBManager
+	SeakiAPIClient *sekaiapi.HarukiSekaiAPIClient
+	HttpClient     *harukiHttp.Client
+	Logger         *harukiLogger.Logger
 }
 
-func (h *DataHandler) PreHandleData(data map[string]interface{}, userID int64, policy utils.UploadPolicy, server utils.SupportedDataUploadServer) map[string]interface{} {
+func cleanSuite(suite map[string]interface{}) map[string]interface{} {
+	removeKeys := harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys
+	for _, key := range removeKeys {
+		if _, ok := suite[key]; ok {
+			suite[key] = []interface{}{}
+		}
+	}
+	return suite
+}
+func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) (map[string]interface{}, error) {
+	if dataType == utils.UploadDataTypeSuite && parsedUserID != nil && expectedUserID != nil && *expectedUserID != *parsedUserID {
+		return nil, fmt.Errorf("invalid userID: %s, expected: %s", strconv.FormatInt(*parsedUserID, 10), strconv.FormatInt(*expectedUserID, 10))
+	}
+	if dataType == utils.UploadDataTypeMysekai {
+		updatedResources, ok := data["updatedResources"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid data: missing updatedResources")
+		}
+
+		photos, ok := updatedResources["userMysekaiPhotos"].([]interface{})
+		if !ok || len(photos) == 0 {
+			return nil, fmt.Errorf("no userMysekaiPhotos found, it seems you may not have taken a photo yet")
+		}
+
+		firstPhoto, ok := photos[0].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid photo data")
+		}
+
+		imagePath, ok := firstPhoto["imagePath"].(string)
+		if imagePath == "" || !ok {
+			return nil, fmt.Errorf("missing imagePath")
+		}
+
+		if server == utils.SupportedDataUploadServerJP || server == utils.SupportedDataUploadServerEN {
+			hashPattern := regexp.MustCompile(`^[a-f0-9]{64}/[a-f0-9]{64}$`)
+			if hashPattern.MatchString(imagePath) {
+			} else {
+				return nil, fmt.Errorf("invalid server: %s", server)
+			}
+		} else {
+			uidPattern := regexp.MustCompile(`^(\d+)_([0-9a-fA-F-]{36})$`)
+			matches := uidPattern.FindStringSubmatch(imagePath)
+			if len(matches) == 3 {
+				uid := matches[1]
+				uidInt, err := strconv.ParseInt(uid, 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid uid format")
+				}
+				if expectedUserID == nil || uidInt != *expectedUserID {
+					return nil, fmt.Errorf("userId %s does not match expected UserId %d", uid, *expectedUserID)
+				}
+				resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
+				if resultInfo == nil {
+					if err != nil {
+						return nil, err
+					}
+					return nil, fmt.Errorf("failed to get user profile")
+				}
+				if !resultInfo.ServerAvailable {
+					return nil, fmt.Errorf("sekai api is unavailable")
+				}
+				if !resultInfo.AccountExists {
+					return nil, fmt.Errorf("game account not found")
+				}
+			} else {
+				return nil, fmt.Errorf("invalid imagePath format")
+			}
+		}
+	}
+	if dataType == utils.UploadDataTypeSuite {
+		_, ok := data["userGamedata"]
+		_, ok2 := data["userProfile"]
+		if !ok && !ok2 {
+			return nil, fmt.Errorf("invalid data, it seems you may have uploaded a wrong suite data")
+		}
+		data = cleanSuite(data)
+	}
 	data["upload_time"] = time.Now().Unix()
-	data["policy"] = string(policy)
-	data["_id"] = userID
+	data["_id"] = expectedUserID
 	data["server"] = string(server)
-	return data
+	return data, nil
 }
 
-func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, policy utils.UploadPolicy, dataType utils.UploadDataType, userID *int64) (*utils.HandleDataResult, error) {
+func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, isPublicAPI bool, dataType utils.UploadDataType, expectedUserID *int64) (*utils.HandleDataResult, error) {
 	unpacked, err := harukiSekai.Unpack(raw, server)
 	if err != nil {
 		h.Logger.Errorf("unpack failed: %v", err)
@@ -46,59 +126,80 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 
 	if status, ok := unpackedMap["httpStatus"]; ok {
 		errCode, _ := unpackedMap["errorCode"].(string)
-		statusCode := int(status.(float64))
+		var statusCode int
+		switch v := status.(type) {
+		case float64:
+			statusCode = int(v)
+		case int:
+			statusCode = v
+		case int32:
+			statusCode = int(v)
+		case int64:
+			statusCode = int(v)
+		case uint16:
+			statusCode = int(v)
+		case uint32:
+			statusCode = int(v)
+		case uint64:
+			statusCode = int(v)
+		case json.Number:
+			if i64, err := v.Int64(); err == nil {
+				statusCode = int(i64)
+			}
+		default:
+			h.Logger.Debugf("unexpected httpStatus type: %T, value: %v", v, v)
+		}
 		return &utils.HandleDataResult{
 			Status:       &statusCode,
 			ErrorMessage: &errCode,
 		}, fmt.Errorf("data retrieve error")
 	}
 
-	if userID == nil {
-		var extracted int64 = 0
-		if gameData, ok := unpackedMap["userGamedata"].(map[string]interface{}); ok {
-			switch v := gameData["userId"].(type) {
-			case json.Number:
-				if id64, err := v.Int64(); err == nil {
-					extracted = id64
-				} else if u64, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
-					extracted = int64(u64)
-				}
-			case string:
-				if u64, err := strconv.ParseUint(v, 10, 64); err == nil {
-					extracted = int64(u64)
-				}
-			case float64:
-				extracted = int64(v)
-			case int64:
-				extracted = v
-			case uint64:
-				extracted = int64(v)
-			default:
-				h.Logger.Debugf("userId raw type: %T, value: %v", v, v)
+	var extractedUserID *int64 = nil
+	if gameData, ok := unpackedMap["userGamedata"].(map[string]interface{}); ok {
+		switch v := gameData["userId"].(type) {
+		case json.Number:
+			if id64, err := v.Int64(); err == nil {
+				tmp := id64
+				extractedUserID = &tmp
+			} else if u64, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
+				tmp := int64(u64)
+				extractedUserID = &tmp
 			}
+		case string:
+			if u64, err := strconv.ParseUint(v, 10, 64); err == nil {
+				tmp := int64(u64)
+				extractedUserID = &tmp
+			}
+		case float64:
+			tmp := int64(v)
+			extractedUserID = &tmp
+		case int64:
+			tmp := v
+			extractedUserID = &tmp
+		case uint64:
+			tmp := int64(v)
+			extractedUserID = &tmp
+		default:
+			h.Logger.Debugf("userId raw type: %T, value: %v", v, v)
 		}
 
-		if extracted == 0 {
-			return nil, fmt.Errorf("failed to extract userId from unpacked data")
-		}
-		userID = new(int64)
-		*userID = extracted
-	}
-	if userID == nil {
-		return nil, fmt.Errorf("failed to extract userId from unpacked data")
 	}
 
-	data := h.PreHandleData(unpackedMap, *userID, policy, server)
-
-	if _, err := h.MongoManager.UpdateData(ctx, string(server), *userID, data, dataType); err != nil {
+	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType)
+	if err != nil {
 		return nil, err
 	}
 
-	if policy == utils.UploadPolicyPublic {
-		go h.CallWebhook(ctx, *userID, server, dataType)
+	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
+		return nil, err
 	}
 
-	return &utils.HandleDataResult{UserID: userID}, nil
+	if isPublicAPI {
+		go h.CallWebhook(ctx, *expectedUserID, server, dataType)
+	}
+
+	return &utils.HandleDataResult{UserID: expectedUserID}, nil
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
@@ -125,7 +226,7 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 }
 
 func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
-	callbacks, err := h.MongoManager.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
+	callbacks, err := h.DBManager.Mongo.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
 
 	if err != nil || len(callbacks) == 0 {
 		return
