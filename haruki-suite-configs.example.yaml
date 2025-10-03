@@ -1,14 +1,29 @@
-proxy: "http://127.0.0.1:6152"
+proxy: "http://mihomo:7890"
+
+user_system:
+  db_type: "postgres"
+  db_url: "postgresql://user:password@postgres:5432/toolbox?sslmode=disable"
+  cloudflare_secret: ""
+  smtp:
+    smtp_addr: ""
+    smtp_port: 465
+    smtp_mail: ""
+    smtp_pass: ""
+    mail_name: ""
+  session_sign_token: ""
+  avatar_save_dir: "avatars"
+  frontend_url: ""
+  social_platform_verify_token: ""
 
 mongodb:
-  url: "mongodb://user:password@host:port"
-  db: "data"
+  url: "mongodb://user:pass@mongo"
+  db: "collections"
   suite: "suite"
   mysekai: "mysekai"
   webhook: "webhook"
   webhook_user: "webhook_user"
-  private_api_secret: "Bearer jaklwfgawujfhgwaf"
-  private_api_user_agent: "Specific UA"
+  private_api_secret: "Bearer "
+  private_api_user_agent: ""
 
 redis:
   host: "localhost"
@@ -16,21 +31,30 @@ redis:
   password: ""   # 为空表示无密码
 
 webhook:
-  jwt_secret: "" # Webhook签名私钥
+  jwt_secret: ""
 
 backend:
   host: "0.0.0.0"
   port: 6666
   ssl: false
-  ssl_cert: ""
-  ssl_key: ""
+  ssl_cert: "fullchain.cer"
+  ssl_key: "com.key"
   log_level: "INFO"
   main_log_file: "main.log"
   access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"
   access_log_path: "access.log"
   allow_cors:
-    - "https://example.com"
+    - ""
 
+sekai_api:
+  api_endpoint: ""
+  api_token: ""
+
+haruki_proxy:
+  user_agent: "HarukiProxy"
+  version: "v1.7.0"
+  secret: ""
+  unpack_key: ""
 
 sekai_client:
   en_server_api_host: ""
@@ -48,10 +72,8 @@ sekai_client:
   en_server_app_version_url: ""
   jp_server_inherit_client_headers:
     Host: ""
-    # Add more here
   en_server_inherit_client_headers:
     Host: ""
-    # Add more here
   suite_remove_keys:
     - "userInherit"
     - "userMaterials"
@@ -74,6 +96,7 @@ sekai_client:
     - "userArchiveEventEpisodeStatuses"
     - "userCustomProfileResourceUsages"
     - "userCharacterProfileEpisodeStatuses"
+
 
 others:
   public_api_allowed_keys:
