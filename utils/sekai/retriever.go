@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
@@ -12,37 +11,8 @@ import (
 	"time"
 )
 
-const (
-	JP harukiUtils.SupportedInheritUploadServer = "jp"
-	EN harukiUtils.SupportedInheritUploadServer = "en"
-)
-
-var thisProxy = harukiConfig.Cfg.Proxy
-var (
-	Api = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost),
-		EN: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost),
-	}
-
-	Headers = map[harukiUtils.SupportedInheritUploadServer]map[string]string{
-		JP: harukiConfig.Cfg.SekaiClient.JPServerInheritClientHeaders,
-		EN: harukiConfig.Cfg.SekaiClient.ENServerInheritClientHeaders,
-	}
-
-	Version = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: harukiConfig.Cfg.SekaiClient.JPServerAppVersionUrl,
-		EN: harukiConfig.Cfg.SekaiClient.ENServerAppVersionUrl,
-	}
-
-	InheritJWTToken = map[harukiUtils.SupportedInheritUploadServer]string{
-		JP: harukiConfig.Cfg.SekaiClient.JPServerInheritToken,
-		EN: harukiConfig.Cfg.SekaiClient.ENServerInheritToken,
-	}
-)
-
 type HarukiSekaiDataRetriever struct {
-	client       *Client
-	policy       harukiUtils.UploadPolicy
+	client       *HarukiSekaiClient
 	uploadType   harukiUtils.UploadDataType
 	logger       *harukiLogger.Logger
 	isErrorExist bool
@@ -52,7 +22,6 @@ type HarukiSekaiDataRetriever struct {
 func NewSekaiDataRetriever(
 	server harukiUtils.SupportedInheritUploadServer,
 	inherit harukiUtils.InheritInformation,
-	policy harukiUtils.UploadPolicy,
 	uploadType harukiUtils.UploadDataType,
 ) *HarukiSekaiDataRetriever {
 	client := NewSekaiClient(struct {
@@ -75,7 +44,6 @@ func NewSekaiDataRetriever(
 
 	return &HarukiSekaiDataRetriever{
 		client:       client,
-		policy:       policy,
 		uploadType:   uploadType,
 		logger:       harukiLogger.NewLogger("SekaiDataRetriever", "DEBUG", nil),
 		isErrorExist: false,
@@ -238,6 +206,5 @@ func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiI
 		UserID:  r.client.userID,
 		Suite:   suite,
 		Mysekai: mysekai,
-		Policy:  string(r.policy),
 	}, nil
 }

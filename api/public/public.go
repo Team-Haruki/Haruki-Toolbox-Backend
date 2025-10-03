@@ -2,10 +2,10 @@ package public
 
 import (
 	"fmt"
-	harukiRootApi "haruki-suite/api"
 	harukiUtils "haruki-suite/utils"
-	harukiMongo "haruki-suite/utils/mongo"
-	harukiRedis "haruki-suite/utils/redis"
+	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	harukiRedis "haruki-suite/utils/database/redis"
 	"strconv"
 	"strings"
 	"time"
@@ -13,72 +13,63 @@ import (
 	"context"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type HarukiPublicAPI struct {
-	Mongo       *harukiMongo.MongoDBManager
-	Redis       *redis.Client
-	AllowedKeys []string
-}
-
-func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
-	group := app.Group("/public/:server/:data_type")
+func registerPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	group := apiHelper.Router.Group("/public/:server/:data_type")
 
 	group.Get("/:user_id", func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				Message: err.Error(),
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
 		dataTypeStr := c.Params("data_type")
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				Message: err.Error(),
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
 		userIDStr := c.Params("user_id")
 		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusBadRequest),
-				Message: "Invalid userId, it must be integer",
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid userId, it must be integer", nil)
 		}
 
 		cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
 		ctx := context.Background()
 		var resp interface{}
-		if found, err := harukiRedis.GetCache(ctx, api.Redis, cacheKey, &resp); err == nil && found {
+		if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
 			return c.JSON(resp)
 		}
 
-		result, err := api.Mongo.GetData(c.Context(), userID, string(server), dataType)
+		record, err := apiHelper.DBManager.DB.GameAccountBinding.
+			Query().
+			Where(
+				gameaccountbinding.ServerEQ(string(server)),
+				gameaccountbinding.GameUserIDEQ(userIDStr),
+			).
+			WithUser().
+			Only(ctx)
+
+		result, err := apiHelper.DBManager.Mongo.GetData(c.Context(), userID, string(server), dataType)
 		if err != nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusInternalServerError),
-				Message: fmt.Sprintf("Failed to get user data: %v", err),
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err), nil)
 		}
 		if result == nil {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusNotFound),
-				Message: "Player data not found.",
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "Player data not found.", nil)
 		}
-		if policy, ok := result["policy"].(string); ok && policy == string(harukiUtils.UploadPolicyPrivate) {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
-				Message: "This player's data is not publicly accessible.",
-			})
+
+		if dataType == harukiUtils.UploadDataTypeSuite {
+			if record.Suite == nil || !record.Suite.AllowPublicApi {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
+			}
+		} else if dataType == harukiUtils.UploadDataTypeMysekai {
+			if record.Mysekai == nil || !record.Mysekai.AllowPublicApi {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
+			}
 		}
 
 		if dataType == harukiUtils.UploadDataTypeSuite {
@@ -93,7 +84,6 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 				}
 				filteredUserGamedata = filtered
 			}
-			allowedKeys := api.AllowedKeys
 			requestKey := c.Query("key")
 			if requestKey != "" {
 				keys := strings.Split(requestKey, ",")
@@ -106,29 +96,23 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 				}
 				if len(keys) == 1 {
 					key := keys[0]
-					if !harukiUtils.ArrayContains(allowedKeys, key) && key != "userGamedata" {
-						return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-							Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
-							Message: "Invalid request key",
-						})
+					if !harukiAPIHelper.ArrayContains(apiHelper.PublicAPIAllowedKeys, key) && key != "userGamedata" {
+						return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "Invalid request key", nil)
 					}
 					if key == "userGamedata" {
 						resp = filteredUserGamedata
 					} else {
-						resp = harukiUtils.GetValueFromResult(result, key)
+						resp = GetValueFromResult(result, key)
 					}
 				} else {
 					for _, key := range keys {
 						if key == "userGamedata" {
 							continue
 						}
-						if !harukiUtils.ArrayContains(allowedKeys, key) {
-							return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-								Status:  harukiRootApi.IntPtr(fiber.StatusForbidden),
-								Message: fmt.Sprintf("Invalid request key: %s", key),
-							})
+						if !harukiAPIHelper.ArrayContains(apiHelper.PublicAPIAllowedKeys, key) {
+							return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, fmt.Sprintf("Invalid request key: %s", key), nil)
 						}
-						suite[key] = harukiUtils.GetValueFromResult(result, key)
+						suite[key] = GetValueFromResult(result, key)
 					}
 					if includeUserGamedata && filteredUserGamedata != nil {
 						suite["userGamedata"] = filteredUserGamedata
@@ -136,11 +120,11 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 					resp = suite
 				}
 			} else {
-				for _, key := range allowedKeys {
+				for _, key := range apiHelper.PublicAPIAllowedKeys {
 					if key == "userGamedata" {
 						continue
 					}
-					suite[key] = harukiUtils.GetValueFromResult(result, key)
+					suite[key] = GetValueFromResult(result, key)
 				}
 				resp = suite
 			}
@@ -165,13 +149,10 @@ func (api *HarukiPublicAPI) RegisterRoutes(app *fiber.App) {
 			}
 			resp = mysekaiData
 		} else {
-			return harukiRootApi.JSONResponse(c, harukiUtils.APIResponse{
-				Status:  harukiRootApi.IntPtr(fiber.StatusInternalServerError),
-				Message: "Unknown error.",
-			})
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Unknown error.", nil)
 		}
 
-		_ = harukiRedis.SetCache(ctx, api.Redis, cacheKey, resp, 300*time.Second)
+		apiHelper.DBManager.Redis.SetCache(ctx, cacheKey, resp, 300*time.Second)
 
 		return c.JSON(resp)
 	})
