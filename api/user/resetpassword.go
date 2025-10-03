@@ -66,10 +66,10 @@ func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to retrieve secret", nil)
 		}
 		if !found {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Reset code expired or invalid", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Reset code expired or invalid", nil)
 		}
 		if secret != payload.OneTimeSecret {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Incorrect reset code", nil)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Incorrect reset code", nil)
 		}
 
 		u, err := apiHelper.DBManager.DB.User.

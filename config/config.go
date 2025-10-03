@@ -64,6 +64,7 @@ type HarukiProxyConfig struct {
 	UserAgent string `yaml:"user_agent"`
 	Version   string `yaml:"version"`
 	Secret    string `yaml:"secret"`
+	UnpackKey string `yaml:"unpack_key"`
 }
 
 type SekaiClientConfig struct {

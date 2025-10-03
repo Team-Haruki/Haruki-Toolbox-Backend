@@ -9,9 +9,23 @@ import (
 	"strconv"
 	"strings"
 
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/hashicorp/go-version"
 )
+
+func unpackKeyFromHelper(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) ([]byte, error) {
+	k := strings.TrimSpace(apiHelper.HarukiProxyUnpackKey)
+	if k == "" {
+		return nil, errors.New("missing HarukiProxyUnpackKey")
+	}
+	sum := sha256.Sum256([]byte(k))
+	return sum[:], nil
+}
 
 func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	if apiHelper.HarukiProxyUserAgent != "" && apiHelper.HarukiProxyVersion != "" && apiHelper.HarukiProxySecret != "" {
@@ -20,6 +34,7 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 			requestSecret := c.Get("X-Haruki-Toolbox-Secret")
 
 			if requestSecret != apiHelper.HarukiProxySecret {
+				fmt.Println(apiHelper.HarukiProxySecret)
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid HarukiProxy Secret", nil)
 			}
 
@@ -55,6 +70,40 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 	}
 }
 
+func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) ([]byte, error) {
+	key, err := unpackKeyFromHelper(apiHelper)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(body) < nonceSize+gcm.Overhead() {
+		return nil, errors.New("ciphertext too short")
+	}
+
+	nonce := body[:nonceSize]
+	ciphertext := body[nonceSize:]
+
+	var aadBytes []byte
+	if len(aad) > 0 {
+		aadBytes = []byte(aad)
+	}
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, aadBytes)
+	if err != nil {
+		return nil, err
+	}
+	return plaintext, nil
+}
+
 func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	api := apiHelper.Router.Group("/harukiproxy/:server/:user_id/:data_type", validateHarukiProxyClientHeader(apiHelper))
 
@@ -76,10 +125,16 @@ func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid user_id", nil)
 		}
 		gameUserID := int64(gameUserIDInt)
+		rawBody := c.Request().Body()
+		aad := fmt.Sprintf("%s|%s|%s", serverStr, gameUserIDStr, dataTypeStr)
+		decryptedBody, dErr := Unpack(rawBody, aad, apiHelper)
+		if dErr != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, fmt.Sprintf("failed to decrypt request body: %v", dErr), nil)
+		}
 
 		_, err = HandleUpload(
 			context.Background(),
-			c.Request().Body(),
+			decryptedBody,
 			server,
 			dataType,
 			&gameUserID,
