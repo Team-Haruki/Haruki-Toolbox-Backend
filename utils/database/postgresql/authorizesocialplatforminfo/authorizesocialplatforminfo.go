@@ -18,6 +18,8 @@ const (
 	FieldPlatform = "platform"
 	// FieldPlatformUserID holds the string denoting the platform_user_id field in the database.
 	FieldPlatformUserID = "platform_user_id"
+	// FieldPlatformID holds the string denoting the platform_id field in the database.
+	FieldPlatformID = "platform_id"
 	// FieldComment holds the string denoting the comment field in the database.
 	FieldComment = "comment"
 	// EdgeUser holds the string denoting the user edge name in mutations.
@@ -39,6 +41,7 @@ var Columns = []string{
 	FieldUserID,
 	FieldPlatform,
 	FieldPlatformUserID,
+	FieldPlatformID,
 	FieldComment,
 }
 
@@ -73,6 +76,11 @@ func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
 // ByPlatformUserID orders the results by the platform_user_id field.
 func ByPlatformUserID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPlatformUserID, opts...).ToFunc()
+}
+
+// ByPlatformID orders the results by the platform_id field.
+func ByPlatformID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlatformID, opts...).ToFunc()
 }
 
 // ByComment orders the results by the comment field.

@@ -14,9 +14,9 @@ type AuthorizeSocialPlatformInfo struct {
 func (AuthorizeSocialPlatformInfo) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("user_id"),
-		field.Int("id"),
 		field.String("platform"),
 		field.String("platform_user_id"),
+		field.Int("platform_id"),
 		field.String("comment").Optional(),
 	}
 }
@@ -29,6 +29,6 @@ func (AuthorizeSocialPlatformInfo) Edges() []ent.Edge {
 
 func (AuthorizeSocialPlatformInfo) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("user_id", "id").Unique(),
+		index.Fields("user_id", "platform_id").Unique(),
 	}
 }

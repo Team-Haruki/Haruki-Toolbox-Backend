@@ -69,6 +69,11 @@ func PlatformUserID(v string) predicate.AuthorizeSocialPlatformInfo {
 	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldPlatformUserID, v))
 }
 
+// PlatformID applies equality check predicate on the "platform_id" field. It's identical to PlatformIDEQ.
+func PlatformID(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldPlatformID, v))
+}
+
 // Comment applies equality check predicate on the "comment" field. It's identical to CommentEQ.
 func Comment(v string) predicate.AuthorizeSocialPlatformInfo {
 	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldComment, v))
@@ -267,6 +272,46 @@ func PlatformUserIDEqualFold(v string) predicate.AuthorizeSocialPlatformInfo {
 // PlatformUserIDContainsFold applies the ContainsFold predicate on the "platform_user_id" field.
 func PlatformUserIDContainsFold(v string) predicate.AuthorizeSocialPlatformInfo {
 	return predicate.AuthorizeSocialPlatformInfo(sql.FieldContainsFold(FieldPlatformUserID, v))
+}
+
+// PlatformIDEQ applies the EQ predicate on the "platform_id" field.
+func PlatformIDEQ(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldPlatformID, v))
+}
+
+// PlatformIDNEQ applies the NEQ predicate on the "platform_id" field.
+func PlatformIDNEQ(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldNEQ(FieldPlatformID, v))
+}
+
+// PlatformIDIn applies the In predicate on the "platform_id" field.
+func PlatformIDIn(vs ...int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldIn(FieldPlatformID, vs...))
+}
+
+// PlatformIDNotIn applies the NotIn predicate on the "platform_id" field.
+func PlatformIDNotIn(vs ...int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldNotIn(FieldPlatformID, vs...))
+}
+
+// PlatformIDGT applies the GT predicate on the "platform_id" field.
+func PlatformIDGT(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldGT(FieldPlatformID, v))
+}
+
+// PlatformIDGTE applies the GTE predicate on the "platform_id" field.
+func PlatformIDGTE(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldGTE(FieldPlatformID, v))
+}
+
+// PlatformIDLT applies the LT predicate on the "platform_id" field.
+func PlatformIDLT(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldLT(FieldPlatformID, v))
+}
+
+// PlatformIDLTE applies the LTE predicate on the "platform_id" field.
+func PlatformIDLTE(v int) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldLTE(FieldPlatformID, v))
 }
 
 // CommentEQ applies the EQ predicate on the "comment" field.
