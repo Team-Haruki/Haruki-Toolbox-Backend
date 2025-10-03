@@ -28,6 +28,17 @@ type WebhookConfig struct {
 	JWTSecret string `yaml:"jwt_secret"`
 }
 
+type UserSystemConfig struct {
+	DBType                    string     `yaml:"db_type"`
+	DBURL                     string     `yaml:"db_url"`
+	CloudflareSecret          string     `yaml:"cloudflare_secret"`
+	SMTP                      SMTPConfig `yaml:"smtp"`
+	SessionSignToken          string     `yaml:"session_sign_token"`
+	AvatarSaveDir             string     `yaml:"avatar_save_dir"`
+	FrontendURL               string     `yaml:"frontend_url"`
+	SocialPlatformVerifyToken string     `yaml:"social_platform_verify_token"`
+}
+
 type BackendConfig struct {
 	Host          string   `yaml:"host"`
 	Port          int      `yaml:"port"`
@@ -41,10 +52,19 @@ type BackendConfig struct {
 	AllowCORS     []string `yaml:"allow_cors"`
 }
 
+type SMTPConfig struct {
+	SMTPAddr string `yaml:"smtp_addr"`
+	SMTPPort int    `yaml:"smtp_port"`
+	SMTPMail string `yaml:"smtp_mail"`
+	SMTPPass string `yaml:"smtp_pass"`
+	MailName string `yaml:"mail_name"`
+}
+
 type HarukiProxyConfig struct {
 	UserAgent string `yaml:"user_agent"`
 	Version   string `yaml:"version"`
 	Secret    string `yaml:"secret"`
+	UnpackKey string `yaml:"unpack_key"`
 }
 
 type SekaiClientConfig struct {
@@ -65,6 +85,11 @@ type SekaiClientConfig struct {
 	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
 	SuiteRemoveKeys              []string          `yaml:"suite_remove_keys"`
 }
+
+type SekaiAPIConfig struct {
+	APIEndpoint string `yaml:"api_endpoint"`
+	APIToken    string `yaml:"api_token"`
+}
 type OthersConfig struct {
 	PublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
 }
@@ -75,8 +100,10 @@ type Config struct {
 	Redis       RedisConfig       `yaml:"redis"`
 	Webhook     WebhookConfig     `yaml:"webhook"`
 	Backend     BackendConfig     `yaml:"backend"`
+	UserSystem  UserSystemConfig  `yaml:"user_system"`
 	Others      OthersConfig      `yaml:"others"`
 	SekaiClient SekaiClientConfig `yaml:"sekai_client"`
+	SekaiAPI    SekaiAPIConfig    `yaml:"sekai_api"`
 	HarukiProxy HarukiProxyConfig `yaml:"haruki_proxy"`
 }
 

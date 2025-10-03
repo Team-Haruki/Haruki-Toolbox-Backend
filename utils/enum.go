@@ -56,19 +56,3 @@ func ParseSupportedInheritUploadServer(s string) (SupportedInheritUploadServer, 
 		return "", fmt.Errorf("invalid server: %s", s)
 	}
 }
-
-type UploadPolicy string
-
-const (
-	UploadPolicyPublic  UploadPolicy = "public"
-	UploadPolicyPrivate UploadPolicy = "private"
-)
-
-func ParseUploadPolicy(s string) (UploadPolicy, error) {
-	switch UploadPolicy(s) {
-	case UploadPolicyPublic, UploadPolicyPrivate:
-		return UploadPolicy(s), nil
-	default:
-		return "", fmt.Errorf("invalid policy: %s", s)
-	}
-}
