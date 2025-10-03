@@ -43,6 +43,8 @@ type AuthorizeSocialPlatformInfoMutation struct {
 	id               *int
 	platform         *string
 	platform_user_id *string
+	platform_id      *int
+	addplatform_id   *int
 	comment          *string
 	clearedFields    map[string]struct{}
 	user             *string
@@ -120,12 +122,6 @@ func (m AuthorizeSocialPlatformInfoMutation) Tx() (*Tx, error) {
 	tx := &Tx{config: m.config}
 	tx.init()
 	return tx, nil
-}
-
-// SetID sets the value of the id field. Note that this
-// operation is only accepted on creation of AuthorizeSocialPlatformInfo entities.
-func (m *AuthorizeSocialPlatformInfoMutation) SetID(id int) {
-	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
@@ -264,6 +260,62 @@ func (m *AuthorizeSocialPlatformInfoMutation) ResetPlatformUserID() {
 	m.platform_user_id = nil
 }
 
+// SetPlatformID sets the "platform_id" field.
+func (m *AuthorizeSocialPlatformInfoMutation) SetPlatformID(i int) {
+	m.platform_id = &i
+	m.addplatform_id = nil
+}
+
+// PlatformID returns the value of the "platform_id" field in the mutation.
+func (m *AuthorizeSocialPlatformInfoMutation) PlatformID() (r int, exists bool) {
+	v := m.platform_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlatformID returns the old "platform_id" field's value of the AuthorizeSocialPlatformInfo entity.
+// If the AuthorizeSocialPlatformInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuthorizeSocialPlatformInfoMutation) OldPlatformID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlatformID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlatformID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlatformID: %w", err)
+	}
+	return oldValue.PlatformID, nil
+}
+
+// AddPlatformID adds i to the "platform_id" field.
+func (m *AuthorizeSocialPlatformInfoMutation) AddPlatformID(i int) {
+	if m.addplatform_id != nil {
+		*m.addplatform_id += i
+	} else {
+		m.addplatform_id = &i
+	}
+}
+
+// AddedPlatformID returns the value that was added to the "platform_id" field in this mutation.
+func (m *AuthorizeSocialPlatformInfoMutation) AddedPlatformID() (r int, exists bool) {
+	v := m.addplatform_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPlatformID resets all changes to the "platform_id" field.
+func (m *AuthorizeSocialPlatformInfoMutation) ResetPlatformID() {
+	m.platform_id = nil
+	m.addplatform_id = nil
+}
+
 // SetComment sets the "comment" field.
 func (m *AuthorizeSocialPlatformInfoMutation) SetComment(s string) {
 	m.comment = &s
@@ -374,7 +426,7 @@ func (m *AuthorizeSocialPlatformInfoMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuthorizeSocialPlatformInfoMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.user != nil {
 		fields = append(fields, authorizesocialplatforminfo.FieldUserID)
 	}
@@ -383,6 +435,9 @@ func (m *AuthorizeSocialPlatformInfoMutation) Fields() []string {
 	}
 	if m.platform_user_id != nil {
 		fields = append(fields, authorizesocialplatforminfo.FieldPlatformUserID)
+	}
+	if m.platform_id != nil {
+		fields = append(fields, authorizesocialplatforminfo.FieldPlatformID)
 	}
 	if m.comment != nil {
 		fields = append(fields, authorizesocialplatforminfo.FieldComment)
@@ -401,6 +456,8 @@ func (m *AuthorizeSocialPlatformInfoMutation) Field(name string) (ent.Value, boo
 		return m.Platform()
 	case authorizesocialplatforminfo.FieldPlatformUserID:
 		return m.PlatformUserID()
+	case authorizesocialplatforminfo.FieldPlatformID:
+		return m.PlatformID()
 	case authorizesocialplatforminfo.FieldComment:
 		return m.Comment()
 	}
@@ -418,6 +475,8 @@ func (m *AuthorizeSocialPlatformInfoMutation) OldField(ctx context.Context, name
 		return m.OldPlatform(ctx)
 	case authorizesocialplatforminfo.FieldPlatformUserID:
 		return m.OldPlatformUserID(ctx)
+	case authorizesocialplatforminfo.FieldPlatformID:
+		return m.OldPlatformID(ctx)
 	case authorizesocialplatforminfo.FieldComment:
 		return m.OldComment(ctx)
 	}
@@ -450,6 +509,13 @@ func (m *AuthorizeSocialPlatformInfoMutation) SetField(name string, value ent.Va
 		}
 		m.SetPlatformUserID(v)
 		return nil
+	case authorizesocialplatforminfo.FieldPlatformID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlatformID(v)
+		return nil
 	case authorizesocialplatforminfo.FieldComment:
 		v, ok := value.(string)
 		if !ok {
@@ -464,13 +530,21 @@ func (m *AuthorizeSocialPlatformInfoMutation) SetField(name string, value ent.Va
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *AuthorizeSocialPlatformInfoMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addplatform_id != nil {
+		fields = append(fields, authorizesocialplatforminfo.FieldPlatformID)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *AuthorizeSocialPlatformInfoMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case authorizesocialplatforminfo.FieldPlatformID:
+		return m.AddedPlatformID()
+	}
 	return nil, false
 }
 
@@ -479,6 +553,13 @@ func (m *AuthorizeSocialPlatformInfoMutation) AddedField(name string) (ent.Value
 // type.
 func (m *AuthorizeSocialPlatformInfoMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case authorizesocialplatforminfo.FieldPlatformID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPlatformID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AuthorizeSocialPlatformInfo numeric field %s", name)
 }
@@ -523,6 +604,9 @@ func (m *AuthorizeSocialPlatformInfoMutation) ResetField(name string) error {
 		return nil
 	case authorizesocialplatforminfo.FieldPlatformUserID:
 		m.ResetPlatformUserID()
+		return nil
+	case authorizesocialplatforminfo.FieldPlatformID:
+		m.ResetPlatformID()
 		return nil
 	case authorizesocialplatforminfo.FieldComment:
 		m.ResetComment()

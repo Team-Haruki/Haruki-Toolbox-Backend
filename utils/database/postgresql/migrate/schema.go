@@ -13,6 +13,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "platform", Type: field.TypeString},
 		{Name: "platform_user_id", Type: field.TypeString},
+		{Name: "platform_id", Type: field.TypeInt},
 		{Name: "comment", Type: field.TypeString, Nullable: true},
 		{Name: "user_id", Type: field.TypeString},
 	}
@@ -24,16 +25,16 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "authorize_social_platform_infos_users_authorized_social_platforms",
-				Columns:    []*schema.Column{AuthorizeSocialPlatformInfosColumns[4]},
+				Columns:    []*schema.Column{AuthorizeSocialPlatformInfosColumns[5]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "authorizesocialplatforminfo_user_id_id",
+				Name:    "authorizesocialplatforminfo_user_id_platform_id",
 				Unique:  true,
-				Columns: []*schema.Column{AuthorizeSocialPlatformInfosColumns[4], AuthorizeSocialPlatformInfosColumns[0]},
+				Columns: []*schema.Column{AuthorizeSocialPlatformInfosColumns[5], AuthorizeSocialPlatformInfosColumns[3]},
 			},
 		},
 	}

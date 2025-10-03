@@ -70,6 +70,27 @@ func (_u *AuthorizeSocialPlatformInfoUpdate) SetNillablePlatformUserID(v *string
 	return _u
 }
 
+// SetPlatformID sets the "platform_id" field.
+func (_u *AuthorizeSocialPlatformInfoUpdate) SetPlatformID(v int) *AuthorizeSocialPlatformInfoUpdate {
+	_u.mutation.ResetPlatformID()
+	_u.mutation.SetPlatformID(v)
+	return _u
+}
+
+// SetNillablePlatformID sets the "platform_id" field if the given value is not nil.
+func (_u *AuthorizeSocialPlatformInfoUpdate) SetNillablePlatformID(v *int) *AuthorizeSocialPlatformInfoUpdate {
+	if v != nil {
+		_u.SetPlatformID(*v)
+	}
+	return _u
+}
+
+// AddPlatformID adds value to the "platform_id" field.
+func (_u *AuthorizeSocialPlatformInfoUpdate) AddPlatformID(v int) *AuthorizeSocialPlatformInfoUpdate {
+	_u.mutation.AddPlatformID(v)
+	return _u
+}
+
 // SetComment sets the "comment" field.
 func (_u *AuthorizeSocialPlatformInfoUpdate) SetComment(v string) *AuthorizeSocialPlatformInfoUpdate {
 	_u.mutation.SetComment(v)
@@ -158,6 +179,12 @@ func (_u *AuthorizeSocialPlatformInfoUpdate) sqlSave(ctx context.Context) (_node
 	}
 	if value, ok := _u.mutation.PlatformUserID(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldPlatformUserID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlatformID(); ok {
+		_spec.SetField(authorizesocialplatforminfo.FieldPlatformID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPlatformID(); ok {
+		_spec.AddField(authorizesocialplatforminfo.FieldPlatformID, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Comment(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldComment, field.TypeString, value)
@@ -253,6 +280,27 @@ func (_u *AuthorizeSocialPlatformInfoUpdateOne) SetNillablePlatformUserID(v *str
 	if v != nil {
 		_u.SetPlatformUserID(*v)
 	}
+	return _u
+}
+
+// SetPlatformID sets the "platform_id" field.
+func (_u *AuthorizeSocialPlatformInfoUpdateOne) SetPlatformID(v int) *AuthorizeSocialPlatformInfoUpdateOne {
+	_u.mutation.ResetPlatformID()
+	_u.mutation.SetPlatformID(v)
+	return _u
+}
+
+// SetNillablePlatformID sets the "platform_id" field if the given value is not nil.
+func (_u *AuthorizeSocialPlatformInfoUpdateOne) SetNillablePlatformID(v *int) *AuthorizeSocialPlatformInfoUpdateOne {
+	if v != nil {
+		_u.SetPlatformID(*v)
+	}
+	return _u
+}
+
+// AddPlatformID adds value to the "platform_id" field.
+func (_u *AuthorizeSocialPlatformInfoUpdateOne) AddPlatformID(v int) *AuthorizeSocialPlatformInfoUpdateOne {
+	_u.mutation.AddPlatformID(v)
 	return _u
 }
 
@@ -374,6 +422,12 @@ func (_u *AuthorizeSocialPlatformInfoUpdateOne) sqlSave(ctx context.Context) (_n
 	}
 	if value, ok := _u.mutation.PlatformUserID(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldPlatformUserID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlatformID(); ok {
+		_spec.SetField(authorizesocialplatforminfo.FieldPlatformID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPlatformID(); ok {
+		_spec.AddField(authorizesocialplatforminfo.FieldPlatformID, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Comment(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldComment, field.TypeString, value)

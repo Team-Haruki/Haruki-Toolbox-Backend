@@ -23,6 +23,8 @@ type AuthorizeSocialPlatformInfo struct {
 	Platform string `json:"platform,omitempty"`
 	// PlatformUserID holds the value of the "platform_user_id" field.
 	PlatformUserID string `json:"platform_user_id,omitempty"`
+	// PlatformID holds the value of the "platform_id" field.
+	PlatformID int `json:"platform_id,omitempty"`
 	// Comment holds the value of the "comment" field.
 	Comment string `json:"comment,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -56,7 +58,7 @@ func (*AuthorizeSocialPlatformInfo) scanValues(columns []string) ([]any, error) 
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case authorizesocialplatforminfo.FieldID:
+		case authorizesocialplatforminfo.FieldID, authorizesocialplatforminfo.FieldPlatformID:
 			values[i] = new(sql.NullInt64)
 		case authorizesocialplatforminfo.FieldUserID, authorizesocialplatforminfo.FieldPlatform, authorizesocialplatforminfo.FieldPlatformUserID, authorizesocialplatforminfo.FieldComment:
 			values[i] = new(sql.NullString)
@@ -98,6 +100,12 @@ func (_m *AuthorizeSocialPlatformInfo) assignValues(columns []string, values []a
 				return fmt.Errorf("unexpected type %T for field platform_user_id", values[i])
 			} else if value.Valid {
 				_m.PlatformUserID = value.String
+			}
+		case authorizesocialplatforminfo.FieldPlatformID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field platform_id", values[i])
+			} else if value.Valid {
+				_m.PlatformID = int(value.Int64)
 			}
 		case authorizesocialplatforminfo.FieldComment:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -154,6 +162,9 @@ func (_m *AuthorizeSocialPlatformInfo) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("platform_user_id=")
 	builder.WriteString(_m.PlatformUserID)
+	builder.WriteString(", ")
+	builder.WriteString("platform_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PlatformID))
 	builder.WriteString(", ")
 	builder.WriteString("comment=")
 	builder.WriteString(_m.Comment)

@@ -1,6 +1,7 @@
 package user
 
 import (
+	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -47,31 +48,22 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 		existing, err := client.Query().
 			Where(
 				authorizesocialplatforminfo.UserID(toolboxUserID),
-				authorizesocialplatforminfo.IDEQ(userAccountID),
+				authorizesocialplatforminfo.Platform(payload.Platform),
+				authorizesocialplatforminfo.PlatformUserID(payload.UserID),
 			).
 			Only(ctx)
 		if err == nil && existing != nil {
-			_, err = client.Update().
-				Where(
-					authorizesocialplatforminfo.UserID(toolboxUserID),
-					authorizesocialplatforminfo.IDEQ(userAccountID),
-				).
-				SetPlatform(payload.Platform).
-				SetPlatformUserID(payload.UserID).
-				SetComment(payload.Comment).
-				Save(ctx)
-			if err != nil {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update social platform", nil)
-			}
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "this social platform account is authorized", nil)
 		} else {
 			_, err = client.Create().
 				SetUserID(toolboxUserID).
-				SetID(userAccountID).
+				SetPlatformID(userAccountID).
 				SetPlatform(payload.Platform).
 				SetPlatformUserID(payload.UserID).
 				SetComment(payload.Comment).
 				Save(ctx)
 			if err != nil {
+				fmt.Println(err)
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to add social platform", nil)
 			}
 		}
@@ -86,7 +78,7 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 		var resp []harukiAPIHelper.AuthorizeSocialPlatformInfo
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				ID:       i.ID,
+				ID:       i.PlatformID,
 				Platform: i.Platform,
 				UserID:   i.PlatformUserID,
 				Comment:  i.Comment,
@@ -112,7 +104,7 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 		_, err = client.Delete().
 			Where(
 				authorizesocialplatforminfo.UserID(toolboxUserID),
-				authorizesocialplatforminfo.IDEQ(authorizeSocialPlatformAccountID),
+				authorizesocialplatforminfo.PlatformIDEQ(authorizeSocialPlatformAccountID),
 			).
 			Exec(ctx)
 		if err != nil {
@@ -129,7 +121,7 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 		var resp []harukiAPIHelper.AuthorizeSocialPlatformInfo
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				ID:       i.ID,
+				ID:       i.PlatformID,
 				Platform: i.Platform,
 				UserID:   i.PlatformUserID,
 				Comment:  i.Comment,

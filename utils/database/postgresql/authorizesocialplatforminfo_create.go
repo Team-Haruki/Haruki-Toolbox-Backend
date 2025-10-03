@@ -38,6 +38,12 @@ func (_c *AuthorizeSocialPlatformInfoCreate) SetPlatformUserID(v string) *Author
 	return _c
 }
 
+// SetPlatformID sets the "platform_id" field.
+func (_c *AuthorizeSocialPlatformInfoCreate) SetPlatformID(v int) *AuthorizeSocialPlatformInfoCreate {
+	_c.mutation.SetPlatformID(v)
+	return _c
+}
+
 // SetComment sets the "comment" field.
 func (_c *AuthorizeSocialPlatformInfoCreate) SetComment(v string) *AuthorizeSocialPlatformInfoCreate {
 	_c.mutation.SetComment(v)
@@ -49,12 +55,6 @@ func (_c *AuthorizeSocialPlatformInfoCreate) SetNillableComment(v *string) *Auth
 	if v != nil {
 		_c.SetComment(*v)
 	}
-	return _c
-}
-
-// SetID sets the "id" field.
-func (_c *AuthorizeSocialPlatformInfoCreate) SetID(v int) *AuthorizeSocialPlatformInfoCreate {
-	_c.mutation.SetID(v)
 	return _c
 }
 
@@ -106,6 +106,9 @@ func (_c *AuthorizeSocialPlatformInfoCreate) check() error {
 	if _, ok := _c.mutation.PlatformUserID(); !ok {
 		return &ValidationError{Name: "platform_user_id", err: errors.New(`postgresql: missing required field "AuthorizeSocialPlatformInfo.platform_user_id"`)}
 	}
+	if _, ok := _c.mutation.PlatformID(); !ok {
+		return &ValidationError{Name: "platform_id", err: errors.New(`postgresql: missing required field "AuthorizeSocialPlatformInfo.platform_id"`)}
+	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`postgresql: missing required edge "AuthorizeSocialPlatformInfo.user"`)}
 	}
@@ -123,10 +126,8 @@ func (_c *AuthorizeSocialPlatformInfoCreate) sqlSave(ctx context.Context) (*Auth
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != _node.ID {
-		id := _spec.ID.Value.(int64)
-		_node.ID = int(id)
-	}
+	id := _spec.ID.Value.(int64)
+	_node.ID = int(id)
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
 	return _node, nil
@@ -137,10 +138,6 @@ func (_c *AuthorizeSocialPlatformInfoCreate) createSpec() (*AuthorizeSocialPlatf
 		_node = &AuthorizeSocialPlatformInfo{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(authorizesocialplatforminfo.Table, sqlgraph.NewFieldSpec(authorizesocialplatforminfo.FieldID, field.TypeInt))
 	)
-	if id, ok := _c.mutation.ID(); ok {
-		_node.ID = id
-		_spec.ID.Value = id
-	}
 	if value, ok := _c.mutation.Platform(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldPlatform, field.TypeString, value)
 		_node.Platform = value
@@ -148,6 +145,10 @@ func (_c *AuthorizeSocialPlatformInfoCreate) createSpec() (*AuthorizeSocialPlatf
 	if value, ok := _c.mutation.PlatformUserID(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldPlatformUserID, field.TypeString, value)
 		_node.PlatformUserID = value
+	}
+	if value, ok := _c.mutation.PlatformID(); ok {
+		_spec.SetField(authorizesocialplatforminfo.FieldPlatformID, field.TypeInt, value)
+		_node.PlatformID = value
 	}
 	if value, ok := _c.mutation.Comment(); ok {
 		_spec.SetField(authorizesocialplatforminfo.FieldComment, field.TypeString, value)
@@ -217,7 +218,7 @@ func (_c *AuthorizeSocialPlatformInfoCreateBulk) Save(ctx context.Context) ([]*A
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+				if specs[i].ID.Value != nil {
 					id := specs[i].ID.Value.(int64)
 					nodes[i].ID = int(id)
 				}
