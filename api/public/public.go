@@ -53,6 +53,9 @@ func registerPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			).
 			WithUser().
 			Only(ctx)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "account binding not found", nil)
+		}
 
 		result, err := apiHelper.DBManager.Mongo.GetData(c.Context(), userID, string(server), dataType)
 		if err != nil {

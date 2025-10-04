@@ -2,6 +2,8 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
@@ -23,5 +25,11 @@ func (GameAccountBinding) Fields() []ent.Field {
 func (GameAccountBinding) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("user", User.Type).Ref("game_account_bindings").Unique(),
+	}
+}
+
+func (GameAccountBinding) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "game_account_binding"},
 	}
 }
