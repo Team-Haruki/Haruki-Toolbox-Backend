@@ -30,6 +30,6 @@ func (GameAccountBinding) Edges() []ent.Edge {
 
 func (GameAccountBinding) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "game_account_binding"},
+		entsql.Annotation{Table: "game_account_bindings"},
 	}
 }
