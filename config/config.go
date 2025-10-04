@@ -28,6 +28,17 @@ type WebhookConfig struct {
 	JWTSecret string `yaml:"jwt_secret"`
 }
 
+type ThirdPartyDataProviderConfig struct {
+	Endpoint8823   string `yaml:"endpoint_8823"`
+	Secret8823     string `yaml:"secret_8823"`
+	EndpointSakura string `yaml:"endpoint_sakura"`
+	SecretSakura   string `yaml:"secret_sakura"`
+	EndpointResona string `yaml:"endpoint_resona"`
+	SecretResona   string `yaml:"secret_resona"`
+	EndpointLuna   string `yaml:"endpoint_luna"`
+	SecretLuna     string `yaml:"secret_luna"`
+}
+
 type UserSystemConfig struct {
 	DBType                    string     `yaml:"db_type"`
 	DBURL                     string     `yaml:"db_url"`
@@ -95,16 +106,17 @@ type OthersConfig struct {
 }
 
 type Config struct {
-	Proxy       string            `yaml:"proxy"`
-	MongoDB     MongoDBConfig     `yaml:"mongodb"`
-	Redis       RedisConfig       `yaml:"redis"`
-	Webhook     WebhookConfig     `yaml:"webhook"`
-	Backend     BackendConfig     `yaml:"backend"`
-	UserSystem  UserSystemConfig  `yaml:"user_system"`
-	Others      OthersConfig      `yaml:"others"`
-	SekaiClient SekaiClientConfig `yaml:"sekai_client"`
-	SekaiAPI    SekaiAPIConfig    `yaml:"sekai_api"`
-	HarukiProxy HarukiProxyConfig `yaml:"haruki_proxy"`
+	Proxy                  string                       `yaml:"proxy"`
+	MongoDB                MongoDBConfig                `yaml:"mongodb"`
+	Redis                  RedisConfig                  `yaml:"redis"`
+	Webhook                WebhookConfig                `yaml:"webhook"`
+	Backend                BackendConfig                `yaml:"backend"`
+	UserSystem             UserSystemConfig             `yaml:"user_system"`
+	Others                 OthersConfig                 `yaml:"others"`
+	SekaiClient            SekaiClientConfig            `yaml:"sekai_client"`
+	SekaiAPI               SekaiAPIConfig               `yaml:"sekai_api"`
+	HarukiProxy            HarukiProxyConfig            `yaml:"haruki_proxy"`
+	ThirdPartyDataProvider ThirdPartyDataProviderConfig `yaml:"third_party_data_provider"`
 }
 
 var Cfg Config

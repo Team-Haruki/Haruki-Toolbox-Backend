@@ -1,11 +1,11 @@
 package api
 
 import (
-	entSchema "haruki-suite/ent/schema"
-	"haruki-suite/utils"
-
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
+	"haruki-suite/ent/schema"
+	entSchema "haruki-suite/ent/schema"
+	"haruki-suite/utils"
 )
 
 // ====================== Helper Struct ======================
@@ -25,6 +25,11 @@ type GenericResponse[T any] struct {
 	Status      int    `json:"status"`
 	Message     string `json:"message"`
 	UpdatedData *T     `json:"updatedData,omitempty"`
+}
+
+type HarukiToolboxGameAccountPrivacySettings struct {
+	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
+	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
 }
 
 // ====================== Request Struct ======================

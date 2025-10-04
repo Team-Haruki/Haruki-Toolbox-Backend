@@ -46,6 +46,16 @@ backend:
   allow_cors:
     - ""
 
+third_party_data_provider:
+  endpoint_8823: ""
+  secret_8823: ""
+  endpoint_sakura: ""
+  secret_sakura: ""
+  endpoint_resona: ""
+  secret_resona: ""
+  endpoint_luna: ""
+  secret_luna: ""
+
 sekai_api:
   api_endpoint: ""
   api_token: ""

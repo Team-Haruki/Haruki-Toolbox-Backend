@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	harukiConfig "haruki-suite/config"
-	"haruki-suite/ent/schema"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
@@ -20,13 +19,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 )
-
-var logger = harukiLogger.NewLogger("HandlerDebugger", "DEBUG", nil)
-
-type HarukiToolboxGameAccountPrivacySettings struct {
-	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
-	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
-}
 
 func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType, int64) {
 	if strings.Contains(originalURL, string(harukiUtils.UploadDataTypeSuite)) {
@@ -62,8 +54,8 @@ func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType,
 	return "", 0
 }
 
-func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, userID *string) (bool, *bool, HarukiToolboxGameAccountPrivacySettings, *bool, error) {
-	var settings HarukiToolboxGameAccountPrivacySettings
+func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, userID *string) (bool, *bool, harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings, *bool, error) {
+	var settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings
 
 	record, err := db.GameAccountBinding.
 		Query().
@@ -90,7 +82,7 @@ func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server 
 		allowCNMysekai = &a
 	}
 
-	settings = HarukiToolboxGameAccountPrivacySettings{
+	settings = harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings{
 		Suite:   record.Suite,
 		Mysekai: record.Mysekai,
 	}
@@ -107,7 +99,6 @@ func HandleUpload(
 	userID *string,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 ) (*harukiUtils.HandleDataResult, error) {
-	logger.Debugf("HandleUpload called: server=%s dataType=%s gameUserID=%v userID=%v", server, dataType, gameUserID, userID)
 
 	handler := &harukiDataHandler.DataHandler{
 		DBManager:      helper.DBManager,
@@ -118,16 +109,13 @@ func HandleUpload(
 
 	var allowPublicAPI bool
 	exists, belongs, settings, allowCNMySekai, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
-	logger.Debugf("ParseGameAccountSetting result: exists=%v belongs=%v settings=%+v allowCNMySekai=%v err=%v", exists, belongs, settings, allowCNMySekai, err)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		logger.Debugf("Game account does not exist")
 		allowPublicAPI = false
 	}
 	if belongs != nil && !*belongs {
-		logger.Debugf("Game account does not belong to the user")
 		return nil, errors.New("game account does not belong to the user")
 	}
 
@@ -155,25 +143,21 @@ func HandleUpload(
 		}
 	}
 
-	logger.Debugf("About to call HandleAndUpdateData with allowPublicAPI=%v", allowPublicAPI)
-	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID)
+	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID, settings)
 	if err != nil {
 		return result, err
 	}
 
 	if result.Status != nil {
-		logger.Debugf("HandleAndUpdateData returned status=%d", *result.Status)
 		if *result.Status != 200 {
 			return result, errors.New("upload failed with status: " + strconv.Itoa(*result.Status))
 		}
 	}
 
-	logger.Debugf("Clearing cache for dataType=%s server=%s gameUserID=%d", dataType, server, *gameUserID)
 	if err = helper.DBManager.Redis.ClearCache(ctx, string(dataType), string(server), *gameUserID); err != nil {
 		return result, err
 	}
 
-	logger.Debugf("HandleUpload completed successfully")
 	return result, nil
 }
 

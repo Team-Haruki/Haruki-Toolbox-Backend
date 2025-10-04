@@ -5,6 +5,7 @@ type SuiteDataPrivacySettings struct {
 	AllowSakura    bool `json:"allowSakura"`
 	Allow8823      bool `json:"allow8823"`
 	AllowResona    bool `json:"allowResona"`
+	AllowLuna      bool `json:"allowLuna"`
 }
 
 type MysekaiDataPrivacySettings struct {
@@ -12,4 +13,5 @@ type MysekaiDataPrivacySettings struct {
 	AllowFixtureApi bool `json:"allowFixtureApi"`
 	Allow8823       bool `json:"allow8823"`
 	AllowResona     bool `json:"allowResona"`
+	AllowLuna       bool `json:"allowLuna"`
 }
