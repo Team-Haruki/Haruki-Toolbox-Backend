@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -82,6 +83,13 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "gameaccountbinding_server_game_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{GameAccountBindingsColumns[1], GameAccountBindingsColumns[2]},
+			},
+		},
 	}
 	// SocialPlatformInfosColumns holds the columns for the "social_platform_infos" table.
 	SocialPlatformInfosColumns = []*schema.Column{
@@ -102,6 +110,13 @@ var (
 				Columns:    []*schema.Column{SocialPlatformInfosColumns[4]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "socialplatforminfo_platform_platform_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{SocialPlatformInfosColumns[1], SocialPlatformInfosColumns[2]},
 			},
 		},
 	}
@@ -134,5 +149,8 @@ func init() {
 	AuthorizeSocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 	EmailInfosTable.ForeignKeys[0].RefTable = UsersTable
 	GameAccountBindingsTable.ForeignKeys[0].RefTable = UsersTable
+	GameAccountBindingsTable.Annotation = &entsql.Annotation{
+		Table: "game_account_bindings",
+	}
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 }

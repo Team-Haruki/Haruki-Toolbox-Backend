@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 type GameAccountBinding struct {
@@ -25,6 +26,12 @@ func (GameAccountBinding) Fields() []ent.Field {
 func (GameAccountBinding) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("user", User.Type).Ref("game_account_bindings").Unique(),
+	}
+}
+
+func (GameAccountBinding) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("server", "game_user_id").Unique(),
 	}
 }
 

@@ -21,6 +21,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+var logger = harukiLogger.NewLogger("HandlerDebugger", "DEBUG", nil)
+
 type HarukiToolboxGameAccountPrivacySettings struct {
 	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
 	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
@@ -105,6 +107,8 @@ func HandleUpload(
 	userID *string,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 ) (*harukiUtils.HandleDataResult, error) {
+	logger.Debugf("HandleUpload called: server=%s dataType=%s gameUserID=%v userID=%v", server, dataType, gameUserID, userID)
+
 	handler := &harukiDataHandler.DataHandler{
 		DBManager:      helper.DBManager,
 		SeakiAPIClient: helper.SekaiAPIClient,
@@ -114,13 +118,16 @@ func HandleUpload(
 
 	var allowPublicAPI bool
 	exists, belongs, settings, allowCNMySekai, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
+	logger.Debugf("ParseGameAccountSetting result: exists=%v belongs=%v settings=%+v allowCNMySekai=%v err=%v", exists, belongs, settings, allowCNMySekai, err)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
+		logger.Debugf("Game account does not exist")
 		allowPublicAPI = false
 	}
 	if belongs != nil && !*belongs {
+		logger.Debugf("Game account does not belong to the user")
 		return nil, errors.New("game account does not belong to the user")
 	}
 
@@ -148,19 +155,25 @@ func HandleUpload(
 		}
 	}
 
+	logger.Debugf("About to call HandleAndUpdateData with allowPublicAPI=%v", allowPublicAPI)
 	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID)
 	if err != nil {
 		return result, err
 	}
 
-	if result.Status != nil && *result.Status != 200 {
-		return result, errors.New("upload failed with status: " + strconv.Itoa(*result.Status))
+	if result.Status != nil {
+		logger.Debugf("HandleAndUpdateData returned status=%d", *result.Status)
+		if *result.Status != 200 {
+			return result, errors.New("upload failed with status: " + strconv.Itoa(*result.Status))
+		}
 	}
 
+	logger.Debugf("Clearing cache for dataType=%s server=%s gameUserID=%d", dataType, server, *gameUserID)
 	if err = helper.DBManager.Redis.ClearCache(ctx, string(dataType), string(server), *gameUserID); err != nil {
 		return result, err
 	}
 
+	logger.Debugf("HandleUpload completed successfully")
 	return result, nil
 }
 
