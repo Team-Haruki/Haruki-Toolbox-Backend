@@ -5,6 +5,7 @@ import (
 	"fmt"
 	harukiConfig "haruki-suite/config"
 	"haruki-suite/utils"
+	apiHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database"
 	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
@@ -36,7 +37,7 @@ func cleanSuite(suite map[string]interface{}) map[string]interface{} {
 	}
 	return suite
 }
-func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) (map[string]interface{}, error) {
+func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) (map[string]interface{}, error) {
 	if dataType == utils.UploadDataTypeSuite && parsedUserID != nil && expectedUserID != nil && *expectedUserID != *parsedUserID {
 		return nil, fmt.Errorf("invalid userID: %s, expected: %s", strconv.FormatInt(*parsedUserID, 10), strconv.FormatInt(*expectedUserID, 10))
 	}
@@ -111,7 +112,7 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 	return data, nil
 }
 
-func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, isPublicAPI bool, dataType utils.UploadDataType, expectedUserID *int64) (*utils.HandleDataResult, error) {
+func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, isPublicAPI bool, dataType utils.UploadDataType, expectedUserID *int64, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) (*utils.HandleDataResult, error) {
 	unpacked, err := harukiSekai.Unpack(raw, server)
 	if err != nil {
 		h.Logger.Errorf("unpack failed: %v", err)
@@ -186,10 +187,12 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 
 	}
 
-	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType)
+	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType, settings)
 	if err != nil {
 		return nil, err
 	}
+
+	go DataSyncer(*expectedUserID, server, dataType, raw, settings)
 
 	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
 		return nil, err
@@ -206,7 +209,7 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	h.Logger.Infof("Calling back WebHook API: %s", url)
 
 	headers := map[string]string{
-		"User-Agent": fmt.Sprintf("Haruki-Suite/%s", harukiVersion.Version),
+		"User-Agent": fmt.Sprintf("Haruki-Toolbox-Backend/%s", harukiVersion.Version),
 	}
 	if bearer != "" {
 		headers["Authorization"] = "Bearer " + bearer
