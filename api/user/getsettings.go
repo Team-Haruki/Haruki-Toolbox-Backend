@@ -14,7 +14,7 @@ import (
 func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	apiHelper.Router.Group("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		ctx := context.Background()
-		userID := c.Locals("UserID").(string)
+		userID := c.Locals("userID").(string)
 
 		user, err := apiHelper.DBManager.DB.User.
 			Query().
