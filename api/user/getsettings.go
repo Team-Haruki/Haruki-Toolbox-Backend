@@ -6,29 +6,19 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/cloudflare"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v2"
-	"golang.org/x/crypto/bcrypt"
 )
 
-func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	apiHelper.Router.Post("/api/user/login", func(c *fiber.Ctx) error {
+func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	apiHelper.Router.Group("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
 		ctx := context.Background()
-		var payload harukiAPIHelper.LoginPayload
-		if err := c.BodyParser(&payload); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
-		}
-
-		result, err := cloudflare.ValidateTurnstile(payload.ChallengeToken, c.Get("X-Forwarded-For"))
-		if err != nil || result == nil || !result.Success {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid Turnstile challenge"})
-		}
+		userID := c.Locals("UserID").(string)
 
 		user, err := apiHelper.DBManager.DB.User.
 			Query().
-			Where(userSchema.EmailEQ(payload.Email)).
+			Where(userSchema.IDEQ(userID)).
 			WithEmailInfo().
 			WithSocialPlatformInfo().
 			WithAuthorizedSocialPlatforms().
@@ -36,15 +26,6 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			Only(ctx)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid email or password", nil)
-		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(payload.Password)); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid email or password", nil)
-		}
-
-		sessionToken, err := apiHelper.SessionHandler.IssueSession(user.ID)
-		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Could not issue session", nil)
 		}
 
 		var emailInfo harukiAPIHelper.EmailInfo
@@ -55,7 +36,7 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			}
 		} else {
 			emailInfo = harukiAPIHelper.EmailInfo{
-				Email:    payload.Email,
+				Email:    user.Edges.EmailInfo.Email,
 				Verified: false,
 			}
 		}
@@ -111,9 +92,8 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			SocialPlatformInfo:          socialPlatformInfo,
 			AuthorizeSocialPlatformInfo: &authorizeSocialPlatformInfo,
 			GameAccountBindings:         &gameAccountBindings,
-			SessionToken:                &sessionToken,
 		}
-		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
+		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "get settings success", UserData: ud}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
 
 	})
