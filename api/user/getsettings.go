@@ -93,8 +93,7 @@ func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			AuthorizeSocialPlatformInfo: &authorizeSocialPlatformInfo,
 			GameAccountBindings:         &gameAccountBindings,
 		}
-		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "get settings success", UserData: ud}
-		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
+		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "success get latest settings", &ud)
 
 	})
 }
