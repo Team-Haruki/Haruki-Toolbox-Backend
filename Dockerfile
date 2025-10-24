@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.created=$BUILD_DATE
 
 WORKDIR /app
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates tzdata
 
 COPY --from=builder /app/haruki-toolbox-backend .
 
