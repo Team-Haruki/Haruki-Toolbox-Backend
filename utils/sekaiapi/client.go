@@ -28,7 +28,7 @@ func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient
 }
 
 func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, error) {
-	server, err := utils.ParseSupportedDataUploadServer(serverStr)
+	_, err := utils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
 		return nil, nil, err
 	}
