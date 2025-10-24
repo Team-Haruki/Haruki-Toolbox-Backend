@@ -80,7 +80,7 @@ func registerPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			var filteredUserGamedata map[string]interface{}
 			if gameData, ok := result["userGamedata"].(primitive.M); ok && len(gameData) > 0 {
 				filtered := map[string]interface{}{}
-				for _, key := range []string{"userId", "name", "deck", "exp", "totalExp"} {
+				for _, key := range []string{"userId", "name", "deck", "exp", "totalExp", "coin"} {
 					if v, ok := gameData[key]; ok {
 						filtered[key] = v
 					}
