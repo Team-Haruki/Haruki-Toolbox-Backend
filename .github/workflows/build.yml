@@ -22,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.25.1
+          go-version: 1.25.3
 
       - name: Build Executable
         run: |
@@ -43,6 +43,40 @@ jobs:
               ;;
           esac
 
+      - name: Compress Artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist/pkg
+          case "${{ matrix.platform }}" in
+            windows-x64)
+              FILE=$(ls dist/*-Windows-x64.exe)
+              OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-windows-x64.zip"
+              (cd dist && zip -9 "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              ;;
+            linux-x64)
+              FILE=$(ls dist/*-Linux-amd64)
+              OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-linux-x64.tar.gz"
+              (cd dist && tar -czf "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              ;;
+            linux-arm64)
+              FILE=$(ls dist/*-Linux-arm64)
+              OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-linux-arm64.tar.gz"
+              (cd dist && tar -czf "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              ;;
+            macos-arm64)
+              FILE=$(ls dist/*-macOS-arm64)
+              OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-macos-arm64.tar.gz"
+              (cd dist && tar -czf "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              ;;
+          esac
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd dist/pkg
+          shopt -s nullglob
+          sha256sum * > "SHA256SUMS-${VERSION}.txt"
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -55,6 +89,9 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/HarukiToolboxBackend-${{ github.ref_name }}-*
+          files: |
+            dist/pkg/HarukiToolboxBackend-${{ github.ref_name }}-*.zip
+            dist/pkg/HarukiToolboxBackend-${{ github.ref_name }}-*.tar.gz
+            dist/pkg/SHA256SUMS-${{ github.ref_name }}.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
