@@ -28,16 +28,11 @@ func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient
 }
 
 func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, error) {
-	server, err := utils.ParseSupportedDataUploadServer(serverStr)
+	_, err := utils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	var url string
-	if server == utils.SupportedDataUploadServerEN || server == utils.SupportedDataUploadServerKR {
-		url = fmt.Sprintf("%s/api/%s/user/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
-	} else {
-		url = fmt.Sprintf("%s/api/%s/user/%%25user_id/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
-	}
+	url := fmt.Sprintf("%s/api/%s/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
 	resp, err := c.httpClient.R().
 		SetHeader("X-Haruki-Sekai-Token", c.harukiSekaiAPIToken).
 		SetHeader("Accept", "application/json").
