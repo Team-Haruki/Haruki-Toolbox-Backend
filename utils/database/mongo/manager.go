@@ -51,25 +51,65 @@ func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUs
 }
 
 func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID int64, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
-	var collection *mongo.Collection
-	if dataType == utils.UploadDataTypeSuite {
-		collection = m.suiteCollection
-	} else {
-		collection = m.mysekaiCollection
-	}
+	collection := m.getCollectionByDataType(dataType)
 
-	var oldData map[string]interface{}
-	err := collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&oldData)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		oldData = make(map[string]interface{})
-	} else if err != nil {
+	oldData, err := m.fetchOldData(ctx, collection, userID)
+	if err != nil {
 		return nil, err
 	}
 
+	finalData := m.buildFinalData(oldData, data)
+
+	updateDoc := bson.M{"$set": finalData}
+	return collection.UpdateOne(ctx,
+		bson.M{"_id": userID, "server": server},
+		updateDoc,
+		options.Update().SetUpsert(true),
+	)
+}
+
+func (m *MongoDBManager) getCollectionByDataType(dataType utils.UploadDataType) *mongo.Collection {
+	if dataType == utils.UploadDataTypeSuite {
+		return m.suiteCollection
+	}
+	return m.mysekaiCollection
+}
+
+func (m *MongoDBManager) fetchOldData(ctx context.Context, collection *mongo.Collection, userID int64) (map[string]interface{}, error) {
+	var oldData map[string]interface{}
+	err := collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&oldData)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return make(map[string]interface{}), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return oldData, nil
+}
+
+func (m *MongoDBManager) buildFinalData(oldData, data map[string]interface{}) bson.M {
 	finalData := bson.M{}
 
+	if mergedEvents := mergeUserEvents(oldData, data); mergedEvents != nil {
+		finalData["userEvents"] = mergedEvents
+	}
+
+	if mergedBlooms := mergeWorldBlooms(oldData, data); mergedBlooms != nil {
+		finalData["userWorldBlooms"] = mergedBlooms
+	}
+
+	for key, value := range data {
+		if key != "userEvents" && key != "userWorldBlooms" {
+			finalData[key] = value
+		}
+	}
+
+	return finalData
+}
+
+func mergeUserEvents(oldData, newData map[string]interface{}) []interface{} {
 	oldEvents, _ := oldData["userEvents"].(primitive.A)
-	newEvents, _ := data["userEvents"].([]interface{})
+	newEvents, _ := newData["userEvents"].([]interface{})
 	allEvents := append(oldEvents, newEvents...)
 
 	latestEvents := make(map[int64]map[string]interface{})
@@ -79,33 +119,45 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID i
 			if old, exists := latestEvents[eventID]; !exists {
 				latestEvents[eventID] = e
 			} else {
-				newPoint := getInt(e, "eventPoint")
-				oldPoint := getInt(old, "eventPoint")
-				if newPoint > oldPoint {
+				if shouldReplaceEvent(e, old) {
 					latestEvents[eventID] = e
-				} else if newPoint == oldPoint {
-					if len(e) > len(old) {
-						latestEvents[eventID] = e
-					}
 				}
 			}
 		}
 	}
-	if len(latestEvents) > 0 {
-		arr := make([]interface{}, 0, len(latestEvents))
-		for _, v := range latestEvents {
-			arr = append(arr, v)
-		}
-		finalData["userEvents"] = arr
+
+	if len(latestEvents) == 0 {
+		return nil
 	}
 
+	arr := make([]interface{}, 0, len(latestEvents))
+	for _, v := range latestEvents {
+		arr = append(arr, v)
+	}
+	return arr
+}
+
+func shouldReplaceEvent(newEvent, oldEvent map[string]interface{}) bool {
+	newPoint := getInt(newEvent, "eventPoint")
+	oldPoint := getInt(oldEvent, "eventPoint")
+	if newPoint > oldPoint {
+		return true
+	}
+	if newPoint == oldPoint && len(newEvent) > len(oldEvent) {
+		return true
+	}
+	return false
+}
+
+type bloomKey struct {
+	EventID, CharID int64
+}
+
+func mergeWorldBlooms(oldData, newData map[string]interface{}) []interface{} {
 	oldBlooms, _ := oldData["userWorldBlooms"].(primitive.A)
-	newBlooms, _ := data["userWorldBlooms"].([]interface{})
+	newBlooms, _ := newData["userWorldBlooms"].([]interface{})
 	allBlooms := append(oldBlooms, newBlooms...)
 
-	type bloomKey struct {
-		EventID, CharID int64
-	}
 	latestBlooms := make(map[bloomKey]map[string]interface{})
 	for _, bv := range allBlooms {
 		if b, ok := bv.(map[string]interface{}); ok {
@@ -116,38 +168,34 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID i
 			if old, exists := latestBlooms[key]; !exists {
 				latestBlooms[key] = b
 			} else {
-				newPoint := getInt(b, "worldBloomChapterPoint")
-				oldPoint := getInt(old, "worldBloomChapterPoint")
-				if newPoint > oldPoint {
+				if shouldReplaceBloom(b, old) {
 					latestBlooms[key] = b
-				} else if newPoint == oldPoint {
-					if len(b) > len(old) {
-						latestBlooms[key] = b
-					}
 				}
 			}
 		}
 	}
-	if len(latestBlooms) > 0 {
-		arr := make([]interface{}, 0, len(latestBlooms))
-		for _, v := range latestBlooms {
-			arr = append(arr, v)
-		}
-		finalData["userWorldBlooms"] = arr
+
+	if len(latestBlooms) == 0 {
+		return nil
 	}
 
-	for key, value := range data {
-		if key != "userEvents" && key != "userWorldBlooms" {
-			finalData[key] = value
-		}
+	arr := make([]interface{}, 0, len(latestBlooms))
+	for _, v := range latestBlooms {
+		arr = append(arr, v)
 	}
+	return arr
+}
 
-	updateDoc := bson.M{"$set": finalData}
-	return collection.UpdateOne(ctx,
-		bson.M{"_id": userID, "server": server},
-		updateDoc,
-		options.Update().SetUpsert(true),
-	)
+func shouldReplaceBloom(newBloom, oldBloom map[string]interface{}) bool {
+	newPoint := getInt(newBloom, "worldBloomChapterPoint")
+	oldPoint := getInt(oldBloom, "worldBloomChapterPoint")
+	if newPoint > oldPoint {
+		return true
+	}
+	if newPoint == oldPoint && len(newBloom) > len(oldBloom) {
+		return true
+	}
+	return false
 }
 
 func (m *MongoDBManager) GetData(ctx context.Context, userID int64, server string, dataType utils.UploadDataType) (bson.M, error) {

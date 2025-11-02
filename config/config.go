@@ -101,6 +101,7 @@ type SekaiAPIConfig struct {
 	APIEndpoint string `yaml:"api_endpoint"`
 	APIToken    string `yaml:"api_token"`
 }
+
 type OthersConfig struct {
 	PublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
 }

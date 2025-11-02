@@ -107,40 +107,19 @@ func HandleUpload(
 		Logger:         harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil),
 	}
 
-	var allowPublicAPI bool
 	exists, belongs, settings, allowCNMySekai, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
-		allowPublicAPI = false
-	}
-	if belongs != nil && !*belongs {
-		return nil, errors.New("game account does not belong to the user")
+
+	if err := validateGameAccountBelonging(belongs); err != nil {
+		return nil, err
 	}
 
-	if dataType == harukiUtils.UploadDataTypeMysekai {
-		if settings.Mysekai != nil {
-			allowPublicAPI = settings.Mysekai.AllowPublicApi
-		} else {
-			allowPublicAPI = false
-		}
-	} else {
-		if settings.Suite != nil {
-			allowPublicAPI = settings.Suite.AllowPublicApi
-		} else {
-			allowPublicAPI = false
-		}
-	}
+	allowPublicAPI := determinePublicAPIPermission(exists, dataType, settings)
 
-	if dataType == harukiUtils.UploadDataTypeMysekai && server == harukiUtils.SupportedDataUploadServerCN {
-		if userID != nil {
-			if allowCNMySekai != nil {
-				if !*allowCNMySekai {
-					return nil, errors.New("illegal request")
-				}
-			}
-		}
+	if err := validateCNMysekaiAccess(dataType, server, userID, allowCNMySekai); err != nil {
+		return nil, err
 	}
 
 	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID, settings)
@@ -148,10 +127,8 @@ func HandleUpload(
 		return result, err
 	}
 
-	if result.Status != nil {
-		if *result.Status != 200 {
-			return result, errors.New("upload failed with status: " + strconv.Itoa(*result.Status))
-		}
+	if err := validateUploadResult(result); err != nil {
+		return result, err
 	}
 
 	if err = helper.DBManager.Redis.ClearCache(ctx, string(dataType), string(server), *gameUserID); err != nil {
@@ -159,6 +136,47 @@ func HandleUpload(
 	}
 
 	return result, nil
+}
+
+func validateGameAccountBelonging(belongs *bool) error {
+	if belongs != nil && !*belongs {
+		return errors.New("game account does not belong to the user")
+	}
+	return nil
+}
+
+func determinePublicAPIPermission(exists bool, dataType harukiUtils.UploadDataType, settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings) bool {
+	if !exists {
+		return false
+	}
+
+	if dataType == harukiUtils.UploadDataTypeMysekai {
+		if settings.Mysekai != nil {
+			return settings.Mysekai.AllowPublicApi
+		}
+		return false
+	}
+
+	if settings.Suite != nil {
+		return settings.Suite.AllowPublicApi
+	}
+	return false
+}
+
+func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, userID *string, allowCNMySekai *bool) error {
+	if dataType == harukiUtils.UploadDataTypeMysekai && server == harukiUtils.SupportedDataUploadServerCN {
+		if userID != nil && allowCNMySekai != nil && !*allowCNMySekai {
+			return errors.New("illegal request")
+		}
+	}
+	return nil
+}
+
+func validateUploadResult(result *harukiUtils.HandleDataResult) error {
+	if result.Status != nil && *result.Status != 200 {
+		return errors.New("upload failed with status: " + strconv.Itoa(*result.Status))
+	}
+	return nil
 }
 
 func HandleProxyUpload(
