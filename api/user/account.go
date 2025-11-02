@@ -17,10 +17,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
-
-	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		var payload harukiAPIHelper.UpdateProfilePayload
 		if err := c.BodyParser(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
@@ -79,9 +77,11 @@ func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			ud.AvatarPath = &url
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "profile updated", &ud)
-	})
+	}
+}
 
-	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		var payload harukiAPIHelper.ChangePasswordPayload
 		if err := c.BodyParser(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
@@ -102,8 +102,15 @@ func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to update password", nil)
 		}
-		harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
+		_ = harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
-	})
+	}
+}
+
+func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
+
+	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, handleUpdateProfile(apiHelper))
+	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, handleChangePassword(apiHelper))
 
 }

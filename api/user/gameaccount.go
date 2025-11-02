@@ -190,15 +190,6 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 	}
 }
 
-func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
-
-	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateGameAccountVerificationCode(apiHelper))
-	r.Post("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleCreateGameAccountBinding(apiHelper))
-	r.Put("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleUpdateGameAccountBinding(apiHelper))
-	r.Delete("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleDeleteGameAccountBinding(apiHelper))
-}
-
 func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) (*postgresql.GameAccountBinding, error) {
 	existing, _ := apiHelper.DBManager.DB.GameAccountBinding.
 		Query().
@@ -291,4 +282,13 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 			Save(ctx)
 	}
 	return err
+}
+
+func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
+
+	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateGameAccountVerificationCode(apiHelper))
+	r.Post("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleCreateGameAccountBinding(apiHelper))
+	r.Put("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleUpdateGameAccountBinding(apiHelper))
+	r.Delete("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleDeleteGameAccountBinding(apiHelper))
 }
