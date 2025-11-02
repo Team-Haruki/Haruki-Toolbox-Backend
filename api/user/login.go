@@ -7,14 +7,15 @@ import (
 	"haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
+	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	apiHelper.Router.Post("/api/user/login", func(c *fiber.Ctx) error {
+func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		var payload harukiAPIHelper.LoginPayload
 		if err := c.BodyParser(&payload); err != nil {
@@ -47,60 +48,11 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Could not issue session", nil)
 		}
 
-		var emailInfo harukiAPIHelper.EmailInfo
-		if user.Edges.EmailInfo != nil {
-			emailInfo = harukiAPIHelper.EmailInfo{
-				Email:    user.Edges.EmailInfo.Email,
-				Verified: user.Edges.EmailInfo.Verified,
-			}
-		} else {
-			emailInfo = harukiAPIHelper.EmailInfo{
-				Email:    payload.Email,
-				Verified: false,
-			}
-		}
-
-		var socialPlatformInfo *harukiAPIHelper.SocialPlatformInfo
-		if user.Edges.SocialPlatformInfo != nil {
-			socialPlatformInfo = &harukiAPIHelper.SocialPlatformInfo{
-				Platform: user.Edges.SocialPlatformInfo.Platform,
-				UserID:   user.Edges.SocialPlatformInfo.PlatformUserID,
-				Verified: user.Edges.SocialPlatformInfo.Verified,
-			}
-		}
-		var authorizeSocialPlatformInfo []harukiAPIHelper.AuthorizeSocialPlatformInfo
-		if user.Edges.AuthorizedSocialPlatforms != nil && len(user.Edges.AuthorizedSocialPlatforms) > 0 {
-			authorizeSocialPlatformInfo = make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(user.Edges.AuthorizedSocialPlatforms))
-			for _, a := range user.Edges.AuthorizedSocialPlatforms {
-				authorizeSocialPlatformInfo = append(authorizeSocialPlatformInfo, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-					ID:       a.ID,
-					Platform: a.Platform,
-					UserID:   a.PlatformUserID,
-					Comment:  a.Comment,
-				})
-			}
-		}
-
-		var gameAccountBindings []harukiAPIHelper.GameAccountBinding
-		if user.Edges.GameAccountBindings != nil && len(user.Edges.GameAccountBindings) > 0 {
-			gameAccountBindings = make([]harukiAPIHelper.GameAccountBinding, 0, len(user.Edges.GameAccountBindings))
-			for _, g := range user.Edges.GameAccountBindings {
-				gameAccountBindings = append(gameAccountBindings, harukiAPIHelper.GameAccountBinding{
-					Server:   utils.SupportedDataUploadServer(g.Server),
-					UserID:   g.GameUserID,
-					Verified: g.Verified,
-					Suite:    g.Suite,
-					Mysekai:  g.Mysekai,
-				})
-			}
-		}
-
-		var avatarURL string
-		if user.AvatarPath != nil {
-			avatarURL = fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
-		} else {
-			avatarURL = ""
-		}
+		emailInfo := buildEmailInfo(user, payload.Email)
+		socialPlatformInfo := buildSocialPlatformInfo(user)
+		authorizeSocialPlatformInfo := buildAuthorizeSocialPlatformInfo(user)
+		gameAccountBindings := buildGameAccountBindings(user)
+		avatarURL := buildAvatarURL(user)
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			Name:                        &user.Name,
@@ -115,6 +67,70 @@ func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		}
 		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
+	}
+}
 
-	})
+func buildEmailInfo(user *postgresql.User, email string) harukiAPIHelper.EmailInfo {
+	if user.Edges.EmailInfo != nil {
+		return harukiAPIHelper.EmailInfo{
+			Email:    user.Edges.EmailInfo.Email,
+			Verified: user.Edges.EmailInfo.Verified,
+		}
+	}
+	return harukiAPIHelper.EmailInfo{Email: email, Verified: false}
+}
+
+func buildSocialPlatformInfo(user *postgresql.User) *harukiAPIHelper.SocialPlatformInfo {
+	if user.Edges.SocialPlatformInfo != nil {
+		return &harukiAPIHelper.SocialPlatformInfo{
+			Platform: user.Edges.SocialPlatformInfo.Platform,
+			UserID:   user.Edges.SocialPlatformInfo.PlatformUserID,
+			Verified: user.Edges.SocialPlatformInfo.Verified,
+		}
+	}
+	return nil
+}
+
+func buildAuthorizeSocialPlatformInfo(user *postgresql.User) []harukiAPIHelper.AuthorizeSocialPlatformInfo {
+	var result []harukiAPIHelper.AuthorizeSocialPlatformInfo
+	if user.Edges.AuthorizedSocialPlatforms != nil && len(user.Edges.AuthorizedSocialPlatforms) > 0 {
+		result = make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(user.Edges.AuthorizedSocialPlatforms))
+		for _, a := range user.Edges.AuthorizedSocialPlatforms {
+			result = append(result, harukiAPIHelper.AuthorizeSocialPlatformInfo{
+				ID:       a.ID,
+				Platform: a.Platform,
+				UserID:   a.PlatformUserID,
+				Comment:  a.Comment,
+			})
+		}
+	}
+	return result
+}
+
+func buildGameAccountBindings(user *postgresql.User) []harukiAPIHelper.GameAccountBinding {
+	var result []harukiAPIHelper.GameAccountBinding
+	if user.Edges.GameAccountBindings != nil && len(user.Edges.GameAccountBindings) > 0 {
+		result = make([]harukiAPIHelper.GameAccountBinding, 0, len(user.Edges.GameAccountBindings))
+		for _, g := range user.Edges.GameAccountBindings {
+			result = append(result, harukiAPIHelper.GameAccountBinding{
+				Server:   utils.SupportedDataUploadServer(g.Server),
+				UserID:   g.GameUserID,
+				Verified: g.Verified,
+				Suite:    g.Suite,
+				Mysekai:  g.Mysekai,
+			})
+		}
+	}
+	return result
+}
+
+func buildAvatarURL(user *postgresql.User) string {
+	if user.AvatarPath != nil {
+		return fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
+	}
+	return ""
+}
+
+func registerLoginRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	apiHelper.Router.Post("/api/user/login", handleLogin(apiHelper))
 }

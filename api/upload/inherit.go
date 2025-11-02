@@ -10,10 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/inherit/:server/:upload_type")
-
-	api.Post("/submit", func(c *fiber.Ctx) error {
+func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		uploadTypeStr := c.Params("upload_type")
 
@@ -41,46 +39,63 @@ func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
-		var uploadErr error
-		if uploadType == harukiUtils.UploadDataTypeMysekai {
-			if result.Mysekai == nil && err != nil {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, fmt.Sprintf("Retrieve mysekai data failed: %v", err), nil)
-			} else if result.Mysekai == nil {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, fmt.Sprintf("Retrieve mysekai data failed, it seems you may not have completed the tutorial yet."), nil)
-			}
-			_, uploadErr = HandleUpload(
-				context.Background(),
-				result.Mysekai,
-				harukiUtils.SupportedDataUploadServer(serverStr),
-				harukiUtils.UploadDataTypeMysekai,
-				&result.UserID,
-				nil,
-				apiHelper,
-			)
-			if uploadErr != nil {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, uploadErr.Error(), nil)
-			}
+		if err := uploadMysekaiDataIfNeeded(c, apiHelper, uploadType, result, serverStr); err != nil {
+			return err
 		}
 
-		if result.Suite == nil && err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, fmt.Sprintf("Retrieve suite data failed: %v", err), nil)
-		} else if result.Suite == nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, fmt.Sprintf("Retrieve suite data failed: unknown error"), nil)
-		}
-		_, uploadErr = HandleUpload(
-			context.Background(),
-			result.Suite,
-			harukiUtils.SupportedDataUploadServer(serverStr),
-			harukiUtils.UploadDataTypeSuite,
-			&result.UserID,
-			nil,
-			apiHelper,
-		)
-		if uploadErr != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, uploadErr.Error(), nil)
+		if err := uploadSuiteData(c, apiHelper, result, serverStr); err != nil {
+			return err
 		}
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, fmt.Sprintf("%s server user %d successfully uploaded data.", serverStr, result.UserID), nil)
-	})
+	}
+}
 
+func uploadMysekaiDataIfNeeded(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
+	if uploadType != harukiUtils.UploadDataTypeMysekai {
+		return nil
+	}
+
+	if result.Mysekai == nil {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Retrieve mysekai data failed, it seems you may not have completed the tutorial yet.", nil)
+	}
+
+	_, err := HandleUpload(
+		context.Background(),
+		result.Mysekai,
+		harukiUtils.SupportedDataUploadServer(serverStr),
+		harukiUtils.UploadDataTypeMysekai,
+		&result.UserID,
+		nil,
+		apiHelper,
+	)
+	if err != nil {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+	}
+	return nil
+}
+
+func uploadSuiteData(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
+	if result.Suite == nil {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Retrieve suite data failed: unknown error", nil)
+	}
+
+	_, err := HandleUpload(
+		context.Background(),
+		result.Suite,
+		harukiUtils.SupportedDataUploadServer(serverStr),
+		harukiUtils.UploadDataTypeSuite,
+		&result.UserID,
+		nil,
+		apiHelper,
+	)
+	if err != nil {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+	}
+	return nil
+}
+
+func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/inherit/:server/:upload_type")
+	api.Post("/submit", handleInheritSubmit(apiHelper))
 }

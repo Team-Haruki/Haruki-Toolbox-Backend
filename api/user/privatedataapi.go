@@ -3,6 +3,7 @@ package user
 import (
 	harukiUtils "haruki-suite/utils"
 	harukiApiHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"strconv"
@@ -27,10 +28,8 @@ func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Ha
 	}
 }
 
-func registerPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/private/:server/:data_type/:user_id", ValidateUserPermission(apiHelper.PrivateAPIToken, apiHelper.PrivateAPIUserAgent))
-
-	api.Get("/", func(c *fiber.Ctx) error {
+func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		serverStr := c.Params("server")
 		dataTypeStr := c.Params("data_type")
 		userIDStr := c.Params("user_id")
@@ -69,27 +68,7 @@ func registerPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelp
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "game account not found", nil)
 		}
 
-		authorized := false
-
-		if dbUser.Edges.SocialPlatformInfo != nil &&
-			dbUser.Edges.SocialPlatformInfo.Platform == platform &&
-			dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
-			authorized = true
-		}
-
-		if !authorized {
-			exists, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
-				Where(
-					authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
-					authorizesocialplatforminfo.PlatformEQ(platform),
-					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
-				).
-				Exist(c.Context())
-			if err == nil && exists {
-				authorized = true
-			}
-		}
-
+		authorized := isUserAuthorized(c, apiHelper, dbUser, platform, platformUserID)
 		if !authorized {
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "forbidden: invalid platform or platform_user_id for this user", nil)
 		}
@@ -99,24 +78,54 @@ func registerPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelp
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
-		requestKey := c.Query("key")
-		if requestKey != "" {
-			keys := strings.Split(requestKey, ",")
-			if len(keys) == 1 {
-				return c.JSON(result[keys[0]])
-			}
-			data := make(map[string]interface{})
-			for _, k := range keys {
-				data[k] = result[k]
-			}
-			return c.JSON(data)
-		}
-
 		if result == nil {
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "user data not found", nil)
 		}
 
-		return c.JSON(result)
-	})
+		return processRequestKeys(c, result)
+	}
+}
 
+func isUserAuthorized(c *fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) bool {
+	// Check primary social platform info
+	if dbUser.Edges.SocialPlatformInfo != nil &&
+		dbUser.Edges.SocialPlatformInfo.Platform == platform &&
+		dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
+		return true
+	}
+
+	// Check authorized social platforms
+	exists, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
+		Where(
+			authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
+			authorizesocialplatforminfo.PlatformEQ(platform),
+			authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
+		).
+		Exist(c.Context())
+	if err == nil && exists {
+		return true
+	}
+
+	return false
+}
+
+func processRequestKeys(c *fiber.Ctx, result map[string]interface{}) error {
+	requestKey := c.Query("key")
+	if requestKey != "" {
+		keys := strings.Split(requestKey, ",")
+		if len(keys) == 1 {
+			return c.JSON(result[keys[0]])
+		}
+		data := make(map[string]interface{})
+		for _, k := range keys {
+			data[k] = result[k]
+		}
+		return c.JSON(data)
+	}
+	return c.JSON(result)
+}
+
+func registerPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/private/:server/:data_type/:user_id", ValidateUserPermission(apiHelper.PrivateAPIToken, apiHelper.PrivateAPIUserAgent))
+	api.Get("/", handleGetPrivateData(apiHelper))
 }
