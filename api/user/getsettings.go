@@ -11,8 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	apiHelper.Router.Group("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 
@@ -36,7 +36,7 @@ func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			}
 		} else {
 			emailInfo = harukiAPIHelper.EmailInfo{
-				Email:    user.Edges.EmailInfo.Email,
+				Email:    "",
 				Verified: false,
 			}
 		}
@@ -94,6 +94,9 @@ func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			GameAccountBindings:         &gameAccountBindings,
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "success get latest settings", &ud)
+	}
+}
 
-	})
+func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	apiHelper.Router.Get("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, handleGetSettings(apiHelper))
 }

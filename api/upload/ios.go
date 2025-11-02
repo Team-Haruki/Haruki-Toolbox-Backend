@@ -15,8 +15,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const chunkExpire = time.Minute * 3
-
 var dataChunks map[string][]harukiUtils.DataChunk
 
 type dataUploadHeader struct {
@@ -27,11 +25,8 @@ type dataUploadHeader struct {
 	TotalChunks   int    `header:"X-Total-Chunks"`
 }
 
-func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/ios")
-	logger := harukiLogger.NewLogger("HarukiSekaiIOS", "DEBUG", nil)
-
-	api.Post("/script/upload", func(c *fiber.Ctx) error {
+func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "This endpoint is temporarily disabled", nil)
 		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
 		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
@@ -109,9 +104,11 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}(header, userId, server, string(uploadType))
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Successfully uploaded data.", nil)
-	})
+	}
+}
 
-	api.Get("/proxy/:server/suite/user/:user_id", func(c *fiber.Ctx) error {
+func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 
@@ -133,9 +130,11 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			apiHelper,
 		)
 		return proxyHandler(c)
-	})
+	}
+}
 
-	api.Post("/proxy/:server/user/:user_id/mysekai", func(c *fiber.Ctx) error {
+func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 
@@ -156,5 +155,14 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			apiHelper,
 		)
 		return proxyHandler(c)
-	})
+	}
+}
+
+func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/ios")
+	logger := harukiLogger.NewLogger("HarukiSekaiIOS", "DEBUG", nil)
+
+	api.Post("/script/upload", handleIOSScriptUpload(apiHelper, logger))
+	api.Get("/proxy/:server/suite/user/:user_id", handleIOSProxySuite(apiHelper, logger))
+	api.Post("/proxy/:server/user/:user_id/mysekai", handleIOSProxyMysekai(apiHelper, logger))
 }

@@ -127,5 +127,6 @@ func processRequestKeys(c *fiber.Ctx, result map[string]interface{}) error {
 
 func registerPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) {
 	api := apiHelper.Router.Group("/private/:server/:data_type/:user_id", ValidateUserPermission(apiHelper.PrivateAPIToken, apiHelper.PrivateAPIUserAgent))
+
 	api.Get("/", handleGetPrivateData(apiHelper))
 }

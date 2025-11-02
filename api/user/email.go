@@ -73,10 +73,8 @@ func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper *har
 	return true, nil
 }
 
-func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	email := apiHelper.Router.Group("/api/email")
-
-	email.Post("/send", func(c *fiber.Ctx) error {
+func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		var req harukiAPIHelper.SendEmailPayload
 		if err := c.BodyParser(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
@@ -90,10 +88,11 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already exists", nil)
 		}
 		return SendEmailHandler(c, req.Email, req.ChallengeToken, apiHelper)
+	}
+}
 
-	})
-
-	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		var req harukiAPIHelper.VerifyEmailPayload
 		if err := c.BodyParser(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
@@ -129,7 +128,14 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				Verified: true,
 			},
 		}
-		harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
+		_ = harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "email verified", &ud)
-	})
+	}
+}
+
+func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	email := apiHelper.Router.Group("/api/email")
+
+	email.Post("/send", handleSendEmail(apiHelper))
+	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, handleVerifyEmail(apiHelper))
 }

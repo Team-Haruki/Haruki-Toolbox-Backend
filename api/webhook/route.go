@@ -47,19 +47,19 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 	}
 }
 
-func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper.WebhookJWTSecret, apiHelper.DBManager.Mongo))
-
-	api.Get("/subscribers", func(c *fiber.Ctx) error {
+func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		webhookID := c.Locals("webhook_id").(string)
 		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(c.Context(), webhookID)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, err.Error(), nil)
 		}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &users)
-	})
+	}
+}
 
-	api.Put("/:server/:data_type/:user_id", func(c *fiber.Ctx) error {
+func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		userID := c.Params("user_id")
 		webhookID := c.Locals("webhook_id").(string)
 
@@ -80,9 +80,11 @@ func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, err.Error(), nil)
 		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Registered webhook push user successfully.", nil)
-	})
+	}
+}
 
-	api.Delete("/:server/:data_type/:user_id", func(c *fiber.Ctx) error {
+func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		userID := c.Params("user_id")
 		webhookID := c.Locals("webhook_id").(string)
 
@@ -103,5 +105,13 @@ func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, err.Error(), nil)
 		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Unregistered webhook push user successfully.", nil)
-	})
+	}
+}
+
+func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper.WebhookJWTSecret, apiHelper.DBManager.Mongo))
+
+	api.Get("/subscribers", handleGetSubscribers(apiHelper))
+	api.Put("/:server/:data_type/:user_id", handlePutWebhookUser(apiHelper))
+	api.Delete("/:server/:data_type/:user_id", handleDeleteWebhookUser(apiHelper))
 }

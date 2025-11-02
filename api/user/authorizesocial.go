@@ -10,10 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id")
-
-	verifyUserHasVerifiedSocialPlatform := func(c *fiber.Ctx) error {
+func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.SocialPlatformInfo
@@ -28,8 +26,10 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 		}
 		return c.Next()
 	}
+}
 
-	r.Put("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform, func(c *fiber.Ctx) error {
+func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		idParam := c.Params("id")
 		userAccountID, err := strconv.Atoi(idParam)
@@ -88,9 +88,11 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 			AuthorizeSocialPlatformInfo: &resp,
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "authorized social platform updated", &ud)
-	})
+	}
+}
 
-	r.Delete("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform, func(c *fiber.Ctx) error {
+func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		idParam := c.Params("id")
 		authorizeSocialPlatformAccountID, err := strconv.Atoi(idParam)
@@ -131,5 +133,12 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 			AuthorizeSocialPlatformInfo: &resp,
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "authorized social platform updated", &ud)
-	})
+	}
+}
+
+func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id")
+
+	r.Put("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleAuthorizeSocialPlatform(apiHelper))
+	r.Delete("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
 }
