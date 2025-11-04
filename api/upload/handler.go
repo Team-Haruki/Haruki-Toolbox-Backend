@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType, int64) {
@@ -184,7 +184,7 @@ func HandleProxyUpload(
 	dataType harukiUtils.UploadDataType,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 ) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 
 		serverStr := c.Params("server")

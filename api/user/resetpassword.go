@@ -11,15 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var payload harukiAPIHelper.SendResetPasswordPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid payload", nil)
 		}
 
@@ -53,9 +53,9 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 }
 
 func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var payload harukiAPIHelper.ResetPasswordPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid payload", nil)
 		}
 		key := "resetpw:" + payload.Email

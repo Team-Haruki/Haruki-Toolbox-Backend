@@ -7,13 +7,13 @@ import (
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
-		ctx := c.Context()
+		ctx := c.RequestCtx()
 		client := apiHelper.DBManager.DB.SocialPlatformInfo
 
 		info, err := client.Query().
@@ -29,7 +29,7 @@ func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 }
 
 func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		idParam := c.Params("id")
 		userAccountID, err := strconv.Atoi(idParam)
@@ -38,11 +38,11 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		}
 
 		var payload harukiAPIHelper.AuthorizeSocialPlatformPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
-		ctx := c.Context()
+		ctx := c.RequestCtx()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
 
 		existing, err := client.Query().
@@ -92,7 +92,7 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 }
 
 func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		idParam := c.Params("id")
 		authorizeSocialPlatformAccountID, err := strconv.Atoi(idParam)
@@ -100,7 +100,7 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid id parameter", nil)
 		}
 
-		ctx := c.Context()
+		ctx := c.RequestCtx()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
 
 		_, err = client.Delete().
@@ -137,8 +137,9 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 }
 
 func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id")
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id", apiHelper.SessionHandler.VerifySessionToken)
 
-	r.Put("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleAuthorizeSocialPlatform(apiHelper))
-	r.Delete("/", apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
+	r.RouteChain("/").
+		Put(verifyUserHasVerifiedSocialPlatform(apiHelper), handleAuthorizeSocialPlatform(apiHelper)).
+		Delete(apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
 }

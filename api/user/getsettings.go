@@ -8,11 +8,11 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 

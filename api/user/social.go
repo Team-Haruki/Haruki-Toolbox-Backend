@@ -9,14 +9,14 @@ import (
 	"haruki-suite/utils/database/postgresql/user"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
 func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.SendQQMailPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		ctx := context.Background()
@@ -37,9 +37,9 @@ func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fib
 }
 
 func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.VerifyQQMailPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		email := fmt.Sprintf("%s@qq.com", req.QQ)
@@ -74,11 +74,11 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 }
 
 func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		var req harukiAPIHelper.GenerateSocialPlatformCodePayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
@@ -118,7 +118,7 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 }
 
 func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		statusToken := c.Params("status_token")
 		userID := c.Locals("userID").(string)
 		ctx := context.Background()
@@ -152,7 +152,7 @@ func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 }
 
 func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 
@@ -180,7 +180,7 @@ func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 }
 
 func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		authHeader := c.Get("Authorization")
 		if len(authHeader) < 7 || authHeader[:7] != "Bearer " {
@@ -192,7 +192,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		}
 
 		var req harukiAPIHelper.HarukiBotVerifySocialPlatformPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
@@ -245,13 +245,13 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 }
 
 func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform")
+	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform", apiHelper.SessionHandler.VerifySessionToken)
 
-	social.Post("/send-qq-mail", apiHelper.SessionHandler.VerifySessionToken, handleSendQQMail(apiHelper))
-	social.Post("/verify-qq-mail", apiHelper.SessionHandler.VerifySessionToken, handleVerifyQQMail(apiHelper))
-	social.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateVerificationCode(apiHelper))
-	social.Get("/verification-status/:status_token", apiHelper.SessionHandler.VerifySessionToken, handleVerificationStatus(apiHelper))
-	social.Delete("/clear", apiHelper.SessionHandler.VerifySessionToken, handleClearSocialPlatform(apiHelper))
+	social.Post("/send-qq-mail", handleSendQQMail(apiHelper))
+	social.Post("/verify-qq-mail", handleVerifyQQMail(apiHelper))
+	social.Post("/generate-verification-code", handleGenerateVerificationCode(apiHelper))
+	social.Get("/verification-status/:status_token", handleVerificationStatus(apiHelper))
+	social.Delete("/clear", handleClearSocialPlatform(apiHelper))
 
 	apiHelper.Router.Post("/api/verify-social-platform", handleVerifySocialPlatform(apiHelper))
 }

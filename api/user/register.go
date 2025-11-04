@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"golang.org/x/crypto/bcrypt"
 
 	"haruki-suite/utils/database/postgresql/emailinfo"
@@ -16,9 +16,9 @@ import (
 )
 
 func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.RegisterPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request payload", nil)
 		}
 
@@ -85,7 +85,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 	}
 }
 
-func extractRemoteIP(c *fiber.Ctx) string {
+func extractRemoteIP(c fiber.Ctx) string {
 	xff := c.Get("X-Forwarded-For")
 	if xff != "" {
 		if idx := strings.IndexByte(xff, ','); idx >= 0 {
@@ -96,7 +96,7 @@ func extractRemoteIP(c *fiber.Ctx) string {
 	return c.IP()
 }
 
-func verifyEmailOTP(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) error {
+func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) error {
 	redisKey := "email:verify:" + email
 	var storedOTP string
 	exists, err := apiHelper.DBManager.Redis.GetCache(context.Background(), redisKey, &storedOTP)
@@ -109,7 +109,7 @@ func verifyEmailOTP(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	return nil
 }
 
-func checkEmailAvailability(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string) error {
+func checkEmailAvailability(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string) error {
 	userExists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(email)).Exist(context.Background())
 	if err != nil {
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "database error", nil)

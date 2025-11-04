@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		authorization := c.Get("Authorization")
 		userAgent := c.Get("User-Agent")
 
@@ -29,7 +29,7 @@ func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Ha
 }
 
 func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		serverStr := c.Params("server")
 		dataTypeStr := c.Params("data_type")
 		userIDStr := c.Params("user_id")
@@ -58,12 +58,12 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 				gameaccountbinding.ServerEQ(string(server)),
 				gameaccountbinding.GameUserIDEQ(userIDStr),
 			).
-			First(c.Context())
+			First(c.RequestCtx())
 		if err != nil {
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "game account not found", nil)
 		}
 
-		dbUser, err := gameAccountBinding.QueryUser().WithSocialPlatformInfo().Only(c.Context())
+		dbUser, err := gameAccountBinding.QueryUser().WithSocialPlatformInfo().Only(c.RequestCtx())
 		if err != nil {
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "game account not found", nil)
 		}
@@ -73,7 +73,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "forbidden: invalid platform or platform_user_id for this user", nil)
 		}
 
-		result, err := apiHelper.DBManager.Mongo.GetData(c.Context(), int64(userID), string(server), dataType)
+		result, err := apiHelper.DBManager.Mongo.GetData(c.RequestCtx(), int64(userID), string(server), dataType)
 		if err != nil {
 			return harukiApiHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
@@ -86,7 +86,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 	}
 }
 
-func isUserAuthorized(c *fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) bool {
+func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) bool {
 	// Check primary social platform info
 	if dbUser.Edges.SocialPlatformInfo != nil &&
 		dbUser.Edges.SocialPlatformInfo.Platform == platform &&
@@ -101,7 +101,7 @@ func isUserAuthorized(c *fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRout
 			authorizesocialplatforminfo.PlatformEQ(platform),
 			authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
 		).
-		Exist(c.Context())
+		Exist(c.RequestCtx())
 	if err == nil && exists {
 		return true
 	}
@@ -109,7 +109,7 @@ func isUserAuthorized(c *fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRout
 	return false
 }
 
-func processRequestKeys(c *fiber.Ctx, result map[string]interface{}) error {
+func processRequestKeys(c fiber.Ctx, result map[string]interface{}) error {
 	requestKey := c.Query("key")
 	if requestKey != "" {
 		keys := strings.Split(requestKey, ",")
