@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 var dataChunks map[string][]harukiUtils.DataChunk
@@ -26,7 +26,7 @@ type dataUploadHeader struct {
 }
 
 func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "This endpoint is temporarily disabled", nil)
 		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
 		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
@@ -108,7 +108,7 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 }
 
 func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 
@@ -134,7 +134,7 @@ func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 }
 
 func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 

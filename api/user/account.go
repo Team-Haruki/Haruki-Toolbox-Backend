@@ -12,15 +12,15 @@ import (
 
 	"haruki-suite/config"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var payload harukiAPIHelper.UpdateProfilePayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
 
@@ -81,9 +81,9 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 }
 
 func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var payload harukiAPIHelper.ChangePasswordPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
 
@@ -108,9 +108,9 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 }
 
 func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id", apiHelper.SessionHandler.VerifySessionToken)
 
-	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, handleUpdateProfile(apiHelper))
-	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, handleChangePassword(apiHelper))
+	r.Put("/profile", handleUpdateProfile(apiHelper))
+	r.Put("/change-password", handleChangePassword(apiHelper))
 
 }

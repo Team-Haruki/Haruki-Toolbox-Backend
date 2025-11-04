@@ -7,11 +7,11 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("user_id")

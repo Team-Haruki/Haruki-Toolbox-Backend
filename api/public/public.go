@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func handleGetPublicData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
@@ -68,7 +68,7 @@ func handleGetPublicData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	}
 }
 
-func fetchGameAccountBinding(c *fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server harukiUtils.SupportedDataUploadServer, userIDStr string) (*postgresql.GameAccountBinding, error) {
+func fetchGameAccountBinding(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server harukiUtils.SupportedDataUploadServer, userIDStr string) (*postgresql.GameAccountBinding, error) {
 	record, err := apiHelper.DBManager.DB.GameAccountBinding.
 		Query().
 		Where(
@@ -83,8 +83,8 @@ func fetchGameAccountBinding(c *fiber.Ctx, ctx context.Context, apiHelper *haruk
 	return record, nil
 }
 
-func fetchUserData(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) (map[string]interface{}, error) {
-	result, err := apiHelper.DBManager.Mongo.GetData(c.Context(), userID, string(server), dataType)
+func fetchUserData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) (map[string]interface{}, error) {
+	result, err := apiHelper.DBManager.Mongo.GetData(c.RequestCtx(), userID, string(server), dataType)
 	if err != nil {
 		return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err), nil)
 	}
@@ -94,7 +94,7 @@ func fetchUserData(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 	return result, nil
 }
 
-func validatePublicAPIAccess(c *fiber.Ctx, record *postgresql.GameAccountBinding, dataType harukiUtils.UploadDataType) error {
+func validatePublicAPIAccess(c fiber.Ctx, record *postgresql.GameAccountBinding, dataType harukiUtils.UploadDataType) error {
 	if dataType == harukiUtils.UploadDataTypeSuite {
 		if record.Suite == nil || !record.Suite.AllowPublicApi {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
@@ -107,7 +107,7 @@ func validatePublicAPIAccess(c *fiber.Ctx, record *postgresql.GameAccountBinding
 	return nil
 }
 
-func processDataByType(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dataType harukiUtils.UploadDataType, result map[string]interface{}) (interface{}, error) {
+func processDataByType(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dataType harukiUtils.UploadDataType, result map[string]interface{}) (interface{}, error) {
 	if dataType == harukiUtils.UploadDataTypeSuite {
 		return processSuiteData(c, result, apiHelper)
 	} else if dataType == harukiUtils.UploadDataTypeMysekai {
@@ -116,7 +116,7 @@ func processDataByType(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Unknown error.", nil)
 }
 
-func processSuiteData(c *fiber.Ctx, result map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
+func processSuiteData(c fiber.Ctx, result map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
 	filteredUserGamedata := extractFilteredUserGamedata(result)
 	requestKey := c.Query("key")
 
@@ -142,7 +142,7 @@ func extractFilteredUserGamedata(result map[string]interface{}) map[string]inter
 	return filtered
 }
 
-func processRequestedSuiteKeys(c *fiber.Ctx, requestKey string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
+func processRequestedSuiteKeys(c fiber.Ctx, requestKey string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
 	keys := strings.Split(requestKey, ",")
 
 	if len(keys) == 1 {
@@ -152,7 +152,7 @@ func processRequestedSuiteKeys(c *fiber.Ctx, requestKey string, result map[strin
 	return processMultipleSuiteKeys(c, keys, result, filteredUserGamedata, apiHelper)
 }
 
-func processSingleSuiteKey(c *fiber.Ctx, key string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
+func processSingleSuiteKey(c fiber.Ctx, key string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
 	if !harukiAPIHelper.ArrayContains(apiHelper.PublicAPIAllowedKeys, key) && key != "userGamedata" {
 		return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "Invalid request key", nil)
 	}
@@ -162,7 +162,7 @@ func processSingleSuiteKey(c *fiber.Ctx, key string, result map[string]interface
 	return GetValueFromResult(result, key), nil
 }
 
-func processMultipleSuiteKeys(c *fiber.Ctx, keys []string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
+func processMultipleSuiteKeys(c fiber.Ctx, keys []string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (interface{}, error) {
 	suite := map[string]interface{}{}
 	includeUserGamedata := false
 
@@ -194,7 +194,7 @@ func buildDefaultSuiteResponse(result map[string]interface{}, apiHelper *harukiA
 	return suite
 }
 
-func processMysekaiData(c *fiber.Ctx, result map[string]interface{}) interface{} {
+func processMysekaiData(c fiber.Ctx, result map[string]interface{}) interface{} {
 	requestKey := c.Query("key")
 	mysekaiData := map[string]interface{}{}
 	if requestKey != "" {

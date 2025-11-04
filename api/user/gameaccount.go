@@ -11,15 +11,15 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		var req harukiAPIHelper.GameAccountBindingPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		code := GenerateCode(true)
@@ -59,14 +59,14 @@ func getUserBindings(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolb
 }
 
 func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
 		var req harukiAPIHelper.GameAccountBindingPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
@@ -104,14 +104,14 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 }
 
 func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
 		var req harukiAPIHelper.GameAccountBindingPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
@@ -151,7 +151,7 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 }
 
 func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
@@ -202,7 +202,7 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return existing, nil
 }
 
-func checkIfAlreadyVerified(c *fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
+func checkIfAlreadyVerified(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
 	if existing != nil && existing.Verified {
 		if existing.Edges.User.ID != userID {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "this account is already bound by another user", nil)
@@ -229,7 +229,7 @@ func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 	return code, nil
 }
 
-func verifyGameAccountOwnership(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
+func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
 	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
 	if err != nil || resultInfo == nil {
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, fmt.Sprintf("request sekai account profile failed: %v", err), nil)
@@ -285,10 +285,11 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 }
 
 func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account", apiHelper.SessionHandler.VerifySessionToken)
 
-	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateGameAccountVerificationCode(apiHelper))
-	r.Post("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleCreateGameAccountBinding(apiHelper))
-	r.Put("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleUpdateGameAccountBinding(apiHelper))
-	r.Delete("/:server/:game_user_id", apiHelper.SessionHandler.VerifySessionToken, handleDeleteGameAccountBinding(apiHelper))
+	r.Post("/generate-verification-code", handleGenerateGameAccountVerificationCode(apiHelper))
+	r.RouteChain("/:server/:game_user_id").
+		Post(handleCreateGameAccountBinding(apiHelper)).
+		Put(handleUpdateGameAccountBinding(apiHelper)).
+		Delete(handleDeleteGameAccountBinding(apiHelper))
 }

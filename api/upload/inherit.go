@@ -7,11 +7,11 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	harukiSekai "haruki-suite/utils/sekai"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		serverStr := c.Params("server")
 		uploadTypeStr := c.Params("upload_type")
 
@@ -24,7 +24,7 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 		data := new(harukiUtils.InheritInformation)
-		if err := c.BodyParser(data); err != nil {
+		if err := c.Bind().Body(data); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnprocessableEntity, "Validation error: "+err.Error(), nil)
 		}
 
@@ -51,7 +51,7 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	}
 }
 
-func uploadMysekaiDataIfNeeded(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
+func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
 	if uploadType != harukiUtils.UploadDataTypeMysekai {
 		return nil
 	}
@@ -75,7 +75,7 @@ func uploadMysekaiDataIfNeeded(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	return nil
 }
 
-func uploadSuiteData(c *fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
+func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
 	if result.Suite == nil {
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Retrieve suite data failed: unknown error", nil)
 	}
