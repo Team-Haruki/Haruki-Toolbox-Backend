@@ -90,7 +90,13 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p dist/pkg
-          mv artifacts/build-artifacts-*/pkg/* dist/pkg/ 2>/dev/null || true
+          for artifact_dir in artifacts/build-artifacts-*; do
+            for file in "$artifact_dir"/pkg/*; do
+              if [ -f "$file" ]; then
+                mv "$file" dist/pkg/
+              fi
+            done
+          done
           cd dist/pkg
           shopt -s nullglob
           sha256sum * > "SHA256SUMS-${VERSION}.txt"
