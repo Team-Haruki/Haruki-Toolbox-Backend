@@ -265,7 +265,9 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, se
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		_ = cursor.Close(ctx)
+	}(cursor, ctx)
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {
@@ -298,7 +300,9 @@ func (m *MongoDBManager) GetWebhookSubscribers(ctx context.Context, webhookID st
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		_ = cursor.Close(ctx)
+	}(cursor, ctx)
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {
@@ -331,7 +335,9 @@ func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server
 												"$map": bson.M{
 													"input": "$$layout.mysekaiFixtures",
 													"as":    "fixture",
-													"in":    bson.M{"$eq": bson.A{"$$fixture.mysekaiFixtureId", fixtureID}},
+													"in": bson.M{
+														"$eq": bson.A{"$$fixture.mysekaiFixtureId", fixtureID},
+													},
 												},
 											},
 										},
@@ -345,9 +351,6 @@ func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server
 				},
 			},
 		}}},
-		bson.D{{Key: "$match", Value: bson.M{
-			"mysekaiSiteIds": bson.M{"$ne": bson.A{}},
-		}}},
 	}
 
 	aggOpts := options.Aggregate()
@@ -356,7 +359,9 @@ func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		_ = cursor.Close(ctx)
+	}(cursor, ctx)
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {
