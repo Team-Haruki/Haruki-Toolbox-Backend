@@ -70,15 +70,32 @@ jobs:
               ;;
           esac
 
-      - name: Generate checksums
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts-${{ matrix.platform }}
+          path: dist/pkg/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+
+      - name: Prepare release files
         run: |
-          set -euo pipefail
+          mkdir -p dist/pkg
+          mv artifacts/build-artifacts-*/pkg/* dist/pkg/ 2>/dev/null || true
           cd dist/pkg
           shopt -s nullglob
           sha256sum * > "SHA256SUMS-${VERSION}.txt"
 
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
