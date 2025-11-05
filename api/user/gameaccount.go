@@ -285,11 +285,11 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 }
 
 func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account", apiHelper.SessionHandler.VerifySessionToken)
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
 
-	r.Post("/generate-verification-code", handleGenerateGameAccountVerificationCode(apiHelper))
+	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateGameAccountVerificationCode(apiHelper))
 	r.RouteChain("/:server/:game_user_id").
-		Post(handleCreateGameAccountBinding(apiHelper)).
-		Put(handleUpdateGameAccountBinding(apiHelper)).
-		Delete(handleDeleteGameAccountBinding(apiHelper))
+		Post(apiHelper.SessionHandler.VerifySessionToken, handleCreateGameAccountBinding(apiHelper)).
+		Put(apiHelper.SessionHandler.VerifySessionToken, handleUpdateGameAccountBinding(apiHelper)).
+		Delete(apiHelper.SessionHandler.VerifySessionToken, handleDeleteGameAccountBinding(apiHelper))
 }
