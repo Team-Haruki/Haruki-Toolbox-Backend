@@ -38,78 +38,123 @@ func cleanSuite(suite map[string]interface{}) map[string]interface{} {
 	return suite
 }
 func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) (map[string]interface{}, error) {
-	if dataType == utils.UploadDataTypeSuite && parsedUserID != nil && expectedUserID != nil && *expectedUserID != *parsedUserID {
-		return nil, fmt.Errorf("invalid userID: %s, expected: %s", strconv.FormatInt(*parsedUserID, 10), strconv.FormatInt(*expectedUserID, 10))
+	if err := validateUserIDMatch(expectedUserID, parsedUserID, dataType); err != nil {
+		return nil, err
 	}
+
 	if dataType == utils.UploadDataTypeMysekai {
-		updatedResources, ok := data["updatedResources"].(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid data: missing updatedResources")
-		}
-
-		photos, ok := updatedResources["userMysekaiPhotos"].([]interface{})
-		if !ok || len(photos) == 0 {
-			return nil, fmt.Errorf("no userMysekaiPhotos found, it seems you may not have taken a photo yet")
-		}
-
-		firstPhoto, ok := photos[0].(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid photo data")
-		}
-
-		imagePath, ok := firstPhoto["imagePath"].(string)
-		if imagePath == "" || !ok {
-			return nil, fmt.Errorf("missing imagePath")
-		}
-
-		if server == utils.SupportedDataUploadServerJP || server == utils.SupportedDataUploadServerEN {
-			hashPattern := regexp.MustCompile(`^[a-f0-9]{64}/[a-f0-9]{64}$`)
-			if hashPattern.MatchString(imagePath) {
-			} else {
-				return nil, fmt.Errorf("invalid server: %s", server)
-			}
-		} else {
-			uidPattern := regexp.MustCompile(`^(\d+)_([0-9a-fA-F-]{36})$`)
-			matches := uidPattern.FindStringSubmatch(imagePath)
-			if len(matches) == 3 {
-				uid := matches[1]
-				uidInt, err := strconv.ParseInt(uid, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("invalid uid format")
-				}
-				if expectedUserID == nil || uidInt != *expectedUserID {
-					return nil, fmt.Errorf("userId %s does not match expected UserId %d", uid, *expectedUserID)
-				}
-				resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
-				if resultInfo == nil {
-					if err != nil {
-						return nil, err
-					}
-					return nil, fmt.Errorf("failed to get user profile")
-				}
-				if !resultInfo.ServerAvailable {
-					return nil, fmt.Errorf("sekai api is unavailable")
-				}
-				if !resultInfo.AccountExists {
-					return nil, fmt.Errorf("game account not found")
-				}
-			} else {
-				return nil, fmt.Errorf("invalid imagePath format")
-			}
+		if err := h.validateMysekaiData(data, expectedUserID, server); err != nil {
+			return nil, err
 		}
 	}
+
 	if dataType == utils.UploadDataTypeSuite {
-		_, ok := data["userGamedata"]
-		_, ok2 := data["userProfile"]
-		if !ok && !ok2 {
-			return nil, fmt.Errorf("invalid data, it seems you may have uploaded a wrong suite data")
+		if err := validateSuiteData(data); err != nil {
+			return nil, err
 		}
 		data = cleanSuite(data)
 	}
+
 	data["upload_time"] = time.Now().Unix()
 	data["_id"] = expectedUserID
 	data["server"] = string(server)
 	return data, nil
+}
+
+func validateUserIDMatch(expectedUserID, parsedUserID *int64, dataType utils.UploadDataType) error {
+	if dataType == utils.UploadDataTypeSuite && parsedUserID != nil && expectedUserID != nil && *expectedUserID != *parsedUserID {
+		return fmt.Errorf("invalid userID: %s, expected: %s", strconv.FormatInt(*parsedUserID, 10), strconv.FormatInt(*expectedUserID, 10))
+	}
+	return nil
+}
+
+func (h *DataHandler) validateMysekaiData(data map[string]interface{}, expectedUserID *int64, server utils.SupportedDataUploadServer) error {
+	updatedResources, ok := data["updatedResources"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid data: missing updatedResources")
+	}
+
+	photos, ok := updatedResources["userMysekaiPhotos"].([]interface{})
+	if !ok || len(photos) == 0 {
+		return fmt.Errorf("no userMysekaiPhotos found, it seems you may not have taken a photo yet")
+	}
+
+	firstPhoto, ok := photos[0].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid photo data")
+	}
+
+	imagePath, ok := firstPhoto["imagePath"].(string)
+	if imagePath == "" || !ok {
+		return fmt.Errorf("missing imagePath")
+	}
+
+	return h.validateImagePath(imagePath, expectedUserID, server)
+}
+
+func (h *DataHandler) validateImagePath(imagePath string, expectedUserID *int64, server utils.SupportedDataUploadServer) error {
+	if server == utils.SupportedDataUploadServerJP || server == utils.SupportedDataUploadServerEN {
+		return validateJPENImagePath(imagePath, server)
+	}
+	return h.validateOtherServerImagePath(imagePath, expectedUserID, server)
+}
+
+func validateJPENImagePath(imagePath string, server utils.SupportedDataUploadServer) error {
+	hashPattern := regexp.MustCompile(`^[a-f0-9]{64}/[a-f0-9]{64}$`)
+	if !hashPattern.MatchString(imagePath) {
+		return fmt.Errorf("invalid server: %s", server)
+	}
+	return nil
+}
+
+func (h *DataHandler) validateOtherServerImagePath(imagePath string, expectedUserID *int64, server utils.SupportedDataUploadServer) error {
+	uidPattern := regexp.MustCompile(`^(\d+)_([0-9a-fA-F-]{36})$`)
+	matches := uidPattern.FindStringSubmatch(imagePath)
+	if len(matches) != 3 {
+		return fmt.Errorf("invalid imagePath format")
+	}
+
+	uid := matches[1]
+	uidInt, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid uid format")
+	}
+
+	if expectedUserID == nil {
+		return fmt.Errorf("expected user ID is nil")
+	}
+
+	if uidInt != *expectedUserID {
+		return fmt.Errorf("userId %s does not match expected UserId %d", uid, *expectedUserID)
+	}
+
+	return h.verifyGameAccountExists(uid, server)
+}
+
+func (h *DataHandler) verifyGameAccountExists(uid string, server utils.SupportedDataUploadServer) error {
+	resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
+	if resultInfo == nil {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("failed to get user profile")
+	}
+	if !resultInfo.ServerAvailable {
+		return fmt.Errorf("sekai api is unavailable")
+	}
+	if !resultInfo.AccountExists {
+		return fmt.Errorf("game account not found")
+	}
+	return nil
+}
+
+func validateSuiteData(data map[string]interface{}) error {
+	_, ok := data["userGamedata"]
+	_, ok2 := data["userProfile"]
+	if !ok && !ok2 {
+		return fmt.Errorf("invalid data, it seems you may have uploaded a wrong suite data")
+	}
+	return nil
 }
 
 func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, isPublicAPI bool, dataType utils.UploadDataType, expectedUserID *int64, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) (*utils.HandleDataResult, error) {
@@ -125,67 +170,11 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		return nil, fmt.Errorf("invalid unpacked data type")
 	}
 
-	if status, ok := unpackedMap["httpStatus"]; ok {
-		errCode, _ := unpackedMap["errorCode"].(string)
-		var statusCode int
-		switch v := status.(type) {
-		case float64:
-			statusCode = int(v)
-		case int:
-			statusCode = v
-		case int32:
-			statusCode = int(v)
-		case int64:
-			statusCode = int(v)
-		case uint16:
-			statusCode = int(v)
-		case uint32:
-			statusCode = int(v)
-		case uint64:
-			statusCode = int(v)
-		case json.Number:
-			if i64, err := v.Int64(); err == nil {
-				statusCode = int(i64)
-			}
-		default:
-			h.Logger.Debugf("unexpected httpStatus type: %T, value: %v", v, v)
-		}
-		return &utils.HandleDataResult{
-			Status:       &statusCode,
-			ErrorMessage: &errCode,
-		}, fmt.Errorf("data retrieve error")
+	if result := h.checkForHTTPError(unpackedMap); result != nil {
+		return result, fmt.Errorf("data retrieve error")
 	}
 
-	var extractedUserID *int64 = nil
-	if gameData, ok := unpackedMap["userGamedata"].(map[string]interface{}); ok {
-		switch v := gameData["userId"].(type) {
-		case json.Number:
-			if id64, err := v.Int64(); err == nil {
-				tmp := id64
-				extractedUserID = &tmp
-			} else if u64, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
-				tmp := int64(u64)
-				extractedUserID = &tmp
-			}
-		case string:
-			if u64, err := strconv.ParseUint(v, 10, 64); err == nil {
-				tmp := int64(u64)
-				extractedUserID = &tmp
-			}
-		case float64:
-			tmp := int64(v)
-			extractedUserID = &tmp
-		case int64:
-			tmp := v
-			extractedUserID = &tmp
-		case uint64:
-			tmp := int64(v)
-			extractedUserID = &tmp
-		default:
-			h.Logger.Debugf("userId raw type: %T, value: %v", v, v)
-		}
-
-	}
+	extractedUserID := extractUserIDFromGameData(unpackedMap, h.Logger)
 
 	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType, settings)
 	if err != nil {
@@ -203,6 +192,89 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 	}
 
 	return &utils.HandleDataResult{UserID: expectedUserID}, nil
+}
+
+func (h *DataHandler) checkForHTTPError(unpackedMap map[string]interface{}) *utils.HandleDataResult {
+	status, ok := unpackedMap["httpStatus"]
+	if !ok {
+		return nil
+	}
+
+	errCode, _ := unpackedMap["errorCode"].(string)
+	statusCode := convertToStatusCode(status, h.Logger)
+	return &utils.HandleDataResult{
+		Status:       &statusCode,
+		ErrorMessage: &errCode,
+	}
+}
+
+func convertToStatusCode(status interface{}, logger *harukiLogger.Logger) int {
+	switch v := status.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case uint16:
+		return int(v)
+	case uint32:
+		return int(v)
+	case uint64:
+		return int(v)
+	case json.Number:
+		if i64, err := v.Int64(); err == nil {
+			return int(i64)
+		}
+	default:
+		logger.Debugf("unexpected httpStatus type: %T, value: %v", v, v)
+	}
+	return 0
+}
+
+func extractUserIDFromGameData(unpackedMap map[string]interface{}, logger *harukiLogger.Logger) *int64 {
+	gameData, ok := unpackedMap["userGamedata"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	userIDValue, ok := gameData["userId"]
+	if !ok {
+		return nil
+	}
+
+	return convertToInt64Pointer(userIDValue, logger)
+}
+
+func convertToInt64Pointer(value interface{}, logger *harukiLogger.Logger) *int64 {
+	switch v := value.(type) {
+	case json.Number:
+		if id64, err := v.Int64(); err == nil {
+			return &id64
+		}
+		if u64, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
+			tmp := int64(u64)
+			return &tmp
+		}
+	case string:
+		if u64, err := strconv.ParseUint(v, 10, 64); err == nil {
+			tmp := int64(u64)
+			return &tmp
+		}
+	case float64:
+		tmp := int64(v)
+		return &tmp
+	case int64:
+		return &v
+	case uint64:
+		tmp := int64(v)
+		return &tmp
+	default:
+		logger.Debugf("userId raw type: %T, value: %v", v, v)
+	}
+	return nil
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {

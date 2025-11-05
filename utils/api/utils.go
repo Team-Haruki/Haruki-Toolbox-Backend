@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -22,11 +22,11 @@ func NewResponse[T any](status int, message string, data *T) *GenericResponse[T]
 	}
 }
 
-func UpdatedDataResponse[T any](c *fiber.Ctx, status int, message string, data *T) error {
+func UpdatedDataResponse[T any](c fiber.Ctx, status int, message string, data *T) error {
 	return c.Status(status).JSON(NewResponse(status, message, data))
 }
 
-func ResponseWithStruct[T any](c *fiber.Ctx, status int, data T) error {
+func ResponseWithStruct[T any](c fiber.Ctx, status int, data T) error {
 	return c.Status(status).JSON(data)
 }
 
@@ -61,7 +61,7 @@ func (s *SessionHandler) IssueSession(userID string) (string, error) {
 	return signed, nil
 }
 
-func (s *SessionHandler) VerifySessionToken(c *fiber.Ctx) error {
+func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	auth := c.Get("Authorization")
 	if auth == "" {
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)

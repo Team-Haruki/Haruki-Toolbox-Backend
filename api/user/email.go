@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func GenerateCode(antiCensor bool) string {
@@ -28,7 +28,7 @@ func GenerateCode(antiCensor bool) string {
 	return code
 }
 
-func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
 	xForwardedFor := c.Get("X-Forwarded-For")
 	clientIP := ""
 	if xForwardedFor != "" {
@@ -54,7 +54,7 @@ func SendEmailHandler(c *fiber.Ctx, email, challengeToken string, helper *haruki
 	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "verification code sent", nil)
 }
 
-func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
+func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
 	ctx := context.Background()
 	var code string
 	found, err := helper.DBManager.Redis.GetCache(ctx, "email:verify:"+email, &code)
@@ -73,12 +73,10 @@ func VerifyEmailHandler(c *fiber.Ctx, email, oneTimePassword string, helper *har
 	return true, nil
 }
 
-func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	email := apiHelper.Router.Group("/api/email")
-
-	email.Post("/send", func(c *fiber.Ctx) error {
+func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.SendEmailPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		ctx := context.Background()
@@ -90,12 +88,13 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already exists", nil)
 		}
 		return SendEmailHandler(c, req.Email, req.ChallengeToken, apiHelper)
+	}
+}
 
-	})
-
-	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.VerifyEmailPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		ok, err := VerifyEmailHandler(c, req.Email, req.OneTimePassword, apiHelper)
@@ -129,7 +128,14 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				Verified: true,
 			},
 		}
-		harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
+		_ = harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "email verified", &ud)
-	})
+	}
+}
+
+func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	email := apiHelper.Router.Group("/api/email")
+
+	email.Post("/send", handleSendEmail(apiHelper))
+	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, handleVerifyEmail(apiHelper))
 }
