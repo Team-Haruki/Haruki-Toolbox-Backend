@@ -245,13 +245,13 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 }
 
 func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform", apiHelper.SessionHandler.VerifySessionToken)
+	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform")
 
-	social.Post("/send-qq-mail", handleSendQQMail(apiHelper))
-	social.Post("/verify-qq-mail", handleVerifyQQMail(apiHelper))
-	social.Post("/generate-verification-code", handleGenerateVerificationCode(apiHelper))
-	social.Get("/verification-status/:status_token", handleVerificationStatus(apiHelper))
-	social.Delete("/clear", handleClearSocialPlatform(apiHelper))
+	social.Post("/send-qq-mail", apiHelper.SessionHandler.VerifySessionToken, handleSendQQMail(apiHelper))
+	social.Post("/verify-qq-mail", apiHelper.SessionHandler.VerifySessionToken, handleVerifyQQMail(apiHelper))
+	social.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateVerificationCode(apiHelper))
+	social.Get("/verification-status/:status_token", apiHelper.SessionHandler.VerifySessionToken, handleVerificationStatus(apiHelper))
+	social.Delete("/clear", apiHelper.SessionHandler.VerifySessionToken, handleClearSocialPlatform(apiHelper))
 
 	apiHelper.Router.Post("/api/verify-social-platform", handleVerifySocialPlatform(apiHelper))
 }
