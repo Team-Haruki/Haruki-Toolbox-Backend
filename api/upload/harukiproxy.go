@@ -14,7 +14,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/hashicorp/go-version"
 )
 
@@ -29,7 +29,7 @@ func unpackKeyFromHelper(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 
 func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	if apiHelper.HarukiProxyUserAgent != "" && apiHelper.HarukiProxyVersion != "" && apiHelper.HarukiProxySecret != "" {
-		return func(c *fiber.Ctx) error {
+		return func(c fiber.Ctx) error {
 			requestUserAgent := c.Get("User-Agent")
 			requestSecret := c.Get("X-Haruki-Toolbox-Secret")
 
@@ -65,7 +65,7 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 		}
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		return c.Next()
 	}
 }
@@ -104,10 +104,8 @@ func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	return plaintext, nil
 }
 
-func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/harukiproxy/:server/:user_id/:data_type", validateHarukiProxyClientHeader(apiHelper))
-
-	api.Post("/upload", func(c *fiber.Ctx) error {
+func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("user_id")
 		dataTypeStr := c.Params("data_type")
@@ -147,5 +145,11 @@ func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		}
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)
-	})
+	}
+}
+
+func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/harukiproxy/:server/:user_id/:data_type", validateHarukiProxyClientHeader(apiHelper))
+
+	api.Post("/upload", handleHarukiProxyUpload(apiHelper))
 }

@@ -5,12 +5,12 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	harukiMongo "haruki-suite/utils/database/mongo"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		jwtToken := c.Get("X-Haruki-Suite-Webhook-Token")
 		if jwtToken == "" {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "Missing X-Haruki-Suite-Webhook-Token header", nil)
@@ -37,7 +37,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "Invalid token payload", nil)
 		}
 
-		user, err := manager.GetWebhookUser(c.Context(), _id, credential)
+		user, err := manager.GetWebhookUser(c.RequestCtx(), _id, credential)
 		if err != nil || user == nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "Webhook user not found or credential mismatch", nil)
 		}
@@ -47,19 +47,19 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 	}
 }
 
-func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper.WebhookJWTSecret, apiHelper.DBManager.Mongo))
-
-	api.Get("/subscribers", func(c *fiber.Ctx) error {
+func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		webhookID := c.Locals("webhook_id").(string)
-		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(c.Context(), webhookID)
+		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(c.RequestCtx(), webhookID)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, err.Error(), nil)
 		}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &users)
-	})
+	}
+}
 
-	api.Put("/:server/:data_type/:user_id", func(c *fiber.Ctx) error {
+func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		userID := c.Params("user_id")
 		webhookID := c.Locals("webhook_id").(string)
 
@@ -75,14 +75,16 @@ func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
-		err = apiHelper.DBManager.Mongo.AddWebhookPushUser(c.Context(), userID, string(server), string(dataType), webhookID)
+		err = apiHelper.DBManager.Mongo.AddWebhookPushUser(c.RequestCtx(), userID, string(server), string(dataType), webhookID)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, err.Error(), nil)
 		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Registered webhook push user successfully.", nil)
-	})
+	}
+}
 
-	api.Delete("/:server/:data_type/:user_id", func(c *fiber.Ctx) error {
+func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		userID := c.Params("user_id")
 		webhookID := c.Locals("webhook_id").(string)
 
@@ -98,10 +100,19 @@ func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 
-		err = apiHelper.DBManager.Mongo.RemoveWebhookPushUser(c.Context(), userID, string(server), string(dataType), webhookID)
+		err = apiHelper.DBManager.Mongo.RemoveWebhookPushUser(c.RequestCtx(), userID, string(server), string(dataType), webhookID)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, err.Error(), nil)
 		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Unregistered webhook push user successfully.", nil)
-	})
+	}
+}
+
+func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper.WebhookJWTSecret, apiHelper.DBManager.Mongo))
+
+	api.Get("/subscribers", handleGetSubscribers(apiHelper))
+	api.RouteChain("/:server/:data_type/:user_id").
+		Put(handlePutWebhookUser(apiHelper)).
+		Delete(handleDeleteWebhookUser(apiHelper))
 }

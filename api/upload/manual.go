@@ -7,13 +7,11 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
-func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/manual/:server/:user_id/:data_type", apiHelper.SessionHandler.VerifySessionToken)
-
-	api.Post("/upload", func(c *fiber.Ctx) error {
+func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("user_id")
@@ -48,5 +46,11 @@ func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		}
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)
-	})
+	}
+}
+
+func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	api := apiHelper.Router.Group("/manual/:server/:user_id/:data_type", apiHelper.SessionHandler.VerifySessionToken)
+
+	api.Post("/upload", handleManualUpload(apiHelper))
 }
