@@ -5,7 +5,7 @@ import (
 	"haruki-suite/utils/sekaiapi"
 	smtp2 "haruki-suite/utils/smtp"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type HarukiToolboxRouterHelpers struct {

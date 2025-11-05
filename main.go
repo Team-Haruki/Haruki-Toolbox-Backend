@@ -20,9 +20,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/bytedance/sonic"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/logger"
 	_ "github.com/lib/pq"
 )
 
@@ -38,7 +39,9 @@ func main() {
 			os.Exit(1)
 		}
 		loggerWriter = io.MultiWriter(os.Stdout, logFile)
-		defer logFile.Close()
+		defer func(logFile *os.File) {
+			_ = logFile.Close()
+		}(logFile)
 	}
 	mainLogger := harukiLogger.NewLogger("Main", harukiConfig.Cfg.Backend.LogLevel, loggerWriter)
 	mainLogger.Infof(fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
@@ -71,14 +74,23 @@ func main() {
 		mainLogger.Errorf("Failed creating schema resources: %v", err)
 		os.Exit(1)
 	}
-	defer entClient.Close()
+	defer func(entClient *dbManager.Client) {
+		_ = entClient.Close()
+	}(entClient)
 	smtpClient := harukiSMTP.NewSMTPClient(harukiConfig.Cfg.UserSystem.SMTP)
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, harukiConfig.Cfg.UserSystem.SessionSignToken)
 
 	app := fiber.New(fiber.Config{
-		BodyLimit: 30 * 1024 * 1024,
+		BodyLimit:   30 * 1024 * 1024,
+		JSONEncoder: sonic.Marshal,
+		JSONDecoder: sonic.Unmarshal,
+		ProxyHeader: harukiConfig.Cfg.Backend.ProxyHeader,
+		TrustProxy:  harukiConfig.Cfg.Backend.EnableTrustProxy,
+		TrustProxyConfig: fiber.TrustProxyConfig{
+			Proxies: harukiConfig.Cfg.Backend.TrustProxies,
+		},
 	})
-	app.Use(func(c *fiber.Ctx) error {
+	app.Use(func(c fiber.Ctx) error {
 		nonceBytes := make([]byte, 16)
 		if _, err := rand.Read(nonceBytes); err != nil {
 			return err
@@ -90,7 +102,7 @@ func main() {
 				"frame-src https://challenges.cloudflare.com; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: https:; "+
-				"connect-src 'self' https://your-api-domain.com; "+
+				"connect-src 'self' https://suite-api.haruki.seiunx.com; "+
 				"object-src 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self';",
@@ -107,8 +119,8 @@ func main() {
 			_, ok := allowedOrigins[origin]
 			return ok
 		},
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: true,
 	}))
 
@@ -120,8 +132,10 @@ func main() {
 				mainLogger.Errorf("Failed to open access log file: %v", err)
 				os.Exit(1)
 			}
-			defer accessLogFile.Close()
-			loggerConfig.Output = accessLogFile
+			defer func(accessLogFile *os.File) {
+				_ = accessLogFile.Close()
+			}(accessLogFile)
+			loggerConfig.Stream = accessLogFile
 		}
 		app.Use(logger.New(loggerConfig))
 	}
@@ -146,15 +160,21 @@ func main() {
 	harukiApi.RegisterRoutes(apiHelper)
 
 	addr := fmt.Sprintf("%s:%d", harukiConfig.Cfg.Backend.Host, harukiConfig.Cfg.Backend.Port)
+
+	listenConfig := fiber.ListenConfig{
+		DisableStartupMessage: true,
+	}
 	if harukiConfig.Cfg.Backend.SSL {
-		if err := app.ListenTLS(addr, harukiConfig.Cfg.Backend.SSLCert, harukiConfig.Cfg.Backend.SSLKey); err != nil {
-			mainLogger.Errorf("Failed to start HTTPS server: %v", err)
-			os.Exit(1)
+		mainLogger.Infof("SSL enabled, starting HTTPS server at %s", addr)
+		listenConfig.CertFile = harukiConfig.Cfg.Backend.SSLCert
+		listenConfig.CertKeyFile = harukiConfig.Cfg.Backend.SSLKey
+	}
+	if err := app.Listen(addr, listenConfig); err != nil {
+		serverType := "HTTP"
+		if harukiConfig.Cfg.Backend.SSL {
+			serverType = "HTTPS"
 		}
-	} else {
-		if err := app.Listen(addr); err != nil {
-			mainLogger.Errorf("Failed to start HTTP server: %v", err)
-			os.Exit(1)
-		}
+		mainLogger.Errorf("failed to start %s server: %v", serverType, err)
+		os.Exit(1)
 	}
 }

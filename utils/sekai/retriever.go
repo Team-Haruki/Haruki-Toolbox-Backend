@@ -153,7 +153,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 		return nil, nil
 	}
 
-	resp, status, _ = r.client.callAPI(ctx, "/module-maintenance/MYSEKAI_ROOM", "GET", nil, nil)
+	resp, _, _ = r.client.callAPI(ctx, "/module-maintenance/MYSEKAI_ROOM", "GET", nil, nil)
 	unpacked, _ = Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
 		return nil, nil

@@ -39,24 +39,24 @@ func (c *Client) init() error {
 }
 
 func (c *Client) Request(ctx context.Context, method, uri string, headers map[string]string, body []byte) (int, map[string]string, []byte, error) {
-    req := c.client.R().
-        SetContext(ctx).
-        SetHeaders(headers)
+	req := c.client.R().
+		SetContext(ctx).
+		SetHeaders(headers)
 
-    if body != nil && len(body) > 0 {
-        req.SetBody(body)
-    }
+	if body != nil && len(body) > 0 {
+		req.SetBody(body)
+	}
 
-    resp, err := req.Execute(method, uri)
-    if err != nil {
-        return 0, nil, nil, err
-    }
+	resp, err := req.Execute(method, uri)
+	if err != nil {
+		return 0, nil, nil, err
+	}
 
-    respHeaders := make(map[string]string, len(resp.Header()))
-    for k, v := range resp.Header() {
-        if len(v) > 0 {
-            respHeaders[k] = v[0]
-        }
-    }
-    return resp.StatusCode(), respHeaders, resp.Body(), nil
+	respHeaders := make(map[string]string, len(resp.Header()))
+	for k, v := range resp.Header() {
+		if len(v) > 0 {
+			respHeaders[k] = v[0]
+		}
+	}
+	return resp.StatusCode(), respHeaders, resp.Body(), nil
 }
