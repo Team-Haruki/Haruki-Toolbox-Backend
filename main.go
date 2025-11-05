@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -79,7 +80,16 @@ func main() {
 	smtpClient := harukiSMTP.NewSMTPClient(harukiConfig.Cfg.UserSystem.SMTP)
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, harukiConfig.Cfg.UserSystem.SessionSignToken)
 
-	app := fiber.New(fiber.Config{BodyLimit: 30 * 1024 * 1024})
+	app := fiber.New(fiber.Config{
+		BodyLimit:   30 * 1024 * 1024,
+		JSONEncoder: sonic.Marshal,
+		JSONDecoder: sonic.Unmarshal,
+		ProxyHeader: harukiConfig.Cfg.Backend.ProxyHeader,
+		TrustProxy:  harukiConfig.Cfg.Backend.EnableTrustProxy,
+		TrustProxyConfig: fiber.TrustProxyConfig{
+			Proxies: harukiConfig.Cfg.Backend.TrustProxies,
+		},
+	})
 	app.Use(func(c fiber.Ctx) error {
 		nonceBytes := make([]byte, 16)
 		if _, err := rand.Read(nonceBytes); err != nil {
@@ -92,7 +102,7 @@ func main() {
 				"frame-src https://challenges.cloudflare.com; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: https:; "+
-				"connect-src 'self' https://your-api-domain.com; "+
+				"connect-src 'self' https://suite-api.haruki.seiunx.com; "+
 				"object-src 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self';",
@@ -158,15 +168,13 @@ func main() {
 		mainLogger.Infof("SSL enabled, starting HTTPS server at %s", addr)
 		listenConfig.CertFile = harukiConfig.Cfg.Backend.SSLCert
 		listenConfig.CertKeyFile = harukiConfig.Cfg.Backend.SSLKey
-		if err := app.Listen(addr, listenConfig); err != nil {
-			mainLogger.Errorf("failed to start HTTPS server: %v", err)
-			os.Exit(1)
+	}
+	if err := app.Listen(addr, listenConfig); err != nil {
+		serverType := "HTTP"
+		if harukiConfig.Cfg.Backend.SSL {
+			serverType = "HTTPS"
 		}
-	} else {
-		mainLogger.Infof("Starting HTTP server at %s", addr)
-		if err := app.Listen(addr, listenConfig); err != nil {
-			mainLogger.Errorf("failed to start HTTP server: %v", err)
-			os.Exit(1)
-		}
+		mainLogger.Errorf("failed to start %s server: %v", serverType, err)
+		os.Exit(1)
 	}
 }

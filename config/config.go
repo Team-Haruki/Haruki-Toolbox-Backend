@@ -51,16 +51,19 @@ type UserSystemConfig struct {
 }
 
 type BackendConfig struct {
-	Host          string   `yaml:"host"`
-	Port          int      `yaml:"port"`
-	SSL           bool     `yaml:"ssl"`
-	SSLCert       string   `yaml:"ssl_cert"`
-	SSLKey        string   `yaml:"ssl_key"`
-	LogLevel      string   `yaml:"log_level"`
-	MainLogFile   string   `yaml:"main_log_file"`
-	AccessLog     string   `yaml:"access_log"`
-	AccessLogPath string   `yaml:"access_log_path"`
-	AllowCORS     []string `yaml:"allow_cors"`
+	Host             string   `yaml:"host"`
+	Port             int      `yaml:"port"`
+	SSL              bool     `yaml:"ssl"`
+	SSLCert          string   `yaml:"ssl_cert"`
+	SSLKey           string   `yaml:"ssl_key"`
+	LogLevel         string   `yaml:"log_level"`
+	MainLogFile      string   `yaml:"main_log_file"`
+	AccessLog        string   `yaml:"access_log"`
+	AccessLogPath    string   `yaml:"access_log_path"`
+	AllowCORS        []string `yaml:"allow_cors"`
+	EnableTrustProxy bool     `yaml:"enable_trust_proxy"`
+	TrustProxies     []string `yaml:"trusted_proxies"`
+	ProxyHeader      string   `yaml:"proxy_header"`
 }
 
 type SMTPConfig struct {
