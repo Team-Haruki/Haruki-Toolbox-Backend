@@ -168,6 +168,8 @@ func main() {
 		mainLogger.Infof("SSL enabled, starting HTTPS server at %s", addr)
 		listenConfig.CertFile = harukiConfig.Cfg.Backend.SSLCert
 		listenConfig.CertKeyFile = harukiConfig.Cfg.Backend.SSLKey
+	} else {
+		mainLogger.Infof("Starting HTTP server at %s", addr)
 	}
 	if err := app.Listen(addr, listenConfig); err != nil {
 		serverType := "HTTP"
