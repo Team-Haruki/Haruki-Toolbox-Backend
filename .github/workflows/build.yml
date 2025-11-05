@@ -51,22 +51,22 @@ jobs:
             windows-x64)
               FILE=$(ls dist/*-Windows-x64.exe)
               OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-windows-x64.zip"
-              (cd dist && zip -9 "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              (cd dist && zip -9 "pkg/$(basename "$OUT")" "$(basename "$FILE")")
               ;;
             linux-x64)
               FILE=$(ls dist/*-Linux-amd64)
               OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-linux-x64.tar.gz"
-              (cd dist && tar -czf "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              (cd dist && tar -czf "pkg/$(basename "$OUT")" "$(basename "$FILE")")
               ;;
             linux-arm64)
               FILE=$(ls dist/*-Linux-arm64)
               OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-linux-arm64.tar.gz"
-              (cd dist && tar -czf "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              (cd dist && tar -czf "pkg/$(basename "$OUT")" "$(basename "$FILE")")
               ;;
             macos-arm64)
               FILE=$(ls dist/*-macOS-arm64)
               OUT="dist/pkg/HarukiToolboxBackend-${VERSION}-macos-arm64.tar.gz"
-              (cd dist && tar -czf "../pkg/$(basename "$OUT")" "$(basename "$FILE")")
+              (cd dist && tar -czf "pkg/$(basename "$OUT")" "$(basename "$FILE")")
               ;;
           esac
 
