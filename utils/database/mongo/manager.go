@@ -309,20 +309,50 @@ func (m *MongoDBManager) GetWebhookSubscribers(ctx context.Context, webhookID st
 
 func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server string, fixtureID int) ([]bson.M, error) {
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"server": server}}},
-		{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts"}},
-		{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts"}},
-		{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts.mysekaiFixtures"}},
-		{{Key: "$match", Value: bson.M{
+		bson.D{{Key: "$match", Value: bson.M{
+			"server": server,
 			"updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts.mysekaiFixtures.mysekaiFixtureId": fixtureID,
 		}}},
-		{{Key: "$group", Value: bson.M{
-			"_id":            "$_id",
-			"mysekaiSiteIds": bson.M{"$addToSet": "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteId"},
+		bson.D{{Key: "$project", Value: bson.M{
+			"_id": 1,
+			"mysekaiSiteIds": bson.M{
+				"$reduce": bson.M{
+					"input":        "$updatedResources.userMysekaiSiteHousingLayouts",
+					"initialValue": bson.A{},
+					"in": bson.M{
+						"$cond": bson.A{
+							bson.M{
+								"$anyElementTrue": bson.M{
+									"$map": bson.M{
+										"input": "$$this.mysekaiSiteHousingLayouts",
+										"as":    "layout",
+										"in": bson.M{
+											"$anyElementTrue": bson.M{
+												"$map": bson.M{
+													"input": "$$layout.mysekaiFixtures",
+													"as":    "fixture",
+													"in":    bson.M{"$eq": bson.A{"$$fixture.mysekaiFixtureId", fixtureID}},
+												},
+											},
+										},
+									},
+								},
+							},
+							bson.M{"$concatArrays": bson.A{"$$value", bson.A{"$$this.mysekaiSiteId"}}},
+							"$$value",
+						},
+					},
+				},
+			},
+		}}},
+		bson.D{{Key: "$match", Value: bson.M{
+			"mysekaiSiteIds": bson.M{"$ne": bson.A{}},
 		}}},
 	}
 
-	cursor, err := m.mysekaiCollection.Aggregate(ctx, pipeline)
+	aggOpts := options.Aggregate()
+
+	cursor, err := m.mysekaiCollection.Aggregate(ctx, pipeline, aggOpts)
 	if err != nil {
 		return nil, err
 	}
