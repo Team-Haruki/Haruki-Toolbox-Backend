@@ -9,16 +9,14 @@ import (
 	"haruki-suite/utils/database/postgresql/user"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
-func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform")
-
-	social.Post("/send-qq-mail", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.SendQQMailPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		ctx := context.Background()
@@ -34,16 +32,14 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "QQ binding already exists", nil)
 		}
 		email := fmt.Sprintf("%s@qq.com", req.QQ)
-		if err := c.BodyParser(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
-		}
 		return SendEmailHandler(c, email, req.ChallengeToken, apiHelper)
+	}
+}
 
-	})
-
-	social.Post("/verify-qq-mail", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		var req harukiAPIHelper.VerifyQQMailPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		email := fmt.Sprintf("%s@qq.com", req.QQ)
@@ -74,13 +70,15 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			},
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "social platform verified", &ud)
-	})
+	}
+}
 
-	social.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 		var req harukiAPIHelper.GenerateSocialPlatformCodePayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
@@ -116,9 +114,11 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			OneTimePassword: code,
 		}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, resp)
-	})
+	}
+}
 
-	social.Get("/verification-status/:status_token", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		statusToken := c.Params("status_token")
 		userID := c.Locals("userID").(string)
 		ctx := context.Background()
@@ -145,12 +145,14 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 					Verified: info.Verified,
 				},
 			}
-			return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusBadRequest, "invalid status", &ud)
+			return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "verification completed", &ud)
 		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "get status failed", nil)
-	})
+	}
+}
 
-	social.Delete("/clear", apiHelper.SessionHandler.VerifySessionToken, func(c *fiber.Ctx) error {
+func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		userID := c.Locals("userID").(string)
 
@@ -174,9 +176,11 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "social platform info cleared successfully", nil)
-	})
+	}
+}
 
-	apiHelper.Router.Post("/api/verify-social-platform", func(c *fiber.Ctx) error {
+func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		ctx := context.Background()
 		authHeader := c.Get("Authorization")
 		if len(authHeader) < 7 || authHeader[:7] != "Bearer " {
@@ -188,7 +192,7 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 
 		var req harukiAPIHelper.HarukiBotVerifySocialPlatformPayload
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
 		}
 
@@ -237,6 +241,17 @@ func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "social platform verified", nil)
-	})
+	}
+}
 
+func registerSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform")
+
+	social.Post("/send-qq-mail", apiHelper.SessionHandler.VerifySessionToken, handleSendQQMail(apiHelper))
+	social.Post("/verify-qq-mail", apiHelper.SessionHandler.VerifySessionToken, handleVerifyQQMail(apiHelper))
+	social.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateVerificationCode(apiHelper))
+	social.Get("/verification-status/:status_token", apiHelper.SessionHandler.VerifySessionToken, handleVerificationStatus(apiHelper))
+	social.Delete("/clear", apiHelper.SessionHandler.VerifySessionToken, handleClearSocialPlatform(apiHelper))
+
+	apiHelper.Router.Post("/api/verify-social-platform", handleVerifySocialPlatform(apiHelper))
 }

@@ -11,17 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	a := apiHelper.Router.Group("/api/user")
-
-	a.Post("/reset-password/send", func(c *fiber.Ctx) error {
+func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		var payload harukiAPIHelper.SendResetPasswordPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid payload", nil)
 		}
 
@@ -51,11 +49,13 @@ func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 		}
 
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Reset password email sent", nil)
-	})
+	}
+}
 
-	a.Post("/reset-password", func(c *fiber.Ctx) error {
+func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
 		var payload harukiAPIHelper.ResetPasswordPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid payload", nil)
 		}
 		key := "resetpw:" + payload.Email
@@ -98,7 +98,14 @@ func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to clear user sessions", nil)
 		}
 
-		apiHelper.DBManager.Redis.DeleteCache(ctx, key)
+		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, key)
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Password reset successfully", nil)
-	})
+	}
+}
+
+func registerResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	a := apiHelper.Router.Group("/api/user")
+
+	a.Post("/reset-password/send", handleSendResetPassword(apiHelper))
+	a.Post("/reset-password", handleResetPassword(apiHelper))
 }
