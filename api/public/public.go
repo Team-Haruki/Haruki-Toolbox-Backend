@@ -95,6 +95,10 @@ func fetchUserData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 }
 
 func validatePublicAPIAccess(c fiber.Ctx, record *postgresql.GameAccountBinding, dataType harukiUtils.UploadDataType) error {
+	if record == nil {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "account binding not found", nil)
+	}
+
 	if dataType == harukiUtils.UploadDataTypeSuite {
 		if record.Suite == nil || !record.Suite.AllowPublicApi {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
