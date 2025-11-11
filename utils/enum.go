@@ -5,8 +5,9 @@ import "fmt"
 type UploadDataType string
 
 const (
-	UploadDataTypeSuite   UploadDataType = "suite"
-	UploadDataTypeMysekai UploadDataType = "mysekai"
+	UploadDataTypeSuite                UploadDataType = "suite"
+	UploadDataTypeMysekai              UploadDataType = "mysekai"
+	UploadDataTypeMysekaiBirthdayParty UploadDataType = "mysekai_birthday_party"
 )
 
 func ParseUploadDataType(s string) (UploadDataType, error) {

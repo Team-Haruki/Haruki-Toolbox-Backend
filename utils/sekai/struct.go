@@ -60,8 +60,9 @@ var (
 )
 
 var acquirePath = map[harukiUtils.UploadDataType]string{
-	harukiUtils.UploadDataTypeSuite:   "/suite/user/%d",
-	harukiUtils.UploadDataTypeMysekai: "/user/%d/mysekai",
+	harukiUtils.UploadDataTypeSuite:                "/suite/user/%d",
+	harukiUtils.UploadDataTypeMysekai:              "/user/%d/mysekai",
+	harukiUtils.UploadDataTypeMysekaiBirthdayParty: "/user/%d/mysekai/birthday-party/%d/delivery",
 }
 
 var allowedHeaders = map[string]struct{}{

@@ -42,7 +42,11 @@ func HarukiSekaiProxyCallAPI(
 	params map[string]string,
 	proxy string,
 	userID int64,
+	mysekaiBirthdayPartyID *int64,
 ) (*harukiUtils.SekaiDataRetrieverResponse, error) {
+	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty && (mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0) {
+		return nil, fmt.Errorf("invalid birthday party_id")
+	}
 
 	apiEndpoint := GetAPIEndpoint()
 	endpoint, ok := apiEndpoint[server]
@@ -54,7 +58,13 @@ func HarukiSekaiProxyCallAPI(
 	filteredHeaders := filterHeaders(headers)
 	filteredHeaders["Host"] = host
 
-	url := fmt.Sprintf(baseURL+acquirePath[dataType], userID)
+	var url string
+	urlTemplate := baseURL + acquirePath[dataType]
+	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
+		url = fmt.Sprintf(urlTemplate, userID, *mysekaiBirthdayPartyID)
+	} else {
+		url = fmt.Sprintf(urlTemplate, userID)
+	}
 
 	if params != nil && len(params) > 0 {
 		q := urlParse.Values{}
@@ -64,7 +74,7 @@ func HarukiSekaiProxyCallAPI(
 		url += "?" + q.Encode()
 	}
 
-	client := harukiHttp.NewClient(proxy, 15*time.Second)
+	client := harukiHttp.NewClient(proxy, 30*time.Second)
 
 	statusCode, respHeaders, respBody, err := client.Request(ctx, method, url, filteredHeaders, data)
 	if err != nil {

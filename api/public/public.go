@@ -130,12 +130,16 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if err != nil {
 			return err
 		}
-		cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
 		ctx := context.Background()
 		var resp interface{}
-		if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
-			return c.JSON(resp)
+
+		if dataType != harukiUtils.UploadDataTypeMysekai {
+			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
+			if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
+				return c.JSON(resp)
+			}
 		}
+
 		record, err := fetchAccountBinding(ctx, apiHelper, server, userIDStr)
 		if err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "account binding not found", nil)
@@ -151,7 +155,12 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if err != nil {
 			return err
 		}
-		_ = apiHelper.DBManager.Redis.SetCache(ctx, cacheKey, resp, 300*time.Second)
+
+		if dataType != harukiUtils.UploadDataTypeMysekai {
+			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
+			_ = apiHelper.DBManager.Redis.SetCache(ctx, cacheKey, resp, 300*time.Second)
+		}
+
 		return c.JSON(resp)
 	}
 }

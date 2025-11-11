@@ -86,7 +86,7 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 			}
 		}
 	}
-	if dataType == utils.UploadDataTypeMysekai {
+	if dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if settings.Mysekai != nil {
 			if settings.Mysekai.Allow8823 {
 				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823)
