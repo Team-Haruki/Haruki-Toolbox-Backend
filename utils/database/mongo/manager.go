@@ -52,15 +52,23 @@ func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUs
 
 func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID int64, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
 	collection := m.getCollectionByDataType(dataType)
-
-	oldData, err := m.fetchOldData(ctx, collection, userID)
-	if err != nil {
-		return nil, err
+	var updateDoc bson.M
+	if dataType == utils.UploadDataTypeSuite {
+		oldData, err := m.fetchOldData(ctx, collection, userID)
+		if err != nil {
+			return nil, err
+		}
+		finalData := m.buildFinalData(oldData, data)
+		updateDoc = bson.M{"$set": finalData}
+	} else if dataType == utils.UploadDataTypeMysekai {
+		updateDoc = bson.M{"$set": data}
+	} else {
+		updatedResources, _ := data["updatedResources"].(map[string]interface{})
+		updateDoc = bson.M{"$set": bson.M{
+			"upload_time": data["upload_time"],
+			"updatedResources.userMysekaiHarvestMaps": updatedResources["userMysekaiHarvestMaps"],
+		}}
 	}
-
-	finalData := m.buildFinalData(oldData, data)
-
-	updateDoc := bson.M{"$set": finalData}
 	return collection.UpdateOne(ctx,
 		bson.M{"_id": userID, "server": server},
 		updateDoc,

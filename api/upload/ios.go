@@ -128,6 +128,7 @@ func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			harukiConfig.Cfg.Proxy,
 			harukiUtils.UploadDataTypeSuite,
 			apiHelper,
+			nil,
 		)
 		return proxyHandler(c)
 	}
@@ -153,6 +154,38 @@ func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			harukiConfig.Cfg.Proxy,
 			harukiUtils.UploadDataTypeMysekai,
 			apiHelper,
+			nil,
+		)
+		return proxyHandler(c)
+	}
+}
+
+func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		userIDStr := c.Params("user_id")
+		serverStr := c.Params("server")
+		partyIdStr := c.Params("party_id")
+
+		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		userID, err := strconv.ParseInt(userIDStr, 0, 64)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+		partyID, err := strconv.ParseInt(partyIdStr, 0, 64)
+		if err != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+		}
+
+		logger.Infof("Received %s server mysekai birthday party delivery request from user %d for party id %d", server, userID, partyID)
+
+		proxyHandler := HandleProxyUpload(
+			harukiConfig.Cfg.Proxy,
+			harukiUtils.UploadDataTypeMysekaiBirthdayParty,
+			apiHelper,
+			&partyID,
 		)
 		return proxyHandler(c)
 	}
@@ -165,4 +198,5 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	api.Post("/script/upload", handleIOSScriptUpload(apiHelper, logger))
 	api.Get("/proxy/:server/suite/user/:user_id", handleIOSProxySuite(apiHelper, logger))
 	api.Post("/proxy/:server/user/:user_id/mysekai", handleIOSProxyMysekai(apiHelper, logger))
+	api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, logger))
 }

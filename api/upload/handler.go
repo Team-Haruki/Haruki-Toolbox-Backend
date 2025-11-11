@@ -183,6 +183,7 @@ func HandleProxyUpload(
 	proxy string,
 	dataType harukiUtils.UploadDataType,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	mysekaiBirthdayPartyID *int64,
 ) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := context.Background()
@@ -202,13 +203,18 @@ func HandleProxyUpload(
 			return fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
 
+		if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty &&
+			(mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0) {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid birthday party_id")
+		}
+
 		headers := make(map[string]string)
 		for k, v := range c.Request().Header.All() {
 			headers[string(append([]byte(nil), k...))] = string(append([]byte(nil), v...))
 		}
 
 		var body []byte
-		if c.Method() == fiber.MethodPost {
+		if c.Method() == fiber.MethodPost || c.Method() == fiber.MethodPut || c.Method() == fiber.MethodPatch {
 			body = c.Body()
 		}
 
@@ -223,9 +229,28 @@ func HandleProxyUpload(
 			params,
 			proxy,
 			userID,
+			mysekaiBirthdayPartyID,
 		)
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+
+		if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
+			unpackedData, err := sekai.Unpack(resp.RawBody, server)
+			if err != nil {
+				return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+			}
+			dataMap, ok := unpackedData.(map[string]interface{})
+			if !ok {
+				return fiber.NewError(fiber.StatusInternalServerError, "invalid response data format")
+			}
+			isRefreshed, ok := dataMap["isRefreshed"].(bool)
+			if !ok || !isRefreshed {
+				for k, v := range resp.NewHeaders {
+					c.Set(k, v)
+				}
+				return c.Status(resp.StatusCode).Send(resp.RawBody)
+			}
 		}
 
 		if _, err := HandleUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper); err != nil {

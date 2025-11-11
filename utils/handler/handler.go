@@ -37,7 +37,8 @@ func cleanSuite(suite map[string]interface{}) map[string]interface{} {
 	}
 	return suite
 }
-func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) (map[string]interface{}, error) {
+
+func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) (map[string]interface{}, error) {
 	if err := validateUserIDMatch(expectedUserID, parsedUserID, dataType); err != nil {
 		return nil, err
 	}
@@ -53,6 +54,13 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 			return nil, err
 		}
 		data = cleanSuite(data)
+	}
+
+	if dataType == utils.UploadDataTypeMysekaiBirthdayParty {
+		if err := validateBirthdayPartyData(data); err != nil {
+			return nil, err
+		}
+		data = extractBirthdayPartyData(data)
 	}
 
 	data["upload_time"] = time.Now().Unix()
@@ -157,6 +165,31 @@ func validateSuiteData(data map[string]interface{}) error {
 	return nil
 }
 
+func validateBirthdayPartyData(data map[string]interface{}) error {
+	updatedResources, ok := data["updatedResources"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid data: missing updatedResources")
+	}
+
+	harvestMaps, ok := updatedResources["userMysekaiHarvestMaps"]
+	if !ok || harvestMaps == nil {
+		return fmt.Errorf("no userMysekaiHarvestMaps found, it seems you may not have participated in the birthday party event yet")
+	}
+
+	return nil
+}
+
+func extractBirthdayPartyData(data map[string]interface{}) map[string]interface{} {
+	updatedResources, _ := data["updatedResources"].(map[string]interface{})
+	harvestMaps := updatedResources["userMysekaiHarvestMaps"]
+
+	return map[string]interface{}{
+		"updatedResources": map[string]interface{}{
+			"userMysekaiHarvestMaps": harvestMaps,
+		},
+	}
+}
+
 func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, server utils.SupportedDataUploadServer, isPublicAPI bool, dataType utils.UploadDataType, expectedUserID *int64, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) (*utils.HandleDataResult, error) {
 	unpacked, err := harukiSekai.Unpack(raw, server)
 	if err != nil {
@@ -176,12 +209,22 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 
 	extractedUserID := extractUserIDFromGameData(unpackedMap, h.Logger)
 
-	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType, settings)
+	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType)
 	if err != nil {
 		return nil, err
 	}
 
-	go DataSyncer(*expectedUserID, server, dataType, raw, settings)
+	if dataType != utils.UploadDataTypeMysekaiBirthdayParty {
+		go DataSyncer(*expectedUserID, server, dataType, raw, settings)
+	} else {
+		packedBody, err := harukiSekai.Pack(data, server)
+		if err != nil {
+			h.Logger.Errorf("pack birthday party data failed: %v", err)
+		} else {
+			go DataSyncer(*expectedUserID, server, dataType, packedBody, settings)
+		}
+
+	}
 
 	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
 		return nil, err
