@@ -172,7 +172,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 
 	_, _, _ = r.client.callAPI(ctx,
 		fmt.Sprintf("/user/%s/diarkis-auth?diarkisServerType=mysekai", strconv.FormatInt(r.client.userID, 10)),
-		"POST", nil, nil)
+		"Get", nil, nil)
 
 	if status == 200 {
 		r.logger.Infof("%s server retrieved MySekai data.", strings.ToUpper(string(r.client.server)))
