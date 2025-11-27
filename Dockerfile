@@ -16,6 +16,7 @@ RUN go build \
 
 FROM alpine:3.20
 
+ENV TZ=Asia/Shanghai
 ARG VERSION=dev
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
@@ -27,6 +28,7 @@ WORKDIR /app
 RUN apk --no-cache add ca-certificates tzdata
 
 COPY --from=builder /app/haruki-toolbox-backend .
+RUN mkdir -p logs
 
 EXPOSE 6666
 ENTRYPOINT ["./haruki-toolbox-backend"]
