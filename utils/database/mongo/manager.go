@@ -148,10 +148,7 @@ func mergeUserEvents(oldData, newData map[string]interface{}) []interface{} {
 func shouldReplaceEvent(newEvent, oldEvent map[string]interface{}) bool {
 	newPoint := getInt(newEvent, "eventPoint")
 	oldPoint := getInt(oldEvent, "eventPoint")
-	if newPoint > oldPoint {
-		return true
-	}
-	if newPoint == oldPoint && len(newEvent) > len(oldEvent) {
+	if newPoint >= oldPoint {
 		return true
 	}
 	return false
@@ -197,10 +194,7 @@ func mergeWorldBlooms(oldData, newData map[string]interface{}) []interface{} {
 func shouldReplaceBloom(newBloom, oldBloom map[string]interface{}) bool {
 	newPoint := getInt(newBloom, "worldBloomChapterPoint")
 	oldPoint := getInt(oldBloom, "worldBloomChapterPoint")
-	if newPoint > oldPoint {
-		return true
-	}
-	if newPoint == oldPoint && len(newBloom) > len(oldBloom) {
+	if newPoint >= oldPoint {
 		return true
 	}
 	return false
