@@ -12,7 +12,7 @@ const (
 
 func ParseUploadDataType(s string) (UploadDataType, error) {
 	switch UploadDataType(s) {
-	case UploadDataTypeSuite, UploadDataTypeMysekai:
+	case UploadDataTypeSuite, UploadDataTypeMysekai, UploadDataTypeMysekaiBirthdayParty:
 		return UploadDataType(s), nil
 	default:
 		return "", fmt.Errorf("invalid data_type: %s", s)
