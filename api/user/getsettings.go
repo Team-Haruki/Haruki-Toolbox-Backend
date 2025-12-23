@@ -78,7 +78,7 @@ func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 
 		var avatarURL string
 		if user.AvatarPath != nil {
-			avatarURL = fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
+			avatarURL = fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.AvatarURL, *user.AvatarPath)
 		} else {
 			avatarURL = ""
 		}
