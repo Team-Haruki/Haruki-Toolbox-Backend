@@ -73,7 +73,7 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			ud.Name = payload.Name
 		}
 		if payload.AvatarBase64 != nil {
-			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.FrontendURL, "/"), avatarFileName)
+			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.AvatarURL, "/"), avatarFileName)
 			ud.AvatarPath = &url
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "profile updated", &ud)

@@ -46,6 +46,7 @@ type UserSystemConfig struct {
 	SMTP                      SMTPConfig `yaml:"smtp"`
 	SessionSignToken          string     `yaml:"session_sign_token"`
 	AvatarSaveDir             string     `yaml:"avatar_save_dir"`
+	AvatarURL                 string     `yaml:"avatar_url"`
 	FrontendURL               string     `yaml:"frontend_url"`
 	SocialPlatformVerifyToken string     `yaml:"social_platform_verify_token"`
 }

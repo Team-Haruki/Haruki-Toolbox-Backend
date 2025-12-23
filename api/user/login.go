@@ -126,7 +126,7 @@ func buildGameAccountBindings(user *postgresql.User) []harukiAPIHelper.GameAccou
 
 func buildAvatarURL(user *postgresql.User) string {
 	if user.AvatarPath != nil {
-		return fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.FrontendURL, *user.AvatarPath)
+		return fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.AvatarURL, *user.AvatarPath)
 	}
 	return ""
 }
