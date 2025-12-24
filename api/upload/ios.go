@@ -27,7 +27,7 @@ type dataUploadHeader struct {
 
 func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "This endpoint is temporarily disabled", nil)
+		return harukiAPIHelper.ErrorForbidden(c, "This endpoint is temporarily disabled")
 		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
 		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
 		header := &dataUploadHeader{
@@ -44,7 +44,7 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 
 		uploadType, userId := ExtractUploadTypeAndUserID(header.OriginalUrl)
 		if uploadType == "" {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Unknown upload type", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "Unknown upload type")
 		}
 
 		var server harukiUtils.SupportedDataUploadServer
@@ -55,7 +55,7 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			}
 		}
 		if server == "" {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Unknown game server", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "Unknown game server")
 		}
 
 		now := time.Now()
@@ -103,7 +103,7 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			}
 		}(header, userId, server, string(uploadType))
 
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "Successfully uploaded data.", nil)
+		return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 	}
 }
 
@@ -114,12 +114,12 @@ func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 
 		userID, err := strconv.ParseInt(userIDStr, 0, 64)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 
 		logger.Infof("Received %s server suite request from user %d", server, userID)
@@ -141,11 +141,11 @@ func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		userID, err := strconv.ParseInt(userIDStr, 0, 64)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
@@ -168,15 +168,15 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		userID, err := strconv.ParseInt(userIDStr, 0, 64)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		partyID, err := strconv.ParseInt(partyIdStr, 0, 64)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 
 		logger.Infof("Received %s server mysekai birthday party delivery request from user %d for party id %d", server, userID, partyID)
