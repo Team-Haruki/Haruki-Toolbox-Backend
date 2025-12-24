@@ -91,13 +91,13 @@ func processSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	if len(keys) == 1 {
 		resp, valid := processSingleKey(keys[0], result, filteredUserGamedata, apiHelper.PublicAPIAllowedKeys)
 		if !valid {
-			return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "Invalid request key", nil)
+			return nil, harukiAPIHelper.ErrorForbidden(c, "Invalid request key")
 		}
 		return resp, nil
 	}
 	suite, invalidKey := processMultipleKeys(keys, result, filteredUserGamedata, apiHelper.PublicAPIAllowedKeys)
 	if invalidKey != "" {
-		return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, fmt.Sprintf("Invalid request key: %s", invalidKey), nil)
+		return nil, harukiAPIHelper.ErrorForbidden(c, fmt.Sprintf("Invalid request key: %s", invalidKey))
 	}
 	return suite, nil
 }
@@ -126,11 +126,11 @@ func processMysekaiData(c fiber.Ctx, result map[string]interface{}) interface{} 
 
 func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		ctx := c.Context()
 		server, dataType, userID, userIDStr, err := parseParams(c)
 		if err != nil {
 			return err
 		}
-		ctx := context.Background()
 		var resp interface{}
 
 		if dataType != harukiUtils.UploadDataTypeMysekai {
@@ -142,10 +142,10 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 
 		record, err := fetchAccountBinding(ctx, apiHelper, server, userIDStr)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "account binding not found", nil)
+			return harukiAPIHelper.ErrorNotFound(c, "account binding not found")
 		}
 		if !validatePublicAPIAccess(record, dataType) {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "you are not allowed to access this player data.", nil)
+			return harukiAPIHelper.ErrorForbidden(c, "you are not allowed to access this player data.")
 		}
 		result, err := fetchMongoData(c, apiHelper, userID, server, dataType)
 		if err != nil {
@@ -169,17 +169,17 @@ func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtil
 	serverStr := c.Params("server")
 	server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
-		return "", "", 0, "", harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+		return "", "", 0, "", harukiAPIHelper.ErrorBadRequest(c, err.Error())
 	}
 	dataTypeStr := c.Params("data_type")
 	dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 	if err != nil {
-		return "", "", 0, "", harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, err.Error(), nil)
+		return "", "", 0, "", harukiAPIHelper.ErrorBadRequest(c, err.Error())
 	}
 	userIDStr := c.Params("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
-		return "", "", 0, "", harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid userId, it must be integer", nil)
+		return "", "", 0, "", harukiAPIHelper.ErrorBadRequest(c, "Invalid userId, it must be integer")
 	}
 	return server, dataType, userID, userIDStr, nil
 }
@@ -196,12 +196,13 @@ func fetchAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 }
 
 func fetchMongoData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) (map[string]interface{}, error) {
-	result, err := apiHelper.DBManager.Mongo.GetData(c.Context(), userID, string(server), dataType)
+	ctx := c.Context()
+	result, err := apiHelper.DBManager.Mongo.GetData(ctx, userID, string(server), dataType)
 	if err != nil {
-		return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err), nil)
+		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
 	}
 	if result == nil {
-		return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "Player data not found.", nil)
+		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
 	}
 	return result, nil
 }
@@ -213,7 +214,7 @@ func processDataResponse(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRo
 	if dataType == harukiUtils.UploadDataTypeMysekai {
 		return processMysekaiData(c, result), nil
 	}
-	return nil, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Unknown error.", nil)
+	return nil, harukiAPIHelper.ErrorInternal(c, "Unknown error.")
 }
 
 func registerPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

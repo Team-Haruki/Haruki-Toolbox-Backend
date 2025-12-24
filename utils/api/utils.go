@@ -30,6 +30,38 @@ func ResponseWithStruct[T any](c fiber.Ctx, status int, data T) error {
 	return c.Status(status).JSON(data)
 }
 
+// ====================== Error Response Functions ======================
+
+// ErrorBadRequest returns a 400 Bad Request response
+func ErrorBadRequest(c fiber.Ctx, message string) error {
+	return UpdatedDataResponse[string](c, fiber.StatusBadRequest, message, nil)
+}
+
+// ErrorUnauthorized returns a 401 Unauthorized response
+func ErrorUnauthorized(c fiber.Ctx, message string) error {
+	return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, message, nil)
+}
+
+// ErrorForbidden returns a 403 Forbidden response
+func ErrorForbidden(c fiber.Ctx, message string) error {
+	return UpdatedDataResponse[string](c, fiber.StatusForbidden, message, nil)
+}
+
+// ErrorNotFound returns a 404 Not Found response
+func ErrorNotFound(c fiber.Ctx, message string) error {
+	return UpdatedDataResponse[string](c, fiber.StatusNotFound, message, nil)
+}
+
+// ErrorInternal returns a 500 Internal Server Error response
+func ErrorInternal(c fiber.Ctx, message string) error {
+	return UpdatedDataResponse[string](c, fiber.StatusInternalServerError, message, nil)
+}
+
+// SuccessResponse returns a 200 OK response with optional data
+func SuccessResponse[T any](c fiber.Ctx, message string, data *T) error {
+	return UpdatedDataResponse(c, fiber.StatusOK, message, data)
+}
+
 // ====================== Session Helper Functions ======================
 
 func NewSessionHandler(redisClient *redis.Client, sessionSignKey string) *SessionHandler {

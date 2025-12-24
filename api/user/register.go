@@ -1,10 +1,10 @@
 package user
 
 import (
-	"context"
 	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
+	harukiRedis "haruki-suite/utils/database/redis"
 	"strings"
 	"time"
 
@@ -17,16 +17,17 @@ import (
 
 func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		ctx := c.Context()
 		var req harukiAPIHelper.RegisterPayload
 		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request payload", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 
 		remoteIP := extractRemoteIP(c)
 
 		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, remoteIP)
 		if err != nil || vresp == nil || !vresp.Success {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid challenge token", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid challenge token")
 		}
 
 		if err := verifyEmailOTP(c, apiHelper, req.Email, req.OneTimePassword); err != nil {
@@ -39,7 +40,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to hash password", nil)
+			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
 		}
 
 		uid := fmt.Sprintf("%010d", time.Now().UnixNano()%1e10)
@@ -50,22 +51,22 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			SetEmail(req.Email).
 			SetPasswordHash(string(passwordHash)).
 			SetNillableAvatarPath(nil).
-			Save(context.Background())
+			Save(ctx)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create user", nil)
+			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
 		}
 
-		emailInfo, err := apiHelper.DBManager.DB.EmailInfo.Create().
+		emailInfoRecord, err := apiHelper.DBManager.DB.EmailInfo.Create().
 			SetEmail(req.Email).
 			SetVerified(true).
 			SetUser(newUser).
-			Save(context.Background())
+			Save(ctx)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to create email info", nil)
+			return harukiAPIHelper.ErrorInternal(c, "failed to create email info")
 		}
 
-		redisKey := "email:verify:" + req.Email
-		_ = apiHelper.DBManager.Redis.DeleteCache(context.Background(), redisKey)
+		redisKey := harukiRedis.BuildEmailVerifyKey(req.Email)
+		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)
 
 		signedToken, _ := apiHelper.SessionHandler.IssueSession(uid)
 
@@ -74,7 +75,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			UserID:                      &uid,
 			AvatarPath:                  nil,
 			AllowCNMysekai:              &newUser.AllowCnMysekai,
-			EmailInfo:                   &harukiAPIHelper.EmailInfo{Email: emailInfo.Email, Verified: emailInfo.Verified},
+			EmailInfo:                   &harukiAPIHelper.EmailInfo{Email: emailInfoRecord.Email, Verified: emailInfoRecord.Verified},
 			SocialPlatformInfo:          nil,
 			AuthorizeSocialPlatformInfo: nil,
 			GameAccountBindings:         nil,
@@ -97,33 +98,35 @@ func extractRemoteIP(c fiber.Ctx) string {
 }
 
 func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) error {
-	redisKey := "email:verify:" + email
+	ctx := c.Context()
+	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	var storedOTP string
-	exists, err := apiHelper.DBManager.Redis.GetCache(context.Background(), redisKey, &storedOTP)
+	exists, err := apiHelper.DBManager.Redis.GetCache(ctx, redisKey, &storedOTP)
 	if err != nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "redis error", nil)
+		return harukiAPIHelper.ErrorInternal(c, "redis error")
 	}
 	if !exists || storedOTP != otp {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid or expired verification code", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "invalid or expired verification code")
 	}
 	return nil
 }
 
 func checkEmailAvailability(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string) error {
-	userExists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(email)).Exist(context.Background())
+	ctx := c.Context()
+	userExists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(email)).Exist(ctx)
 	if err != nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "database error", nil)
+		return harukiAPIHelper.ErrorInternal(c, "database error")
 	}
 	if userExists {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already in use", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "email already in use")
 	}
 
-	emailVerifiedExists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(email), emailinfo.Verified(true)).Exist(context.Background())
+	emailVerifiedExists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(email), emailinfo.Verified(true)).Exist(ctx)
 	if err != nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "database error", nil)
+		return harukiAPIHelper.ErrorInternal(c, "database error")
 	}
 	if emailVerifiedExists {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already verified", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "email already verified")
 	}
 	return nil
 }

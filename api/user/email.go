@@ -1,13 +1,13 @@
 package user
 
 import (
-	"context"
 	"crypto/rand"
 	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/user"
+	harukiRedis "haruki-suite/utils/database/redis"
 	"haruki-suite/utils/smtp"
 	"math/big"
 	"strings"
@@ -29,6 +29,7 @@ func GenerateCode(antiCensor bool) string {
 }
 
 func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+	ctx := c.Context()
 	xForwardedFor := c.Get("X-Forwarded-For")
 	clientIP := ""
 	if xForwardedFor != "" {
@@ -38,54 +39,56 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 
 	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
 	if err != nil || !resp.Success {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "captcha verify failed", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 	}
 
 	code := GenerateCode(false)
-	if err := helper.DBManager.Redis.SetCache(context.Background(), "email:verify:"+email, code, 5*time.Minute); err != nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
+	redisKey := harukiRedis.BuildEmailVerifyKey(email)
+	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, 5*time.Minute); err != nil {
+		return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 	}
 
 	body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
 	if err := helper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to send email", nil)
+		return harukiAPIHelper.ErrorInternal(c, "failed to send email")
 	}
 
-	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "verification code sent", nil)
+	return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
 }
 
 func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
-	ctx := context.Background()
+	ctx := c.Context()
+	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	var code string
-	found, err := helper.DBManager.Redis.GetCache(ctx, "email:verify:"+email, &code)
+	found, err := helper.DBManager.Redis.GetCache(ctx, redisKey, &code)
 	if err != nil {
-		return false, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to check redis", nil)
+		return false, harukiAPIHelper.ErrorInternal(c, "failed to check redis")
 	}
 	if !found {
-		return false, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code expired or not found", nil)
+		return false, harukiAPIHelper.ErrorBadRequest(c, "verification code expired or not found")
 	}
 
 	if oneTimePassword != code {
-		return false, harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid verification code", nil)
+		return false, harukiAPIHelper.ErrorBadRequest(c, "invalid verification code")
 	}
 
-	_ = helper.DBManager.Redis.DeleteCache(ctx, "email:verify:"+email)
+	_ = helper.DBManager.Redis.DeleteCache(ctx, redisKey)
 	return true, nil
 }
 
 func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		ctx := c.Context()
 		var req harukiAPIHelper.SendEmailPayload
 		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-		ctx := context.Background()
 		exists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query database", nil)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "email already exists", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "email already exists")
 		}
 		return SendEmailHandler(c, req.Email, req.ChallengeToken, apiHelper)
 	}
@@ -93,25 +96,25 @@ func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 
 func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		ctx := c.Context()
 		var req harukiAPIHelper.VerifyEmailPayload
 		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 		ok, err := VerifyEmailHandler(c, req.Email, req.OneTimePassword, apiHelper)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification failed", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
 		}
 		userID := c.Locals("userID").(string)
-		ctx := context.Background()
 		if _, err := apiHelper.DBManager.DB.User.
 			Update().
 			Where(user.IDEQ(userID)).
 			SetEmail(req.Email).
 			Save(ctx); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update user email", nil)
+			return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
 		}
 		if _, err := apiHelper.DBManager.DB.EmailInfo.
 			Update().
@@ -119,7 +122,7 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			SetEmail(req.Email).
 			SetVerified(true).
 			Save(ctx); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update email info", nil)
+			return harukiAPIHelper.ErrorInternal(c, "failed to update email info")
 		}
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -129,7 +132,7 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			},
 		}
 		_ = harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "email verified", &ud)
+		return harukiAPIHelper.SuccessResponse(c, "email verified", &ud)
 	}
 }
 
