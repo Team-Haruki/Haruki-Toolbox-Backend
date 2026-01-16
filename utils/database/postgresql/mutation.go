@@ -6,12 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/ent/schema"
+	"haruki-suite/entsrc/schema"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/group"
+	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
 	"sync"
 
@@ -31,7 +34,10 @@ const (
 	TypeAuthorizeSocialPlatformInfo = "AuthorizeSocialPlatformInfo"
 	TypeEmailInfo                   = "EmailInfo"
 	TypeGameAccountBinding          = "GameAccountBinding"
+	TypeGroup                       = "Group"
+	TypeGroupList                   = "GroupList"
 	TypeSocialPlatformInfo          = "SocialPlatformInfo"
+	TypeUploadLog                   = "UploadLog"
 	TypeUser                        = "User"
 )
 
@@ -1786,6 +1792,1087 @@ func (m *GameAccountBindingMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown GameAccountBinding edge %s", name)
 }
 
+// GroupMutation represents an operation that mutates the Group nodes in the graph.
+type GroupMutation struct {
+	config
+	op                Op
+	typ               string
+	id                *int
+	group             *string
+	clearedFields     map[string]struct{}
+	group_list        map[int]struct{}
+	removedgroup_list map[int]struct{}
+	clearedgroup_list bool
+	done              bool
+	oldValue          func(context.Context) (*Group, error)
+	predicates        []predicate.Group
+}
+
+var _ ent.Mutation = (*GroupMutation)(nil)
+
+// groupOption allows management of the mutation configuration using functional options.
+type groupOption func(*GroupMutation)
+
+// newGroupMutation creates new mutation for the Group entity.
+func newGroupMutation(c config, op Op, opts ...groupOption) *GroupMutation {
+	m := &GroupMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGroup,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGroupID sets the ID field of the mutation.
+func withGroupID(id int) groupOption {
+	return func(m *GroupMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Group
+		)
+		m.oldValue = func(ctx context.Context) (*Group, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Group.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGroup sets the old Group of the mutation.
+func withGroup(node *Group) groupOption {
+	return func(m *GroupMutation) {
+		m.oldValue = func(context.Context) (*Group, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GroupMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GroupMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Group entities.
+func (m *GroupMutation) SetID(id int) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GroupMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GroupMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Group.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetGroup sets the "group" field.
+func (m *GroupMutation) SetGroup(s string) {
+	m.group = &s
+}
+
+// Group returns the value of the "group" field in the mutation.
+func (m *GroupMutation) Group() (r string, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroup returns the old "group" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGroup(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroup is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroup requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroup: %w", err)
+	}
+	return oldValue.Group, nil
+}
+
+// ResetGroup resets all changes to the "group" field.
+func (m *GroupMutation) ResetGroup() {
+	m.group = nil
+}
+
+// AddGroupListIDs adds the "group_list" edge to the GroupList entity by ids.
+func (m *GroupMutation) AddGroupListIDs(ids ...int) {
+	if m.group_list == nil {
+		m.group_list = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.group_list[ids[i]] = struct{}{}
+	}
+}
+
+// ClearGroupList clears the "group_list" edge to the GroupList entity.
+func (m *GroupMutation) ClearGroupList() {
+	m.clearedgroup_list = true
+}
+
+// GroupListCleared reports if the "group_list" edge to the GroupList entity was cleared.
+func (m *GroupMutation) GroupListCleared() bool {
+	return m.clearedgroup_list
+}
+
+// RemoveGroupListIDs removes the "group_list" edge to the GroupList entity by IDs.
+func (m *GroupMutation) RemoveGroupListIDs(ids ...int) {
+	if m.removedgroup_list == nil {
+		m.removedgroup_list = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.group_list, ids[i])
+		m.removedgroup_list[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedGroupList returns the removed IDs of the "group_list" edge to the GroupList entity.
+func (m *GroupMutation) RemovedGroupListIDs() (ids []int) {
+	for id := range m.removedgroup_list {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// GroupListIDs returns the "group_list" edge IDs in the mutation.
+func (m *GroupMutation) GroupListIDs() (ids []int) {
+	for id := range m.group_list {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetGroupList resets all changes to the "group_list" edge.
+func (m *GroupMutation) ResetGroupList() {
+	m.group_list = nil
+	m.clearedgroup_list = false
+	m.removedgroup_list = nil
+}
+
+// Where appends a list predicates to the GroupMutation builder.
+func (m *GroupMutation) Where(ps ...predicate.Group) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GroupMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GroupMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Group, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GroupMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GroupMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Group).
+func (m *GroupMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GroupMutation) Fields() []string {
+	fields := make([]string, 0, 1)
+	if m.group != nil {
+		fields = append(fields, group.FieldGroup)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GroupMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case group.FieldGroup:
+		return m.Group()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case group.FieldGroup:
+		return m.OldGroup(ctx)
+	}
+	return nil, fmt.Errorf("unknown Group field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GroupMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case group.FieldGroup:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroup(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Group field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GroupMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GroupMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Group numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GroupMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GroupMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GroupMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown Group nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GroupMutation) ResetField(name string) error {
+	switch name {
+	case group.FieldGroup:
+		m.ResetGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown Group field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GroupMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.group_list != nil {
+		edges = append(edges, group.EdgeGroupList)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GroupMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case group.EdgeGroupList:
+		ids := make([]ent.Value, 0, len(m.group_list))
+		for id := range m.group_list {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GroupMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.removedgroup_list != nil {
+		edges = append(edges, group.EdgeGroupList)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case group.EdgeGroupList:
+		ids := make([]ent.Value, 0, len(m.removedgroup_list))
+		for id := range m.removedgroup_list {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GroupMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedgroup_list {
+		edges = append(edges, group.EdgeGroupList)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GroupMutation) EdgeCleared(name string) bool {
+	switch name {
+	case group.EdgeGroupList:
+		return m.clearedgroup_list
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GroupMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Group unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GroupMutation) ResetEdge(name string) error {
+	switch name {
+	case group.EdgeGroupList:
+		m.ResetGroupList()
+		return nil
+	}
+	return fmt.Errorf("unknown Group edge %s", name)
+}
+
+// GroupListMutation represents an operation that mutates the GroupList nodes in the graph.
+type GroupListMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	name          *string
+	avatar        *string
+	bg            *string
+	group_info    *string
+	detail        *string
+	clearedFields map[string]struct{}
+	group         *int
+	clearedgroup  bool
+	done          bool
+	oldValue      func(context.Context) (*GroupList, error)
+	predicates    []predicate.GroupList
+}
+
+var _ ent.Mutation = (*GroupListMutation)(nil)
+
+// grouplistOption allows management of the mutation configuration using functional options.
+type grouplistOption func(*GroupListMutation)
+
+// newGroupListMutation creates new mutation for the GroupList entity.
+func newGroupListMutation(c config, op Op, opts ...grouplistOption) *GroupListMutation {
+	m := &GroupListMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGroupList,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGroupListID sets the ID field of the mutation.
+func withGroupListID(id int) grouplistOption {
+	return func(m *GroupListMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *GroupList
+		)
+		m.oldValue = func(ctx context.Context) (*GroupList, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().GroupList.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGroupList sets the old GroupList of the mutation.
+func withGroupList(node *GroupList) grouplistOption {
+	return func(m *GroupListMutation) {
+		m.oldValue = func(context.Context) (*GroupList, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GroupListMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GroupListMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of GroupList entities.
+func (m *GroupListMutation) SetID(id int) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GroupListMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GroupListMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().GroupList.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetName sets the "name" field.
+func (m *GroupListMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *GroupListMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the GroupList entity.
+// If the GroupList object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupListMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *GroupListMutation) ResetName() {
+	m.name = nil
+}
+
+// SetAvatar sets the "avatar" field.
+func (m *GroupListMutation) SetAvatar(s string) {
+	m.avatar = &s
+}
+
+// Avatar returns the value of the "avatar" field in the mutation.
+func (m *GroupListMutation) Avatar() (r string, exists bool) {
+	v := m.avatar
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAvatar returns the old "avatar" field's value of the GroupList entity.
+// If the GroupList object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupListMutation) OldAvatar(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAvatar is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAvatar requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAvatar: %w", err)
+	}
+	return oldValue.Avatar, nil
+}
+
+// ClearAvatar clears the value of the "avatar" field.
+func (m *GroupListMutation) ClearAvatar() {
+	m.avatar = nil
+	m.clearedFields[grouplist.FieldAvatar] = struct{}{}
+}
+
+// AvatarCleared returns if the "avatar" field was cleared in this mutation.
+func (m *GroupListMutation) AvatarCleared() bool {
+	_, ok := m.clearedFields[grouplist.FieldAvatar]
+	return ok
+}
+
+// ResetAvatar resets all changes to the "avatar" field.
+func (m *GroupListMutation) ResetAvatar() {
+	m.avatar = nil
+	delete(m.clearedFields, grouplist.FieldAvatar)
+}
+
+// SetBg sets the "bg" field.
+func (m *GroupListMutation) SetBg(s string) {
+	m.bg = &s
+}
+
+// Bg returns the value of the "bg" field in the mutation.
+func (m *GroupListMutation) Bg() (r string, exists bool) {
+	v := m.bg
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBg returns the old "bg" field's value of the GroupList entity.
+// If the GroupList object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupListMutation) OldBg(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBg is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBg requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBg: %w", err)
+	}
+	return oldValue.Bg, nil
+}
+
+// ClearBg clears the value of the "bg" field.
+func (m *GroupListMutation) ClearBg() {
+	m.bg = nil
+	m.clearedFields[grouplist.FieldBg] = struct{}{}
+}
+
+// BgCleared returns if the "bg" field was cleared in this mutation.
+func (m *GroupListMutation) BgCleared() bool {
+	_, ok := m.clearedFields[grouplist.FieldBg]
+	return ok
+}
+
+// ResetBg resets all changes to the "bg" field.
+func (m *GroupListMutation) ResetBg() {
+	m.bg = nil
+	delete(m.clearedFields, grouplist.FieldBg)
+}
+
+// SetGroupInfo sets the "group_info" field.
+func (m *GroupListMutation) SetGroupInfo(s string) {
+	m.group_info = &s
+}
+
+// GroupInfo returns the value of the "group_info" field in the mutation.
+func (m *GroupListMutation) GroupInfo() (r string, exists bool) {
+	v := m.group_info
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupInfo returns the old "group_info" field's value of the GroupList entity.
+// If the GroupList object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupListMutation) OldGroupInfo(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupInfo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupInfo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupInfo: %w", err)
+	}
+	return oldValue.GroupInfo, nil
+}
+
+// ResetGroupInfo resets all changes to the "group_info" field.
+func (m *GroupListMutation) ResetGroupInfo() {
+	m.group_info = nil
+}
+
+// SetDetail sets the "detail" field.
+func (m *GroupListMutation) SetDetail(s string) {
+	m.detail = &s
+}
+
+// Detail returns the value of the "detail" field in the mutation.
+func (m *GroupListMutation) Detail() (r string, exists bool) {
+	v := m.detail
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDetail returns the old "detail" field's value of the GroupList entity.
+// If the GroupList object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupListMutation) OldDetail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDetail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDetail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDetail: %w", err)
+	}
+	return oldValue.Detail, nil
+}
+
+// ResetDetail resets all changes to the "detail" field.
+func (m *GroupListMutation) ResetDetail() {
+	m.detail = nil
+}
+
+// SetGroupID sets the "group" edge to the Group entity by id.
+func (m *GroupListMutation) SetGroupID(id int) {
+	m.group = &id
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *GroupListMutation) ClearGroup() {
+	m.clearedgroup = true
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *GroupListMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupID returns the "group" edge ID in the mutation.
+func (m *GroupListMutation) GroupID() (id int, exists bool) {
+	if m.group != nil {
+		return *m.group, true
+	}
+	return
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *GroupListMutation) GroupIDs() (ids []int) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *GroupListMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// Where appends a list predicates to the GroupListMutation builder.
+func (m *GroupListMutation) Where(ps ...predicate.GroupList) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GroupListMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GroupListMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.GroupList, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GroupListMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GroupListMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (GroupList).
+func (m *GroupListMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GroupListMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.name != nil {
+		fields = append(fields, grouplist.FieldName)
+	}
+	if m.avatar != nil {
+		fields = append(fields, grouplist.FieldAvatar)
+	}
+	if m.bg != nil {
+		fields = append(fields, grouplist.FieldBg)
+	}
+	if m.group_info != nil {
+		fields = append(fields, grouplist.FieldGroupInfo)
+	}
+	if m.detail != nil {
+		fields = append(fields, grouplist.FieldDetail)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GroupListMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case grouplist.FieldName:
+		return m.Name()
+	case grouplist.FieldAvatar:
+		return m.Avatar()
+	case grouplist.FieldBg:
+		return m.Bg()
+	case grouplist.FieldGroupInfo:
+		return m.GroupInfo()
+	case grouplist.FieldDetail:
+		return m.Detail()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GroupListMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case grouplist.FieldName:
+		return m.OldName(ctx)
+	case grouplist.FieldAvatar:
+		return m.OldAvatar(ctx)
+	case grouplist.FieldBg:
+		return m.OldBg(ctx)
+	case grouplist.FieldGroupInfo:
+		return m.OldGroupInfo(ctx)
+	case grouplist.FieldDetail:
+		return m.OldDetail(ctx)
+	}
+	return nil, fmt.Errorf("unknown GroupList field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GroupListMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case grouplist.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case grouplist.FieldAvatar:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAvatar(v)
+		return nil
+	case grouplist.FieldBg:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBg(v)
+		return nil
+	case grouplist.FieldGroupInfo:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupInfo(v)
+		return nil
+	case grouplist.FieldDetail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDetail(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GroupList field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GroupListMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GroupListMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GroupListMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown GroupList numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GroupListMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(grouplist.FieldAvatar) {
+		fields = append(fields, grouplist.FieldAvatar)
+	}
+	if m.FieldCleared(grouplist.FieldBg) {
+		fields = append(fields, grouplist.FieldBg)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GroupListMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GroupListMutation) ClearField(name string) error {
+	switch name {
+	case grouplist.FieldAvatar:
+		m.ClearAvatar()
+		return nil
+	case grouplist.FieldBg:
+		m.ClearBg()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupList nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GroupListMutation) ResetField(name string) error {
+	switch name {
+	case grouplist.FieldName:
+		m.ResetName()
+		return nil
+	case grouplist.FieldAvatar:
+		m.ResetAvatar()
+		return nil
+	case grouplist.FieldBg:
+		m.ResetBg()
+		return nil
+	case grouplist.FieldGroupInfo:
+		m.ResetGroupInfo()
+		return nil
+	case grouplist.FieldDetail:
+		m.ResetDetail()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupList field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GroupListMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.group != nil {
+		edges = append(edges, grouplist.EdgeGroup)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GroupListMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case grouplist.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GroupListMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GroupListMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GroupListMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedgroup {
+		edges = append(edges, grouplist.EdgeGroup)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GroupListMutation) EdgeCleared(name string) bool {
+	switch name {
+	case grouplist.EdgeGroup:
+		return m.clearedgroup
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GroupListMutation) ClearEdge(name string) error {
+	switch name {
+	case grouplist.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupList unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GroupListMutation) ResetEdge(name string) error {
+	switch name {
+	case grouplist.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown GroupList edge %s", name)
+}
+
 // SocialPlatformInfoMutation represents an operation that mutates the SocialPlatformInfo nodes in the graph.
 type SocialPlatformInfoMutation struct {
 	config
@@ -2339,6 +3426,602 @@ func (m *SocialPlatformInfoMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SocialPlatformInfo edge %s", name)
+}
+
+// UploadLogMutation represents an operation that mutates the UploadLog nodes in the graph.
+type UploadLogMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *int
+	server          *string
+	game_user_id    *string
+	toolbox_user_id *string
+	data_type       *string
+	upload_method   *string
+	success         *bool
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*UploadLog, error)
+	predicates      []predicate.UploadLog
+}
+
+var _ ent.Mutation = (*UploadLogMutation)(nil)
+
+// uploadlogOption allows management of the mutation configuration using functional options.
+type uploadlogOption func(*UploadLogMutation)
+
+// newUploadLogMutation creates new mutation for the UploadLog entity.
+func newUploadLogMutation(c config, op Op, opts ...uploadlogOption) *UploadLogMutation {
+	m := &UploadLogMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeUploadLog,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withUploadLogID sets the ID field of the mutation.
+func withUploadLogID(id int) uploadlogOption {
+	return func(m *UploadLogMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *UploadLog
+		)
+		m.oldValue = func(ctx context.Context) (*UploadLog, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().UploadLog.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withUploadLog sets the old UploadLog of the mutation.
+func withUploadLog(node *UploadLog) uploadlogOption {
+	return func(m *UploadLogMutation) {
+		m.oldValue = func(context.Context) (*UploadLog, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m UploadLogMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m UploadLogMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *UploadLogMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *UploadLogMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().UploadLog.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetServer sets the "server" field.
+func (m *UploadLogMutation) SetServer(s string) {
+	m.server = &s
+}
+
+// Server returns the value of the "server" field in the mutation.
+func (m *UploadLogMutation) Server() (r string, exists bool) {
+	v := m.server
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServer returns the old "server" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldServer(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServer: %w", err)
+	}
+	return oldValue.Server, nil
+}
+
+// ResetServer resets all changes to the "server" field.
+func (m *UploadLogMutation) ResetServer() {
+	m.server = nil
+}
+
+// SetGameUserID sets the "game_user_id" field.
+func (m *UploadLogMutation) SetGameUserID(s string) {
+	m.game_user_id = &s
+}
+
+// GameUserID returns the value of the "game_user_id" field in the mutation.
+func (m *UploadLogMutation) GameUserID() (r string, exists bool) {
+	v := m.game_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGameUserID returns the old "game_user_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldGameUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGameUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGameUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGameUserID: %w", err)
+	}
+	return oldValue.GameUserID, nil
+}
+
+// ResetGameUserID resets all changes to the "game_user_id" field.
+func (m *UploadLogMutation) ResetGameUserID() {
+	m.game_user_id = nil
+}
+
+// SetToolboxUserID sets the "toolbox_user_id" field.
+func (m *UploadLogMutation) SetToolboxUserID(s string) {
+	m.toolbox_user_id = &s
+}
+
+// ToolboxUserID returns the value of the "toolbox_user_id" field in the mutation.
+func (m *UploadLogMutation) ToolboxUserID() (r string, exists bool) {
+	v := m.toolbox_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolboxUserID returns the old "toolbox_user_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldToolboxUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolboxUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolboxUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolboxUserID: %w", err)
+	}
+	return oldValue.ToolboxUserID, nil
+}
+
+// ResetToolboxUserID resets all changes to the "toolbox_user_id" field.
+func (m *UploadLogMutation) ResetToolboxUserID() {
+	m.toolbox_user_id = nil
+}
+
+// SetDataType sets the "data_type" field.
+func (m *UploadLogMutation) SetDataType(s string) {
+	m.data_type = &s
+}
+
+// DataType returns the value of the "data_type" field in the mutation.
+func (m *UploadLogMutation) DataType() (r string, exists bool) {
+	v := m.data_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDataType returns the old "data_type" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldDataType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDataType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDataType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDataType: %w", err)
+	}
+	return oldValue.DataType, nil
+}
+
+// ResetDataType resets all changes to the "data_type" field.
+func (m *UploadLogMutation) ResetDataType() {
+	m.data_type = nil
+}
+
+// SetUploadMethod sets the "upload_method" field.
+func (m *UploadLogMutation) SetUploadMethod(s string) {
+	m.upload_method = &s
+}
+
+// UploadMethod returns the value of the "upload_method" field in the mutation.
+func (m *UploadLogMutation) UploadMethod() (r string, exists bool) {
+	v := m.upload_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUploadMethod returns the old "upload_method" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldUploadMethod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUploadMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUploadMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUploadMethod: %w", err)
+	}
+	return oldValue.UploadMethod, nil
+}
+
+// ResetUploadMethod resets all changes to the "upload_method" field.
+func (m *UploadLogMutation) ResetUploadMethod() {
+	m.upload_method = nil
+}
+
+// SetSuccess sets the "success" field.
+func (m *UploadLogMutation) SetSuccess(b bool) {
+	m.success = &b
+}
+
+// Success returns the value of the "success" field in the mutation.
+func (m *UploadLogMutation) Success() (r bool, exists bool) {
+	v := m.success
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSuccess returns the old "success" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldSuccess(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSuccess is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSuccess requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSuccess: %w", err)
+	}
+	return oldValue.Success, nil
+}
+
+// ResetSuccess resets all changes to the "success" field.
+func (m *UploadLogMutation) ResetSuccess() {
+	m.success = nil
+}
+
+// Where appends a list predicates to the UploadLogMutation builder.
+func (m *UploadLogMutation) Where(ps ...predicate.UploadLog) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the UploadLogMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *UploadLogMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.UploadLog, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *UploadLogMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *UploadLogMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (UploadLog).
+func (m *UploadLogMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *UploadLogMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.server != nil {
+		fields = append(fields, uploadlog.FieldServer)
+	}
+	if m.game_user_id != nil {
+		fields = append(fields, uploadlog.FieldGameUserID)
+	}
+	if m.toolbox_user_id != nil {
+		fields = append(fields, uploadlog.FieldToolboxUserID)
+	}
+	if m.data_type != nil {
+		fields = append(fields, uploadlog.FieldDataType)
+	}
+	if m.upload_method != nil {
+		fields = append(fields, uploadlog.FieldUploadMethod)
+	}
+	if m.success != nil {
+		fields = append(fields, uploadlog.FieldSuccess)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *UploadLogMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case uploadlog.FieldServer:
+		return m.Server()
+	case uploadlog.FieldGameUserID:
+		return m.GameUserID()
+	case uploadlog.FieldToolboxUserID:
+		return m.ToolboxUserID()
+	case uploadlog.FieldDataType:
+		return m.DataType()
+	case uploadlog.FieldUploadMethod:
+		return m.UploadMethod()
+	case uploadlog.FieldSuccess:
+		return m.Success()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *UploadLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case uploadlog.FieldServer:
+		return m.OldServer(ctx)
+	case uploadlog.FieldGameUserID:
+		return m.OldGameUserID(ctx)
+	case uploadlog.FieldToolboxUserID:
+		return m.OldToolboxUserID(ctx)
+	case uploadlog.FieldDataType:
+		return m.OldDataType(ctx)
+	case uploadlog.FieldUploadMethod:
+		return m.OldUploadMethod(ctx)
+	case uploadlog.FieldSuccess:
+		return m.OldSuccess(ctx)
+	}
+	return nil, fmt.Errorf("unknown UploadLog field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UploadLogMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case uploadlog.FieldServer:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServer(v)
+		return nil
+	case uploadlog.FieldGameUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGameUserID(v)
+		return nil
+	case uploadlog.FieldToolboxUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolboxUserID(v)
+		return nil
+	case uploadlog.FieldDataType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDataType(v)
+		return nil
+	case uploadlog.FieldUploadMethod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUploadMethod(v)
+		return nil
+	case uploadlog.FieldSuccess:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSuccess(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UploadLog field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *UploadLogMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *UploadLogMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UploadLogMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown UploadLog numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *UploadLogMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *UploadLogMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *UploadLogMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown UploadLog nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *UploadLogMutation) ResetField(name string) error {
+	switch name {
+	case uploadlog.FieldServer:
+		m.ResetServer()
+		return nil
+	case uploadlog.FieldGameUserID:
+		m.ResetGameUserID()
+		return nil
+	case uploadlog.FieldToolboxUserID:
+		m.ResetToolboxUserID()
+		return nil
+	case uploadlog.FieldDataType:
+		m.ResetDataType()
+		return nil
+	case uploadlog.FieldUploadMethod:
+		m.ResetUploadMethod()
+		return nil
+	case uploadlog.FieldSuccess:
+		m.ResetSuccess()
+		return nil
+	}
+	return fmt.Errorf("unknown UploadLog field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *UploadLogMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *UploadLogMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *UploadLogMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *UploadLogMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *UploadLogMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *UploadLogMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *UploadLogMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown UploadLog unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *UploadLogMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown UploadLog edge %s", name)
 }
 
 // UserMutation represents an operation that mutates the User nodes in the graph.

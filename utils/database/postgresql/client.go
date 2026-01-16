@@ -14,7 +14,10 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/group"
+	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
 
 	"entgo.io/ent"
@@ -34,8 +37,14 @@ type Client struct {
 	EmailInfo *EmailInfoClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
 	GameAccountBinding *GameAccountBindingClient
+	// Group is the client for interacting with the Group builders.
+	Group *GroupClient
+	// GroupList is the client for interacting with the GroupList builders.
+	GroupList *GroupListClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
+	// UploadLog is the client for interacting with the UploadLog builders.
+	UploadLog *UploadLogClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 }
@@ -52,7 +61,10 @@ func (c *Client) init() {
 	c.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(c.config)
 	c.EmailInfo = NewEmailInfoClient(c.config)
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
+	c.Group = NewGroupClient(c.config)
+	c.GroupList = NewGroupListClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
+	c.UploadLog = NewUploadLogClient(c.config)
 	c.User = NewUserClient(c.config)
 }
 
@@ -149,7 +161,10 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
 		EmailInfo:                   NewEmailInfoClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
+		Group:                       NewGroupClient(cfg),
+		GroupList:                   NewGroupListClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
 	}, nil
 }
@@ -173,7 +188,10 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
 		EmailInfo:                   NewEmailInfoClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
+		Group:                       NewGroupClient(cfg),
+		GroupList:                   NewGroupListClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
 	}, nil
 }
@@ -203,21 +221,23 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.AuthorizeSocialPlatformInfo.Use(hooks...)
-	c.EmailInfo.Use(hooks...)
-	c.GameAccountBinding.Use(hooks...)
-	c.SocialPlatformInfo.Use(hooks...)
-	c.User.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.GameAccountBinding, c.Group,
+		c.GroupList, c.SocialPlatformInfo, c.UploadLog, c.User,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.AuthorizeSocialPlatformInfo.Intercept(interceptors...)
-	c.EmailInfo.Intercept(interceptors...)
-	c.GameAccountBinding.Intercept(interceptors...)
-	c.SocialPlatformInfo.Intercept(interceptors...)
-	c.User.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.GameAccountBinding, c.Group,
+		c.GroupList, c.SocialPlatformInfo, c.UploadLog, c.User,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
@@ -229,8 +249,14 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EmailInfo.mutate(ctx, m)
 	case *GameAccountBindingMutation:
 		return c.GameAccountBinding.mutate(ctx, m)
+	case *GroupMutation:
+		return c.Group.mutate(ctx, m)
+	case *GroupListMutation:
+		return c.GroupList.mutate(ctx, m)
 	case *SocialPlatformInfoMutation:
 		return c.SocialPlatformInfo.mutate(ctx, m)
+	case *UploadLogMutation:
+		return c.UploadLog.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
@@ -685,6 +711,304 @@ func (c *GameAccountBindingClient) mutate(ctx context.Context, m *GameAccountBin
 	}
 }
 
+// GroupClient is a client for the Group schema.
+type GroupClient struct {
+	config
+}
+
+// NewGroupClient returns a client for the Group from the given config.
+func NewGroupClient(c config) *GroupClient {
+	return &GroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `group.Hooks(f(g(h())))`.
+func (c *GroupClient) Use(hooks ...Hook) {
+	c.hooks.Group = append(c.hooks.Group, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `group.Intercept(f(g(h())))`.
+func (c *GroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Group = append(c.inters.Group, interceptors...)
+}
+
+// Create returns a builder for creating a Group entity.
+func (c *GroupClient) Create() *GroupCreate {
+	mutation := newGroupMutation(c.config, OpCreate)
+	return &GroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Group entities.
+func (c *GroupClient) CreateBulk(builders ...*GroupCreate) *GroupCreateBulk {
+	return &GroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GroupClient) MapCreateBulk(slice any, setFunc func(*GroupCreate, int)) *GroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GroupCreateBulk{err: fmt.Errorf("calling to GroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Group.
+func (c *GroupClient) Update() *GroupUpdate {
+	mutation := newGroupMutation(c.config, OpUpdate)
+	return &GroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GroupClient) UpdateOne(_m *Group) *GroupUpdateOne {
+	mutation := newGroupMutation(c.config, OpUpdateOne, withGroup(_m))
+	return &GroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GroupClient) UpdateOneID(id int) *GroupUpdateOne {
+	mutation := newGroupMutation(c.config, OpUpdateOne, withGroupID(id))
+	return &GroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Group.
+func (c *GroupClient) Delete() *GroupDelete {
+	mutation := newGroupMutation(c.config, OpDelete)
+	return &GroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GroupClient) DeleteOne(_m *Group) *GroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GroupClient) DeleteOneID(id int) *GroupDeleteOne {
+	builder := c.Delete().Where(group.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GroupDeleteOne{builder}
+}
+
+// Query returns a query builder for Group.
+func (c *GroupClient) Query() *GroupQuery {
+	return &GroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Group entity by its id.
+func (c *GroupClient) Get(ctx context.Context, id int) (*Group, error) {
+	return c.Query().Where(group.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GroupClient) GetX(ctx context.Context, id int) *Group {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGroupList queries the group_list edge of a Group.
+func (c *GroupClient) QueryGroupList(_m *Group) *GroupListQuery {
+	query := (&GroupListClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(grouplist.Table, grouplist.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, group.GroupListTable, group.GroupListColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *GroupClient) Hooks() []Hook {
+	return c.hooks.Group
+}
+
+// Interceptors returns the client interceptors.
+func (c *GroupClient) Interceptors() []Interceptor {
+	return c.inters.Group
+}
+
+func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown Group mutation op: %q", m.Op())
+	}
+}
+
+// GroupListClient is a client for the GroupList schema.
+type GroupListClient struct {
+	config
+}
+
+// NewGroupListClient returns a client for the GroupList from the given config.
+func NewGroupListClient(c config) *GroupListClient {
+	return &GroupListClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `grouplist.Hooks(f(g(h())))`.
+func (c *GroupListClient) Use(hooks ...Hook) {
+	c.hooks.GroupList = append(c.hooks.GroupList, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `grouplist.Intercept(f(g(h())))`.
+func (c *GroupListClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GroupList = append(c.inters.GroupList, interceptors...)
+}
+
+// Create returns a builder for creating a GroupList entity.
+func (c *GroupListClient) Create() *GroupListCreate {
+	mutation := newGroupListMutation(c.config, OpCreate)
+	return &GroupListCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GroupList entities.
+func (c *GroupListClient) CreateBulk(builders ...*GroupListCreate) *GroupListCreateBulk {
+	return &GroupListCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GroupListClient) MapCreateBulk(slice any, setFunc func(*GroupListCreate, int)) *GroupListCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GroupListCreateBulk{err: fmt.Errorf("calling to GroupListClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GroupListCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GroupListCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GroupList.
+func (c *GroupListClient) Update() *GroupListUpdate {
+	mutation := newGroupListMutation(c.config, OpUpdate)
+	return &GroupListUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GroupListClient) UpdateOne(_m *GroupList) *GroupListUpdateOne {
+	mutation := newGroupListMutation(c.config, OpUpdateOne, withGroupList(_m))
+	return &GroupListUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GroupListClient) UpdateOneID(id int) *GroupListUpdateOne {
+	mutation := newGroupListMutation(c.config, OpUpdateOne, withGroupListID(id))
+	return &GroupListUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GroupList.
+func (c *GroupListClient) Delete() *GroupListDelete {
+	mutation := newGroupListMutation(c.config, OpDelete)
+	return &GroupListDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GroupListClient) DeleteOne(_m *GroupList) *GroupListDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GroupListClient) DeleteOneID(id int) *GroupListDeleteOne {
+	builder := c.Delete().Where(grouplist.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GroupListDeleteOne{builder}
+}
+
+// Query returns a query builder for GroupList.
+func (c *GroupListClient) Query() *GroupListQuery {
+	return &GroupListQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGroupList},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GroupList entity by its id.
+func (c *GroupListClient) Get(ctx context.Context, id int) (*GroupList, error) {
+	return c.Query().Where(grouplist.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GroupListClient) GetX(ctx context.Context, id int) *GroupList {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGroup queries the group edge of a GroupList.
+func (c *GroupListClient) QueryGroup(_m *GroupList) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(grouplist.Table, grouplist.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, grouplist.GroupTable, grouplist.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *GroupListClient) Hooks() []Hook {
+	return c.hooks.GroupList
+}
+
+// Interceptors returns the client interceptors.
+func (c *GroupListClient) Interceptors() []Interceptor {
+	return c.inters.GroupList
+}
+
+func (c *GroupListClient) mutate(ctx context.Context, m *GroupListMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GroupListCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GroupListUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GroupListUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GroupListDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown GroupList mutation op: %q", m.Op())
+	}
+}
+
 // SocialPlatformInfoClient is a client for the SocialPlatformInfo schema.
 type SocialPlatformInfoClient struct {
 	config
@@ -831,6 +1155,139 @@ func (c *SocialPlatformInfoClient) mutate(ctx context.Context, m *SocialPlatform
 		return (&SocialPlatformInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown SocialPlatformInfo mutation op: %q", m.Op())
+	}
+}
+
+// UploadLogClient is a client for the UploadLog schema.
+type UploadLogClient struct {
+	config
+}
+
+// NewUploadLogClient returns a client for the UploadLog from the given config.
+func NewUploadLogClient(c config) *UploadLogClient {
+	return &UploadLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `uploadlog.Hooks(f(g(h())))`.
+func (c *UploadLogClient) Use(hooks ...Hook) {
+	c.hooks.UploadLog = append(c.hooks.UploadLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `uploadlog.Intercept(f(g(h())))`.
+func (c *UploadLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UploadLog = append(c.inters.UploadLog, interceptors...)
+}
+
+// Create returns a builder for creating a UploadLog entity.
+func (c *UploadLogClient) Create() *UploadLogCreate {
+	mutation := newUploadLogMutation(c.config, OpCreate)
+	return &UploadLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UploadLog entities.
+func (c *UploadLogClient) CreateBulk(builders ...*UploadLogCreate) *UploadLogCreateBulk {
+	return &UploadLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UploadLogClient) MapCreateBulk(slice any, setFunc func(*UploadLogCreate, int)) *UploadLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UploadLogCreateBulk{err: fmt.Errorf("calling to UploadLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UploadLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UploadLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UploadLog.
+func (c *UploadLogClient) Update() *UploadLogUpdate {
+	mutation := newUploadLogMutation(c.config, OpUpdate)
+	return &UploadLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UploadLogClient) UpdateOne(_m *UploadLog) *UploadLogUpdateOne {
+	mutation := newUploadLogMutation(c.config, OpUpdateOne, withUploadLog(_m))
+	return &UploadLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UploadLogClient) UpdateOneID(id int) *UploadLogUpdateOne {
+	mutation := newUploadLogMutation(c.config, OpUpdateOne, withUploadLogID(id))
+	return &UploadLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UploadLog.
+func (c *UploadLogClient) Delete() *UploadLogDelete {
+	mutation := newUploadLogMutation(c.config, OpDelete)
+	return &UploadLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UploadLogClient) DeleteOne(_m *UploadLog) *UploadLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UploadLogClient) DeleteOneID(id int) *UploadLogDeleteOne {
+	builder := c.Delete().Where(uploadlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UploadLogDeleteOne{builder}
+}
+
+// Query returns a query builder for UploadLog.
+func (c *UploadLogClient) Query() *UploadLogQuery {
+	return &UploadLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUploadLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UploadLog entity by its id.
+func (c *UploadLogClient) Get(ctx context.Context, id int) (*UploadLog, error) {
+	return c.Query().Where(uploadlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UploadLogClient) GetX(ctx context.Context, id int) *UploadLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UploadLogClient) Hooks() []Hook {
+	return c.hooks.UploadLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *UploadLogClient) Interceptors() []Interceptor {
+	return c.inters.UploadLog
+}
+
+func (c *UploadLogClient) mutate(ctx context.Context, m *UploadLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UploadLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UploadLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UploadLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UploadLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown UploadLog mutation op: %q", m.Op())
 	}
 }
 
@@ -1034,11 +1491,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, SocialPlatformInfo,
-		User []ent.Hook
+		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, Group, GroupList,
+		SocialPlatformInfo, UploadLog, User []ent.Hook
 	}
 	inters struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, SocialPlatformInfo,
-		User []ent.Interceptor
+		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, Group, GroupList,
+		SocialPlatformInfo, UploadLog, User []ent.Interceptor
 	}
 )

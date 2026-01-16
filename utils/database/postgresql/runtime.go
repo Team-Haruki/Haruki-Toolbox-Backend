@@ -3,10 +3,13 @@
 package postgresql
 
 import (
-	"haruki-suite/ent/schema"
+	"haruki-suite/entsrc/schema"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/group"
+	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
 )
 
@@ -26,12 +29,50 @@ func init() {
 	gameaccountbindingDescVerified := gameaccountbindingFields[2].Descriptor()
 	// gameaccountbinding.DefaultVerified holds the default value on creation for the verified field.
 	gameaccountbinding.DefaultVerified = gameaccountbindingDescVerified.Default.(bool)
+	groupFields := schema.Group{}.Fields()
+	_ = groupFields
+	// groupDescGroup is the schema descriptor for group field.
+	groupDescGroup := groupFields[1].Descriptor()
+	// group.GroupValidator is a validator for the "group" field. It is called by the builders before save.
+	group.GroupValidator = groupDescGroup.Validators[0].(func(string) error)
+	grouplistFields := schema.GroupList{}.Fields()
+	_ = grouplistFields
+	// grouplistDescName is the schema descriptor for name field.
+	grouplistDescName := grouplistFields[1].Descriptor()
+	// grouplist.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	grouplist.NameValidator = grouplistDescName.Validators[0].(func(string) error)
+	// grouplistDescAvatar is the schema descriptor for avatar field.
+	grouplistDescAvatar := grouplistFields[2].Descriptor()
+	// grouplist.AvatarValidator is a validator for the "avatar" field. It is called by the builders before save.
+	grouplist.AvatarValidator = grouplistDescAvatar.Validators[0].(func(string) error)
+	// grouplistDescBg is the schema descriptor for bg field.
+	grouplistDescBg := grouplistFields[3].Descriptor()
+	// grouplist.BgValidator is a validator for the "bg" field. It is called by the builders before save.
+	grouplist.BgValidator = grouplistDescBg.Validators[0].(func(string) error)
+	// grouplistDescGroupInfo is the schema descriptor for group_info field.
+	grouplistDescGroupInfo := grouplistFields[4].Descriptor()
+	// grouplist.GroupInfoValidator is a validator for the "group_info" field. It is called by the builders before save.
+	grouplist.GroupInfoValidator = grouplistDescGroupInfo.Validators[0].(func(string) error)
+	// grouplistDescDetail is the schema descriptor for detail field.
+	grouplistDescDetail := grouplistFields[5].Descriptor()
+	// grouplist.DetailValidator is a validator for the "detail" field. It is called by the builders before save.
+	grouplist.DetailValidator = grouplistDescDetail.Validators[0].(func(string) error)
 	socialplatforminfoFields := schema.SocialPlatformInfo{}.Fields()
 	_ = socialplatforminfoFields
 	// socialplatforminfoDescVerified is the schema descriptor for verified field.
 	socialplatforminfoDescVerified := socialplatforminfoFields[2].Descriptor()
 	// socialplatforminfo.DefaultVerified holds the default value on creation for the verified field.
 	socialplatforminfo.DefaultVerified = socialplatforminfoDescVerified.Default.(bool)
+	uploadlogFields := schema.UploadLog{}.Fields()
+	_ = uploadlogFields
+	// uploadlogDescGameUserID is the schema descriptor for game_user_id field.
+	uploadlogDescGameUserID := uploadlogFields[1].Descriptor()
+	// uploadlog.GameUserIDValidator is a validator for the "game_user_id" field. It is called by the builders before save.
+	uploadlog.GameUserIDValidator = uploadlogDescGameUserID.Validators[0].(func(string) error)
+	// uploadlogDescToolboxUserID is the schema descriptor for toolbox_user_id field.
+	uploadlogDescToolboxUserID := uploadlogFields[2].Descriptor()
+	// uploadlog.ToolboxUserIDValidator is a validator for the "toolbox_user_id" field. It is called by the builders before save.
+	uploadlog.ToolboxUserIDValidator = uploadlogDescToolboxUserID.Validators[0].(func(string) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.
