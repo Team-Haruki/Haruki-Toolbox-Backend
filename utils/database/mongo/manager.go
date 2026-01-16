@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"haruki-suite/utils"
+	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -39,8 +40,15 @@ func getInt(m map[string]interface{}, key string) int64 {
 func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUser, webhookUserUser string) (*MongoDBManager, error) {
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(dbURL))
 	if err != nil {
+		harukiLogger.Errorf("Failed to connect to MongoDB: %v", err)
 		return nil, err
 	}
+	// Verify connection
+	if err := client.Ping(ctx, nil); err != nil {
+		harukiLogger.Errorf("Failed to ping MongoDB: %v", err)
+		return nil, err
+	}
+
 	return &MongoDBManager{
 		client:                client,
 		suiteCollection:       client.Database(db).Collection(suite),
@@ -69,11 +77,15 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID i
 			"updatedResources.userMysekaiHarvestMaps": updatedResources["userMysekaiHarvestMaps"],
 		}}
 	}
-	return collection.UpdateOne(ctx,
+	res, err := collection.UpdateOne(ctx,
 		bson.M{"_id": userID, "server": server},
 		updateDoc,
 		options.Update().SetUpsert(true),
 	)
+	if err != nil {
+		harukiLogger.Errorf("Failed to update data for user %d: %v", userID, err)
+	}
+	return res, err
 }
 
 func (m *MongoDBManager) getCollectionByDataType(dataType utils.UploadDataType) *mongo.Collection {
@@ -90,6 +102,7 @@ func (m *MongoDBManager) fetchOldData(ctx context.Context, collection *mongo.Col
 		return make(map[string]interface{}), nil
 	}
 	if err != nil {
+		harukiLogger.Errorf("Failed to fetch old data for user %d: %v", userID, err)
 		return nil, err
 	}
 	return oldData, nil
@@ -213,12 +226,16 @@ func (m *MongoDBManager) GetData(ctx context.Context, userID int64, server strin
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, nil
 	}
+	if err != nil {
+		harukiLogger.Errorf("Failed to get data for user %d: %v", userID, err)
+	}
 	return result, err
 }
 
 func (m *MongoDBManager) GetWebhookUser(ctx context.Context, id, credential string) (bson.M, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
+		harukiLogger.Errorf("Invalid webhook ID format: %v", err)
 		return nil, err
 	}
 	var result bson.M
@@ -228,6 +245,9 @@ func (m *MongoDBManager) GetWebhookUser(ctx context.Context, id, credential stri
 	).Decode(&result)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, nil
+	}
+	if err != nil {
+		harukiLogger.Errorf("Failed to get webhook user %s: %v", id, err)
 	}
 	return result, err
 }
@@ -241,6 +261,7 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, se
 		return []bson.M{}, nil
 	}
 	if err != nil {
+		harukiLogger.Errorf("Failed to get webhook binding for user %d: %v", userID, err)
 		return nil, err
 	}
 
@@ -265,6 +286,7 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, se
 	cursor, err := m.webhookCollection.Find(ctx, filter,
 		options.Find().SetProjection(bson.M{"callback_url": 1, "bearer": 1, "_id": 0}))
 	if err != nil {
+		harukiLogger.Errorf("Failed to find webhooks: %v", err)
 		return nil, err
 	}
 	defer func(cursor *mongo.Cursor, ctx context.Context) {
@@ -273,6 +295,7 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, se
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {
+		harukiLogger.Errorf("Failed to decode webhooks: %v", err)
 		return nil, err
 	}
 	return results, nil
@@ -284,6 +307,9 @@ func (m *MongoDBManager) AddWebhookPushUser(ctx context.Context, userID string, 
 		bson.M{"$addToSet": bson.M{"webhook_user_ids": webhookID}},
 		options.Update().SetUpsert(true),
 	)
+	if err != nil {
+		harukiLogger.Errorf("Failed to add webhook push user: %v", err)
+	}
 	return err
 }
 
@@ -292,6 +318,9 @@ func (m *MongoDBManager) RemoveWebhookPushUser(ctx context.Context, userID strin
 		bson.M{"uid": userID, "server": server, "type": dataType},
 		bson.M{"$pull": bson.M{"webhook_user_ids": webhookID}},
 	)
+	if err != nil {
+		harukiLogger.Errorf("Failed to remove webhook push user: %v", err)
+	}
 	return err
 }
 
@@ -300,6 +329,7 @@ func (m *MongoDBManager) GetWebhookSubscribers(ctx context.Context, webhookID st
 		bson.M{"webhook_user_ids": webhookID},
 		options.Find().SetProjection(bson.M{"uid": 1, "server": 1, "type": 1, "_id": 0}))
 	if err != nil {
+		harukiLogger.Errorf("Failed to find subscribers for webhook %s: %v", webhookID, err)
 		return nil, err
 	}
 	defer func(cursor *mongo.Cursor, ctx context.Context) {
@@ -308,6 +338,7 @@ func (m *MongoDBManager) GetWebhookSubscribers(ctx context.Context, webhookID st
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {
+		harukiLogger.Errorf("Failed to decode subscribers: %v", err)
 		return nil, err
 	}
 	return results, nil
@@ -359,6 +390,7 @@ func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server
 
 	cursor, err := m.mysekaiCollection.Aggregate(ctx, pipeline, aggOpts)
 	if err != nil {
+		harukiLogger.Errorf("Failed to aggregate mysekai fixtures: %v", err)
 		return nil, err
 	}
 	defer func(cursor *mongo.Cursor, ctx context.Context) {
@@ -367,6 +399,7 @@ func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server
 
 	var results []bson.M
 	if err := cursor.All(ctx, &results); err != nil {
+		harukiLogger.Errorf("Failed to decode aggregation results: %v", err)
 		return nil, err
 	}
 	return results, nil

@@ -1,12 +1,14 @@
 package user
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"haruki-suite/config"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -26,6 +28,7 @@ func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fib
 				socialplatforminfo.PlatformUserID(req.QQ)).
 			Exist(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
@@ -59,6 +62,7 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			SetVerified(true).
 			SetUserID(userID).
 			Save(ctx); err != nil {
+			harukiLogger.Errorf("Failed to create social platform info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
 		}
 
@@ -86,6 +90,7 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				socialplatforminfo.PlatformUserID(req.UserID)).
 			Exist(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
@@ -95,18 +100,22 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(req.Platform), req.UserID)
 		statusToken := uuid.NewString()
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 		}
 		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "false", 5*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save status token")
 		}
 		userIDKey := harukiRedis.BuildSocialPlatformUserIDKey(string(req.Platform), req.UserID)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, userIDKey, userID, 5*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save userID mapping")
 		}
 		statusTokenMappingKey := harukiRedis.BuildSocialPlatformStatusTokenKey(string(req.Platform), req.UserID)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenMappingKey, statusToken, 5*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save status token mapping")
 		}
 
@@ -129,6 +138,7 @@ func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		var status string
 		found, err := apiHelper.DBManager.Redis.GetCache(ctx, statusTokenKey, &status)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get status")
 		}
 		if !found {
@@ -140,6 +150,7 @@ func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		if status == "true" {
 			info, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).Only(ctx)
 			if err != nil {
+				harukiLogger.Errorf("Failed to query social platform info: %v", err)
 				return harukiAPIHelper.ErrorInternal(c, "failed to get social platform info")
 			}
 			ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -165,6 +176,7 @@ func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
 			Exist(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query social platform info")
 		}
 		if !exists {
@@ -176,6 +188,7 @@ func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			Where(socialplatforminfo.HasUserWith(user.IDEQ(userID))).
 			Exec(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to delete social platform info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to clear social platform info")
 		}
 
@@ -191,7 +204,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid authorization")
 		}
 		token := authHeader[7:]
-		if token == "" || token != config.Cfg.UserSystem.SocialPlatformVerifyToken {
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(config.Cfg.UserSystem.SocialPlatformVerifyToken)) != 1 {
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid authorization")
 		}
 
@@ -204,6 +217,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		var code string
 		found, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get verification key")
 		}
 		if !found {
@@ -217,6 +231,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		var userID string
 		found, err = apiHelper.DBManager.Redis.GetCache(ctx, userIDKey, &userID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get userID")
 		}
 		if !found {
@@ -226,6 +241,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		var statusToken string
 		found, err = apiHelper.DBManager.Redis.GetCache(ctx, statusTokenMappingKey, &statusToken)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get status token")
 		}
 		if !found {
@@ -239,11 +255,13 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			SetVerified(true).
 			SetUserID(userID).
 			Save(ctx); err != nil {
+			harukiLogger.Errorf("Failed to create social platform info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
 		}
 
 		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "true", 5*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save status token")
 		}
 

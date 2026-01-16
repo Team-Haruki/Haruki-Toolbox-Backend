@@ -20,10 +20,13 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+var (
+	userIDSuffixRegex = regexp.MustCompile(`user/(\d+)`)
+)
+
 func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType, int64) {
 	if strings.Contains(originalURL, string(harukiUtils.UploadDataTypeSuite)) {
-		re := regexp.MustCompile(`user/(\d+)`)
-		match := re.FindStringSubmatch(originalURL)
+		match := userIDSuffixRegex.FindStringSubmatch(originalURL)
 
 		if len(match) < 2 {
 			return "", 0
@@ -37,8 +40,7 @@ func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType,
 		return harukiUtils.UploadDataTypeSuite, userID
 
 	} else if strings.Contains(originalURL, string(harukiUtils.UploadDataTypeMysekai)) {
-		re := regexp.MustCompile(`user/(\d+)`)
-		match := re.FindStringSubmatch(originalURL)
+		match := userIDSuffixRegex.FindStringSubmatch(originalURL)
 
 		if len(match) < 2 {
 			return "", 0
@@ -102,7 +104,7 @@ func HandleUpload(
 
 	handler := &harukiDataHandler.DataHandler{
 		DBManager:      helper.DBManager,
-		SeakiAPIClient: helper.SekaiAPIClient,
+		SekaiAPIClient: helper.SekaiAPIClient,
 		HttpClient:     harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
 		Logger:         harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil),
 	}
@@ -132,7 +134,7 @@ func HandleUpload(
 	}
 
 	if err = helper.DBManager.Redis.ClearCache(ctx, string(dataType), string(server), *gameUserID); err != nil {
-		return result, err
+		handler.Logger.Warnf("Failed to clear redis cache: %v", err)
 	}
 
 	return result, nil

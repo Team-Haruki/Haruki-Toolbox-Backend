@@ -5,6 +5,7 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
 	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
 	"strings"
 	"time"
 
@@ -40,6 +41,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
+			harukiLogger.Errorf("Failed to hash password: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
 		}
 
@@ -53,6 +55,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			SetNillableAvatarPath(nil).
 			Save(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to create user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
 		}
 
@@ -62,6 +65,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			SetUser(newUser).
 			Save(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to create email info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to create email info")
 		}
 
@@ -103,6 +107,7 @@ func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 	var storedOTP string
 	exists, err := apiHelper.DBManager.Redis.GetCache(ctx, redisKey, &storedOTP)
 	if err != nil {
+		harukiLogger.Errorf("Failed to get redis cache: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "redis error")
 	}
 	if !exists || storedOTP != otp {
@@ -115,6 +120,7 @@ func checkEmailAvailability(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 	ctx := c.Context()
 	userExists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(email)).Exist(ctx)
 	if err != nil {
+		harukiLogger.Errorf("Failed to query user: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "database error")
 	}
 	if userExists {
@@ -123,6 +129,7 @@ func checkEmailAvailability(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 
 	emailVerifiedExists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(email), emailinfo.Verified(true)).Exist(ctx)
 	if err != nil {
+		harukiLogger.Errorf("Failed to query email info: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "database error")
 	}
 	if emailVerifiedExists {

@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"haruki-suite/config"
+	harukiLogger "haruki-suite/utils/logger"
 	"strings"
 	"time"
 
@@ -99,20 +101,33 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
 	}
 	tokenStr := auth
+	if strings.HasPrefix(tokenStr, "Bearer ") {
+		tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
+	}
+
 	parsed, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
 		return []byte(config.Cfg.UserSystem.SessionSignToken), nil
 	})
 	if err != nil || !parsed.Valid {
+		harukiLogger.Warnf("Invalid session token: %v", err)
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid token", nil)
 	}
 	claims, ok := parsed.Claims.(*SessionClaims)
 	if !ok {
+		harukiLogger.Warnf("Invalid session claims")
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid claims", nil)
 	}
 
 	key := claims.UserID + ":" + claims.SessionToken
 	exists, err := s.RedisClient.Exists(context.Background(), key).Result()
-	if err != nil || exists == 0 {
+	if err != nil {
+		harukiLogger.Errorf("Redis error checking session: %v", err)
+		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid session", nil)
+	}
+	if exists == 0 {
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid session", nil)
 	}
 
@@ -147,10 +162,12 @@ func ClearUserSessions(redisClient *redis.Client, userID string) error {
 	for {
 		keys, newCursor, err := redisClient.Scan(ctx, cursor, prefix+"*", 100).Result()
 		if err != nil {
+			harukiLogger.Errorf("Redis scan error: %v", err)
 			return err
 		}
 		if len(keys) > 0 {
 			if err := redisClient.Del(ctx, keys...).Err(); err != nil {
+				harukiLogger.Errorf("Redis del error: %v", err)
 				return err
 			}
 		}

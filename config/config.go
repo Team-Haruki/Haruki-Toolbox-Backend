@@ -141,24 +141,4 @@ func init() {
 		logger.Errorf("Failed to parse config: %v", err)
 		os.Exit(1)
 	}
-
-	// Environment variable overrides for sensitive fields
-	if env := os.Getenv("HARUKI_USERSYSTEM_DBURL"); env != "" {
-		Cfg.UserSystem.DBURL = env
-	}
-	if env := os.Getenv("HARUKI_REDIS_PASSWORD"); env != "" {
-		Cfg.Redis.Password = env
-	}
-	if env := os.Getenv("HARUKI_WEBHOOK_JWTSECRET"); env != "" {
-		Cfg.Webhook.JWTSecret = env
-	}
-	if env := os.Getenv("HARUKI_USERSYSTEM_CLOUDFLARESECRET"); env != "" {
-		Cfg.UserSystem.CloudflareSecret = env
-	}
-	if env := os.Getenv("HARUKI_SMTP_SMTPPASS"); env != "" {
-		Cfg.SMTP.SMTPPass = env
-	}
-	if env := os.Getenv("HARUKI_HARUKIPROXY_SECRET"); env != "" {
-		Cfg.HarukiProxy.Secret = env
-	}
 }

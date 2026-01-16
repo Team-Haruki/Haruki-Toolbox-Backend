@@ -10,12 +10,41 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-var dataChunks map[string][]harukiUtils.DataChunk
+var (
+	dataChunks      = make(map[string][]harukiUtils.DataChunk)
+	dataChunksMutex sync.RWMutex
+)
+
+func init() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		for range ticker.C {
+			cleanExpiredChunks()
+		}
+	}()
+}
+
+func cleanExpiredChunks() {
+	dataChunksMutex.Lock()
+	defer dataChunksMutex.Unlock()
+
+	now := time.Now()
+	for uploadID, chunks := range dataChunks {
+		if len(chunks) > 0 {
+			if now.Sub(chunks[len(chunks)-1].Time) > 30*time.Minute {
+				delete(dataChunks, uploadID)
+			}
+		} else {
+			delete(dataChunks, uploadID)
+		}
+	}
+}
 
 type dataUploadHeader struct {
 	ScriptVersion string `header:"X-Script-Version"`
@@ -61,11 +90,11 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		now := time.Now()
 		body := c.Request().Body()
 
-		if dataChunks == nil {
-			dataChunks = make(map[string][]harukiUtils.DataChunk)
-		}
 		chunkCopy := make([]byte, len(body))
 		copy(chunkCopy, body)
+
+		var completedChunks []harukiUtils.DataChunk
+		dataChunksMutex.Lock()
 		dataChunks[header.UploadId] = append(dataChunks[header.UploadId], harukiUtils.DataChunk{
 			RequestURL:  header.OriginalUrl,
 			UploadID:    header.UploadId,
@@ -75,9 +104,14 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			Data:        chunkCopy,
 		})
 
-		go func(header *dataUploadHeader, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string) {
-			chunks := dataChunks[header.UploadId]
-			if len(chunks) == header.TotalChunks {
+		if len(dataChunks[header.UploadId]) == header.TotalChunks {
+			completedChunks = dataChunks[header.UploadId]
+			delete(dataChunks, header.UploadId)
+		}
+		dataChunksMutex.Unlock()
+
+		if completedChunks != nil {
+			go func(reqCtx context.Context, chunks []harukiUtils.DataChunk, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string) {
 				sort.Slice(chunks, func(x, y int) bool {
 					return chunks[x].ChunkIndex < chunks[y].ChunkIndex
 				})
@@ -93,15 +127,14 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 					offset += len(c.Data)
 				}
 
-				ctx := context.Background()
+				// Create a background context that inherits values from request context but isn't cancelled when request ends
+				ctx := context.WithoutCancel(reqCtx)
 				_, err := HandleUpload(ctx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, nil, apiHelper)
 				if err != nil {
 					logger.Errorf("HandleUpload failed: %v", err)
 				}
-
-				delete(dataChunks, header.UploadId)
-			}
-		}(header, userId, server, string(uploadType))
+			}(c.Context(), completedChunks, userId, server, string(uploadType))
+		}
 
 		return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 	}

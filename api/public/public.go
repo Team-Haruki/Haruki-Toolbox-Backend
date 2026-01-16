@@ -8,6 +8,7 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
 	"time"
@@ -149,10 +150,12 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		result, err := fetchMongoData(c, apiHelper, userID, server, dataType)
 		if err != nil {
+			harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
 			return err
 		}
 		resp, err = processDataResponse(c, apiHelper, dataType, result)
 		if err != nil {
+			harukiLogger.Errorf("Failed to process data response: %v", err)
 			return err
 		}
 

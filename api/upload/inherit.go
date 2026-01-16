@@ -27,12 +27,6 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err := c.Bind().Body(data); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "Validation error: "+err.Error())
 		}
-
-		if harukiUtils.SupportedInheritUploadServer(serverStr) == harukiUtils.SupportedInheritUploadServerEN &&
-			uploadType == harukiUtils.UploadDataTypeMysekai {
-			return harukiAPIHelper.ErrorForbidden(c, "Haruki Inherit can not accept EN server's mysekai data upload request at this time.")
-		}
-
 		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType)
 		result, err := retriever.Run(ctx)
 		if err != nil {

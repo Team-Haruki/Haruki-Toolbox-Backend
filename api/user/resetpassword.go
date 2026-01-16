@@ -7,6 +7,7 @@ import (
 	"haruki-suite/utils/cloudflare"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
 	"haruki-suite/utils/smtp"
 	"strings"
 	"time"
@@ -40,11 +41,13 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		resetURL := fmt.Sprintf("%s/user/reset-password/%s?email=%s", config.Cfg.UserSystem.FrontendURL, resetSecret, payload.Email)
 		redisKey := harukiRedis.BuildResetPasswordKey(payload.Email)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, redisKey, resetSecret, 30*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to store secret")
 		}
 
 		body := strings.ReplaceAll(smtp.ResetPasswordTemplate, "{{LINK}}", resetURL)
 		if err := apiHelper.SMTPClient.Send([]string{payload.Email}, "您的重设密码请求 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
+			harukiLogger.Errorf("Failed to send email: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to send email")
 		}
 
@@ -63,6 +66,7 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		var secret string
 		found, err := apiHelper.DBManager.Redis.GetCache(ctx, redisKey, &secret)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to retrieve secret")
 		}
 		if !found {
@@ -77,11 +81,13 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			Where(user.EmailEQ(payload.Email)).
 			Only(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to locate user")
 		}
 
 		hashed, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {
+			harukiLogger.Errorf("Failed to hash password: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to hash password")
 		}
 
@@ -91,10 +97,12 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			SetPasswordHash(string(hashed)).
 			Save(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to update user password: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to update password")
 		}
 
 		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, u.ID); err != nil {
+			harukiLogger.Errorf("Failed to clear user sessions: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to clear user sessions")
 		}
 
