@@ -4,6 +4,7 @@ import (
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	harukiMongo "haruki-suite/utils/database/mongo"
+	harukiLogger "haruki-suite/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -11,6 +12,11 @@ import (
 
 func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		if secretKey == "" {
+			harukiLogger.Errorf("Webhook secret key is not configured")
+			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
+		}
+
 		ctx := c.Context()
 		jwtToken := c.Get("X-Haruki-Suite-Webhook-Token")
 		if jwtToken == "" {
@@ -39,7 +45,11 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		}
 
 		user, err := manager.GetWebhookUser(ctx, _id, credential)
-		if err != nil || user == nil {
+		if err != nil {
+			harukiLogger.Errorf("Failed to get webhook user: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "Database error")
+		}
+		if user == nil {
 			return harukiAPIHelper.ErrorForbidden(c, "Webhook user not found or credential mismatch")
 		}
 
@@ -54,6 +64,7 @@ func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		webhookID := c.Locals("webhook_id").(string)
 		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(ctx, webhookID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get subscribers for webhook %s: %v", webhookID, err)
 			return harukiAPIHelper.ErrorInternal(c, err.Error())
 		}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &users)
@@ -80,6 +91,7 @@ func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 
 		err = apiHelper.DBManager.Mongo.AddWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to add webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, err.Error())
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, "Registered webhook push user successfully.", nil)
@@ -106,6 +118,7 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 
 		err = apiHelper.DBManager.Mongo.RemoveWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to remove webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, err.Error())
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, "Unregistered webhook push user successfully.", nil)

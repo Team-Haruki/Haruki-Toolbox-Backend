@@ -66,6 +66,7 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	}
 	c.isErrorExist = true
 	c.errorMessage = "failed to parse cookies after retries"
+	c.logger.Errorf(c.errorMessage)
 	return fmt.Errorf(c.errorMessage)
 }
 
@@ -103,6 +104,7 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 	}
 	c.isErrorExist = true
 	c.errorMessage = "failed to parse game version after retries"
+	c.logger.Errorf(c.errorMessage)
 	return fmt.Errorf(c.errorMessage)
 }
 
@@ -133,6 +135,7 @@ func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, bo
 	url := c.api + path
 	status, respHeaders, respBody, err := c.httpClient.Request(ctx, method, url, headers, body)
 	if err != nil {
+		c.logger.Errorf("HTTP request failed for %s: %v", url, err)
 		return nil, 0, err
 	}
 
@@ -146,6 +149,7 @@ func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, bo
 		return respBody, status, nil
 	}
 
+	c.logger.Errorf("API returned non-200 status for %s: %d", url, status)
 	return respBody, status, fmt.Errorf("API error: %d", status)
 }
 
@@ -153,6 +157,7 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 	c.logger.Infof("%s Server Sekai Client generating inherit token...", strings.ToUpper(string(c.server)))
 	token, err := c.generateInheritToken()
 	if err != nil {
+		c.logger.Errorf("Failed to generate inherit token: %v", err)
 		return err
 	}
 	headers := map[string]string{"x-inherit-id-verify-token": token}
@@ -180,10 +185,12 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 
 	unpackedAny, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
+		c.logger.Errorf("Failed to unpack inherit response: %v", err)
 		return err
 	}
 	unpacked, ok := unpackedAny.(map[string]interface{})
 	if !ok {
+		c.logger.Errorf("Unexpected unpack result type")
 		return fmt.Errorf("unexpected unpack result type")
 	}
 
@@ -203,6 +210,7 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 				}
 			}
 		}
+		c.logger.Errorf("Failed to get userId from inherit response")
 		return fmt.Errorf("failed to get userId")
 	} else {
 		if cred, ok := unpacked["credential"].(string); ok {
@@ -210,6 +218,7 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 			c.logger.Infof("%s Server Sekai Client retrieved user credential.", strings.ToUpper(string(c.server)))
 			return nil
 		}
+		c.logger.Errorf("Failed to get credential from inherit response")
 		return fmt.Errorf("failed to get credential")
 	}
 }
@@ -227,6 +236,7 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 	}
 	packed, err := Pack(body, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
+		c.logger.Errorf("Failed to pack login request: %v", err)
 		return err
 	}
 
@@ -236,15 +246,18 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		return err
 	}
 	if status == 403 {
+		c.logger.Errorf("Account login failed, status=403")
 		return fmt.Errorf("account login failed, status=403")
 	}
 
 	unpackedAny, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
+		c.logger.Errorf("Failed to unpack login response: %v", err)
 		return err
 	}
 	unpacked, ok := unpackedAny.(map[string]interface{})
 	if !ok {
+		c.logger.Errorf("Unexpected unpack result type")
 		return fmt.Errorf("unexpected unpack result type")
 	}
 
@@ -253,6 +266,7 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		c.logger.Infof("%s Server Sekai Client logged in.", strings.ToUpper(string(c.server)))
 		return nil
 	}
+	c.logger.Errorf("Login response missing sessionToken")
 	return fmt.Errorf("login response missing sessionToken")
 }
 

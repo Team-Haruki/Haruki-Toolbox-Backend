@@ -102,7 +102,7 @@ func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRoute
 			authorizesocialplatforminfo.PlatformEQ(platform),
 			authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
 		).
-		Exist(c.RequestCtx())
+		Exist(c.Context())
 	if err == nil && exists {
 		return true
 	}

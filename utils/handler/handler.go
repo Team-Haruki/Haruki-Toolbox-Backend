@@ -23,7 +23,7 @@ import (
 
 type DataHandler struct {
 	DBManager      *database.HarukiToolboxDBManager
-	SeakiAPIClient *sekaiapi.HarukiSekaiAPIClient
+	SekaiAPIClient *sekaiapi.HarukiSekaiAPIClient
 	HttpClient     *harukiHttp.Client
 	Logger         *harukiLogger.Logger
 }
@@ -140,7 +140,7 @@ func (h *DataHandler) validateOtherServerImagePath(imagePath string, expectedUse
 }
 
 func (h *DataHandler) verifyGameAccountExists(uid string, server utils.SupportedDataUploadServer) error {
-	resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
+	resultInfo, _, err := h.SekaiAPIClient.GetUserProfile(uid, string(server))
 	if resultInfo == nil {
 		if err != nil {
 			return err
@@ -227,6 +227,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 	}
 
 	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
+		h.Logger.Errorf("Failed to update mongo data: %v", err)
 		return nil, err
 	}
 

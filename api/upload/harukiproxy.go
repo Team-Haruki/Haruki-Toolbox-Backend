@@ -26,6 +26,10 @@ func unpackKeyFromHelper(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	return sum[:], nil
 }
 
+var (
+	userAgentRegex = regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
+)
+
 func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	if apiHelper.HarukiProxyUserAgent != "" && apiHelper.HarukiProxyVersion != "" && apiHelper.HarukiProxySecret != "" {
 		return func(c fiber.Ctx) error {
@@ -36,8 +40,7 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 				return harukiAPIHelper.ErrorBadRequest(c, "Invalid HarukiProxy Secret")
 			}
 
-			re := regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
-			matches := re.FindStringSubmatch(requestUserAgent)
+			matches := userAgentRegex.FindStringSubmatch(requestUserAgent)
 			if len(matches) < 3 {
 				return harukiAPIHelper.ErrorBadRequest(c, "Invalid User-Agent format")
 			}

@@ -7,7 +7,17 @@ import (
 )
 
 func RestoreCompactData(data bson.M) []map[string]interface{} {
-	enumRaw, _ := data["__ENUM__"].(bson.M)
+	var enumRaw bson.M
+	if val, ok := data["__ENUM__"]; ok {
+		if m, ok := val.(bson.M); ok {
+			enumRaw = m
+		} else if m, ok := val.(map[string]interface{}); ok {
+			enumRaw = make(bson.M)
+			for k, v := range m {
+				enumRaw[k] = v
+			}
+		}
+	}
 
 	columnLabels, columns := extractColumnsAndLabels(data, enumRaw)
 
@@ -142,7 +152,11 @@ func GetValueFromResult(result bson.M, key string) interface{} {
 	case bson.M:
 		return RestoreCompactData(m)
 	case map[string]interface{}:
-		return RestoreCompactData(m)
+		bm := make(bson.M)
+		for k, v := range m {
+			bm[k] = v
+		}
+		return RestoreCompactData(bm)
 	case bson.D:
 		bm := make(bson.M, len(m))
 		for _, elem := range m {

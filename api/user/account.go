@@ -6,6 +6,7 @@ import (
 	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql/user"
+	harukiLogger "haruki-suite/utils/logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +55,7 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			avatarFileName = uuid.NewString() + ext
 			savePath := filepath.Join(config.Cfg.UserSystem.AvatarSaveDir, avatarFileName)
 			if err := os.WriteFile(savePath, decodedAvatar, 0644); err != nil {
+				harukiLogger.Errorf("Failed to save avatar file: %v", err)
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to save avatar", nil)
 			}
 			ub = ub.SetAvatarPath(avatarFileName)
@@ -65,6 +67,7 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 
 		_, err := ub.Save(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to update user profile: %v", err)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to update user profile", nil)
 		}
 
@@ -89,6 +92,7 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {
+			harukiLogger.Errorf("Failed to hash password: %v", err)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to hash password", nil)
 		}
 
@@ -100,9 +104,12 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			SetPasswordHash(string(hashedPassword)).
 			Save(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to update password: %v", err)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Failed to update password", nil)
 		}
-		_ = harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
+		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
+			harukiLogger.Errorf("Failed to clear user sessions: %v", err)
+		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
 	}
 }

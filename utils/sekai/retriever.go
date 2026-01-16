@@ -60,11 +60,13 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 
 	suite, status, err := r.client.callAPI(ctx, basePath, "GET", nil, nil)
 	if err != nil {
+		r.logger.Errorf("Failed to call suite API: %v", err)
 		return nil, err
 	}
 	if suite == nil {
 		r.isErrorExist = true
 		r.ErrorMessage = "failed to retrieve suite, API response timeout."
+		r.logger.Errorf(r.ErrorMessage)
 		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 
@@ -79,10 +81,12 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 
 	unpacked, err := Unpack(suite, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if err != nil {
+		r.logger.Errorf("Failed to unpack suite response: %v", err)
 		return nil, err
 	}
 	unpackedMap, ok := unpacked.(map[string]interface{})
 	if !ok {
+		r.logger.Errorf("Unexpected unpack type for suite response")
 		return nil, fmt.Errorf("unexpected unpack type")
 	}
 
@@ -109,6 +113,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 		r.logger.Infof("%s server retrieved suite.", strings.ToUpper(string(r.client.server)))
 		return suite, nil
 	}
+	r.logger.Errorf("Suite API returned non-200 status: %d", status)
 	return nil, fmt.Errorf("suite api returned non-200 status")
 }
 
@@ -146,16 +151,19 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 	r.logger.Infof("%s server checking MySekai availability...", strings.ToUpper(string(r.client.server)))
 	resp, status, err := r.client.callAPI(ctx, "/module-maintenance/MYSEKAI", "GET", nil, nil)
 	if err != nil || status != 200 {
+		r.logger.Warnf("MySekai maintenance check failed or status not 200: %v, status: %d", err, status)
 		return nil, err
 	}
 	unpacked, _ := Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
+		r.logger.Infof("MySekai is under maintenance")
 		return nil, nil
 	}
 
 	resp, _, _ = r.client.callAPI(ctx, "/module-maintenance/MYSEKAI_ROOM", "GET", nil, nil)
 	unpacked, _ = Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
+		r.logger.Infof("MySekai Room is under maintenance")
 		return nil, nil
 	}
 
@@ -178,6 +186,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 		r.logger.Infof("%s server retrieved MySekai data.", strings.ToUpper(string(r.client.server)))
 		return mysekai, nil
 	}
+	r.logger.Errorf("Failed to retrieve MySekai data, status: %d", status)
 	return nil, fmt.Errorf("failed to retrieve mysekai")
 }
 
@@ -185,11 +194,13 @@ func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiI
 	if err := r.client.Init(ctx); err != nil {
 		r.isErrorExist = true
 		r.ErrorMessage = err.Error()
+		r.logger.Errorf("Client init failed: %v", err)
 		return nil, err
 	}
 	if r.client.isErrorExist {
 		r.isErrorExist = true
 		r.ErrorMessage = r.client.errorMessage
+		r.logger.Errorf("Client has error: %s", r.client.errorMessage)
 		return nil, fmt.Errorf(r.ErrorMessage)
 	}
 

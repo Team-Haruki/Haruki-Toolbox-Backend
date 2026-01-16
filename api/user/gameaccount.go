@@ -9,6 +9,7 @@ import (
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -26,6 +27,7 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		code := GenerateCode(true)
 		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, string(req.Server), req.UserID)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 		}
 
@@ -73,6 +75,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 		existing, err := queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query existing binding: %v", err)
 			return err
 		}
 
@@ -90,11 +93,13 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		if err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req); err != nil {
+			harukiLogger.Errorf("Failed to save game account binding: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -137,11 +142,13 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			SetMysekai(req.MySekai).
 			Save(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to update game account binding: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -177,11 +184,13 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to delete game account binding: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -210,6 +219,7 @@ func checkIfAlreadyVerified(c fiber.Ctx, ctx context.Context, apiHelper *harukiA
 		}
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -233,6 +243,7 @@ func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
 	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
 	if err != nil || resultInfo == nil {
+		harukiLogger.Errorf("Failed to get user profile from Sekai API: %v", err)
 		return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("request sekai account profile failed: %v", err))
 	}
 	if !resultInfo.ServerAvailable {
@@ -247,6 +258,7 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 
 	var data map[string]interface{}
 	if err := sonic.Unmarshal(body, &data); err != nil {
+		harukiLogger.Errorf("Failed to unmarshal user profile: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to parse profile")
 	}
 	userProfile, ok := data["userProfile"].(map[string]interface{})

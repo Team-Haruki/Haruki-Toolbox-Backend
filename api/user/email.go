@@ -8,6 +8,7 @@ import (
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
 	"haruki-suite/utils/smtp"
 	"math/big"
 	"strings"
@@ -45,11 +46,13 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 	code := GenerateCode(false)
 	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, 5*time.Minute); err != nil {
+		harukiLogger.Errorf("Failed to set redis cache: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 	}
 
 	body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
 	if err := helper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
+		harukiLogger.Errorf("Failed to send email: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to send email")
 	}
 
@@ -62,6 +65,7 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	var code string
 	found, err := helper.DBManager.Redis.GetCache(ctx, redisKey, &code)
 	if err != nil {
+		harukiLogger.Errorf("Failed to get redis cache: %v", err)
 		return false, harukiAPIHelper.ErrorInternal(c, "failed to check redis")
 	}
 	if !found {
@@ -85,6 +89,7 @@ func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 		}
 		exists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query email info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
@@ -114,6 +119,7 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			Where(user.IDEQ(userID)).
 			SetEmail(req.Email).
 			Save(ctx); err != nil {
+			harukiLogger.Errorf("Failed to update user email: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
 		}
 		if _, err := apiHelper.DBManager.DB.EmailInfo.
@@ -122,6 +128,7 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			SetEmail(req.Email).
 			SetVerified(true).
 			Save(ctx); err != nil {
+			harukiLogger.Errorf("Failed to update email info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to update email info")
 		}
 
