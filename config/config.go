@@ -62,6 +62,7 @@ type BackendConfig struct {
 	AccessLog        string   `yaml:"access_log"`
 	AccessLogPath    string   `yaml:"access_log_path"`
 	AllowCORS        []string `yaml:"allow_cors"`
+	CSPConnectSrc    []string `yaml:"csp_connect_src"`
 	EnableTrustProxy bool     `yaml:"enable_trust_proxy"`
 	TrustProxies     []string `yaml:"trusted_proxies"`
 	ProxyHeader      string   `yaml:"proxy_header"`
@@ -139,5 +140,25 @@ func init() {
 	if err := decoder.Decode(&Cfg); err != nil {
 		logger.Errorf("Failed to parse config: %v", err)
 		os.Exit(1)
+	}
+
+	// Environment variable overrides for sensitive fields
+	if env := os.Getenv("HARUKI_USERSYSTEM_DBURL"); env != "" {
+		Cfg.UserSystem.DBURL = env
+	}
+	if env := os.Getenv("HARUKI_REDIS_PASSWORD"); env != "" {
+		Cfg.Redis.Password = env
+	}
+	if env := os.Getenv("HARUKI_WEBHOOK_JWTSECRET"); env != "" {
+		Cfg.Webhook.JWTSecret = env
+	}
+	if env := os.Getenv("HARUKI_USERSYSTEM_CLOUDFLARESECRET"); env != "" {
+		Cfg.UserSystem.CloudflareSecret = env
+	}
+	if env := os.Getenv("HARUKI_SMTP_SMTPPASS"); env != "" {
+		Cfg.SMTP.SMTPPass = env
+	}
+	if env := os.Getenv("HARUKI_HARUKIPROXY_SECRET"); env != "" {
+		Cfg.HarukiProxy.Secret = env
 	}
 }
