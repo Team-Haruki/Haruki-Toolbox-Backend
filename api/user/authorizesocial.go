@@ -54,18 +54,18 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			Only(ctx)
 		if err == nil && existing != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "this social platform account is authorized")
-		} else {
-			_, err = client.Create().
-				SetUserID(toolboxUserID).
-				SetPlatformID(userAccountID).
-				SetPlatform(payload.Platform).
-				SetPlatformUserID(payload.UserID).
-				SetComment(payload.Comment).
-				Save(ctx)
-			if err != nil {
-				harukiLogger.Errorf("Failed to create authorized social platform: %v", err)
-				return harukiAPIHelper.ErrorInternal(c, "failed to add social platform")
-			}
+		}
+
+		_, err = client.Create().
+			SetUserID(toolboxUserID).
+			SetPlatformID(userAccountID).
+			SetPlatform(payload.Platform).
+			SetPlatformUserID(payload.UserID).
+			SetComment(payload.Comment).
+			Save(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to create authorized social platform: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to add social platform")
 		}
 
 		infos, err := client.Query().
@@ -76,7 +76,7 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
 		}
 
-		var resp []harukiAPIHelper.AuthorizeSocialPlatformInfo
+		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
 				ID:       i.PlatformID,
@@ -123,7 +123,7 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
 		}
 
-		var resp []harukiAPIHelper.AuthorizeSocialPlatformInfo
+		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
 				ID:       i.PlatformID,

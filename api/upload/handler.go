@@ -100,6 +100,7 @@ func HandleUpload(
 	gameUserID *int64,
 	userID *string,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	uploadMethod harukiUtils.UploadMethod,
 ) (*harukiUtils.HandleDataResult, error) {
 
 	handler := &harukiDataHandler.DataHandler{
@@ -125,11 +126,38 @@ func HandleUpload(
 	}
 
 	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID, settings)
-	if err != nil {
-		return result, err
+
+	// Record upload log
+	success := err == nil
+	if err == nil {
+		if vErr := validateUploadResult(result); vErr != nil {
+			success = false
+			err = vErr
+		}
 	}
 
-	if err := validateUploadResult(result); err != nil {
+	toolboxUserID := ""
+	if userID != nil {
+		toolboxUserID = *userID
+	}
+
+	go func() {
+		logCtx := context.Background()
+		_, logErr := helper.DBManager.DB.UploadLog.Create().
+			SetServer(string(server)).
+			SetGameUserID(strconv.FormatInt(*gameUserID, 10)).
+			SetToolboxUserID(toolboxUserID).
+			SetDataType(string(dataType)).
+			SetUploadMethod(string(uploadMethod)).
+			SetSuccess(success).
+			SetUploadTime(time.Now()).
+			Save(logCtx)
+		if logErr != nil {
+			handler.Logger.Warnf("Failed to create upload log: %v", logErr)
+		}
+	}()
+
+	if err != nil {
 		return result, err
 	}
 
@@ -255,7 +283,7 @@ func HandleProxyUpload(
 			}
 		}
 
-		if _, err := HandleUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper); err != nil {
+		if _, err := HandleUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper, harukiUtils.UploadMethodIOSProxy); err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
 

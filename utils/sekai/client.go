@@ -212,15 +212,15 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 		}
 		c.logger.Errorf("Failed to get userId from inherit response")
 		return fmt.Errorf("failed to get userId")
-	} else {
-		if cred, ok := unpacked["credential"].(string); ok {
-			c.credential = cred
-			c.logger.Infof("%s Server Sekai Client retrieved user credential.", strings.ToUpper(string(c.server)))
-			return nil
-		}
-		c.logger.Errorf("Failed to get credential from inherit response")
-		return fmt.Errorf("failed to get credential")
 	}
+
+	if cred, ok := unpacked["credential"].(string); ok {
+		c.credential = cred
+		c.logger.Infof("%s Server Sekai Client retrieved user credential.", strings.ToUpper(string(c.server)))
+		return nil
+	}
+	c.logger.Errorf("Failed to get credential from inherit response")
+	return fmt.Errorf("failed to get credential")
 }
 
 func (c *HarukiSekaiClient) Login(ctx context.Context) error {

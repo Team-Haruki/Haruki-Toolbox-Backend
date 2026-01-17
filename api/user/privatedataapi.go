@@ -1,6 +1,7 @@
 package user
 
 import (
+	"crypto/subtle"
 	harukiUtils "haruki-suite/utils"
 	harukiApiHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
@@ -17,7 +18,7 @@ func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Ha
 		authorization := c.Get("Authorization")
 		userAgent := c.Get("User-Agent")
 
-		if authorization != expectedToken {
+		if subtle.ConstantTimeCompare([]byte(authorization), []byte(expectedToken)) != 1 {
 			return harukiApiHelper.ErrorUnauthorized(c, "unauthorized token")
 		}
 

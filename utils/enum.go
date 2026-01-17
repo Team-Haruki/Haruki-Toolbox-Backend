@@ -1,6 +1,9 @@
 package utils
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type UploadDataType string
 
@@ -56,4 +59,32 @@ func ParseSupportedInheritUploadServer(s string) (SupportedInheritUploadServer, 
 	default:
 		return "", fmt.Errorf("invalid server: %s", s)
 	}
+}
+
+type UploadMethod string
+
+const (
+	UploadMethodManual      UploadMethod = "manual"
+	UploadMethodIOSProxy    UploadMethod = "ios_proxy"
+	UploadMethodIOSScript   UploadMethod = "ios_script"
+	UploadMethodHarukiProxy UploadMethod = "haruki_proxy"
+	UploadMethodInherit     UploadMethod = "inherit"
+)
+
+const (
+	SessionTTL       = 7 * 24 * time.Hour
+	OTPTTL           = 5 * time.Minute
+	MaxOTPAttempts   = 5
+	ResetPasswordTTL = 30 * time.Minute
+)
+
+const (
+	MaxBodySize = 30 * 1024 * 1024 // 30 MB
+)
+
+var AllowedAvatarMIMETypes = map[string]string{
+	"image/png":  ".png",
+	"image/jpeg": ".jpg",
+	"image/gif":  ".gif",
+	"image/webp": ".webp",
 }

@@ -69,7 +69,8 @@ type ResetPasswordPayload struct {
 }
 
 type ChangePasswordPayload struct {
-	Password string `json:"password"`
+	OldPassword string `json:"oldPassword"`
+	Password    string `json:"password"`
 }
 
 type SendEmailPayload struct {

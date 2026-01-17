@@ -1,12 +1,13 @@
 package user
 
 import (
+	"crypto/rand"
 	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
-	"strings"
+	"math/big"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -24,9 +25,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 
-		remoteIP := extractRemoteIP(c)
-
-		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, remoteIP)
+		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, c.IP())
 		if err != nil || vresp == nil || !vresp.Success {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid challenge token")
 		}
@@ -45,7 +44,10 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
 		}
 
-		uid := fmt.Sprintf("%010d", time.Now().UnixNano()%1e10)
+		// Generate 10-digit unique user ID: 4-digit timestamp suffix + 6-digit random
+		tsSuffix := time.Now().UnixMicro() % 10000
+		randNum, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+		uid := fmt.Sprintf("%04d%06d", tsSuffix, randNum.Int64())
 
 		newUser, err := apiHelper.DBManager.DB.User.Create().
 			SetID(uid).
@@ -72,7 +74,11 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		redisKey := harukiRedis.BuildEmailVerifyKey(req.Email)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)
 
-		signedToken, _ := apiHelper.SessionHandler.IssueSession(uid)
+		signedToken, err := apiHelper.SessionHandler.IssueSession(uid)
+		if err != nil {
+			harukiLogger.Errorf("Failed to issue session for user %s: %v", uid, err)
+			return harukiAPIHelper.ErrorInternal(c, "Failed to create session")
+		}
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			Name:                        &newUser.Name,
@@ -88,17 +94,6 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "register success", UserData: ud}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
 	}
-}
-
-func extractRemoteIP(c fiber.Ctx) string {
-	xff := c.Get("X-Forwarded-For")
-	if xff != "" {
-		if idx := strings.IndexByte(xff, ','); idx >= 0 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-	return c.IP()
 }
 
 func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) error {
