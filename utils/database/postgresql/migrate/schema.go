@@ -126,6 +126,26 @@ var (
 			},
 		},
 	}
+	// IosScriptCodesColumns holds the columns for the "ios_script_codes" table.
+	IosScriptCodesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "upload_code", Type: field.TypeString, Unique: true, Size: 10},
+		{Name: "user_id", Type: field.TypeString, Unique: true},
+	}
+	// IosScriptCodesTable holds the schema information for the "ios_script_codes" table.
+	IosScriptCodesTable = &schema.Table{
+		Name:       "ios_script_codes",
+		Columns:    IosScriptCodesColumns,
+		PrimaryKey: []*schema.Column{IosScriptCodesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "ios_script_codes_users_ios_script_code",
+				Columns:    []*schema.Column{IosScriptCodesColumns[2]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// SocialPlatformInfosColumns holds the columns for the "social_platform_infos" table.
 	SocialPlatformInfosColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -160,10 +180,11 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "server", Type: field.TypeString},
 		{Name: "game_user_id", Type: field.TypeString, Size: 30},
-		{Name: "toolbox_user_id", Type: field.TypeString, Size: 10},
+		{Name: "toolbox_user_id", Type: field.TypeString, Nullable: true, Size: 10},
 		{Name: "data_type", Type: field.TypeString},
 		{Name: "upload_method", Type: field.TypeString},
 		{Name: "success", Type: field.TypeBool},
+		{Name: "upload_time", Type: field.TypeTime},
 	}
 	// UploadLogsTable holds the schema information for the "upload_logs" table.
 	UploadLogsTable = &schema.Table{
@@ -193,6 +214,7 @@ var (
 		GameAccountBindingsTable,
 		GroupsTable,
 		GroupListsTable,
+		IosScriptCodesTable,
 		SocialPlatformInfosTable,
 		UploadLogsTable,
 		UsersTable,
@@ -207,5 +229,6 @@ func init() {
 		Table: "game_account_bindings",
 	}
 	GroupListsTable.ForeignKeys[0].RefTable = GroupsTable
+	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 }

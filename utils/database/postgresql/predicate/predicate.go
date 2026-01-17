@@ -21,6 +21,9 @@ type Group func(*sql.Selector)
 // GroupList is the predicate function for grouplist builders.
 type GroupList func(*sql.Selector)
 
+// IOSScriptCode is the predicate function for iosscriptcode builders.
+type IOSScriptCode func(*sql.Selector)
+
 // SocialPlatformInfo is the predicate function for socialplatforminfo builders.
 type SocialPlatformInfo func(*sql.Selector)
 

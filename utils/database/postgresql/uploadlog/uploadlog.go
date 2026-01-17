@@ -23,6 +23,8 @@ const (
 	FieldUploadMethod = "upload_method"
 	// FieldSuccess holds the string denoting the success field in the database.
 	FieldSuccess = "success"
+	// FieldUploadTime holds the string denoting the upload_time field in the database.
+	FieldUploadTime = "upload_time"
 	// Table holds the table name of the uploadlog in the database.
 	Table = "upload_logs"
 )
@@ -36,6 +38,7 @@ var Columns = []string{
 	FieldDataType,
 	FieldUploadMethod,
 	FieldSuccess,
+	FieldUploadTime,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -91,4 +94,9 @@ func ByUploadMethod(opts ...sql.OrderTermOption) OrderOption {
 // BySuccess orders the results by the success field.
 func BySuccess(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSuccess, opts...).ToFunc()
+}
+
+// ByUploadTime orders the results by the upload_time field.
+func ByUploadTime(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUploadTime, opts...).ToFunc()
 }

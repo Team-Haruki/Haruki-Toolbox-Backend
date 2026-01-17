@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/uploadlog"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -37,6 +38,14 @@ func (_c *UploadLogCreate) SetToolboxUserID(v string) *UploadLogCreate {
 	return _c
 }
 
+// SetNillableToolboxUserID sets the "toolbox_user_id" field if the given value is not nil.
+func (_c *UploadLogCreate) SetNillableToolboxUserID(v *string) *UploadLogCreate {
+	if v != nil {
+		_c.SetToolboxUserID(*v)
+	}
+	return _c
+}
+
 // SetDataType sets the "data_type" field.
 func (_c *UploadLogCreate) SetDataType(v string) *UploadLogCreate {
 	_c.mutation.SetDataType(v)
@@ -52,6 +61,12 @@ func (_c *UploadLogCreate) SetUploadMethod(v string) *UploadLogCreate {
 // SetSuccess sets the "success" field.
 func (_c *UploadLogCreate) SetSuccess(v bool) *UploadLogCreate {
 	_c.mutation.SetSuccess(v)
+	return _c
+}
+
+// SetUploadTime sets the "upload_time" field.
+func (_c *UploadLogCreate) SetUploadTime(v time.Time) *UploadLogCreate {
+	_c.mutation.SetUploadTime(v)
 	return _c
 }
 
@@ -100,9 +115,6 @@ func (_c *UploadLogCreate) check() error {
 			return &ValidationError{Name: "game_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.game_user_id": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.ToolboxUserID(); !ok {
-		return &ValidationError{Name: "toolbox_user_id", err: errors.New(`postgresql: missing required field "UploadLog.toolbox_user_id"`)}
-	}
 	if v, ok := _c.mutation.ToolboxUserID(); ok {
 		if err := uploadlog.ToolboxUserIDValidator(v); err != nil {
 			return &ValidationError{Name: "toolbox_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.toolbox_user_id": %w`, err)}
@@ -116,6 +128,9 @@ func (_c *UploadLogCreate) check() error {
 	}
 	if _, ok := _c.mutation.Success(); !ok {
 		return &ValidationError{Name: "success", err: errors.New(`postgresql: missing required field "UploadLog.success"`)}
+	}
+	if _, ok := _c.mutation.UploadTime(); !ok {
+		return &ValidationError{Name: "upload_time", err: errors.New(`postgresql: missing required field "UploadLog.upload_time"`)}
 	}
 	return nil
 }
@@ -166,6 +181,10 @@ func (_c *UploadLogCreate) createSpec() (*UploadLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Success(); ok {
 		_spec.SetField(uploadlog.FieldSuccess, field.TypeBool, value)
 		_node.Success = value
+	}
+	if value, ok := _c.mutation.UploadTime(); ok {
+		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)
+		_node.UploadTime = value
 	}
 	return _node, _spec
 }

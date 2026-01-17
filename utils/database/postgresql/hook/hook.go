@@ -68,6 +68,18 @@ func (f GroupListFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postg
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.GroupListMutation", m)
 }
 
+// The IOSScriptCodeFunc type is an adapter to allow the use of ordinary
+// function as IOSScriptCode mutator.
+type IOSScriptCodeFunc func(context.Context, *postgresql.IOSScriptCodeMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IOSScriptCodeFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.IOSScriptCodeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.IOSScriptCodeMutation", m)
+}
+
 // The SocialPlatformInfoFunc type is an adapter to allow the use of ordinary
 // function as SocialPlatformInfo mutator.
 type SocialPlatformInfoFunc func(context.Context, *postgresql.SocialPlatformInfoMutation) (postgresql.Value, error)

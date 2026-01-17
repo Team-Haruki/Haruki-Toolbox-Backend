@@ -8,6 +8,7 @@ import (
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
@@ -57,6 +58,12 @@ func init() {
 	grouplistDescDetail := grouplistFields[5].Descriptor()
 	// grouplist.DetailValidator is a validator for the "detail" field. It is called by the builders before save.
 	grouplist.DetailValidator = grouplistDescDetail.Validators[0].(func(string) error)
+	iosscriptcodeFields := schema.IOSScriptCode{}.Fields()
+	_ = iosscriptcodeFields
+	// iosscriptcodeDescUploadCode is the schema descriptor for upload_code field.
+	iosscriptcodeDescUploadCode := iosscriptcodeFields[1].Descriptor()
+	// iosscriptcode.UploadCodeValidator is a validator for the "upload_code" field. It is called by the builders before save.
+	iosscriptcode.UploadCodeValidator = iosscriptcodeDescUploadCode.Validators[0].(func(string) error)
 	socialplatforminfoFields := schema.SocialPlatformInfo{}.Fields()
 	_ = socialplatforminfoFields
 	// socialplatforminfoDescVerified is the schema descriptor for verified field.

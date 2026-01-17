@@ -9,6 +9,7 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
@@ -175,6 +176,25 @@ func (_u *UserUpdate) AddGameAccountBindings(v ...*GameAccountBinding) *UserUpda
 	return _u.AddGameAccountBindingIDs(ids...)
 }
 
+// SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
+func (_u *UserUpdate) SetIosScriptCodeID(id int) *UserUpdate {
+	_u.mutation.SetIosScriptCodeID(id)
+	return _u
+}
+
+// SetNillableIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID if the given value is not nil.
+func (_u *UserUpdate) SetNillableIosScriptCodeID(id *int) *UserUpdate {
+	if id != nil {
+		_u = _u.SetIosScriptCodeID(*id)
+	}
+	return _u
+}
+
+// SetIosScriptCode sets the "ios_script_code" edge to the IOSScriptCode entity.
+func (_u *UserUpdate) SetIosScriptCode(v *IOSScriptCode) *UserUpdate {
+	return _u.SetIosScriptCodeID(v.ID)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -232,6 +252,12 @@ func (_u *UserUpdate) RemoveGameAccountBindings(v ...*GameAccountBinding) *UserU
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGameAccountBindingIDs(ids...)
+}
+
+// ClearIosScriptCode clears the "ios_script_code" edge to the IOSScriptCode entity.
+func (_u *UserUpdate) ClearIosScriptCode() *UserUpdate {
+	_u.mutation.ClearIosScriptCode()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -436,6 +462,35 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.IosScriptCodeCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.IosScriptCodeTable,
+			Columns: []string{user.IosScriptCodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.IosScriptCodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.IosScriptCodeTable,
+			Columns: []string{user.IosScriptCodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -600,6 +655,25 @@ func (_u *UserUpdateOne) AddGameAccountBindings(v ...*GameAccountBinding) *UserU
 	return _u.AddGameAccountBindingIDs(ids...)
 }
 
+// SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
+func (_u *UserUpdateOne) SetIosScriptCodeID(id int) *UserUpdateOne {
+	_u.mutation.SetIosScriptCodeID(id)
+	return _u
+}
+
+// SetNillableIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableIosScriptCodeID(id *int) *UserUpdateOne {
+	if id != nil {
+		_u = _u.SetIosScriptCodeID(*id)
+	}
+	return _u
+}
+
+// SetIosScriptCode sets the "ios_script_code" edge to the IOSScriptCode entity.
+func (_u *UserUpdateOne) SetIosScriptCode(v *IOSScriptCode) *UserUpdateOne {
+	return _u.SetIosScriptCodeID(v.ID)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -657,6 +731,12 @@ func (_u *UserUpdateOne) RemoveGameAccountBindings(v ...*GameAccountBinding) *Us
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGameAccountBindingIDs(ids...)
+}
+
+// ClearIosScriptCode clears the "ios_script_code" edge to the IOSScriptCode entity.
+func (_u *UserUpdateOne) ClearIosScriptCode() *UserUpdateOne {
+	_u.mutation.ClearIosScriptCode()
+	return _u
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -884,6 +964,35 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.IosScriptCodeCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.IosScriptCodeTable,
+			Columns: []string{user.IosScriptCodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.IosScriptCodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.IosScriptCodeTable,
+			Columns: []string{user.IosScriptCodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

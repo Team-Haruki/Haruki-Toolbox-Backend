@@ -461,6 +461,29 @@ func HasGameAccountBindingsWith(preds ...predicate.GameAccountBinding) predicate
 	})
 }
 
+// HasIosScriptCode applies the HasEdge predicate on the "ios_script_code" edge.
+func HasIosScriptCode() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, IosScriptCodeTable, IosScriptCodeColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasIosScriptCodeWith applies the HasEdge predicate on the "ios_script_code" edge with a given conditions (other predicates).
+func HasIosScriptCodeWith(preds ...predicate.IOSScriptCode) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newIosScriptCodeStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.User) predicate.User {
 	return predicate.User(sql.AndPredicates(predicates...))

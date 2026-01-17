@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/uploadlog"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -69,6 +70,12 @@ func (_u *UploadLogUpdate) SetNillableToolboxUserID(v *string) *UploadLogUpdate 
 	return _u
 }
 
+// ClearToolboxUserID clears the value of the "toolbox_user_id" field.
+func (_u *UploadLogUpdate) ClearToolboxUserID() *UploadLogUpdate {
+	_u.mutation.ClearToolboxUserID()
+	return _u
+}
+
 // SetDataType sets the "data_type" field.
 func (_u *UploadLogUpdate) SetDataType(v string) *UploadLogUpdate {
 	_u.mutation.SetDataType(v)
@@ -107,6 +114,20 @@ func (_u *UploadLogUpdate) SetSuccess(v bool) *UploadLogUpdate {
 func (_u *UploadLogUpdate) SetNillableSuccess(v *bool) *UploadLogUpdate {
 	if v != nil {
 		_u.SetSuccess(*v)
+	}
+	return _u
+}
+
+// SetUploadTime sets the "upload_time" field.
+func (_u *UploadLogUpdate) SetUploadTime(v time.Time) *UploadLogUpdate {
+	_u.mutation.SetUploadTime(v)
+	return _u
+}
+
+// SetNillableUploadTime sets the "upload_time" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableUploadTime(v *time.Time) *UploadLogUpdate {
+	if v != nil {
+		_u.SetUploadTime(*v)
 	}
 	return _u
 }
@@ -179,6 +200,9 @@ func (_u *UploadLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.ToolboxUserID(); ok {
 		_spec.SetField(uploadlog.FieldToolboxUserID, field.TypeString, value)
 	}
+	if _u.mutation.ToolboxUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldToolboxUserID, field.TypeString)
+	}
 	if value, ok := _u.mutation.DataType(); ok {
 		_spec.SetField(uploadlog.FieldDataType, field.TypeString, value)
 	}
@@ -187,6 +211,9 @@ func (_u *UploadLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Success(); ok {
 		_spec.SetField(uploadlog.FieldSuccess, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.UploadTime(); ok {
+		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -250,6 +277,12 @@ func (_u *UploadLogUpdateOne) SetNillableToolboxUserID(v *string) *UploadLogUpda
 	return _u
 }
 
+// ClearToolboxUserID clears the value of the "toolbox_user_id" field.
+func (_u *UploadLogUpdateOne) ClearToolboxUserID() *UploadLogUpdateOne {
+	_u.mutation.ClearToolboxUserID()
+	return _u
+}
+
 // SetDataType sets the "data_type" field.
 func (_u *UploadLogUpdateOne) SetDataType(v string) *UploadLogUpdateOne {
 	_u.mutation.SetDataType(v)
@@ -288,6 +321,20 @@ func (_u *UploadLogUpdateOne) SetSuccess(v bool) *UploadLogUpdateOne {
 func (_u *UploadLogUpdateOne) SetNillableSuccess(v *bool) *UploadLogUpdateOne {
 	if v != nil {
 		_u.SetSuccess(*v)
+	}
+	return _u
+}
+
+// SetUploadTime sets the "upload_time" field.
+func (_u *UploadLogUpdateOne) SetUploadTime(v time.Time) *UploadLogUpdateOne {
+	_u.mutation.SetUploadTime(v)
+	return _u
+}
+
+// SetNillableUploadTime sets the "upload_time" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableUploadTime(v *time.Time) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetUploadTime(*v)
 	}
 	return _u
 }
@@ -390,6 +437,9 @@ func (_u *UploadLogUpdateOne) sqlSave(ctx context.Context) (_node *UploadLog, er
 	if value, ok := _u.mutation.ToolboxUserID(); ok {
 		_spec.SetField(uploadlog.FieldToolboxUserID, field.TypeString, value)
 	}
+	if _u.mutation.ToolboxUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldToolboxUserID, field.TypeString)
+	}
 	if value, ok := _u.mutation.DataType(); ok {
 		_spec.SetField(uploadlog.FieldDataType, field.TypeString, value)
 	}
@@ -398,6 +448,9 @@ func (_u *UploadLogUpdateOne) sqlSave(ctx context.Context) (_node *UploadLog, er
 	}
 	if value, ok := _u.mutation.Success(); ok {
 		_spec.SetField(uploadlog.FieldSuccess, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.UploadTime(); ok {
+		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)
 	}
 	_node = &UploadLog{config: _u.config}
 	_spec.Assign = _node.assignValues
