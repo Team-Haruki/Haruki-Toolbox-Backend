@@ -4548,6 +4548,8 @@ type UserMutation struct {
 	password_hash                      *string
 	avatar_path                        *string
 	allow_cn_mysekai                   *bool
+	banned                             *bool
+	ban_reason                         *string
 	clearedFields                      map[string]struct{}
 	email_info                         *int
 	clearedemail_info                  bool
@@ -4863,6 +4865,91 @@ func (m *UserMutation) ResetAllowCnMysekai() {
 	m.allow_cn_mysekai = nil
 }
 
+// SetBanned sets the "banned" field.
+func (m *UserMutation) SetBanned(b bool) {
+	m.banned = &b
+}
+
+// Banned returns the value of the "banned" field in the mutation.
+func (m *UserMutation) Banned() (r bool, exists bool) {
+	v := m.banned
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBanned returns the old "banned" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldBanned(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBanned is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBanned requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBanned: %w", err)
+	}
+	return oldValue.Banned, nil
+}
+
+// ResetBanned resets all changes to the "banned" field.
+func (m *UserMutation) ResetBanned() {
+	m.banned = nil
+}
+
+// SetBanReason sets the "ban_reason" field.
+func (m *UserMutation) SetBanReason(s string) {
+	m.ban_reason = &s
+}
+
+// BanReason returns the value of the "ban_reason" field in the mutation.
+func (m *UserMutation) BanReason() (r string, exists bool) {
+	v := m.ban_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBanReason returns the old "ban_reason" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldBanReason(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBanReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBanReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBanReason: %w", err)
+	}
+	return oldValue.BanReason, nil
+}
+
+// ClearBanReason clears the value of the "ban_reason" field.
+func (m *UserMutation) ClearBanReason() {
+	m.ban_reason = nil
+	m.clearedFields[user.FieldBanReason] = struct{}{}
+}
+
+// BanReasonCleared returns if the "ban_reason" field was cleared in this mutation.
+func (m *UserMutation) BanReasonCleared() bool {
+	_, ok := m.clearedFields[user.FieldBanReason]
+	return ok
+}
+
+// ResetBanReason resets all changes to the "ban_reason" field.
+func (m *UserMutation) ResetBanReason() {
+	m.ban_reason = nil
+	delete(m.clearedFields, user.FieldBanReason)
+}
+
 // SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by id.
 func (m *UserMutation) SetEmailInfoID(id int) {
 	m.email_info = &id
@@ -5122,7 +5209,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 7)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -5137,6 +5224,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.allow_cn_mysekai != nil {
 		fields = append(fields, user.FieldAllowCnMysekai)
+	}
+	if m.banned != nil {
+		fields = append(fields, user.FieldBanned)
+	}
+	if m.ban_reason != nil {
+		fields = append(fields, user.FieldBanReason)
 	}
 	return fields
 }
@@ -5156,6 +5249,10 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.AvatarPath()
 	case user.FieldAllowCnMysekai:
 		return m.AllowCnMysekai()
+	case user.FieldBanned:
+		return m.Banned()
+	case user.FieldBanReason:
+		return m.BanReason()
 	}
 	return nil, false
 }
@@ -5175,6 +5272,10 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldAvatarPath(ctx)
 	case user.FieldAllowCnMysekai:
 		return m.OldAllowCnMysekai(ctx)
+	case user.FieldBanned:
+		return m.OldBanned(ctx)
+	case user.FieldBanReason:
+		return m.OldBanReason(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -5219,6 +5320,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAllowCnMysekai(v)
 		return nil
+	case user.FieldBanned:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBanned(v)
+		return nil
+	case user.FieldBanReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBanReason(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -5252,6 +5367,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldAvatarPath) {
 		fields = append(fields, user.FieldAvatarPath)
 	}
+	if m.FieldCleared(user.FieldBanReason) {
+		fields = append(fields, user.FieldBanReason)
+	}
 	return fields
 }
 
@@ -5268,6 +5386,9 @@ func (m *UserMutation) ClearField(name string) error {
 	switch name {
 	case user.FieldAvatarPath:
 		m.ClearAvatarPath()
+		return nil
+	case user.FieldBanReason:
+		m.ClearBanReason()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -5291,6 +5412,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldAllowCnMysekai:
 		m.ResetAllowCnMysekai()
+		return nil
+	case user.FieldBanned:
+		m.ResetBanned()
+		return nil
+	case user.FieldBanReason:
+		m.ResetBanReason()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)

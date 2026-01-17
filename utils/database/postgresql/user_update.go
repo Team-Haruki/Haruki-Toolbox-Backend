@@ -108,6 +108,40 @@ func (_u *UserUpdate) SetNillableAllowCnMysekai(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetBanned sets the "banned" field.
+func (_u *UserUpdate) SetBanned(v bool) *UserUpdate {
+	_u.mutation.SetBanned(v)
+	return _u
+}
+
+// SetNillableBanned sets the "banned" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableBanned(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetBanned(*v)
+	}
+	return _u
+}
+
+// SetBanReason sets the "ban_reason" field.
+func (_u *UserUpdate) SetBanReason(v string) *UserUpdate {
+	_u.mutation.SetBanReason(v)
+	return _u
+}
+
+// SetNillableBanReason sets the "ban_reason" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableBanReason(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetBanReason(*v)
+	}
+	return _u
+}
+
+// ClearBanReason clears the value of the "ban_reason" field.
+func (_u *UserUpdate) ClearBanReason() *UserUpdate {
+	_u.mutation.ClearBanReason()
+	return _u
+}
+
 // SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
 func (_u *UserUpdate) SetEmailInfoID(id int) *UserUpdate {
 	_u.mutation.SetEmailInfoID(id)
@@ -313,6 +347,15 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Banned(); ok {
+		_spec.SetField(user.FieldBanned, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.BanReason(); ok {
+		_spec.SetField(user.FieldBanReason, field.TypeString, value)
+	}
+	if _u.mutation.BanReasonCleared() {
+		_spec.ClearField(user.FieldBanReason, field.TypeString)
 	}
 	if _u.mutation.EmailInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -587,6 +630,40 @@ func (_u *UserUpdateOne) SetNillableAllowCnMysekai(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetBanned sets the "banned" field.
+func (_u *UserUpdateOne) SetBanned(v bool) *UserUpdateOne {
+	_u.mutation.SetBanned(v)
+	return _u
+}
+
+// SetNillableBanned sets the "banned" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableBanned(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetBanned(*v)
+	}
+	return _u
+}
+
+// SetBanReason sets the "ban_reason" field.
+func (_u *UserUpdateOne) SetBanReason(v string) *UserUpdateOne {
+	_u.mutation.SetBanReason(v)
+	return _u
+}
+
+// SetNillableBanReason sets the "ban_reason" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableBanReason(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetBanReason(*v)
+	}
+	return _u
+}
+
+// ClearBanReason clears the value of the "ban_reason" field.
+func (_u *UserUpdateOne) ClearBanReason() *UserUpdateOne {
+	_u.mutation.ClearBanReason()
+	return _u
+}
+
 // SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
 func (_u *UserUpdateOne) SetEmailInfoID(id int) *UserUpdateOne {
 	_u.mutation.SetEmailInfoID(id)
@@ -822,6 +899,15 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Banned(); ok {
+		_spec.SetField(user.FieldBanned, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.BanReason(); ok {
+		_spec.SetField(user.FieldBanReason, field.TypeString, value)
+	}
+	if _u.mutation.BanReasonCleared() {
+		_spec.ClearField(user.FieldBanReason, field.TypeString)
 	}
 	if _u.mutation.EmailInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
