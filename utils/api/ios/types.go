@@ -1,5 +1,9 @@
 package ios
 
+import (
+	harukiUtils "haruki-suite/utils"
+)
+
 // ProxyApp represents supported proxy applications
 type ProxyApp string
 
@@ -58,10 +62,10 @@ func ParseEndpointType(s string) (EndpointType, bool) {
 type DataType string
 
 const (
-	DataTypeSuite           DataType = "suite"
-	DataTypeMysekai         DataType = "mysekai"
-	DataTypeMysekaiForce    DataType = "mysekai_force"
-	DataTypeMysekaiBirthday DataType = "mysekai-birthday"
+	DataTypeSuite                DataType = "suite"
+	DataTypeMysekai              DataType = "mysekai"
+	DataTypeMysekaiForce         DataType = "mysekai_force"
+	DataTypeMysekaiBirthdayParty DataType = "mysekai_birthday_party"
 )
 
 // ParseDataType parses string to DataType
@@ -73,37 +77,8 @@ func ParseDataType(s string) (DataType, bool) {
 		return DataTypeMysekai, true
 	case "mysekai_force":
 		return DataTypeMysekaiForce, true
-	case "mysekai-birthday":
-		return DataTypeMysekaiBirthday, true
-	default:
-		return "", false
-	}
-}
-
-// Region represents game server region
-type Region string
-
-const (
-	RegionJP Region = "jp"
-	RegionEN Region = "en"
-	RegionTW Region = "tw"
-	RegionKR Region = "kr"
-	RegionCN Region = "cn"
-)
-
-// ParseRegion parses string to Region
-func ParseRegion(s string) (Region, bool) {
-	switch s {
-	case "jp":
-		return RegionJP, true
-	case "en":
-		return RegionEN, true
-	case "tw":
-		return RegionTW, true
-	case "kr":
-		return RegionKR, true
-	case "cn":
-		return RegionCN, true
+	case "mysekai_birthday_party":
+		return DataTypeMysekaiBirthdayParty, true
 	default:
 		return "", false
 	}
@@ -112,7 +87,7 @@ func ParseRegion(s string) (Region, bool) {
 // ModuleRequest represents a request to generate an iOS module
 type ModuleRequest struct {
 	UploadCode  string
-	Regions     []Region
+	Regions     []harukiUtils.SupportedDataUploadServer
 	DataTypes   []DataType
 	App         ProxyApp
 	Mode        UploadMode

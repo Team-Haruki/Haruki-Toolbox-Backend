@@ -2,9 +2,18 @@ package ios
 
 import (
 	"fmt"
+	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	"strings"
 )
+
+var HarukiIOSMitMHostnameMapping = map[harukiUtils.SupportedDataUploadServer][]string{
+	harukiUtils.SupportedDataUploadServerJP: {harukiConfig.Cfg.SekaiClient.JPServerAPIHost},
+	harukiUtils.SupportedDataUploadServerEN: {harukiConfig.Cfg.SekaiClient.ENServerAPIHost},
+	harukiUtils.SupportedDataUploadServerTW: {harukiConfig.Cfg.SekaiClient.TWServerAPIHost, harukiConfig.Cfg.SekaiClient.TWServerAPIHost2},
+	harukiUtils.SupportedDataUploadServerKR: {harukiConfig.Cfg.SekaiClient.KRServerAPIHost, harukiConfig.Cfg.SekaiClient.KRServerAPIHost2},
+	harukiUtils.SupportedDataUploadServerCN: {harukiConfig.Cfg.SekaiClient.CNServerAPIHost, harukiConfig.Cfg.SekaiClient.CNServerAPIHost2},
+}
 
 // Rule represents a single rewrite/script rule
 type Rule struct {
@@ -22,12 +31,12 @@ type RuleSet struct {
 }
 
 // GetHostnames returns hostnames for given regions
-func GetHostnames(regions []Region) []string {
+func GetHostnames(regions []harukiUtils.SupportedDataUploadServer) []string {
 	var hostnames []string
 	seen := make(map[string]bool)
 
 	for _, region := range regions {
-		hosts := IOSMitMHostnameMapping[harukiUtils.SupportedDataUploadServer(region)]
+		hosts := HarukiIOSMitMHostnameMapping[region]
 		for _, h := range hosts {
 			if !seen[h] {
 				seen[h] = true
@@ -39,16 +48,16 @@ func GetHostnames(regions []Region) []string {
 }
 
 // GenerateRuleSet generates all rules for the given request
-func GenerateRuleSet(req *ModuleRequest, endpoint string) *RuleSet {
+func GenerateRuleSet(req *ModuleRequest, endpoint string, endpointType string) *RuleSet {
 	rs := &RuleSet{
 		Hostnames: GetHostnames(req.Regions),
 	}
 
 	for _, region := range req.Regions {
-		hosts := IOSMitMHostnameMapping[harukiUtils.SupportedDataUploadServer(region)]
+		hosts := HarukiIOSMitMHostnameMapping[region]
 		for _, host := range hosts {
 			for _, dt := range req.DataTypes {
-				rules := generateRulesForDataType(host, string(region), dt, req.Mode, req.UploadCode, endpoint, req.ChunkSizeMB)
+				rules := generateRulesForDataType(host, string(region), dt, req.Mode, req.UploadCode, endpoint, req.ChunkSizeMB, endpointType)
 				rs.RewriteRules = append(rs.RewriteRules, rules.RewriteRules...)
 				rs.ScriptRules = append(rs.ScriptRules, rules.ScriptRules...)
 			}
@@ -58,12 +67,12 @@ func GenerateRuleSet(req *ModuleRequest, endpoint string) *RuleSet {
 	return rs
 }
 
-func generateRulesForDataType(host, region string, dt DataType, mode UploadMode, uploadCode, endpoint string, chunkSizeMB int) *RuleSet {
+func generateRulesForDataType(host, region string, dt DataType, mode UploadMode, uploadCode, endpoint string, chunkSizeMB int, endpointType string) *RuleSet {
 	rs := &RuleSet{}
 	escapedHost := strings.ReplaceAll(host, ".", "\\.")
 
-	// Build script URL with chunk size
-	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d", endpoint, uploadCode, chunkSizeMB)
+	// Build script URL with chunk size and endpoint type
+	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d&endpoint=%s", endpoint, uploadCode, chunkSizeMB, endpointType)
 
 	switch dt {
 	case DataTypeSuite:
@@ -134,7 +143,7 @@ func generateRulesForDataType(host, region string, dt DataType, mode UploadMode,
 			})
 		}
 
-	case DataTypeMysekaiBirthday:
+	case DataTypeMysekaiBirthdayParty:
 		pattern := fmt.Sprintf(`^https://%s/api/user/(\d+)/mysekai/birthday-party/(\d+)/delivery`, escapedHost)
 		if mode == UploadModeProxy {
 			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai/birthday-party/$2/delivery 307", endpoint, region)
