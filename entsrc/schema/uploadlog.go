@@ -16,12 +16,14 @@ func (UploadLog) Fields() []ent.Field {
 		field.String("game_user_id").
 			MaxLen(30),
 		field.String("toolbox_user_id").
-			MaxLen(10),
+			MaxLen(10).
+			Optional(),
 		field.String("data_type").
 			Comment("suite mysekai mysekai_birthday"),
 		field.String("upload_method").
 			Comment("manual harukiproxy iosproxy inherit"),
 		field.Bool("success"),
+		field.Time("upload_time"),
 	}
 }
 
