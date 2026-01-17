@@ -70,6 +70,34 @@ func (_c *UserCreate) SetNillableAllowCnMysekai(v *bool) *UserCreate {
 	return _c
 }
 
+// SetBanned sets the "banned" field.
+func (_c *UserCreate) SetBanned(v bool) *UserCreate {
+	_c.mutation.SetBanned(v)
+	return _c
+}
+
+// SetNillableBanned sets the "banned" field if the given value is not nil.
+func (_c *UserCreate) SetNillableBanned(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetBanned(*v)
+	}
+	return _c
+}
+
+// SetBanReason sets the "ban_reason" field.
+func (_c *UserCreate) SetBanReason(v string) *UserCreate {
+	_c.mutation.SetBanReason(v)
+	return _c
+}
+
+// SetNillableBanReason sets the "ban_reason" field if the given value is not nil.
+func (_c *UserCreate) SetNillableBanReason(v *string) *UserCreate {
+	if v != nil {
+		_c.SetBanReason(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *UserCreate) SetID(v string) *UserCreate {
 	_c.mutation.SetID(v)
@@ -202,6 +230,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultAllowCnMysekai
 		_c.mutation.SetAllowCnMysekai(v)
 	}
+	if _, ok := _c.mutation.Banned(); !ok {
+		v := user.DefaultBanned
+		_c.mutation.SetBanned(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -217,6 +249,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
+	}
+	if _, ok := _c.mutation.Banned(); !ok {
+		return &ValidationError{Name: "banned", err: errors.New(`postgresql: missing required field "User.banned"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := user.IDValidator(v); err != nil {
@@ -277,6 +312,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 		_node.AllowCnMysekai = value
+	}
+	if value, ok := _c.mutation.Banned(); ok {
+		_spec.SetField(user.FieldBanned, field.TypeBool, value)
+		_node.Banned = value
+	}
+	if value, ok := _c.mutation.BanReason(); ok {
+		_spec.SetField(user.FieldBanReason, field.TypeString, value)
+		_node.BanReason = &value
 	}
 	if nodes := _c.mutation.EmailInfoIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
