@@ -124,21 +124,21 @@ func (r *HarukiSekaiDataRetriever) RefreshHome(ctx context.Context, friends bool
 	r.logger.Infof("%s server refreshing home...", strings.ToUpper(string(r.client.server)))
 
 	if friends {
-		r.client.callAPI(ctx, fmt.Sprintf("/user/%s/invitation", strconv.FormatInt(r.client.userID, 10)), "GET", nil, nil)
-		r.client.callAPI(ctx, "/system", "GET", nil, nil)
-		r.client.callAPI(ctx, "/information", "GET", nil, nil)
+		_, _, _ = r.client.callAPI(ctx, fmt.Sprintf("/user/%s/invitation", strconv.FormatInt(r.client.userID, 10)), "GET", nil, nil)
+		_, _, _ = r.client.callAPI(ctx, "/system", "GET", nil, nil)
+		_, _, _ = r.client.callAPI(ctx, "/information", "GET", nil, nil)
 	} else {
-		r.client.callAPI(ctx, "/system", "GET", nil, nil)
-		r.client.callAPI(ctx, "/information", "GET", nil, nil)
+		_, _, _ = r.client.callAPI(ctx, "/system", "GET", nil, nil)
+		_, _, _ = r.client.callAPI(ctx, "/information", "GET", nil, nil)
 	}
 
 	refreshPath := fmt.Sprintf("/user/%s/home/refresh", strconv.FormatInt(r.client.userID, 10))
 	if login {
 		data, _ := Pack(RequestDataRefreshLogin, harukiUtils.SupportedDataUploadServer(r.client.server))
-		r.client.callAPI(ctx, refreshPath, "PUT", data, nil)
+		_, _, _ = r.client.callAPI(ctx, refreshPath, "PUT", data, nil)
 	} else {
 		data, _ := Pack(RequestDataRefresh, harukiUtils.SupportedDataUploadServer(r.client.server))
-		r.client.callAPI(ctx, refreshPath, "PUT", data, nil)
+		_, _, _ = r.client.callAPI(ctx, refreshPath, "PUT", data, nil)
 	}
 	return nil
 }

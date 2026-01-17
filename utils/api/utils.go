@@ -75,7 +75,7 @@ func NewSessionHandler(redisClient *redis.Client, sessionSignKey string) *Sessio
 
 func (s *SessionHandler) IssueSession(userID string) (string, error) {
 	sessionToken := uuid.NewString()
-	err := s.RedisClient.Set(context.Background(), userID+":"+sessionToken, "1", 12*time.Hour).Err()
+	err := s.RedisClient.Set(context.Background(), userID+":"+sessionToken, "1", 7*24*time.Hour).Err()
 	if err != nil {
 		return "", err
 	}
@@ -83,7 +83,7 @@ func (s *SessionHandler) IssueSession(userID string) (string, error) {
 		UserID:       userID,
 		SessionToken: sessionToken,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(12 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

@@ -201,7 +201,7 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 }
 
 func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) (*postgresql.GameAccountBinding, error) {
-	existing, _ := apiHelper.DBManager.DB.GameAccountBinding.
+	existing, err := apiHelper.DBManager.DB.GameAccountBinding.
 		Query().
 		Where(
 			gameaccountbinding.ServerEQ(serverStr),
@@ -209,6 +209,13 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 		).
 		WithUser().
 		Only(ctx)
+	if err != nil {
+		if postgresql.IsNotFound(err) {
+			return nil, nil
+		}
+		harukiLogger.Errorf("Failed to query existing binding: %v", err)
+		return nil, err
+	}
 	return existing, nil
 }
 

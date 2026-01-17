@@ -65,7 +65,7 @@ func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(ctx, webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get subscribers for webhook %s: %v", webhookID, err)
-			return harukiAPIHelper.ErrorInternal(c, err.Error())
+			return harukiAPIHelper.ErrorInternal(c, "Failed to get subscribers")
 		}
 		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &users)
 	}

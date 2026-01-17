@@ -90,7 +90,7 @@ func (l *Logger) logf(level logLevel, format string, args ...interface{}) {
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprint(l.writer, line)
+	_, _ = fmt.Fprint(l.writer, line)
 }
 
 func (l *Logger) Debugf(format string, args ...interface{})    { l.logf(DEBUG, format, args...) }

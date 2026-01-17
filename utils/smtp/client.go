@@ -24,7 +24,9 @@ func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []by
 	if err != nil {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
 	}
-	defer c.Close()
+	defer func(c *smtp.Client) {
+		_ = c.Close()
+	}(c)
 
 	if err = c.Auth(auth); err != nil {
 		return fmt.Errorf("failed to authenticate: %w", err)
@@ -95,7 +97,10 @@ func (c *HarukiSMTPClient) Send(to []string, subject, body string, displayName s
 
 	var msgBuilder strings.Builder
 	for k, v := range headers {
-		fmt.Fprintf(&msgBuilder, "%s: %s\r\n", k, v)
+		_, err := fmt.Fprintf(&msgBuilder, "%s: %s\r\n", k, v)
+		if err != nil {
+			return err
+		}
 	}
 	msgBuilder.WriteString("\r\n")
 	msgBuilder.WriteString(body)

@@ -63,6 +63,7 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 		&result.UserID,
 		nil,
 		apiHelper,
+		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
 		return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -84,6 +85,7 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		&result.UserID,
 		nil,
 		apiHelper,
+		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
 		return harukiAPIHelper.ErrorBadRequest(c, err.Error())

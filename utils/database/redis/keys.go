@@ -65,3 +65,9 @@ func BuildSocialPlatformStatusTokenKey(platform, platformUserID string) string {
 func BuildStatusTokenKey(token string) string {
 	return fmt.Sprintf("%s:%s:%s:%s", KeyPrefixHaruki, KeyModuleSocial, KeyActionStatusToken, token)
 }
+
+// BuildOTPAttemptKey builds key for tracking OTP verification attempts
+// Format: haruki:email:attempt:{email}
+func BuildOTPAttemptKey(email string) string {
+	return fmt.Sprintf("%s:%s:attempt:%s", KeyPrefixHaruki, KeyModuleEmail, email)
+}

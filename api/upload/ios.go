@@ -19,7 +19,10 @@ import (
 var (
 	dataChunks      = make(map[string][]harukiUtils.DataChunk)
 	dataChunksMutex sync.RWMutex
+	dataChunksSize  int64 // Total bytes stored in dataChunks
 )
+
+const maxDataChunksSize = 16 * 1024 * 1024 // 16MB limit
 
 func init() {
 	go func() {
@@ -38,6 +41,10 @@ func cleanExpiredChunks() {
 	for uploadID, chunks := range dataChunks {
 		if len(chunks) > 0 {
 			if now.Sub(chunks[len(chunks)-1].Time) > 30*time.Minute {
+				// Subtract size before deleting
+				for _, chunk := range chunks {
+					dataChunksSize -= int64(len(chunk.Data))
+				}
 				delete(dataChunks, uploadID)
 			}
 		} else {
@@ -56,7 +63,6 @@ type dataUploadHeader struct {
 
 func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		return harukiAPIHelper.ErrorForbidden(c, "This endpoint is temporarily disabled")
 		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
 		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
 		header := &dataUploadHeader{
@@ -95,6 +101,13 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 
 		var completedChunks []harukiUtils.DataChunk
 		dataChunksMutex.Lock()
+
+		if dataChunksSize+int64(len(chunkCopy)) > maxDataChunksSize {
+			dataChunksMutex.Unlock()
+			return harukiAPIHelper.ErrorBadRequest(c, "Server upload buffer full, please try again later")
+		}
+
+		dataChunksSize += int64(len(chunkCopy))
 		dataChunks[header.UploadId] = append(dataChunks[header.UploadId], harukiUtils.DataChunk{
 			RequestURL:  header.OriginalUrl,
 			UploadID:    header.UploadId,
@@ -106,6 +119,10 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 
 		if len(dataChunks[header.UploadId]) == header.TotalChunks {
 			completedChunks = dataChunks[header.UploadId]
+			// Subtract size when chunks are consumed
+			for _, chunk := range completedChunks {
+				dataChunksSize -= int64(len(chunk.Data))
+			}
 			delete(dataChunks, header.UploadId)
 		}
 		dataChunksMutex.Unlock()
@@ -127,9 +144,8 @@ func handleIOSScriptUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 					offset += len(c.Data)
 				}
 
-				// Create a background context that inherits values from request context but isn't cancelled when request ends
 				ctx := context.WithoutCancel(reqCtx)
-				_, err := HandleUpload(ctx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, nil, apiHelper)
+				_, err := HandleUpload(ctx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, nil, apiHelper, harukiUtils.UploadMethodIOSScript)
 				if err != nil {
 					logger.Errorf("HandleUpload failed: %v", err)
 				}

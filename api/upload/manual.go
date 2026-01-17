@@ -39,6 +39,7 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			&gameUserID,
 			&userID,
 			apiHelper,
+			harukiUtils.UploadMethodManual,
 		)
 
 		if err != nil {

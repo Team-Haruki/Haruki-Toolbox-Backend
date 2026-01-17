@@ -140,6 +140,7 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			&gameUserID,
 			nil,
 			apiHelper,
+			harukiUtils.UploadMethodHarukiProxy,
 		)
 
 		if err != nil {
