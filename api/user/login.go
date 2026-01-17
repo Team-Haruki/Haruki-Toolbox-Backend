@@ -30,6 +30,7 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 			WithSocialPlatformInfo().
 			WithAuthorizedSocialPlatforms().
 			WithGameAccountBindings().
+			WithIosScriptCode().
 			Only(ctx)
 		if err != nil {
 			harukiLogger.Infof("Login failed for email %s: user not found or query error", payload.Email)
@@ -39,6 +40,15 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(payload.Password)); err != nil {
 			harukiLogger.Infof("Login failed for email %s: invalid password", payload.Email)
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
+		}
+
+		// Check if user is banned
+		if user.Banned {
+			banMessage := "Your account has been banned"
+			if user.BanReason != nil && *user.BanReason != "" {
+				banMessage = "Your account has been banned: " + *user.BanReason
+			}
+			return harukiAPIHelper.ErrorForbidden(c, banMessage)
 		}
 
 		sessionToken, err := apiHelper.SessionHandler.IssueSession(user.ID)

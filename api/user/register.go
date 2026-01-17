@@ -71,6 +71,21 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorInternal(c, "failed to create email info")
 		}
 
+		// Generate iOS upload code for new user
+		uploadCode, err := generateUploadCode()
+		if err != nil {
+			harukiLogger.Errorf("Failed to generate upload code: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to generate upload code")
+		}
+		_, err = apiHelper.DBManager.DB.IOSScriptCode.Create().
+			SetUserID(uid).
+			SetUploadCode(uploadCode).
+			Save(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to create iOS script code: %v", err)
+			// Non-fatal, continue with registration
+		}
+
 		redisKey := harukiRedis.BuildEmailVerifyKey(req.Email)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)
 
@@ -85,6 +100,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			UserID:                      &uid,
 			AvatarPath:                  nil,
 			AllowCNMysekai:              &newUser.AllowCnMysekai,
+			IOSUploadCode:               &uploadCode,
 			EmailInfo:                   &harukiAPIHelper.EmailInfo{Email: emailInfoRecord.Email, Verified: emailInfoRecord.Verified},
 			SocialPlatformInfo:          nil,
 			AuthorizeSocialPlatformInfo: nil,

@@ -19,6 +19,7 @@ func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			WithSocialPlatformInfo().
 			WithAuthorizedSocialPlatforms().
 			WithGameAccountBindings().
+			WithIosScriptCode().
 			Only(ctx)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "User not found")

@@ -15,18 +15,28 @@ func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) Haruki
 	authorizeSocialPlatformInfo := buildAuthorizeSocialPlatformInfoFromUser(user)
 	gameAccountBindings := buildGameAccountBindingsFromUser(user)
 	avatarURL := buildAvatarURLFromUser(user)
+	iosUploadCode := buildIOSUploadCodeFromUser(user)
 
 	return HarukiToolboxUserData{
 		Name:                        &user.Name,
 		UserID:                      &user.ID,
 		AvatarPath:                  &avatarURL,
 		AllowCNMysekai:              &user.AllowCnMysekai,
+		IOSUploadCode:               iosUploadCode,
 		EmailInfo:                   &emailInfo,
 		SocialPlatformInfo:          socialPlatformInfo,
 		AuthorizeSocialPlatformInfo: &authorizeSocialPlatformInfo,
 		GameAccountBindings:         &gameAccountBindings,
 		SessionToken:                sessionToken,
 	}
+}
+
+// buildIOSUploadCodeFromUser extracts iOS upload code from user edges
+func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
+	if user.Edges.IosScriptCode != nil {
+		return &user.Edges.IosScriptCode.UploadCode
+	}
+	return nil
 }
 
 // buildEmailInfoFromUser extracts email info from user edges
