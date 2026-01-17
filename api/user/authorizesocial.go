@@ -22,7 +22,7 @@ func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 				socialplatforminfo.Verified(true),
 			).First(ctx)
 		if err != nil || info == nil {
-			return harukiAPIHelper.ErrorForbidden(c, "user has no verified social platform info")
+			return harukiAPIHelper.ErrorBadRequest(c, "user has no verified social platform info")
 		}
 		return c.Next()
 	}
@@ -143,6 +143,6 @@ func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiTool
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id")
 
 	r.RouteChain("/").
-		Put(apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleAuthorizeSocialPlatform(apiHelper)).
-		Delete(apiHelper.SessionHandler.VerifySessionToken, verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
+		Put(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), verifyUserHasVerifiedSocialPlatform(apiHelper), handleAuthorizeSocialPlatform(apiHelper)).
+		Delete(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
 }

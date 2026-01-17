@@ -59,7 +59,7 @@ func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType,
 	return "", 0
 }
 
-func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, userID *string) (bool, *bool, harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings, *bool, error) {
+func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, userID *string) (bool, *bool, harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings, *bool, *bool, *string, error) {
 	var settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings
 
 	record, err := db.GameAccountBinding.
@@ -73,18 +73,25 @@ func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server 
 
 	if err != nil {
 		if postgresql.IsNotFound(err) {
-			return false, nil, settings, nil, nil
+			return false, nil, settings, nil, nil, nil, nil
 		}
-		return false, nil, settings, nil, err
+		return false, nil, settings, nil, nil, nil, err
 	}
 
 	var belongs *bool
 	var allowCNMysekai *bool
-	if userID != nil {
+	var userBanned *bool
+	var banReason *string
+	if record.Edges.User != nil {
 		a := record.Edges.User.AllowCnMysekai
-		b := record.Edges.User.ID == *userID
-		belongs = &b
 		allowCNMysekai = &a
+		banned := record.Edges.User.Banned
+		userBanned = &banned
+		banReason = record.Edges.User.BanReason
+		if userID != nil {
+			b := record.Edges.User.ID == *userID
+			belongs = &b
+		}
 	}
 
 	settings = harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings{
@@ -92,7 +99,7 @@ func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server 
 		Mysekai: record.Mysekai,
 	}
 
-	return true, belongs, settings, allowCNMysekai, nil
+	return true, belongs, settings, allowCNMysekai, userBanned, banReason, nil
 }
 
 func HandleUpload(
@@ -113,9 +120,18 @@ func HandleUpload(
 		Logger:         harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil),
 	}
 
-	exists, belongs, settings, allowCNMySekai, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
+	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if the game account owner is banned
+	if userBanned != nil && *userBanned {
+		banMessage := "account owner is banned"
+		if banReason != nil && *banReason != "" {
+			banMessage = "account owner is banned: " + *banReason
+		}
+		return nil, errors.New(banMessage)
 	}
 
 	if err := validateGameAccountBelonging(belongs); err != nil {

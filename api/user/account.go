@@ -149,7 +149,7 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 func registerAccountRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
-	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, handleUpdateProfile(apiHelper))
-	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, handleChangePassword(apiHelper))
+	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleUpdateProfile(apiHelper))
+	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleChangePassword(apiHelper))
 
 }

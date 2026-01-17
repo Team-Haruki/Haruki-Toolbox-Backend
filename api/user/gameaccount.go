@@ -134,7 +134,7 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.ErrorForbidden(c, "this account is bound by another user")
+			return harukiAPIHelper.ErrorBadRequest(c, "this account is bound by another user")
 		}
 
 		_, err = existing.Update().
@@ -179,7 +179,7 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.ErrorForbidden(c, "not authorized to delete this binding")
+			return harukiAPIHelper.ErrorBadRequest(c, "not authorized to delete this binding")
 		}
 
 		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
@@ -222,7 +222,7 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 func checkIfAlreadyVerified(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
 	if existing != nil && existing.Verified {
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.ErrorForbidden(c, "this account is already bound by another user")
+			return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
 		}
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
@@ -307,9 +307,9 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
 
-	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateGameAccountVerificationCode(apiHelper))
+	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleGenerateGameAccountVerificationCode(apiHelper))
 	r.RouteChain("/:server/:game_user_id").
-		Post(apiHelper.SessionHandler.VerifySessionToken, handleCreateGameAccountBinding(apiHelper)).
-		Put(apiHelper.SessionHandler.VerifySessionToken, handleUpdateGameAccountBinding(apiHelper)).
-		Delete(apiHelper.SessionHandler.VerifySessionToken, handleDeleteGameAccountBinding(apiHelper))
+		Post(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleCreateGameAccountBinding(apiHelper)).
+		Put(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleUpdateGameAccountBinding(apiHelper)).
+		Delete(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleDeleteGameAccountBinding(apiHelper))
 }

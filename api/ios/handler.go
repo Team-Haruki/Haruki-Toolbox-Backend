@@ -148,7 +148,7 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 				return harukiAPIHelper.ErrorBadRequest(c, "user not found")
 			}
 			if !u.AllowCnMysekai {
-				return harukiAPIHelper.ErrorForbidden(c, "CN mysekai data types require allow_cn_mysekai permission")
+				return harukiAPIHelper.ErrorForbidden(c, "You are not allowed to use CN mysekai function")
 			}
 		}
 
