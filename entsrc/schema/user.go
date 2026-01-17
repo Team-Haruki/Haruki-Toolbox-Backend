@@ -18,6 +18,8 @@ func (User) Fields() []ent.Field {
 		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
+		field.Bool("banned").Default(false),
+		field.String("ban_reason").Optional().Nillable(),
 	}
 }
 

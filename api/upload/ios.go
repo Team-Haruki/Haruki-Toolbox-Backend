@@ -269,7 +269,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 				}
 
 				ctx := context.WithoutCancel(reqCtx)
-				_, err := HandleUpload(ctx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, nil, apiHelper, harukiUtils.UploadMethodIOSScript)
+				_, err := HandleUpload(ctx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, &toolboxUserID, apiHelper, harukiUtils.UploadMethodIOSScript)
 				if err != nil {
 					logger.Errorf("HandleUpload failed: %v", err)
 				}
