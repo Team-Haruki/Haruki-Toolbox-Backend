@@ -92,13 +92,13 @@ func processSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	if len(keys) == 1 {
 		resp, valid := processSingleKey(keys[0], result, filteredUserGamedata, apiHelper.PublicAPIAllowedKeys)
 		if !valid {
-			return nil, harukiAPIHelper.ErrorForbidden(c, "Invalid request key")
+			return nil, harukiAPIHelper.ErrorBadRequest(c, "Invalid request key")
 		}
 		return resp, nil
 	}
 	suite, invalidKey := processMultipleKeys(keys, result, filteredUserGamedata, apiHelper.PublicAPIAllowedKeys)
 	if invalidKey != "" {
-		return nil, harukiAPIHelper.ErrorForbidden(c, fmt.Sprintf("Invalid request key: %s", invalidKey))
+		return nil, harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("Invalid request key: %s", invalidKey))
 	}
 	return suite, nil
 }

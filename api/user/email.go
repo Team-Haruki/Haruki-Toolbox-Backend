@@ -165,5 +165,5 @@ func registerEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	email := apiHelper.Router.Group("/api/email")
 
 	email.Post("/send", handleSendEmail(apiHelper))
-	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, handleVerifyEmail(apiHelper))
+	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleVerifyEmail(apiHelper))
 }

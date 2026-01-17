@@ -31,5 +31,5 @@ func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 }
 
 func registerGetInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	apiHelper.Router.Get("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, handleGetSettings(apiHelper))
+	apiHelper.Router.Get("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleGetSettings(apiHelper))
 }

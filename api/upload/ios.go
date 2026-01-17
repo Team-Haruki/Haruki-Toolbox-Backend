@@ -206,7 +206,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			Where(gameaccountbinding.VerifiedEQ(true)).
 			All(ctx)
 		if err != nil || len(bindings) == 0 {
-			return harukiAPIHelper.ErrorForbidden(c, "No verified game account binding found for this server")
+			return harukiAPIHelper.ErrorBadRequest(c, "No verified game account binding found for this server")
 		}
 
 		// Check if the game user ID matches any bound account
@@ -219,7 +219,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			}
 		}
 		if !matched {
-			return harukiAPIHelper.ErrorForbidden(c, "Game user ID does not match your bound accounts")
+			return harukiAPIHelper.ErrorBadRequest(c, "Game user ID does not match your bound accounts")
 		}
 
 		// Store chunk - same logic as handleIOSScriptUpload
