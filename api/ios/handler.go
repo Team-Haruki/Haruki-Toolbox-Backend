@@ -3,6 +3,7 @@ package ios
 import (
 	"fmt"
 	harukiConfig "haruki-suite/config"
+	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	iosGen "haruki-suite/utils/api/ios"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
@@ -87,17 +88,17 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			chunkSizeMB = parsed
 		}
 
-		// Parse regions
+		// Parse regions using utils.ParseSupportedDataUploadServer
 		regionStrs := strings.Split(regionsStr, "-")
-		var regions []iosGen.Region
+		var regions []harukiUtils.SupportedDataUploadServer
 		hasCN := false
 		for _, rs := range regionStrs {
-			region, ok := iosGen.ParseRegion(rs)
-			if !ok {
+			region, err := harukiUtils.ParseSupportedDataUploadServer(rs)
+			if err != nil {
 				return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported region: %s. Supported: jp, en, tw, kr, cn", rs))
 			}
 			regions = append(regions, region)
-			if region == iosGen.RegionCN {
+			if region == harukiUtils.SupportedDataUploadServerCN {
 				hasCN = true
 			}
 		}
@@ -112,11 +113,11 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		for _, dts := range dataTypeStrs {
 			dt, ok := iosGen.ParseDataType(dts)
 			if !ok {
-				return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported data type: %s. Supported: suite, mysekai, mysekai_force, mysekai-birthday", dts))
+				return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported data type: %s. Supported: suite, mysekai, mysekai_force, mysekai_birthday_party", dts))
 			}
 
 			// Track mysekai types for CN check
-			if dt == iosGen.DataTypeMysekai || dt == iosGen.DataTypeMysekaiForce || dt == iosGen.DataTypeMysekaiBirthday {
+			if dt == iosGen.DataTypeMysekai || dt == iosGen.DataTypeMysekaiForce || dt == iosGen.DataTypeMysekaiBirthdayParty {
 				hasCNMysekaiType = true
 			}
 			if dt == iosGen.DataTypeMysekai {
@@ -179,7 +180,7 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 
 		// Generate module with selected endpoint
 		endpoint := getEndpoint(endpointType)
-		content, err := iosGen.GenerateModule(req, endpoint)
+		content, err := iosGen.GenerateModule(req, endpoint, endpointStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate module")
 		}

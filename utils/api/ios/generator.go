@@ -7,8 +7,8 @@ import (
 )
 
 // GenerateModule generates the complete module content for the given request
-func GenerateModule(req *ModuleRequest, endpoint string) (string, error) {
-	ruleSet := GenerateRuleSet(req, endpoint)
+func GenerateModule(req *ModuleRequest, endpoint string, endpointType string) (string, error) {
+	ruleSet := GenerateRuleSet(req, endpoint, endpointType)
 
 	switch req.App {
 	case ProxyAppSurge:
@@ -27,7 +27,7 @@ func GenerateModule(req *ModuleRequest, endpoint string) (string, error) {
 // GenerateScript generates the JavaScript upload script
 func GenerateScript(uploadCode string, chunkSizeMB int, uploadURL string) string {
 	script := IOSJavaScriptTemplate
-	script = strings.ReplaceAll(script, "{{UPLOAD_URL}}", uploadURL+"/ios/script/upload")
+	script = strings.ReplaceAll(script, "{{UPLOAD_URL}}", uploadURL+"/ios/script/"+uploadCode+"/upload")
 	script = strings.ReplaceAll(script, "{{CHUNK_SIZE}}", fmt.Sprintf("%d", chunkSizeMB))
 	script = strings.ReplaceAll(script, "{{UPLOAD_CODE}}", uploadCode)
 	script = strings.ReplaceAll(script, "{{GENERATE_DATE}}", time.Now().Format("2006-01-02 15:04:05"))
