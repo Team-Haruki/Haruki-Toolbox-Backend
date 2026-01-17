@@ -4,6 +4,7 @@ package uploadlog
 
 import (
 	"haruki-suite/utils/database/postgresql/predicate"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 )
@@ -81,6 +82,11 @@ func UploadMethod(v string) predicate.UploadLog {
 // Success applies equality check predicate on the "success" field. It's identical to SuccessEQ.
 func Success(v bool) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldEQ(FieldSuccess, v))
+}
+
+// UploadTime applies equality check predicate on the "upload_time" field. It's identical to UploadTimeEQ.
+func UploadTime(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldUploadTime, v))
 }
 
 // ServerEQ applies the EQ predicate on the "server" field.
@@ -268,6 +274,16 @@ func ToolboxUserIDHasSuffix(v string) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldHasSuffix(FieldToolboxUserID, v))
 }
 
+// ToolboxUserIDIsNil applies the IsNil predicate on the "toolbox_user_id" field.
+func ToolboxUserIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldToolboxUserID))
+}
+
+// ToolboxUserIDNotNil applies the NotNil predicate on the "toolbox_user_id" field.
+func ToolboxUserIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldToolboxUserID))
+}
+
 // ToolboxUserIDEqualFold applies the EqualFold predicate on the "toolbox_user_id" field.
 func ToolboxUserIDEqualFold(v string) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldEqualFold(FieldToolboxUserID, v))
@@ -416,6 +432,46 @@ func SuccessEQ(v bool) predicate.UploadLog {
 // SuccessNEQ applies the NEQ predicate on the "success" field.
 func SuccessNEQ(v bool) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldNEQ(FieldSuccess, v))
+}
+
+// UploadTimeEQ applies the EQ predicate on the "upload_time" field.
+func UploadTimeEQ(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldUploadTime, v))
+}
+
+// UploadTimeNEQ applies the NEQ predicate on the "upload_time" field.
+func UploadTimeNEQ(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldUploadTime, v))
+}
+
+// UploadTimeIn applies the In predicate on the "upload_time" field.
+func UploadTimeIn(vs ...time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldUploadTime, vs...))
+}
+
+// UploadTimeNotIn applies the NotIn predicate on the "upload_time" field.
+func UploadTimeNotIn(vs ...time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldUploadTime, vs...))
+}
+
+// UploadTimeGT applies the GT predicate on the "upload_time" field.
+func UploadTimeGT(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldUploadTime, v))
+}
+
+// UploadTimeGTE applies the GTE predicate on the "upload_time" field.
+func UploadTimeGTE(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldUploadTime, v))
+}
+
+// UploadTimeLT applies the LT predicate on the "upload_time" field.
+func UploadTimeLT(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldUploadTime, v))
+}
+
+// UploadTimeLTE applies the LTE predicate on the "upload_time" field.
+func UploadTimeLTE(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldUploadTime, v))
 }
 
 // And groups predicates with the AND operator between them.

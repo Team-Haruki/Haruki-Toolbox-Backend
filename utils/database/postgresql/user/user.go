@@ -30,6 +30,8 @@ const (
 	EdgeAuthorizedSocialPlatforms = "authorized_social_platforms"
 	// EdgeGameAccountBindings holds the string denoting the game_account_bindings edge name in mutations.
 	EdgeGameAccountBindings = "game_account_bindings"
+	// EdgeIosScriptCode holds the string denoting the ios_script_code edge name in mutations.
+	EdgeIosScriptCode = "ios_script_code"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// EmailInfoTable is the table that holds the email_info relation/edge.
@@ -60,6 +62,13 @@ const (
 	GameAccountBindingsInverseTable = "game_account_bindings"
 	// GameAccountBindingsColumn is the table column denoting the game_account_bindings relation/edge.
 	GameAccountBindingsColumn = "user_game_account_bindings"
+	// IosScriptCodeTable is the table that holds the ios_script_code relation/edge.
+	IosScriptCodeTable = "ios_script_codes"
+	// IosScriptCodeInverseTable is the table name for the IOSScriptCode entity.
+	// It exists in this package in order to avoid circular dependency with the "iosscriptcode" package.
+	IosScriptCodeInverseTable = "ios_script_codes"
+	// IosScriptCodeColumn is the table column denoting the ios_script_code relation/edge.
+	IosScriptCodeColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -163,6 +172,13 @@ func ByGameAccountBindings(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOpti
 		sqlgraph.OrderByNeighborTerms(s, newGameAccountBindingsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByIosScriptCodeField orders the results by ios_script_code field.
+func ByIosScriptCodeField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newIosScriptCodeStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newEmailInfoStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -189,5 +205,12 @@ func newGameAccountBindingsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(GameAccountBindingsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, GameAccountBindingsTable, GameAccountBindingsColumn),
+	)
+}
+func newIosScriptCodeStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(IosScriptCodeInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, IosScriptCodeTable, IosScriptCodeColumn),
 	)
 }

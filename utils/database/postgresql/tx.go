@@ -22,6 +22,8 @@ type Tx struct {
 	Group *GroupClient
 	// GroupList is the client for interacting with the GroupList builders.
 	GroupList *GroupListClient
+	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
+	IOSScriptCode *IOSScriptCodeClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
 	// UploadLog is the client for interacting with the UploadLog builders.
@@ -164,6 +166,7 @@ func (tx *Tx) init() {
 	tx.GameAccountBinding = NewGameAccountBindingClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupList = NewGroupListClient(tx.config)
+	tx.IOSScriptCode = NewIOSScriptCodeClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)
 	tx.UploadLog = NewUploadLogClient(tx.config)
 	tx.User = NewUserClient(tx.config)

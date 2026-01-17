@@ -5,6 +5,7 @@ package postgresql
 import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 	"strings"
@@ -44,9 +45,11 @@ type UserEdges struct {
 	AuthorizedSocialPlatforms []*AuthorizeSocialPlatformInfo `json:"authorized_social_platforms,omitempty"`
 	// GameAccountBindings holds the value of the game_account_bindings edge.
 	GameAccountBindings []*GameAccountBinding `json:"game_account_bindings,omitempty"`
+	// IosScriptCode holds the value of the ios_script_code edge.
+	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // EmailInfoOrErr returns the EmailInfo value or an error if the edge
@@ -87,6 +90,17 @@ func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
 		return e.GameAccountBindings, nil
 	}
 	return nil, &NotLoadedError{edge: "game_account_bindings"}
+}
+
+// IosScriptCodeOrErr returns the IosScriptCode value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
+	if e.IosScriptCode != nil {
+		return e.IosScriptCode, nil
+	} else if e.loadedTypes[4] {
+		return nil, &NotFoundError{label: iosscriptcode.Label}
+	}
+	return nil, &NotLoadedError{edge: "ios_script_code"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -181,6 +195,11 @@ func (_m *User) QueryAuthorizedSocialPlatforms() *AuthorizeSocialPlatformInfoQue
 // QueryGameAccountBindings queries the "game_account_bindings" edge of the User entity.
 func (_m *User) QueryGameAccountBindings() *GameAccountBindingQuery {
 	return NewUserClient(_m.config).QueryGameAccountBindings(_m)
+}
+
+// QueryIosScriptCode queries the "ios_script_code" edge of the User entity.
+func (_m *User) QueryIosScriptCode() *IOSScriptCodeQuery {
+	return NewUserClient(_m.config).QueryIosScriptCode(_m)
 }
 
 // Update returns a builder for updating this User.

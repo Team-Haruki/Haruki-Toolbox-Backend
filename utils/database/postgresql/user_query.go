@@ -9,6 +9,7 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
@@ -31,6 +32,7 @@ type UserQuery struct {
 	withSocialPlatformInfo        *SocialPlatformInfoQuery
 	withAuthorizedSocialPlatforms *AuthorizeSocialPlatformInfoQuery
 	withGameAccountBindings       *GameAccountBindingQuery
+	withIosScriptCode             *IOSScriptCodeQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -148,6 +150,28 @@ func (_q *UserQuery) QueryGameAccountBindings() *GameAccountBindingQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(gameaccountbinding.Table, gameaccountbinding.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.GameAccountBindingsTable, user.GameAccountBindingsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryIosScriptCode chains the current query on the "ios_script_code" edge.
+func (_q *UserQuery) QueryIosScriptCode() *IOSScriptCodeQuery {
+	query := (&IOSScriptCodeClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(iosscriptcode.Table, iosscriptcode.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, user.IosScriptCodeTable, user.IosScriptCodeColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -351,6 +375,7 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withSocialPlatformInfo:        _q.withSocialPlatformInfo.Clone(),
 		withAuthorizedSocialPlatforms: _q.withAuthorizedSocialPlatforms.Clone(),
 		withGameAccountBindings:       _q.withGameAccountBindings.Clone(),
+		withIosScriptCode:             _q.withIosScriptCode.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -398,6 +423,17 @@ func (_q *UserQuery) WithGameAccountBindings(opts ...func(*GameAccountBindingQue
 		opt(query)
 	}
 	_q.withGameAccountBindings = query
+	return _q
+}
+
+// WithIosScriptCode tells the query-builder to eager-load the nodes that are connected to
+// the "ios_script_code" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithIosScriptCode(opts ...func(*IOSScriptCodeQuery)) *UserQuery {
+	query := (&IOSScriptCodeClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withIosScriptCode = query
 	return _q
 }
 
@@ -479,11 +515,12 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [5]bool{
 			_q.withEmailInfo != nil,
 			_q.withSocialPlatformInfo != nil,
 			_q.withAuthorizedSocialPlatforms != nil,
 			_q.withGameAccountBindings != nil,
+			_q.withIosScriptCode != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -531,6 +568,12 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			func(n *User, e *GameAccountBinding) {
 				n.Edges.GameAccountBindings = append(n.Edges.GameAccountBindings, e)
 			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withIosScriptCode; query != nil {
+		if err := _q.loadIosScriptCode(ctx, query, nodes, nil,
+			func(n *User, e *IOSScriptCode) { n.Edges.IosScriptCode = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -648,6 +691,33 @@ func (_q *UserQuery) loadGameAccountBindings(ctx context.Context, query *GameAcc
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_game_account_bindings" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadIosScriptCode(ctx context.Context, query *IOSScriptCodeQuery, nodes []*User, init func(*User), assign func(*User, *IOSScriptCode)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(iosscriptcode.FieldUserID)
+	}
+	query.Where(predicate.IOSScriptCode(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.IosScriptCodeColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

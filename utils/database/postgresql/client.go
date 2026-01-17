@@ -16,6 +16,7 @@ import (
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
@@ -41,6 +42,8 @@ type Client struct {
 	Group *GroupClient
 	// GroupList is the client for interacting with the GroupList builders.
 	GroupList *GroupListClient
+	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
+	IOSScriptCode *IOSScriptCodeClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
 	// UploadLog is the client for interacting with the UploadLog builders.
@@ -63,6 +66,7 @@ func (c *Client) init() {
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupList = NewGroupListClient(c.config)
+	c.IOSScriptCode = NewIOSScriptCodeClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
 	c.UploadLog = NewUploadLogClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -163,6 +167,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
+		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
 		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
@@ -190,6 +195,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
+		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
 		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
@@ -223,7 +229,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.GameAccountBinding, c.Group,
-		c.GroupList, c.SocialPlatformInfo, c.UploadLog, c.User,
+		c.GroupList, c.IOSScriptCode, c.SocialPlatformInfo, c.UploadLog, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -234,7 +240,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.GameAccountBinding, c.Group,
-		c.GroupList, c.SocialPlatformInfo, c.UploadLog, c.User,
+		c.GroupList, c.IOSScriptCode, c.SocialPlatformInfo, c.UploadLog, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -253,6 +259,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Group.mutate(ctx, m)
 	case *GroupListMutation:
 		return c.GroupList.mutate(ctx, m)
+	case *IOSScriptCodeMutation:
+		return c.IOSScriptCode.mutate(ctx, m)
 	case *SocialPlatformInfoMutation:
 		return c.SocialPlatformInfo.mutate(ctx, m)
 	case *UploadLogMutation:
@@ -1009,6 +1017,155 @@ func (c *GroupListClient) mutate(ctx context.Context, m *GroupListMutation) (Val
 	}
 }
 
+// IOSScriptCodeClient is a client for the IOSScriptCode schema.
+type IOSScriptCodeClient struct {
+	config
+}
+
+// NewIOSScriptCodeClient returns a client for the IOSScriptCode from the given config.
+func NewIOSScriptCodeClient(c config) *IOSScriptCodeClient {
+	return &IOSScriptCodeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `iosscriptcode.Hooks(f(g(h())))`.
+func (c *IOSScriptCodeClient) Use(hooks ...Hook) {
+	c.hooks.IOSScriptCode = append(c.hooks.IOSScriptCode, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `iosscriptcode.Intercept(f(g(h())))`.
+func (c *IOSScriptCodeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IOSScriptCode = append(c.inters.IOSScriptCode, interceptors...)
+}
+
+// Create returns a builder for creating a IOSScriptCode entity.
+func (c *IOSScriptCodeClient) Create() *IOSScriptCodeCreate {
+	mutation := newIOSScriptCodeMutation(c.config, OpCreate)
+	return &IOSScriptCodeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IOSScriptCode entities.
+func (c *IOSScriptCodeClient) CreateBulk(builders ...*IOSScriptCodeCreate) *IOSScriptCodeCreateBulk {
+	return &IOSScriptCodeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IOSScriptCodeClient) MapCreateBulk(slice any, setFunc func(*IOSScriptCodeCreate, int)) *IOSScriptCodeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IOSScriptCodeCreateBulk{err: fmt.Errorf("calling to IOSScriptCodeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IOSScriptCodeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IOSScriptCodeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IOSScriptCode.
+func (c *IOSScriptCodeClient) Update() *IOSScriptCodeUpdate {
+	mutation := newIOSScriptCodeMutation(c.config, OpUpdate)
+	return &IOSScriptCodeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IOSScriptCodeClient) UpdateOne(_m *IOSScriptCode) *IOSScriptCodeUpdateOne {
+	mutation := newIOSScriptCodeMutation(c.config, OpUpdateOne, withIOSScriptCode(_m))
+	return &IOSScriptCodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IOSScriptCodeClient) UpdateOneID(id int) *IOSScriptCodeUpdateOne {
+	mutation := newIOSScriptCodeMutation(c.config, OpUpdateOne, withIOSScriptCodeID(id))
+	return &IOSScriptCodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IOSScriptCode.
+func (c *IOSScriptCodeClient) Delete() *IOSScriptCodeDelete {
+	mutation := newIOSScriptCodeMutation(c.config, OpDelete)
+	return &IOSScriptCodeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IOSScriptCodeClient) DeleteOne(_m *IOSScriptCode) *IOSScriptCodeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IOSScriptCodeClient) DeleteOneID(id int) *IOSScriptCodeDeleteOne {
+	builder := c.Delete().Where(iosscriptcode.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IOSScriptCodeDeleteOne{builder}
+}
+
+// Query returns a query builder for IOSScriptCode.
+func (c *IOSScriptCodeClient) Query() *IOSScriptCodeQuery {
+	return &IOSScriptCodeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIOSScriptCode},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IOSScriptCode entity by its id.
+func (c *IOSScriptCodeClient) Get(ctx context.Context, id int) (*IOSScriptCode, error) {
+	return c.Query().Where(iosscriptcode.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IOSScriptCodeClient) GetX(ctx context.Context, id int) *IOSScriptCode {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a IOSScriptCode.
+func (c *IOSScriptCodeClient) QueryUser(_m *IOSScriptCode) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(iosscriptcode.Table, iosscriptcode.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, iosscriptcode.UserTable, iosscriptcode.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IOSScriptCodeClient) Hooks() []Hook {
+	return c.hooks.IOSScriptCode
+}
+
+// Interceptors returns the client interceptors.
+func (c *IOSScriptCodeClient) Interceptors() []Interceptor {
+	return c.inters.IOSScriptCode
+}
+
+func (c *IOSScriptCodeClient) mutate(ctx context.Context, m *IOSScriptCodeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IOSScriptCodeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IOSScriptCodeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IOSScriptCodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IOSScriptCodeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown IOSScriptCode mutation op: %q", m.Op())
+	}
+}
+
 // SocialPlatformInfoClient is a client for the SocialPlatformInfo schema.
 type SocialPlatformInfoClient struct {
 	config
@@ -1463,6 +1620,22 @@ func (c *UserClient) QueryGameAccountBindings(_m *User) *GameAccountBindingQuery
 	return query
 }
 
+// QueryIosScriptCode queries the ios_script_code edge of a User.
+func (c *UserClient) QueryIosScriptCode(_m *User) *IOSScriptCodeQuery {
+	query := (&IOSScriptCodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(iosscriptcode.Table, iosscriptcode.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, user.IosScriptCodeTable, user.IosScriptCodeColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *UserClient) Hooks() []Hook {
 	return c.hooks.User
@@ -1492,10 +1665,10 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, Group, GroupList,
-		SocialPlatformInfo, UploadLog, User []ent.Hook
+		IOSScriptCode, SocialPlatformInfo, UploadLog, User []ent.Hook
 	}
 	inters struct {
 		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, Group, GroupList,
-		SocialPlatformInfo, UploadLog, User []ent.Interceptor
+		IOSScriptCode, SocialPlatformInfo, UploadLog, User []ent.Interceptor
 	}
 )

@@ -9,6 +9,7 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 
@@ -141,6 +142,25 @@ func (_c *UserCreate) AddGameAccountBindings(v ...*GameAccountBinding) *UserCrea
 		ids[i] = v[i].ID
 	}
 	return _c.AddGameAccountBindingIDs(ids...)
+}
+
+// SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
+func (_c *UserCreate) SetIosScriptCodeID(id int) *UserCreate {
+	_c.mutation.SetIosScriptCodeID(id)
+	return _c
+}
+
+// SetNillableIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID if the given value is not nil.
+func (_c *UserCreate) SetNillableIosScriptCodeID(id *int) *UserCreate {
+	if id != nil {
+		_c = _c.SetIosScriptCodeID(*id)
+	}
+	return _c
+}
+
+// SetIosScriptCode sets the "ios_script_code" edge to the IOSScriptCode entity.
+func (_c *UserCreate) SetIosScriptCode(v *IOSScriptCode) *UserCreate {
+	return _c.SetIosScriptCodeID(v.ID)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -315,6 +335,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.IosScriptCodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.IosScriptCodeTable,
+			Columns: []string{user.IosScriptCodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

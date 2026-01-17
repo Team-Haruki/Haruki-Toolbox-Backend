@@ -11,6 +11,7 @@ import (
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
@@ -85,6 +86,7 @@ func checkColumn(t, c string) error {
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
 			group.Table:                       group.ValidColumn,
 			grouplist.Table:                   grouplist.ValidColumn,
+			iosscriptcode.Table:               iosscriptcode.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,
 			uploadlog.Table:                   uploadlog.ValidColumn,
 			user.Table:                        user.ValidColumn,
