@@ -1,6 +1,8 @@
 package misc
 
 import (
+	"fmt"
+	"haruki-suite/config"
 	harukiAPIHelper "haruki-suite/utils/api"
 
 	"github.com/gofiber/fiber/v3"
@@ -12,7 +14,6 @@ func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		groups, err := apiHelper.DBManager.DB.Group.Query().
 			WithGroupList().
 			All(ctx)
-
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "Failed to fetch friend groups")
 		}
@@ -20,10 +21,18 @@ func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		for _, g := range groups {
 			var items []FriendGroupItem
 			for _, item := range g.Edges.GroupList {
+				var avatarPath string
+				var bgPath string
+				if item.Avatar != nil {
+					avatarPath = fmt.Sprintf("%s/friend-links/%s", config.Cfg.UserSystem.AvatarURL, *item.Avatar)
+				}
+				if item.Bg != nil {
+					bgPath = fmt.Sprintf("%s/friend-links/%s", config.Cfg.UserSystem.AvatarURL, *item.Bg)
+				}
 				items = append(items, FriendGroupItem{
 					Name:      item.Name,
-					Avatar:    item.Avatar,
-					Bg:        item.Bg,
+					Avatar:    &avatarPath,
+					Bg:        &bgPath,
 					GroupInfo: item.GroupInfo,
 					Detail:    item.Detail,
 				})
