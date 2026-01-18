@@ -7,15 +7,12 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// checkUserNotBanned is a middleware that checks if the current user is banned.
-// It should be used after VerifySessionToken middleware which sets userID in Locals.
 func checkUserNotBanned(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, ok := c.Locals("userID").(string)
 		if !ok || userID == "" {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
-
 		ctx := c.Context()
 		user, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(userID)).
@@ -24,7 +21,6 @@ func checkUserNotBanned(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "user not found")
 		}
-
 		if user.Banned {
 			banMessage := "Your account has been banned"
 			if user.BanReason != nil && *user.BanReason != "" {
@@ -32,7 +28,6 @@ func checkUserNotBanned(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			}
 			return harukiAPIHelper.ErrorForbidden(c, banMessage)
 		}
-
 		return c.Next()
 	}
 }

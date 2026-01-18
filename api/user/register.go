@@ -24,31 +24,24 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
-
 		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, c.IP())
 		if err != nil || vresp == nil || !vresp.Success {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid challenge token")
 		}
-
 		if err := verifyEmailOTP(c, apiHelper, req.Email, req.OneTimePassword); err != nil {
 			return err
 		}
-
 		if err := checkEmailAvailability(c, apiHelper, req.Email); err != nil {
 			return err
 		}
-
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
 			harukiLogger.Errorf("Failed to hash password: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
 		}
-
-		// Generate 10-digit unique user ID: 4-digit timestamp suffix + 6-digit random
 		tsSuffix := time.Now().UnixMicro() % 10000
 		randNum, _ := rand.Int(rand.Reader, big.NewInt(1000000))
 		uid := fmt.Sprintf("%04d%06d", tsSuffix, randNum.Int64())
-
 		newUser, err := apiHelper.DBManager.DB.User.Create().
 			SetID(uid).
 			SetName(req.Name).
@@ -60,7 +53,6 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			harukiLogger.Errorf("Failed to create user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
 		}
-
 		emailInfoRecord, err := apiHelper.DBManager.DB.EmailInfo.Create().
 			SetEmail(req.Email).
 			SetVerified(true).
@@ -70,8 +62,6 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			harukiLogger.Errorf("Failed to create email info: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to create email info")
 		}
-
-		// Generate iOS upload code for new user
 		uploadCode, err := generateUploadCode()
 		if err != nil {
 			harukiLogger.Errorf("Failed to generate upload code: %v", err)
@@ -85,16 +75,13 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			harukiLogger.Errorf("Failed to create iOS script code: %v", err)
 			// Non-fatal, continue with registration
 		}
-
 		redisKey := harukiRedis.BuildEmailVerifyKey(req.Email)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)
-
 		signedToken, err := apiHelper.SessionHandler.IssueSession(uid)
 		if err != nil {
 			harukiLogger.Errorf("Failed to issue session for user %s: %v", uid, err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to create session")
 		}
-
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			Name:                        &newUser.Name,
 			UserID:                      &uid,

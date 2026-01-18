@@ -15,7 +15,6 @@ func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		toolboxUserID := c.Params("toolbox_user_id")
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.SocialPlatformInfo
-
 		info, err := client.Query().
 			Where(
 				socialplatforminfo.UserSocialPlatformInfoEQ(toolboxUserID),
@@ -36,15 +35,12 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid id parameter")
 		}
-
 		var payload harukiAPIHelper.AuthorizeSocialPlatformPayload
 		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
-
 		existing, err := client.Query().
 			Where(
 				authorizesocialplatforminfo.UserID(toolboxUserID),
@@ -55,7 +51,6 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		if err == nil && existing != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "this social platform account is authorized")
 		}
-
 		_, err = client.Create().
 			SetUserID(toolboxUserID).
 			SetPlatformID(userAccountID).
@@ -67,7 +62,6 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			harukiLogger.Errorf("Failed to create authorized social platform: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to add social platform")
 		}
-
 		infos, err := client.Query().
 			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
 			All(ctx)
@@ -75,7 +69,6 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
 		}
-
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
@@ -100,10 +93,8 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid id parameter")
 		}
-
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
-
 		_, err = client.Delete().
 			Where(
 				authorizesocialplatforminfo.UserID(toolboxUserID),
@@ -114,7 +105,6 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			harukiLogger.Errorf("Failed to delete authorized social platform: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete authorized social platform")
 		}
-
 		infos, err := client.Query().
 			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
 			All(ctx)
@@ -122,7 +112,6 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
 		}
-
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{

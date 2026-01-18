@@ -14,7 +14,6 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		ctx := c.Context()
 		serverStr := c.Params("server")
 		uploadTypeStr := c.Params("upload_type")
-
 		server, err := harukiUtils.ParseSupportedInheritUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -32,15 +31,12 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		if err := uploadMysekaiDataIfNeeded(c, apiHelper, uploadType, result, serverStr); err != nil {
 			return err
 		}
-
 		if err := uploadSuiteData(c, apiHelper, result, serverStr); err != nil {
 			return err
 		}
-
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded data.", serverStr, result.UserID), nil)
 	}
 }
@@ -50,11 +46,9 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 	if uploadType != harukiUtils.UploadDataTypeMysekai {
 		return nil
 	}
-
 	if result.Mysekai == nil {
 		return harukiAPIHelper.ErrorBadRequest(c, "Retrieve mysekai data failed, it seems you may not have completed the tutorial yet.")
 	}
-
 	_, err := HandleUpload(
 		ctx,
 		result.Mysekai,
@@ -76,7 +70,6 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	if result.Suite == nil {
 		return harukiAPIHelper.ErrorBadRequest(c, "Retrieve suite data failed: unknown error")
 	}
-
 	_, err := HandleUpload(
 		ctx,
 		result.Suite,

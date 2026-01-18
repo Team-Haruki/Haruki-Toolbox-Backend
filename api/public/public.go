@@ -133,14 +133,12 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return err
 		}
 		var resp interface{}
-
 		if dataType != harukiUtils.UploadDataTypeMysekai {
 			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
 			if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
 				return c.JSON(resp)
 			}
 		}
-
 		record, err := fetchAccountBinding(ctx, apiHelper, server, userIDStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorNotFound(c, "account binding not found")
@@ -158,12 +156,10 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Errorf("Failed to process data response: %v", err)
 			return err
 		}
-
 		if dataType != harukiUtils.UploadDataTypeMysekai {
 			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
 			_ = apiHelper.DBManager.Redis.SetCache(ctx, cacheKey, resp, 300*time.Second)
 		}
-
 		return c.JSON(resp)
 	}
 }

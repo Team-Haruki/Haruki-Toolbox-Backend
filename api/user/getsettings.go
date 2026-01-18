@@ -11,7 +11,6 @@ func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID := c.Locals("userID").(string)
-
 		user, err := apiHelper.DBManager.DB.User.
 			Query().
 			Where(userSchema.IDEQ(userID)).

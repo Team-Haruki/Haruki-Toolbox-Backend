@@ -39,12 +39,10 @@ func init() {
 func cleanExpiredChunks() {
 	dataChunksMutex.Lock()
 	defer dataChunksMutex.Unlock()
-
 	now := time.Now()
 	for uploadID, chunks := range dataChunks {
 		if len(chunks) > 0 {
 			if now.Sub(chunks[len(chunks)-1].Time) > 30*time.Minute {
-				// Subtract size before deleting
 				for _, chunk := range chunks {
 					dataChunksSize -= int64(len(chunk.Data))
 				}
@@ -68,19 +66,15 @@ func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
-
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		userID, err := strconv.ParseInt(userIDStr, 0, 64)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		logger.Infof("Received %s server suite request from user %d", server, userID)
-
 		proxyHandler := HandleProxyUpload(
 			harukiConfig.Cfg.Proxy,
 			harukiUtils.UploadDataTypeSuite,
@@ -95,7 +89,6 @@ func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
-
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -104,9 +97,7 @@ func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
-
 		proxyHandler := HandleProxyUpload(
 			harukiConfig.Cfg.Proxy,
 			harukiUtils.UploadDataTypeMysekai,
@@ -122,7 +113,6 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
 		partyIdStr := c.Params("party_id")
-
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -135,9 +125,7 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		logger.Infof("Received %s server mysekai birthday party delivery request from user %d for party id %d", server, userID, partyID)
-
 		proxyHandler := HandleProxyUpload(
 			harukiConfig.Cfg.Proxy,
 			harukiUtils.UploadDataTypeMysekaiBirthdayParty,
@@ -148,18 +136,13 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 	}
 }
 
-// handleIOSScriptUploadWithValidation handles script uploads with upload_code validation
-// Route: POST /ios/script/:upload_code/upload
 func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		uploadCode := c.Params("upload_code")
-
 		if uploadCode == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "missing upload_code")
 		}
-
-		// Validate upload_code and get associated user
 		record, err := apiHelper.DBManager.DB.IOSScriptCode.Query().
 			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
 			Only(ctx)
@@ -167,8 +150,6 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
 		}
 		toolboxUserID := record.UserID
-
-		// Parse headers
 		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
 		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
 		header := &dataUploadHeader{
@@ -178,16 +159,13 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			ChunkIndex:    chunkIndex,
 			TotalChunks:   totalChunks,
 		}
-
 		if header.ScriptVersion == "" {
 			header.ScriptVersion = "unknown"
 		}
-
 		uploadType, gameUserId := ExtractUploadTypeAndUserID(header.OriginalUrl)
 		if uploadType == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "Unknown upload type")
 		}
-
 		var server harukiUtils.SupportedDataUploadServer
 		for s, tuple := range sekai.GetAPIEndpoint() {
 			if strings.Contains(header.OriginalUrl, tuple[1]) {
@@ -198,8 +176,6 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if server == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "Unknown game server")
 		}
-
-		// Validate that gameUserId matches one of the user's bound game accounts
 		bindings, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
 			Where(gameaccountbinding.HasUserWith(user.IDEQ(toolboxUserID))).
 			Where(gameaccountbinding.ServerEQ(string(server))).
@@ -208,8 +184,6 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if err != nil || len(bindings) == 0 {
 			return harukiAPIHelper.ErrorBadRequest(c, "No verified game account binding found for this server")
 		}
-
-		// Check if the game user ID matches any bound account
 		gameUserIdStr := strconv.FormatInt(gameUserId, 10)
 		matched := false
 		for _, binding := range bindings {
@@ -221,14 +195,10 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if !matched {
 			return harukiAPIHelper.ErrorBadRequest(c, "Game user ID does not match your bound accounts")
 		}
-
-		// Store chunk - same logic as handleIOSScriptUpload
 		now := time.Now()
 		body := c.Request().Body()
-
 		chunkCopy := make([]byte, len(body))
 		copy(chunkCopy, body)
-
 		dataChunksMutex.Lock()
 		if dataChunksSize+int64(len(chunkCopy)) > maxDataChunksSize {
 			dataChunksMutex.Unlock()
@@ -240,7 +210,6 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			Data:       chunkCopy,
 			Time:       now,
 		})
-
 		var completedChunks []harukiUtils.DataChunk
 		if len(dataChunks[header.UploadId]) == header.TotalChunks {
 			completedChunks = dataChunks[header.UploadId]
@@ -250,13 +219,11 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			delete(dataChunks, header.UploadId)
 		}
 		dataChunksMutex.Unlock()
-
 		if completedChunks != nil {
 			go func(reqCtx context.Context, chunks []harukiUtils.DataChunk, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string) {
 				sort.Slice(chunks, func(x, y int) bool {
 					return chunks[x].ChunkIndex < chunks[y].ChunkIndex
 				})
-
 				totalLen := 0
 				for _, c := range chunks {
 					totalLen += len(c.Data)
@@ -267,7 +234,6 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 					copy(payload[offset:], c.Data)
 					offset += len(c.Data)
 				}
-
 				ctx := context.WithoutCancel(reqCtx)
 				_, err := HandleUpload(ctx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, &toolboxUserID, apiHelper, harukiUtils.UploadMethodIOSScript)
 				if err != nil {
@@ -275,7 +241,6 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 				}
 			}(c.Context(), completedChunks, gameUserId, server, string(uploadType))
 		}
-
 		return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 	}
 }
@@ -284,9 +249,7 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	api := apiHelper.Router.Group("/ios")
 	logger := harukiLogger.NewLogger("HarukiSekaiIOS", "DEBUG", nil)
 
-	// New validated upload route with upload_code
 	api.Post("/script/:upload_code/upload", handleIOSScriptUploadWithValidation(apiHelper, logger))
-
 	api.Get("/proxy/:server/suite/user/:user_id", handleIOSProxySuite(apiHelper, logger))
 	api.Post("/proxy/:server/user/:user_id/mysekai", handleIOSProxyMysekai(apiHelper, logger))
 	api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, logger))

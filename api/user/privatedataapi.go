@@ -17,11 +17,9 @@ func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Ha
 	return func(c fiber.Ctx) error {
 		authorization := c.Get("Authorization")
 		userAgent := c.Get("User-Agent")
-
 		if subtle.ConstantTimeCompare([]byte(authorization), []byte(expectedToken)) != 1 {
 			return harukiApiHelper.ErrorUnauthorized(c, "unauthorized token")
 		}
-
 		if requiredAgentKeyword != "" && !harukiApiHelper.StringContains(userAgent, requiredAgentKeyword) {
 			return harukiApiHelper.ErrorUnauthorized(c, "unauthorized user agent")
 		}
@@ -37,11 +35,9 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		userIDStr := c.Params("user_id")
 		platform := c.Query("platform")
 		platformUserID := c.Query("platform_user_id")
-
 		if (platform != "" && platformUserID == "") || (platform == "" && platformUserID != "") {
 			return harukiApiHelper.ErrorBadRequest(c, "both platform and platform_user_id must be provided together")
 		}
-
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiApiHelper.ErrorBadRequest(c, err.Error())
@@ -54,7 +50,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiApiHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		gameAccountBinding, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
 			Where(
 				gameaccountbinding.ServerEQ(string(server)),
@@ -64,39 +59,31 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiApiHelper.ErrorNotFound(c, "game account not found")
 		}
-
 		dbUser, err := gameAccountBinding.QueryUser().WithSocialPlatformInfo().Only(ctx)
 		if err != nil {
 			return harukiApiHelper.ErrorNotFound(c, "game account not found")
 		}
-
 		authorized := isUserAuthorized(c, apiHelper, dbUser, platform, platformUserID)
 		if !authorized {
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
 		}
-
 		result, err := apiHelper.DBManager.Mongo.GetData(ctx, int64(userID), string(server), dataType)
 		if err != nil {
 			return harukiApiHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		if result == nil {
 			return harukiApiHelper.ErrorNotFound(c, "user data not found")
 		}
-
 		return processRequestKeys(c, result)
 	}
 }
 
 func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) bool {
-	// Check primary social platform info
 	if dbUser.Edges.SocialPlatformInfo != nil &&
 		dbUser.Edges.SocialPlatformInfo.Platform == platform &&
 		dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
 		return true
 	}
-
-	// Check authorized social platforms
 	exists, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
 		Where(
 			authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
@@ -107,7 +94,6 @@ func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRoute
 	if err == nil && exists {
 		return true
 	}
-
 	return false
 }
 

@@ -18,13 +18,10 @@ func RestoreCompactData(data bson.M) []map[string]interface{} {
 			}
 		}
 	}
-
 	columnLabels, columns := extractColumnsAndLabels(data, enumRaw)
-
 	if len(columns) == 0 {
 		return []map[string]interface{}{}
 	}
-
 	numEntries := calculateMinEntries(columns)
 	return buildResultEntries(numEntries, columnLabels, columns)
 }
@@ -32,25 +29,20 @@ func RestoreCompactData(data bson.M) []map[string]interface{} {
 func extractColumnsAndLabels(data bson.M, enumRaw bson.M) ([]string, [][]interface{}) {
 	var columnLabels []string
 	var columns [][]interface{}
-
 	for key, value := range data {
 		if key == "__ENUM__" {
 			continue
 		}
 		columnLabels = append(columnLabels, key)
-
 		dataColumn := convertToInterfaceSlice(value)
-
 		if enumRaw != nil {
 			if enumColumn := processEnumColumn(enumRaw, key, dataColumn); enumColumn != nil {
 				columns = append(columns, enumColumn)
 				continue
 			}
 		}
-
 		columns = append(columns, dataColumn)
 	}
-
 	return columnLabels, columns
 }
 
@@ -70,19 +62,16 @@ func processEnumColumn(enumRaw bson.M, key string, dataColumn []interface{}) []i
 	if !ok {
 		return nil
 	}
-
 	enumSlice := convertToInterfaceSlice(enumColumnRaw)
 	if enumSlice == nil {
 		return nil
 	}
-
 	columnValues := make([]interface{}, 0, len(dataColumn))
 	for _, v := range dataColumn {
 		if v == nil {
 			columnValues = append(columnValues, nil)
 			continue
 		}
-
 		index := convertToInt(v)
 		if index >= 0 && index < len(enumSlice) {
 			columnValues = append(columnValues, enumSlice[index])
@@ -147,7 +136,6 @@ func GetValueFromResult(result bson.M, key string) interface{} {
 	if !ok {
 		return []interface{}{}
 	}
-
 	switch m := val.(type) {
 	case bson.M:
 		return RestoreCompactData(m)

@@ -17,11 +17,6 @@ type Client struct {
 func NewClient(proxy string, timeout time.Duration) *Client {
 	client := &Client{Proxy: proxy, Timeout: timeout}
 	if err := client.init(); err != nil {
-		// In a real application, we might want to handle this error more gracefully,
-		// but for now, we'll log it and return a client that might not be fully configured.
-		// Since init() mainly sets up the resty client which is essential, panic might be acceptable
-		// if we can't create the client, but let's try to avoid it.
-		// However, resty.New() doesn't return an error, so init() failure is unlikely unless we add more logic.
 		fmt.Printf("Failed to initialize HTTP client: %v\n", err)
 	}
 	return client
@@ -49,20 +44,16 @@ func (c *Client) Request(ctx context.Context, method, uri string, headers map[st
 			return 0, nil, nil, fmt.Errorf("failed to initialize client: %w", err)
 		}
 	}
-
 	req := c.client.R().
 		SetContext(ctx).
 		SetHeaders(headers)
-
 	if body != nil && len(body) > 0 {
 		req.SetBody(body)
 	}
-
 	resp, err := req.Execute(method, uri)
 	if err != nil {
 		return 0, nil, nil, err
 	}
-
 	respHeaders := make(map[string]string, len(resp.Header()))
 	for k, v := range resp.Header() {
 		if len(v) > 0 {
