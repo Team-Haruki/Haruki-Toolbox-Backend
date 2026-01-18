@@ -9,6 +9,7 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 
@@ -65,6 +66,34 @@ func (_c *UserCreate) SetAllowCnMysekai(v bool) *UserCreate {
 func (_c *UserCreate) SetNillableAllowCnMysekai(v *bool) *UserCreate {
 	if v != nil {
 		_c.SetAllowCnMysekai(*v)
+	}
+	return _c
+}
+
+// SetBanned sets the "banned" field.
+func (_c *UserCreate) SetBanned(v bool) *UserCreate {
+	_c.mutation.SetBanned(v)
+	return _c
+}
+
+// SetNillableBanned sets the "banned" field if the given value is not nil.
+func (_c *UserCreate) SetNillableBanned(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetBanned(*v)
+	}
+	return _c
+}
+
+// SetBanReason sets the "ban_reason" field.
+func (_c *UserCreate) SetBanReason(v string) *UserCreate {
+	_c.mutation.SetBanReason(v)
+	return _c
+}
+
+// SetNillableBanReason sets the "ban_reason" field if the given value is not nil.
+func (_c *UserCreate) SetNillableBanReason(v *string) *UserCreate {
+	if v != nil {
+		_c.SetBanReason(*v)
 	}
 	return _c
 }
@@ -143,6 +172,25 @@ func (_c *UserCreate) AddGameAccountBindings(v ...*GameAccountBinding) *UserCrea
 	return _c.AddGameAccountBindingIDs(ids...)
 }
 
+// SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
+func (_c *UserCreate) SetIosScriptCodeID(id int) *UserCreate {
+	_c.mutation.SetIosScriptCodeID(id)
+	return _c
+}
+
+// SetNillableIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID if the given value is not nil.
+func (_c *UserCreate) SetNillableIosScriptCodeID(id *int) *UserCreate {
+	if id != nil {
+		_c = _c.SetIosScriptCodeID(*id)
+	}
+	return _c
+}
+
+// SetIosScriptCode sets the "ios_script_code" edge to the IOSScriptCode entity.
+func (_c *UserCreate) SetIosScriptCode(v *IOSScriptCode) *UserCreate {
+	return _c.SetIosScriptCodeID(v.ID)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -182,6 +230,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultAllowCnMysekai
 		_c.mutation.SetAllowCnMysekai(v)
 	}
+	if _, ok := _c.mutation.Banned(); !ok {
+		v := user.DefaultBanned
+		_c.mutation.SetBanned(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -197,6 +249,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
+	}
+	if _, ok := _c.mutation.Banned(); !ok {
+		return &ValidationError{Name: "banned", err: errors.New(`postgresql: missing required field "User.banned"`)}
 	}
 	if v, ok := _c.mutation.ID(); ok {
 		if err := user.IDValidator(v); err != nil {
@@ -258,6 +313,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 		_node.AllowCnMysekai = value
 	}
+	if value, ok := _c.mutation.Banned(); ok {
+		_spec.SetField(user.FieldBanned, field.TypeBool, value)
+		_node.Banned = value
+	}
+	if value, ok := _c.mutation.BanReason(); ok {
+		_spec.SetField(user.FieldBanReason, field.TypeString, value)
+		_node.BanReason = &value
+	}
 	if nodes := _c.mutation.EmailInfoIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
@@ -315,6 +378,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.IosScriptCodeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.IosScriptCodeTable,
+			Columns: []string{user.IosScriptCodeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

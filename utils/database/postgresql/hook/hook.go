@@ -44,6 +44,42 @@ func (f GameAccountBindingFunc) Mutate(ctx context.Context, m postgresql.Mutatio
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.GameAccountBindingMutation", m)
 }
 
+// The GroupFunc type is an adapter to allow the use of ordinary
+// function as Group mutator.
+type GroupFunc func(context.Context, *postgresql.GroupMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f GroupFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.GroupMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.GroupMutation", m)
+}
+
+// The GroupListFunc type is an adapter to allow the use of ordinary
+// function as GroupList mutator.
+type GroupListFunc func(context.Context, *postgresql.GroupListMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f GroupListFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.GroupListMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.GroupListMutation", m)
+}
+
+// The IOSScriptCodeFunc type is an adapter to allow the use of ordinary
+// function as IOSScriptCode mutator.
+type IOSScriptCodeFunc func(context.Context, *postgresql.IOSScriptCodeMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IOSScriptCodeFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.IOSScriptCodeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.IOSScriptCodeMutation", m)
+}
+
 // The SocialPlatformInfoFunc type is an adapter to allow the use of ordinary
 // function as SocialPlatformInfo mutator.
 type SocialPlatformInfoFunc func(context.Context, *postgresql.SocialPlatformInfoMutation) (postgresql.Value, error)
@@ -54,6 +90,18 @@ func (f SocialPlatformInfoFunc) Mutate(ctx context.Context, m postgresql.Mutatio
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SocialPlatformInfoMutation", m)
+}
+
+// The UploadLogFunc type is an adapter to allow the use of ordinary
+// function as UploadLog mutator.
+type UploadLogFunc func(context.Context, *postgresql.UploadLogMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UploadLogFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.UploadLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.UploadLogMutation", m)
 }
 
 // The UserFunc type is an adapter to allow the use of ordinary

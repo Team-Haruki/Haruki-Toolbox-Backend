@@ -8,6 +8,9 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
+	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -16,18 +19,18 @@ import (
 
 func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := context.Background()
+		ctx := c.Context()
 		userID := c.Locals("userID").(string)
 		var req harukiAPIHelper.GameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 		code := GenerateCode(true)
-		storageKey := fmt.Sprintf("%s:game-account:verify:%s:%s", userID, string(req.Server), req.UserID)
+		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, string(req.Server), req.UserID)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to save code", nil)
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 		}
-
 		resp := harukiAPIHelper.GenerateGameAccountCodeResponse{
 			Status:          fiber.StatusOK,
 			Message:         "ok",
@@ -60,28 +63,26 @@ func getUserBindings(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolb
 
 func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := context.Background()
+		ctx := c.Context()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
-
 		var req harukiAPIHelper.GameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-
 		existing, err := queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
 		if err != nil {
+			harukiLogger.Errorf("Failed to query existing binding: %v", err)
 			return err
 		}
 
 		if resp := checkIfAlreadyVerified(c, ctx, apiHelper, existing, userID); resp != nil {
 			return resp
 		}
-
 		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
-			return err
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 
 		if err := verifyGameAccountOwnership(c, apiHelper, gameUserIDStr, serverStr, code); err != nil {
@@ -89,30 +90,31 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		if err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req); err != nil {
-			return err
+			harukiLogger.Errorf("Failed to save game account binding: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
-
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query bindings", nil)
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "verification succeeded", &ud)
+		return harukiAPIHelper.SuccessResponse(c, "verification succeeded", &ud)
 	}
 }
 
 func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := context.Background()
+		ctx := c.Context()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
 		var req harukiAPIHelper.GameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "invalid request body", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 
 		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
@@ -125,10 +127,10 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Only(ctx)
 
 		if err != nil || existing == nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "binding not found", nil)
+			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "this account is bound by another user", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "this account is bound by another user")
 		}
 
 		_, err = existing.Update().
@@ -136,23 +138,25 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			SetMysekai(req.MySekai).
 			Save(ctx)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to update binding", nil)
+			harukiLogger.Errorf("Failed to update game account binding: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query bindings", nil)
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "binding updated successfully", &ud)
+		return harukiAPIHelper.SuccessResponse(c, "binding updated successfully", &ud)
 	}
 }
 
 func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := context.Background()
+		ctx := c.Context()
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
@@ -167,31 +171,33 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Only(ctx)
 
 		if err != nil || existing == nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotFound, "binding not found", nil)
+			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "not authorized to delete this binding", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "not authorized to delete this binding")
 		}
 
 		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to delete binding", nil)
+			harukiLogger.Errorf("Failed to delete game account binding: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query bindings", nil)
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "binding deleted successfully", &ud)
+		return harukiAPIHelper.SuccessResponse(c, "binding deleted successfully", &ud)
 	}
 }
 
 func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) (*postgresql.GameAccountBinding, error) {
-	existing, _ := apiHelper.DBManager.DB.GameAccountBinding.
+	existing, err := apiHelper.DBManager.DB.GameAccountBinding.
 		Query().
 		Where(
 			gameaccountbinding.ServerEQ(serverStr),
@@ -199,28 +205,36 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 		).
 		WithUser().
 		Only(ctx)
+	if err != nil {
+		if postgresql.IsNotFound(err) {
+			return nil, nil
+		}
+		harukiLogger.Errorf("Failed to query existing binding: %v", err)
+		return nil, err
+	}
 	return existing, nil
 }
 
 func checkIfAlreadyVerified(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
 	if existing != nil && existing.Verified {
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusForbidden, "this account is already bound by another user", nil)
+			return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
 		}
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to query bindings", nil)
+			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "account already verified", &ud)
+		return harukiAPIHelper.SuccessResponse(c, "account already verified", &ud)
 	}
 	return nil
 }
 
 func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) (string, error) {
-	storageKey := fmt.Sprintf("%s:game-account:verify:%s:%s", userID, serverStr, gameUserIDStr)
+	storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
 	var code string
 	ok, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
 	if err != nil || !ok {
@@ -232,32 +246,34 @@ func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
 	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
 	if err != nil || resultInfo == nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, fmt.Sprintf("request sekai account profile failed: %v", err), nil)
+		harukiLogger.Errorf("Failed to get user profile from Sekai API: %v", err)
+		return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("request sekai account profile failed: %v", err))
 	}
 	if !resultInfo.ServerAvailable {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "server unavailable or under maintenance", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "server unavailable or under maintenance")
 	}
 	if !resultInfo.AccountExists {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "game account not found", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "game account not found")
 	}
 	if !resultInfo.Body || len(body) == 0 {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "empty user profile response", nil)
+		return harukiAPIHelper.ErrorInternal(c, "empty user profile response")
 	}
 
 	var data map[string]interface{}
 	if err := sonic.Unmarshal(body, &data); err != nil {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to parse profile", nil)
+		harukiLogger.Errorf("Failed to unmarshal user profile: %v", err)
+		return harukiAPIHelper.ErrorInternal(c, "failed to parse profile")
 	}
 	userProfile, ok := data["userProfile"].(map[string]interface{})
 	if !ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "userProfile missing", nil)
+		return harukiAPIHelper.ErrorInternal(c, "userProfile missing")
 	}
 	word, ok := userProfile["word"].(string)
 	if !ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code missing in user profile", nil)
+		return harukiAPIHelper.ErrorBadRequest(c, "verification code missing in user profile")
 	}
-	if word != expectedCode {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "verification code mismatch", nil)
+	if strings.Contains(word, expectedCode) {
+		return harukiAPIHelper.ErrorBadRequest(c, "verification code mismatch")
 	}
 	return nil
 }
@@ -287,9 +303,9 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
 
-	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, handleGenerateGameAccountVerificationCode(apiHelper))
+	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleGenerateGameAccountVerificationCode(apiHelper))
 	r.RouteChain("/:server/:game_user_id").
-		Post(apiHelper.SessionHandler.VerifySessionToken, handleCreateGameAccountBinding(apiHelper)).
-		Put(apiHelper.SessionHandler.VerifySessionToken, handleUpdateGameAccountBinding(apiHelper)).
-		Delete(apiHelper.SessionHandler.VerifySessionToken, handleDeleteGameAccountBinding(apiHelper))
+		Post(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleCreateGameAccountBinding(apiHelper)).
+		Put(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleUpdateGameAccountBinding(apiHelper)).
+		Delete(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleDeleteGameAccountBinding(apiHelper))
 }

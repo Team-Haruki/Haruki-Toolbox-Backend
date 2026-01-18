@@ -3,6 +3,7 @@ package sekaiapi
 import (
 	"fmt"
 	"haruki-suite/utils"
+	harukiLogger "haruki-suite/utils/logger"
 
 	"github.com/go-resty/resty/v2"
 )
@@ -38,6 +39,7 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (
 		SetHeader("Accept", "application/json").
 		Get(url)
 	if err != nil {
+		harukiLogger.Errorf("Sekai API request failed for %s: %v", url, err)
 		return nil, nil, fmt.Errorf("请求失败: %v", err)
 	}
 	switch resp.StatusCode() {
@@ -54,18 +56,21 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (
 			Body:            false,
 		}, nil, fmt.Errorf("this user does not exist, please check your userID if is corrent")
 	case 500:
+		harukiLogger.Errorf("Sekai API returned 500 for %s", url)
 		return &HarukiSekaiAPIResult{
 			ServerAvailable: false,
 			AccountExists:   false,
 			Body:            false,
 		}, nil, fmt.Errorf("api is busy, please try again later, if this problem still consist, please contact Haruki Dev Team")
 	case 503:
+		harukiLogger.Warnf("Sekai API returned 503 (maintenance) for %s", url)
 		return &HarukiSekaiAPIResult{
 			ServerAvailable: false,
 			AccountExists:   false,
 			Body:            false,
 		}, nil, fmt.Errorf("the game server you query is under maintenance")
 	default:
+		harukiLogger.Errorf("Sekai API returned unexpected status %d for %s", resp.StatusCode(), url)
 		return &HarukiSekaiAPIResult{
 			ServerAvailable: false,
 			AccountExists:   false,

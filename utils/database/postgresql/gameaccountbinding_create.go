@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/ent/schema"
+	"haruki-suite/entsrc/schema"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
 

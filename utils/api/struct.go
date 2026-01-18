@@ -1,11 +1,11 @@
 package api
 
 import (
+	"haruki-suite/entsrc/schema"
+	"haruki-suite/utils"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
-	"haruki-suite/ent/schema"
-	entSchema "haruki-suite/ent/schema"
-	"haruki-suite/utils"
 )
 
 // ====================== Helper Struct ======================
@@ -69,7 +69,8 @@ type ResetPasswordPayload struct {
 }
 
 type ChangePasswordPayload struct {
-	Password string `json:"password"`
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
 }
 
 type SendEmailPayload struct {
@@ -109,10 +110,10 @@ type AuthorizeSocialPlatformPayload struct {
 }
 
 type GameAccountBindingPayload struct {
-	Server  utils.SupportedDataUploadServer       `json:"server"`
-	UserID  string                                `json:"userId"`
-	Suite   *entSchema.SuiteDataPrivacySettings   `json:"suite"`
-	MySekai *entSchema.MysekaiDataPrivacySettings `json:"mysekai"`
+	Server  utils.SupportedDataUploadServer    `json:"server"`
+	UserID  string                             `json:"userId"`
+	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
+	MySekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
 }
 
 // ====================== Response Struct ======================
@@ -128,6 +129,7 @@ type HarukiToolboxUserData struct {
 	UserID                      *string                        `json:"userId,omitempty"`
 	AvatarPath                  *string                        `json:"avatarPath,omitempty"`
 	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitempty"`
+	IOSUploadCode               *string                        `json:"iosUploadCode,omitempty"`
 	EmailInfo                   *EmailInfo                     `json:"emailInfo,omitempty"`
 	SocialPlatformInfo          *SocialPlatformInfo            `json:"socialPlatformInfo,omitempty"`
 	AuthorizeSocialPlatformInfo *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitempty"`
@@ -160,11 +162,11 @@ type AuthorizeSocialPlatformInfo struct {
 }
 
 type GameAccountBinding struct {
-	Server   utils.SupportedDataUploadServer       `json:"server"`
-	UserID   string                                `json:"userId"`
-	Verified bool                                  `json:"verified"`
-	Suite    *entSchema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
-	Mysekai  *entSchema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
+	Server   utils.SupportedDataUploadServer    `json:"server"`
+	UserID   string                             `json:"userId"`
+	Verified bool                               `json:"verified"`
+	Suite    *schema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
+	Mysekai  *schema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
 }
 
 type GenerateSocialPlatformCodeResponse struct {

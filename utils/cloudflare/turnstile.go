@@ -3,6 +3,7 @@ package cloudflare
 import (
 	"fmt"
 	"haruki-suite/config"
+	harukiLogger "haruki-suite/utils/logger"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -28,20 +29,19 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 	if remoteIP != "" {
 		payload["remoteip"] = remoteIP
 	}
-
 	body, _ := sonic.Marshal(payload)
-
 	client := resty.New().SetTimeout(5 * time.Second)
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(body).
 		Post(verifyURL)
 	if err != nil {
+		harukiLogger.Errorf("Turnstile request failed: %v", err)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-
 	var result TurnstileResponse
 	if err := sonic.Unmarshal(resp.Body(), &result); err != nil {
+		harukiLogger.Errorf("Turnstile response decode failed: %v, body: %s", err, string(resp.Body()))
 		return nil, fmt.Errorf("decode failed: %w", err)
 	}
 	return &result, nil

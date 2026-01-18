@@ -47,6 +47,16 @@ type Logger struct {
 	writer io.Writer
 }
 
+var DefaultLogger *Logger
+
+func init() {
+	DefaultLogger = NewLogger("HarukiDefaultLogger", "INFO", os.Stdout)
+}
+
+func SetDefaultLogger(l *Logger) {
+	DefaultLogger = l
+}
+
 func NewLogger(name string, level string, writer io.Writer) *Logger {
 	if writer == nil {
 		writer = os.Stdout
@@ -80,7 +90,7 @@ func (l *Logger) logf(level logLevel, format string, args ...interface{}) {
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	fmt.Fprint(l.writer, line)
+	_, _ = fmt.Fprint(l.writer, line)
 }
 
 func (l *Logger) Debugf(format string, args ...interface{})    { l.logf(DEBUG, format, args...) }
@@ -91,3 +101,9 @@ func (l *Logger) Criticalf(format string, args ...interface{}) { l.logf(CRITICAL
 func (l *Logger) Exceptionf(format string, args ...interface{}) {
 	l.logf(ERROR, "[EXCEPTION] "+format, args...)
 }
+
+func Debugf(format string, args ...interface{})    { DefaultLogger.Debugf(format, args...) }
+func Infof(format string, args ...interface{})     { DefaultLogger.Infof(format, args...) }
+func Warnf(format string, args ...interface{})     { DefaultLogger.Warnf(format, args...) }
+func Errorf(format string, args ...interface{})    { DefaultLogger.Errorf(format, args...) }
+func Criticalf(format string, args ...interface{}) { DefaultLogger.Criticalf(format, args...) }

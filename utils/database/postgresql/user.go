@@ -5,6 +5,7 @@ package postgresql
 import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 	"strings"
@@ -28,6 +29,10 @@ type User struct {
 	AvatarPath *string `json:"avatar_path,omitempty"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
 	AllowCnMysekai bool `json:"allow_cn_mysekai,omitempty"`
+	// Banned holds the value of the "banned" field.
+	Banned bool `json:"banned,omitempty"`
+	// BanReason holds the value of the "ban_reason" field.
+	BanReason *string `json:"ban_reason,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges        UserEdges `json:"edges"`
@@ -44,9 +49,11 @@ type UserEdges struct {
 	AuthorizedSocialPlatforms []*AuthorizeSocialPlatformInfo `json:"authorized_social_platforms,omitempty"`
 	// GameAccountBindings holds the value of the game_account_bindings edge.
 	GameAccountBindings []*GameAccountBinding `json:"game_account_bindings,omitempty"`
+	// IosScriptCode holds the value of the ios_script_code edge.
+	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // EmailInfoOrErr returns the EmailInfo value or an error if the edge
@@ -89,14 +96,25 @@ func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
 	return nil, &NotLoadedError{edge: "game_account_bindings"}
 }
 
+// IosScriptCodeOrErr returns the IosScriptCode value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
+	if e.IosScriptCode != nil {
+		return e.IosScriptCode, nil
+	} else if e.loadedTypes[4] {
+		return nil, &NotFoundError{label: iosscriptcode.Label}
+	}
+	return nil, &NotLoadedError{edge: "ios_script_code"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldAllowCnMysekai:
+		case user.FieldAllowCnMysekai, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldBanReason:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -150,6 +168,19 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AllowCnMysekai = value.Bool
 			}
+		case user.FieldBanned:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field banned", values[i])
+			} else if value.Valid {
+				_m.Banned = value.Bool
+			}
+		case user.FieldBanReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field ban_reason", values[i])
+			} else if value.Valid {
+				_m.BanReason = new(string)
+				*_m.BanReason = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -181,6 +212,11 @@ func (_m *User) QueryAuthorizedSocialPlatforms() *AuthorizeSocialPlatformInfoQue
 // QueryGameAccountBindings queries the "game_account_bindings" edge of the User entity.
 func (_m *User) QueryGameAccountBindings() *GameAccountBindingQuery {
 	return NewUserClient(_m.config).QueryGameAccountBindings(_m)
+}
+
+// QueryIosScriptCode queries the "ios_script_code" edge of the User entity.
+func (_m *User) QueryIosScriptCode() *IOSScriptCodeQuery {
+	return NewUserClient(_m.config).QueryIosScriptCode(_m)
 }
 
 // Update returns a builder for updating this User.
@@ -222,6 +258,14 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("allow_cn_mysekai=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowCnMysekai))
+	builder.WriteString(", ")
+	builder.WriteString("banned=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Banned))
+	builder.WriteString(", ")
+	if v := _m.BanReason; v != nil {
+		builder.WriteString("ban_reason=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

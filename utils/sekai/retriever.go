@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type HarukiSekaiDataRetriever struct {
+type DataRetriever struct {
 	client       *HarukiSekaiClient
 	uploadType   harukiUtils.UploadDataType
 	logger       *harukiLogger.Logger
@@ -19,20 +19,14 @@ type HarukiSekaiDataRetriever struct {
 	ErrorMessage string
 }
 
+type HarukiSekaiDataRetriever = DataRetriever
+
 func NewSekaiDataRetriever(
 	server harukiUtils.SupportedInheritUploadServer,
 	inherit harukiUtils.InheritInformation,
 	uploadType harukiUtils.UploadDataType,
 ) *HarukiSekaiDataRetriever {
-	client := NewSekaiClient(struct {
-		Server          harukiUtils.SupportedInheritUploadServer
-		API             string
-		VersionURL      string
-		Inherit         harukiUtils.InheritInformation
-		Headers         map[string]string
-		Proxy           string
-		InheritJWTToken string
-	}{
+	client := NewSekaiClientWithConfig(ClientConfig{
 		Server:          server,
 		API:             Api[server],
 		VersionURL:      Version[server],
@@ -53,154 +47,199 @@ func NewSekaiDataRetriever(
 
 func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, error) {
 	if r.isErrorExist {
-		return nil, fmt.Errorf(r.ErrorMessage)
+		return nil, NewDataRetrievalError("suite", "pre-check", r.ErrorMessage, nil)
 	}
-	r.logger.Infof("%s server retrieving suite...", strings.ToUpper(string(r.client.server)))
-	basePath := fmt.Sprintf("/suite/user/%s", strconv.FormatInt(r.client.userID, 10))
-
+	serverName := strings.ToUpper(string(r.client.server))
+	r.logger.Infof("%s server retrieving suite...", serverName)
+	userIDStr := strconv.FormatInt(r.client.userID, 10)
+	basePath := fmt.Sprintf("/suite/user/%s", userIDStr)
 	suite, status, err := r.client.callAPI(ctx, basePath, "GET", nil, nil)
 	if err != nil {
-		return nil, err
+		r.logger.Errorf("Suite API call failed: %v", err)
+		return nil, NewDataRetrievalError("suite", "api_call", "failed to call suite API", err)
 	}
 	if suite == nil {
 		r.isErrorExist = true
-		r.ErrorMessage = "failed to retrieve suite, API response timeout."
-		return nil, fmt.Errorf(r.ErrorMessage)
+		r.ErrorMessage = "suite API returned nil response"
+		r.logger.Errorf(r.ErrorMessage)
+		return nil, NewDataRetrievalError("suite", "api_response", r.ErrorMessage, nil)
 	}
-
 	time.Sleep(1 * time.Second)
-	r.logger.Infof("%s server calling suite...", strings.ToUpper(string(r.client.server)))
-
+	r.logger.Debugf("%s server making follow-up suite calls...", serverName)
 	path := basePath + "?isForceAllReload=false&name=user_colorful_pass,user_colorful_pass_v2,user_offline_event"
-	_, _, _ = r.client.callAPI(ctx, path, "GET", nil, nil)
+	if _, _, err := r.client.callAPI(ctx, path, "GET", nil, nil); err != nil {
+		r.logger.Warnf("Follow-up suite call failed (non-critical): %v", err)
+	}
 	time.Sleep(1 * time.Second)
-	_, _, _ = r.client.callAPI(ctx, "/system", "GET", nil, nil)
+	if _, _, err := r.client.callAPI(ctx, "/system", "GET", nil, nil); err != nil {
+		r.logger.Warnf("System call failed (non-critical): %v", err)
+	}
 	time.Sleep(1 * time.Second)
-
 	unpacked, err := Unpack(suite, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if err != nil {
-		return nil, err
+		r.logger.Errorf("Failed to unpack suite response: %v", err)
+		return nil, NewDataRetrievalError("suite", "unpack", "failed to unpack response", err)
 	}
 	unpackedMap, ok := unpacked.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("unexpected unpack type")
+		r.logger.Errorf("Unexpected suite response type")
+		return nil, NewDataRetrievalError("suite", "parse", "unexpected response type", nil)
 	}
-
-	friend := false
+	hasFriends := false
 	if f, ok := unpackedMap["userFriends"]; ok && f != nil {
-		friend = true
+		hasFriends = true
 	}
-
-	if r.client.loginBonus {
-		if friend {
-			_ = r.RefreshHome(ctx, true, true)
-		} else {
-			_ = r.RefreshHome(ctx, false, true)
-		}
-	} else {
-		if friend {
-			_ = r.RefreshHome(ctx, true, false)
-		} else {
-			_ = r.RefreshHome(ctx, false, false)
-		}
+	if err := r.RefreshHome(ctx, hasFriends, r.client.loginBonus); err != nil {
+		r.logger.Warnf("RefreshHome failed (non-critical): %v", err)
 	}
-
 	if status == 200 {
-		r.logger.Infof("%s server retrieved suite.", strings.ToUpper(string(r.client.server)))
+		r.logger.Infof("%s server retrieved suite successfully.", serverName)
 		return suite, nil
 	}
-	return nil, fmt.Errorf("suite api returned non-200 status")
+	r.logger.Errorf("Suite API returned non-200 status: %d", status)
+	return nil, NewDataRetrievalError("suite", "status", fmt.Sprintf("unexpected status code: %d", status), nil)
 }
 
 func (r *HarukiSekaiDataRetriever) RefreshHome(ctx context.Context, friends bool, login bool) error {
 	if r.isErrorExist {
-		return fmt.Errorf(r.ErrorMessage)
+		return NewDataRetrievalError("home", "pre-check", r.ErrorMessage, nil)
 	}
-	r.logger.Infof("%s server refreshing home...", strings.ToUpper(string(r.client.server)))
-
+	serverName := strings.ToUpper(string(r.client.server))
+	r.logger.Infof("%s server refreshing home...", serverName)
+	userIDStr := strconv.FormatInt(r.client.userID, 10)
+	var lastErr error
 	if friends {
-		r.client.callAPI(ctx, fmt.Sprintf("/user/%s/invitation", strconv.FormatInt(r.client.userID, 10)), "GET", nil, nil)
-		r.client.callAPI(ctx, "/system", "GET", nil, nil)
-		r.client.callAPI(ctx, "/information", "GET", nil, nil)
-	} else {
-		r.client.callAPI(ctx, "/system", "GET", nil, nil)
-		r.client.callAPI(ctx, "/information", "GET", nil, nil)
+		if _, _, err := r.client.callAPI(ctx, fmt.Sprintf("/user/%s/invitation", userIDStr), "GET", nil, nil); err != nil {
+			lastErr = err
+			r.logger.Warnf("Invitation call failed: %v", err)
+		}
 	}
-
-	refreshPath := fmt.Sprintf("/user/%s/home/refresh", strconv.FormatInt(r.client.userID, 10))
+	if _, _, err := r.client.callAPI(ctx, "/system", "GET", nil, nil); err != nil {
+		lastErr = err
+		r.logger.Warnf("System call failed: %v", err)
+	}
+	if _, _, err := r.client.callAPI(ctx, "/information", "GET", nil, nil); err != nil {
+		lastErr = err
+		r.logger.Warnf("Information call failed: %v", err)
+	}
+	refreshPath := fmt.Sprintf("/user/%s/home/refresh", userIDStr)
+	var refreshData map[string]interface{}
 	if login {
-		data, _ := Pack(RequestDataRefreshLogin, harukiUtils.SupportedDataUploadServer(r.client.server))
-		r.client.callAPI(ctx, refreshPath, "PUT", data, nil)
+		refreshData = RequestDataRefreshLogin
 	} else {
-		data, _ := Pack(RequestDataRefresh, harukiUtils.SupportedDataUploadServer(r.client.server))
-		r.client.callAPI(ctx, refreshPath, "PUT", data, nil)
+		refreshData = RequestDataRefresh
+	}
+	data, err := Pack(refreshData, harukiUtils.SupportedDataUploadServer(r.client.server))
+	if err != nil {
+		r.logger.Warnf("Failed to pack refresh data: %v", err)
+		return NewDataRetrievalError("home", "pack", "failed to pack refresh data", err)
+	}
+	if _, _, err := r.client.callAPI(ctx, refreshPath, "PUT", data, nil); err != nil {
+		lastErr = err
+		r.logger.Warnf("Home refresh call failed: %v", err)
+	}
+	r.logger.Infof("%s server home refresh completed.", serverName)
+	if lastErr != nil {
+		return NewDataRetrievalError("home", "refresh", "some refresh calls failed", lastErr)
 	}
 	return nil
 }
 
 func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte, error) {
 	if r.isErrorExist {
-		return nil, fmt.Errorf(r.ErrorMessage)
+		return nil, NewDataRetrievalError("mysekai", "pre-check", r.ErrorMessage, nil)
 	}
-
-	r.logger.Infof("%s server checking MySekai availability...", strings.ToUpper(string(r.client.server)))
+	serverName := strings.ToUpper(string(r.client.server))
+	r.logger.Infof("%s server checking MySekai availability...", serverName)
 	resp, status, err := r.client.callAPI(ctx, "/module-maintenance/MYSEKAI", "GET", nil, nil)
-	if err != nil || status != 200 {
-		return nil, err
+	if err != nil {
+		r.logger.Warnf("MySekai maintenance check failed: %v", err)
+		return nil, NewDataRetrievalError("mysekai", "maintenance_check", "failed to check maintenance status", err)
 	}
-	unpacked, _ := Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
-	if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
-		return nil, nil
+	if status != 200 {
+		return nil, NewDataRetrievalError("mysekai", "maintenance_check", fmt.Sprintf("unexpected status: %d", status), nil)
 	}
-
-	resp, _, _ = r.client.callAPI(ctx, "/module-maintenance/MYSEKAI_ROOM", "GET", nil, nil)
-	unpacked, _ = Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
-	if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
-		return nil, nil
+	unpacked, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
+	if err != nil {
+		r.logger.Warnf("Failed to unpack maintenance response: %v", err)
+	} else if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
+		r.logger.Infof("MySekai is under maintenance")
+		return nil, ErrMaintenance
 	}
-
-	r.logger.Infof("%s server retrieving MySekai data...", strings.ToUpper(string(r.client.server)))
-	general, _ := base64.StdEncoding.DecodeString(RequestDataGeneral)
-	mysekai, status, _ := r.client.callAPI(ctx,
-		fmt.Sprintf("/user/%s/mysekai?isForceAllReloadOnlyMySekai=True", strconv.FormatInt(r.client.userID, 10)),
-		"POST", general, nil)
-
-	roomReq, _ := Pack(RequestDataMySekaiRoom, harukiUtils.SupportedDataUploadServer(r.client.server))
-	_, _, _ = r.client.callAPI(ctx,
-		fmt.Sprintf("/user/%s/mysekai/%s/room", strconv.FormatInt(r.client.userID, 10), strconv.FormatInt(r.client.userID, 10)),
-		"POST", roomReq, nil)
-
-	_, _, _ = r.client.callAPI(ctx,
-		fmt.Sprintf("/user/%s/diarkis-auth?diarkisServerType=mysekai", strconv.FormatInt(r.client.userID, 10)),
-		"Get", nil, nil)
-
+	resp, _, err = r.client.callAPI(ctx, "/module-maintenance/MYSEKAI_ROOM", "GET", nil, nil)
+	if err != nil {
+		r.logger.Warnf("MySekai Room maintenance check failed: %v", err)
+	} else {
+		unpacked, err = Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
+		if err != nil {
+			r.logger.Warnf("Failed to unpack room maintenance response: %v", err)
+		} else if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
+			r.logger.Infof("MySekai Room is under maintenance")
+			return nil, ErrMaintenance
+		}
+	}
+	r.logger.Infof("%s server retrieving MySekai data...", serverName)
+	userIDStr := strconv.FormatInt(r.client.userID, 10)
+	general, err := base64.StdEncoding.DecodeString(RequestDataGeneral)
+	if err != nil {
+		return nil, NewDataRetrievalError("mysekai", "decode", "failed to decode request data", err)
+	}
+	mysekaiPath := fmt.Sprintf("/user/%s/mysekai?isForceAllReloadOnlyMySekai=True", userIDStr)
+	mysekai, status, err := r.client.callAPI(ctx, mysekaiPath, "POST", general, nil)
+	if err != nil {
+		r.logger.Errorf("MySekai API call failed: %v", err)
+		return nil, NewDataRetrievalError("mysekai", "api_call", "failed to call MySekai API", err)
+	}
+	roomReq, err := Pack(RequestDataMySekaiRoom, harukiUtils.SupportedDataUploadServer(r.client.server))
+	if err != nil {
+		r.logger.Warnf("Failed to pack room request: %v", err)
+	} else {
+		roomPath := fmt.Sprintf("/user/%s/mysekai/%s/room", userIDStr, userIDStr)
+		if _, _, err := r.client.callAPI(ctx, roomPath, "POST", roomReq, nil); err != nil {
+			r.logger.Warnf("Room call failed (non-critical): %v", err)
+		}
+	}
+	diarkisPath := fmt.Sprintf("/user/%s/diarkis-auth?diarkisServerType=mysekai", userIDStr)
+	if _, _, err := r.client.callAPI(ctx, diarkisPath, "GET", nil, nil); err != nil {
+		r.logger.Warnf("Diarkis auth call failed (non-critical): %v", err)
+	}
 	if status == 200 {
-		r.logger.Infof("%s server retrieved MySekai data.", strings.ToUpper(string(r.client.server)))
+		r.logger.Infof("%s server retrieved MySekai data successfully.", serverName)
 		return mysekai, nil
 	}
-	return nil, fmt.Errorf("failed to retrieve mysekai")
+	r.logger.Errorf("MySekai API returned non-200 status: %d", status)
+	return nil, NewDataRetrievalError("mysekai", "status", fmt.Sprintf("unexpected status code: %d", status), nil)
 }
 
 func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiInheritDataRetrieverResponse, error) {
 	if err := r.client.Init(ctx); err != nil {
 		r.isErrorExist = true
 		r.ErrorMessage = err.Error()
-		return nil, err
+		r.logger.Errorf("Client initialization failed: %v", err)
+		return nil, NewDataRetrievalError("run", "init", "client initialization failed", err)
 	}
 	if r.client.isErrorExist {
 		r.isErrorExist = true
 		r.ErrorMessage = r.client.errorMessage
-		return nil, fmt.Errorf(r.ErrorMessage)
+		r.logger.Errorf("Client error: %s", r.client.errorMessage)
+		return nil, NewDataRetrievalError("run", "client_error", r.client.errorMessage, nil)
 	}
-
-	suite, _ := r.RetrieveSuite(ctx)
-	_ = r.RefreshHome(ctx, false, false)
-
+	suite, suiteErr := r.RetrieveSuite(ctx)
+	if suiteErr != nil {
+		r.logger.Warnf("Suite retrieval failed: %v", suiteErr)
+		// Continue to try other data retrieval
+	}
+	if err := r.RefreshHome(ctx, false, false); err != nil {
+		r.logger.Warnf("Final home refresh failed (non-critical): %v", err)
+	}
 	var mysekai []byte
+	var mysekaiErr error
 	if r.uploadType == harukiUtils.UploadDataTypeMysekai {
-		mysekai, _ = r.RetrieveMysekai(ctx)
+		mysekai, mysekaiErr = r.RetrieveMysekai(ctx)
+		if mysekaiErr != nil && !IsMaintenanceError(mysekaiErr) {
+			r.logger.Warnf("MySekai retrieval failed: %v", mysekaiErr)
+		}
 	}
-
 	return &harukiUtils.SekaiInheritDataRetrieverResponse{
 		Server:  string(r.client.server),
 		UserID:  r.client.userID,
