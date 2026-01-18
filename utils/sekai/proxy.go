@@ -11,14 +11,31 @@ import (
 	"time"
 )
 
+var apiEndpoints = map[harukiUtils.SupportedDataUploadServer][2]string{
+	harukiUtils.SupportedDataUploadServerJP: {
+		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost),
+		harukiConfig.Cfg.SekaiClient.JPServerAPIHost,
+	},
+	harukiUtils.SupportedDataUploadServerEN: {
+		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost),
+		harukiConfig.Cfg.SekaiClient.ENServerAPIHost,
+	},
+	harukiUtils.SupportedDataUploadServerTW: {
+		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.TWServerAPIHost),
+		harukiConfig.Cfg.SekaiClient.TWServerAPIHost,
+	},
+	harukiUtils.SupportedDataUploadServerKR: {
+		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.KRServerAPIHost),
+		harukiConfig.Cfg.SekaiClient.KRServerAPIHost,
+	},
+	harukiUtils.SupportedDataUploadServerCN: {
+		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.CNServerAPIHost),
+		harukiConfig.Cfg.SekaiClient.CNServerAPIHost,
+	},
+}
+
 func GetAPIEndpoint() map[harukiUtils.SupportedDataUploadServer][2]string {
-	return map[harukiUtils.SupportedDataUploadServer][2]string{
-		harukiUtils.SupportedDataUploadServerJP: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost), harukiConfig.Cfg.SekaiClient.JPServerAPIHost},
-		harukiUtils.SupportedDataUploadServerEN: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost), harukiConfig.Cfg.SekaiClient.ENServerAPIHost},
-		harukiUtils.SupportedDataUploadServerTW: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.TWServerAPIHost), harukiConfig.Cfg.SekaiClient.TWServerAPIHost},
-		harukiUtils.SupportedDataUploadServerKR: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.KRServerAPIHost), harukiConfig.Cfg.SekaiClient.KRServerAPIHost},
-		harukiUtils.SupportedDataUploadServerCN: {fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.CNServerAPIHost), harukiConfig.Cfg.SekaiClient.CNServerAPIHost},
-	}
+	return apiEndpoints
 }
 
 func filterHeaders(headers map[string]string) map[string]string {
@@ -44,50 +61,47 @@ func HarukiSekaiProxyCallAPI(
 	userID int64,
 	mysekaiBirthdayPartyID *int64,
 ) (*harukiUtils.SekaiDataRetrieverResponse, error) {
-	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty && (mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0) {
-		return nil, fmt.Errorf("invalid birthday party_id")
+	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
+		if mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0 {
+			return nil, NewAPIError("/birthday-party", method, 0,
+				"birthday party ID is required but was not provided", nil)
+		}
 	}
-
-	apiEndpoint := GetAPIEndpoint()
-	endpoint, ok := apiEndpoint[server]
+	endpoint, ok := apiEndpoints[server]
 	if !ok {
-		return nil, fmt.Errorf("invalid server: %s", server)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidServer, server)
 	}
 	baseURL, host := endpoint[0], endpoint[1]
-
+	pathTemplate, ok := acquirePath[dataType]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidDataType, dataType)
+	}
 	filteredHeaders := filterHeaders(headers)
 	filteredHeaders["Host"] = host
-
 	var url string
-	urlTemplate := baseURL + acquirePath[dataType]
 	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
-		url = fmt.Sprintf(urlTemplate, userID, *mysekaiBirthdayPartyID)
+		url = baseURL + fmt.Sprintf(pathTemplate, userID, *mysekaiBirthdayPartyID)
 	} else {
-		url = fmt.Sprintf(urlTemplate, userID)
+		url = baseURL + fmt.Sprintf(pathTemplate, userID)
 	}
-
-	if params != nil && len(params) > 0 {
+	if len(params) > 0 {
 		q := urlParse.Values{}
 		for k, v := range params {
 			q.Set(k, v)
 		}
 		url += "?" + q.Encode()
 	}
-
 	client := harukiHttp.NewClient(proxy, 30*time.Second)
-
 	statusCode, respHeaders, respBody, err := client.Request(ctx, method, url, filteredHeaders, data)
 	if err != nil {
-		return nil, err
+		return nil, NewAPIError(url, method, 0, "HTTP request failed", err)
 	}
-
-	rawBody := append([]byte(nil), respBody...)
-
-	newHeaders := make(map[string]string)
+	rawBody := make([]byte, len(respBody))
+	copy(rawBody, respBody)
+	newHeaders := make(map[string]string, len(respHeaders))
 	for k, v := range respHeaders {
 		newHeaders[k] = v
 	}
-
 	return &harukiUtils.SekaiDataRetrieverResponse{
 		RawBody:    rawBody,
 		StatusCode: statusCode,

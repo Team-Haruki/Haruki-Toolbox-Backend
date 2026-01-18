@@ -62,9 +62,12 @@ type BackendConfig struct {
 	AccessLog        string   `yaml:"access_log"`
 	AccessLogPath    string   `yaml:"access_log_path"`
 	AllowCORS        []string `yaml:"allow_cors"`
+	CSPConnectSrc    []string `yaml:"csp_connect_src"`
 	EnableTrustProxy bool     `yaml:"enable_trust_proxy"`
 	TrustProxies     []string `yaml:"trusted_proxies"`
 	ProxyHeader      string   `yaml:"proxy_header"`
+	BackendURL       string   `yaml:"backend_url"`
+	BackendCDNURL    string   `yaml:"backend_cdn_url"`
 }
 
 type SMTPConfig struct {
@@ -88,8 +91,11 @@ type SekaiClientConfig struct {
 	ENServerAESIV                string            `yaml:"en_server_aes_iv"`
 	JPServerAPIHost              string            `yaml:"jp_server_api_host"`
 	TWServerAPIHost              string            `yaml:"tw_server_api_host"`
+	TWServerAPIHost2             string            `yaml:"tw_server_api_host_2"`
 	KRServerAPIHost              string            `yaml:"kr_server_api_host"`
+	KRServerAPIHost2             string            `yaml:"kr_server_api_host_2"`
 	CNServerAPIHost              string            `yaml:"cn_server_api_host"`
+	CNServerAPIHost2             string            `yaml:"cn_server_api_host_2"`
 	OtherServerAESKey            string            `yaml:"other_server_aes_key"`
 	OtherServerAESIV             string            `yaml:"other_server_aes_iv"`
 	JPServerInheritToken         string            `yaml:"jp_server_inherit_token"`
@@ -133,7 +139,9 @@ func init() {
 		logger.Errorf("Failed to open config file: %v", err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
 	decoder := yaml.NewDecoder(f)
 	if err := decoder.Decode(&Cfg); err != nil {

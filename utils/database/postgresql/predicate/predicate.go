@@ -15,8 +15,20 @@ type EmailInfo func(*sql.Selector)
 // GameAccountBinding is the predicate function for gameaccountbinding builders.
 type GameAccountBinding func(*sql.Selector)
 
+// Group is the predicate function for group builders.
+type Group func(*sql.Selector)
+
+// GroupList is the predicate function for grouplist builders.
+type GroupList func(*sql.Selector)
+
+// IOSScriptCode is the predicate function for iosscriptcode builders.
+type IOSScriptCode func(*sql.Selector)
+
 // SocialPlatformInfo is the predicate function for socialplatforminfo builders.
 type SocialPlatformInfo func(*sql.Selector)
+
+// UploadLog is the predicate function for uploadlog builders.
+type UploadLog func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

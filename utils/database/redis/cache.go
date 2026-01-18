@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	harukiLogger "haruki-suite/utils/logger"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -36,22 +37,25 @@ func GetClearCachePaths(server string, dataType string, userID int64) []CachePat
 func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
 	fullPath := c.Path()
 	queryString := c.RequestCtx().QueryArgs().String()
-
 	queryHash := "none"
 	if queryString != "" {
 		hash := md5.Sum([]byte(queryString))
 		queryHash = hex.EncodeToString(hash[:])
 	}
-
 	return fmt.Sprintf("%s:%s:query=%s", namespace, fullPath, queryHash)
 }
 
 func (r *HarukiRedisManager) SetCache(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
 	data, err := sonic.Marshal(value)
 	if err != nil {
+		harukiLogger.Errorf("Failed to marshal cache value for key %s: %v", key, err)
 		return err
 	}
-	return r.Redis.Set(ctx, key, data, ttl).Err()
+	if err := r.Redis.Set(ctx, key, data, ttl).Err(); err != nil {
+		harukiLogger.Errorf("Failed to set redis cache for key %s: %v", key, err)
+		return err
+	}
+	return nil
 }
 
 func (r *HarukiRedisManager) GetCache(ctx context.Context, key string, out interface{}) (bool, error) {
@@ -60,13 +64,22 @@ func (r *HarukiRedisManager) GetCache(ctx context.Context, key string, out inter
 		return false, nil
 	}
 	if err != nil {
+		harukiLogger.Errorf("Failed to get redis cache for key %s: %v", key, err)
 		return false, err
 	}
-	return true, sonic.Unmarshal([]byte(val), out)
+	if err := sonic.Unmarshal([]byte(val), out); err != nil {
+		harukiLogger.Errorf("Failed to unmarshal cache value for key %s: %v", key, err)
+		return true, err
+	}
+	return true, nil
 }
 
 func (r *HarukiRedisManager) DeleteCache(ctx context.Context, key string) error {
-	return r.Redis.Del(ctx, key).Err()
+	if err := r.Redis.Del(ctx, key).Err(); err != nil {
+		harukiLogger.Errorf("Failed to delete redis cache for key %s: %v", key, err)
+		return err
+	}
+	return nil
 }
 
 func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server string, userID int64) error {

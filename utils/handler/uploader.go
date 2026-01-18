@@ -9,26 +9,36 @@ import (
 	harukiVersion "haruki-suite/version"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 )
 
-var logger = harukiLogger.NewLogger("HarukiDataSyncer", "DEBUG", nil)
+var (
+	logger     = harukiLogger.NewLogger("HarukiDataSyncer", "DEBUG", nil)
+	httpClient *resty.Client
+)
+
+func init() {
+	httpClient = resty.New()
+	httpClient.SetTimeout(30 * time.Second)
+	httpClient.SetHeader("User-Agent", fmt.Sprintf("Haruki-Toolbox-Backend/%s", harukiVersion.Version))
+	httpClient.SetHeader("Accept", "application/octet-stream")
+}
 
 func DataUploader(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string) {
 	if url != "" {
 		url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
 		url = strings.ReplaceAll(url, "{server}", string(server))
 		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
-		httpClient := resty.New()
+
 		resp, err := httpClient.R().
-			SetHeader("User-Agent", fmt.Sprintf("Haruki-Toolbox-Backend/%s", harukiVersion.Version)).
-			SetHeader("Accept", "application/octet-stream").
 			SetHeader("Authorization", fmt.Sprintf("Bearer %s", endpointSecret)).
 			SetBody(rawData).
 			Post(url)
 		if err != nil {
 			logger.Warnf("Failed to sync data to %s: %v", url, err)
+			return
 		}
 		if resp.StatusCode() != 200 {
 			logger.Warnf("Failed to sync data to %s: status code %v", url, resp.Status())
@@ -42,10 +52,7 @@ func DataUploader(url string, userID int64, server utils.SupportedDataUploadServ
 
 func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string) {
 	if url != "" {
-		httpClient := resty.New()
 		resp, err := httpClient.R().
-			SetHeader("User-Agent", fmt.Sprintf("Haruki-Toolbox-Backend/%s", harukiVersion.Version)).
-			SetHeader("Accept", "application/octet-stream").
 			SetHeader("X-Credentials", endpointSecret).
 			SetHeader("X-Server-Region", string(server)).
 			SetHeader("X-Upload-Type", string(dataType)).
@@ -54,6 +61,7 @@ func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, 
 			Post(url)
 		if err != nil {
 			logger.Warnf("Failed to sync data to %s: %v", url, err)
+			return
 		}
 		if resp.StatusCode() != 200 {
 			logger.Warnf("Failed to sync data to %s: status code %v", url, resp.Status())
@@ -66,6 +74,12 @@ func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, 
 }
 
 func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("DataSyncer panicked: %v", r)
+		}
+	}()
+
 	if dataType == utils.UploadDataTypeSuite {
 		if settings.Suite != nil {
 			if settings.Suite.Allow8823 {

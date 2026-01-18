@@ -23,7 +23,7 @@ import (
 
 type DataHandler struct {
 	DBManager      *database.HarukiToolboxDBManager
-	SeakiAPIClient *sekaiapi.HarukiSekaiAPIClient
+	SekaiAPIClient *sekaiapi.HarukiSekaiAPIClient
 	HttpClient     *harukiHttp.Client
 	Logger         *harukiLogger.Logger
 }
@@ -42,27 +42,23 @@ func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID 
 	if err := validateUserIDMatch(expectedUserID, parsedUserID, dataType); err != nil {
 		return nil, err
 	}
-
 	if dataType == utils.UploadDataTypeMysekai {
 		if err := h.validateMysekaiData(data, expectedUserID, server); err != nil {
 			return nil, err
 		}
 	}
-
 	if dataType == utils.UploadDataTypeSuite {
 		if err := validateSuiteData(data); err != nil {
 			return nil, err
 		}
 		data = cleanSuite(data)
 	}
-
 	if dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if err := validateBirthdayPartyData(data); err != nil {
 			return nil, err
 		}
 		data = extractBirthdayPartyData(data)
 	}
-
 	data["upload_time"] = time.Now().Unix()
 	data["_id"] = expectedUserID
 	data["server"] = string(server)
@@ -81,22 +77,18 @@ func (h *DataHandler) validateMysekaiData(data map[string]interface{}, expectedU
 	if !ok {
 		return fmt.Errorf("invalid data: missing updatedResources")
 	}
-
 	photos, ok := updatedResources["userMysekaiPhotos"].([]interface{})
 	if !ok || len(photos) == 0 {
 		return fmt.Errorf("no userMysekaiPhotos found, it seems you may not have taken a photo yet")
 	}
-
 	firstPhoto, ok := photos[0].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid photo data")
 	}
-
 	imagePath, ok := firstPhoto["imagePath"].(string)
 	if imagePath == "" || !ok {
 		return fmt.Errorf("missing imagePath")
 	}
-
 	return h.validateImagePath(imagePath, expectedUserID, server)
 }
 
@@ -121,17 +113,14 @@ func (h *DataHandler) validateOtherServerImagePath(imagePath string, expectedUse
 	if len(matches) != 3 {
 		return fmt.Errorf("invalid imagePath format")
 	}
-
 	uid := matches[1]
 	uidInt, err := strconv.ParseInt(uid, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid uid format")
 	}
-
 	if expectedUserID == nil {
 		return fmt.Errorf("expected user ID is nil")
 	}
-
 	if uidInt != *expectedUserID {
 		return fmt.Errorf("userId %s does not match expected UserId %d", uid, *expectedUserID)
 	}
@@ -140,7 +129,7 @@ func (h *DataHandler) validateOtherServerImagePath(imagePath string, expectedUse
 }
 
 func (h *DataHandler) verifyGameAccountExists(uid string, server utils.SupportedDataUploadServer) error {
-	resultInfo, _, err := h.SeakiAPIClient.GetUserProfile(uid, string(server))
+	resultInfo, _, err := h.SekaiAPIClient.GetUserProfile(uid, string(server))
 	if resultInfo == nil {
 		if err != nil {
 			return err
@@ -170,19 +159,16 @@ func validateBirthdayPartyData(data map[string]interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid data: missing updatedResources")
 	}
-
 	harvestMaps, ok := updatedResources["userMysekaiHarvestMaps"]
 	if !ok || harvestMaps == nil {
 		return fmt.Errorf("no userMysekaiHarvestMaps found, it seems you may not have participated in the birthday party event yet")
 	}
-
 	return nil
 }
 
 func extractBirthdayPartyData(data map[string]interface{}) map[string]interface{} {
 	updatedResources, _ := data["updatedResources"].(map[string]interface{})
 	harvestMaps := updatedResources["userMysekaiHarvestMaps"]
-
 	return map[string]interface{}{
 		"updatedResources": map[string]interface{}{
 			"userMysekaiHarvestMaps": harvestMaps,
@@ -196,24 +182,19 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		h.Logger.Errorf("unpack failed: %v", err)
 		return nil, err
 	}
-
 	unpackedMap, ok := unpacked.(map[string]interface{})
 	if !ok {
 		h.Logger.Errorf("unpack returned unexpected type %T", unpacked)
 		return nil, fmt.Errorf("invalid unpacked data type")
 	}
-
 	if result := h.checkForHTTPError(unpackedMap); result != nil {
 		return result, fmt.Errorf("data retrieve error")
 	}
-
 	extractedUserID := extractUserIDFromGameData(unpackedMap, h.Logger)
-
 	data, err := h.PreHandleData(unpackedMap, expectedUserID, extractedUserID, server, dataType)
 	if err != nil {
 		return nil, err
 	}
-
 	if dataType != utils.UploadDataTypeMysekaiBirthdayParty {
 		go DataSyncer(*expectedUserID, server, dataType, raw, settings)
 	} else {
@@ -225,15 +206,13 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		}
 
 	}
-
 	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
+		h.Logger.Errorf("Failed to update mongo data: %v", err)
 		return nil, err
 	}
-
 	if isPublicAPI {
 		go h.CallWebhook(ctx, *expectedUserID, server, dataType)
 	}
-
 	return &utils.HandleDataResult{UserID: expectedUserID}, nil
 }
 
@@ -242,7 +221,6 @@ func (h *DataHandler) checkForHTTPError(unpackedMap map[string]interface{}) *uti
 	if !ok {
 		return nil
 	}
-
 	errCode, _ := unpackedMap["errorCode"].(string)
 	statusCode := convertToStatusCode(status, h.Logger)
 	return &utils.HandleDataResult{
@@ -282,12 +260,10 @@ func extractUserIDFromGameData(unpackedMap map[string]interface{}, logger *haruk
 	if !ok {
 		return nil
 	}
-
 	userIDValue, ok := gameData["userId"]
 	if !ok {
 		return nil
 	}
-
 	return convertToInt64Pointer(userIDValue, logger)
 }
 
@@ -322,20 +298,17 @@ func convertToInt64Pointer(value interface{}, logger *harukiLogger.Logger) *int6
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
 	h.Logger.Infof("Calling back WebHook API: %s", url)
-
 	headers := map[string]string{
 		"User-Agent": fmt.Sprintf("Haruki-Toolbox-Backend/%s", harukiVersion.Version),
 	}
 	if bearer != "" {
 		headers["Authorization"] = "Bearer " + bearer
 	}
-
 	statusCode, _, _, err := h.HttpClient.Request(ctx, "POST", url, headers, nil)
 	if err != nil {
 		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return
 	}
-
 	if statusCode == 200 {
 		h.Logger.Infof("Called back WebHook API %s successfully.", url)
 	} else {
@@ -345,11 +318,9 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 
 func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
 	callbacks, err := h.DBManager.Mongo.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
-
 	if err != nil || len(callbacks) == 0 {
 		return
 	}
-
 	var wg sync.WaitGroup
 	for _, cb := range callbacks {
 		url := cb["callback_url"].(string)
@@ -357,7 +328,6 @@ func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server util
 		url = strings.ReplaceAll(url, "{server}", string(server))
 		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
 		bearer, _ := cb["Bearer"].(string)
-
 		wg.Add(1)
 		go func(u, b string) {
 			defer wg.Done()

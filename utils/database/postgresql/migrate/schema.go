@@ -91,6 +91,61 @@ var (
 			},
 		},
 	}
+	// GroupsColumns holds the columns for the "groups" table.
+	GroupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "group", Type: field.TypeString, Unique: true, Size: 64},
+	}
+	// GroupsTable holds the schema information for the "groups" table.
+	GroupsTable = &schema.Table{
+		Name:       "groups",
+		Columns:    GroupsColumns,
+		PrimaryKey: []*schema.Column{GroupsColumns[0]},
+	}
+	// GroupListsColumns holds the columns for the "group_lists" table.
+	GroupListsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString, Size: 64},
+		{Name: "avatar", Type: field.TypeString, Nullable: true, Size: 500},
+		{Name: "bg", Type: field.TypeString, Nullable: true, Size: 500},
+		{Name: "group_info", Type: field.TypeString, Size: 100},
+		{Name: "detail", Type: field.TypeString, Size: 300},
+		{Name: "group_group_list", Type: field.TypeInt},
+	}
+	// GroupListsTable holds the schema information for the "group_lists" table.
+	GroupListsTable = &schema.Table{
+		Name:       "group_lists",
+		Columns:    GroupListsColumns,
+		PrimaryKey: []*schema.Column{GroupListsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "group_lists_groups_group_list",
+				Columns:    []*schema.Column{GroupListsColumns[6]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// IosScriptCodesColumns holds the columns for the "ios_script_codes" table.
+	IosScriptCodesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "upload_code", Type: field.TypeString, Unique: true, Size: 32},
+		{Name: "user_id", Type: field.TypeString, Unique: true},
+	}
+	// IosScriptCodesTable holds the schema information for the "ios_script_codes" table.
+	IosScriptCodesTable = &schema.Table{
+		Name:       "ios_script_codes",
+		Columns:    IosScriptCodesColumns,
+		PrimaryKey: []*schema.Column{IosScriptCodesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "ios_script_codes_users_ios_script_code",
+				Columns:    []*schema.Column{IosScriptCodesColumns[2]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// SocialPlatformInfosColumns holds the columns for the "social_platform_infos" table.
 	SocialPlatformInfosColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -120,6 +175,23 @@ var (
 			},
 		},
 	}
+	// UploadLogsColumns holds the columns for the "upload_logs" table.
+	UploadLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "server", Type: field.TypeString},
+		{Name: "game_user_id", Type: field.TypeString, Size: 30},
+		{Name: "toolbox_user_id", Type: field.TypeString, Nullable: true, Size: 10},
+		{Name: "data_type", Type: field.TypeString},
+		{Name: "upload_method", Type: field.TypeString},
+		{Name: "success", Type: field.TypeBool},
+		{Name: "upload_time", Type: field.TypeTime},
+	}
+	// UploadLogsTable holds the schema information for the "upload_logs" table.
+	UploadLogsTable = &schema.Table{
+		Name:       "upload_logs",
+		Columns:    UploadLogsColumns,
+		PrimaryKey: []*schema.Column{UploadLogsColumns[0]},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
@@ -128,6 +200,8 @@ var (
 		{Name: "password_hash", Type: field.TypeString},
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
+		{Name: "banned", Type: field.TypeBool, Default: false},
+		{Name: "ban_reason", Type: field.TypeString, Nullable: true},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
@@ -140,7 +214,11 @@ var (
 		AuthorizeSocialPlatformInfosTable,
 		EmailInfosTable,
 		GameAccountBindingsTable,
+		GroupsTable,
+		GroupListsTable,
+		IosScriptCodesTable,
 		SocialPlatformInfosTable,
+		UploadLogsTable,
 		UsersTable,
 	}
 )
@@ -152,5 +230,7 @@ func init() {
 	GameAccountBindingsTable.Annotation = &entsql.Annotation{
 		Table: "game_account_bindings",
 	}
+	GroupListsTable.ForeignKeys[0].RefTable = GroupsTable
+	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 }

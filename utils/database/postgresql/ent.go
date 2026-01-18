@@ -9,7 +9,11 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/group"
+	"haruki-suite/utils/database/postgresql/grouplist"
+	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
 	"reflect"
 	"sync"
@@ -80,7 +84,11 @@ func checkColumn(t, c string) error {
 			authorizesocialplatforminfo.Table: authorizesocialplatforminfo.ValidColumn,
 			emailinfo.Table:                   emailinfo.ValidColumn,
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
+			group.Table:                       group.ValidColumn,
+			grouplist.Table:                   grouplist.ValidColumn,
+			iosscriptcode.Table:               iosscriptcode.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,
+			uploadlog.Table:                   uploadlog.ValidColumn,
 			user.Table:                        user.ValidColumn,
 		})
 	})

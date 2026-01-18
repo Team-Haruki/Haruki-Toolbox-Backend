@@ -96,13 +96,19 @@ func main() {
 			return err
 		}
 		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
+
+		cspConnectSrc := "'self'"
+		for _, src := range harukiConfig.Cfg.Backend.CSPConnectSrc {
+			cspConnectSrc += " " + src
+		}
+
 		c.Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' https://challenges.cloudflare.com 'nonce-"+nonce+"'; "+
 				"frame-src https://challenges.cloudflare.com; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: https:; "+
-				"connect-src 'self' https://suite-api.haruki.seiunx.com; "+
+				"connect-src "+cspConnectSrc+"; "+
 				"object-src 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self';",
