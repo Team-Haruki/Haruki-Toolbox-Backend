@@ -129,7 +129,7 @@ var (
 	// IosScriptCodesColumns holds the columns for the "ios_script_codes" table.
 	IosScriptCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "upload_code", Type: field.TypeString, Unique: true, Size: 10},
+		{Name: "upload_code", Type: field.TypeString, Unique: true, Size: 32},
 		{Name: "user_id", Type: field.TypeString, Unique: true},
 	}
 	// IosScriptCodesTable holds the schema information for the "ios_script_codes" table.

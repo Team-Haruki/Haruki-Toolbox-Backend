@@ -24,7 +24,6 @@ func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "User not found")
 		}
-
 		ud := harukiAPIHelper.BuildUserDataFromDBUser(user, nil)
 		return harukiAPIHelper.SuccessResponse(c, "success get latest settings", &ud)
 	}
