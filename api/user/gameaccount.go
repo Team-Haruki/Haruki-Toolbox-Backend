@@ -80,7 +80,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if resp := checkIfAlreadyVerified(c, ctx, apiHelper, existing, userID); resp != nil {
 			return resp
 		}
-		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
+		code, err := getVerificationCode(ctx, apiHelper, userID, string(req.Server), req.UserID)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
@@ -272,7 +272,7 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	if !ok {
 		return harukiAPIHelper.ErrorBadRequest(c, "verification code missing in user profile")
 	}
-	if strings.Contains(word, expectedCode) {
+	if !strings.Contains(word, expectedCode) {
 		return harukiAPIHelper.ErrorBadRequest(c, "verification code mismatch")
 	}
 	return nil
