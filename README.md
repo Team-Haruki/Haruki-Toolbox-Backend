@@ -1,9 +1,10 @@
 # Haruki Toolbox Backend
 
-**Haruki Toolbox Backend API** is a companion project for [HarukiBot](https://github.com/Team-Haruki), collecting user-submitted suite and mysekai data, and optionally provides public APIs for querying.
+**Haruki Toolbox Backend** is a companion project for [HarukiBot](https://github.com/Team-Haruki), collecting user-submitted suite and mysekai data, and optionally provides public APIs for querying.
 It also utilizes Redis for efficient caching to speed up API responses.
 
 ## Requirements
++ `PostgreSQL`
 + `MongoDB`
 + `Redis`
 
