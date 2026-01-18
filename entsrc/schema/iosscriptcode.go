@@ -15,7 +15,7 @@ func (IOSScriptCode) Fields() []ent.Field {
 		field.String("user_id").
 			Unique(),
 		field.String("upload_code").
-			MaxLen(10).
+			MaxLen(32).
 			Unique(),
 	}
 }
