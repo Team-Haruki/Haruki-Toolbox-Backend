@@ -55,7 +55,7 @@ func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 		if rule.RuleType == "redirect" {
 			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
 		} else if rule.RuleType == "rewrite" {
-			sb.WriteString(fmt.Sprintf("%s %s 302\n", rule.Pattern, rule.Target))
+			sb.WriteString(fmt.Sprintf("%s %s 307\n", rule.Pattern, rule.Target))
 		}
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
@@ -89,7 +89,7 @@ func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 		if rule.RuleType == "redirect" {
 			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
 		} else if rule.RuleType == "rewrite" {
-			sb.WriteString(fmt.Sprintf("%s %s 302\n", rule.Pattern, rule.Target))
+			sb.WriteString(fmt.Sprintf("%s %s 307\n", rule.Pattern, rule.Target))
 		}
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
@@ -120,23 +120,24 @@ func generateQuantumultXModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString(fmt.Sprintf("; Date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("\n")
 
-	// Rewrite - QX format: pattern 307 target
-	sb.WriteString("[rewrite_local]\n")
+	// Rewrite - QX format: pattern url 307 target
+	// Note: rule.Target may contain " 307" suffix (for Surge), we need to strip it for QX
 	for _, rule := range rs.RewriteRules {
-		if rule.RuleType == "redirect" {
-			// QX format: pattern 307 target (not url 307)
-			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
-		} else if rule.RuleType == "rewrite" {
-			sb.WriteString(fmt.Sprintf("%s 302 %s\n", rule.Pattern, rule.Target))
+		target := rule.Target
+		// Strip trailing " 307" if present (added for Surge format in rules.go)
+		target = strings.TrimSuffix(target, " 307")
+
+		if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
+			// QX format: pattern url 307 target
+			sb.WriteString(fmt.Sprintf("%s url 307 %s\n", rule.Pattern, target))
 		}
 	}
-	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
+	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ url reject\n")
 	sb.WriteString("\n")
 
 	// Note: QX does not support script upload mode
 
 	// MITM
-	sb.WriteString("[mitm]\n")
 	sb.WriteString(fmt.Sprintf("hostname = %s, submit.backtrace.io\n", strings.Join(rs.Hostnames, ", ")))
 
 	return sb.String()
@@ -145,28 +146,27 @@ func generateQuantumultXModule(req *ModuleRequest, rs *RuleSet) string {
 func generateStashModule(req *ModuleRequest, rs *RuleSet) string {
 	var sb strings.Builder
 
-	sb.WriteString("name: \"Haruki工具箱数据上传模块\"\n")
-	sb.WriteString("desc: \"自动获取选定区服与数据类型的数据，并上传至Haruki工具箱\"\n")
+	sb.WriteString("name: Haruki工具箱数据上传模块\n")
+	sb.WriteString("desc: 自动获取选定区服与数据类型的数据，并上传至Haruki工具箱\n")
 	sb.WriteString(fmt.Sprintf("# date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("\n")
 
 	sb.WriteString("http:\n")
 
 	// Rewrite rules
-	if len(rs.RewriteRules) > 0 {
+	if len(rs.RewriteRules) > 0 || len(rs.ScriptRules) > 0 {
 		sb.WriteString("  rewrite:\n")
 		for _, rule := range rs.RewriteRules {
-			if rule.RuleType == "redirect" {
-				// Target format is "url 307", split it
-				parts := strings.Split(rule.Target, " ")
-				if len(parts) >= 2 {
-					sb.WriteString(fmt.Sprintf("    - \"%s %s %s\"\n", rule.Pattern, parts[1], parts[0]))
-				}
-			} else if rule.RuleType == "rewrite" {
-				sb.WriteString(fmt.Sprintf("    - \"%s 302 %s\"\n", rule.Pattern, rule.Target))
+			target := rule.Target
+			// Strip trailing " 307" if present (added for Surge format in rules.go)
+			target = strings.TrimSuffix(target, " 307")
+
+			if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
+				// Stash format: - pattern target 307
+				sb.WriteString(fmt.Sprintf("    - %s %s 307\n", rule.Pattern, target))
 			}
 		}
-		sb.WriteString("    - \"^https:\\/\\/submit\\.backtrace\\.io\\/ reject\"\n")
+		sb.WriteString("    - ^https:\\/\\/submit\\.backtrace\\.io\\/ - reject\n")
 	}
 
 	// Script rules (if any)
