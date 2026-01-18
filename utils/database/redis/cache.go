@@ -37,13 +37,11 @@ func GetClearCachePaths(server string, dataType string, userID int64) []CachePat
 func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
 	fullPath := c.Path()
 	queryString := c.RequestCtx().QueryArgs().String()
-
 	queryHash := "none"
 	if queryString != "" {
 		hash := md5.Sum([]byte(queryString))
 		queryHash = hex.EncodeToString(hash[:])
 	}
-
 	return fmt.Sprintf("%s:%s:query=%s", namespace, fullPath, queryHash)
 }
 

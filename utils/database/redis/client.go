@@ -19,11 +19,9 @@ func NewRedisClient(cfg config.RedisConfig) *HarukiRedisManager {
 		Password: cfg.Password,
 		DB:       0,
 	})
-
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		harukiLogger.Errorf("Failed to connect to Redis: %v", err)
 	}
-
 	return &HarukiRedisManager{
 		Redis: client,
 	}

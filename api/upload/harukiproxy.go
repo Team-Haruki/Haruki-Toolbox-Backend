@@ -26,30 +26,24 @@ func unpackKeyFromHelper(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	return sum[:], nil
 }
 
-var (
-	userAgentRegex = regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
-)
+var userAgentRegex = regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
 
 func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	if apiHelper.HarukiProxyUserAgent != "" && apiHelper.HarukiProxyVersion != "" && apiHelper.HarukiProxySecret != "" {
 		return func(c fiber.Ctx) error {
 			requestUserAgent := c.Get("User-Agent")
 			requestSecret := c.Get("X-Haruki-Toolbox-Secret")
-
 			if requestSecret != apiHelper.HarukiProxySecret {
 				return harukiAPIHelper.ErrorBadRequest(c, "Invalid HarukiProxy Secret")
 			}
-
 			matches := userAgentRegex.FindStringSubmatch(requestUserAgent)
 			if len(matches) < 3 {
 				return harukiAPIHelper.ErrorBadRequest(c, "Invalid User-Agent format")
 			}
-
 			uaName := matches[1]
 			if apiHelper.HarukiProxyUserAgent != uaName {
 				return harukiAPIHelper.ErrorBadRequest(c, "Invalid User-Agent name")
 			}
-
 			clientVerStr := matches[2]
 			clientVerStr = strings.TrimPrefix(clientVerStr, "v")
 			minVerStr := strings.TrimPrefix(apiHelper.HarukiProxyVersion, "v")
@@ -61,11 +55,9 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 			if clientVer.LessThan(minVer) {
 				return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("Client version %s is below minimum required %s", clientVerStr, apiHelper.HarukiProxyVersion))
 			}
-
 			return c.Next()
 		}
 	}
-
 	return func(c fiber.Ctx) error {
 		return c.Next()
 	}
@@ -84,20 +76,16 @@ func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	if err != nil {
 		return nil, err
 	}
-
 	nonceSize := gcm.NonceSize()
 	if len(body) < nonceSize+gcm.Overhead() {
 		return nil, errors.New("ciphertext too short")
 	}
-
 	nonce := body[:nonceSize]
 	ciphertext := body[nonceSize:]
-
 	var aadBytes []byte
 	if len(aad) > 0 {
 		aadBytes = []byte(aad)
 	}
-
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, aadBytes)
 	if err != nil {
 		return nil, err
@@ -111,7 +99,6 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("user_id")
 		dataTypeStr := c.Params("data_type")
-
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -131,7 +118,6 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if dErr != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("failed to decrypt request body: %v", dErr))
 		}
-
 		_, err = HandleUpload(
 			ctx,
 			decryptedBody,
@@ -142,11 +128,9 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			apiHelper,
 			harukiUtils.UploadMethodHarukiProxy,
 		)
-
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)
 	}
 }

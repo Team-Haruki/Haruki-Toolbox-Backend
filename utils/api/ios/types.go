@@ -4,7 +4,6 @@ import (
 	harukiUtils "haruki-suite/utils"
 )
 
-// ProxyApp represents supported proxy applications
 type ProxyApp string
 
 const (
@@ -14,7 +13,6 @@ const (
 	ProxyAppStash       ProxyApp = "stoverride"
 )
 
-// ParseProxyApp parses file extension to ProxyApp
 func ParseProxyApp(ext string) (ProxyApp, bool) {
 	switch ext {
 	case "sgmodule":
@@ -30,23 +28,20 @@ func ParseProxyApp(ext string) (ProxyApp, bool) {
 	}
 }
 
-// UploadMode represents how data is uploaded
 type UploadMode string
 
 const (
-	UploadModeProxy  UploadMode = "proxy"  // 307 redirect
-	UploadModeScript UploadMode = "script" // JavaScript upload
+	UploadModeProxy  UploadMode = "proxy"
+	UploadModeScript UploadMode = "script"
 )
 
-// EndpointType represents which endpoint to use
 type EndpointType string
 
 const (
-	EndpointTypeDirect EndpointType = "direct" // Use direct backend URL
-	EndpointTypeCDN    EndpointType = "cdn"    // Use CDN URL
+	EndpointTypeDirect EndpointType = "direct"
+	EndpointTypeCDN    EndpointType = "cdn"
 )
 
-// ParseEndpointType parses string to EndpointType
 func ParseEndpointType(s string) (EndpointType, bool) {
 	switch s {
 	case "direct":
@@ -58,7 +53,6 @@ func ParseEndpointType(s string) (EndpointType, bool) {
 	}
 }
 
-// DataType represents the type of game data to capture
 type DataType string
 
 const (
@@ -68,7 +62,6 @@ const (
 	DataTypeMysekaiBirthdayParty DataType = "mysekai_birthday_party"
 )
 
-// ParseDataType parses string to DataType
 func ParseDataType(s string) (DataType, bool) {
 	switch s {
 	case "suite":
@@ -84,17 +77,15 @@ func ParseDataType(s string) (DataType, bool) {
 	}
 }
 
-// ModuleRequest represents a request to generate an iOS module
 type ModuleRequest struct {
 	UploadCode  string
 	Regions     []harukiUtils.SupportedDataUploadServer
 	DataTypes   []DataType
 	App         ProxyApp
 	Mode        UploadMode
-	ChunkSizeMB int // Chunk size in MB for JavaScript upload (default: 1)
+	ChunkSizeMB int
 }
 
-// ContentType returns the HTTP content type for the module
 func (app ProxyApp) ContentType() string {
 	switch app {
 	case ProxyAppSurge, ProxyAppLoon:
@@ -108,9 +99,7 @@ func (app ProxyApp) ContentType() string {
 	}
 }
 
-// FileName generates the download filename
 func (req *ModuleRequest) FileName() string {
-	// Format: jp-en-haruki-toolbox-suite-mysekai.sgmodule
 	result := ""
 	for i, r := range req.Regions {
 		if i > 0 {
@@ -127,4 +116,19 @@ func (req *ModuleRequest) FileName() string {
 	}
 	result += "." + string(req.App)
 	return result
+}
+
+var regionNames = map[harukiUtils.SupportedDataUploadServer]string{
+	harukiUtils.SupportedDataUploadServerJP: "日服",
+	harukiUtils.SupportedDataUploadServerEN: "国际服",
+	harukiUtils.SupportedDataUploadServerTW: "台服",
+	harukiUtils.SupportedDataUploadServerKR: "韩服",
+	harukiUtils.SupportedDataUploadServerCN: "国服",
+}
+
+var dataTypeNames = map[DataType]string{
+	DataTypeSuite:                "Suite",
+	DataTypeMysekai:              "MySekai",
+	DataTypeMysekaiForce:         "MySekai强制刷新",
+	DataTypeMysekaiBirthdayParty: "MySekai生日双叶",
 }

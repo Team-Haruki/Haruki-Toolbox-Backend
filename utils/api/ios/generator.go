@@ -6,10 +6,28 @@ import (
 	"time"
 )
 
-// GenerateModule generates the complete module content for the given request
+func generateModuleNameAndDesc(req *ModuleRequest) (name, desc string) {
+	var regionParts []string
+	for _, r := range req.Regions {
+		if n, ok := regionNames[r]; ok {
+			regionParts = append(regionParts, n)
+		}
+	}
+	regionsStr := strings.Join(regionParts, "/")
+	var dataTypeParts []string
+	for _, dt := range req.DataTypes {
+		if n, ok := dataTypeNames[dt]; ok {
+			dataTypeParts = append(dataTypeParts, n)
+		}
+	}
+	dataTypesStr := strings.Join(dataTypeParts, "/")
+	name = fmt.Sprintf("Haruki工具箱数据上传模块（%s）", regionsStr)
+	desc = fmt.Sprintf("自动获取%s的%s数据，并上传至Haruki工具箱", regionsStr, dataTypesStr)
+	return
+}
+
 func GenerateModule(req *ModuleRequest, endpoint string, endpointType string) (string, error) {
 	ruleSet := GenerateRuleSet(req, endpoint, endpointType)
-
 	switch req.App {
 	case ProxyAppSurge:
 		return generateSurgeModule(req, ruleSet), nil
@@ -24,32 +42,28 @@ func GenerateModule(req *ModuleRequest, endpoint string, endpointType string) (s
 	}
 }
 
-// GenerateScript generates the JavaScript upload script
 func GenerateScript(uploadCode string, chunkSizeMB int, uploadURL string) string {
-	script := IOSJavaScriptTemplate
+	script := HarukiIOSJavaScriptTemplate
 	script = strings.ReplaceAll(script, "{{UPLOAD_URL}}", uploadURL+"/ios/script/"+uploadCode+"/upload")
 	script = strings.ReplaceAll(script, "{{CHUNK_SIZE}}", fmt.Sprintf("%d", chunkSizeMB))
 	script = strings.ReplaceAll(script, "{{UPLOAD_CODE}}", uploadCode)
 	script = strings.ReplaceAll(script, "{{GENERATE_DATE}}", time.Now().Format("2006-01-02 15:04:05"))
+	script = strings.ReplaceAll(script, "\\u0060", "`")
 	return script
 }
 
 func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 	var sb strings.Builder
-
-	sb.WriteString("#!name=Haruki工具箱数据上传模块\n")
-	sb.WriteString("#!desc=自动获取选定区服与数据类型的数据，并上传至Haruki工具箱\n")
+	name, desc := generateModuleNameAndDesc(req)
+	sb.WriteString(fmt.Sprintf("#!name=%s\n", name))
+	sb.WriteString(fmt.Sprintf("#!desc=%s\n", desc))
 	sb.WriteString("#!homepage=https://haruki.seiunx.com/ios-modules\n")
 	sb.WriteString("#!author=Haruki Dev Team\n")
 	sb.WriteString(fmt.Sprintf("#!date=%s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("\n")
-
-	// MITM
 	sb.WriteString("[MITM]\n")
 	sb.WriteString(fmt.Sprintf("hostname = %%APPEND%% %s, submit.backtrace.io\n", strings.Join(rs.Hostnames, ", ")))
 	sb.WriteString("\n")
-
-	// URL Rewrite
 	sb.WriteString("[URL Rewrite]\n")
 	for _, rule := range rs.RewriteRules {
 		if rule.RuleType == "redirect" {
@@ -60,30 +74,25 @@ func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
 	sb.WriteString("\n")
-
-	// Script (if any)
 	if len(rs.ScriptRules) > 0 {
 		sb.WriteString("[Script]\n")
 		for i, rule := range rs.ScriptRules {
-			sb.WriteString(fmt.Sprintf("haruki-upload-%d = type=http-response,pattern=%s,requires-body=1,max-size=0,script-path=%s\n",
+			sb.WriteString(fmt.Sprintf("haruki-upload-%d = type=http-response,pattern=%s,requires-body=1,binary-body-mode=1,max-size=100000000,timeout=60,script-path=%s\n",
 				i+1, rule.Pattern, rule.Target))
 		}
 	}
-
 	return sb.String()
 }
 
 func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 	var sb strings.Builder
-
-	sb.WriteString("#!name=Haruki工具箱数据上传模块\n")
-	sb.WriteString("#!desc=自动获取选定区服与数据类型的数据，并上传至Haruki工具箱\n")
+	name, desc := generateModuleNameAndDesc(req)
+	sb.WriteString(fmt.Sprintf("#!name=%s\n", name))
+	sb.WriteString(fmt.Sprintf("#!desc=%s\n", desc))
 	sb.WriteString("#!homepage=https://haruki.seiunx.com/ios-modules\n")
 	sb.WriteString("#!author=Haruki Dev Team\n")
 	sb.WriteString(fmt.Sprintf("#!date=%s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("\n")
-
-	// Rewrite
 	sb.WriteString("[Rewrite]\n")
 	for _, rule := range rs.RewriteRules {
 		if rule.RuleType == "redirect" {
@@ -94,82 +103,58 @@ func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
 	sb.WriteString("\n")
-
-	// Script (if any)
 	if len(rs.ScriptRules) > 0 {
 		sb.WriteString("[Script]\n")
 		for i, rule := range rs.ScriptRules {
-			sb.WriteString(fmt.Sprintf("http-response %s script-path=%s, requires-body=true, tag=haruki-upload-%d\n",
+			sb.WriteString(fmt.Sprintf("http-response %s script-path=%s, requires-body=true, binary-body-mode=true, max-size=100000000, timeout=60, tag=haruki-upload-%d\n",
 				rule.Pattern, rule.Target, i+1))
 		}
 		sb.WriteString("\n")
 	}
-
-	// MITM
 	sb.WriteString("[MITM]\n")
 	sb.WriteString(fmt.Sprintf("hostname = %s, submit.backtrace.io\n", strings.Join(rs.Hostnames, ", ")))
-
 	return sb.String()
 }
 
 func generateQuantumultXModule(req *ModuleRequest, rs *RuleSet) string {
 	var sb strings.Builder
-
-	sb.WriteString("; Haruki工具箱数据上传模块\n")
-	sb.WriteString("; 自动获取选定区服与数据类型的数据，并上传至Haruki工具箱\n")
+	name, desc := generateModuleNameAndDesc(req)
+	sb.WriteString(fmt.Sprintf("; %s\n", name))
+	sb.WriteString(fmt.Sprintf("; %s\n", desc))
 	sb.WriteString(fmt.Sprintf("; Date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("\n")
-
-	// Rewrite - QX format: pattern url 307 target
-	// Note: rule.Target may contain " 307" suffix (for Surge), we need to strip it for QX
 	for _, rule := range rs.RewriteRules {
 		target := rule.Target
-		// Strip trailing " 307" if present (added for Surge format in rules.go)
 		target = strings.TrimSuffix(target, " 307")
-
 		if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
-			// QX format: pattern url 307 target
 			sb.WriteString(fmt.Sprintf("%s url 307 %s\n", rule.Pattern, target))
 		}
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ url reject\n")
 	sb.WriteString("\n")
-
-	// Note: QX does not support script upload mode
-
-	// MITM
 	sb.WriteString(fmt.Sprintf("hostname = %s, submit.backtrace.io\n", strings.Join(rs.Hostnames, ", ")))
-
 	return sb.String()
 }
 
 func generateStashModule(req *ModuleRequest, rs *RuleSet) string {
 	var sb strings.Builder
-
-	sb.WriteString("name: Haruki工具箱数据上传模块\n")
-	sb.WriteString("desc: 自动获取选定区服与数据类型的数据，并上传至Haruki工具箱\n")
+	name, desc := generateModuleNameAndDesc(req)
+	sb.WriteString(fmt.Sprintf("name: %s\n", name))
+	sb.WriteString(fmt.Sprintf("desc: %s\n", desc))
 	sb.WriteString(fmt.Sprintf("# date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("\n")
-
 	sb.WriteString("http:\n")
-
-	// Rewrite rules
 	if len(rs.RewriteRules) > 0 || len(rs.ScriptRules) > 0 {
 		sb.WriteString("  rewrite:\n")
 		for _, rule := range rs.RewriteRules {
 			target := rule.Target
-			// Strip trailing " 307" if present (added for Surge format in rules.go)
 			target = strings.TrimSuffix(target, " 307")
-
 			if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
-				// Stash format: - pattern target 307
 				sb.WriteString(fmt.Sprintf("    - %s %s 307\n", rule.Pattern, target))
 			}
 		}
 		sb.WriteString("    - ^https:\\/\\/submit\\.backtrace\\.io\\/ - reject\n")
 	}
-
-	// Script rules (if any)
 	if len(rs.ScriptRules) > 0 {
 		sb.WriteString("  script:\n")
 		for i, rule := range rs.ScriptRules {
@@ -177,17 +162,16 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) string {
 			sb.WriteString(fmt.Sprintf("      name: haruki-upload-%d\n", i+1))
 			sb.WriteString("      type: response\n")
 			sb.WriteString("      require-body: true\n")
+			sb.WriteString("      binary-body-mode: true\n")
+			sb.WriteString("      max-size: 100000000\n")
 			sb.WriteString("      timeout: 60\n")
 			sb.WriteString(fmt.Sprintf("      script-path: \"%s\"\n", rule.Target))
 		}
 	}
-
-	// MITM
 	sb.WriteString("  mitm:\n")
 	for _, h := range rs.Hostnames {
 		sb.WriteString(fmt.Sprintf("    - \"%s\"\n", h))
 	}
 	sb.WriteString("    - \"submit.backtrace.io\"\n")
-
 	return sb.String()
 }

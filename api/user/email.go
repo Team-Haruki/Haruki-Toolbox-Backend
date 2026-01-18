@@ -37,32 +37,26 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 		parts := strings.Split(xForwardedFor, ",")
 		clientIP = strings.TrimSpace(parts[0])
 	}
-
 	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
 	if err != nil || !resp.Success {
 		return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 	}
-
 	code := GenerateCode(false)
 	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, 5*time.Minute); err != nil {
 		harukiLogger.Errorf("Failed to set redis cache: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 	}
-
 	body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
 	if err := helper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
 		harukiLogger.Errorf("Failed to send email: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to send email")
 	}
-
 	return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
 }
 
 func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
 	ctx := c.Context()
-
-	// Check attempt count
 	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
 	var attemptCount int
 	found, err := helper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount)
@@ -73,7 +67,6 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	if found && attemptCount >= 5 {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "Too many verification attempts. Please request a new code.")
 	}
-
 	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	var code string
 	found, err = helper.DBManager.Redis.GetCache(ctx, redisKey, &code)
@@ -84,15 +77,11 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	if !found {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "verification code expired or not found")
 	}
-
 	if oneTimePassword != code {
-		// Increment attempt count
 		newCount := attemptCount + 1
 		_ = helper.DBManager.Redis.SetCache(ctx, attemptKey, newCount, 5*time.Minute)
 		return false, harukiAPIHelper.ErrorBadRequest(c, "invalid verification code")
 	}
-
-	// Success: clear both the code and attempt count
 	_ = helper.DBManager.Redis.DeleteCache(ctx, redisKey)
 	_ = helper.DBManager.Redis.DeleteCache(ctx, attemptKey)
 	return true, nil

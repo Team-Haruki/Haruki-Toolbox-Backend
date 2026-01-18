@@ -16,7 +16,6 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("user_id")
 		dataTypeStr := c.Params("data_type")
-
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -30,7 +29,6 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid user_id")
 		}
 		gameUserID := int64(gameUserIDInt)
-
 		_, err = HandleUpload(
 			ctx,
 			c.Request().Body(),
@@ -41,11 +39,9 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			apiHelper,
 			harukiUtils.UploadMethodManual,
 		)
-
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)
 	}
 }

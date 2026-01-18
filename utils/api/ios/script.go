@@ -1,6 +1,6 @@
 package ios
 
-const IOSJavaScriptTemplate = `// Modified from yichahucha & NobyDa
+const HarukiIOSJavaScriptTemplate = `// Modified from yichahucha & NobyDa
 function HarukiUploadClient() {
     const start = Date.now()
     const isRequest = typeof $request != "undefined"
@@ -251,8 +251,15 @@ const version = "1.0.0";
 const upload_id = Math.random().toString(36).substr(2, 9);
 const upload_url = "{{UPLOAD_URL}}";
 const chunkSize = {{CHUNK_SIZE}} * 1024 * 1024; // {{CHUNK_SIZE}}MB per chunk
-const body = typeof $response !== 'undefined' ? $response.body : '';
+const body = (typeof $response !== 'undefined' && $response.body) ? $response.body : '';
 const url = $.isRequest ? $request.url : '';
+
+// Early return if no body
+if (!body || body.length === 0) {
+    console.log('[haruki_toolbox_uploader] No response body to upload');
+    $done({});
+}
+
 const totalChunks = Math.ceil(body.length / chunkSize);
 
 let sentChunks = 0;

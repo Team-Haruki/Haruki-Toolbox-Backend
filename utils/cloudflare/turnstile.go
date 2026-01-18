@@ -29,9 +29,7 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 	if remoteIP != "" {
 		payload["remoteip"] = remoteIP
 	}
-
 	body, _ := sonic.Marshal(payload)
-
 	client := resty.New().SetTimeout(5 * time.Second)
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
@@ -41,7 +39,6 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 		harukiLogger.Errorf("Turnstile request failed: %v", err)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-
 	var result TurnstileResponse
 	if err := sonic.Unmarshal(resp.Body(), &result); err != nil {
 		harukiLogger.Errorf("Turnstile response decode failed: %v, body: %s", err, string(resp.Body()))

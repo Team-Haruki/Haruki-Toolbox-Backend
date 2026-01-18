@@ -17,6 +17,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type ClientConfig struct {
+	Server          harukiUtils.SupportedInheritUploadServer
+	API             string
+	VersionURL      string
+	Inherit         harukiUtils.InheritInformation
+	Headers         map[string]string
+	Proxy           string
+	InheritJWTToken string
+}
+
 func NewSekaiClient(cfg struct {
 	Server          harukiUtils.SupportedInheritUploadServer
 	API             string
@@ -26,7 +36,19 @@ func NewSekaiClient(cfg struct {
 	Proxy           string
 	InheritJWTToken string
 }) *HarukiSekaiClient {
-	http := harukiHttp.NewClient(cfg.Proxy, 15*time.Second)
+	return NewSekaiClientWithConfig(ClientConfig{
+		Server:          cfg.Server,
+		API:             cfg.API,
+		VersionURL:      cfg.VersionURL,
+		Inherit:         cfg.Inherit,
+		Headers:         cfg.Headers,
+		Proxy:           cfg.Proxy,
+		InheritJWTToken: cfg.InheritJWTToken,
+	})
+}
+
+func NewSekaiClientWithConfig(cfg ClientConfig) *HarukiSekaiClient {
+	httpClient := harukiHttp.NewClient(cfg.Proxy, 15*time.Second)
 
 	return &HarukiSekaiClient{
 		server:          cfg.Server,
@@ -35,7 +57,7 @@ func NewSekaiClient(cfg struct {
 		inherit:         cfg.Inherit,
 		headers:         cfg.Headers,
 		inheritJWTToken: cfg.InheritJWTToken,
-		httpClient:      http,
+		httpClient:      httpClient,
 		logger:          harukiLogger.NewLogger("SekaiClient", "DEBUG", nil),
 	}
 }
@@ -44,13 +66,14 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	if c.server != harukiUtils.SupportedInheritUploadServerJP {
 		return nil
 	}
-
 	c.logger.Infof("Parsing JP server cookies...")
 	url := "https://issue.sekai.colorfulpalette.org/api/signature"
+	var lastErr error
 	for i := 0; i < retries; i++ {
 		status, headers, _, err := c.httpClient.Request(ctx, "POST", url, nil, nil)
 		if err != nil {
-			c.logger.Warnf("HTTP client returned error while parsing cookies: %v, retrying...", err)
+			lastErr = err
+			c.logger.Warnf("Cookie request failed (attempt %d/%d): %v", i+1, retries, err)
 			continue
 		}
 		if status == 200 {
@@ -59,27 +82,31 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 				c.logger.Infof("JP server cookies parsed.")
 				return nil
 			}
-			c.logger.Errorf("Failed to parse JP server cookies, empty Set-Cookie header")
+			lastErr = fmt.Errorf("empty Set-Cookie header")
+			c.logger.Errorf("Cookie response missing Set-Cookie header")
 			continue
 		}
-		c.logger.Errorf("Failed to parse JP server cookies, status=%d", status)
+		lastErr = fmt.Errorf("unexpected status code: %d", status)
+		c.logger.Errorf("Cookie request failed with status %d", status)
 	}
 	c.isErrorExist = true
 	c.errorMessage = "failed to parse cookies after retries"
-	c.logger.Errorf(c.errorMessage)
-	return fmt.Errorf(c.errorMessage)
+	return NewAuthError("getCookies",
+		fmt.Sprintf("failed after %d attempts", retries), lastErr)
 }
 
 func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) error {
 	if c.isErrorExist {
-		return fmt.Errorf("client error while parsing cookies")
+		return NewAuthError("parseAppVersion", "client in error state", nil)
 	}
-
-	c.logger.Infof("Parsing %s server app version...", strings.ToUpper(string(c.server)))
+	serverName := strings.ToUpper(string(c.server))
+	c.logger.Infof("Parsing %s server app version...", serverName)
+	var lastErr error
 	for i := 0; i < retries; i++ {
 		status, _, body, err := c.httpClient.Request(ctx, "GET", c.versionURL, nil, nil)
 		if err != nil {
-			c.logger.Warnf("HTTP client returned error while parsing %s server version: %v, retrying...", strings.ToUpper(string(c.server)), err)
+			lastErr = err
+			c.logger.Warnf("Version request failed (attempt %d/%d): %v", i+1, retries, err)
 			continue
 		}
 		if status == 200 {
@@ -90,22 +117,24 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 				AssetVersion string `json:"assetVersion"`
 			}
 			if err := sonic.Unmarshal(body, &data); err != nil {
-				c.logger.Errorf("Failed to unmarshal %s server app version json: %v", strings.ToUpper(string(c.server)), err)
+				lastErr = err
+				c.logger.Errorf("Failed to parse version response: %v", err)
 				continue
 			}
 			c.headers["X-App-Version"] = data.AppVersion
 			c.headers["X-App-Hash"] = data.AppHash
 			c.headers["X-Data-Version"] = data.DataVersion
 			c.headers["X-Asset-Version"] = data.AssetVersion
-			c.logger.Infof("Parsed %s server app version.", strings.ToUpper(string(c.server)))
+			c.logger.Infof("Parsed %s server app version: %s", serverName, data.AppVersion)
 			return nil
 		}
-		c.logger.Errorf("Game version API returned error, status=%d", status)
+		lastErr = fmt.Errorf("unexpected status code: %d", status)
+		c.logger.Errorf("Version request failed with status %d", status)
 	}
 	c.isErrorExist = true
 	c.errorMessage = "failed to parse game version after retries"
-	c.logger.Errorf(c.errorMessage)
-	return fmt.Errorf(c.errorMessage)
+	return NewAuthError("parseAppVersion",
+		fmt.Sprintf("%s server: failed after %d attempts", serverName, retries), lastErr)
 }
 
 func (c *HarukiSekaiClient) generateInheritToken() (string, error) {
@@ -113,7 +142,6 @@ func (c *HarukiSekaiClient) generateInheritToken() (string, error) {
 		"inheritId": c.inherit.InheritID,
 		"password":  c.inherit.InheritPassword,
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, inheritPayload)
 	return token.SignedString([]byte(c.inheritJWTToken))
 }
@@ -122,7 +150,6 @@ func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, bo
 	if c.isErrorExist {
 		return nil, 0, fmt.Errorf("client in error state: %s", c.errorMessage)
 	}
-
 	headers := make(map[string]string)
 	for k, v := range c.headers {
 		headers[k] = v
@@ -131,14 +158,12 @@ func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, bo
 		headers[k] = v
 	}
 	headers["X-Request-Id"] = uuid.NewString()
-
 	url := c.api + path
 	status, respHeaders, respBody, err := c.httpClient.Request(ctx, method, url, headers, body)
 	if err != nil {
 		c.logger.Errorf("HTTP request failed for %s: %v", url, err)
 		return nil, 0, err
 	}
-
 	if status == 200 {
 		if st, ok := respHeaders["X-Session-Token"]; ok && st != "" {
 			c.headers["X-Session-Token"] = st
@@ -148,7 +173,6 @@ func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, bo
 		}
 		return respBody, status, nil
 	}
-
 	c.logger.Errorf("API returned non-200 status for %s: %d", url, status)
 	return respBody, status, fmt.Errorf("API error: %d", status)
 }
@@ -162,19 +186,15 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 	}
 	headers := map[string]string{"x-inherit-id-verify-token": token}
 	c.logger.Infof("%s Server Sekai Client generated inherit token.", strings.ToUpper(string(c.server)))
-
 	c.logger.Infof("%s Server Sekai Client inheriting account...", strings.ToUpper(string(c.server)))
 	path := fmt.Sprintf("/inherit/user/%s?isExecuteInherit=%s",
 		c.inherit.InheritID,
 		map[bool]string{true: "True", false: "False"}[!returnUserID],
 	)
-
 	if c.server == harukiUtils.SupportedInheritUploadServerEN {
 		path += "&isAdult=True&tAge=16"
 	}
-
 	data, _ := base64.StdEncoding.DecodeString(RequestDataGeneral)
-
 	resp, status, err := c.callAPI(ctx, path, "POST", data, headers)
 	if err != nil {
 		return err
@@ -182,7 +202,6 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 	if status != 200 {
 		return fmt.Errorf("inherit account failed, status=%d", status)
 	}
-
 	unpackedAny, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
 		c.logger.Errorf("Failed to unpack inherit response: %v", err)
@@ -193,7 +212,6 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 		c.logger.Errorf("Unexpected unpack result type")
 		return fmt.Errorf("unexpected unpack result type")
 	}
-
 	if returnUserID {
 		if after, ok := unpacked["afterUserGamedata"].(map[string]interface{}); ok {
 			if uidVal, exists := after["userId"]; exists {
@@ -213,7 +231,6 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 		c.logger.Errorf("Failed to get userId from inherit response")
 		return fmt.Errorf("failed to get userId")
 	}
-
 	if cred, ok := unpacked["credential"].(string); ok {
 		c.credential = cred
 		c.logger.Infof("%s Server Sekai Client retrieved user credential.", strings.ToUpper(string(c.server)))
@@ -227,7 +244,6 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 	if c.credential == "" {
 		return fmt.Errorf("inherit failed")
 	}
-
 	c.logger.Infof("%s Server Sekai Client logging in...", strings.ToUpper(string(c.server)))
 	body := map[string]any{
 		"credential":      c.credential,
@@ -239,7 +255,6 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		c.logger.Errorf("Failed to pack login request: %v", err)
 		return err
 	}
-
 	path := fmt.Sprintf("/user/%s/auth?refreshUpdatedResources=False", strconv.FormatInt(c.userID, 10))
 	resp, status, err := c.callAPI(ctx, path, "PUT", packed, nil)
 	if err != nil {
@@ -249,7 +264,6 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		c.logger.Errorf("Account login failed, status=403")
 		return fmt.Errorf("account login failed, status=403")
 	}
-
 	unpackedAny, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
 		c.logger.Errorf("Failed to unpack login response: %v", err)
@@ -260,7 +274,6 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		c.logger.Errorf("Unexpected unpack result type")
 		return fmt.Errorf("unexpected unpack result type")
 	}
-
 	if st, ok := unpacked["sessionToken"].(string); ok {
 		c.headers["X-Session-Token"] = st
 		c.logger.Infof("%s Server Sekai Client logged in.", strings.ToUpper(string(c.server)))

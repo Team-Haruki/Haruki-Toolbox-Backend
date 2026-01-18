@@ -16,13 +16,11 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 			harukiLogger.Errorf("Webhook secret key is not configured")
 			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
 		}
-
 		ctx := c.Context()
 		jwtToken := c.Get("X-Haruki-Suite-Webhook-Token")
 		if jwtToken == "" {
 			return harukiAPIHelper.ErrorUnauthorized(c, "Missing X-Haruki-Suite-Webhook-Token header")
 		}
-
 		token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fiber.ErrForbidden
@@ -32,18 +30,15 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if err != nil || !token.Valid {
 			return harukiAPIHelper.ErrorForbidden(c, "Invalid or expired JWT")
 		}
-
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			return harukiAPIHelper.ErrorForbidden(c, "Invalid token claims")
 		}
-
 		_id, okID := claims["_id"].(string)
 		credential, okCred := claims["credential"].(string)
 		if !okID || !okCred {
 			return harukiAPIHelper.ErrorForbidden(c, "Invalid token payload")
 		}
-
 		user, err := manager.GetWebhookUser(ctx, _id, credential)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get webhook user: %v", err)
@@ -52,7 +47,6 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if user == nil {
 			return harukiAPIHelper.ErrorForbidden(c, "Webhook user not found or credential mismatch")
 		}
-
 		c.Locals("webhook_id", _id)
 		return c.Next()
 	}
@@ -76,19 +70,16 @@ func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		ctx := c.Context()
 		userID := c.Params("user_id")
 		webhookID := c.Locals("webhook_id").(string)
-
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		dataTypeStr := c.Params("data_type")
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		err = apiHelper.DBManager.Mongo.AddWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to add webhook push user: %v", err)
@@ -103,19 +94,16 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		ctx := c.Context()
 		userID := c.Params("user_id")
 		webhookID := c.Locals("webhook_id").(string)
-
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		dataTypeStr := c.Params("data_type")
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-
 		err = apiHelper.DBManager.Mongo.RemoveWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to remove webhook push user: %v", err)

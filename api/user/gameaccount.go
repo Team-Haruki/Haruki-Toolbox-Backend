@@ -10,6 +10,7 @@ import (
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -30,7 +31,6 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 		}
-
 		resp := harukiAPIHelper.GenerateGameAccountCodeResponse{
 			Status:          fiber.StatusOK,
 			Message:         "ok",
@@ -67,12 +67,10 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
-
 		var req harukiAPIHelper.GameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-
 		existing, err := queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query existing binding: %v", err)
@@ -82,7 +80,6 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if resp := checkIfAlreadyVerified(c, ctx, apiHelper, existing, userID); resp != nil {
 			return resp
 		}
-
 		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
@@ -96,7 +93,6 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			harukiLogger.Errorf("Failed to save game account binding: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
-
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get user bindings: %v", err)
@@ -276,7 +272,7 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	if !ok {
 		return harukiAPIHelper.ErrorBadRequest(c, "verification code missing in user profile")
 	}
-	if word != expectedCode {
+	if strings.Contains(word, expectedCode) {
 		return harukiAPIHelper.ErrorBadRequest(c, "verification code mismatch")
 	}
 	return nil

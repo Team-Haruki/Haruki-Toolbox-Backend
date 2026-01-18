@@ -30,27 +30,20 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
-
 		ctx := c.Context()
 		userID := c.Locals("userID").(string)
 		ub := apiHelper.DBManager.DB.User.Update().Where(user.IDEQ(userID))
-
 		var avatarFileName string
 		if payload.AvatarBase64 != nil {
 			base64Data := *payload.AvatarBase64
-
-			// Strip data URI prefix if present
 			if strings.Contains(base64Data, ";base64,") {
 				parts := strings.SplitN(base64Data, ";base64,", 2)
 				base64Data = parts[1]
 			}
-
 			decodedAvatar, err := base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
 			}
-
-			// Detect actual MIME type from content
 			detectedMIME := http.DetectContentType(decodedAvatar)
 			allowedMIMEs := map[string]string{
 				"image/png":  ".png",
@@ -58,39 +51,30 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				"image/gif":  ".gif",
 				"image/webp": ".webp",
 			}
-
 			ext, ok := allowedMIMEs[detectedMIME]
 			if !ok {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Unsupported image format. Allowed: PNG, JPEG, GIF, WebP", nil)
 			}
-
-			// Validate image can be decoded (ensures it's a valid image)
 			if _, _, err := image.Decode(bytes.NewReader(decodedAvatar)); err != nil {
 				harukiLogger.Warnf("Invalid image data from user %s: %v", userID, err)
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid or corrupted image data", nil)
 			}
-
-			// Generate safe filename and ensure no path traversal
 			avatarFileName = uuid.NewString() + ext
 			savePath := filepath.Join(config.Cfg.UserSystem.AvatarSaveDir, filepath.Base(avatarFileName))
-
 			if err := os.WriteFile(savePath, decodedAvatar, 0644); err != nil {
 				harukiLogger.Errorf("Failed to save avatar file: %v", err)
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
 			}
 			ub = ub.SetAvatarPath(avatarFileName)
 		}
-
 		if payload.Name != nil {
 			ub = ub.SetName(*payload.Name)
 		}
-
 		_, err := ub.Save(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to update user profile: %v", err)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
 		}
-
 		ud := harukiAPIHelper.HarukiToolboxUserData{}
 		if payload.Name != nil {
 			ud.Name = payload.Name
@@ -109,28 +93,21 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
-
 		ctx := c.Context()
 		userID := c.Locals("userID").(string)
-
-		// Fetch user to verify old password
 		u, err := apiHelper.DBManager.DB.User.Query().Where(user.IDEQ(userID)).Only(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query user %s: %v", userID, err)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to verify user", nil)
 		}
-
-		// Verify old password
 		if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(payload.OldPassword)); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Old password is incorrect", nil)
 		}
-
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), bcrypt.DefaultCost)
 		if err != nil {
 			harukiLogger.Errorf("Failed to hash password: %v", err)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
 		}
-
 		_, err = apiHelper.DBManager.DB.User.
 			Update().Where(user.IDEQ(userID)).
 			SetPasswordHash(string(hashedPassword)).

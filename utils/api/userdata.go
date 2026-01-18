@@ -7,8 +7,6 @@ import (
 	"haruki-suite/utils/database/postgresql"
 )
 
-// BuildUserDataFromDBUser constructs HarukiToolboxUserData from a database User entity
-// This function centralizes the user data building logic to avoid code duplication
 func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
 	emailInfo := buildEmailInfoFromUser(user)
 	socialPlatformInfo := buildSocialPlatformInfoFromUser(user)
@@ -31,7 +29,6 @@ func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) Haruki
 	}
 }
 
-// buildIOSUploadCodeFromUser extracts iOS upload code from user edges
 func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 	if user.Edges.IosScriptCode != nil {
 		return &user.Edges.IosScriptCode.UploadCode
@@ -39,7 +36,6 @@ func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 	return nil
 }
 
-// buildEmailInfoFromUser extracts email info from user edges
 func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
 	if user.Edges.EmailInfo != nil {
 		return EmailInfo{
@@ -53,7 +49,6 @@ func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
 	}
 }
 
-// buildSocialPlatformInfoFromUser extracts social platform info from user edges
 func buildSocialPlatformInfoFromUser(user *postgresql.User) *SocialPlatformInfo {
 	if user.Edges.SocialPlatformInfo != nil {
 		return &SocialPlatformInfo{
@@ -65,7 +60,6 @@ func buildSocialPlatformInfoFromUser(user *postgresql.User) *SocialPlatformInfo 
 	return nil
 }
 
-// buildAuthorizeSocialPlatformInfoFromUser extracts authorized social platforms from user edges
 func buildAuthorizeSocialPlatformInfoFromUser(user *postgresql.User) []AuthorizeSocialPlatformInfo {
 	var result []AuthorizeSocialPlatformInfo
 	if user.Edges.AuthorizedSocialPlatforms != nil && len(user.Edges.AuthorizedSocialPlatforms) > 0 {
@@ -82,7 +76,6 @@ func buildAuthorizeSocialPlatformInfoFromUser(user *postgresql.User) []Authorize
 	return result
 }
 
-// buildGameAccountBindingsFromUser extracts game account bindings from user edges
 func buildGameAccountBindingsFromUser(user *postgresql.User) []GameAccountBinding {
 	var result []GameAccountBinding
 	if user.Edges.GameAccountBindings != nil && len(user.Edges.GameAccountBindings) > 0 {
@@ -100,7 +93,6 @@ func buildGameAccountBindingsFromUser(user *postgresql.User) []GameAccountBindin
 	return result
 }
 
-// buildAvatarURLFromUser constructs the avatar URL from user data
 func buildAvatarURLFromUser(user *postgresql.User) string {
 	if user.AvatarPath != nil {
 		return fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.AvatarURL, *user.AvatarPath)
