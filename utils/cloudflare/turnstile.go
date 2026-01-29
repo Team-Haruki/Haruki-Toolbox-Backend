@@ -31,6 +31,9 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 	}
 	body, _ := sonic.Marshal(payload)
 	client := resty.New().SetTimeout(5 * time.Second)
+	if config.Cfg.Proxy != "" {
+		client.SetProxy(config.Cfg.Proxy)
+	}
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(body).
