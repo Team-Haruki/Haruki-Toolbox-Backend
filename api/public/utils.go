@@ -2,6 +2,7 @@ package public
 
 import (
 	"fmt"
+	harukiLogger "haruki-suite/utils/logger"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -9,13 +10,21 @@ import (
 func RestoreCompactData(data bson.M) []map[string]interface{} {
 	var enumRaw bson.M
 	if val, ok := data["__ENUM__"]; ok {
-		if m, ok := val.(bson.M); ok {
+		switch m := val.(type) {
+		case bson.M:
 			enumRaw = m
-		} else if m, ok := val.(map[string]interface{}); ok {
+		case map[string]interface{}:
 			enumRaw = make(bson.M)
 			for k, v := range m {
 				enumRaw[k] = v
 			}
+		case bson.D:
+			enumRaw = make(bson.M, len(m))
+			for _, elem := range m {
+				enumRaw[elem.Key] = elem.Value
+			}
+		default:
+			harukiLogger.Warnf("RestoreCompactData: unknown type for __ENUM__: %T", val)
 		}
 	}
 	columnLabels, columns := extractColumnsAndLabels(data, enumRaw)
