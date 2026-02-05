@@ -30,10 +30,18 @@ func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType har
 func filterUserGamedata(result map[string]interface{}) map[string]interface{} {
 	var gameData map[string]interface{}
 	if val, ok := result["userGamedata"]; ok {
-		if m, ok := val.(bson.M); ok {
-			gameData = m
-		} else if m, ok := val.(map[string]interface{}); ok {
-			gameData = m
+		switch v := val.(type) {
+		case bson.M:
+			gameData = v
+		case map[string]interface{}:
+			gameData = v
+		case bson.D:
+			gameData = make(map[string]interface{}, len(v))
+			for _, elem := range v {
+				gameData[elem.Key] = elem.Value
+			}
+		default:
+			harukiLogger.Warnf("filterUserGamedata: unknown type for userGamedata: %T", val)
 		}
 	}
 
