@@ -101,9 +101,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
 	}
 	tokenStr := auth
-	if strings.HasPrefix(tokenStr, "Bearer ") {
-		tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
-	}
+	tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
 
 	parsed, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {

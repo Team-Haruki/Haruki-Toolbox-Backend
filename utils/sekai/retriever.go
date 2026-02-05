@@ -61,7 +61,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 	if suite == nil {
 		r.isErrorExist = true
 		r.ErrorMessage = "suite API returned nil response"
-		r.logger.Errorf(r.ErrorMessage)
+		r.logger.Errorf("%s", r.ErrorMessage)
 		return nil, NewDataRetrievalError("suite", "api_response", r.ErrorMessage, nil)
 	}
 	time.Sleep(1 * time.Second)

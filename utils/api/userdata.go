@@ -62,7 +62,7 @@ func buildSocialPlatformInfoFromUser(user *postgresql.User) *SocialPlatformInfo 
 
 func buildAuthorizeSocialPlatformInfoFromUser(user *postgresql.User) []AuthorizeSocialPlatformInfo {
 	var result []AuthorizeSocialPlatformInfo
-	if user.Edges.AuthorizedSocialPlatforms != nil && len(user.Edges.AuthorizedSocialPlatforms) > 0 {
+	if len(user.Edges.AuthorizedSocialPlatforms) > 0 {
 		result = make([]AuthorizeSocialPlatformInfo, 0, len(user.Edges.AuthorizedSocialPlatforms))
 		for _, a := range user.Edges.AuthorizedSocialPlatforms {
 			result = append(result, AuthorizeSocialPlatformInfo{
@@ -78,7 +78,7 @@ func buildAuthorizeSocialPlatformInfoFromUser(user *postgresql.User) []Authorize
 
 func buildGameAccountBindingsFromUser(user *postgresql.User) []GameAccountBinding {
 	var result []GameAccountBinding
-	if user.Edges.GameAccountBindings != nil && len(user.Edges.GameAccountBindings) > 0 {
+	if len(user.Edges.GameAccountBindings) > 0 {
 		result = make([]GameAccountBinding, 0, len(user.Edges.GameAccountBindings))
 		for _, g := range user.Edges.GameAccountBindings {
 			result = append(result, GameAccountBinding{
