@@ -44,7 +44,7 @@ func main() {
 		}(logFile)
 	}
 	mainLogger := harukiLogger.NewLogger("Main", harukiConfig.Cfg.Backend.LogLevel, loggerWriter)
-	mainLogger.Infof(fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
+	mainLogger.Infof("%s", fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
 	mainLogger.Infof("Powered By Haruki Dev Team")
 
 	sekaiAPIClient := harukiSekaiAPIClient.NewHarukiSekaiAPIClient(
@@ -135,6 +135,11 @@ func main() {
 			Format:     harukiConfig.Cfg.Backend.AccessLog,
 			TimeFormat: "2006-01-02 15:04:05",
 			TimeZone:   "Local",
+			CustomTags: map[string]logger.LogFunc{
+				"bytesSent": func(output logger.Buffer, c fiber.Ctx, data *logger.Data, extra string) (int, error) {
+					return output.WriteString(fmt.Sprintf("%d", len(c.Response().Body())))
+				},
+			},
 		}
 		if harukiConfig.Cfg.Backend.AccessLogPath != "" {
 			accessLogFile, err := os.OpenFile(harukiConfig.Cfg.Backend.AccessLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
