@@ -131,7 +131,11 @@ func main() {
 	}))
 
 	if harukiConfig.Cfg.Backend.AccessLog != "" {
-		loggerConfig := logger.Config{Format: harukiConfig.Cfg.Backend.AccessLog}
+		loggerConfig := logger.Config{
+			Format:     harukiConfig.Cfg.Backend.AccessLog,
+			TimeFormat: "2006-01-02 15:04:05",
+			TimeZone:   "Local",
+		}
 		if harukiConfig.Cfg.Backend.AccessLogPath != "" {
 			accessLogFile, err := os.OpenFile(harukiConfig.Cfg.Backend.AccessLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
