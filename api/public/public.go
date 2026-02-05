@@ -28,8 +28,16 @@ func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType har
 }
 
 func filterUserGamedata(result map[string]interface{}) map[string]interface{} {
-	gameData, ok := result["userGamedata"].(bson.M)
-	if !ok || len(gameData) == 0 {
+	var gameData map[string]interface{}
+	if val, ok := result["userGamedata"]; ok {
+		if m, ok := val.(bson.M); ok {
+			gameData = m
+		} else if m, ok := val.(map[string]interface{}); ok {
+			gameData = m
+		}
+	}
+
+	if len(gameData) == 0 {
 		return nil
 	}
 
