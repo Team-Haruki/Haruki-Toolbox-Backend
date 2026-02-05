@@ -66,9 +66,10 @@ func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("\n")
 	sb.WriteString("[URL Rewrite]\n")
 	for _, rule := range rs.RewriteRules {
-		if rule.RuleType == "redirect" {
+		switch rule.RuleType {
+		case "redirect":
 			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
-		} else if rule.RuleType == "rewrite" {
+		case "rewrite":
 			sb.WriteString(fmt.Sprintf("%s %s 307\n", rule.Pattern, rule.Target))
 		}
 	}
@@ -95,9 +96,10 @@ func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("\n")
 	sb.WriteString("[Rewrite]\n")
 	for _, rule := range rs.RewriteRules {
-		if rule.RuleType == "redirect" {
+		switch rule.RuleType {
+		case "redirect":
 			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
-		} else if rule.RuleType == "rewrite" {
+		case "rewrite":
 			sb.WriteString(fmt.Sprintf("%s %s 307\n", rule.Pattern, rule.Target))
 		}
 	}

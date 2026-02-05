@@ -7,10 +7,9 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type MongoDBManager struct {
@@ -38,7 +37,7 @@ func getInt(m map[string]interface{}, key string) int64 {
 }
 
 func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUser, webhookUserUser string) (*MongoDBManager, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(dbURL))
+	client, err := mongo.Connect(options.Client().ApplyURI(dbURL))
 	if err != nil {
 		harukiLogger.Errorf("Failed to connect to MongoDB: %v", err)
 		return nil, err
@@ -61,16 +60,17 @@ func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUs
 func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID int64, data map[string]interface{}, dataType utils.UploadDataType) (*mongo.UpdateResult, error) {
 	collection := m.getCollectionByDataType(dataType)
 	var updateDoc bson.M
-	if dataType == utils.UploadDataTypeSuite {
+	switch dataType {
+	case utils.UploadDataTypeSuite:
 		oldData, err := m.fetchOldData(ctx, collection, userID)
 		if err != nil {
 			return nil, err
 		}
 		finalData := m.buildFinalData(oldData, data)
 		updateDoc = bson.M{"$set": finalData}
-	} else if dataType == utils.UploadDataTypeMysekai {
+	case utils.UploadDataTypeMysekai:
 		updateDoc = bson.M{"$set": data}
-	} else {
+	default:
 		updatedResources, _ := data["updatedResources"].(map[string]interface{})
 		updateDoc = bson.M{"$set": bson.M{
 			"upload_time": data["upload_time"],
@@ -80,7 +80,7 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID i
 	res, err := collection.UpdateOne(ctx,
 		bson.M{"_id": userID, "server": server},
 		updateDoc,
-		options.Update().SetUpsert(true),
+		options.UpdateOne().SetUpsert(true),
 	)
 	if err != nil {
 		harukiLogger.Errorf("Failed to update data for user %d: %v", userID, err)
@@ -129,7 +129,7 @@ func (m *MongoDBManager) buildFinalData(oldData, data map[string]interface{}) bs
 }
 
 func mergeUserEvents(oldData, newData map[string]interface{}) []interface{} {
-	oldEvents, _ := oldData["userEvents"].(primitive.A)
+	oldEvents, _ := oldData["userEvents"].(bson.A)
 	newEvents, _ := newData["userEvents"].([]interface{})
 	allEvents := append(oldEvents, newEvents...)
 
@@ -172,7 +172,7 @@ type bloomKey struct {
 }
 
 func mergeWorldBlooms(oldData, newData map[string]interface{}) []interface{} {
-	oldBlooms, _ := oldData["userWorldBlooms"].(primitive.A)
+	oldBlooms, _ := oldData["userWorldBlooms"].(bson.A)
 	newBlooms, _ := newData["userWorldBlooms"].([]interface{})
 	allBlooms := append(oldBlooms, newBlooms...)
 
@@ -233,7 +233,7 @@ func (m *MongoDBManager) GetData(ctx context.Context, userID int64, server strin
 }
 
 func (m *MongoDBManager) GetWebhookUser(ctx context.Context, id, credential string) (bson.M, error) {
-	oid, err := primitive.ObjectIDFromHex(id)
+	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		harukiLogger.Errorf("Invalid webhook ID format: %v", err)
 		return nil, err
@@ -265,19 +265,19 @@ func (m *MongoDBManager) GetWebhookPushAPI(ctx context.Context, userID int64, se
 		return nil, err
 	}
 
-	webhookIDs, ok := binding["webhook_user_ids"].(primitive.A)
+	webhookIDs, ok := binding["webhook_user_ids"].(bson.A)
 	if !ok {
 		return []bson.M{}, nil
 	}
 
-	var ids []primitive.ObjectID
+	var ids []bson.ObjectID
 	for _, v := range webhookIDs {
 		switch val := v.(type) {
 		case string:
-			if oid, err := primitive.ObjectIDFromHex(val); err == nil {
+			if oid, err := bson.ObjectIDFromHex(val); err == nil {
 				ids = append(ids, oid)
 			}
-		case primitive.ObjectID:
+		case bson.ObjectID:
 			ids = append(ids, val)
 		}
 	}
@@ -305,7 +305,7 @@ func (m *MongoDBManager) AddWebhookPushUser(ctx context.Context, userID string, 
 	_, err := m.webhookUserCollection.UpdateOne(ctx,
 		bson.M{"uid": userID, "server": server, "type": dataType},
 		bson.M{"$addToSet": bson.M{"webhook_user_ids": webhookID}},
-		options.Update().SetUpsert(true),
+		options.UpdateOne().SetUpsert(true),
 	)
 	if err != nil {
 		harukiLogger.Errorf("Failed to add webhook push user: %v", err)
