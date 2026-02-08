@@ -67,18 +67,21 @@ func (m *MongoDBManager) UpdateData(ctx context.Context, server string, userID i
 			return nil, err
 		}
 		finalData := m.buildFinalData(oldData, data)
+		finalData["server"] = server
 		updateDoc = bson.M{"$set": finalData}
 	case utils.UploadDataTypeMysekai:
+		data["server"] = server
 		updateDoc = bson.M{"$set": data}
 	default:
 		updatedResources, _ := data["updatedResources"].(map[string]interface{})
 		updateDoc = bson.M{"$set": bson.M{
+			"server":      server,
 			"upload_time": data["upload_time"],
 			"updatedResources.userMysekaiHarvestMaps": updatedResources["userMysekaiHarvestMaps"],
 		}}
 	}
 	res, err := collection.UpdateOne(ctx,
-		bson.M{"_id": userID, "server": server},
+		bson.M{"_id": userID},
 		updateDoc,
 		options.UpdateOne().SetUpsert(true),
 	)
