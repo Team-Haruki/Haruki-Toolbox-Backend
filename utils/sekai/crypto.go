@@ -13,6 +13,7 @@ import (
 	"haruki-suite/utils/orderedmsgpack"
 
 	"github.com/iancoleman/orderedmap"
+	"github.com/shamaton/msgpack/v2"
 	"github.com/vgorin/cryptogo/pad"
 )
 
@@ -50,10 +51,52 @@ func NewSekaiCryptorFromHex(aesKeyHex, aesIVHex string) (*SekaiCryptor, error) {
 }
 
 func (c *SekaiCryptor) newCBC(encrypt bool) cipher.BlockMode {
+	iv := make([]byte, len(c.iv))
+	copy(iv, c.iv)
 	if encrypt {
-		return cipher.NewCBCEncrypter(c.block, c.iv)
+		return cipher.NewCBCEncrypter(c.block, iv)
 	}
-	return cipher.NewCBCDecrypter(c.block, c.iv)
+	return cipher.NewCBCDecrypter(c.block, iv)
+}
+
+type MsgpackMarshaler interface {
+	MarshalMsgpack() ([]byte, error)
+}
+
+func (c *SekaiCryptor) Pack(content any) ([]byte, error) {
+	if content == nil {
+		return nil, ErrNilContent
+	}
+
+	var raw []byte
+	switch v := content.(type) {
+	case []byte:
+		raw = v
+	default:
+		if marshaler, ok := content.(MsgpackMarshaler); ok {
+			b, err := marshaler.MarshalMsgpack()
+			if err != nil {
+				return nil, fmt.Errorf("custom msgpack marshal: %w", err)
+			}
+			raw = b
+		} else {
+			b, err := orderedmsgpack.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("msgpack marshal: %w", err)
+			}
+			raw = b
+		}
+	}
+
+	if len(raw) == 0 {
+		return nil, ErrEmptyContent
+	}
+
+	padded := pad.PKCS7Pad(raw, aes.BlockSize)
+	encrypter := c.newCBC(true)
+	encrypted := make([]byte, len(padded))
+	encrypter.CryptBlocks(encrypted, padded)
+	return encrypted, nil
 }
 
 var bytesPool = sync.Pool{
@@ -61,6 +104,29 @@ var bytesPool = sync.Pool{
 		b := make([]byte, 0, 1024)
 		return &b
 	},
+}
+
+func safePKCS7Unpad(b []byte) ([]byte, error) {
+	if len(b) == 0 || len(b)%aes.BlockSize != 0 {
+		return nil, ErrInvalidBlockSize
+	}
+
+	padLen := int(b[len(b)-1])
+	if padLen <= 0 || padLen > aes.BlockSize {
+		return nil, fmt.Errorf("invalid pkcs7 padding length: %d", padLen)
+	}
+
+	if padLen > len(b) {
+		return nil, fmt.Errorf("invalid pkcs7 padding length exceeds data length")
+	}
+
+	for i := len(b) - padLen; i < len(b); i++ {
+		if int(b[i]) != padLen {
+			return nil, fmt.Errorf("invalid pkcs7 padding byte at %d: %d", i, b[i])
+		}
+	}
+
+	return b[:len(b)-padLen], nil
 }
 
 func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
@@ -82,12 +148,12 @@ func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
 	} else {
 		*decrypted = (*decrypted)[:len(content)]
 	}
-	defer bytesPool.Put(decrypted)
 
 	decrypter.CryptBlocks(*decrypted, content)
 
-	unpadded, err := pad.PKCS7Unpad(*decrypted)
+	unpadded, err := safePKCS7Unpad(*decrypted)
 	if err != nil {
+		bytesPool.Put(decrypted)
 		return fmt.Errorf("failed to unpad: %w", err)
 	}
 
@@ -95,32 +161,100 @@ func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
 	case *orderedmap.OrderedMap:
 		om, err := orderedmsgpack.MsgpackToOrderedMap(unpadded)
 		if err != nil {
+			bytesPool.Put(decrypted)
 			return fmt.Errorf("ordered decode: %w", err)
 		}
 		om.SetEscapeHTML(false)
 		*dst = *om
-		return nil
 	case **orderedmap.OrderedMap:
 		om, err := orderedmsgpack.MsgpackToOrderedMap(unpadded)
 		if err != nil {
+			bytesPool.Put(decrypted)
 			return fmt.Errorf("ordered (**ptr) decode: %w", err)
 		}
 		*dst = om
-		return nil
 	default:
-		if err := orderedmsgpack.Unmarshal(unpadded, out); err != nil {
-			return fmt.Errorf("msgpack decode: %w", err)
+		if err := msgpack.Unmarshal(unpadded, out); err != nil {
+			bytesPool.Put(decrypted)
+			preview := unpadded
+			if len(preview) > 200 {
+				preview = preview[:200]
+			}
+			return fmt.Errorf("msgpack decode (len=%d, target=%T, first200=%x): %w", len(unpadded), out, preview, err)
 		}
-		return nil
 	}
+
+	bytesPool.Put(decrypted)
+	return nil
 }
 
 func (c *SekaiCryptor) Unpack(content []byte) (any, error) {
-	var result any
-	if err := c.UnpackInto(content, &result); err != nil {
+	var mapResult map[string]any
+	if err := c.UnpackInto(content, &mapResult); err == nil {
+		sanitizeMapValues(mapResult)
+		return mapResult, nil
+	}
+
+	var sliceResult []any
+	if err := c.UnpackInto(content, &sliceResult); err == nil {
+		sanitizeSliceValues(sliceResult)
+		return sliceResult, nil
+	}
+
+	var anyResult any
+	if err := c.UnpackInto(content, &anyResult); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return convertUnpackResult(anyResult), nil
+}
+
+func sanitizeMapValues(m map[string]any) {
+	for k, v := range m {
+		switch child := v.(type) {
+		case map[interface{}]interface{}:
+			m[k] = convertUnpackResult(child)
+		case map[string]any:
+			sanitizeMapValues(child)
+		case []any:
+			sanitizeSliceValues(child)
+		}
+	}
+}
+
+func sanitizeSliceValues(s []any) {
+	for i, v := range s {
+		switch child := v.(type) {
+		case map[interface{}]interface{}:
+			s[i] = convertUnpackResult(child)
+		case map[string]any:
+			sanitizeMapValues(child)
+		case []any:
+			sanitizeSliceValues(child)
+		}
+	}
+}
+
+func convertUnpackResult(v any) any {
+	switch x := v.(type) {
+	case map[interface{}]interface{}:
+		m := make(map[string]any, len(x))
+		for k, val := range x {
+			if keyStr, ok := k.(string); ok {
+				m[keyStr] = convertUnpackResult(val)
+			} else if keyBytes, ok := k.([]byte); ok {
+				m[string(keyBytes)] = convertUnpackResult(val)
+			}
+		}
+		return m
+	case map[string]any:
+		sanitizeMapValues(x)
+		return x
+	case []any:
+		sanitizeSliceValues(x)
+		return x
+	default:
+		return v
+	}
 }
 
 func (c *SekaiCryptor) UnpackOrdered(content []byte) (*orderedmap.OrderedMap, error) {
@@ -130,26 +264,6 @@ func (c *SekaiCryptor) UnpackOrdered(content []byte) (*orderedmap.OrderedMap, er
 		return nil, err
 	}
 	return result, nil
-}
-
-func (c *SekaiCryptor) Pack(content any) ([]byte, error) {
-	if content == nil {
-		return nil, ErrNilContent
-	}
-	packed, err := orderedmsgpack.Marshal(content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize content with msgpack: %w", err)
-	}
-	if len(packed) == 0 {
-		return nil, ErrEmptyContent
-	}
-
-	padded := pad.PKCS7Pad(packed, aes.BlockSize)
-	encrypter := c.newCBC(true)
-
-	encrypted := make([]byte, len(padded))
-	encrypter.CryptBlocks(encrypted, padded)
-	return encrypted, nil
 }
 
 func getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
