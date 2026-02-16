@@ -30,8 +30,8 @@ func init() {
 	httpClient.SetHeader("Accept", "application/octet-stream")
 }
 
-func processData(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, string, error) {
-	if !harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandard {
+func processData(rawData []byte, server utils.SupportedDataUploadServer, sendJSONZstandard bool) ([]byte, string, error) {
+	if !sendJSONZstandard {
 		return rawData, utils.HarukiDataSyncerDataFormatRaw, nil
 	}
 
@@ -60,9 +60,9 @@ func processData(rawData []byte, server utils.SupportedDataUploadServer) ([]byte
 	return buf.Bytes(), utils.HarukiDataSyncerDataFormatJsonZstd, nil
 }
 
-func DataUploader(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string) {
+func DataUploader(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string, sendJSONZstandard bool) {
 	if url != "" {
-		dataToSend, encoding, err := processData(rawData, server)
+		dataToSend, encoding, err := processData(rawData, server, sendJSONZstandard)
 		if err != nil {
 			logger.Warnf("Failed to process data for %s: %v", url, err)
 			return
@@ -91,9 +91,9 @@ func DataUploader(url string, userID int64, server utils.SupportedDataUploadServ
 	}
 }
 
-func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string) {
+func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string, sendJSONZstandard bool) {
 	if url != "" {
-		dataToSend, encoding, err := processData(rawData, server)
+		dataToSend, encoding, err := processData(rawData, server, sendJSONZstandard)
 		if err != nil {
 			logger.Warnf("Failed to process data for %s: %v", url, err)
 			return
@@ -131,19 +131,19 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 	if dataType == utils.UploadDataTypeSuite {
 		if settings.Suite != nil {
 			if settings.Suite.Allow8823 {
-				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823)
+				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandard8823)
 				logger.Infof("Syncing suite data to 8823...")
 			}
 			if settings.Suite.AllowSakura {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointSakura, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretSakura)
+				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointSakura, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretSakura, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardSakura)
 				logger.Infof("Syncing suite data to SakuraBot...")
 			}
 			if settings.Suite.AllowResona {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointResona, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretResona)
+				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointResona, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretResona, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardResona)
 				logger.Infof("Syncing suite data to ResonaBot...")
 			}
 			if settings.Suite.AllowLuna {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointLuna, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretLuna)
+				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointLuna, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretLuna, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardLuna)
 				logger.Infof("Syncing suite data to LunaBot...")
 			}
 		}
@@ -151,15 +151,15 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 	if dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if settings.Mysekai != nil {
 			if settings.Mysekai.Allow8823 {
-				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823)
+				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandard8823)
 				logger.Infof("Syncing mysekai data to 8823...")
 			}
 			if settings.Mysekai.AllowResona {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointResona, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretResona)
+				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointResona, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretResona, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardResona)
 				logger.Infof("Syncing mysekai data to ResonaBot...")
 			}
 			if settings.Mysekai.AllowLuna {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointLuna, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretLuna)
+				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointLuna, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretLuna, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardLuna)
 				logger.Infof("Syncing mysekai data to LunaBot...")
 			}
 		}

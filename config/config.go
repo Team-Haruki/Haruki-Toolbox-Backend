@@ -29,15 +29,18 @@ type WebhookConfig struct {
 }
 
 type ThirdPartyDataProviderConfig struct {
-	Endpoint8823      string `yaml:"endpoint_8823"`
-	Secret8823        string `yaml:"secret_8823"`
-	EndpointSakura    string `yaml:"endpoint_sakura"`
-	SecretSakura      string `yaml:"secret_sakura"`
-	EndpointResona    string `yaml:"endpoint_resona"`
-	SecretResona      string `yaml:"secret_resona"`
-	EndpointLuna      string `yaml:"endpoint_luna"`
-	SecretLuna        string `yaml:"secret_luna"`
-	SendJSONZstandard bool   `yaml:"send_json_zstandard"`
+	Endpoint8823            string `yaml:"endpoint_8823"`
+	Secret8823              string `yaml:"secret_8823"`
+	SendJSONZstandard8823   bool   `yaml:"send_json_zstandard_8823"`
+	EndpointSakura          string `yaml:"endpoint_sakura"`
+	SecretSakura            string `yaml:"secret_sakura"`
+	SendJSONZstandardSakura bool   `yaml:"send_json_zstandard_sakura"`
+	EndpointResona          string `yaml:"endpoint_resona"`
+	SecretResona            string `yaml:"secret_resona"`
+	SendJSONZstandardResona bool   `yaml:"send_json_zstandard_resona"`
+	EndpointLuna            string `yaml:"endpoint_luna"`
+	SecretLuna              string `yaml:"secret_luna"`
+	SendJSONZstandardLuna   bool   `yaml:"send_json_zstandard_luna"`
 }
 
 type UserSystemConfig struct {
