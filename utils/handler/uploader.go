@@ -1,17 +1,21 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	harukiConfig "haruki-suite/config"
 	"haruki-suite/utils"
 	apiHelper "haruki-suite/utils/api"
 	harukiLogger "haruki-suite/utils/logger"
+	"haruki-suite/utils/sekai"
 	harukiVersion "haruki-suite/version"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/klauspost/compress/zstd"
 )
 
 var (
@@ -26,15 +30,52 @@ func init() {
 	httpClient.SetHeader("Accept", "application/octet-stream")
 }
 
+func processData(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, string, error) {
+	if !harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandard {
+		return rawData, utils.HarukiDataSyncerDataFormatRaw, nil
+	}
+
+	unpacked, err := sekai.UnpackOrdered(rawData, server)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to unpack ordered data: %w", err)
+	}
+
+	jsonData, err := json.Marshal(unpacked)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to marshal json: %w", err)
+	}
+
+	var buf bytes.Buffer
+	writer, err := zstd.NewWriter(&buf)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create zstd writer: %w", err)
+	}
+	if _, err := writer.Write(jsonData); err != nil {
+		return nil, "", fmt.Errorf("failed to write json to zstd writer: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", fmt.Errorf("failed to close zstd writer: %w", err)
+	}
+
+	return buf.Bytes(), utils.HarukiDataSyncerDataFormatJsonZstd, nil
+}
+
 func DataUploader(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string) {
 	if url != "" {
+		dataToSend, encoding, err := processData(rawData, server)
+		if err != nil {
+			logger.Warnf("Failed to process data for %s: %v", url, err)
+			return
+		}
+
 		url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
 		url = strings.ReplaceAll(url, "{server}", string(server))
 		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
 
 		resp, err := httpClient.R().
 			SetHeader("Authorization", fmt.Sprintf("Bearer %s", endpointSecret)).
-			SetBody(rawData).
+			SetHeader("X-Haruki-Upload-Data-Format", encoding).
+			SetBody(dataToSend).
 			Post(url)
 		if err != nil {
 			logger.Warnf("Failed to sync data to %s: %v", url, err)
@@ -52,12 +93,19 @@ func DataUploader(url string, userID int64, server utils.SupportedDataUploadServ
 
 func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string) {
 	if url != "" {
+		dataToSend, encoding, err := processData(rawData, server)
+		if err != nil {
+			logger.Warnf("Failed to process data for %s: %v", url, err)
+			return
+		}
+
 		resp, err := httpClient.R().
 			SetHeader("X-Credentials", endpointSecret).
 			SetHeader("X-Server-Region", string(server)).
 			SetHeader("X-Upload-Type", string(dataType)).
 			SetHeader("X-User-Id", strconv.FormatInt(userID, 10)).
-			SetBody(rawData).
+			SetHeader("X-Haruki-Upload-Data-Format", encoding).
+			SetBody(dataToSend).
 			Post(url)
 		if err != nil {
 			logger.Warnf("Failed to sync data to %s: %v", url, err)

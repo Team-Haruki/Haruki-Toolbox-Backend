@@ -88,3 +88,8 @@ var AllowedAvatarMIMETypes = map[string]string{
 	"image/gif":  ".gif",
 	"image/webp": ".webp",
 }
+
+const (
+	HarukiDataSyncerDataFormatRaw      = "raw"
+	HarukiDataSyncerDataFormatJsonZstd = "json-zstd"
+)

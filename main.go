@@ -22,6 +22,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	_ "github.com/lib/pq"
@@ -81,7 +82,7 @@ func main() {
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, harukiConfig.Cfg.UserSystem.SessionSignToken)
 
 	app := fiber.New(fiber.Config{
-		BodyLimit:   30 * 1024 * 1024,
+		BodyLimit:   100 * 1024 * 1024,
 		JSONEncoder: sonic.Marshal,
 		JSONDecoder: sonic.Unmarshal,
 		ProxyHeader: harukiConfig.Cfg.Backend.ProxyHeader,
@@ -90,6 +91,7 @@ func main() {
 			Proxies: harukiConfig.Cfg.Backend.TrustProxies,
 		},
 	})
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 	app.Use(func(c fiber.Ctx) error {
 		nonceBytes := make([]byte, 16)
 		if _, err := rand.Read(nonceBytes); err != nil {
