@@ -182,14 +182,23 @@ func UnmarshalRead(r io.Reader, v any) error {
 }
 
 func MsgpackToOrderedMap(b []byte) (*orderedmap.OrderedMap, error) {
-	return MsgpackToOrderedMapFromReader(bytes.NewReader(b))
+	reader := bytes.NewReader(b)
+	val, err := decodeValue(reader)
+	if err != nil {
+		return nil, fmt.Errorf("decode msgpack: %w", err)
+	}
+	om, ok := val.(*orderedmap.OrderedMap)
+	if !ok {
+		return nil, fmt.Errorf("decoded value is %T, not *orderedmap.OrderedMap", val)
+	}
+	om.SetEscapeHTML(false)
+	return om, nil
 }
 
 func MsgpackToOrderedMapFromReader(r io.Reader) (*orderedmap.OrderedMap, error) {
-	var decoded orderedmap.OrderedMap
-	if err := UnmarshalRead(r, &decoded); err != nil {
-		return nil, err
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("read all: %w", err)
 	}
-	decoded.SetEscapeHTML(false)
-	return &decoded, nil
+	return MsgpackToOrderedMap(data)
 }
