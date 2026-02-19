@@ -62,7 +62,6 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	found, err := helper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount)
 	if err != nil {
 		harukiLogger.Errorf("Failed to get OTP attempt count: %v", err)
-		// Continue anyway, don't block due to internal error
 	}
 	if found && attemptCount >= 5 {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "Too many verification attempts. Please request a new code.")

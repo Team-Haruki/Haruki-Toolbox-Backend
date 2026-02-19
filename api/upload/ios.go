@@ -22,10 +22,10 @@ import (
 var (
 	dataChunks      = make(map[string][]harukiUtils.DataChunk)
 	dataChunksMutex sync.RWMutex
-	dataChunksSize  int64 // Total bytes stored in dataChunks
+	dataChunksSize  int64
 )
 
-const maxDataChunksSize = 16 * 1024 * 1024 // 16MB limit
+const maxDataChunksSize = 16 * 1024 * 1024
 
 func init() {
 	go func() {

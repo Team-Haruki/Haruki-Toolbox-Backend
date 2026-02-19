@@ -73,7 +73,6 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			Save(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to create iOS script code: %v", err)
-			// Non-fatal, continue with registration
 		}
 		redisKey := harukiRedis.BuildEmailVerifyKey(req.Email)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)

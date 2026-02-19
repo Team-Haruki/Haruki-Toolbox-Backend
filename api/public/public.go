@@ -27,121 +27,61 @@ func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType har
 	return false
 }
 
-func filterUserGamedata(result map[string]interface{}) map[string]interface{} {
-	var gameData map[string]interface{}
-	if val, ok := result["userGamedata"]; ok {
-		switch v := val.(type) {
-		case bson.M:
-			gameData = v
-		case map[string]interface{}:
-			gameData = v
-		case bson.D:
-			gameData = make(map[string]interface{}, len(v))
-			for _, elem := range v {
-				gameData[elem.Key] = elem.Value
-			}
-		default:
-			harukiLogger.Warnf("filterUserGamedata: unknown type for userGamedata: %T", val)
-		}
+func compactFieldName(key string) string {
+	if len(key) == 0 {
+		return ""
 	}
-
-	if len(gameData) == 0 {
-		return nil
-	}
-
-	filtered := map[string]interface{}{}
-	for _, key := range []string{"userId", "name", "deck", "exp", "totalExp", "coin"} {
-		if v, ok := gameData[key]; ok {
-			filtered[key] = v
-		}
-	}
-	return filtered
+	return fmt.Sprintf("compact%s%s", string(key[0]-32), key[1:])
 }
 
-func processSingleKey(key string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, allowedKeys []string) (interface{}, bool) {
-	if !harukiAPIHelper.ArrayContains(allowedKeys, key) && key != "userGamedata" {
-		return nil, false
-	}
-	if key == "userGamedata" {
-		return filteredUserGamedata, true
-	}
-	return GetValueFromResult(result, key), true
-}
-
-func processMultipleKeys(keys []string, result map[string]interface{}, filteredUserGamedata map[string]interface{}, allowedKeys []string) (map[string]interface{}, string) {
-	suite := map[string]interface{}{}
-	includeUserGamedata := false
+func buildSuiteProjection(keys []string) bson.M {
+	proj := bson.M{"_id": 0}
 	for _, key := range keys {
 		if key == "userGamedata" {
-			includeUserGamedata = true
-			continue
+			for _, field := range userGamedataAllowedFields {
+				proj["userGamedata."+field] = 1
+			}
+		} else {
+			proj[key] = 1
+			proj[compactFieldName(key)] = 1
 		}
-		if !harukiAPIHelper.ArrayContains(allowedKeys, key) {
-			return nil, key
-		}
-		suite[key] = GetValueFromResult(result, key)
 	}
-	if includeUserGamedata && filteredUserGamedata != nil {
-		suite["userGamedata"] = filteredUserGamedata
-	}
-	return suite, ""
+	return proj
 }
 
-func buildDefaultSuiteResponse(result map[string]interface{}, allowedKeys []string) map[string]interface{} {
-	suite := map[string]interface{}{}
-	for _, key := range allowedKeys {
+func buildMysekaiProjection(keys []string) bson.M {
+	if len(keys) == 0 {
+		return bson.M{"_id": 0, "server": 0}
+	}
+	proj := bson.M{"_id": 0}
+	for _, key := range keys {
+		proj[key] = 1
+	}
+	return proj
+}
+
+func buildSuiteResponse(result bson.D, keys []string) bson.D {
+	resp := make(bson.D, 0, len(keys))
+	for _, key := range keys {
 		if key == "userGamedata" {
-			continue
-		}
-		suite[key] = GetValueFromResult(result, key)
-	}
-	return suite
-}
-
-func processSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result map[string]interface{}) (interface{}, error) {
-	filteredUserGamedata := filterUserGamedata(result)
-	requestKey := c.Query("key")
-	if requestKey == "" {
-		return buildDefaultSuiteResponse(result, apiHelper.PublicAPIAllowedKeys), nil
-	}
-	keys := strings.Split(requestKey, ",")
-	if len(keys) == 1 {
-		resp, valid := processSingleKey(keys[0], result, filteredUserGamedata, apiHelper.PublicAPIAllowedKeys)
-		if !valid {
-			return nil, harukiAPIHelper.ErrorBadRequest(c, "Invalid request key")
-		}
-		return resp, nil
-	}
-	suite, invalidKey := processMultipleKeys(keys, result, filteredUserGamedata, apiHelper.PublicAPIAllowedKeys)
-	if invalidKey != "" {
-		return nil, harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("Invalid request key: %s", invalidKey))
-	}
-	return suite, nil
-}
-
-func processMysekaiData(c fiber.Ctx, result map[string]interface{}) interface{} {
-	requestKey := c.Query("key")
-	mysekaiData := map[string]interface{}{}
-	if requestKey != "" {
-		keys := strings.Split(requestKey, ",")
-		for _, key := range keys {
-			if key == "_id" || key == "policy" {
-				continue
+			for _, elem := range result {
+				if elem.Key == "userGamedata" {
+					resp = append(resp, bson.E{Key: "userGamedata", Value: elem.Value})
+					break
+				}
 			}
-			mysekaiData[key] = result[key]
-		}
-	} else {
-		for k, v := range result {
-			if k == "_id" || k == "policy" {
-				continue
-			}
-			mysekaiData[k] = v
+		} else {
+			resp = append(resp, bson.E{Key: key, Value: GetValueFromResult(result, key)})
 		}
 	}
-	return mysekaiData
+	return resp
 }
 
 func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	allowedKeySet := make(map[string]struct{}, len(apiHelper.PublicAPIAllowedKeys))
+	for _, k := range apiHelper.PublicAPIAllowedKeys {
+		allowedKeySet[k] = struct{}{}
+	}
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		server, dataType, userID, userIDStr, err := parseParams(c)
@@ -162,14 +102,13 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if !validatePublicAPIAccess(record, dataType) {
 			return harukiAPIHelper.ErrorForbidden(c, "you are not allowed to access this player data.")
 		}
-		result, err := fetchMongoData(c, apiHelper, userID, server, dataType)
-		if err != nil {
-			harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
-			return err
+		requestKey := c.Query("key")
+		if dataType == harukiUtils.UploadDataTypeSuite {
+			resp, err = handleSuiteRequest(c, apiHelper, userID, server, requestKey, allowedKeySet, apiHelper.PublicAPIAllowedKeys)
+		} else {
+			resp, err = handleMysekaiRequest(c, apiHelper, userID, server, requestKey)
 		}
-		resp, err = processDataResponse(c, apiHelper, dataType, result)
 		if err != nil {
-			harukiLogger.Errorf("Failed to process data response: %v", err)
 			return err
 		}
 		if dataType != harukiUtils.UploadDataTypeMysekai {
@@ -178,6 +117,71 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		return c.JSON(resp)
 	}
+}
+
+func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (interface{}, error) {
+	ctx := c.Context()
+
+	var keys []string
+	if requestKey == "" {
+		keys = allowedKeys
+	} else {
+		keys = strings.Split(requestKey, ",")
+		for _, key := range keys {
+			if key == "userGamedata" {
+				continue
+			}
+			if _, ok := allowedKeySet[key]; !ok {
+				return nil, harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("Invalid request key: %s", key))
+			}
+		}
+	}
+
+	projection := buildSuiteProjection(keys)
+	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeSuite, projection)
+	if err != nil {
+		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
+		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
+	}
+	if result == nil {
+		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
+	}
+
+	if requestKey != "" && len(keys) == 1 {
+		key := keys[0]
+		if key == "userGamedata" {
+			for _, elem := range result {
+				if elem.Key == "userGamedata" {
+					return elem.Value, nil
+				}
+			}
+			return bson.D{}, nil
+		}
+		return GetValueFromResult(result, key), nil
+	}
+
+	return buildSuiteResponse(result, keys), nil
+}
+
+func handleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (interface{}, error) {
+	ctx := c.Context()
+
+	var keys []string
+	if requestKey != "" {
+		keys = strings.Split(requestKey, ",")
+	}
+
+	projection := buildMysekaiProjection(keys)
+	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeMysekai, projection)
+	if err != nil {
+		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
+		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
+	}
+	if result == nil {
+		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
+	}
+
+	return result, nil
 }
 
 func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType, int64, string, error) {
@@ -208,28 +212,6 @@ func fetchAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 		).
 		WithUser().
 		Only(ctx)
-}
-
-func fetchMongoData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, dataType harukiUtils.UploadDataType) (map[string]interface{}, error) {
-	ctx := c.Context()
-	result, err := apiHelper.DBManager.Mongo.GetData(ctx, userID, string(server), dataType)
-	if err != nil {
-		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
-	}
-	if result == nil {
-		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
-	}
-	return result, nil
-}
-
-func processDataResponse(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dataType harukiUtils.UploadDataType, result map[string]interface{}) (interface{}, error) {
-	if dataType == harukiUtils.UploadDataTypeSuite {
-		return processSuiteData(c, apiHelper, result)
-	}
-	if dataType == harukiUtils.UploadDataTypeMysekai {
-		return processMysekaiData(c, result), nil
-	}
-	return nil, harukiAPIHelper.ErrorInternal(c, "Unknown error.")
 }
 
 func registerPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

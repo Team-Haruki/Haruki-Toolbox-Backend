@@ -42,7 +42,7 @@ func NewMongoDBManager(ctx context.Context, dbURL, db, suite, mysekai, webhookUs
 		harukiLogger.Errorf("Failed to connect to MongoDB: %v", err)
 		return nil, err
 	}
-	// Verify connection
+
 	if err := client.Ping(ctx, nil); err != nil {
 		harukiLogger.Errorf("Failed to ping MongoDB: %v", err)
 		return nil, err
@@ -235,6 +235,31 @@ func (m *MongoDBManager) GetData(ctx context.Context, userID int64, server strin
 	return result, err
 }
 
+func (m *MongoDBManager) GetDataWithProjection(ctx context.Context, userID int64, server string, dataType utils.UploadDataType, projection bson.M) (bson.D, error) {
+	var collection *mongo.Collection
+	if dataType == utils.UploadDataTypeSuite {
+		collection = m.suiteCollection
+	} else {
+		collection = m.mysekaiCollection
+	}
+
+	filter := bson.M{"_id": userID, "server": server}
+	opts := options.FindOne()
+	if projection != nil {
+		opts.SetProjection(projection)
+	}
+
+	var result bson.D
+	err := collection.FindOne(ctx, filter, opts).Decode(&result)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		harukiLogger.Errorf("Failed to get data for user %d: %v", userID, err)
+	}
+	return result, err
+}
+
 func (m *MongoDBManager) GetWebhookUser(ctx context.Context, id, credential string) (bson.M, error) {
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
@@ -349,49 +374,20 @@ func (m *MongoDBManager) GetWebhookSubscribers(ctx context.Context, webhookID st
 
 func (m *MongoDBManager) SearchPutMysekaiFixtureUser(ctx context.Context, server string, fixtureID int) ([]bson.M, error) {
 	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{"server": server}}},
+		bson.D{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts"}},
+		bson.D{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts"}},
+		bson.D{{Key: "$unwind", Value: "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts.mysekaiFixtures"}},
 		bson.D{{Key: "$match", Value: bson.M{
-			"server": server,
 			"updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteHousingLayouts.mysekaiFixtures.mysekaiFixtureId": fixtureID,
 		}}},
-		bson.D{{Key: "$project", Value: bson.M{
-			"_id": 1,
-			"mysekaiSiteIds": bson.M{
-				"$reduce": bson.M{
-					"input":        "$updatedResources.userMysekaiSiteHousingLayouts",
-					"initialValue": bson.A{},
-					"in": bson.M{
-						"$cond": bson.A{
-							bson.M{
-								"$anyElementTrue": bson.M{
-									"$map": bson.M{
-										"input": "$$this.mysekaiSiteHousingLayouts",
-										"as":    "layout",
-										"in": bson.M{
-											"$anyElementTrue": bson.M{
-												"$map": bson.M{
-													"input": "$$layout.mysekaiFixtures",
-													"as":    "fixture",
-													"in": bson.M{
-														"$eq": bson.A{"$$fixture.mysekaiFixtureId", fixtureID},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-							bson.M{"$concatArrays": bson.A{"$$value", bson.A{"$$this.mysekaiSiteId"}}},
-							"$$value",
-						},
-					},
-				},
-			},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id":            "$_id",
+			"mysekaiSiteIds": bson.M{"$addToSet": "$updatedResources.userMysekaiSiteHousingLayouts.mysekaiSiteId"},
 		}}},
 	}
 
-	aggOpts := options.Aggregate()
-
-	cursor, err := m.mysekaiCollection.Aggregate(ctx, pipeline, aggOpts)
+	cursor, err := m.mysekaiCollection.Aggregate(ctx, pipeline)
 	if err != nil {
 		harukiLogger.Errorf("Failed to aggregate mysekai fixtures: %v", err)
 		return nil, err
