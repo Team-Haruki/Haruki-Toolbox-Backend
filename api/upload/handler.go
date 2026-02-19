@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"errors"
+	"fmt"
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
@@ -105,6 +106,12 @@ func HandleUpload(
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	uploadMethod harukiUtils.UploadMethod,
 ) (*harukiUtils.HandleDataResult, error) {
+	if _, err := harukiUtils.ParseSupportedDataUploadServer(string(server)); err != nil {
+		return nil, fmt.Errorf("invalid server in HandleUpload: %w", err)
+	}
+	if _, err := harukiUtils.ParseUploadDataType(string(dataType)); err != nil {
+		return nil, fmt.Errorf("invalid data_type in HandleUpload: %w", err)
+	}
 	handler := &harukiDataHandler.DataHandler{
 		DBManager:      helper.DBManager,
 		SekaiAPIClient: helper.SekaiAPIClient,
