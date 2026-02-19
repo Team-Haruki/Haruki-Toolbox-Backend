@@ -5,6 +5,7 @@ import (
 	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
+	"haruki-suite/utils/database/postgresql"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
 	"math/big"
@@ -34,23 +35,40 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		if err := checkEmailAvailability(c, apiHelper, req.Email); err != nil {
 			return err
 		}
+		if len(req.Password) < 8 {
+			return harukiAPIHelper.ErrorBadRequest(c, "password must be at least 8 characters")
+		}
+		if len([]byte(req.Password)) > 72 {
+			return harukiAPIHelper.ErrorBadRequest(c, "password is too long (max 72 bytes)")
+		}
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
 			harukiLogger.Errorf("Failed to hash password: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
 		}
-		tsSuffix := time.Now().UnixMicro() % 10000
-		randNum, _ := rand.Int(rand.Reader, big.NewInt(1000000))
-		uid := fmt.Sprintf("%04d%06d", tsSuffix, randNum.Int64())
-		newUser, err := apiHelper.DBManager.DB.User.Create().
-			SetID(uid).
-			SetName(req.Name).
-			SetEmail(req.Email).
-			SetPasswordHash(string(passwordHash)).
-			SetNillableAvatarPath(nil).
-			Save(ctx)
+		var uid string
+		var newUser *postgresql.User
+		for attempt := range 3 {
+			tsSuffix := time.Now().UnixMicro() % 10000
+			randNum, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+			uid = fmt.Sprintf("%04d%06d", tsSuffix, randNum.Int64())
+			newUser, err = apiHelper.DBManager.DB.User.Create().
+				SetID(uid).
+				SetName(req.Name).
+				SetEmail(req.Email).
+				SetPasswordHash(string(passwordHash)).
+				SetNillableAvatarPath(nil).
+				Save(ctx)
+			if err == nil {
+				break
+			}
+			if !postgresql.IsConstraintError(err) {
+				break
+			}
+			harukiLogger.Warnf("UID collision on attempt %d, retrying...", attempt+1)
+		}
 		if err != nil {
-			harukiLogger.Errorf("Failed to create user: %v", err)
+			harukiLogger.Errorf("Failed to create user after retries: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
 		}
 		emailInfoRecord, err := apiHelper.DBManager.DB.EmailInfo.Create().

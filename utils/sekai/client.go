@@ -7,6 +7,7 @@ import (
 	harukiUtils "haruki-suite/utils"
 	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
+	"maps"
 	"math"
 	"strconv"
 	"strings"
@@ -69,7 +70,7 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	c.logger.Infof("Parsing JP server cookies...")
 	url := "https://issue.sekai.colorfulpalette.org/api/signature"
 	var lastErr error
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		status, headers, _, err := c.httpClient.Request(ctx, "POST", url, nil, nil)
 		if err != nil {
 			lastErr = err
@@ -102,7 +103,7 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 	serverName := strings.ToUpper(string(c.server))
 	c.logger.Infof("Parsing %s server app version...", serverName)
 	var lastErr error
-	for i := 0; i < retries; i++ {
+	for i := range retries {
 		status, _, body, err := c.httpClient.Request(ctx, "GET", c.versionURL, nil, nil)
 		if err != nil {
 			lastErr = err
@@ -151,12 +152,8 @@ func (c *HarukiSekaiClient) callAPI(ctx context.Context, path, method string, bo
 		return nil, 0, fmt.Errorf("client in error state: %s", c.errorMessage)
 	}
 	headers := make(map[string]string)
-	for k, v := range c.headers {
-		headers[k] = v
-	}
-	for k, v := range customHeaders {
-		headers[k] = v
-	}
+	maps.Copy(headers, c.headers)
+	maps.Copy(headers, customHeaders)
 	headers["X-Request-Id"] = uuid.NewString()
 	url := c.api + path
 	status, respHeaders, respBody, err := c.httpClient.Request(ctx, method, url, headers, body)
@@ -207,13 +204,13 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 		c.logger.Errorf("Failed to unpack inherit response: %v", err)
 		return err
 	}
-	unpacked, ok := unpackedAny.(map[string]interface{})
+	unpacked, ok := unpackedAny.(map[string]any)
 	if !ok {
 		c.logger.Errorf("Unexpected unpack result type")
 		return fmt.Errorf("unexpected unpack result type")
 	}
 	if returnUserID {
-		if after, ok := unpacked["afterUserGamedata"].(map[string]interface{}); ok {
+		if after, ok := unpacked["afterUserGamedata"].(map[string]any); ok {
 			if uidVal, exists := after["userId"]; exists {
 				switch uid := uidVal.(type) {
 				case int64:
@@ -269,7 +266,7 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		c.logger.Errorf("Failed to unpack login response: %v", err)
 		return err
 	}
-	unpacked, ok := unpackedAny.(map[string]interface{})
+	unpacked, ok := unpackedAny.(map[string]any)
 	if !ok {
 		c.logger.Errorf("Unexpected unpack result type")
 		return fmt.Errorf("unexpected unpack result type")

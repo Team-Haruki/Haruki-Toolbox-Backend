@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"haruki-suite/config"
 	harukiLogger "haruki-suite/utils/logger"
+	"slices"
 	"strings"
 	"time"
 
@@ -103,7 +104,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	tokenStr := auth
 	tokenStr = strings.TrimPrefix(tokenStr, "Bearer ")
 
-	parsed, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(t *jwt.Token) (interface{}, error) {
+	parsed, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
@@ -141,12 +142,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 // ====================== Other Helper Functions ======================
 
 func ArrayContains(arr []string, s string) bool {
-	for _, v := range arr {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(arr, s)
 }
 
 func StringContains(s, substr string) bool {

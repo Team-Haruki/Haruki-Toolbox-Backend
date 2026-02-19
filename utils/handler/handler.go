@@ -28,17 +28,17 @@ type DataHandler struct {
 	Logger         *harukiLogger.Logger
 }
 
-func cleanSuite(suite map[string]interface{}) map[string]interface{} {
+func cleanSuite(suite map[string]any) map[string]any {
 	removeKeys := harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys
 	for _, key := range removeKeys {
 		if _, ok := suite[key]; ok {
-			suite[key] = []interface{}{}
+			suite[key] = []any{}
 		}
 	}
 	return suite
 }
 
-func (h *DataHandler) PreHandleData(data map[string]interface{}, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) (map[string]interface{}, error) {
+func (h *DataHandler) PreHandleData(data map[string]any, expectedUserID *int64, parsedUserID *int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) (map[string]any, error) {
 	if err := validateUserIDMatch(expectedUserID, parsedUserID, dataType); err != nil {
 		return nil, err
 	}
@@ -72,16 +72,16 @@ func validateUserIDMatch(expectedUserID, parsedUserID *int64, dataType utils.Upl
 	return nil
 }
 
-func (h *DataHandler) validateMysekaiData(data map[string]interface{}, expectedUserID *int64, server utils.SupportedDataUploadServer) error {
-	updatedResources, ok := data["updatedResources"].(map[string]interface{})
+func (h *DataHandler) validateMysekaiData(data map[string]any, expectedUserID *int64, server utils.SupportedDataUploadServer) error {
+	updatedResources, ok := data["updatedResources"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("invalid data: missing updatedResources")
 	}
-	photos, ok := updatedResources["userMysekaiPhotos"].([]interface{})
+	photos, ok := updatedResources["userMysekaiPhotos"].([]any)
 	if !ok || len(photos) == 0 {
 		return fmt.Errorf("no userMysekaiPhotos found, it seems you may not have taken a photo yet")
 	}
-	firstPhoto, ok := photos[0].(map[string]interface{})
+	firstPhoto, ok := photos[0].(map[string]any)
 	if !ok {
 		return fmt.Errorf("invalid photo data")
 	}
@@ -145,7 +145,7 @@ func (h *DataHandler) verifyGameAccountExists(uid string, server utils.Supported
 	return nil
 }
 
-func validateSuiteData(data map[string]interface{}) error {
+func validateSuiteData(data map[string]any) error {
 	_, ok := data["userGamedata"]
 	_, ok2 := data["userProfile"]
 	if !ok && !ok2 {
@@ -154,8 +154,8 @@ func validateSuiteData(data map[string]interface{}) error {
 	return nil
 }
 
-func validateBirthdayPartyData(data map[string]interface{}) error {
-	updatedResources, ok := data["updatedResources"].(map[string]interface{})
+func validateBirthdayPartyData(data map[string]any) error {
+	updatedResources, ok := data["updatedResources"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("invalid data: missing updatedResources")
 	}
@@ -166,11 +166,11 @@ func validateBirthdayPartyData(data map[string]interface{}) error {
 	return nil
 }
 
-func extractBirthdayPartyData(data map[string]interface{}) map[string]interface{} {
-	updatedResources, _ := data["updatedResources"].(map[string]interface{})
+func extractBirthdayPartyData(data map[string]any) map[string]any {
+	updatedResources, _ := data["updatedResources"].(map[string]any)
 	harvestMaps := updatedResources["userMysekaiHarvestMaps"]
-	return map[string]interface{}{
-		"updatedResources": map[string]interface{}{
+	return map[string]any{
+		"updatedResources": map[string]any{
 			"userMysekaiHarvestMaps": harvestMaps,
 		},
 	}
@@ -182,7 +182,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		h.Logger.Errorf("unpack failed: %v", err)
 		return nil, err
 	}
-	unpackedMap, ok := unpacked.(map[string]interface{})
+	unpackedMap, ok := unpacked.(map[string]any)
 	if !ok {
 		h.Logger.Errorf("unpack returned unexpected type %T", unpacked)
 		return nil, fmt.Errorf("invalid unpacked data type")
@@ -216,7 +216,7 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 	return &utils.HandleDataResult{UserID: expectedUserID}, nil
 }
 
-func (h *DataHandler) checkForHTTPError(unpackedMap map[string]interface{}) *utils.HandleDataResult {
+func (h *DataHandler) checkForHTTPError(unpackedMap map[string]any) *utils.HandleDataResult {
 	status, ok := unpackedMap["httpStatus"]
 	if !ok {
 		return nil
@@ -229,7 +229,7 @@ func (h *DataHandler) checkForHTTPError(unpackedMap map[string]interface{}) *uti
 	}
 }
 
-func convertToStatusCode(status interface{}, logger *harukiLogger.Logger) int {
+func convertToStatusCode(status any, logger *harukiLogger.Logger) int {
 	switch v := status.(type) {
 	case float64:
 		return int(v)
@@ -255,8 +255,8 @@ func convertToStatusCode(status interface{}, logger *harukiLogger.Logger) int {
 	return 0
 }
 
-func extractUserIDFromGameData(unpackedMap map[string]interface{}, logger *harukiLogger.Logger) *int64 {
-	gameData, ok := unpackedMap["userGamedata"].(map[string]interface{})
+func extractUserIDFromGameData(unpackedMap map[string]any, logger *harukiLogger.Logger) *int64 {
+	gameData, ok := unpackedMap["userGamedata"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -267,7 +267,7 @@ func extractUserIDFromGameData(unpackedMap map[string]interface{}, logger *haruk
 	return convertToInt64Pointer(userIDValue, logger)
 }
 
-func convertToInt64Pointer(value interface{}, logger *harukiLogger.Logger) *int64 {
+func convertToInt64Pointer(value any, logger *harukiLogger.Logger) *int64 {
 	switch v := value.(type) {
 	case json.Number:
 		if id64, err := v.Int64(); err == nil {

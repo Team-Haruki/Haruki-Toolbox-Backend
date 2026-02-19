@@ -25,7 +25,19 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-		code := GenerateCode(true)
+		// Validate server
+		if _, err := utils.ParseSupportedDataUploadServer(string(req.Server)); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
+		}
+		// Validate game user ID
+		if strings.TrimSpace(req.UserID) == "" {
+			return harukiAPIHelper.ErrorBadRequest(c, "userId is required")
+		}
+		code, err := GenerateCode(true)
+		if err != nil {
+			harukiLogger.Errorf("Failed to generate code: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
+		}
 		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, string(req.Server), req.UserID)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
@@ -137,7 +149,10 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.ErrorBadRequest(c, "this account is bound by another user")
+			return harukiAPIHelper.ErrorForbidden(c, "this account is bound by another user")
+		}
+		if !existing.Verified {
+			return harukiAPIHelper.ErrorBadRequest(c, "binding is not verified yet")
 		}
 
 		_, err = existing.Update().
@@ -182,7 +197,7 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.ErrorBadRequest(c, "not authorized to delete this binding")
+			return harukiAPIHelper.ErrorForbidden(c, "not authorized to delete this binding")
 		}
 
 		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
@@ -273,12 +288,12 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		return harukiAPIHelper.ErrorInternal(c, "empty user profile response")
 	}
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err := sonic.Unmarshal(body, &data); err != nil {
 		harukiLogger.Errorf("Failed to unmarshal user profile: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to parse profile")
 	}
-	userProfile, ok := data["userProfile"].(map[string]interface{})
+	userProfile, ok := data["userProfile"].(map[string]any)
 	if !ok {
 		return harukiAPIHelper.ErrorInternal(c, "userProfile missing")
 	}
@@ -286,7 +301,7 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	if !ok {
 		return harukiAPIHelper.ErrorBadRequest(c, "verification code missing in user profile")
 	}
-	if !strings.Contains(word, expectedCode) {
+	if word != expectedCode {
 		return harukiAPIHelper.ErrorBadRequest(c, "verification code mismatch")
 	}
 	return nil

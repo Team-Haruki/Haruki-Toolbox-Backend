@@ -80,7 +80,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 		r.logger.Errorf("Failed to unpack suite response: %v", err)
 		return nil, NewDataRetrievalError("suite", "unpack", "failed to unpack response", err)
 	}
-	unpackedMap, ok := unpacked.(map[string]interface{})
+	unpackedMap, ok := unpacked.(map[string]any)
 	if !ok {
 		r.logger.Errorf("Unexpected suite response type")
 		return nil, NewDataRetrievalError("suite", "parse", "unexpected response type", nil)
@@ -123,7 +123,7 @@ func (r *HarukiSekaiDataRetriever) RefreshHome(ctx context.Context, friends bool
 		r.logger.Warnf("Information call failed: %v", err)
 	}
 	refreshPath := fmt.Sprintf("/user/%s/home/refresh", userIDStr)
-	var refreshData map[string]interface{}
+	var refreshData map[string]any
 	if login {
 		refreshData = RequestDataRefreshLogin
 	} else {
@@ -162,7 +162,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 	unpacked, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if err != nil {
 		r.logger.Warnf("Failed to unpack maintenance response: %v", err)
-	} else if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
+	} else if m, ok := unpacked.(map[string]any); ok && m["isOngoing"] == true {
 		r.logger.Infof("MySekai is under maintenance")
 		return nil, ErrMaintenance
 	}
@@ -173,7 +173,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte,
 		unpacked, err = Unpack(resp, harukiUtils.SupportedDataUploadServer(r.client.server))
 		if err != nil {
 			r.logger.Warnf("Failed to unpack room maintenance response: %v", err)
-		} else if m, ok := unpacked.(map[string]interface{}); ok && m["isOngoing"] == true {
+		} else if m, ok := unpacked.(map[string]any); ok && m["isOngoing"] == true {
 			r.logger.Infof("MySekai Room is under maintenance")
 			return nil, ErrMaintenance
 		}

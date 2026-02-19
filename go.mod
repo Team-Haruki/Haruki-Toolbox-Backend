@@ -1,6 +1,6 @@
 module haruki-suite
 
-go 1.25.1
+go 1.26.0
 
 require (
 	entgo.io/ent v0.14.5

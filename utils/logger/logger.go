@@ -72,7 +72,7 @@ func NewLogger(name string, level string, writer io.Writer) *Logger {
 	}
 }
 
-func (l *Logger) logf(level logLevel, format string, args ...interface{}) {
+func (l *Logger) logf(level logLevel, format string, args ...any) {
 	if level < l.level {
 		return
 	}
@@ -93,17 +93,17 @@ func (l *Logger) logf(level logLevel, format string, args ...interface{}) {
 	_, _ = fmt.Fprint(l.writer, line)
 }
 
-func (l *Logger) Debugf(format string, args ...interface{})    { l.logf(DEBUG, format, args...) }
-func (l *Logger) Infof(format string, args ...interface{})     { l.logf(INFO, format, args...) }
-func (l *Logger) Warnf(format string, args ...interface{})     { l.logf(WARN, format, args...) }
-func (l *Logger) Errorf(format string, args ...interface{})    { l.logf(ERROR, format, args...) }
-func (l *Logger) Criticalf(format string, args ...interface{}) { l.logf(CRITICAL, format, args...) }
-func (l *Logger) Exceptionf(format string, args ...interface{}) {
+func (l *Logger) Debugf(format string, args ...any)    { l.logf(DEBUG, format, args...) }
+func (l *Logger) Infof(format string, args ...any)     { l.logf(INFO, format, args...) }
+func (l *Logger) Warnf(format string, args ...any)     { l.logf(WARN, format, args...) }
+func (l *Logger) Errorf(format string, args ...any)    { l.logf(ERROR, format, args...) }
+func (l *Logger) Criticalf(format string, args ...any) { l.logf(CRITICAL, format, args...) }
+func (l *Logger) Exceptionf(format string, args ...any) {
 	l.logf(ERROR, "[EXCEPTION] "+format, args...)
 }
 
-func Debugf(format string, args ...interface{})    { DefaultLogger.Debugf(format, args...) }
-func Infof(format string, args ...interface{})     { DefaultLogger.Infof(format, args...) }
-func Warnf(format string, args ...interface{})     { DefaultLogger.Warnf(format, args...) }
-func Errorf(format string, args ...interface{})    { DefaultLogger.Errorf(format, args...) }
-func Criticalf(format string, args ...interface{}) { DefaultLogger.Criticalf(format, args...) }
+func Debugf(format string, args ...any)    { DefaultLogger.Debugf(format, args...) }
+func Infof(format string, args ...any)     { DefaultLogger.Infof(format, args...) }
+func Warnf(format string, args ...any)     { DefaultLogger.Warnf(format, args...) }
+func Errorf(format string, args ...any)    { DefaultLogger.Errorf(format, args...) }
+func Criticalf(format string, args ...any) { DefaultLogger.Criticalf(format, args...) }

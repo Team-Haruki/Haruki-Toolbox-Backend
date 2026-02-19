@@ -17,16 +17,16 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func GenerateCode(antiCensor bool) string {
+func GenerateCode(antiCensor bool) (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
-		return "000000"
+		return "", fmt.Errorf("failed to generate random code: %w", err)
 	}
 	code := fmt.Sprintf("%06d", n.Int64())
 	if antiCensor {
-		return strings.Join(strings.Split(code, ""), "/")
+		return strings.Join(strings.Split(code, ""), "/"), nil
 	}
-	return code
+	return code, nil
 }
 
 func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
@@ -41,7 +41,11 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 	if err != nil || !resp.Success {
 		return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 	}
-	code := GenerateCode(false)
+	code, err := GenerateCode(false)
+	if err != nil {
+		harukiLogger.Errorf("Failed to generate code: %v", err)
+		return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
+	}
 	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, 5*time.Minute); err != nil {
 		harukiLogger.Errorf("Failed to set redis cache: %v", err)
@@ -120,6 +124,29 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
 		}
 		userID := c.Locals("userID").(string)
+
+		// Check if this email is already used by another user
+		emailTaken, err := apiHelper.DBManager.DB.User.Query().
+			Where(user.EmailEQ(req.Email), user.IDNEQ(userID)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to check email availability: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to check email availability")
+		}
+		if emailTaken {
+			return harukiAPIHelper.ErrorBadRequest(c, "email already in use by another account")
+		}
+		emailInfoTaken, err := apiHelper.DBManager.DB.EmailInfo.Query().
+			Where(emailinfo.EmailEQ(req.Email), emailinfo.Not(emailinfo.HasUserWith(user.IDEQ(userID)))).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to check email info availability: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to check email availability")
+		}
+		if emailInfoTaken {
+			return harukiAPIHelper.ErrorBadRequest(c, "email already verified by another account")
+		}
+
 		if _, err := apiHelper.DBManager.DB.User.
 			Update().
 			Where(user.IDEQ(userID)).

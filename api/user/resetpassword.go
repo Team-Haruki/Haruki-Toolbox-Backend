@@ -34,6 +34,16 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if err != nil || !resp.Success {
 			return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 		}
+		// Verify user exists before sending reset email
+		exists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(payload.Email)).Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query user: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if !exists {
+			// Return success to avoid email enumeration, but don't actually send
+			return harukiAPIHelper.SuccessResponse[string](c, "Reset password email sent", nil)
+		}
 		resetSecret := uuid.NewString()
 		resetURL := fmt.Sprintf("%s/user/reset-password/%s?email=%s", config.Cfg.UserSystem.FrontendURL, resetSecret, payload.Email)
 		redisKey := harukiRedis.BuildResetPasswordKey(payload.Email)
@@ -77,6 +87,12 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err != nil {
 			harukiLogger.Errorf("Failed to query user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to locate user")
+		}
+		if len(payload.Password) < 8 {
+			return harukiAPIHelper.ErrorBadRequest(c, "password must be at least 8 characters")
+		}
+		if len([]byte(payload.Password)) > 72 {
+			return harukiAPIHelper.ErrorBadRequest(c, "password is too long (max 72 bytes)")
 		}
 		hashed, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {

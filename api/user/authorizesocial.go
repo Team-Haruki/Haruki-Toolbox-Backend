@@ -39,6 +39,14 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
+		// Validate platform
+		switch harukiAPIHelper.SocialPlatform(payload.Platform) {
+		case harukiAPIHelper.SocialPlatformQQ, harukiAPIHelper.SocialPlatformQQBot,
+			harukiAPIHelper.SocialPlatformDiscord, harukiAPIHelper.SocialPlatformTelegram:
+			// valid
+		default:
+			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
+		}
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
 		existing, err := client.Query().

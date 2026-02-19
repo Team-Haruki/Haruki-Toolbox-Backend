@@ -88,7 +88,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if err != nil {
 			return err
 		}
-		var resp interface{}
+		var resp any
 		if dataType != harukiUtils.UploadDataTypeMysekai {
 			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
 			if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
@@ -119,7 +119,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	}
 }
 
-func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (interface{}, error) {
+func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (any, error) {
 	ctx := c.Context()
 
 	var keys []string
@@ -163,7 +163,7 @@ func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	return buildSuiteResponse(result, keys), nil
 }
 
-func handleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (interface{}, error) {
+func handleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
 	ctx := c.Context()
 
 	var keys []string

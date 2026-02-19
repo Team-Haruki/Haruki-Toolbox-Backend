@@ -211,7 +211,7 @@ func (c *SekaiCryptor) Unpack(content []byte) (any, error) {
 func sanitizeMapValues(m map[string]any) {
 	for k, v := range m {
 		switch child := v.(type) {
-		case map[interface{}]interface{}:
+		case map[any]any:
 			m[k] = convertUnpackResult(child)
 		case map[string]any:
 			sanitizeMapValues(child)
@@ -224,7 +224,7 @@ func sanitizeMapValues(m map[string]any) {
 func sanitizeSliceValues(s []any) {
 	for i, v := range s {
 		switch child := v.(type) {
-		case map[interface{}]interface{}:
+		case map[any]any:
 			s[i] = convertUnpackResult(child)
 		case map[string]any:
 			sanitizeMapValues(child)
@@ -236,7 +236,7 @@ func sanitizeSliceValues(s []any) {
 
 func convertUnpackResult(v any) any {
 	switch x := v.(type) {
-	case map[interface{}]interface{}:
+	case map[any]any:
 		m := make(map[string]any, len(x))
 		for k, val := range x {
 			if keyStr, ok := k.(string); ok {
@@ -283,7 +283,7 @@ func getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
 	return cryptor, nil
 }
 
-func Pack(content interface{}, server utils.SupportedDataUploadServer) ([]byte, error) {
+func Pack(content any, server utils.SupportedDataUploadServer) ([]byte, error) {
 	cryptor, err := getCryptor(server)
 	if err != nil {
 		return nil, err
@@ -295,7 +295,7 @@ func Pack(content interface{}, server utils.SupportedDataUploadServer) ([]byte, 
 	return result, nil
 }
 
-func Unpack(content []byte, server utils.SupportedDataUploadServer) (interface{}, error) {
+func Unpack(content []byte, server utils.SupportedDataUploadServer) (any, error) {
 	cryptor, err := getCryptor(server)
 	if err != nil {
 		return nil, err

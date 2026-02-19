@@ -44,6 +44,10 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			if err != nil {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
 			}
+			// Limit avatar to 2MB
+			if len(decodedAvatar) > 2*1024*1024 {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image is too large (max 2MB)", nil)
+			}
 			detectedMIME := http.DetectContentType(decodedAvatar)
 			allowedMIMEs := map[string]string{
 				"image/png":  ".png",
@@ -68,7 +72,11 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			ub = ub.SetAvatarPath(avatarFileName)
 		}
 		if payload.Name != nil {
-			ub = ub.SetName(*payload.Name)
+			name := strings.TrimSpace(*payload.Name)
+			if len(name) == 0 || len(name) > 50 {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Name must be 1-50 characters", nil)
+			}
+			ub = ub.SetName(name)
 		}
 		_, err := ub.Save(ctx)
 		if err != nil {
