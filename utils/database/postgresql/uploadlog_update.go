@@ -166,6 +166,11 @@ func (_u *UploadLogUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UploadLogUpdate) check() error {
+	if v, ok := _u.mutation.Server(); ok {
+		if err := uploadlog.ServerValidator(v); err != nil {
+			return &ValidationError{Name: "server", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.server": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.GameUserID(); ok {
 		if err := uploadlog.GameUserIDValidator(v); err != nil {
 			return &ValidationError{Name: "game_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.game_user_id": %w`, err)}
@@ -174,6 +179,11 @@ func (_u *UploadLogUpdate) check() error {
 	if v, ok := _u.mutation.ToolboxUserID(); ok {
 		if err := uploadlog.ToolboxUserIDValidator(v); err != nil {
 			return &ValidationError{Name: "toolbox_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.toolbox_user_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DataType(); ok {
+		if err := uploadlog.DataTypeValidator(v); err != nil {
+			return &ValidationError{Name: "data_type", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.data_type": %w`, err)}
 		}
 	}
 	return nil
@@ -386,6 +396,11 @@ func (_u *UploadLogUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UploadLogUpdateOne) check() error {
+	if v, ok := _u.mutation.Server(); ok {
+		if err := uploadlog.ServerValidator(v); err != nil {
+			return &ValidationError{Name: "server", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.server": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.GameUserID(); ok {
 		if err := uploadlog.GameUserIDValidator(v); err != nil {
 			return &ValidationError{Name: "game_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.game_user_id": %w`, err)}
@@ -394,6 +409,11 @@ func (_u *UploadLogUpdateOne) check() error {
 	if v, ok := _u.mutation.ToolboxUserID(); ok {
 		if err := uploadlog.ToolboxUserIDValidator(v); err != nil {
 			return &ValidationError{Name: "toolbox_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.toolbox_user_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DataType(); ok {
+		if err := uploadlog.DataTypeValidator(v); err != nil {
+			return &ValidationError{Name: "data_type", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.data_type": %w`, err)}
 		}
 	}
 	return nil

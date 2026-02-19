@@ -72,6 +72,10 @@ func init() {
 	socialplatforminfo.DefaultVerified = socialplatforminfoDescVerified.Default.(bool)
 	uploadlogFields := schema.UploadLog{}.Fields()
 	_ = uploadlogFields
+	// uploadlogDescServer is the schema descriptor for server field.
+	uploadlogDescServer := uploadlogFields[0].Descriptor()
+	// uploadlog.ServerValidator is a validator for the "server" field. It is called by the builders before save.
+	uploadlog.ServerValidator = uploadlogDescServer.Validators[0].(func(string) error)
 	// uploadlogDescGameUserID is the schema descriptor for game_user_id field.
 	uploadlogDescGameUserID := uploadlogFields[1].Descriptor()
 	// uploadlog.GameUserIDValidator is a validator for the "game_user_id" field. It is called by the builders before save.
@@ -80,6 +84,10 @@ func init() {
 	uploadlogDescToolboxUserID := uploadlogFields[2].Descriptor()
 	// uploadlog.ToolboxUserIDValidator is a validator for the "toolbox_user_id" field. It is called by the builders before save.
 	uploadlog.ToolboxUserIDValidator = uploadlogDescToolboxUserID.Validators[0].(func(string) error)
+	// uploadlogDescDataType is the schema descriptor for data_type field.
+	uploadlogDescDataType := uploadlogFields[3].Descriptor()
+	// uploadlog.DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
+	uploadlog.DataTypeValidator = uploadlogDescDataType.Validators[0].(func(string) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.

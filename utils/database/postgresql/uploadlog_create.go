@@ -107,6 +107,11 @@ func (_c *UploadLogCreate) check() error {
 	if _, ok := _c.mutation.Server(); !ok {
 		return &ValidationError{Name: "server", err: errors.New(`postgresql: missing required field "UploadLog.server"`)}
 	}
+	if v, ok := _c.mutation.Server(); ok {
+		if err := uploadlog.ServerValidator(v); err != nil {
+			return &ValidationError{Name: "server", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.server": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.GameUserID(); !ok {
 		return &ValidationError{Name: "game_user_id", err: errors.New(`postgresql: missing required field "UploadLog.game_user_id"`)}
 	}
@@ -122,6 +127,11 @@ func (_c *UploadLogCreate) check() error {
 	}
 	if _, ok := _c.mutation.DataType(); !ok {
 		return &ValidationError{Name: "data_type", err: errors.New(`postgresql: missing required field "UploadLog.data_type"`)}
+	}
+	if v, ok := _c.mutation.DataType(); ok {
+		if err := uploadlog.DataTypeValidator(v); err != nil {
+			return &ValidationError{Name: "data_type", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.data_type": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.UploadMethod(); !ok {
 		return &ValidationError{Name: "upload_method", err: errors.New(`postgresql: missing required field "UploadLog.upload_method"`)}
