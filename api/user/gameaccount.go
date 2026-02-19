@@ -77,10 +77,12 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return err
 		}
 
-		if resp := checkIfAlreadyVerified(c, ctx, apiHelper, existing, userID); resp != nil {
+		if resp := checkExistingBinding(c, ctx, apiHelper, existing, userID); resp != nil {
 			return resp
 		}
-		code, err := getVerificationCode(ctx, apiHelper, userID, string(req.Server), req.UserID)
+		// Use URL params (serverStr, gameUserIDStr) for verification code lookup
+		// to stay consistent with queryExistingBinding and verifyGameAccountOwnership
+		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
@@ -93,6 +95,11 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			harukiLogger.Errorf("Failed to save game account binding: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
+
+		// Delete verification code from Redis after successful binding to prevent reuse
+		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
+		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, storageKey)
+
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get user bindings: %v", err)
@@ -215,11 +222,17 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return existing, nil
 }
 
-func checkIfAlreadyVerified(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
-	if existing != nil && existing.Verified {
-		if existing.Edges.User.ID != userID {
-			return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
-		}
+func checkExistingBinding(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
+	if existing == nil {
+		return nil
+	}
+	// If this binding belongs to a different user, always block regardless of verification status.
+	// Only the original owner can delete the binding to free it for others.
+	if existing.Edges.User.ID != userID {
+		return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
+	}
+	// If it belongs to the current user and is already verified, return early success.
+	if existing.Verified {
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get user bindings: %v", err)
@@ -230,6 +243,7 @@ func checkIfAlreadyVerified(c fiber.Ctx, ctx context.Context, apiHelper *harukiA
 		}
 		return harukiAPIHelper.SuccessResponse(c, "account already verified", &ud)
 	}
+	// existing belongs to current user but not yet verified → allow re-verification
 	return nil
 }
 
@@ -280,13 +294,15 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 
 func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.GameAccountBindingPayload) error {
 	var err error
-	if existing != nil {
+	if existing != nil && existing.Edges.User.ID == userID {
+		// Update existing binding that belongs to the current user
 		_, err = existing.Update().
 			SetVerified(true).
 			SetSuite(req.Suite).
 			SetMysekai(req.MySekai).
 			Save(ctx)
 	} else {
+		// Create new binding for the current user
 		_, err = apiHelper.DBManager.DB.GameAccountBinding.
 			Create().
 			SetServer(serverStr).
