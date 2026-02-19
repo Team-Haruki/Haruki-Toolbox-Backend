@@ -7,45 +7,44 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func RestoreCompactData(data bson.M) []map[string]interface{} {
-	var enumRaw bson.M
-	if val, ok := data["__ENUM__"]; ok {
-		switch m := val.(type) {
-		case bson.M:
-			enumRaw = m
-		case map[string]interface{}:
-			enumRaw = make(bson.M)
-			for k, v := range m {
-				enumRaw[k] = v
+var userGamedataAllowedFields = []string{"userId", "name", "deck", "exp", "totalExp", "coin"}
+
+func RestoreCompactData(data bson.D) []bson.D {
+	var enumRaw bson.D
+	for _, elem := range data {
+		if elem.Key == "__ENUM__" {
+			switch m := elem.Value.(type) {
+			case bson.D:
+				enumRaw = m
+			case bson.M:
+				enumRaw = bsonMToD(m)
+			case map[string]interface{}:
+				enumRaw = mapToD(m)
+			default:
+				harukiLogger.Warnf("RestoreCompactData: unknown type for __ENUM__: %T", elem.Value)
 			}
-		case bson.D:
-			enumRaw = make(bson.M, len(m))
-			for _, elem := range m {
-				enumRaw[elem.Key] = elem.Value
-			}
-		default:
-			harukiLogger.Warnf("RestoreCompactData: unknown type for __ENUM__: %T", val)
+			break
 		}
 	}
 	columnLabels, columns := extractColumnsAndLabels(data, enumRaw)
 	if len(columns) == 0 {
-		return []map[string]interface{}{}
+		return []bson.D{}
 	}
 	numEntries := calculateMinEntries(columns)
 	return buildResultEntries(numEntries, columnLabels, columns)
 }
 
-func extractColumnsAndLabels(data bson.M, enumRaw bson.M) ([]string, [][]interface{}) {
+func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]string, [][]interface{}) {
 	var columnLabels []string
 	var columns [][]interface{}
-	for key, value := range data {
-		if key == "__ENUM__" {
+	for _, elem := range data {
+		if elem.Key == "__ENUM__" {
 			continue
 		}
-		columnLabels = append(columnLabels, key)
-		dataColumn := convertToInterfaceSlice(value)
+		columnLabels = append(columnLabels, elem.Key)
+		dataColumn := convertToInterfaceSlice(elem.Value)
 		if enumRaw != nil {
-			if enumColumn := processEnumColumn(enumRaw, key, dataColumn); enumColumn != nil {
+			if enumColumn := processEnumColumn(enumRaw, elem.Key, dataColumn); enumColumn != nil {
 				columns = append(columns, enumColumn)
 				continue
 			}
@@ -66,9 +65,17 @@ func convertToInterfaceSlice(value interface{}) []interface{} {
 	}
 }
 
-func processEnumColumn(enumRaw bson.M, key string, dataColumn []interface{}) []interface{} {
-	enumColumnRaw, ok := enumRaw[key]
-	if !ok {
+func processEnumColumn(enumRaw bson.D, key string, dataColumn []interface{}) []interface{} {
+	var enumColumnRaw interface{}
+	found := false
+	for _, elem := range enumRaw {
+		if elem.Key == key {
+			enumColumnRaw = elem.Value
+			found = true
+			break
+		}
+	}
+	if !found {
 		return nil
 	}
 	enumSlice := convertToInterfaceSlice(enumColumnRaw)
@@ -116,51 +123,61 @@ func calculateMinEntries(columns [][]interface{}) int {
 	return numEntries
 }
 
-func buildResultEntries(numEntries int, columnLabels []string, columns [][]interface{}) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0, numEntries)
+func buildResultEntries(numEntries int, columnLabels []string, columns [][]interface{}) []bson.D {
+	result := make([]bson.D, 0, numEntries)
 	for i := 0; i < numEntries; i++ {
-		entry := make(map[string]interface{}, len(columnLabels))
+		entry := make(bson.D, 0, len(columnLabels))
 		for j, key := range columnLabels {
+			var val interface{}
 			if i < len(columns[j]) {
-				entry[key] = columns[j][i]
-			} else {
-				entry[key] = nil
+				val = columns[j][i]
 			}
+			entry = append(entry, bson.E{Key: key, Value: val})
 		}
 		result = append(result, entry)
 	}
-
 	return result
 }
 
-func GetValueFromResult(result bson.M, key string) interface{} {
-	if val, ok := result[key]; ok {
-		return val
+func GetValueFromResult(result bson.D, key string) interface{} {
+	for _, elem := range result {
+		if elem.Key == key {
+			return elem.Value
+		}
 	}
 	if len(key) == 0 {
-		return []interface{}{}
+		return bson.A{}
 	}
 	compactName := fmt.Sprintf("compact%s%s", string(key[0]-32), key[1:])
-	val, ok := result[compactName]
-	if !ok {
-		return []interface{}{}
-	}
-	switch m := val.(type) {
-	case bson.M:
-		return RestoreCompactData(m)
-	case map[string]interface{}:
-		bm := make(bson.M)
-		for k, v := range m {
-			bm[k] = v
+	for _, elem := range result {
+		if elem.Key == compactName {
+			switch m := elem.Value.(type) {
+			case bson.D:
+				return RestoreCompactData(m)
+			case bson.M:
+				return RestoreCompactData(bsonMToD(m))
+			case map[string]interface{}:
+				return RestoreCompactData(mapToD(m))
+			default:
+				return bson.A{}
+			}
 		}
-		return RestoreCompactData(bm)
-	case bson.D:
-		bm := make(bson.M, len(m))
-		for _, elem := range m {
-			bm[elem.Key] = elem.Value
-		}
-		return RestoreCompactData(bm)
-	default:
-		return []interface{}{}
 	}
+	return bson.A{}
+}
+
+func bsonMToD(m bson.M) bson.D {
+	d := make(bson.D, 0, len(m))
+	for k, v := range m {
+		d = append(d, bson.E{Key: k, Value: v})
+	}
+	return d
+}
+
+func mapToD(m map[string]interface{}) bson.D {
+	d := make(bson.D, 0, len(m))
+	for k, v := range m {
+		d = append(d, bson.E{Key: k, Value: v})
+	}
+	return d
 }

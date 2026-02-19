@@ -227,7 +227,6 @@ func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiI
 	suite, suiteErr := r.RetrieveSuite(ctx)
 	if suiteErr != nil {
 		r.logger.Warnf("Suite retrieval failed: %v", suiteErr)
-		// Continue to try other data retrieval
 	}
 	if err := r.RefreshHome(ctx, false, false); err != nil {
 		r.logger.Warnf("Final home refresh failed (non-critical): %v", err)

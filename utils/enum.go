@@ -79,7 +79,7 @@ const (
 )
 
 const (
-	MaxBodySize = 30 * 1024 * 1024 // 30 MB
+	MaxBodySize = 30 * 1024 * 1024
 )
 
 var AllowedAvatarMIMETypes = map[string]string{
