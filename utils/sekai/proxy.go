@@ -6,6 +6,7 @@ import (
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiHttp "haruki-suite/utils/http"
+	"maps"
 	urlParse "net/url"
 	"strings"
 	"time"
@@ -99,9 +100,7 @@ func HarukiSekaiProxyCallAPI(
 	rawBody := make([]byte, len(respBody))
 	copy(rawBody, respBody)
 	newHeaders := make(map[string]string, len(respHeaders))
-	for k, v := range respHeaders {
-		newHeaders[k] = v
-	}
+	maps.Copy(newHeaders, respHeaders)
 	return &harukiUtils.SekaiDataRetrieverResponse{
 		RawBody:    rawBody,
 		StatusCode: statusCode,

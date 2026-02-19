@@ -18,7 +18,7 @@ func RestoreCompactData(data bson.D) []bson.D {
 				enumRaw = m
 			case bson.M:
 				enumRaw = bsonMToD(m)
-			case map[string]interface{}:
+			case map[string]any:
 				enumRaw = mapToD(m)
 			default:
 				harukiLogger.Warnf("RestoreCompactData: unknown type for __ENUM__: %T", elem.Value)
@@ -34,9 +34,9 @@ func RestoreCompactData(data bson.D) []bson.D {
 	return buildResultEntries(numEntries, columnLabels, columns)
 }
 
-func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]string, [][]interface{}) {
+func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]string, [][]any) {
 	var columnLabels []string
-	var columns [][]interface{}
+	var columns [][]any
 	for _, elem := range data {
 		if elem.Key == "__ENUM__" {
 			continue
@@ -54,19 +54,19 @@ func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]string, [][]interfa
 	return columnLabels, columns
 }
 
-func convertToInterfaceSlice(value interface{}) []interface{} {
+func convertToInterfaceSlice(value any) []any {
 	switch v := value.(type) {
-	case []interface{}:
+	case []any:
 		return v
 	case bson.A:
 		return v
 	default:
-		return []interface{}{}
+		return []any{}
 	}
 }
 
-func processEnumColumn(enumRaw bson.D, key string, dataColumn []interface{}) []interface{} {
-	var enumColumnRaw interface{}
+func processEnumColumn(enumRaw bson.D, key string, dataColumn []any) []any {
+	var enumColumnRaw any
 	found := false
 	for _, elem := range enumRaw {
 		if elem.Key == key {
@@ -82,7 +82,7 @@ func processEnumColumn(enumRaw bson.D, key string, dataColumn []interface{}) []i
 	if enumSlice == nil {
 		return nil
 	}
-	columnValues := make([]interface{}, 0, len(dataColumn))
+	columnValues := make([]any, 0, len(dataColumn))
 	for _, v := range dataColumn {
 		if v == nil {
 			columnValues = append(columnValues, nil)
@@ -98,7 +98,7 @@ func processEnumColumn(enumRaw bson.D, key string, dataColumn []interface{}) []i
 	return columnValues
 }
 
-func convertToInt(v interface{}) int {
+func convertToInt(v any) int {
 	switch t := v.(type) {
 	case int:
 		return t
@@ -113,7 +113,7 @@ func convertToInt(v interface{}) int {
 	}
 }
 
-func calculateMinEntries(columns [][]interface{}) int {
+func calculateMinEntries(columns [][]any) int {
 	numEntries := len(columns[0])
 	for _, col := range columns {
 		if len(col) < numEntries {
@@ -123,12 +123,12 @@ func calculateMinEntries(columns [][]interface{}) int {
 	return numEntries
 }
 
-func buildResultEntries(numEntries int, columnLabels []string, columns [][]interface{}) []bson.D {
+func buildResultEntries(numEntries int, columnLabels []string, columns [][]any) []bson.D {
 	result := make([]bson.D, 0, numEntries)
-	for i := 0; i < numEntries; i++ {
+	for i := range numEntries {
 		entry := make(bson.D, 0, len(columnLabels))
 		for j, key := range columnLabels {
-			var val interface{}
+			var val any
 			if i < len(columns[j]) {
 				val = columns[j][i]
 			}
@@ -139,7 +139,7 @@ func buildResultEntries(numEntries int, columnLabels []string, columns [][]inter
 	return result
 }
 
-func GetValueFromResult(result bson.D, key string) interface{} {
+func GetValueFromResult(result bson.D, key string) any {
 	for _, elem := range result {
 		if elem.Key == key {
 			return elem.Value
@@ -156,7 +156,7 @@ func GetValueFromResult(result bson.D, key string) interface{} {
 				return RestoreCompactData(m)
 			case bson.M:
 				return RestoreCompactData(bsonMToD(m))
-			case map[string]interface{}:
+			case map[string]any:
 				return RestoreCompactData(mapToD(m))
 			default:
 				return bson.A{}
@@ -174,7 +174,7 @@ func bsonMToD(m bson.M) bson.D {
 	return d
 }
 
-func mapToD(m map[string]interface{}) bson.D {
+func mapToD(m map[string]any) bson.D {
 	d := make(bson.D, 0, len(m))
 	for k, v := range m {
 		d = append(d, bson.E{Key: k, Value: v})

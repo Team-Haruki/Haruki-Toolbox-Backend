@@ -265,7 +265,7 @@ func HandleProxyUpload(
 			if err != nil {
 				return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 			}
-			dataMap, ok := unpackedData.(map[string]interface{})
+			dataMap, ok := unpackedData.(map[string]any)
 			if !ok {
 				return fiber.NewError(fiber.StatusInternalServerError, "invalid response data format")
 			}

@@ -16,6 +16,7 @@ import (
 	harukiSekaiAPIClient "haruki-suite/utils/sekaiapi"
 	harukiSMTP "haruki-suite/utils/smtp"
 	harukiVersion "haruki-suite/version"
+	"strings"
 
 	"io"
 	"os"
@@ -99,9 +100,10 @@ func main() {
 		}
 		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
 
-		cspConnectSrc := "'self'"
+		var cspConnectSrc strings.Builder
+		cspConnectSrc.WriteString("'self'")
 		for _, src := range harukiConfig.Cfg.Backend.CSPConnectSrc {
-			cspConnectSrc += " " + src
+			cspConnectSrc.WriteString(" " + src)
 		}
 
 		c.Set("Content-Security-Policy",
@@ -110,7 +112,7 @@ func main() {
 				"frame-src https://challenges.cloudflare.com; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: https:; "+
-				"connect-src "+cspConnectSrc+"; "+
+				"connect-src "+cspConnectSrc.String()+"; "+
 				"object-src 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self';",

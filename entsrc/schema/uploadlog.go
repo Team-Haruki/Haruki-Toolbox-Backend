@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"slices"
 
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
@@ -18,10 +19,8 @@ func (UploadLog) Fields() []ent.Field {
 		field.String("server").
 			Comment("jp en tw kr cn").
 			Validate(func(s string) error {
-				for _, v := range validServers {
-					if s == v {
-						return nil
-					}
+				if slices.Contains(validServers, s) {
+					return nil
 				}
 				return fmt.Errorf("invalid server: %s", s)
 			}),
@@ -33,10 +32,8 @@ func (UploadLog) Fields() []ent.Field {
 		field.String("data_type").
 			Comment("suite mysekai mysekai_birthday_party").
 			Validate(func(s string) error {
-				for _, v := range validDataTypes {
-					if s == v {
-						return nil
-					}
+				if slices.Contains(validDataTypes, s) {
+					return nil
 				}
 				return fmt.Errorf("invalid data_type: %s", s)
 			}),

@@ -2,6 +2,7 @@ package ios
 
 import (
 	harukiUtils "haruki-suite/utils"
+	"strings"
 )
 
 type ProxyApp string
@@ -100,22 +101,22 @@ func (app ProxyApp) ContentType() string {
 }
 
 func (req *ModuleRequest) FileName() string {
-	result := ""
+	var result strings.Builder
 	for i, r := range req.Regions {
 		if i > 0 {
-			result += "-"
+			result.WriteString("-")
 		}
-		result += string(r)
+		result.WriteString(string(r))
 	}
-	result += "-haruki-toolbox-"
+	result.WriteString("-haruki-toolbox-")
 	for i, dt := range req.DataTypes {
 		if i > 0 {
-			result += "-"
+			result.WriteString("-")
 		}
-		result += string(dt)
+		result.WriteString(string(dt))
 	}
-	result += "." + string(req.App)
-	return result
+	result.WriteString("." + string(req.App))
+	return result.String()
 }
 
 var regionNames = map[harukiUtils.SupportedDataUploadServer]string{

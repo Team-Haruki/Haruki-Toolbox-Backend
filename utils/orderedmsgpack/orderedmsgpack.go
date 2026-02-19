@@ -94,7 +94,7 @@ func (e *OrderedMapEncoder) Code() int8 {
 }
 
 func (e *OrderedMapEncoder) Type() reflect.Type {
-	return reflect.TypeOf(orderedmap.OrderedMap{})
+	return reflect.TypeFor[orderedmap.OrderedMap]()
 }
 
 func (e *OrderedMapEncoder) CalcByteSize(value reflect.Value) (int, error) {
@@ -126,7 +126,7 @@ func (e *OrderedMapStreamEncoder) Code() int8 {
 }
 
 func (e *OrderedMapStreamEncoder) Type() reflect.Type {
-	return reflect.TypeOf(orderedmap.OrderedMap{})
+	return reflect.TypeFor[orderedmap.OrderedMap]()
 }
 
 func (e *OrderedMapStreamEncoder) Write(w ext.StreamWriter, value reflect.Value) error {

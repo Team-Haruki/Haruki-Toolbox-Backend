@@ -45,7 +45,7 @@ func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
 	return fmt.Sprintf("%s:%s:query=%s", namespace, fullPath, queryHash)
 }
 
-func (r *HarukiRedisManager) SetCache(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func (r *HarukiRedisManager) SetCache(ctx context.Context, key string, value any, ttl time.Duration) error {
 	data, err := sonic.Marshal(value)
 	if err != nil {
 		harukiLogger.Errorf("Failed to marshal cache value for key %s: %v", key, err)
@@ -58,7 +58,7 @@ func (r *HarukiRedisManager) SetCache(ctx context.Context, key string, value int
 	return nil
 }
 
-func (r *HarukiRedisManager) GetCache(ctx context.Context, key string, out interface{}) (bool, error) {
+func (r *HarukiRedisManager) GetCache(ctx context.Context, key string, out any) (bool, error) {
 	val, err := r.Redis.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
 		return false, nil

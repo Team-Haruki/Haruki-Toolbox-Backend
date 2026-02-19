@@ -213,7 +213,7 @@ func decodeValue(r *bytes.Reader) (any, error) {
 func decodeMap(r *bytes.Reader, n int) (*orderedmap.OrderedMap, error) {
 	om := orderedmap.New()
 	om.SetEscapeHTML(false)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		keyVal, err := decodeValue(r)
 		if err != nil {
 			return nil, fmt.Errorf("decode map key %d: %w", i, err)
@@ -234,7 +234,7 @@ func decodeMap(r *bytes.Reader, n int) (*orderedmap.OrderedMap, error) {
 // decodeArray reads n elements and returns a []any.
 func decodeArray(r *bytes.Reader, n int) ([]any, error) {
 	arr := make([]any, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		val, err := decodeValue(r)
 		if err != nil {
 			return nil, fmt.Errorf("decode array element %d: %w", i, err)

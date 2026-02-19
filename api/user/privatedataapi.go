@@ -35,8 +35,8 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		userIDStr := c.Params("user_id")
 		platform := c.Query("platform")
 		platformUserID := c.Query("platform_user_id")
-		if (platform != "" && platformUserID == "") || (platform == "" && platformUserID != "") {
-			return harukiApiHelper.ErrorBadRequest(c, "both platform and platform_user_id must be provided together")
+		if platform == "" || platformUserID == "" {
+			return harukiApiHelper.ErrorBadRequest(c, "both platform and platform_user_id are required")
 		}
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
@@ -97,14 +97,14 @@ func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRoute
 	return false
 }
 
-func processRequestKeys(c fiber.Ctx, result map[string]interface{}) error {
+func processRequestKeys(c fiber.Ctx, result map[string]any) error {
 	requestKey := c.Query("key")
 	if requestKey != "" {
 		keys := strings.Split(requestKey, ",")
 		if len(keys) == 1 {
 			return c.JSON(result[keys[0]])
 		}
-		data := make(map[string]interface{})
+		data := make(map[string]any)
 		for _, k := range keys {
 			data[k] = result[k]
 		}

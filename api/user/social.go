@@ -54,6 +54,19 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		if !ok {
 			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
 		}
+		// Re-check for existing binding after OTP verification to prevent TOCTOU race
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(
+				string(harukiAPIHelper.SocialPlatformQQ)),
+				socialplatforminfo.PlatformUserID(req.QQ)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if exists {
+			return harukiAPIHelper.ErrorBadRequest(c, "QQ binding already exists")
+		}
 		userID := c.Locals("userID").(string)
 		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.
 			Create().
@@ -96,7 +109,19 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if exists {
 			return harukiAPIHelper.ErrorBadRequest(c, "binding already exists")
 		}
-		code := GenerateCode(false)
+		// Validate platform
+		switch req.Platform {
+		case harukiAPIHelper.SocialPlatformQQ, harukiAPIHelper.SocialPlatformQQBot,
+			harukiAPIHelper.SocialPlatformDiscord, harukiAPIHelper.SocialPlatformTelegram:
+			// valid
+		default:
+			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
+		}
+		code, err := GenerateCode(false)
+		if err != nil {
+			harukiLogger.Errorf("Failed to generate code: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
+		}
 		storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(req.Platform), req.UserID)
 		statusToken := uuid.NewString()
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
@@ -246,6 +271,19 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		}
 		if !found {
 			return harukiAPIHelper.ErrorBadRequest(c, "status token mapping expired or not found")
+		}
+
+		// Re-check for existing binding after OTP verification to prevent TOCTOU race
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(string(req.Platform)),
+				socialplatforminfo.PlatformUserID(req.UserID)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if exists {
+			return harukiAPIHelper.ErrorBadRequest(c, "this social platform account is already bound")
 		}
 
 		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.

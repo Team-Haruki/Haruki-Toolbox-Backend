@@ -21,7 +21,7 @@ func ValidateWebhookUser(secretKey string, manager *harukiMongo.MongoDBManager) 
 		if jwtToken == "" {
 			return harukiAPIHelper.ErrorUnauthorized(c, "Missing X-Haruki-Suite-Webhook-Token header")
 		}
-		token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (any, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fiber.ErrForbidden
 			}
