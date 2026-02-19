@@ -23,7 +23,7 @@ type UploadLog struct {
 	GameUserID string `json:"game_user_id,omitempty"`
 	// ToolboxUserID holds the value of the "toolbox_user_id" field.
 	ToolboxUserID string `json:"toolbox_user_id,omitempty"`
-	// suite mysekai mysekai_birthday
+	// suite mysekai mysekai_birthday_party
 	DataType string `json:"data_type,omitempty"`
 	// manual harukiproxy iosproxy inherit
 	UploadMethod string `json:"upload_method,omitempty"`

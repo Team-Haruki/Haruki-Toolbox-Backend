@@ -52,10 +52,14 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// ServerValidator is a validator for the "server" field. It is called by the builders before save.
+	ServerValidator func(string) error
 	// GameUserIDValidator is a validator for the "game_user_id" field. It is called by the builders before save.
 	GameUserIDValidator func(string) error
 	// ToolboxUserIDValidator is a validator for the "toolbox_user_id" field. It is called by the builders before save.
 	ToolboxUserIDValidator func(string) error
+	// DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
+	DataTypeValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the UploadLog queries.
