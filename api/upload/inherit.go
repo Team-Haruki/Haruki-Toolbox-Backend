@@ -31,17 +31,18 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
-		if err := uploadMysekaiDataIfNeeded(c, apiHelper, uploadType, result, serverStr); err != nil {
+		uploadServer := harukiUtils.SupportedDataUploadServer(server)
+		if err := uploadMysekaiDataIfNeeded(c, apiHelper, uploadType, result, uploadServer); err != nil {
 			return err
 		}
-		if err := uploadSuiteData(c, apiHelper, result, serverStr); err != nil {
+		if err := uploadSuiteData(c, apiHelper, result, uploadServer); err != nil {
 			return err
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded data.", serverStr, result.UserID), nil)
 	}
 }
 
-func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
+func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {
 	ctx := c.Context()
 	if uploadType != harukiUtils.UploadDataTypeMysekai {
 		return nil
@@ -52,7 +53,7 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 	_, err := HandleUpload(
 		ctx,
 		result.Mysekai,
-		harukiUtils.SupportedDataUploadServer(serverStr),
+		server,
 		harukiUtils.UploadDataTypeMysekai,
 		&result.UserID,
 		nil,
@@ -65,7 +66,7 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 	return nil
 }
 
-func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result *harukiUtils.SekaiInheritDataRetrieverResponse, serverStr string) error {
+func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {
 	ctx := c.Context()
 	if result.Suite == nil {
 		return harukiAPIHelper.ErrorBadRequest(c, "Retrieve suite data failed: unknown error")
@@ -73,7 +74,7 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	_, err := HandleUpload(
 		ctx,
 		result.Suite,
-		harukiUtils.SupportedDataUploadServer(serverStr),
+		server,
 		harukiUtils.UploadDataTypeSuite,
 		&result.UserID,
 		nil,
