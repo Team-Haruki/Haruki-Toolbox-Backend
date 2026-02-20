@@ -92,12 +92,9 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if resp := checkExistingBinding(c, ctx, apiHelper, existing, userID); resp != nil {
 			return resp
 		}
-		// Verify body params match URL params for consistency
-		if string(req.Server) != serverStr || req.UserID != gameUserIDStr {
-			return harukiAPIHelper.ErrorBadRequest(c, "request body server/userId must match URL parameters")
-		}
-		// Use body params for Redis key lookup (consistent with how generate-verification-code stores the key)
-		code, err := getVerificationCode(ctx, apiHelper, userID, string(req.Server), req.UserID)
+		// Redis key must match how generate-verification-code stores it:
+		// BuildGameAccountVerifyKey(userID, server, userID) — third param is toolbox user ID, not game user ID
+		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, userID)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
@@ -112,7 +109,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		// Delete verification code from Redis after successful binding to prevent reuse
-		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, string(req.Server), req.UserID)
+		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, userID)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, storageKey)
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
