@@ -116,6 +116,13 @@ type GameAccountBindingPayload struct {
 	MySekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
 }
 
+// CreateGameAccountBindingPayload is used for create/update binding endpoints.
+// server and game_user_id come from URL params, not from the body.
+type CreateGameAccountBindingPayload struct {
+	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
+	MySekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
+}
+
 // ====================== Response Struct ======================
 
 type RegisterOrLoginSuccessResponse struct {

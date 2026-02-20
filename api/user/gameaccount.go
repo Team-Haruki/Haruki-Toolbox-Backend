@@ -10,6 +10,7 @@ import (
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,24 +22,22 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID := c.Locals("userID").(string)
-		var req harukiAPIHelper.GameAccountBindingPayload
-		if err := c.Bind().Body(&req); err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
-		}
+		serverStr := c.Params("server")
+		gameUserIDStr := c.Params("game_user_id")
 		// Validate server
-		if _, err := utils.ParseSupportedDataUploadServer(string(req.Server)); err != nil {
+		if _, err := utils.ParseSupportedDataUploadServer(serverStr); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		// Validate game user ID
-		if strings.TrimSpace(req.UserID) == "" {
-			return harukiAPIHelper.ErrorBadRequest(c, "userId is required")
+		if strings.TrimSpace(gameUserIDStr) == "" {
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
 		}
 		code, err := GenerateCode(true)
 		if err != nil {
 			harukiLogger.Errorf("Failed to generate code: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
 		}
-		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, string(req.Server), req.UserID)
+		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, 5*time.Minute); err != nil {
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
@@ -79,7 +78,11 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
-		var req harukiAPIHelper.GameAccountBindingPayload
+		// Validate game user ID is numeric
+		if _, err := strconv.Atoi(gameUserIDStr); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
+		}
+		var req harukiAPIHelper.CreateGameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
@@ -92,9 +95,8 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if resp := checkExistingBinding(c, ctx, apiHelper, existing, userID); resp != nil {
 			return resp
 		}
-		// Redis key must match how generate-verification-code stores it:
-		// BuildGameAccountVerifyKey(userID, server, userID) — third param is toolbox user ID, not game user ID
-		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, userID)
+		// Redis key uses URL params (server + game_user_id) — consistent with generate-verification-code
+		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
@@ -109,7 +111,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		// Delete verification code from Redis after successful binding to prevent reuse
-		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, userID)
+		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, storageKey)
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
@@ -131,7 +133,7 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
-		var req harukiAPIHelper.GameAccountBindingPayload
+		var req harukiAPIHelper.CreateGameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
@@ -308,7 +310,7 @@ func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	return nil
 }
 
-func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.GameAccountBindingPayload) error {
+func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) error {
 	var err error
 	if existing != nil && existing.Edges.User.ID == userID {
 		// Update existing binding that belongs to the current user
@@ -335,9 +337,9 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 func registerGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
 
-	r.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleGenerateGameAccountVerificationCode(apiHelper))
 	r.RouteChain("/:server/:game_user_id").
-		Post(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleCreateGameAccountBinding(apiHelper)).
-		Put(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleUpdateGameAccountBinding(apiHelper)).
+		Post(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleGenerateGameAccountVerificationCode(apiHelper)).
+		Put(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleCreateGameAccountBinding(apiHelper)).
+		Patch(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleUpdateGameAccountBinding(apiHelper)).
 		Delete(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), handleDeleteGameAccountBinding(apiHelper))
 }
