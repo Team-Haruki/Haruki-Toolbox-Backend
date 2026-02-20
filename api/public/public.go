@@ -109,7 +109,10 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			resp, err = handleMysekaiRequest(c, apiHelper, userID, server, requestKey)
 		}
 		if err != nil {
-			return err
+			if fErr, ok := err.(*fiber.Error); ok {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fErr.Code, fErr.Message, nil)
+			}
+			return harukiAPIHelper.ErrorInternal(c, err.Error())
 		}
 		if dataType != harukiUtils.UploadDataTypeMysekai {
 			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
@@ -132,7 +135,7 @@ func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 				continue
 			}
 			if _, ok := allowedKeySet[key]; !ok {
-				return nil, harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("Invalid request key: %s", key))
+				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
 			}
 		}
 	}
@@ -141,10 +144,10 @@ func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeSuite, projection)
 	if err != nil {
 		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
-		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
+		return nil, fiber.NewError(fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err))
 	}
 	if result == nil || len(result) == 0 {
-		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
+		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 
 	if requestKey != "" && len(keys) == 1 {
@@ -175,10 +178,10 @@ func handleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxR
 	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeMysekai, projection)
 	if err != nil {
 		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
-		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
+		return nil, fiber.NewError(fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err))
 	}
 	if result == nil || len(result) == 0 {
-		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
+		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 
 	return result, nil
@@ -188,17 +191,17 @@ func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtil
 	serverStr := c.Params("server")
 	server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
-		return "", "", 0, "", harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		return "", "", 0, "", err
 	}
 	dataTypeStr := c.Params("data_type")
 	dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 	if err != nil {
-		return "", "", 0, "", harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		return "", "", 0, "", err
 	}
 	userIDStr := c.Params("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
-		return "", "", 0, "", harukiAPIHelper.ErrorBadRequest(c, "Invalid userId, it must be integer")
+		return "", "", 0, "", fmt.Errorf("Invalid userId, it must be integer")
 	}
 	return server, dataType, userID, userIDStr, nil
 }
