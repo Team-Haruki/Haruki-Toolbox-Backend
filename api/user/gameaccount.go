@@ -78,6 +78,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
+		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
 		// Validate game user ID is numeric
 		if _, err := strconv.Atoi(gameUserIDStr); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
@@ -91,19 +92,26 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			harukiLogger.Errorf("Failed to query existing binding: %v", err)
 			return err
 		}
+		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
 		if resp := checkExistingBinding(c, ctx, apiHelper, existing, userID); resp != nil {
+			harukiLogger.Infof("[GameAccountBinding] checkExistingBinding returned non-nil, short-circuiting")
 			return resp
 		}
+		harukiLogger.Infof("[GameAccountBinding] checkExistingBinding passed, proceeding to verification code check")
 		// Redis key uses URL params (server + game_user_id) — consistent with generate-verification-code
 		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
+			harukiLogger.Infof("[GameAccountBinding] verification code not found: %v", err)
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
+		harukiLogger.Infof("[GameAccountBinding] verification code found, proceeding to Sekai API verification")
 
-		if err := verifyGameAccountOwnership(c, apiHelper, gameUserIDStr, serverStr, code); err != nil {
-			return err
+		if err := verifyGameAccountOwnership(apiHelper, gameUserIDStr, serverStr, code); err != nil {
+			harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership FAILED: %v", err)
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
+		harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership PASSED, saving binding")
 
 		if err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req); err != nil {
 			harukiLogger.Errorf("Failed to save game account binding: %v", err)
@@ -274,40 +282,51 @@ func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 	return code, nil
 }
 
-func verifyGameAccountOwnership(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
+func verifyGameAccountOwnership(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
 	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
 	if err != nil || resultInfo == nil {
-		harukiLogger.Errorf("Failed to get user profile from Sekai API: %v", err)
-		return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("request sekai account profile failed: %v", err))
+		return fmt.Errorf("request sekai account profile failed: %v", err)
 	}
 	if !resultInfo.ServerAvailable {
-		return harukiAPIHelper.ErrorBadRequest(c, "server unavailable or under maintenance")
+		return fmt.Errorf("server unavailable or under maintenance")
 	}
 	if !resultInfo.AccountExists {
-		return harukiAPIHelper.ErrorBadRequest(c, "game account not found")
+		return fmt.Errorf("game account not found")
 	}
 	if !resultInfo.Body || len(body) == 0 {
-		return harukiAPIHelper.ErrorInternal(c, "empty user profile response")
+		return fmt.Errorf("empty user profile response")
 	}
 
 	var data map[string]any
 	if err := sonic.Unmarshal(body, &data); err != nil {
-		harukiLogger.Errorf("Failed to unmarshal user profile: %v", err)
-		return harukiAPIHelper.ErrorInternal(c, "failed to parse profile")
+		return fmt.Errorf("failed to parse profile: %v", err)
+	}
+	// Sekai API may return HTTP 200 with an error payload (e.g. for non-existent users)
+	if _, hasError := data["errorCode"]; hasError {
+		errMsg, _ := data["errorMessage"].(string)
+		return fmt.Errorf("game account not found: %s", errMsg)
 	}
 	userProfile, ok := data["userProfile"].(map[string]any)
 	if !ok {
-		return harukiAPIHelper.ErrorInternal(c, "userProfile missing")
+		return fmt.Errorf("userProfile missing in response")
 	}
 	word, ok := userProfile["word"].(string)
 	if !ok {
-		return harukiAPIHelper.ErrorBadRequest(c, "verification code missing in user profile")
+		return fmt.Errorf("verification code missing in user profile")
 	}
 	word = strings.TrimSpace(word)
 	if !strings.Contains(word, expectedCode) {
-		return harukiAPIHelper.ErrorBadRequest(c, "verification code mismatch")
+		return fmt.Errorf("verification code mismatch")
 	}
 	return nil
+}
+
+func getMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) error {
