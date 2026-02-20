@@ -143,7 +143,7 @@ func handleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
 		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
 	}
-	if result == nil {
+	if result == nil || len(result) == 0 {
 		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
 	}
 
@@ -177,7 +177,7 @@ func handleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxR
 		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
 		return nil, harukiAPIHelper.ErrorInternal(c, fmt.Sprintf("Failed to get user data: %v", err))
 	}
-	if result == nil {
+	if result == nil || len(result) == 0 {
 		return nil, harukiAPIHelper.ErrorNotFound(c, "Player data not found.")
 	}
 
