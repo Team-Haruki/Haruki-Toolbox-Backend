@@ -30,5 +30,7 @@ func (User) Edges() []ent.Edge {
 		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type),
 		edge.To("game_account_bindings", GameAccountBinding.Type),
 		edge.To("ios_script_code", IOSScriptCode.Type).Unique(),
+		edge.To("oauth_authorizations", OAuthAuthorization.Type),
+		edge.To("oauth_tokens", OAuthToken.Type),
 	}
 }

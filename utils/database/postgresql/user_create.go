@@ -10,6 +10,8 @@ import (
 	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	"haruki-suite/utils/database/postgresql/oauthauthorization"
+	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 
@@ -189,6 +191,36 @@ func (_c *UserCreate) SetNillableIosScriptCodeID(id *int) *UserCreate {
 // SetIosScriptCode sets the "ios_script_code" edge to the IOSScriptCode entity.
 func (_c *UserCreate) SetIosScriptCode(v *IOSScriptCode) *UserCreate {
 	return _c.SetIosScriptCodeID(v.ID)
+}
+
+// AddOauthAuthorizationIDs adds the "oauth_authorizations" edge to the OAuthAuthorization entity by IDs.
+func (_c *UserCreate) AddOauthAuthorizationIDs(ids ...int) *UserCreate {
+	_c.mutation.AddOauthAuthorizationIDs(ids...)
+	return _c
+}
+
+// AddOauthAuthorizations adds the "oauth_authorizations" edges to the OAuthAuthorization entity.
+func (_c *UserCreate) AddOauthAuthorizations(v ...*OAuthAuthorization) *UserCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOauthAuthorizationIDs(ids...)
+}
+
+// AddOauthTokenIDs adds the "oauth_tokens" edge to the OAuthToken entity by IDs.
+func (_c *UserCreate) AddOauthTokenIDs(ids ...int) *UserCreate {
+	_c.mutation.AddOauthTokenIDs(ids...)
+	return _c
+}
+
+// AddOauthTokens adds the "oauth_tokens" edges to the OAuthToken entity.
+func (_c *UserCreate) AddOauthTokens(v ...*OAuthToken) *UserCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddOauthTokenIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -394,6 +426,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OauthAuthorizationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OauthAuthorizationsTable,
+			Columns: []string{user.OauthAuthorizationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.OauthTokensIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.OauthTokensTable,
+			Columns: []string{user.OauthTokensColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

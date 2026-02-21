@@ -579,6 +579,52 @@ func HasIosScriptCodeWith(preds ...predicate.IOSScriptCode) predicate.User {
 	})
 }
 
+// HasOauthAuthorizations applies the HasEdge predicate on the "oauth_authorizations" edge.
+func HasOauthAuthorizations() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OauthAuthorizationsTable, OauthAuthorizationsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOauthAuthorizationsWith applies the HasEdge predicate on the "oauth_authorizations" edge with a given conditions (other predicates).
+func HasOauthAuthorizationsWith(preds ...predicate.OAuthAuthorization) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOauthAuthorizationsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasOauthTokens applies the HasEdge predicate on the "oauth_tokens" edge.
+func HasOauthTokens() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, OauthTokensTable, OauthTokensColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasOauthTokensWith applies the HasEdge predicate on the "oauth_tokens" edge with a given conditions (other predicates).
+func HasOauthTokensWith(preds ...predicate.OAuthToken) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newOauthTokensStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.User) predicate.User {
 	return predicate.User(sql.AndPredicates(predicates...))

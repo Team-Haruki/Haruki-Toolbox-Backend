@@ -120,6 +120,13 @@ type OthersConfig struct {
 	PublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
 }
 
+type OAuth2Config struct {
+	AuthCodeTTL     int    `yaml:"auth_code_ttl"`
+	AccessTokenTTL  int    `yaml:"access_token_ttl"`
+	RefreshTokenTTL int    `yaml:"refresh_token_ttl"`
+	TokenSignKey    string `yaml:"token_sign_key"`
+}
+
 type Config struct {
 	Proxy                  string                       `yaml:"proxy"`
 	MongoDB                MongoDBConfig                `yaml:"mongodb"`
@@ -127,6 +134,7 @@ type Config struct {
 	Webhook                WebhookConfig                `yaml:"webhook"`
 	Backend                BackendConfig                `yaml:"backend"`
 	UserSystem             UserSystemConfig             `yaml:"user_system"`
+	OAuth2                 OAuth2Config                 `yaml:"oauth2"`
 	Others                 OthersConfig                 `yaml:"others"`
 	SekaiClient            SekaiClientConfig            `yaml:"sekai_client"`
 	SekaiAPI               SekaiAPIConfig               `yaml:"sekai_api"`

@@ -146,6 +146,99 @@ var (
 			},
 		},
 	}
+	// OauthAuthorizationsColumns holds the columns for the "oauth_authorizations" table.
+	OauthAuthorizationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "revoked", Type: field.TypeBool, Default: false},
+		{Name: "oauth_client_authorizations", Type: field.TypeInt},
+		{Name: "user_oauth_authorizations", Type: field.TypeString},
+	}
+	// OauthAuthorizationsTable holds the schema information for the "oauth_authorizations" table.
+	OauthAuthorizationsTable = &schema.Table{
+		Name:       "oauth_authorizations",
+		Columns:    OauthAuthorizationsColumns,
+		PrimaryKey: []*schema.Column{OauthAuthorizationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "oauth_authorizations_oauth_clients_authorizations",
+				Columns:    []*schema.Column{OauthAuthorizationsColumns[4]},
+				RefColumns: []*schema.Column{OauthClientsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "oauth_authorizations_users_oauth_authorizations",
+				Columns:    []*schema.Column{OauthAuthorizationsColumns[5]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "oauthauthorization_user_oauth_authorizations_oauth_client_authorizations",
+				Unique:  true,
+				Columns: []*schema.Column{OauthAuthorizationsColumns[5], OauthAuthorizationsColumns[4]},
+			},
+		},
+	}
+	// OauthClientsColumns holds the columns for the "oauth_clients" table.
+	OauthClientsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "client_id", Type: field.TypeString, Unique: true},
+		{Name: "client_secret", Type: field.TypeString},
+		{Name: "name", Type: field.TypeString},
+		{Name: "client_type", Type: field.TypeString, Default: "public"},
+		{Name: "redirect_uris", Type: field.TypeJSON},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// OauthClientsTable holds the schema information for the "oauth_clients" table.
+	OauthClientsTable = &schema.Table{
+		Name:       "oauth_clients",
+		Columns:    OauthClientsColumns,
+		PrimaryKey: []*schema.Column{OauthClientsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "oauthclient_client_id",
+				Unique:  true,
+				Columns: []*schema.Column{OauthClientsColumns[1]},
+			},
+		},
+	}
+	// OauthTokensColumns holds the columns for the "oauth_tokens" table.
+	OauthTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "access_token", Type: field.TypeString, Unique: true},
+		{Name: "refresh_token", Type: field.TypeString, Unique: true, Nullable: true},
+		{Name: "scopes", Type: field.TypeJSON},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "oauth_client_tokens", Type: field.TypeInt},
+		{Name: "user_oauth_tokens", Type: field.TypeString},
+	}
+	// OauthTokensTable holds the schema information for the "oauth_tokens" table.
+	OauthTokensTable = &schema.Table{
+		Name:       "oauth_tokens",
+		Columns:    OauthTokensColumns,
+		PrimaryKey: []*schema.Column{OauthTokensColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "oauth_tokens_oauth_clients_tokens",
+				Columns:    []*schema.Column{OauthTokensColumns[7]},
+				RefColumns: []*schema.Column{OauthClientsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "oauth_tokens_users_oauth_tokens",
+				Columns:    []*schema.Column{OauthTokensColumns[8]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// SocialPlatformInfosColumns holds the columns for the "social_platform_infos" table.
 	SocialPlatformInfosColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -217,6 +310,9 @@ var (
 		GroupsTable,
 		GroupListsTable,
 		IosScriptCodesTable,
+		OauthAuthorizationsTable,
+		OauthClientsTable,
+		OauthTokensTable,
 		SocialPlatformInfosTable,
 		UploadLogsTable,
 		UsersTable,
@@ -232,5 +328,18 @@ func init() {
 	}
 	GroupListsTable.ForeignKeys[0].RefTable = GroupsTable
 	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
+	OauthAuthorizationsTable.ForeignKeys[0].RefTable = OauthClientsTable
+	OauthAuthorizationsTable.ForeignKeys[1].RefTable = UsersTable
+	OauthAuthorizationsTable.Annotation = &entsql.Annotation{
+		Table: "oauth_authorizations",
+	}
+	OauthClientsTable.Annotation = &entsql.Annotation{
+		Table: "oauth_clients",
+	}
+	OauthTokensTable.ForeignKeys[0].RefTable = OauthClientsTable
+	OauthTokensTable.ForeignKeys[1].RefTable = UsersTable
+	OauthTokensTable.Annotation = &entsql.Annotation{
+		Table: "oauth_tokens",
+	}
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 }
