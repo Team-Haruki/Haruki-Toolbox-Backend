@@ -80,6 +80,42 @@ func (f IOSScriptCodeFunc) Mutate(ctx context.Context, m postgresql.Mutation) (p
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.IOSScriptCodeMutation", m)
 }
 
+// The OAuthAuthorizationFunc type is an adapter to allow the use of ordinary
+// function as OAuthAuthorization mutator.
+type OAuthAuthorizationFunc func(context.Context, *postgresql.OAuthAuthorizationMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OAuthAuthorizationFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.OAuthAuthorizationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.OAuthAuthorizationMutation", m)
+}
+
+// The OAuthClientFunc type is an adapter to allow the use of ordinary
+// function as OAuthClient mutator.
+type OAuthClientFunc func(context.Context, *postgresql.OAuthClientMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OAuthClientFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.OAuthClientMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.OAuthClientMutation", m)
+}
+
+// The OAuthTokenFunc type is an adapter to allow the use of ordinary
+// function as OAuthToken mutator.
+type OAuthTokenFunc func(context.Context, *postgresql.OAuthTokenMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OAuthTokenFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.OAuthTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.OAuthTokenMutation", m)
+}
+
 // The SocialPlatformInfoFunc type is an adapter to allow the use of ordinary
 // function as SocialPlatformInfo mutator.
 type SocialPlatformInfoFunc func(context.Context, *postgresql.SocialPlatformInfoMutation) (postgresql.Value, error)

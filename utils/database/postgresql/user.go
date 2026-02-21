@@ -51,9 +51,13 @@ type UserEdges struct {
 	GameAccountBindings []*GameAccountBinding `json:"game_account_bindings,omitempty"`
 	// IosScriptCode holds the value of the ios_script_code edge.
 	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitempty"`
+	// OauthAuthorizations holds the value of the oauth_authorizations edge.
+	OauthAuthorizations []*OAuthAuthorization `json:"oauth_authorizations,omitempty"`
+	// OauthTokens holds the value of the oauth_tokens edge.
+	OauthTokens []*OAuthToken `json:"oauth_tokens,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [5]bool
+	loadedTypes [7]bool
 }
 
 // EmailInfoOrErr returns the EmailInfo value or an error if the edge
@@ -105,6 +109,24 @@ func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 		return nil, &NotFoundError{label: iosscriptcode.Label}
 	}
 	return nil, &NotLoadedError{edge: "ios_script_code"}
+}
+
+// OauthAuthorizationsOrErr returns the OauthAuthorizations value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) OauthAuthorizationsOrErr() ([]*OAuthAuthorization, error) {
+	if e.loadedTypes[5] {
+		return e.OauthAuthorizations, nil
+	}
+	return nil, &NotLoadedError{edge: "oauth_authorizations"}
+}
+
+// OauthTokensOrErr returns the OauthTokens value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) OauthTokensOrErr() ([]*OAuthToken, error) {
+	if e.loadedTypes[6] {
+		return e.OauthTokens, nil
+	}
+	return nil, &NotLoadedError{edge: "oauth_tokens"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -217,6 +239,16 @@ func (_m *User) QueryGameAccountBindings() *GameAccountBindingQuery {
 // QueryIosScriptCode queries the "ios_script_code" edge of the User entity.
 func (_m *User) QueryIosScriptCode() *IOSScriptCodeQuery {
 	return NewUserClient(_m.config).QueryIosScriptCode(_m)
+}
+
+// QueryOauthAuthorizations queries the "oauth_authorizations" edge of the User entity.
+func (_m *User) QueryOauthAuthorizations() *OAuthAuthorizationQuery {
+	return NewUserClient(_m.config).QueryOauthAuthorizations(_m)
+}
+
+// QueryOauthTokens queries the "oauth_tokens" edge of the User entity.
+func (_m *User) QueryOauthTokens() *OAuthTokenQuery {
+	return NewUserClient(_m.config).QueryOauthTokens(_m)
 }
 
 // Update returns a builder for updating this User.

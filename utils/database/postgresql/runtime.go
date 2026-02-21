@@ -9,9 +9,13 @@ import (
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	"haruki-suite/utils/database/postgresql/oauthauthorization"
+	"haruki-suite/utils/database/postgresql/oauthclient"
+	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
+	"time"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -64,6 +68,56 @@ func init() {
 	iosscriptcodeDescUploadCode := iosscriptcodeFields[1].Descriptor()
 	// iosscriptcode.UploadCodeValidator is a validator for the "upload_code" field. It is called by the builders before save.
 	iosscriptcode.UploadCodeValidator = iosscriptcodeDescUploadCode.Validators[0].(func(string) error)
+	oauthauthorizationFields := schema.OAuthAuthorization{}.Fields()
+	_ = oauthauthorizationFields
+	// oauthauthorizationDescCreatedAt is the schema descriptor for created_at field.
+	oauthauthorizationDescCreatedAt := oauthauthorizationFields[1].Descriptor()
+	// oauthauthorization.DefaultCreatedAt holds the default value on creation for the created_at field.
+	oauthauthorization.DefaultCreatedAt = oauthauthorizationDescCreatedAt.Default.(func() time.Time)
+	// oauthauthorizationDescRevoked is the schema descriptor for revoked field.
+	oauthauthorizationDescRevoked := oauthauthorizationFields[2].Descriptor()
+	// oauthauthorization.DefaultRevoked holds the default value on creation for the revoked field.
+	oauthauthorization.DefaultRevoked = oauthauthorizationDescRevoked.Default.(bool)
+	oauthclientFields := schema.OAuthClient{}.Fields()
+	_ = oauthclientFields
+	// oauthclientDescClientID is the schema descriptor for client_id field.
+	oauthclientDescClientID := oauthclientFields[0].Descriptor()
+	// oauthclient.ClientIDValidator is a validator for the "client_id" field. It is called by the builders before save.
+	oauthclient.ClientIDValidator = oauthclientDescClientID.Validators[0].(func(string) error)
+	// oauthclientDescClientSecret is the schema descriptor for client_secret field.
+	oauthclientDescClientSecret := oauthclientFields[1].Descriptor()
+	// oauthclient.ClientSecretValidator is a validator for the "client_secret" field. It is called by the builders before save.
+	oauthclient.ClientSecretValidator = oauthclientDescClientSecret.Validators[0].(func(string) error)
+	// oauthclientDescName is the schema descriptor for name field.
+	oauthclientDescName := oauthclientFields[2].Descriptor()
+	// oauthclient.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	oauthclient.NameValidator = oauthclientDescName.Validators[0].(func(string) error)
+	// oauthclientDescClientType is the schema descriptor for client_type field.
+	oauthclientDescClientType := oauthclientFields[3].Descriptor()
+	// oauthclient.DefaultClientType holds the default value on creation for the client_type field.
+	oauthclient.DefaultClientType = oauthclientDescClientType.Default.(string)
+	// oauthclientDescActive is the schema descriptor for active field.
+	oauthclientDescActive := oauthclientFields[6].Descriptor()
+	// oauthclient.DefaultActive holds the default value on creation for the active field.
+	oauthclient.DefaultActive = oauthclientDescActive.Default.(bool)
+	// oauthclientDescCreatedAt is the schema descriptor for created_at field.
+	oauthclientDescCreatedAt := oauthclientFields[7].Descriptor()
+	// oauthclient.DefaultCreatedAt holds the default value on creation for the created_at field.
+	oauthclient.DefaultCreatedAt = oauthclientDescCreatedAt.Default.(func() time.Time)
+	oauthtokenFields := schema.OAuthToken{}.Fields()
+	_ = oauthtokenFields
+	// oauthtokenDescAccessToken is the schema descriptor for access_token field.
+	oauthtokenDescAccessToken := oauthtokenFields[0].Descriptor()
+	// oauthtoken.AccessTokenValidator is a validator for the "access_token" field. It is called by the builders before save.
+	oauthtoken.AccessTokenValidator = oauthtokenDescAccessToken.Validators[0].(func(string) error)
+	// oauthtokenDescRevoked is the schema descriptor for revoked field.
+	oauthtokenDescRevoked := oauthtokenFields[4].Descriptor()
+	// oauthtoken.DefaultRevoked holds the default value on creation for the revoked field.
+	oauthtoken.DefaultRevoked = oauthtokenDescRevoked.Default.(bool)
+	// oauthtokenDescCreatedAt is the schema descriptor for created_at field.
+	oauthtokenDescCreatedAt := oauthtokenFields[5].Descriptor()
+	// oauthtoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	oauthtoken.DefaultCreatedAt = oauthtokenDescCreatedAt.Default.(func() time.Time)
 	socialplatforminfoFields := schema.SocialPlatformInfo{}.Fields()
 	_ = socialplatforminfoFields
 	// socialplatforminfoDescVerified is the schema descriptor for verified field.

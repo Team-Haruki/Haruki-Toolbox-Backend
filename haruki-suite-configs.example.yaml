@@ -33,6 +33,12 @@ redis:
 webhook:
   jwt_secret: ""
 
+oauth2:
+  auth_code_ttl: 300
+  access_token_ttl: 3600
+  refresh_token_ttl: 2592000
+  token_sign_key: ""
+
 backend:
   host: "0.0.0.0"
   port: 6666

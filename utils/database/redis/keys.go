@@ -50,3 +50,7 @@ func BuildStatusTokenKey(token string) string {
 func BuildOTPAttemptKey(email string) string {
 	return fmt.Sprintf("%s:%s:attempt:%s", KeyPrefixHaruki, KeyModuleEmail, email)
 }
+
+func BuildOAuth2AuthCodeKey(code string) string {
+	return fmt.Sprintf("%s:oauth2:code:%s", KeyPrefixHaruki, code)
+}

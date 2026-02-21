@@ -24,6 +24,15 @@ type GroupList func(*sql.Selector)
 // IOSScriptCode is the predicate function for iosscriptcode builders.
 type IOSScriptCode func(*sql.Selector)
 
+// OAuthAuthorization is the predicate function for oauthauthorization builders.
+type OAuthAuthorization func(*sql.Selector)
+
+// OAuthClient is the predicate function for oauthclient builders.
+type OAuthClient func(*sql.Selector)
+
+// OAuthToken is the predicate function for oauthtoken builders.
+type OAuthToken func(*sql.Selector)
+
 // SocialPlatformInfo is the predicate function for socialplatforminfo builders.
 type SocialPlatformInfo func(*sql.Selector)
 

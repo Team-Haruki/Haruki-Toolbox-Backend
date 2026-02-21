@@ -36,6 +36,10 @@ const (
 	EdgeGameAccountBindings = "game_account_bindings"
 	// EdgeIosScriptCode holds the string denoting the ios_script_code edge name in mutations.
 	EdgeIosScriptCode = "ios_script_code"
+	// EdgeOauthAuthorizations holds the string denoting the oauth_authorizations edge name in mutations.
+	EdgeOauthAuthorizations = "oauth_authorizations"
+	// EdgeOauthTokens holds the string denoting the oauth_tokens edge name in mutations.
+	EdgeOauthTokens = "oauth_tokens"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// EmailInfoTable is the table that holds the email_info relation/edge.
@@ -73,6 +77,20 @@ const (
 	IosScriptCodeInverseTable = "ios_script_codes"
 	// IosScriptCodeColumn is the table column denoting the ios_script_code relation/edge.
 	IosScriptCodeColumn = "user_id"
+	// OauthAuthorizationsTable is the table that holds the oauth_authorizations relation/edge.
+	OauthAuthorizationsTable = "oauth_authorizations"
+	// OauthAuthorizationsInverseTable is the table name for the OAuthAuthorization entity.
+	// It exists in this package in order to avoid circular dependency with the "oauthauthorization" package.
+	OauthAuthorizationsInverseTable = "oauth_authorizations"
+	// OauthAuthorizationsColumn is the table column denoting the oauth_authorizations relation/edge.
+	OauthAuthorizationsColumn = "user_oauth_authorizations"
+	// OauthTokensTable is the table that holds the oauth_tokens relation/edge.
+	OauthTokensTable = "oauth_tokens"
+	// OauthTokensInverseTable is the table name for the OAuthToken entity.
+	// It exists in this package in order to avoid circular dependency with the "oauthtoken" package.
+	OauthTokensInverseTable = "oauth_tokens"
+	// OauthTokensColumn is the table column denoting the oauth_tokens relation/edge.
+	OauthTokensColumn = "user_oauth_tokens"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -197,6 +215,34 @@ func ByIosScriptCodeField(field string, opts ...sql.OrderTermOption) OrderOption
 		sqlgraph.OrderByNeighborTerms(s, newIosScriptCodeStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByOauthAuthorizationsCount orders the results by oauth_authorizations count.
+func ByOauthAuthorizationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOauthAuthorizationsStep(), opts...)
+	}
+}
+
+// ByOauthAuthorizations orders the results by oauth_authorizations terms.
+func ByOauthAuthorizations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOauthAuthorizationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByOauthTokensCount orders the results by oauth_tokens count.
+func ByOauthTokensCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newOauthTokensStep(), opts...)
+	}
+}
+
+// ByOauthTokens orders the results by oauth_tokens terms.
+func ByOauthTokens(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newOauthTokensStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newEmailInfoStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -230,5 +276,19 @@ func newIosScriptCodeStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(IosScriptCodeInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2O, false, IosScriptCodeTable, IosScriptCodeColumn),
+	)
+}
+func newOauthAuthorizationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OauthAuthorizationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OauthAuthorizationsTable, OauthAuthorizationsColumn),
+	)
+}
+func newOauthTokensStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(OauthTokensInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, OauthTokensTable, OauthTokensColumn),
 	)
 }
