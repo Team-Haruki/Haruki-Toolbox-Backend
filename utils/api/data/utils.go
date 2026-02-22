@@ -7,7 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-var userGamedataAllowedFields = []string{"userId", "name", "deck", "exp", "totalExp", "coin"}
+var userGamedataAllowedFields = []string{"userId", "name", "deck", "exp", "totalExp", "coin", "rank"}
 
 func RestoreCompactData(data bson.D) []bson.D {
 	var enumRaw bson.D
