@@ -99,8 +99,14 @@ func (m *MongoDBManager) getCollectionByDataType(dataType utils.UploadDataType) 
 }
 
 func (m *MongoDBManager) fetchOldData(ctx context.Context, collection *mongo.Collection, userID int64) (map[string]any, error) {
+
+	projection := bson.M{
+		"userEvents":      1,
+		"userWorldBlooms": 1,
+		"_id":             0,
+	}
 	var oldData map[string]any
-	err := collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&oldData)
+	err := collection.FindOne(ctx, bson.M{"_id": userID}, options.FindOne().SetProjection(projection)).Decode(&oldData)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return make(map[string]any), nil
 	}

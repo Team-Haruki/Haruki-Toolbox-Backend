@@ -11,23 +11,18 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// OAuth2 user profile response (scope: user:read)
 type oauth2UserProfileResponse struct {
 	UserID     string  `json:"userId"`
 	Name       string  `json:"name"`
 	AvatarPath *string `json:"avatarPath"`
 }
 
-// OAuth2 binding response (scope: bindings:read)
 type oauth2BindingResponse struct {
 	Server   string `json:"server"`
 	UserID   string `json:"userId"`
 	Verified bool   `json:"verified"`
 }
 
-// handleOAuth2GetUserProfile returns the authenticated user's name and avatar.
-// GET /api/oauth2/user/profile
-// Scope: user:read
 func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -55,9 +50,6 @@ func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	}
 }
 
-// handleOAuth2GetBindings returns the authenticated user's game account bindings.
-// GET /api/oauth2/user/bindings
-// Scope: bindings:read
 func handleOAuth2GetBindings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -83,7 +75,6 @@ func handleOAuth2GetBindings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	}
 }
 
-// registerOAuth2UserInfoRoutes registers OAuth2-protected user info endpoints.
 func registerOAuth2UserInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	apiHelper.Router.Get("/api/oauth2/user/profile",
 		harukiOAuth2.VerifyOAuth2Token(apiHelper.DBManager.DB, harukiOAuth2.ScopeUserRead),

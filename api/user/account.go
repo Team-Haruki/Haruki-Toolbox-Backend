@@ -44,7 +44,7 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			if err != nil {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
 			}
-			// Limit avatar to 2MB
+
 			if len(decodedAvatar) > 2*1024*1024 {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image is too large (max 2MB)", nil)
 			}

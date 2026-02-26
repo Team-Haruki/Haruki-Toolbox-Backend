@@ -15,8 +15,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// ====================== Response Functions ======================
-
 func NewResponse[T any](status int, message string, data *T) *GenericResponse[T] {
 	return &GenericResponse[T]{
 		Status:      status,
@@ -32,8 +30,6 @@ func UpdatedDataResponse[T any](c fiber.Ctx, status int, message string, data *T
 func ResponseWithStruct[T any](c fiber.Ctx, status int, data T) error {
 	return c.Status(status).JSON(data)
 }
-
-// ====================== Error Response Functions ======================
 
 // ErrorBadRequest returns a 400 Bad Request response
 func ErrorBadRequest(c fiber.Ctx, message string) error {
@@ -64,8 +60,6 @@ func ErrorInternal(c fiber.Ctx, message string) error {
 func SuccessResponse[T any](c fiber.Ctx, message string, data *T) error {
 	return UpdatedDataResponse(c, fiber.StatusOK, message, data)
 }
-
-// ====================== Session Helper Functions ======================
 
 func NewSessionHandler(redisClient *redis.Client, sessionSignKey string) *SessionHandler {
 	return &SessionHandler{
@@ -138,8 +132,6 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	c.Locals("userID", claims.UserID)
 	return c.Next()
 }
-
-// ====================== Other Helper Functions ======================
 
 func ArrayContains(arr []string, s string) bool {
 	return slices.Contains(arr, s)

@@ -54,7 +54,7 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		if !ok {
 			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
 		}
-		// Re-check for existing binding after OTP verification to prevent TOCTOU race
+
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
 			Where(socialplatforminfo.PlatformEQ(
 				string(harukiAPIHelper.SocialPlatformQQ)),
@@ -109,11 +109,11 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if exists {
 			return harukiAPIHelper.ErrorBadRequest(c, "binding already exists")
 		}
-		// Validate platform
+
 		switch req.Platform {
 		case harukiAPIHelper.SocialPlatformQQ, harukiAPIHelper.SocialPlatformQQBot,
 			harukiAPIHelper.SocialPlatformDiscord, harukiAPIHelper.SocialPlatformTelegram:
-			// valid
+
 		default:
 			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
 		}
@@ -273,7 +273,6 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorBadRequest(c, "status token mapping expired or not found")
 		}
 
-		// Re-check for existing binding after OTP verification to prevent TOCTOU race
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
 			Where(socialplatforminfo.PlatformEQ(string(req.Platform)),
 				socialplatforminfo.PlatformUserID(req.UserID)).

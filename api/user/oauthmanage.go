@@ -60,7 +60,6 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		clientID := c.Params("client_id")
 
-		// Find the client
 		client, err := apiHelper.DBManager.DB.OAuthClient.Query().
 			Where(oauthclient.ClientIDEQ(clientID)).
 			Only(ctx)
@@ -68,7 +67,6 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorNotFound(c, "client not found")
 		}
 
-		// Revoke the authorization
 		_, err = apiHelper.DBManager.DB.OAuthAuthorization.Update().
 			Where(
 				oauthauthorization.HasUserWith(user.IDEQ(userID)),
@@ -81,7 +79,6 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorInternal(c, "failed to revoke authorization")
 		}
 
-		// Also revoke all tokens for this client+user
 		_, err = apiHelper.DBManager.DB.OAuthToken.Update().
 			Where(
 				oauthtoken.HasUserWith(user.IDEQ(userID)),

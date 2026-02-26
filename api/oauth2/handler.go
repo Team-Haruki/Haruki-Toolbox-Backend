@@ -24,7 +24,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AuthCodeData is stored in Redis during the authorization code flow.
 type AuthCodeData struct {
 	ClientID            string   `json:"client_id"`
 	UserID              string   `json:"user_id"`
@@ -34,9 +33,6 @@ type AuthCodeData struct {
 	CodeChallengeMethod string   `json:"code_challenge_method,omitempty"`
 }
 
-// handleAuthorize validates parameters and redirects to the frontend consent page.
-// GET /api/oauth2/authorize?response_type=code&client_id=...&redirect_uri=...&scope=...&state=...
-// PKCE params: code_challenge, code_challenge_method (required for public clients)
 func handleAuthorize(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -62,7 +58,6 @@ func handleAuthorize(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			return errorRedirectOrJSON(c, redirectURI, state, "invalid_client", "client not found or inactive")
 		}
 
-		// Validate redirect_uri
 		if !slices.Contains(client.RedirectUris, redirectURI) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error":             "invalid_request",
@@ -70,7 +65,6 @@ func handleAuthorize(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			})
 		}
 
-		// PKCE: enforce for public clients, optional for confidential
 		if client.ClientType == "public" && codeChallenge == "" {
 			return errorRedirect(c, redirectURI, state, "invalid_request", "code_challenge is required for public clients (PKCE)")
 		}
@@ -78,14 +72,12 @@ func handleAuthorize(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			return errorRedirect(c, redirectURI, state, "invalid_request", "code_challenge_method must be S256")
 		}
 
-		// Validate scopes
 		requestedScopes := strings.Split(scope, " ")
 		validatedScopes, ok := harukiOAuth2.ValidateScopes(requestedScopes, client.Scopes)
 		if !ok {
 			return errorRedirect(c, redirectURI, state, "invalid_scope", "one or more requested scopes are invalid")
 		}
 
-		// Redirect to frontend consent page with params (pass PKCE through)
 		frontendURL := config.Cfg.UserSystem.FrontendURL
 		consentURL := fmt.Sprintf("%s/oauth2/consent?client_id=%s&client_name=%s&scope=%s&redirect_uri=%s&state=%s",
 			strings.TrimRight(frontendURL, "/"),
@@ -132,7 +124,6 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			return c.JSON(fiber.Map{"redirect_url": u})
 		}
 
-		// Validate client
 		client, err := apiHelper.DBManager.DB.OAuthClient.Query().
 			Where(oauthclient.ClientIDEQ(req.ClientID), oauthclient.ActiveEQ(true)).
 			Only(ctx)
@@ -150,7 +141,6 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid scope")
 		}
 
-		// Create or update authorization record
 		existing, err := apiHelper.DBManager.DB.OAuthAuthorization.Query().
 			Where(
 				oauthauthorization.HasUserWith(user.IDEQ(userID)),
@@ -158,7 +148,7 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			).
 			Only(ctx)
 		if err != nil {
-			// No existing authorization, create new
+
 			_, err = apiHelper.DBManager.DB.OAuthAuthorization.Create().
 				SetUserID(userID).
 				SetClientID(client.ID).
@@ -170,7 +160,7 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 				return harukiAPIHelper.ErrorInternal(c, "failed to save authorization")
 			}
 		} else {
-			// Update existing authorization
+
 			_, err = existing.Update().
 				SetScopes(validatedScopes).
 				SetRevoked(false).
@@ -181,7 +171,6 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			}
 		}
 
-		// Generate authorization code and store in Redis
 		code, err := harukiOAuth2.GenerateAuthorizationCode()
 		if err != nil {
 			harukiLogger.Errorf("Failed to generate auth code: %v", err)
@@ -207,7 +196,6 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			return harukiAPIHelper.ErrorInternal(c, "failed to store authorization code")
 		}
 
-		// Return JSON with redirect URL for the frontend to handle
 		redirectURL := buildRedirectURL(req.RedirectURI, req.State, map[string]string{
 			"code": code,
 		})
@@ -236,8 +224,6 @@ func handleToken(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 			return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "client not found")
 		}
 
-		// Confidential clients must provide client_secret
-		// Public clients authenticate via PKCE (code_verifier) instead
 		if client.ClientType == "confidential" {
 			if clientSecret == "" {
 				return oauthError(c, fiber.StatusBadRequest, "invalid_client", "client_secret is required for confidential clients")
@@ -268,7 +254,6 @@ func handleAuthCodeExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 		return oauthError(c, fiber.StatusBadRequest, "invalid_request", "code and redirect_uri are required")
 	}
 
-	// Retrieve and delete auth code from Redis (one-time use)
 	codeKey := harukiRedis.BuildOAuth2AuthCodeKey(code)
 	var codeData AuthCodeData
 	found, err := apiHelper.DBManager.Redis.GetCache(ctx, codeKey, &codeData)
@@ -277,12 +262,10 @@ func handleAuthCodeExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 	}
 	_ = apiHelper.DBManager.Redis.DeleteCache(ctx, codeKey)
 
-	// Validate code data
 	if codeData.ClientID != client.ClientID || codeData.RedirectURI != redirectURI {
 		return oauthError(c, fiber.StatusBadRequest, "invalid_grant", "code does not match client or redirect_uri")
 	}
 
-	// PKCE verification
 	if codeData.CodeChallenge != "" {
 		if codeVerifier == "" {
 			return oauthError(c, fiber.StatusBadRequest, "invalid_request", "code_verifier is required")
@@ -291,7 +274,7 @@ func handleAuthCodeExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 			return oauthError(c, fiber.StatusBadRequest, "invalid_grant", "code_verifier does not match code_challenge")
 		}
 	} else if client.ClientType == "public" {
-		// Public clients must use PKCE
+
 		return oauthError(c, fiber.StatusBadRequest, "invalid_request", "PKCE is required for public clients")
 	}
 
@@ -313,7 +296,6 @@ func handleRefreshTokenExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		return oauthError(c, fiber.StatusBadRequest, "invalid_request", "refresh_token is required")
 	}
 
-	// Find the refresh token
 	dbToken, err := apiHelper.DBManager.DB.OAuthToken.Query().
 		Where(
 			oauthtoken.RefreshTokenEQ(refreshToken),
@@ -326,7 +308,6 @@ func handleRefreshTokenExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		return oauthError(c, fiber.StatusBadRequest, "invalid_grant", "refresh token not found or revoked")
 	}
 
-	// Revoke old token
 	_, _ = dbToken.Update().SetRevoked(true).Save(ctx)
 
 	return issueTokens(c, apiHelper, client, dbToken.Edges.User.ID, dbToken.Scopes)
@@ -341,7 +322,7 @@ func issueTokens(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		ttl = 3600
 	}
 	if isConfidential {
-		ttl = 0 // no expiration
+		ttl = 0
 	}
 
 	accessTokenStr, expiresAt, err := harukiOAuth2.GenerateAccessToken(userID, client.ClientID, scopes, ttl)
@@ -413,7 +394,6 @@ func handleRevoke(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.H
 			return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "invalid client credentials")
 		}
 
-		// Try to revoke by access_token first, then by refresh_token
 		_, err = apiHelper.DBManager.DB.OAuthToken.Update().
 			Where(
 				oauthtoken.Or(
@@ -428,20 +408,17 @@ func handleRevoke(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.H
 			harukiLogger.Warnf("OAuth2 revoke: token not found or already revoked: %v", err)
 		}
 
-		// RFC 7009: always return 200 OK regardless of whether the token was found
 		return c.JSON(fiber.Map{"status": "ok"})
 	}
 }
 
-// ====================== Helper Functions ======================
-
 func formOrJSON(c fiber.Ctx, key string) string {
-	// Try form value first (application/x-www-form-urlencoded)
+
 	val := c.FormValue(key)
 	if val != "" {
 		return val
 	}
-	// Fall back to query param (for GET requests)
+
 	return c.Query(key)
 }
 

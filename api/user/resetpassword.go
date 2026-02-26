@@ -34,14 +34,14 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if err != nil || !resp.Success {
 			return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 		}
-		// Verify user exists before sending reset email
+
 		exists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(payload.Email)).Exist(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if !exists {
-			// Return success to avoid email enumeration, but don't actually send
+
 			return harukiAPIHelper.SuccessResponse[string](c, "Reset password email sent", nil)
 		}
 		resetSecret := uuid.NewString()

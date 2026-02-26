@@ -196,7 +196,10 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		return nil, err
 	}
 	if dataType != utils.UploadDataTypeMysekaiBirthdayParty {
-		go DataSyncer(*expectedUserID, server, dataType, raw, settings)
+
+		rawCopy := make([]byte, len(raw))
+		copy(rawCopy, raw)
+		go DataSyncer(*expectedUserID, server, dataType, rawCopy, settings)
 	} else {
 		packedBody, err := harukiSekai.Pack(data, server)
 		if err != nil {
@@ -204,7 +207,6 @@ func (h *DataHandler) HandleAndUpdateData(ctx context.Context, raw []byte, serve
 		} else {
 			go DataSyncer(*expectedUserID, server, dataType, packedBody, settings)
 		}
-
 	}
 	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
 		h.Logger.Errorf("Failed to update mongo data: %v", err)

@@ -46,7 +46,6 @@ func handleGetOwnData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fib
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid game user_id, it must be integer")
 		}
 
-		// Verify that the user has bound this game account and it's verified
 		binding, err := apiHelper.DBManager.DB.GameAccountBinding.
 			Query().
 			Where(

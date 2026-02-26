@@ -11,8 +11,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// VerifyOAuth2Token is a Fiber middleware that validates an OAuth2 Bearer token.
-// It sets c.Locals("userID"), c.Locals("oauth2ClientID"), and c.Locals("oauth2Scopes").
 func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		auth := c.Get("Authorization")
@@ -33,7 +31,6 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 			})
 		}
 
-		// Look up the token in DB to check revocation
 		dbToken, err := db.OAuthToken.Query().
 			Where(
 				oauthtoken.AccessTokenEQ(tokenStr),
@@ -47,7 +44,6 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 			})
 		}
 
-		// Check expiration for tokens that have one
 		if dbToken.ExpiresAt != nil && dbToken.ExpiresAt.Before(time.Now()) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  fiber.StatusUnauthorized,
@@ -55,7 +51,6 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 			})
 		}
 
-		// Check required scope
 		if requiredScope != "" && !HasScope(claims.Scopes, requiredScope) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"status":  fiber.StatusForbidden,
@@ -70,8 +65,6 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 	}
 }
 
-// VerifySessionOrOAuth2Token tries session auth first, falls back to OAuth2.
-// This allows routes to accept both session tokens and OAuth2 tokens.
 func VerifySessionOrOAuth2Token(sessionVerify fiber.Handler, db *postgresql.Client, requiredScope string) fiber.Handler {
 	oauth2Verify := VerifyOAuth2Token(db, requiredScope)
 	return func(c fiber.Ctx) error {
@@ -83,19 +76,16 @@ func VerifySessionOrOAuth2Token(sessionVerify fiber.Handler, db *postgresql.Clie
 			})
 		}
 
-		// If it looks like a JWT (3 dot-separated segments), try OAuth2 first
 		tokenStr := strings.TrimPrefix(auth, "Bearer ")
 		if strings.Count(tokenStr, ".") == 2 {
-			// Could be either a session JWT or OAuth2 JWT
-			// Try parsing as OAuth2 token first
+
 			claims, err := ParseAccessToken(tokenStr)
 			if err == nil && claims.ClientID != "" {
-				// This is an OAuth2 token (has client_id claim)
+
 				return oauth2Verify(c)
 			}
 		}
 
-		// Fall back to session token verification
 		return sessionVerify(c)
 	}
 }

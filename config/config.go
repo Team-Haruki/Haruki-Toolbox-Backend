@@ -32,15 +32,23 @@ type ThirdPartyDataProviderConfig struct {
 	Endpoint8823            string `yaml:"endpoint_8823"`
 	Secret8823              string `yaml:"secret_8823"`
 	SendJSONZstandard8823   bool   `yaml:"send_json_zstandard_8823"`
+	CheckEnabled8823        bool   `yaml:"check_enabled_8823"`
+	CheckURL8823            string `yaml:"check_url_8823"`
 	EndpointSakura          string `yaml:"endpoint_sakura"`
 	SecretSakura            string `yaml:"secret_sakura"`
 	SendJSONZstandardSakura bool   `yaml:"send_json_zstandard_sakura"`
+	CheckEnabledSakura      bool   `yaml:"check_enabled_sakura"`
+	CheckURLSakura          string `yaml:"check_url_sakura"`
 	EndpointResona          string `yaml:"endpoint_resona"`
 	SecretResona            string `yaml:"secret_resona"`
 	SendJSONZstandardResona bool   `yaml:"send_json_zstandard_resona"`
+	CheckEnabledResona      bool   `yaml:"check_enabled_resona"`
+	CheckURLResona          string `yaml:"check_url_resona"`
 	EndpointLuna            string `yaml:"endpoint_luna"`
 	SecretLuna              string `yaml:"secret_luna"`
 	SendJSONZstandardLuna   bool   `yaml:"send_json_zstandard_luna"`
+	CheckEnabledLuna        bool   `yaml:"check_enabled_luna"`
+	CheckURLLuna            string `yaml:"check_url_luna"`
 }
 
 type UserSystemConfig struct {

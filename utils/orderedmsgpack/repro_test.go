@@ -8,7 +8,7 @@ import (
 )
 
 func TestOrderedMsgpackPreservesOrder(t *testing.T) {
-	// Register the extension (normally done in main/init)
+
 	err := RegisterOrderedMapExt()
 	if err != nil {
 		t.Fatalf("Failed to register extension: %v", err)
@@ -20,13 +20,11 @@ func TestOrderedMsgpackPreservesOrder(t *testing.T) {
 		o.Set("b", 2)
 		o.Set("c", 3)
 
-		// Marshal using extension
 		data, err := Marshal(o)
 		if err != nil {
 			t.Fatalf("Marshal failed: %v", err)
 		}
 
-		// Unmarshal using new decoder
 		loaded, err := MsgpackToOrderedMap(data)
 		if err != nil {
 			t.Fatalf("Unmarshal failed: %v", err)
@@ -102,7 +100,6 @@ func TestStandardMsgpackToOrderedMap(t *testing.T) {
 			}
 		}
 
-		// Verify values
 		xVal, _ := loaded.Get("x")
 		yVal, _ := loaded.Get("y")
 		zVal, _ := loaded.Get("z")
@@ -141,7 +138,6 @@ func TestStandardMsgpackToOrderedMap(t *testing.T) {
 			t.Fatalf("MsgpackToOrderedMap failed: %v", err)
 		}
 
-		// Check outer keys
 		keys := loaded.Keys()
 		expectedKeys := []string{"name", "inner", "score"}
 		if len(keys) != len(expectedKeys) {
@@ -153,7 +149,6 @@ func TestStandardMsgpackToOrderedMap(t *testing.T) {
 			}
 		}
 
-		// Check inner map is also an OrderedMap
 		innerVal, _ := loaded.Get("inner")
 		innerOM, ok := innerVal.(*orderedmap.OrderedMap)
 		if !ok {

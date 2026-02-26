@@ -24,11 +24,11 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
-		// Validate server
+
 		if _, err := utils.ParseSupportedDataUploadServer(serverStr); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
-		// Validate game user ID
+
 		if strings.TrimSpace(gameUserIDStr) == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
 		}
@@ -79,7 +79,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
-		// Validate game user ID is numeric
+
 		if _, err := strconv.Atoi(gameUserIDStr); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
@@ -99,7 +99,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return resp
 		}
 		harukiLogger.Infof("[GameAccountBinding] checkExistingBinding passed, proceeding to verification code check")
-		// Redis key uses URL params (server + game_user_id) — consistent with generate-verification-code
+
 		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
 			harukiLogger.Infof("[GameAccountBinding] verification code not found: %v", err)
@@ -118,7 +118,6 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
 
-		// Delete verification code from Redis after successful binding to prevent reuse
 		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, storageKey)
 
@@ -251,12 +250,11 @@ func checkExistingBinding(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPI
 	if existing == nil {
 		return nil
 	}
-	// If this binding belongs to a different user, always block regardless of verification status.
-	// Only the original owner can delete the binding to free it for others.
+
 	if existing.Edges.User.ID != userID {
 		return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
 	}
-	// If it belongs to the current user and is already verified, return early success.
+
 	if existing.Verified {
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
@@ -268,7 +266,7 @@ func checkExistingBinding(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPI
 		}
 		return harukiAPIHelper.SuccessResponse(c, "account already verified", &ud)
 	}
-	// existing belongs to current user but not yet verified → allow re-verification
+
 	return nil
 }
 
@@ -301,7 +299,7 @@ func verifyGameAccountOwnership(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	if err := sonic.Unmarshal(body, &data); err != nil {
 		return fmt.Errorf("failed to parse profile: %v", err)
 	}
-	// Sekai API may return HTTP 200 with an error payload (e.g. for non-existent users)
+
 	if _, hasError := data["errorCode"]; hasError {
 		errMsg, _ := data["errorMessage"].(string)
 		return fmt.Errorf("game account not found: %s", errMsg)
@@ -332,14 +330,14 @@ func getMapKeys(m map[string]any) []string {
 func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) error {
 	var err error
 	if existing != nil && existing.Edges.User.ID == userID {
-		// Update existing binding that belongs to the current user
+
 		_, err = existing.Update().
 			SetVerified(true).
 			SetSuite(req.Suite).
 			SetMysekai(req.MySekai).
 			Save(ctx)
 	} else {
-		// Create new binding for the current user
+
 		_, err = apiHelper.DBManager.DB.GameAccountBinding.
 			Create().
 			SetServer(serverStr).
