@@ -125,7 +125,6 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 		}
 		userID := c.Locals("userID").(string)
 
-		// Check if this email is already used by another user
 		emailTaken, err := apiHelper.DBManager.DB.User.Query().
 			Where(user.EmailEQ(req.Email), user.IDNEQ(userID)).
 			Exist(ctx)

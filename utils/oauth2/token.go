@@ -10,7 +10,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// OAuth2TokenClaims represents the JWT claims for an OAuth2 access token.
 type OAuth2TokenClaims struct {
 	UserID   string   `json:"uid"`
 	ClientID string   `json:"cid"`
@@ -18,8 +17,6 @@ type OAuth2TokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateAccessToken creates a signed JWT access token.
-// If ttlSeconds <= 0, the token has no expiration (for confidential clients).
 func GenerateAccessToken(userID, clientID string, scopes []string, ttlSeconds int) (string, *time.Time, error) {
 	claims := OAuth2TokenClaims{
 		UserID:   userID,
@@ -44,7 +41,6 @@ func GenerateAccessToken(userID, clientID string, scopes []string, ttlSeconds in
 	return signed, expiresAt, nil
 }
 
-// ParseAccessToken validates and parses a JWT access token.
 func ParseAccessToken(tokenStr string) (*OAuth2TokenClaims, error) {
 	parsed, err := jwt.ParseWithClaims(tokenStr, &OAuth2TokenClaims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -65,7 +61,6 @@ func ParseAccessToken(tokenStr string) (*OAuth2TokenClaims, error) {
 	return claims, nil
 }
 
-// GenerateRandomToken generates a cryptographically random hex token.
 func GenerateRandomToken(byteLen int) (string, error) {
 	b := make([]byte, byteLen)
 	if _, err := rand.Read(b); err != nil {
@@ -74,12 +69,10 @@ func GenerateRandomToken(byteLen int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// GenerateAuthorizationCode generates a random authorization code.
 func GenerateAuthorizationCode() (string, error) {
 	return GenerateRandomToken(32)
 }
 
-// GenerateRefreshToken generates a random refresh token.
 func GenerateRefreshToken() (string, error) {
 	return GenerateRandomToken(32)
 }

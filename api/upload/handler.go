@@ -21,7 +21,12 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-var userIDSuffixRegex = regexp.MustCompile(`user/(\d+)`)
+var (
+	userIDSuffixRegex       = regexp.MustCompile(`user/(\d+)`)
+	sharedHttpClient        = harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second)
+	uploadSemaphore         = make(chan struct{}, 10)
+	sharedDataHandlerLogger = harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil)
+)
 
 func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType, int64) {
 	if strings.Contains(originalURL, string(harukiUtils.UploadDataTypeSuite)) {
@@ -106,6 +111,10 @@ func HandleUpload(
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	uploadMethod harukiUtils.UploadMethod,
 ) (*harukiUtils.HandleDataResult, error) {
+
+	uploadSemaphore <- struct{}{}
+	defer func() { <-uploadSemaphore }()
+
 	if _, err := harukiUtils.ParseSupportedDataUploadServer(string(server)); err != nil {
 		return nil, fmt.Errorf("invalid server in HandleUpload: %w", err)
 	}
@@ -115,8 +124,8 @@ func HandleUpload(
 	handler := &harukiDataHandler.DataHandler{
 		DBManager:      helper.DBManager,
 		SekaiAPIClient: helper.SekaiAPIClient,
-		HttpClient:     harukiHttp.NewClient(harukiConfig.Cfg.Proxy, 15*time.Second),
-		Logger:         harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil),
+		HttpClient:     sharedHttpClient,
+		Logger:         sharedDataHandlerLogger,
 	}
 	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
 	if err != nil {

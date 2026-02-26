@@ -318,3 +318,39 @@ func UnpackOrdered(content []byte, server utils.SupportedDataUploadServer) (*ord
 	}
 	return result, nil
 }
+
+func DecryptToMsgpack(content []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
+	cryptor, err := getCryptor(server)
+	if err != nil {
+		return nil, err
+	}
+	if len(content) == 0 {
+		return nil, ErrEmptyContent
+	}
+	if len(content)%aes.BlockSize != 0 {
+		return nil, ErrInvalidBlockSize
+	}
+
+	decrypter := cryptor.newCBC(false)
+
+	decrypted := bytesPool.Get().(*[]byte)
+	if cap(*decrypted) < len(content) {
+		*decrypted = make([]byte, len(content))
+	} else {
+		*decrypted = (*decrypted)[:len(content)]
+	}
+
+	decrypter.CryptBlocks(*decrypted, content)
+
+	unpadded, err := safePKCS7Unpad(*decrypted)
+	if err != nil {
+		bytesPool.Put(decrypted)
+		return nil, fmt.Errorf("failed to unpad: %w", err)
+	}
+
+	result := make([]byte, len(unpadded))
+	copy(result, unpadded)
+	bytesPool.Put(decrypted)
+
+	return result, nil
+}

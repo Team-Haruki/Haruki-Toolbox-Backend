@@ -2,16 +2,17 @@ package handler
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	harukiConfig "haruki-suite/config"
 	"haruki-suite/utils"
 	apiHelper "haruki-suite/utils/api"
 	harukiLogger "haruki-suite/utils/logger"
 	"haruki-suite/utils/sekai"
+	"haruki-suite/utils/streamjson"
 	harukiVersion "haruki-suite/version"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -30,95 +31,110 @@ func init() {
 	httpClient.SetHeader("Accept", "application/octet-stream")
 }
 
-func processData(rawData []byte, server utils.SupportedDataUploadServer, sendJSONZstandard bool) ([]byte, string, error) {
-	if !sendJSONZstandard {
-		return rawData, utils.HarukiDataSyncerDataFormatRaw, nil
-	}
+var zstdEncoderPool = sync.Pool{
+	New: func() any {
+		w, _ := zstd.NewWriter(nil)
+		return w
+	},
+}
 
-	unpacked, err := sekai.UnpackOrdered(rawData, server)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to unpack ordered data: %w", err)
-	}
+func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
 
-	jsonData, err := json.Marshal(unpacked)
+	msgpackBytes, err := sekai.DecryptToMsgpack(rawData, server)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to marshal json: %w", err)
+		return nil, fmt.Errorf("failed to decrypt data: %w", err)
 	}
 
 	var buf bytes.Buffer
-	writer, err := zstd.NewWriter(&buf)
+	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
+	encoder.Reset(&buf)
+
+	if err := streamjson.Convert(msgpackBytes, encoder); err != nil {
+		encoder.Close()
+		zstdEncoderPool.Put(encoder)
+		return nil, fmt.Errorf("failed to stream convert msgpack to json+zstd: %w", err)
+	}
+
+	msgpackBytes = nil
+
+	if err := encoder.Close(); err != nil {
+		zstdEncoderPool.Put(encoder)
+		return nil, fmt.Errorf("failed to close zstd writer: %w", err)
+	}
+	zstdEncoderPool.Put(encoder)
+
+	return buf.Bytes(), nil
+}
+
+func sendData(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, data []byte, encoding string, endpointSecret string, headers map[string]string) {
+	if url == "" {
+		logger.Warnf("Upload endpoint url is empty, skipped syncing data.")
+		return
+	}
+
+	url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
+	url = strings.ReplaceAll(url, "{server}", string(server))
+	url = strings.ReplaceAll(url, "{data_type}", string(dataType))
+
+	req := httpClient.R().
+		SetHeader("X-Haruki-Upload-Data-Format", encoding).
+		SetBody(data)
+
+	for k, v := range headers {
+		req.SetHeader(k, v)
+	}
+
+	resp, err := req.Post(url)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create zstd writer: %w", err)
+		logger.Warnf("Failed to sync data to %s: %v", url, err)
+		return
 	}
-	if _, err := writer.Write(jsonData); err != nil {
-		return nil, "", fmt.Errorf("failed to write json to zstd writer: %w", err)
-	}
-	if err := writer.Close(); err != nil {
-		return nil, "", fmt.Errorf("failed to close zstd writer: %w", err)
-	}
-
-	return buf.Bytes(), utils.HarukiDataSyncerDataFormatJsonZstd, nil
-}
-
-func DataUploader(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string, sendJSONZstandard bool) {
-	if url != "" {
-		dataToSend, encoding, err := processData(rawData, server, sendJSONZstandard)
-		if err != nil {
-			logger.Warnf("Failed to process data for %s: %v", url, err)
-			return
-		}
-
-		url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
-		url = strings.ReplaceAll(url, "{server}", string(server))
-		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
-
-		resp, err := httpClient.R().
-			SetHeader("Authorization", fmt.Sprintf("Bearer %s", endpointSecret)).
-			SetHeader("X-Haruki-Upload-Data-Format", encoding).
-			SetBody(dataToSend).
-			Post(url)
-		if err != nil {
-			logger.Warnf("Failed to sync data to %s: %v", url, err)
-			return
-		}
-		if resp.StatusCode() != 200 {
-			logger.Warnf("Failed to sync data to %s: status code %v", url, resp.Status())
-		} else {
-			logger.Infof("Successfully sync data to %s", url)
-		}
+	if resp.StatusCode() != 200 {
+		logger.Warnf("Failed to sync data to %s: status code %v", url, resp.Status())
 	} else {
-		logger.Warnf("Upload endpoint url is empty, skipped syncing data.")
+		logger.Infof("Successfully sync data to %s", url)
 	}
 }
 
-func Sync8823(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, endpointSecret string, sendJSONZstandard bool) {
-	if url != "" {
-		dataToSend, encoding, err := processData(rawData, server, sendJSONZstandard)
-		if err != nil {
-			logger.Warnf("Failed to process data for %s: %v", url, err)
-			return
-		}
+type syncTarget struct {
+	url               string
+	secret            string
+	sendJSONZstandard bool
+	is8823            bool
+	checkEnabled      bool
+	checkURL          string
+}
 
-		resp, err := httpClient.R().
-			SetHeader("X-Credentials", endpointSecret).
-			SetHeader("X-Server-Region", string(server)).
-			SetHeader("X-Upload-Type", string(dataType)).
-			SetHeader("X-User-Id", strconv.FormatInt(userID, 10)).
-			SetHeader("X-Haruki-Upload-Data-Format", encoding).
-			SetBody(dataToSend).
-			Post(url)
-		if err != nil {
-			logger.Warnf("Failed to sync data to %s: %v", url, err)
-			return
-		}
-		if resp.StatusCode() != 200 {
-			logger.Warnf("Failed to sync data to %s: status code %v", url, resp.Status())
-		} else {
-			logger.Infof("Successfully sync data to %s", url)
-		}
-	} else {
-		logger.Warnf("Upload endpoint url is empty, skipped syncing data.")
+func checkUserExists(t syncTarget, userID int64, server utils.SupportedDataUploadServer) bool {
+	if !t.checkEnabled || t.checkURL == "" {
+		return true
 	}
+
+	url := t.checkURL
+	url = strings.ReplaceAll(url, "{user_id}", strconv.FormatInt(userID, 10))
+	url = strings.ReplaceAll(url, "{server}", string(server))
+
+	req := httpClient.R()
+	if t.is8823 {
+		req.SetHeader("X-Credentials", t.secret)
+	} else {
+		req.SetHeader("Authorization", fmt.Sprintf("Bearer %s", t.secret))
+	}
+
+	resp, err := req.Get(url)
+	if err != nil {
+		logger.Warnf("Check user failed for %s: %v", url, err)
+		return false
+	}
+	if resp.StatusCode() == 200 {
+		return true
+	}
+	if resp.StatusCode() == 404 {
+		logger.Debugf("User %d not found at %s, skipping sync", userID, url)
+		return false
+	}
+	logger.Warnf("Unexpected check response from %s: %d", url, resp.StatusCode())
+	return false
 }
 
 func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) {
@@ -128,40 +144,96 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 		}
 	}()
 
+	cfg := harukiConfig.Cfg.ThirdPartyDataProvider
+
+	var targets []syncTarget
+
 	if dataType == utils.UploadDataTypeSuite {
 		if settings.Suite != nil {
 			if settings.Suite.Allow8823 {
-				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandard8823)
-				logger.Infof("Syncing suite data to 8823...")
+				targets = append(targets, syncTarget{cfg.Endpoint8823, cfg.Secret8823, cfg.SendJSONZstandard8823, true, cfg.CheckEnabled8823, cfg.CheckURL8823})
 			}
 			if settings.Suite.AllowSakura {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointSakura, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretSakura, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardSakura)
-				logger.Infof("Syncing suite data to SakuraBot...")
+				targets = append(targets, syncTarget{cfg.EndpointSakura, cfg.SecretSakura, cfg.SendJSONZstandardSakura, false, cfg.CheckEnabledSakura, cfg.CheckURLSakura})
 			}
 			if settings.Suite.AllowResona {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointResona, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretResona, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardResona)
-				logger.Infof("Syncing suite data to ResonaBot...")
+				targets = append(targets, syncTarget{cfg.EndpointResona, cfg.SecretResona, cfg.SendJSONZstandardResona, false, cfg.CheckEnabledResona, cfg.CheckURLResona})
 			}
 			if settings.Suite.AllowLuna {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointLuna, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretLuna, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardLuna)
-				logger.Infof("Syncing suite data to LunaBot...")
+				targets = append(targets, syncTarget{cfg.EndpointLuna, cfg.SecretLuna, cfg.SendJSONZstandardLuna, false, cfg.CheckEnabledLuna, cfg.CheckURLLuna})
 			}
 		}
 	}
 	if dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if settings.Mysekai != nil {
 			if settings.Mysekai.Allow8823 {
-				go Sync8823(harukiConfig.Cfg.ThirdPartyDataProvider.Endpoint8823, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.Secret8823, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandard8823)
-				logger.Infof("Syncing mysekai data to 8823...")
+				targets = append(targets, syncTarget{cfg.Endpoint8823, cfg.Secret8823, cfg.SendJSONZstandard8823, true, cfg.CheckEnabled8823, cfg.CheckURL8823})
 			}
 			if settings.Mysekai.AllowResona {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointResona, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretResona, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardResona)
-				logger.Infof("Syncing mysekai data to ResonaBot...")
+				targets = append(targets, syncTarget{cfg.EndpointResona, cfg.SecretResona, cfg.SendJSONZstandardResona, false, cfg.CheckEnabledResona, cfg.CheckURLResona})
 			}
 			if settings.Mysekai.AllowLuna {
-				go DataUploader(harukiConfig.Cfg.ThirdPartyDataProvider.EndpointLuna, userID, server, dataType, rawData, harukiConfig.Cfg.ThirdPartyDataProvider.SecretLuna, harukiConfig.Cfg.ThirdPartyDataProvider.SendJSONZstandardLuna)
-				logger.Infof("Syncing mysekai data to LunaBot...")
+				targets = append(targets, syncTarget{cfg.EndpointLuna, cfg.SecretLuna, cfg.SendJSONZstandardLuna, false, cfg.CheckEnabledLuna, cfg.CheckURLLuna})
 			}
 		}
+	}
+
+	if len(targets) == 0 {
+		return
+	}
+
+	needsProcessed := false
+	for _, t := range targets {
+		if t.sendJSONZstandard {
+			needsProcessed = true
+			break
+		}
+	}
+
+	var processedData []byte
+	if needsProcessed {
+		var err error
+		processedData, err = processDataOnce(rawData, server)
+		if err != nil {
+			logger.Warnf("Failed to pre-process data: %v", err)
+
+			needsProcessed = false
+		}
+	}
+
+	for _, t := range targets {
+		t := t
+
+		if !checkUserExists(t, userID, server) {
+			logger.Infof("Skipping sync to %s: user %d not found", t.url, userID)
+			continue
+		}
+
+		var data []byte
+		var encoding string
+		if t.sendJSONZstandard && needsProcessed {
+			data = processedData
+			encoding = utils.HarukiDataSyncerDataFormatJsonZstd
+		} else {
+			data = rawData
+			encoding = utils.HarukiDataSyncerDataFormatRaw
+		}
+
+		var headers map[string]string
+		if t.is8823 {
+			headers = map[string]string{
+				"X-Credentials":   t.secret,
+				"X-Server-Region": string(server),
+				"X-Upload-Type":   string(dataType),
+				"X-User-Id":       strconv.FormatInt(userID, 10),
+			}
+		} else {
+			headers = map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", t.secret),
+			}
+		}
+
+		logger.Infof("Syncing %s data to %s...", dataType, t.url)
+		go sendData(t.url, userID, server, dataType, data, encoding, t.secret, headers)
 	}
 }

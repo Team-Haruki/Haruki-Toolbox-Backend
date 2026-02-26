@@ -12,10 +12,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// handleOAuth2GetGameData handles game data requests authenticated via OAuth2 token.
-// The user identity is derived from the token (no toolbox_user_id in URL).
-// GET /api/oauth2/game-data/:server/:data_type/:user_id
-// Scope: game-data:read
 func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	allowedKeySet := make(map[string]struct{}, len(apiHelper.PublicAPIAllowedKeys))
 	for _, k := range apiHelper.PublicAPIAllowedKeys {
@@ -83,7 +79,6 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	}
 }
 
-// registerOAuth2GameDataRoutes registers the OAuth2-protected game data endpoint.
 func registerOAuth2GameDataRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	o := apiHelper.Router.Group("/api/oauth2/game-data")
 	o.Get("/:server/:data_type/:user_id",

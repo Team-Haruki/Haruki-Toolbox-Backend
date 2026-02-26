@@ -8,8 +8,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// ====================== Helper Struct ======================
-
 type SessionClaims struct {
 	UserID       string `json:"userId"`
 	SessionToken string `json:"sessionToken"`
@@ -31,8 +29,6 @@ type HarukiToolboxGameAccountPrivacySettings struct {
 	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
 	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
 }
-
-// ====================== Request Struct ======================
 
 type SocialPlatform string
 
@@ -116,14 +112,10 @@ type GameAccountBindingPayload struct {
 	MySekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
 }
 
-// CreateGameAccountBindingPayload is used for create/update binding endpoints.
-// server and game_user_id come from URL params, not from the body.
 type CreateGameAccountBindingPayload struct {
 	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
 	MySekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
 }
-
-// ====================== Response Struct ======================
 
 type RegisterOrLoginSuccessResponse struct {
 	Status   int                   `json:"status"`

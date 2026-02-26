@@ -47,12 +47,11 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (
 	statusCode := resp.StatusCode()
 	body := resp.Body()
 
-	// For all responses, try to detect body-level errors (upstream may return 200 with error payload)
 	if len(body) > 0 {
 		var bodyData map[string]any
 		if jsonErr := json.Unmarshal(body, &bodyData); jsonErr == nil {
 			if _, hasError := bodyData["errorCode"]; hasError {
-				// Body contains an error payload — extract the real status
+
 				errMsg, _ := bodyData["errorMessage"].(string)
 				httpStatus := 0
 				if hs, ok := bodyData["httpStatus"].(float64); ok {
