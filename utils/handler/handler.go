@@ -11,6 +11,7 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	harukiSekai "haruki-suite/utils/sekai"
 	"haruki-suite/utils/sekaiapi"
+	"haruki-suite/utils/suiterestore"
 	harukiVersion "haruki-suite/version"
 	"regexp"
 	"strconv"
@@ -26,6 +27,32 @@ type DataHandler struct {
 	SekaiAPIClient *sekaiapi.HarukiSekaiAPIClient
 	HttpClient     *harukiHttp.Client
 	Logger         *harukiLogger.Logger
+}
+
+var (
+	suiteRestorerOnce sync.Once
+	suiteRestorerMap  map[string]*suiterestore.Restorer
+)
+
+func initSuiteRestorers() {
+	suiteRestorerOnce.Do(func() {
+		suiteRestorerMap = make(map[string]*suiterestore.Restorer)
+		for region, path := range harukiConfig.Cfg.RestoreSuite.StructuresFile {
+			if path == "" {
+				continue
+			}
+			r, err := suiterestore.NewFromFile(path)
+			if err != nil {
+				panic(fmt.Errorf("failed to load suite structure file for region %s (%s): %w", region, path, err))
+			}
+			suiteRestorerMap[region] = r
+		}
+	})
+}
+
+func getSuiteRestorer(server utils.SupportedDataUploadServer) *suiterestore.Restorer {
+	initSuiteRestorers()
+	return suiteRestorerMap[string(server)]
 }
 
 func cleanSuite(suite map[string]any) map[string]any {
@@ -52,6 +79,11 @@ func (h *DataHandler) PreHandleData(data map[string]any, expectedUserID *int64, 
 			return nil, err
 		}
 		data = cleanSuite(data)
+		if shouldRestoreSuiteForDB(server) {
+			if r := getSuiteRestorer(server); r != nil {
+				data = r.RestoreFields(data)
+			}
+		}
 	}
 	if dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if err := validateBirthdayPartyData(data); err != nil {
@@ -337,4 +369,13 @@ func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server util
 		}(url, bearer)
 	}
 	wg.Wait()
+}
+
+func shouldRestoreSuiteForDB(server utils.SupportedDataUploadServer) bool {
+	for _, r := range harukiConfig.Cfg.RestoreSuite.EnableRegions {
+		if r == string(server) {
+			return true
+		}
+	}
+	return false
 }
