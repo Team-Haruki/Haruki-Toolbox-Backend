@@ -1,0 +1,146 @@
+{
+    "userCards": [
+        "cardId",
+        "level",
+        "exp",
+        "totalExp",
+        "skillLevel",
+        "skillExp",
+        "totalSkillExp",
+        "masterRank",
+        "specialTrainingStatus",
+        "defaultImage",
+        "duplicateCount",
+        "createdAt",
+        [
+            "episodes",
+            [
+                "cardEpisodeId",
+                "scenarioStatus",
+                "scenarioStatusReasons",
+                "isNotSkipped"
+            ]
+        ]
+    ],
+    "userMusicVocals": [
+        "musicId",
+        "musicVocalId"
+    ],
+    "userShops": [
+        "shopId",
+        [
+            "userShopItems",
+            [
+                "shopItemId",
+                "level",
+                "status"
+            ]
+        ]
+    ],
+    "userUnitEpisodeStatuses": [
+        "storyType",
+        "episodeId",
+        "status",
+        "isNotSkipped"
+    ],
+    "userSpecialEpisodeStatuses": [
+        "storyType",
+        "episodeId",
+        "status",
+        "isNotSkipped"
+    ],
+    "userCharacterProfileEpisodeStatuses": [
+        "storyType",
+        "episodeId",
+        "status",
+        "isNotSkipped"
+    ],
+    "userMaterialExchanges": [
+        "materialExchangeId",
+        "exchangeRemaining"
+    ],
+    "userStamps": [
+        "stampId",
+        "obtainedAt"
+    ],
+    "userHonors": [
+        "honorId",
+        "level",
+        "obtainedAt"
+    ],
+    "userChallengeLiveSoloStages": [
+        "challengeLiveStageType",
+        "characterId",
+        "challengeLiveStageId",
+        "rank",
+        "challengeLiveStageStatus",
+        "point"
+    ],
+    "userChallengeLiveSoloHighScoreRewards": [
+        "characterId",
+        "challengeLiveHighScoreRewardId",
+        "challengeLiveHighScoreStatus"
+    ],
+    "userVirtualShops": [
+        "virtualShopId",
+        [
+            "userVirtualShopItems",
+            [
+                "virtualShopId",
+                "virtualShopItemId",
+                "status",
+                "buyCount"
+            ]
+        ]
+    ],
+    "userReleaseConditions": [
+        "releaseConditionId",
+        "createdAt"
+    ],
+    "newReleaseConditions": [
+        "releaseConditionId",
+        "createdAt"
+    ],
+    "userEventEpisodeStatuses": [
+        "storyType",
+        "episodeId",
+        "status",
+        "isNotSkipped"
+    ],
+    "userEventExchanges": [
+        "eventExchangeId",
+        "exchangeRemaining"
+    ],
+    "userArchiveEventEpisodeStatuses": [
+        "storyType",
+        "episodeId",
+        "status",
+        "isNotSkipped"
+    ],
+    "userActionSets": [
+        "id",
+        "status"
+    ],
+    "userEventArchiveCompleteReadRewards": [
+        "eventStoryId",
+        "isDisplayEventArchiveCompleteReadProgress"
+    ],
+    "userMysekaiCharacterTalks": [
+        "mysekaiCharacterTalkId",
+        "isRead"
+    ],
+    "userSekaiEchoCardMissions": [
+        "storyId",
+        "sekaiEchoCardMissionType",
+        "progress"
+    ],
+    "userAreas": [
+        [
+            "actionSets",
+            [
+                "id",
+                "status"
+            ]
+        ]
+    ]
+}
