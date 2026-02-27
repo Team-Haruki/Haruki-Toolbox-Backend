@@ -7,6 +7,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type RestoreSuiteConfig struct {
+	EnableRegions  []string          `yaml:"enable_regions"`
+	StructuresFile map[string]string `yaml:"structures_file"`
+}
+
 type MongoDBConfig struct {
 	URL                 string `yaml:"url"`
 	DB                  string `yaml:"db"`
@@ -34,21 +39,25 @@ type ThirdPartyDataProviderConfig struct {
 	SendJSONZstandard8823   bool   `yaml:"send_json_zstandard_8823"`
 	CheckEnabled8823        bool   `yaml:"check_enabled_8823"`
 	CheckURL8823            string `yaml:"check_url_8823"`
+	RestoreSuite8823        bool   `yaml:"restore_suite_8823"`
 	EndpointSakura          string `yaml:"endpoint_sakura"`
 	SecretSakura            string `yaml:"secret_sakura"`
 	SendJSONZstandardSakura bool   `yaml:"send_json_zstandard_sakura"`
 	CheckEnabledSakura      bool   `yaml:"check_enabled_sakura"`
 	CheckURLSakura          string `yaml:"check_url_sakura"`
+	RestoreSuiteSakura      bool   `yaml:"restore_suite_sakura"`
 	EndpointResona          string `yaml:"endpoint_resona"`
 	SecretResona            string `yaml:"secret_resona"`
 	SendJSONZstandardResona bool   `yaml:"send_json_zstandard_resona"`
 	CheckEnabledResona      bool   `yaml:"check_enabled_resona"`
 	CheckURLResona          string `yaml:"check_url_resona"`
+	RestoreSuiteResona      bool   `yaml:"restore_suite_resona"`
 	EndpointLuna            string `yaml:"endpoint_luna"`
 	SecretLuna              string `yaml:"secret_luna"`
 	SendJSONZstandardLuna   bool   `yaml:"send_json_zstandard_luna"`
 	CheckEnabledLuna        bool   `yaml:"check_enabled_luna"`
 	CheckURLLuna            string `yaml:"check_url_luna"`
+	RestoreSuiteLuna        bool   `yaml:"restore_suite_luna"`
 }
 
 type UserSystemConfig struct {
@@ -148,6 +157,7 @@ type Config struct {
 	SekaiAPI               SekaiAPIConfig               `yaml:"sekai_api"`
 	HarukiProxy            HarukiProxyConfig            `yaml:"haruki_proxy"`
 	ThirdPartyDataProvider ThirdPartyDataProviderConfig `yaml:"third_party_data_provider"`
+	RestoreSuite           RestoreSuiteConfig           `yaml:"restore_suite"`
 }
 
 var Cfg Config

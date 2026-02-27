@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
 	"github.com/klauspost/compress/zstd"
 )
@@ -66,6 +67,46 @@ func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]
 	return buf.Bytes(), nil
 }
 
+func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
+	unpacked, err := sekai.Unpack(rawData, server)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unpack data: %w", err)
+	}
+	unpackedMap, ok := unpacked.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unpacked data is not a map")
+	}
+
+	if r := getSuiteRestorer(server); r != nil {
+		r.RestoreFields(unpackedMap)
+	}
+
+	jsonBytes, err := sonic.Marshal(unpackedMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal restored data to json: %w", err)
+	}
+
+	var buf bytes.Buffer
+	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
+	encoder.Reset(&buf)
+
+	if _, err := encoder.Write(jsonBytes); err != nil {
+		encoder.Close()
+		zstdEncoderPool.Put(encoder)
+		return nil, fmt.Errorf("failed to write json to zstd encoder: %w", err)
+	}
+
+	jsonBytes = nil
+
+	if err := encoder.Close(); err != nil {
+		zstdEncoderPool.Put(encoder)
+		return nil, fmt.Errorf("failed to close zstd writer: %w", err)
+	}
+	zstdEncoderPool.Put(encoder)
+
+	return buf.Bytes(), nil
+}
+
 func sendData(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, data []byte, encoding string, endpointSecret string, headers map[string]string) {
 	if url == "" {
 		logger.Warnf("Upload endpoint url is empty, skipped syncing data.")
@@ -103,6 +144,7 @@ type syncTarget struct {
 	is8823            bool
 	checkEnabled      bool
 	checkURL          string
+	restoreSuite      bool
 }
 
 func checkUserExists(t syncTarget, userID int64, server utils.SupportedDataUploadServer) bool {
@@ -151,29 +193,29 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 	if dataType == utils.UploadDataTypeSuite {
 		if settings.Suite != nil {
 			if settings.Suite.Allow8823 {
-				targets = append(targets, syncTarget{cfg.Endpoint8823, cfg.Secret8823, cfg.SendJSONZstandard8823, true, cfg.CheckEnabled8823, cfg.CheckURL8823})
+				targets = append(targets, syncTarget{cfg.Endpoint8823, cfg.Secret8823, cfg.SendJSONZstandard8823, true, cfg.CheckEnabled8823, cfg.CheckURL8823, cfg.RestoreSuite8823})
 			}
 			if settings.Suite.AllowSakura {
-				targets = append(targets, syncTarget{cfg.EndpointSakura, cfg.SecretSakura, cfg.SendJSONZstandardSakura, false, cfg.CheckEnabledSakura, cfg.CheckURLSakura})
+				targets = append(targets, syncTarget{cfg.EndpointSakura, cfg.SecretSakura, cfg.SendJSONZstandardSakura, false, cfg.CheckEnabledSakura, cfg.CheckURLSakura, cfg.RestoreSuiteSakura})
 			}
 			if settings.Suite.AllowResona {
-				targets = append(targets, syncTarget{cfg.EndpointResona, cfg.SecretResona, cfg.SendJSONZstandardResona, false, cfg.CheckEnabledResona, cfg.CheckURLResona})
+				targets = append(targets, syncTarget{cfg.EndpointResona, cfg.SecretResona, cfg.SendJSONZstandardResona, false, cfg.CheckEnabledResona, cfg.CheckURLResona, cfg.RestoreSuiteResona})
 			}
 			if settings.Suite.AllowLuna {
-				targets = append(targets, syncTarget{cfg.EndpointLuna, cfg.SecretLuna, cfg.SendJSONZstandardLuna, false, cfg.CheckEnabledLuna, cfg.CheckURLLuna})
+				targets = append(targets, syncTarget{cfg.EndpointLuna, cfg.SecretLuna, cfg.SendJSONZstandardLuna, false, cfg.CheckEnabledLuna, cfg.CheckURLLuna, cfg.RestoreSuiteLuna})
 			}
 		}
 	}
 	if dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if settings.Mysekai != nil {
 			if settings.Mysekai.Allow8823 {
-				targets = append(targets, syncTarget{cfg.Endpoint8823, cfg.Secret8823, cfg.SendJSONZstandard8823, true, cfg.CheckEnabled8823, cfg.CheckURL8823})
+				targets = append(targets, syncTarget{cfg.Endpoint8823, cfg.Secret8823, cfg.SendJSONZstandard8823, true, cfg.CheckEnabled8823, cfg.CheckURL8823, false})
 			}
 			if settings.Mysekai.AllowResona {
-				targets = append(targets, syncTarget{cfg.EndpointResona, cfg.SecretResona, cfg.SendJSONZstandardResona, false, cfg.CheckEnabledResona, cfg.CheckURLResona})
+				targets = append(targets, syncTarget{cfg.EndpointResona, cfg.SecretResona, cfg.SendJSONZstandardResona, false, cfg.CheckEnabledResona, cfg.CheckURLResona, false})
 			}
 			if settings.Mysekai.AllowLuna {
-				targets = append(targets, syncTarget{cfg.EndpointLuna, cfg.SecretLuna, cfg.SendJSONZstandardLuna, false, cfg.CheckEnabledLuna, cfg.CheckURLLuna})
+				targets = append(targets, syncTarget{cfg.EndpointLuna, cfg.SecretLuna, cfg.SendJSONZstandardLuna, false, cfg.CheckEnabledLuna, cfg.CheckURLLuna, false})
 			}
 		}
 	}
@@ -183,10 +225,14 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 	}
 
 	needsProcessed := false
+	needsRestored := false
 	for _, t := range targets {
 		if t.sendJSONZstandard {
-			needsProcessed = true
-			break
+			if t.restoreSuite && dataType == utils.UploadDataTypeSuite {
+				needsRestored = true
+			} else {
+				needsProcessed = true
+			}
 		}
 	}
 
@@ -196,8 +242,17 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 		processedData, err = processDataOnce(rawData, server)
 		if err != nil {
 			logger.Warnf("Failed to pre-process data: %v", err)
-
 			needsProcessed = false
+		}
+	}
+
+	var restoredData []byte
+	if needsRestored {
+		var err error
+		restoredData, err = processDataWithRestore(rawData, server)
+		if err != nil {
+			logger.Warnf("Failed to process data with restore: %v", err)
+			needsRestored = false
 		}
 	}
 
@@ -211,7 +266,10 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 
 		var data []byte
 		var encoding string
-		if t.sendJSONZstandard && needsProcessed {
+		if t.sendJSONZstandard && t.restoreSuite && dataType == utils.UploadDataTypeSuite && needsRestored {
+			data = restoredData
+			encoding = utils.HarukiDataSyncerDataFormatJsonZstd
+		} else if t.sendJSONZstandard && needsProcessed {
 			data = processedData
 			encoding = utils.HarukiDataSyncerDataFormatJsonZstd
 		} else {
