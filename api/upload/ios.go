@@ -25,11 +25,11 @@ var (
 	dataChunksSize  int64
 )
 
-const maxDataChunksSize = 16 * 1024 * 1024
+const maxDataChunksSize = 64 * 1024 * 1024
 
 func init() {
 	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(2 * time.Minute)
 		for range ticker.C {
 			cleanExpiredChunks()
 		}
@@ -42,7 +42,7 @@ func cleanExpiredChunks() {
 	now := time.Now()
 	for uploadID, chunks := range dataChunks {
 		if len(chunks) > 0 {
-			if now.Sub(chunks[len(chunks)-1].Time) > 30*time.Minute {
+			if now.Sub(chunks[len(chunks)-1].Time) > 5*time.Minute {
 				for _, chunk := range chunks {
 					dataChunksSize -= int64(len(chunk.Data))
 				}
