@@ -111,6 +111,12 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(payload.OldPassword)); err != nil {
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Old password is incorrect", nil)
 		}
+		if len(payload.NewPassword) < 8 {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "password must be at least 8 characters", nil)
+		}
+		if len([]byte(payload.NewPassword)) > 72 {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "password is too long (max 72 bytes)", nil)
+		}
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), bcrypt.DefaultCost)
 		if err != nil {
 			harukiLogger.Errorf("Failed to hash password: %v", err)
@@ -126,6 +132,7 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		}
 		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
 			harukiLogger.Errorf("Failed to clear user sessions: %v", err)
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "failed to clear sessions", nil)
 		}
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
 	}

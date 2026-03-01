@@ -3,6 +3,7 @@ package config
 import (
 	harukiLogger "haruki-suite/utils/logger"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -162,11 +163,32 @@ type Config struct {
 
 var Cfg Config
 
+func findConfigPath(filename string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return filename
+	}
+	dir := wd
+	for {
+		candidate := filepath.Join(dir, filename)
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			return candidate
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return filename
+}
+
 func init() {
 	logger := harukiLogger.NewLogger("ConfigLoader", "DEBUG", nil)
-	f, err := os.Open("haruki-suite-configs.yaml")
+	configPath := findConfigPath("haruki-suite-configs.yaml")
+	f, err := os.Open(configPath)
 	if err != nil {
-		logger.Errorf("Failed to open config file: %v", err)
+		logger.Errorf("Failed to open config file (%s): %v", configPath, err)
 		os.Exit(1)
 	}
 	defer func(f *os.File) {

@@ -59,7 +59,7 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 		}
 	}
 	return func(c fiber.Ctx) error {
-		return c.Next()
+		return harukiAPIHelper.ErrorInternal(c, "HarukiProxy auth is not configured")
 	}
 }
 

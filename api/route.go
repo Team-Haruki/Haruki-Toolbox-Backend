@@ -19,5 +19,4 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	upload.RegisterUploadAPIRoutes(apiHelper)
 	ios.RegisterIOSRoutes(apiHelper)
 	oauth2Routes.RegisterOAuth2Routes(apiHelper)
-	RegisterDebugRoutes(apiHelper)
 }
