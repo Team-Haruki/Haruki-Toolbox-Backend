@@ -10,9 +10,11 @@ import (
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
 	"haruki-suite/utils/database/postgresql/oauthclient"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
+	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiOAuth2 "haruki-suite/utils/oauth2"
+	"mime"
 	"net/url"
 	"slices"
 	"strings"
@@ -36,33 +38,33 @@ type AuthCodeData struct {
 func handleAuthorize(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		responseType := c.Query("response_type")
 		clientID := c.Query("client_id")
 		redirectURI := c.Query("redirect_uri")
+		responseType := c.Query("response_type")
 		scope := c.Query("scope")
 		state := c.Query("state")
 		codeChallenge := c.Query("code_challenge")
 		codeChallengeMethod := c.Query("code_challenge_method")
 
-		if responseType != "code" {
-			return errorRedirectOrJSON(c, redirectURI, state, "unsupported_response_type", "only 'code' is supported")
-		}
-		if clientID == "" || redirectURI == "" || scope == "" {
-			return errorRedirectOrJSON(c, redirectURI, state, "invalid_request", "client_id, redirect_uri, and scope are required")
+		if clientID == "" || redirectURI == "" {
+			return oauthError(c, fiber.StatusBadRequest, "invalid_request", "client_id and redirect_uri are required")
 		}
 
 		client, err := apiHelper.DBManager.DB.OAuthClient.Query().
 			Where(oauthclient.ClientIDEQ(clientID), oauthclient.ActiveEQ(true)).
 			Only(ctx)
 		if err != nil {
-			return errorRedirectOrJSON(c, redirectURI, state, "invalid_client", "client not found or inactive")
+			return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "client not found or inactive")
 		}
 
 		if !slices.Contains(client.RedirectUris, redirectURI) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error":             "invalid_request",
-				"error_description": "redirect_uri not registered for this client",
-			})
+			return oauthError(c, fiber.StatusBadRequest, "invalid_request", "redirect_uri not registered for this client")
+		}
+		if responseType != "code" {
+			return errorRedirect(c, redirectURI, state, "unsupported_response_type", "only 'code' is supported")
+		}
+		if scope == "" {
+			return errorRedirect(c, redirectURI, state, "invalid_scope", "scope is required")
 		}
 
 		if client.ClientType == "public" && codeChallenge == "" {
@@ -205,50 +207,80 @@ func handleConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 
 // handleToken exchanges an authorization code or refresh token for an access token.
 // POST /api/oauth2/token
-// Body (form or JSON): grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token
+// Body (application/x-www-form-urlencoded): grant_type, code, redirect_uri, client_id, client_secret, code_verifier, refresh_token
 func handleToken(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		grantType := formOrJSON(c, "grant_type")
-		clientID := formOrJSON(c, "client_id")
-		clientSecret := formOrJSON(c, "client_secret")
+		formValues, err := parseOAuthFormRequest(c)
+		if err != nil {
+			return err
+		}
 
-		if clientID == "" {
-			return oauthError(c, fiber.StatusBadRequest, "invalid_client", "client_id is required")
+		clientAuth, errResp := extractClientAuthentication(c, formValues)
+		if errResp != nil {
+			return respondOAuthError(c, *errResp)
+		}
+		if clientAuth.ClientID == "" {
+			return respondOAuthError(c, oauthErrorResponse{
+				Status:               fiber.StatusUnauthorized,
+				Code:                 "invalid_client",
+				Description:          "client authentication is required",
+				BasicChallengeNeeded: true,
+			})
+		}
+
+		grantType := formValue(formValues, "grant_type")
+		if grantType == "" {
+			return oauthError(c, fiber.StatusBadRequest, "invalid_request", "grant_type is required")
 		}
 
 		client, err := apiHelper.DBManager.DB.OAuthClient.Query().
-			Where(oauthclient.ClientIDEQ(clientID), oauthclient.ActiveEQ(true)).
+			Where(oauthclient.ClientIDEQ(clientAuth.ClientID), oauthclient.ActiveEQ(true)).
 			Only(ctx)
 		if err != nil {
-			return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "client not found")
+			return respondOAuthError(c, oauthErrorResponse{
+				Status:               fiber.StatusUnauthorized,
+				Code:                 "invalid_client",
+				Description:          "client not found",
+				BasicChallengeNeeded: true,
+			})
 		}
 
 		if client.ClientType == "confidential" {
-			if clientSecret == "" {
-				return oauthError(c, fiber.StatusBadRequest, "invalid_client", "client_secret is required for confidential clients")
+			if clientAuth.ClientSecret == "" {
+				return respondOAuthError(c, oauthErrorResponse{
+					Status:               fiber.StatusUnauthorized,
+					Code:                 "invalid_client",
+					Description:          "client_secret is required for confidential clients",
+					BasicChallengeNeeded: true,
+				})
 			}
-			if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(clientSecret)); err != nil {
-				return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "invalid client credentials")
+			if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(clientAuth.ClientSecret)); err != nil {
+				return respondOAuthError(c, oauthErrorResponse{
+					Status:               fiber.StatusUnauthorized,
+					Code:                 "invalid_client",
+					Description:          "invalid client credentials",
+					BasicChallengeNeeded: true,
+				})
 			}
 		}
 
 		switch grantType {
 		case "authorization_code":
-			return handleAuthCodeExchange(c, apiHelper, client)
+			return handleAuthCodeExchange(c, apiHelper, client, formValues)
 		case "refresh_token":
-			return handleRefreshTokenExchange(c, apiHelper, client)
+			return handleRefreshTokenExchange(c, apiHelper, client, formValues)
 		default:
 			return oauthError(c, fiber.StatusBadRequest, "unsupported_grant_type", "only authorization_code and refresh_token are supported")
 		}
 	}
 }
 
-func handleAuthCodeExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, client *postgresql.OAuthClient) error {
+func handleAuthCodeExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, client *postgresql.OAuthClient, formValues url.Values) error {
 	ctx := c.Context()
-	code := formOrJSON(c, "code")
-	redirectURI := formOrJSON(c, "redirect_uri")
-	codeVerifier := formOrJSON(c, "code_verifier")
+	code := formValue(formValues, "code")
+	redirectURI := formValue(formValues, "redirect_uri")
+	codeVerifier := formValue(formValues, "code_verifier")
 
 	if code == "" || redirectURI == "" {
 		return oauthError(c, fiber.StatusBadRequest, "invalid_request", "code and redirect_uri are required")
@@ -288,9 +320,9 @@ func verifyCodeChallenge(codeVerifier, codeChallenge string) bool {
 	return computed == codeChallenge
 }
 
-func handleRefreshTokenExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, client *postgresql.OAuthClient) error {
+func handleRefreshTokenExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, client *postgresql.OAuthClient, formValues url.Values) error {
 	ctx := c.Context()
-	refreshToken := formOrJSON(c, "refresh_token")
+	refreshToken := formValue(formValues, "refresh_token")
 
 	if refreshToken == "" {
 		return oauthError(c, fiber.StatusBadRequest, "invalid_request", "refresh_token is required")
@@ -308,21 +340,39 @@ func handleRefreshTokenExchange(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		return oauthError(c, fiber.StatusBadRequest, "invalid_grant", "refresh token not found or revoked")
 	}
 
+	refreshTTL := config.Cfg.OAuth2.RefreshTokenTTL
+	if refreshTTL <= 0 {
+		refreshTTL = 30 * 24 * 3600
+	}
+	if dbToken.CreatedAt.Add(time.Duration(refreshTTL) * time.Second).Before(time.Now()) {
+		_, _ = dbToken.Update().SetRevoked(true).Save(ctx)
+		return oauthError(c, fiber.StatusBadRequest, "invalid_grant", "refresh token expired")
+	}
+
 	_, _ = dbToken.Update().SetRevoked(true).Save(ctx)
 
-	return issueTokens(c, apiHelper, client, dbToken.Edges.User.ID, dbToken.Scopes)
+	issuedScopes := dbToken.Scopes
+	scopeParam := formValue(formValues, "scope")
+	if scopeParam != "" {
+		requestedScopes := parseScopeList(scopeParam)
+		if len(requestedScopes) == 0 {
+			return oauthError(c, fiber.StatusBadRequest, "invalid_scope", "invalid scope")
+		}
+		if !isScopeSubset(requestedScopes, dbToken.Scopes) {
+			return oauthError(c, fiber.StatusBadRequest, "invalid_scope", "requested scope exceeds originally granted scope")
+		}
+		issuedScopes = requestedScopes
+	}
+
+	return issueTokens(c, apiHelper, client, dbToken.Edges.User.ID, issuedScopes)
 }
 
 func issueTokens(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, client *postgresql.OAuthClient, userID string, scopes []string) error {
 	ctx := c.Context()
-	isConfidential := client.ClientType == "confidential"
 
 	ttl := config.Cfg.OAuth2.AccessTokenTTL
 	if ttl <= 0 {
 		ttl = 3600
-	}
-	if isConfidential {
-		ttl = 0
 	}
 
 	accessTokenStr, expiresAt, err := harukiOAuth2.GenerateAccessToken(userID, client.ClientID, scopes, ttl)
@@ -376,50 +426,221 @@ func issueTokens(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 func handleRevoke(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		token := formOrJSON(c, "token")
-		clientID := formOrJSON(c, "client_id")
-		clientSecret := formOrJSON(c, "client_secret")
+		formValues, err := parseOAuthFormRequest(c)
+		if err != nil {
+			return err
+		}
 
-		if token == "" || clientID == "" || clientSecret == "" {
-			return oauthError(c, fiber.StatusBadRequest, "invalid_request", "token, client_id, and client_secret are required")
+		clientAuth, errResp := extractClientAuthentication(c, formValues)
+		if errResp != nil {
+			return respondOAuthError(c, *errResp)
+		}
+
+		token := formValue(formValues, "token")
+		if token == "" {
+			return oauthError(c, fiber.StatusBadRequest, "invalid_request", "token is required")
+		}
+		if clientAuth.ClientID == "" {
+			return respondOAuthError(c, oauthErrorResponse{
+				Status:               fiber.StatusUnauthorized,
+				Code:                 "invalid_client",
+				Description:          "client authentication is required",
+				BasicChallengeNeeded: true,
+			})
 		}
 
 		client, err := apiHelper.DBManager.DB.OAuthClient.Query().
-			Where(oauthclient.ClientIDEQ(clientID), oauthclient.ActiveEQ(true)).
+			Where(oauthclient.ClientIDEQ(clientAuth.ClientID), oauthclient.ActiveEQ(true)).
 			Only(ctx)
 		if err != nil {
-			return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "client not found")
+			return respondOAuthError(c, oauthErrorResponse{
+				Status:               fiber.StatusUnauthorized,
+				Code:                 "invalid_client",
+				Description:          "client not found",
+				BasicChallengeNeeded: true,
+			})
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(clientSecret)); err != nil {
-			return oauthError(c, fiber.StatusUnauthorized, "invalid_client", "invalid client credentials")
+		if client.ClientType == "confidential" {
+			if clientAuth.ClientSecret == "" {
+				return respondOAuthError(c, oauthErrorResponse{
+					Status:               fiber.StatusUnauthorized,
+					Code:                 "invalid_client",
+					Description:          "client_secret is required for confidential clients",
+					BasicChallengeNeeded: true,
+				})
+			}
+			if err := bcrypt.CompareHashAndPassword([]byte(client.ClientSecret), []byte(clientAuth.ClientSecret)); err != nil {
+				return respondOAuthError(c, oauthErrorResponse{
+					Status:               fiber.StatusUnauthorized,
+					Code:                 "invalid_client",
+					Description:          "invalid client credentials",
+					BasicChallengeNeeded: true,
+				})
+			}
 		}
 
-		_, err = apiHelper.DBManager.DB.OAuthToken.Update().
-			Where(
-				oauthtoken.Or(
-					oauthtoken.AccessTokenEQ(token),
-					oauthtoken.RefreshTokenEQ(token),
-				),
-				oauthtoken.HasClientWith(oauthclient.IDEQ(client.ID)),
-			).
+		tokenTypeHint := formValue(formValues, "token_type_hint")
+		var predicates []predicate.OAuthToken
+		switch tokenTypeHint {
+		case "access_token":
+			predicates = append(predicates, oauthtoken.AccessTokenEQ(token))
+		case "refresh_token":
+			predicates = append(predicates, oauthtoken.RefreshTokenEQ(token))
+		default:
+			predicates = append(predicates, oauthtoken.Or(
+				oauthtoken.AccessTokenEQ(token),
+				oauthtoken.RefreshTokenEQ(token),
+			))
+		}
+		predicates = append(predicates, oauthtoken.HasClientWith(oauthclient.IDEQ(client.ID)))
+
+		_, err = apiHelper.DBManager.DB.OAuthToken.Update().Where(predicates...).
 			SetRevoked(true).
 			Save(ctx)
 		if err != nil {
 			harukiLogger.Warnf("OAuth2 revoke: token not found or already revoked: %v", err)
 		}
 
-		return c.JSON(fiber.Map{"status": "ok"})
+		return c.SendStatus(fiber.StatusOK)
 	}
 }
 
-func formOrJSON(c fiber.Ctx, key string) string {
+func formValue(formValues url.Values, key string) string {
+	return strings.TrimSpace(formValues.Get(key))
+}
 
-	val := c.FormValue(key)
-	if val != "" {
-		return val
+func parseOAuthFormRequest(c fiber.Ctx) (url.Values, error) {
+	if !isFormURLEncodedContentType(c.Get("Content-Type")) {
+		return nil, oauthError(c, fiber.StatusBadRequest, "invalid_request", "Content-Type must be application/x-www-form-urlencoded")
+	}
+	formValues, err := parseOAuthFormBody(c.Body())
+	if err != nil {
+		return nil, oauthError(c, fiber.StatusBadRequest, "invalid_request", "invalid form body")
+	}
+	return formValues, nil
+}
+
+func isFormURLEncodedContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(contentType))
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(mediaType, "application/x-www-form-urlencoded")
+}
+
+func parseOAuthFormBody(body []byte) (url.Values, error) {
+	if len(body) == 0 {
+		return make(url.Values), nil
+	}
+	return url.ParseQuery(string(body))
+}
+
+type oauthClientAuthentication struct {
+	ClientID     string
+	ClientSecret string
+}
+
+type oauthErrorResponse struct {
+	Status               int
+	Code                 string
+	Description          string
+	BasicChallengeNeeded bool
+}
+
+func parseBasicAuthorizationValue(authHeader string) (clientID, clientSecret string, presented bool, err error) {
+	parts := strings.SplitN(strings.TrimSpace(authHeader), " ", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return "", "", false, nil
+	}
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Basic") {
+		return "", "", true, fmt.Errorf("unsupported authorization scheme")
 	}
 
-	return c.Query(key)
+	decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(parts[1]))
+	if decodeErr != nil {
+		return "", "", true, fmt.Errorf("invalid basic auth encoding")
+	}
+
+	credential := string(decoded)
+	sep := strings.Index(credential, ":")
+	if sep < 0 {
+		return "", "", true, fmt.Errorf("invalid basic auth credential format")
+	}
+
+	rawClientID := credential[:sep]
+	rawClientSecret := credential[sep+1:]
+
+	decodedClientID, err := url.QueryUnescape(rawClientID)
+	if err != nil {
+		return "", "", true, fmt.Errorf("invalid basic auth client_id")
+	}
+	decodedClientSecret, err := url.QueryUnescape(rawClientSecret)
+	if err != nil {
+		return "", "", true, fmt.Errorf("invalid basic auth client_secret")
+	}
+
+	return strings.TrimSpace(decodedClientID), decodedClientSecret, true, nil
+}
+
+func extractClientAuthentication(c fiber.Ctx, formValues url.Values) (oauthClientAuthentication, *oauthErrorResponse) {
+	bodyClientID := formValue(formValues, "client_id")
+	bodyClientSecret := formValues.Get("client_secret")
+	_, bodySecretPresented := formValues["client_secret"]
+	bodyCredentialPresented := bodyClientID != "" || bodySecretPresented
+
+	basicClientID, basicClientSecret, basicPresented, basicErr := parseBasicAuthorizationValue(c.Get("Authorization"))
+	if basicErr != nil {
+		return oauthClientAuthentication{}, &oauthErrorResponse{
+			Status:               fiber.StatusUnauthorized,
+			Code:                 "invalid_client",
+			Description:          "invalid client authentication",
+			BasicChallengeNeeded: true,
+		}
+	}
+
+	if basicPresented && bodyCredentialPresented {
+		return oauthClientAuthentication{}, &oauthErrorResponse{
+			Status:      fiber.StatusBadRequest,
+			Code:        "invalid_request",
+			Description: "multiple client authentication methods used",
+		}
+	}
+
+	if basicPresented {
+		return oauthClientAuthentication{
+			ClientID:     basicClientID,
+			ClientSecret: basicClientSecret,
+		}, nil
+	}
+
+	return oauthClientAuthentication{
+		ClientID:     bodyClientID,
+		ClientSecret: bodyClientSecret,
+	}, nil
+}
+
+func parseScopeList(scope string) []string {
+	return strings.Fields(scope)
+}
+
+func isScopeSubset(requested, granted []string) bool {
+	grantedSet := make(map[string]struct{}, len(granted))
+	for _, s := range granted {
+		grantedSet[s] = struct{}{}
+	}
+	for _, s := range requested {
+		if _, ok := grantedSet[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func respondOAuthError(c fiber.Ctx, e oauthErrorResponse) error {
+	if e.BasicChallengeNeeded {
+		c.Set("WWW-Authenticate", `Basic realm="oauth2"`)
+	}
+	return oauthError(c, e.Status, e.Code, e.Description)
 }
 
 func oauthError(c fiber.Ctx, status int, errorCode, description string) error {

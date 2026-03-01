@@ -350,6 +350,25 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	}
 }
 
+func parseWebhookCallback(cb map[string]any) (string, string, bool) {
+	rawURL, ok := cb["callback_url"]
+	if !ok {
+		return "", "", false
+	}
+	url, ok := rawURL.(string)
+	if !ok || strings.TrimSpace(url) == "" {
+		return "", "", false
+	}
+	bearer, _ := cb["bearer"].(string)
+	if bearer == "" {
+		// Backward-compat for old data that may contain uppercase field names.
+		if legacy, ok := cb["Bearer"].(string); ok {
+			bearer = legacy
+		}
+	}
+	return url, bearer, true
+}
+
 func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
 	callbacks, err := h.DBManager.Mongo.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
 	if err != nil || len(callbacks) == 0 {
@@ -357,11 +376,14 @@ func (h *DataHandler) CallWebhook(ctx context.Context, userID int64, server util
 	}
 	var wg sync.WaitGroup
 	for _, cb := range callbacks {
-		url := cb["callback_url"].(string)
+		url, bearer, ok := parseWebhookCallback(cb)
+		if !ok {
+			h.Logger.Warnf("Skip invalid webhook callback payload: %v", cb)
+			continue
+		}
 		url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
 		url = strings.ReplaceAll(url, "{server}", string(server))
 		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
-		bearer, _ := cb["Bearer"].(string)
 		wg.Add(1)
 		go func(u, b string) {
 			defer wg.Done()

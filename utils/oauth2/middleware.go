@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"fmt"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
 	harukiLogger "haruki-suite/utils/logger"
@@ -11,10 +12,30 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+func escapeBearerAuthParam(v string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return replacer.Replace(v)
+}
+
+func buildBearerChallenge(errorCode, description, scope string) string {
+	parts := []string{`Bearer realm="haruki-toolbox"`}
+	if errorCode != "" {
+		parts = append(parts, fmt.Sprintf(`error="%s"`, escapeBearerAuthParam(errorCode)))
+	}
+	if description != "" {
+		parts = append(parts, fmt.Sprintf(`error_description="%s"`, escapeBearerAuthParam(description)))
+	}
+	if scope != "" {
+		parts = append(parts, fmt.Sprintf(`scope="%s"`, escapeBearerAuthParam(scope)))
+	}
+	return strings.Join(parts, ", ")
+}
+
 func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		auth := c.Get("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+			c.Set("WWW-Authenticate", buildBearerChallenge("", "", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  fiber.StatusUnauthorized,
 				"message": "missing or invalid authorization header",
@@ -25,6 +46,7 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 		claims, err := ParseAccessToken(tokenStr)
 		if err != nil {
 			harukiLogger.Warnf("OAuth2 token parse failed: %v", err)
+			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "invalid or expired token", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  fiber.StatusUnauthorized,
 				"message": "invalid or expired token",
@@ -38,6 +60,7 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 			).
 			Only(context.Background())
 		if err != nil {
+			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "token not found or revoked", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  fiber.StatusUnauthorized,
 				"message": "token not found or revoked",
@@ -45,6 +68,7 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 		}
 
 		if dbToken.ExpiresAt != nil && dbToken.ExpiresAt.Before(time.Now()) {
+			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "token expired", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  fiber.StatusUnauthorized,
 				"message": "token expired",
@@ -52,6 +76,7 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 		}
 
 		if requiredScope != "" && !HasScope(claims.Scopes, requiredScope) {
+			c.Set("WWW-Authenticate", buildBearerChallenge("insufficient_scope", "insufficient scope", requiredScope))
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"status":  fiber.StatusForbidden,
 				"message": "insufficient scope",
@@ -70,6 +95,7 @@ func VerifySessionOrOAuth2Token(sessionVerify fiber.Handler, db *postgresql.Clie
 	return func(c fiber.Ctx) error {
 		auth := c.Get("Authorization")
 		if auth == "" {
+			c.Set("WWW-Authenticate", buildBearerChallenge("", "", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"status":  fiber.StatusUnauthorized,
 				"message": "missing authorization header",

@@ -7,6 +7,7 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,10 @@ import (
 
 func ValidateUserPermission(expectedToken, requiredAgentKeyword string) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		if strings.TrimSpace(expectedToken) == "" {
+			harukiLogger.Errorf("private api token is not configured")
+			return harukiApiHelper.ErrorInternal(c, "private api is not configured")
+		}
 		authorization := c.Get("Authorization")
 		userAgent := c.Get("User-Agent")
 		if subtle.ConstantTimeCompare([]byte(authorization), []byte(expectedToken)) != 1 {

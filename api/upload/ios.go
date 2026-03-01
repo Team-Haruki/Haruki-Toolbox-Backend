@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"fmt"
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
@@ -21,11 +22,17 @@ import (
 
 var (
 	dataChunks      = make(map[string][]harukiUtils.DataChunk)
+	dataChunkTotals = make(map[string]int)
 	dataChunksMutex sync.RWMutex
 	dataChunksSize  int64
 )
 
-const maxDataChunksSize = 64 * 1024 * 1024
+const (
+	maxDataChunksSize    = 64 * 1024 * 1024
+	maxUploadChunkCount  = 1024
+	maxUploadIDLength    = 128
+	chunkUploadIDSepChar = "|"
+)
 
 func init() {
 	go func() {
@@ -47,9 +54,11 @@ func cleanExpiredChunks() {
 					dataChunksSize -= int64(len(chunk.Data))
 				}
 				delete(dataChunks, uploadID)
+				delete(dataChunkTotals, uploadID)
 			}
 		} else {
 			delete(dataChunks, uploadID)
+			delete(dataChunkTotals, uploadID)
 		}
 	}
 }
@@ -60,6 +69,41 @@ type dataUploadHeader struct {
 	UploadId      string `header:"X-Upload-Id"`
 	ChunkIndex    int    `header:"X-Chunk-Index"`
 	TotalChunks   int    `header:"X-Total-Chunks"`
+}
+
+func validateDataUploadHeader(header *dataUploadHeader) error {
+	uploadID := strings.TrimSpace(header.UploadId)
+	if uploadID == "" {
+		return fmt.Errorf("missing X-Upload-Id")
+	}
+	if len(uploadID) > maxUploadIDLength {
+		return fmt.Errorf("X-Upload-Id is too long")
+	}
+	if header.TotalChunks < 1 || header.TotalChunks > maxUploadChunkCount {
+		return fmt.Errorf("X-Total-Chunks must be between 1 and %d", maxUploadChunkCount)
+	}
+	if header.ChunkIndex < 0 || header.ChunkIndex >= header.TotalChunks {
+		return fmt.Errorf("X-Chunk-Index is out of range")
+	}
+	return nil
+}
+
+func buildChunkUploadKey(toolboxUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID int64, uploadID string) string {
+	return fmt.Sprintf("%s%s%s%s%d%s%s", toolboxUserID, chunkUploadIDSepChar, server, chunkUploadIDSepChar, gameUserID, chunkUploadIDSepChar, uploadID)
+}
+
+func hasAllChunks(chunks []harukiUtils.DataChunk, totalChunks int) bool {
+	if len(chunks) != totalChunks {
+		return false
+	}
+	seen := make(map[int]struct{}, len(chunks))
+	for _, chunk := range chunks {
+		if chunk.ChunkIndex < 0 || chunk.ChunkIndex >= totalChunks {
+			return false
+		}
+		seen[chunk.ChunkIndex] = struct{}{}
+	}
+	return len(seen) == totalChunks
 }
 
 func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
@@ -150,14 +194,23 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
 		}
 		toolboxUserID := record.UserID
-		chunkIndex, _ := strconv.Atoi(c.Get("X-Chunk-Index", "0"))
-		totalChunks, _ := strconv.Atoi(c.Get("X-Total-Chunks", "0"))
+		chunkIndex, err := strconv.Atoi(c.Get("X-Chunk-Index", ""))
+		if err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid X-Chunk-Index")
+		}
+		totalChunks, err := strconv.Atoi(c.Get("X-Total-Chunks", ""))
+		if err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid X-Total-Chunks")
+		}
 		header := &dataUploadHeader{
 			ScriptVersion: c.Get("X-Script-Version"),
 			OriginalUrl:   c.Get("X-Original-Url"),
 			UploadId:      c.Get("X-Upload-Id"),
 			ChunkIndex:    chunkIndex,
 			TotalChunks:   totalChunks,
+		}
+		if err := validateDataUploadHeader(header); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		if header.ScriptVersion == "" {
 			header.ScriptVersion = "unknown"
@@ -197,26 +250,56 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		now := time.Now()
 		body := c.Request().Body()
+		if len(body) == 0 {
+			return harukiAPIHelper.ErrorBadRequest(c, "empty upload body")
+		}
 		chunkCopy := make([]byte, len(body))
 		copy(chunkCopy, body)
+		uploadKey := buildChunkUploadKey(toolboxUserID, server, gameUserId, header.UploadId)
 		dataChunksMutex.Lock()
-		if dataChunksSize+int64(len(chunkCopy)) > maxDataChunksSize {
+		if expectedTotal, ok := dataChunkTotals[uploadKey]; ok {
+			if expectedTotal != header.TotalChunks {
+				dataChunksMutex.Unlock()
+				return harukiAPIHelper.ErrorBadRequest(c, "inconsistent X-Total-Chunks for this upload")
+			}
+		} else {
+			dataChunkTotals[uploadKey] = header.TotalChunks
+		}
+		chunks := dataChunks[uploadKey]
+		replacedIndex := -1
+		oldChunkLen := 0
+		for i := range chunks {
+			if chunks[i].ChunkIndex == header.ChunkIndex {
+				replacedIndex = i
+				oldChunkLen = len(chunks[i].Data)
+				break
+			}
+		}
+		sizeDelta := int64(len(chunkCopy) - oldChunkLen)
+		if dataChunksSize+sizeDelta > maxDataChunksSize {
 			dataChunksMutex.Unlock()
 			return harukiAPIHelper.ErrorInternal(c, "Server upload buffer full, try again later")
 		}
-		dataChunksSize += int64(len(chunkCopy))
-		dataChunks[header.UploadId] = append(dataChunks[header.UploadId], harukiUtils.DataChunk{
+		dataChunksSize += sizeDelta
+		newChunk := harukiUtils.DataChunk{
 			ChunkIndex: header.ChunkIndex,
 			Data:       chunkCopy,
 			Time:       now,
-		})
+		}
+		if replacedIndex >= 0 {
+			chunks[replacedIndex] = newChunk
+		} else {
+			chunks = append(chunks, newChunk)
+		}
+		dataChunks[uploadKey] = chunks
 		var completedChunks []harukiUtils.DataChunk
-		if len(dataChunks[header.UploadId]) == header.TotalChunks {
-			completedChunks = dataChunks[header.UploadId]
+		if hasAllChunks(chunks, header.TotalChunks) {
+			completedChunks = append(completedChunks, chunks...)
 			for _, chunk := range completedChunks {
 				dataChunksSize -= int64(len(chunk.Data))
 			}
-			delete(dataChunks, header.UploadId)
+			delete(dataChunks, uploadKey)
+			delete(dataChunkTotals, uploadKey)
 		}
 		dataChunksMutex.Unlock()
 		if completedChunks != nil {
