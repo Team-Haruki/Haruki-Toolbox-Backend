@@ -32,6 +32,18 @@ func (f EmailInfoFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postg
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.EmailInfoMutation", m)
 }
 
+// The FriendLinkFunc type is an adapter to allow the use of ordinary
+// function as FriendLink mutator.
+type FriendLinkFunc func(context.Context, *postgresql.FriendLinkMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FriendLinkFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.FriendLinkMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.FriendLinkMutation", m)
+}
+
 // The GameAccountBindingFunc type is an adapter to allow the use of ordinary
 // function as GameAccountBinding mutator.
 type GameAccountBindingFunc func(context.Context, *postgresql.GameAccountBindingMutation) (postgresql.Value, error)

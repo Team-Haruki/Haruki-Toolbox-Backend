@@ -5,6 +5,7 @@ package postgresql
 import (
 	"haruki-suite/entsrc/schema"
 	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
@@ -28,6 +29,24 @@ func init() {
 	emailinfoDescVerified := emailinfoFields[1].Descriptor()
 	// emailinfo.DefaultVerified holds the default value on creation for the verified field.
 	emailinfo.DefaultVerified = emailinfoDescVerified.Default.(bool)
+	friendlinkFields := schema.FriendLink{}.Fields()
+	_ = friendlinkFields
+	// friendlinkDescName is the schema descriptor for name field.
+	friendlinkDescName := friendlinkFields[1].Descriptor()
+	// friendlink.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	friendlink.NameValidator = friendlinkDescName.Validators[0].(func(string) error)
+	// friendlinkDescDescription is the schema descriptor for description field.
+	friendlinkDescDescription := friendlinkFields[2].Descriptor()
+	// friendlink.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	friendlink.DescriptionValidator = friendlinkDescDescription.Validators[0].(func(string) error)
+	// friendlinkDescAvatar is the schema descriptor for avatar field.
+	friendlinkDescAvatar := friendlinkFields[3].Descriptor()
+	// friendlink.AvatarValidator is a validator for the "avatar" field. It is called by the builders before save.
+	friendlink.AvatarValidator = friendlinkDescAvatar.Validators[0].(func(string) error)
+	// friendlinkDescURL is the schema descriptor for url field.
+	friendlinkDescURL := friendlinkFields[4].Descriptor()
+	// friendlink.URLValidator is a validator for the "url" field. It is called by the builders before save.
+	friendlink.URLValidator = friendlinkDescURL.Validators[0].(func(string) error)
 	gameaccountbindingFields := schema.GameAccountBinding{}.Fields()
 	_ = gameaccountbindingFields
 	// gameaccountbindingDescVerified is the schema descriptor for verified field.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
@@ -86,6 +87,7 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			authorizesocialplatforminfo.Table: authorizesocialplatforminfo.ValidColumn,
 			emailinfo.Table:                   emailinfo.ValidColumn,
+			friendlink.Table:                  friendlink.ValidColumn,
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
 			group.Table:                       group.ValidColumn,
 			grouplist.Table:                   grouplist.ValidColumn,

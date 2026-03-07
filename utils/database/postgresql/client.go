@@ -13,6 +13,7 @@ import (
 
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
@@ -39,6 +40,8 @@ type Client struct {
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
 	// EmailInfo is the client for interacting with the EmailInfo builders.
 	EmailInfo *EmailInfoClient
+	// FriendLink is the client for interacting with the FriendLink builders.
+	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
 	GameAccountBinding *GameAccountBindingClient
 	// Group is the client for interacting with the Group builders.
@@ -72,6 +75,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(c.config)
 	c.EmailInfo = NewEmailInfoClient(c.config)
+	c.FriendLink = NewFriendLinkClient(c.config)
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupList = NewGroupListClient(c.config)
@@ -176,6 +180,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
 		EmailInfo:                   NewEmailInfoClient(cfg),
+		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
@@ -207,6 +212,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
 		EmailInfo:                   NewEmailInfoClient(cfg),
+		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
@@ -246,8 +252,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.GameAccountBinding, c.Group,
-		c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
+		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.FriendLink, c.GameAccountBinding,
+		c.Group, c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
 		c.OAuthToken, c.SocialPlatformInfo, c.UploadLog, c.User,
 	} {
 		n.Use(hooks...)
@@ -258,8 +264,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.GameAccountBinding, c.Group,
-		c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
+		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.FriendLink, c.GameAccountBinding,
+		c.Group, c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
 		c.OAuthToken, c.SocialPlatformInfo, c.UploadLog, c.User,
 	} {
 		n.Intercept(interceptors...)
@@ -273,6 +279,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AuthorizeSocialPlatformInfo.mutate(ctx, m)
 	case *EmailInfoMutation:
 		return c.EmailInfo.mutate(ctx, m)
+	case *FriendLinkMutation:
+		return c.FriendLink.mutate(ctx, m)
 	case *GameAccountBindingMutation:
 		return c.GameAccountBinding.mutate(ctx, m)
 	case *GroupMutation:
@@ -593,6 +601,139 @@ func (c *EmailInfoClient) mutate(ctx context.Context, m *EmailInfoMutation) (Val
 		return (&EmailInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown EmailInfo mutation op: %q", m.Op())
+	}
+}
+
+// FriendLinkClient is a client for the FriendLink schema.
+type FriendLinkClient struct {
+	config
+}
+
+// NewFriendLinkClient returns a client for the FriendLink from the given config.
+func NewFriendLinkClient(c config) *FriendLinkClient {
+	return &FriendLinkClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `friendlink.Hooks(f(g(h())))`.
+func (c *FriendLinkClient) Use(hooks ...Hook) {
+	c.hooks.FriendLink = append(c.hooks.FriendLink, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `friendlink.Intercept(f(g(h())))`.
+func (c *FriendLinkClient) Intercept(interceptors ...Interceptor) {
+	c.inters.FriendLink = append(c.inters.FriendLink, interceptors...)
+}
+
+// Create returns a builder for creating a FriendLink entity.
+func (c *FriendLinkClient) Create() *FriendLinkCreate {
+	mutation := newFriendLinkMutation(c.config, OpCreate)
+	return &FriendLinkCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of FriendLink entities.
+func (c *FriendLinkClient) CreateBulk(builders ...*FriendLinkCreate) *FriendLinkCreateBulk {
+	return &FriendLinkCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *FriendLinkClient) MapCreateBulk(slice any, setFunc func(*FriendLinkCreate, int)) *FriendLinkCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &FriendLinkCreateBulk{err: fmt.Errorf("calling to FriendLinkClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*FriendLinkCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &FriendLinkCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for FriendLink.
+func (c *FriendLinkClient) Update() *FriendLinkUpdate {
+	mutation := newFriendLinkMutation(c.config, OpUpdate)
+	return &FriendLinkUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *FriendLinkClient) UpdateOne(_m *FriendLink) *FriendLinkUpdateOne {
+	mutation := newFriendLinkMutation(c.config, OpUpdateOne, withFriendLink(_m))
+	return &FriendLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *FriendLinkClient) UpdateOneID(id int) *FriendLinkUpdateOne {
+	mutation := newFriendLinkMutation(c.config, OpUpdateOne, withFriendLinkID(id))
+	return &FriendLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for FriendLink.
+func (c *FriendLinkClient) Delete() *FriendLinkDelete {
+	mutation := newFriendLinkMutation(c.config, OpDelete)
+	return &FriendLinkDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *FriendLinkClient) DeleteOne(_m *FriendLink) *FriendLinkDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *FriendLinkClient) DeleteOneID(id int) *FriendLinkDeleteOne {
+	builder := c.Delete().Where(friendlink.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &FriendLinkDeleteOne{builder}
+}
+
+// Query returns a query builder for FriendLink.
+func (c *FriendLinkClient) Query() *FriendLinkQuery {
+	return &FriendLinkQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeFriendLink},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a FriendLink entity by its id.
+func (c *FriendLinkClient) Get(ctx context.Context, id int) (*FriendLink, error) {
+	return c.Query().Where(friendlink.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *FriendLinkClient) GetX(ctx context.Context, id int) *FriendLink {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *FriendLinkClient) Hooks() []Hook {
+	return c.hooks.FriendLink
+}
+
+// Interceptors returns the client interceptors.
+func (c *FriendLinkClient) Interceptors() []Interceptor {
+	return c.inters.FriendLink
+}
+
+func (c *FriendLinkClient) mutate(ctx context.Context, m *FriendLinkMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&FriendLinkCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&FriendLinkUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&FriendLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&FriendLinkDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown FriendLink mutation op: %q", m.Op())
 	}
 }
 
@@ -2217,13 +2358,13 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, Group, GroupList,
-		IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken, SocialPlatformInfo,
-		UploadLog, User []ent.Hook
+		AuthorizeSocialPlatformInfo, EmailInfo, FriendLink, GameAccountBinding, Group,
+		GroupList, IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken,
+		SocialPlatformInfo, UploadLog, User []ent.Hook
 	}
 	inters struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, GameAccountBinding, Group, GroupList,
-		IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken, SocialPlatformInfo,
-		UploadLog, User []ent.Interceptor
+		AuthorizeSocialPlatformInfo, EmailInfo, FriendLink, GameAccountBinding, Group,
+		GroupList, IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken,
+		SocialPlatformInfo, UploadLog, User []ent.Interceptor
 	}
 )
