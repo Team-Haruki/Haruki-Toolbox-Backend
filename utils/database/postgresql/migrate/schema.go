@@ -60,6 +60,21 @@ var (
 			},
 		},
 	}
+	// FriendLinksColumns holds the columns for the "friend_links" table.
+	FriendLinksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "description", Type: field.TypeString, Size: 300},
+		{Name: "avatar", Type: field.TypeString, Size: 500},
+		{Name: "url", Type: field.TypeString, Size: 500},
+		{Name: "tags", Type: field.TypeJSON, Nullable: true},
+	}
+	// FriendLinksTable holds the schema information for the "friend_links" table.
+	FriendLinksTable = &schema.Table{
+		Name:       "friend_links",
+		Columns:    FriendLinksColumns,
+		PrimaryKey: []*schema.Column{FriendLinksColumns[0]},
+	}
 	// GameAccountBindingsColumns holds the columns for the "game_account_bindings" table.
 	GameAccountBindingsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -306,6 +321,7 @@ var (
 	Tables = []*schema.Table{
 		AuthorizeSocialPlatformInfosTable,
 		EmailInfosTable,
+		FriendLinksTable,
 		GameAccountBindingsTable,
 		GroupsTable,
 		GroupListsTable,

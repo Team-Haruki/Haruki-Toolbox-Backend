@@ -12,6 +12,9 @@ type AuthorizeSocialPlatformInfo func(*sql.Selector)
 // EmailInfo is the predicate function for emailinfo builders.
 type EmailInfo func(*sql.Selector)
 
+// FriendLink is the predicate function for friendlink builders.
+type FriendLink func(*sql.Selector)
+
 // GameAccountBinding is the predicate function for gameaccountbinding builders.
 type GameAccountBinding func(*sql.Selector)
 

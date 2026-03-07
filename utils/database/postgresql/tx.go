@@ -16,6 +16,8 @@ type Tx struct {
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
 	// EmailInfo is the client for interacting with the EmailInfo builders.
 	EmailInfo *EmailInfoClient
+	// FriendLink is the client for interacting with the FriendLink builders.
+	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
 	GameAccountBinding *GameAccountBindingClient
 	// Group is the client for interacting with the Group builders.
@@ -169,6 +171,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(tx.config)
 	tx.EmailInfo = NewEmailInfoClient(tx.config)
+	tx.FriendLink = NewFriendLinkClient(tx.config)
 	tx.GameAccountBinding = NewGameAccountBindingClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupList = NewGroupListClient(tx.config)
