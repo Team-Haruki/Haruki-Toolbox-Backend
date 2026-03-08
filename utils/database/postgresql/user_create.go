@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
@@ -72,6 +71,20 @@ func (_c *UserCreate) SetNillableAllowCnMysekai(v *bool) *UserCreate {
 	return _c
 }
 
+// SetRole sets the "role" field.
+func (_c *UserCreate) SetRole(v user.Role) *UserCreate {
+	_c.mutation.SetRole(v)
+	return _c
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_c *UserCreate) SetNillableRole(v *user.Role) *UserCreate {
+	if v != nil {
+		_c.SetRole(*v)
+	}
+	return _c
+}
+
 // SetBanned sets the "banned" field.
 func (_c *UserCreate) SetBanned(v bool) *UserCreate {
 	_c.mutation.SetBanned(v)
@@ -104,25 +117,6 @@ func (_c *UserCreate) SetNillableBanReason(v *string) *UserCreate {
 func (_c *UserCreate) SetID(v string) *UserCreate {
 	_c.mutation.SetID(v)
 	return _c
-}
-
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_c *UserCreate) SetEmailInfoID(id int) *UserCreate {
-	_c.mutation.SetEmailInfoID(id)
-	return _c
-}
-
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_c *UserCreate) SetNillableEmailInfoID(id *int) *UserCreate {
-	if id != nil {
-		_c = _c.SetEmailInfoID(*id)
-	}
-	return _c
-}
-
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_c *UserCreate) SetEmailInfo(v *EmailInfo) *UserCreate {
-	return _c.SetEmailInfoID(v.ID)
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -262,6 +256,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultAllowCnMysekai
 		_c.mutation.SetAllowCnMysekai(v)
 	}
+	if _, ok := _c.mutation.Role(); !ok {
+		v := user.DefaultRole
+		_c.mutation.SetRole(v)
+	}
 	if _, ok := _c.mutation.Banned(); !ok {
 		v := user.DefaultBanned
 		_c.mutation.SetBanned(v)
@@ -281,6 +279,14 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
+	}
+	if _, ok := _c.mutation.Role(); !ok {
+		return &ValidationError{Name: "role", err: errors.New(`postgresql: missing required field "User.role"`)}
+	}
+	if v, ok := _c.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Banned(); !ok {
 		return &ValidationError{Name: "banned", err: errors.New(`postgresql: missing required field "User.banned"`)}
@@ -345,6 +351,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 		_node.AllowCnMysekai = value
 	}
+	if value, ok := _c.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+		_node.Role = value
+	}
 	if value, ok := _c.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
 		_node.Banned = value
@@ -352,22 +362,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BanReason(); ok {
 		_spec.SetField(user.FieldBanReason, field.TypeString, value)
 		_node.BanReason = &value
-	}
-	if nodes := _c.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.SocialPlatformInfoIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

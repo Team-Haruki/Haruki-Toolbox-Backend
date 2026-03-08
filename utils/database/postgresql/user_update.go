@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
@@ -110,6 +109,20 @@ func (_u *UserUpdate) SetNillableAllowCnMysekai(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetRole sets the "role" field.
+func (_u *UserUpdate) SetRole(v user.Role) *UserUpdate {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRole(v *user.Role) *UserUpdate {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
 // SetBanned sets the "banned" field.
 func (_u *UserUpdate) SetBanned(v bool) *UserUpdate {
 	_u.mutation.SetBanned(v)
@@ -142,25 +155,6 @@ func (_u *UserUpdate) SetNillableBanReason(v *string) *UserUpdate {
 func (_u *UserUpdate) ClearBanReason() *UserUpdate {
 	_u.mutation.ClearBanReason()
 	return _u
-}
-
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_u *UserUpdate) SetEmailInfoID(id int) *UserUpdate {
-	_u.mutation.SetEmailInfoID(id)
-	return _u
-}
-
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_u *UserUpdate) SetNillableEmailInfoID(id *int) *UserUpdate {
-	if id != nil {
-		_u = _u.SetEmailInfoID(*id)
-	}
-	return _u
-}
-
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdate) SetEmailInfo(v *EmailInfo) *UserUpdate {
-	return _u.SetEmailInfoID(v.ID)
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -264,12 +258,6 @@ func (_u *UserUpdate) AddOauthTokens(v ...*OAuthToken) *UserUpdate {
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
-}
-
-// ClearEmailInfo clears the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdate) ClearEmailInfo() *UserUpdate {
-	_u.mutation.ClearEmailInfo()
-	return _u
 }
 
 // ClearSocialPlatformInfo clears the "social_platform_info" edge to the SocialPlatformInfo entity.
@@ -395,7 +383,20 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *UserUpdate) check() error {
+	if v, ok := _u.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -422,6 +423,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+	}
 	if value, ok := _u.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
 	}
@@ -430,35 +434,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
-	}
-	if _u.mutation.EmailInfoCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -794,6 +769,20 @@ func (_u *UserUpdateOne) SetNillableAllowCnMysekai(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetRole sets the "role" field.
+func (_u *UserUpdateOne) SetRole(v user.Role) *UserUpdateOne {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRole(v *user.Role) *UserUpdateOne {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
 // SetBanned sets the "banned" field.
 func (_u *UserUpdateOne) SetBanned(v bool) *UserUpdateOne {
 	_u.mutation.SetBanned(v)
@@ -826,25 +815,6 @@ func (_u *UserUpdateOne) SetNillableBanReason(v *string) *UserUpdateOne {
 func (_u *UserUpdateOne) ClearBanReason() *UserUpdateOne {
 	_u.mutation.ClearBanReason()
 	return _u
-}
-
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_u *UserUpdateOne) SetEmailInfoID(id int) *UserUpdateOne {
-	_u.mutation.SetEmailInfoID(id)
-	return _u
-}
-
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableEmailInfoID(id *int) *UserUpdateOne {
-	if id != nil {
-		_u = _u.SetEmailInfoID(*id)
-	}
-	return _u
-}
-
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdateOne) SetEmailInfo(v *EmailInfo) *UserUpdateOne {
-	return _u.SetEmailInfoID(v.ID)
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -948,12 +918,6 @@ func (_u *UserUpdateOne) AddOauthTokens(v ...*OAuthToken) *UserUpdateOne {
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
-}
-
-// ClearEmailInfo clears the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdateOne) ClearEmailInfo() *UserUpdateOne {
-	_u.mutation.ClearEmailInfo()
-	return _u
 }
 
 // ClearSocialPlatformInfo clears the "social_platform_info" edge to the SocialPlatformInfo entity.
@@ -1092,7 +1056,20 @@ func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *UserUpdateOne) check() error {
+	if v, ok := _u.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -1136,6 +1113,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+	}
 	if value, ok := _u.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
 	}
@@ -1144,35 +1124,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
-	}
-	if _u.mutation.EmailInfoCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -12,7 +12,6 @@ import (
 	"haruki-suite/utils/database/postgresql/migrate"
 
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
@@ -21,7 +20,12 @@ import (
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
 	"haruki-suite/utils/database/postgresql/oauthclient"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
+	"haruki-suite/utils/database/postgresql/riskevent"
+	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/systemlog"
+	"haruki-suite/utils/database/postgresql/ticket"
+	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
 
@@ -38,8 +42,6 @@ type Client struct {
 	Schema *migrate.Schema
 	// AuthorizeSocialPlatformInfo is the client for interacting with the AuthorizeSocialPlatformInfo builders.
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
-	// EmailInfo is the client for interacting with the EmailInfo builders.
-	EmailInfo *EmailInfoClient
 	// FriendLink is the client for interacting with the FriendLink builders.
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
@@ -56,8 +58,18 @@ type Client struct {
 	OAuthClient *OAuthClientClient
 	// OAuthToken is the client for interacting with the OAuthToken builders.
 	OAuthToken *OAuthTokenClient
+	// RiskEvent is the client for interacting with the RiskEvent builders.
+	RiskEvent *RiskEventClient
+	// RiskRule is the client for interacting with the RiskRule builders.
+	RiskRule *RiskRuleClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
+	// SystemLog is the client for interacting with the SystemLog builders.
+	SystemLog *SystemLogClient
+	// Ticket is the client for interacting with the Ticket builders.
+	Ticket *TicketClient
+	// TicketMessage is the client for interacting with the TicketMessage builders.
+	TicketMessage *TicketMessageClient
 	// UploadLog is the client for interacting with the UploadLog builders.
 	UploadLog *UploadLogClient
 	// User is the client for interacting with the User builders.
@@ -74,7 +86,6 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(c.config)
-	c.EmailInfo = NewEmailInfoClient(c.config)
 	c.FriendLink = NewFriendLinkClient(c.config)
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
 	c.Group = NewGroupClient(c.config)
@@ -83,7 +94,12 @@ func (c *Client) init() {
 	c.OAuthAuthorization = NewOAuthAuthorizationClient(c.config)
 	c.OAuthClient = NewOAuthClientClient(c.config)
 	c.OAuthToken = NewOAuthTokenClient(c.config)
+	c.RiskEvent = NewRiskEventClient(c.config)
+	c.RiskRule = NewRiskRuleClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
+	c.SystemLog = NewSystemLogClient(c.config)
+	c.Ticket = NewTicketClient(c.config)
+	c.TicketMessage = NewTicketMessageClient(c.config)
 	c.UploadLog = NewUploadLogClient(c.config)
 	c.User = NewUserClient(c.config)
 }
@@ -179,7 +195,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:                         ctx,
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
-		EmailInfo:                   NewEmailInfoClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
@@ -188,7 +203,12 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		OAuthAuthorization:          NewOAuthAuthorizationClient(cfg),
 		OAuthClient:                 NewOAuthClientClient(cfg),
 		OAuthToken:                  NewOAuthTokenClient(cfg),
+		RiskEvent:                   NewRiskEventClient(cfg),
+		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		SystemLog:                   NewSystemLogClient(cfg),
+		Ticket:                      NewTicketClient(cfg),
+		TicketMessage:               NewTicketMessageClient(cfg),
 		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
 	}, nil
@@ -211,7 +231,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:                         ctx,
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
-		EmailInfo:                   NewEmailInfoClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
@@ -220,7 +239,12 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		OAuthAuthorization:          NewOAuthAuthorizationClient(cfg),
 		OAuthClient:                 NewOAuthClientClient(cfg),
 		OAuthToken:                  NewOAuthTokenClient(cfg),
+		RiskEvent:                   NewRiskEventClient(cfg),
+		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		SystemLog:                   NewSystemLogClient(cfg),
+		Ticket:                      NewTicketClient(cfg),
+		TicketMessage:               NewTicketMessageClient(cfg),
 		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
 	}, nil
@@ -252,9 +276,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.FriendLink, c.GameAccountBinding,
-		c.Group, c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
-		c.OAuthToken, c.SocialPlatformInfo, c.UploadLog, c.User,
+		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding, c.Group,
+		c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
+		c.OAuthToken, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo, c.SystemLog,
+		c.Ticket, c.TicketMessage, c.UploadLog, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -264,9 +289,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.FriendLink, c.GameAccountBinding,
-		c.Group, c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
-		c.OAuthToken, c.SocialPlatformInfo, c.UploadLog, c.User,
+		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding, c.Group,
+		c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
+		c.OAuthToken, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo, c.SystemLog,
+		c.Ticket, c.TicketMessage, c.UploadLog, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -277,8 +303,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *AuthorizeSocialPlatformInfoMutation:
 		return c.AuthorizeSocialPlatformInfo.mutate(ctx, m)
-	case *EmailInfoMutation:
-		return c.EmailInfo.mutate(ctx, m)
 	case *FriendLinkMutation:
 		return c.FriendLink.mutate(ctx, m)
 	case *GameAccountBindingMutation:
@@ -295,8 +319,18 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.OAuthClient.mutate(ctx, m)
 	case *OAuthTokenMutation:
 		return c.OAuthToken.mutate(ctx, m)
+	case *RiskEventMutation:
+		return c.RiskEvent.mutate(ctx, m)
+	case *RiskRuleMutation:
+		return c.RiskRule.mutate(ctx, m)
 	case *SocialPlatformInfoMutation:
 		return c.SocialPlatformInfo.mutate(ctx, m)
+	case *SystemLogMutation:
+		return c.SystemLog.mutate(ctx, m)
+	case *TicketMutation:
+		return c.Ticket.mutate(ctx, m)
+	case *TicketMessageMutation:
+		return c.TicketMessage.mutate(ctx, m)
 	case *UploadLogMutation:
 		return c.UploadLog.mutate(ctx, m)
 	case *UserMutation:
@@ -452,155 +486,6 @@ func (c *AuthorizeSocialPlatformInfoClient) mutate(ctx context.Context, m *Autho
 		return (&AuthorizeSocialPlatformInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown AuthorizeSocialPlatformInfo mutation op: %q", m.Op())
-	}
-}
-
-// EmailInfoClient is a client for the EmailInfo schema.
-type EmailInfoClient struct {
-	config
-}
-
-// NewEmailInfoClient returns a client for the EmailInfo from the given config.
-func NewEmailInfoClient(c config) *EmailInfoClient {
-	return &EmailInfoClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `emailinfo.Hooks(f(g(h())))`.
-func (c *EmailInfoClient) Use(hooks ...Hook) {
-	c.hooks.EmailInfo = append(c.hooks.EmailInfo, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `emailinfo.Intercept(f(g(h())))`.
-func (c *EmailInfoClient) Intercept(interceptors ...Interceptor) {
-	c.inters.EmailInfo = append(c.inters.EmailInfo, interceptors...)
-}
-
-// Create returns a builder for creating a EmailInfo entity.
-func (c *EmailInfoClient) Create() *EmailInfoCreate {
-	mutation := newEmailInfoMutation(c.config, OpCreate)
-	return &EmailInfoCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of EmailInfo entities.
-func (c *EmailInfoClient) CreateBulk(builders ...*EmailInfoCreate) *EmailInfoCreateBulk {
-	return &EmailInfoCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *EmailInfoClient) MapCreateBulk(slice any, setFunc func(*EmailInfoCreate, int)) *EmailInfoCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &EmailInfoCreateBulk{err: fmt.Errorf("calling to EmailInfoClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*EmailInfoCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &EmailInfoCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for EmailInfo.
-func (c *EmailInfoClient) Update() *EmailInfoUpdate {
-	mutation := newEmailInfoMutation(c.config, OpUpdate)
-	return &EmailInfoUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *EmailInfoClient) UpdateOne(_m *EmailInfo) *EmailInfoUpdateOne {
-	mutation := newEmailInfoMutation(c.config, OpUpdateOne, withEmailInfo(_m))
-	return &EmailInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *EmailInfoClient) UpdateOneID(id int) *EmailInfoUpdateOne {
-	mutation := newEmailInfoMutation(c.config, OpUpdateOne, withEmailInfoID(id))
-	return &EmailInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for EmailInfo.
-func (c *EmailInfoClient) Delete() *EmailInfoDelete {
-	mutation := newEmailInfoMutation(c.config, OpDelete)
-	return &EmailInfoDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *EmailInfoClient) DeleteOne(_m *EmailInfo) *EmailInfoDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *EmailInfoClient) DeleteOneID(id int) *EmailInfoDeleteOne {
-	builder := c.Delete().Where(emailinfo.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &EmailInfoDeleteOne{builder}
-}
-
-// Query returns a query builder for EmailInfo.
-func (c *EmailInfoClient) Query() *EmailInfoQuery {
-	return &EmailInfoQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeEmailInfo},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a EmailInfo entity by its id.
-func (c *EmailInfoClient) Get(ctx context.Context, id int) (*EmailInfo, error) {
-	return c.Query().Where(emailinfo.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *EmailInfoClient) GetX(ctx context.Context, id int) *EmailInfo {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryUser queries the user edge of a EmailInfo.
-func (c *EmailInfoClient) QueryUser(_m *EmailInfo) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(emailinfo.Table, emailinfo.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, true, emailinfo.UserTable, emailinfo.UserColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *EmailInfoClient) Hooks() []Hook {
-	return c.hooks.EmailInfo
-}
-
-// Interceptors returns the client interceptors.
-func (c *EmailInfoClient) Interceptors() []Interceptor {
-	return c.inters.EmailInfo
-}
-
-func (c *EmailInfoClient) mutate(ctx context.Context, m *EmailInfoMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&EmailInfoCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&EmailInfoUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&EmailInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&EmailInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("postgresql: unknown EmailInfo mutation op: %q", m.Op())
 	}
 }
 
@@ -1828,6 +1713,272 @@ func (c *OAuthTokenClient) mutate(ctx context.Context, m *OAuthTokenMutation) (V
 	}
 }
 
+// RiskEventClient is a client for the RiskEvent schema.
+type RiskEventClient struct {
+	config
+}
+
+// NewRiskEventClient returns a client for the RiskEvent from the given config.
+func NewRiskEventClient(c config) *RiskEventClient {
+	return &RiskEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `riskevent.Hooks(f(g(h())))`.
+func (c *RiskEventClient) Use(hooks ...Hook) {
+	c.hooks.RiskEvent = append(c.hooks.RiskEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `riskevent.Intercept(f(g(h())))`.
+func (c *RiskEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RiskEvent = append(c.inters.RiskEvent, interceptors...)
+}
+
+// Create returns a builder for creating a RiskEvent entity.
+func (c *RiskEventClient) Create() *RiskEventCreate {
+	mutation := newRiskEventMutation(c.config, OpCreate)
+	return &RiskEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RiskEvent entities.
+func (c *RiskEventClient) CreateBulk(builders ...*RiskEventCreate) *RiskEventCreateBulk {
+	return &RiskEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RiskEventClient) MapCreateBulk(slice any, setFunc func(*RiskEventCreate, int)) *RiskEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RiskEventCreateBulk{err: fmt.Errorf("calling to RiskEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RiskEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RiskEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RiskEvent.
+func (c *RiskEventClient) Update() *RiskEventUpdate {
+	mutation := newRiskEventMutation(c.config, OpUpdate)
+	return &RiskEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RiskEventClient) UpdateOne(_m *RiskEvent) *RiskEventUpdateOne {
+	mutation := newRiskEventMutation(c.config, OpUpdateOne, withRiskEvent(_m))
+	return &RiskEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RiskEventClient) UpdateOneID(id int) *RiskEventUpdateOne {
+	mutation := newRiskEventMutation(c.config, OpUpdateOne, withRiskEventID(id))
+	return &RiskEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RiskEvent.
+func (c *RiskEventClient) Delete() *RiskEventDelete {
+	mutation := newRiskEventMutation(c.config, OpDelete)
+	return &RiskEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RiskEventClient) DeleteOne(_m *RiskEvent) *RiskEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RiskEventClient) DeleteOneID(id int) *RiskEventDeleteOne {
+	builder := c.Delete().Where(riskevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RiskEventDeleteOne{builder}
+}
+
+// Query returns a query builder for RiskEvent.
+func (c *RiskEventClient) Query() *RiskEventQuery {
+	return &RiskEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRiskEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RiskEvent entity by its id.
+func (c *RiskEventClient) Get(ctx context.Context, id int) (*RiskEvent, error) {
+	return c.Query().Where(riskevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RiskEventClient) GetX(ctx context.Context, id int) *RiskEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RiskEventClient) Hooks() []Hook {
+	return c.hooks.RiskEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *RiskEventClient) Interceptors() []Interceptor {
+	return c.inters.RiskEvent
+}
+
+func (c *RiskEventClient) mutate(ctx context.Context, m *RiskEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RiskEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RiskEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RiskEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RiskEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown RiskEvent mutation op: %q", m.Op())
+	}
+}
+
+// RiskRuleClient is a client for the RiskRule schema.
+type RiskRuleClient struct {
+	config
+}
+
+// NewRiskRuleClient returns a client for the RiskRule from the given config.
+func NewRiskRuleClient(c config) *RiskRuleClient {
+	return &RiskRuleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `riskrule.Hooks(f(g(h())))`.
+func (c *RiskRuleClient) Use(hooks ...Hook) {
+	c.hooks.RiskRule = append(c.hooks.RiskRule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `riskrule.Intercept(f(g(h())))`.
+func (c *RiskRuleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RiskRule = append(c.inters.RiskRule, interceptors...)
+}
+
+// Create returns a builder for creating a RiskRule entity.
+func (c *RiskRuleClient) Create() *RiskRuleCreate {
+	mutation := newRiskRuleMutation(c.config, OpCreate)
+	return &RiskRuleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RiskRule entities.
+func (c *RiskRuleClient) CreateBulk(builders ...*RiskRuleCreate) *RiskRuleCreateBulk {
+	return &RiskRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RiskRuleClient) MapCreateBulk(slice any, setFunc func(*RiskRuleCreate, int)) *RiskRuleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RiskRuleCreateBulk{err: fmt.Errorf("calling to RiskRuleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RiskRuleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RiskRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RiskRule.
+func (c *RiskRuleClient) Update() *RiskRuleUpdate {
+	mutation := newRiskRuleMutation(c.config, OpUpdate)
+	return &RiskRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RiskRuleClient) UpdateOne(_m *RiskRule) *RiskRuleUpdateOne {
+	mutation := newRiskRuleMutation(c.config, OpUpdateOne, withRiskRule(_m))
+	return &RiskRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RiskRuleClient) UpdateOneID(id int) *RiskRuleUpdateOne {
+	mutation := newRiskRuleMutation(c.config, OpUpdateOne, withRiskRuleID(id))
+	return &RiskRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RiskRule.
+func (c *RiskRuleClient) Delete() *RiskRuleDelete {
+	mutation := newRiskRuleMutation(c.config, OpDelete)
+	return &RiskRuleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RiskRuleClient) DeleteOne(_m *RiskRule) *RiskRuleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RiskRuleClient) DeleteOneID(id int) *RiskRuleDeleteOne {
+	builder := c.Delete().Where(riskrule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RiskRuleDeleteOne{builder}
+}
+
+// Query returns a query builder for RiskRule.
+func (c *RiskRuleClient) Query() *RiskRuleQuery {
+	return &RiskRuleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRiskRule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RiskRule entity by its id.
+func (c *RiskRuleClient) Get(ctx context.Context, id int) (*RiskRule, error) {
+	return c.Query().Where(riskrule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RiskRuleClient) GetX(ctx context.Context, id int) *RiskRule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RiskRuleClient) Hooks() []Hook {
+	return c.hooks.RiskRule
+}
+
+// Interceptors returns the client interceptors.
+func (c *RiskRuleClient) Interceptors() []Interceptor {
+	return c.inters.RiskRule
+}
+
+func (c *RiskRuleClient) mutate(ctx context.Context, m *RiskRuleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RiskRuleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RiskRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RiskRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RiskRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown RiskRule mutation op: %q", m.Op())
+	}
+}
+
 // SocialPlatformInfoClient is a client for the SocialPlatformInfo schema.
 type SocialPlatformInfoClient struct {
 	config
@@ -1974,6 +2125,437 @@ func (c *SocialPlatformInfoClient) mutate(ctx context.Context, m *SocialPlatform
 		return (&SocialPlatformInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown SocialPlatformInfo mutation op: %q", m.Op())
+	}
+}
+
+// SystemLogClient is a client for the SystemLog schema.
+type SystemLogClient struct {
+	config
+}
+
+// NewSystemLogClient returns a client for the SystemLog from the given config.
+func NewSystemLogClient(c config) *SystemLogClient {
+	return &SystemLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `systemlog.Hooks(f(g(h())))`.
+func (c *SystemLogClient) Use(hooks ...Hook) {
+	c.hooks.SystemLog = append(c.hooks.SystemLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `systemlog.Intercept(f(g(h())))`.
+func (c *SystemLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SystemLog = append(c.inters.SystemLog, interceptors...)
+}
+
+// Create returns a builder for creating a SystemLog entity.
+func (c *SystemLogClient) Create() *SystemLogCreate {
+	mutation := newSystemLogMutation(c.config, OpCreate)
+	return &SystemLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SystemLog entities.
+func (c *SystemLogClient) CreateBulk(builders ...*SystemLogCreate) *SystemLogCreateBulk {
+	return &SystemLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SystemLogClient) MapCreateBulk(slice any, setFunc func(*SystemLogCreate, int)) *SystemLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SystemLogCreateBulk{err: fmt.Errorf("calling to SystemLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SystemLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SystemLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SystemLog.
+func (c *SystemLogClient) Update() *SystemLogUpdate {
+	mutation := newSystemLogMutation(c.config, OpUpdate)
+	return &SystemLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SystemLogClient) UpdateOne(_m *SystemLog) *SystemLogUpdateOne {
+	mutation := newSystemLogMutation(c.config, OpUpdateOne, withSystemLog(_m))
+	return &SystemLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SystemLogClient) UpdateOneID(id int) *SystemLogUpdateOne {
+	mutation := newSystemLogMutation(c.config, OpUpdateOne, withSystemLogID(id))
+	return &SystemLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SystemLog.
+func (c *SystemLogClient) Delete() *SystemLogDelete {
+	mutation := newSystemLogMutation(c.config, OpDelete)
+	return &SystemLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SystemLogClient) DeleteOne(_m *SystemLog) *SystemLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SystemLogClient) DeleteOneID(id int) *SystemLogDeleteOne {
+	builder := c.Delete().Where(systemlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SystemLogDeleteOne{builder}
+}
+
+// Query returns a query builder for SystemLog.
+func (c *SystemLogClient) Query() *SystemLogQuery {
+	return &SystemLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSystemLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SystemLog entity by its id.
+func (c *SystemLogClient) Get(ctx context.Context, id int) (*SystemLog, error) {
+	return c.Query().Where(systemlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SystemLogClient) GetX(ctx context.Context, id int) *SystemLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SystemLogClient) Hooks() []Hook {
+	return c.hooks.SystemLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *SystemLogClient) Interceptors() []Interceptor {
+	return c.inters.SystemLog
+}
+
+func (c *SystemLogClient) mutate(ctx context.Context, m *SystemLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SystemLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SystemLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SystemLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SystemLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown SystemLog mutation op: %q", m.Op())
+	}
+}
+
+// TicketClient is a client for the Ticket schema.
+type TicketClient struct {
+	config
+}
+
+// NewTicketClient returns a client for the Ticket from the given config.
+func NewTicketClient(c config) *TicketClient {
+	return &TicketClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ticket.Hooks(f(g(h())))`.
+func (c *TicketClient) Use(hooks ...Hook) {
+	c.hooks.Ticket = append(c.hooks.Ticket, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ticket.Intercept(f(g(h())))`.
+func (c *TicketClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Ticket = append(c.inters.Ticket, interceptors...)
+}
+
+// Create returns a builder for creating a Ticket entity.
+func (c *TicketClient) Create() *TicketCreate {
+	mutation := newTicketMutation(c.config, OpCreate)
+	return &TicketCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Ticket entities.
+func (c *TicketClient) CreateBulk(builders ...*TicketCreate) *TicketCreateBulk {
+	return &TicketCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TicketClient) MapCreateBulk(slice any, setFunc func(*TicketCreate, int)) *TicketCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TicketCreateBulk{err: fmt.Errorf("calling to TicketClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TicketCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TicketCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Ticket.
+func (c *TicketClient) Update() *TicketUpdate {
+	mutation := newTicketMutation(c.config, OpUpdate)
+	return &TicketUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TicketClient) UpdateOne(_m *Ticket) *TicketUpdateOne {
+	mutation := newTicketMutation(c.config, OpUpdateOne, withTicket(_m))
+	return &TicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TicketClient) UpdateOneID(id int) *TicketUpdateOne {
+	mutation := newTicketMutation(c.config, OpUpdateOne, withTicketID(id))
+	return &TicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Ticket.
+func (c *TicketClient) Delete() *TicketDelete {
+	mutation := newTicketMutation(c.config, OpDelete)
+	return &TicketDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TicketClient) DeleteOne(_m *Ticket) *TicketDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TicketClient) DeleteOneID(id int) *TicketDeleteOne {
+	builder := c.Delete().Where(ticket.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TicketDeleteOne{builder}
+}
+
+// Query returns a query builder for Ticket.
+func (c *TicketClient) Query() *TicketQuery {
+	return &TicketQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTicket},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Ticket entity by its id.
+func (c *TicketClient) Get(ctx context.Context, id int) (*Ticket, error) {
+	return c.Query().Where(ticket.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TicketClient) GetX(ctx context.Context, id int) *Ticket {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMessages queries the messages edge of a Ticket.
+func (c *TicketClient) QueryMessages(_m *Ticket) *TicketMessageQuery {
+	query := (&TicketMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticket.Table, ticket.FieldID, id),
+			sqlgraph.To(ticketmessage.Table, ticketmessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ticket.MessagesTable, ticket.MessagesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TicketClient) Hooks() []Hook {
+	return c.hooks.Ticket
+}
+
+// Interceptors returns the client interceptors.
+func (c *TicketClient) Interceptors() []Interceptor {
+	return c.inters.Ticket
+}
+
+func (c *TicketClient) mutate(ctx context.Context, m *TicketMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TicketCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TicketUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TicketDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown Ticket mutation op: %q", m.Op())
+	}
+}
+
+// TicketMessageClient is a client for the TicketMessage schema.
+type TicketMessageClient struct {
+	config
+}
+
+// NewTicketMessageClient returns a client for the TicketMessage from the given config.
+func NewTicketMessageClient(c config) *TicketMessageClient {
+	return &TicketMessageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ticketmessage.Hooks(f(g(h())))`.
+func (c *TicketMessageClient) Use(hooks ...Hook) {
+	c.hooks.TicketMessage = append(c.hooks.TicketMessage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ticketmessage.Intercept(f(g(h())))`.
+func (c *TicketMessageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TicketMessage = append(c.inters.TicketMessage, interceptors...)
+}
+
+// Create returns a builder for creating a TicketMessage entity.
+func (c *TicketMessageClient) Create() *TicketMessageCreate {
+	mutation := newTicketMessageMutation(c.config, OpCreate)
+	return &TicketMessageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TicketMessage entities.
+func (c *TicketMessageClient) CreateBulk(builders ...*TicketMessageCreate) *TicketMessageCreateBulk {
+	return &TicketMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TicketMessageClient) MapCreateBulk(slice any, setFunc func(*TicketMessageCreate, int)) *TicketMessageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TicketMessageCreateBulk{err: fmt.Errorf("calling to TicketMessageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TicketMessageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TicketMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TicketMessage.
+func (c *TicketMessageClient) Update() *TicketMessageUpdate {
+	mutation := newTicketMessageMutation(c.config, OpUpdate)
+	return &TicketMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TicketMessageClient) UpdateOne(_m *TicketMessage) *TicketMessageUpdateOne {
+	mutation := newTicketMessageMutation(c.config, OpUpdateOne, withTicketMessage(_m))
+	return &TicketMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TicketMessageClient) UpdateOneID(id int) *TicketMessageUpdateOne {
+	mutation := newTicketMessageMutation(c.config, OpUpdateOne, withTicketMessageID(id))
+	return &TicketMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TicketMessage.
+func (c *TicketMessageClient) Delete() *TicketMessageDelete {
+	mutation := newTicketMessageMutation(c.config, OpDelete)
+	return &TicketMessageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TicketMessageClient) DeleteOne(_m *TicketMessage) *TicketMessageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TicketMessageClient) DeleteOneID(id int) *TicketMessageDeleteOne {
+	builder := c.Delete().Where(ticketmessage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TicketMessageDeleteOne{builder}
+}
+
+// Query returns a query builder for TicketMessage.
+func (c *TicketMessageClient) Query() *TicketMessageQuery {
+	return &TicketMessageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTicketMessage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TicketMessage entity by its id.
+func (c *TicketMessageClient) Get(ctx context.Context, id int) (*TicketMessage, error) {
+	return c.Query().Where(ticketmessage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TicketMessageClient) GetX(ctx context.Context, id int) *TicketMessage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryTicket queries the ticket edge of a TicketMessage.
+func (c *TicketMessageClient) QueryTicket(_m *TicketMessage) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticketmessage.Table, ticketmessage.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, ticketmessage.TicketTable, ticketmessage.TicketColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TicketMessageClient) Hooks() []Hook {
+	return c.hooks.TicketMessage
+}
+
+// Interceptors returns the client interceptors.
+func (c *TicketMessageClient) Interceptors() []Interceptor {
+	return c.inters.TicketMessage
+}
+
+func (c *TicketMessageClient) mutate(ctx context.Context, m *TicketMessageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TicketMessageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TicketMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TicketMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TicketMessageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown TicketMessage mutation op: %q", m.Op())
 	}
 }
 
@@ -2218,22 +2800,6 @@ func (c *UserClient) GetX(ctx context.Context, id string) *User {
 	return obj
 }
 
-// QueryEmailInfo queries the email_info edge of a User.
-func (c *UserClient) QueryEmailInfo(_m *User) *EmailInfoQuery {
-	query := (&EmailInfoClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, id),
-			sqlgraph.To(emailinfo.Table, emailinfo.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, user.EmailInfoTable, user.EmailInfoColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QuerySocialPlatformInfo queries the social_platform_info edge of a User.
 func (c *UserClient) QuerySocialPlatformInfo(_m *User) *SocialPlatformInfoQuery {
 	query := (&SocialPlatformInfoClient{config: c.config}).Query()
@@ -2358,13 +2924,15 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, FriendLink, GameAccountBinding, Group,
-		GroupList, IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken,
-		SocialPlatformInfo, UploadLog, User []ent.Hook
+		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding, Group, GroupList,
+		IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken, RiskEvent,
+		RiskRule, SocialPlatformInfo, SystemLog, Ticket, TicketMessage, UploadLog,
+		User []ent.Hook
 	}
 	inters struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, FriendLink, GameAccountBinding, Group,
-		GroupList, IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken,
-		SocialPlatformInfo, UploadLog, User []ent.Interceptor
+		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding, Group, GroupList,
+		IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken, RiskEvent,
+		RiskRule, SocialPlatformInfo, SystemLog, Ticket, TicketMessage, UploadLog,
+		User []ent.Interceptor
 	}
 )

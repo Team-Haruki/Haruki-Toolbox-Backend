@@ -14,8 +14,6 @@ type Tx struct {
 	config
 	// AuthorizeSocialPlatformInfo is the client for interacting with the AuthorizeSocialPlatformInfo builders.
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
-	// EmailInfo is the client for interacting with the EmailInfo builders.
-	EmailInfo *EmailInfoClient
 	// FriendLink is the client for interacting with the FriendLink builders.
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
@@ -32,8 +30,18 @@ type Tx struct {
 	OAuthClient *OAuthClientClient
 	// OAuthToken is the client for interacting with the OAuthToken builders.
 	OAuthToken *OAuthTokenClient
+	// RiskEvent is the client for interacting with the RiskEvent builders.
+	RiskEvent *RiskEventClient
+	// RiskRule is the client for interacting with the RiskRule builders.
+	RiskRule *RiskRuleClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
+	// SystemLog is the client for interacting with the SystemLog builders.
+	SystemLog *SystemLogClient
+	// Ticket is the client for interacting with the Ticket builders.
+	Ticket *TicketClient
+	// TicketMessage is the client for interacting with the TicketMessage builders.
+	TicketMessage *TicketMessageClient
 	// UploadLog is the client for interacting with the UploadLog builders.
 	UploadLog *UploadLogClient
 	// User is the client for interacting with the User builders.
@@ -170,7 +178,6 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(tx.config)
-	tx.EmailInfo = NewEmailInfoClient(tx.config)
 	tx.FriendLink = NewFriendLinkClient(tx.config)
 	tx.GameAccountBinding = NewGameAccountBindingClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
@@ -179,7 +186,12 @@ func (tx *Tx) init() {
 	tx.OAuthAuthorization = NewOAuthAuthorizationClient(tx.config)
 	tx.OAuthClient = NewOAuthClientClient(tx.config)
 	tx.OAuthToken = NewOAuthTokenClient(tx.config)
+	tx.RiskEvent = NewRiskEventClient(tx.config)
+	tx.RiskRule = NewRiskRuleClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)
+	tx.SystemLog = NewSystemLogClient(tx.config)
+	tx.Ticket = NewTicketClient(tx.config)
+	tx.TicketMessage = NewTicketMessageClient(tx.config)
 	tx.UploadLog = NewUploadLogClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }

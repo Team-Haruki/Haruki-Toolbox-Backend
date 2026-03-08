@@ -379,6 +379,26 @@ func AllowCnMysekaiNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldAllowCnMysekai, v))
 }
 
+// RoleEQ applies the EQ predicate on the "role" field.
+func RoleEQ(v Role) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRole, v))
+}
+
+// RoleNEQ applies the NEQ predicate on the "role" field.
+func RoleNEQ(v Role) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRole, v))
+}
+
+// RoleIn applies the In predicate on the "role" field.
+func RoleIn(vs ...Role) predicate.User {
+	return predicate.User(sql.FieldIn(FieldRole, vs...))
+}
+
+// RoleNotIn applies the NotIn predicate on the "role" field.
+func RoleNotIn(vs ...Role) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldRole, vs...))
+}
+
 // BannedEQ applies the EQ predicate on the "banned" field.
 func BannedEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBanned, v))
@@ -462,29 +482,6 @@ func BanReasonEqualFold(v string) predicate.User {
 // BanReasonContainsFold applies the ContainsFold predicate on the "ban_reason" field.
 func BanReasonContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldBanReason, v))
-}
-
-// HasEmailInfo applies the HasEdge predicate on the "email_info" edge.
-func HasEmailInfo() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, EmailInfoTable, EmailInfoColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasEmailInfoWith applies the HasEdge predicate on the "email_info" edge with a given conditions (other predicates).
-func HasEmailInfoWith(preds ...predicate.EmailInfo) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newEmailInfoStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // HasSocialPlatformInfo applies the HasEdge predicate on the "social_platform_info" edge.

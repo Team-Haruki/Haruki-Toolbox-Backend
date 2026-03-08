@@ -5,9 +5,8 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/predicate"
-	"haruki-suite/utils/database/postgresql/user"
+	"haruki-suite/utils/database/postgresql/systemlog"
 	"math"
 
 	"entgo.io/ent"
@@ -16,88 +15,64 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// EmailInfoQuery is the builder for querying EmailInfo entities.
-type EmailInfoQuery struct {
+// SystemLogQuery is the builder for querying SystemLog entities.
+type SystemLogQuery struct {
 	config
 	ctx        *QueryContext
-	order      []emailinfo.OrderOption
+	order      []systemlog.OrderOption
 	inters     []Interceptor
-	predicates []predicate.EmailInfo
-	withUser   *UserQuery
-	withFKs    bool
+	predicates []predicate.SystemLog
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the EmailInfoQuery builder.
-func (_q *EmailInfoQuery) Where(ps ...predicate.EmailInfo) *EmailInfoQuery {
+// Where adds a new predicate for the SystemLogQuery builder.
+func (_q *SystemLogQuery) Where(ps ...predicate.SystemLog) *SystemLogQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *EmailInfoQuery) Limit(limit int) *EmailInfoQuery {
+func (_q *SystemLogQuery) Limit(limit int) *SystemLogQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *EmailInfoQuery) Offset(offset int) *EmailInfoQuery {
+func (_q *SystemLogQuery) Offset(offset int) *SystemLogQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *EmailInfoQuery) Unique(unique bool) *EmailInfoQuery {
+func (_q *SystemLogQuery) Unique(unique bool) *SystemLogQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *EmailInfoQuery) Order(o ...emailinfo.OrderOption) *EmailInfoQuery {
+func (_q *SystemLogQuery) Order(o ...systemlog.OrderOption) *SystemLogQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// QueryUser chains the current query on the "user" edge.
-func (_q *EmailInfoQuery) QueryUser() *UserQuery {
-	query := (&UserClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(emailinfo.Table, emailinfo.FieldID, selector),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, true, emailinfo.UserTable, emailinfo.UserColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// First returns the first EmailInfo entity from the query.
-// Returns a *NotFoundError when no EmailInfo was found.
-func (_q *EmailInfoQuery) First(ctx context.Context) (*EmailInfo, error) {
+// First returns the first SystemLog entity from the query.
+// Returns a *NotFoundError when no SystemLog was found.
+func (_q *SystemLogQuery) First(ctx context.Context) (*SystemLog, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{emailinfo.Label}
+		return nil, &NotFoundError{systemlog.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *EmailInfoQuery) FirstX(ctx context.Context) *EmailInfo {
+func (_q *SystemLogQuery) FirstX(ctx context.Context) *SystemLog {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -105,22 +80,22 @@ func (_q *EmailInfoQuery) FirstX(ctx context.Context) *EmailInfo {
 	return node
 }
 
-// FirstID returns the first EmailInfo ID from the query.
-// Returns a *NotFoundError when no EmailInfo ID was found.
-func (_q *EmailInfoQuery) FirstID(ctx context.Context) (id int, err error) {
+// FirstID returns the first SystemLog ID from the query.
+// Returns a *NotFoundError when no SystemLog ID was found.
+func (_q *SystemLogQuery) FirstID(ctx context.Context) (id int, err error) {
 	var ids []int
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{emailinfo.Label}
+		err = &NotFoundError{systemlog.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *EmailInfoQuery) FirstIDX(ctx context.Context) int {
+func (_q *SystemLogQuery) FirstIDX(ctx context.Context) int {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -128,10 +103,10 @@ func (_q *EmailInfoQuery) FirstIDX(ctx context.Context) int {
 	return id
 }
 
-// Only returns a single EmailInfo entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one EmailInfo entity is found.
-// Returns a *NotFoundError when no EmailInfo entities are found.
-func (_q *EmailInfoQuery) Only(ctx context.Context) (*EmailInfo, error) {
+// Only returns a single SystemLog entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one SystemLog entity is found.
+// Returns a *NotFoundError when no SystemLog entities are found.
+func (_q *SystemLogQuery) Only(ctx context.Context) (*SystemLog, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -140,14 +115,14 @@ func (_q *EmailInfoQuery) Only(ctx context.Context) (*EmailInfo, error) {
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{emailinfo.Label}
+		return nil, &NotFoundError{systemlog.Label}
 	default:
-		return nil, &NotSingularError{emailinfo.Label}
+		return nil, &NotSingularError{systemlog.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *EmailInfoQuery) OnlyX(ctx context.Context) *EmailInfo {
+func (_q *SystemLogQuery) OnlyX(ctx context.Context) *SystemLog {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -155,10 +130,10 @@ func (_q *EmailInfoQuery) OnlyX(ctx context.Context) *EmailInfo {
 	return node
 }
 
-// OnlyID is like Only, but returns the only EmailInfo ID in the query.
-// Returns a *NotSingularError when more than one EmailInfo ID is found.
+// OnlyID is like Only, but returns the only SystemLog ID in the query.
+// Returns a *NotSingularError when more than one SystemLog ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *EmailInfoQuery) OnlyID(ctx context.Context) (id int, err error) {
+func (_q *SystemLogQuery) OnlyID(ctx context.Context) (id int, err error) {
 	var ids []int
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -167,15 +142,15 @@ func (_q *EmailInfoQuery) OnlyID(ctx context.Context) (id int, err error) {
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{emailinfo.Label}
+		err = &NotFoundError{systemlog.Label}
 	default:
-		err = &NotSingularError{emailinfo.Label}
+		err = &NotSingularError{systemlog.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *EmailInfoQuery) OnlyIDX(ctx context.Context) int {
+func (_q *SystemLogQuery) OnlyIDX(ctx context.Context) int {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -183,18 +158,18 @@ func (_q *EmailInfoQuery) OnlyIDX(ctx context.Context) int {
 	return id
 }
 
-// All executes the query and returns a list of EmailInfos.
-func (_q *EmailInfoQuery) All(ctx context.Context) ([]*EmailInfo, error) {
+// All executes the query and returns a list of SystemLogs.
+func (_q *SystemLogQuery) All(ctx context.Context) ([]*SystemLog, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*EmailInfo, *EmailInfoQuery]()
-	return withInterceptors[[]*EmailInfo](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*SystemLog, *SystemLogQuery]()
+	return withInterceptors[[]*SystemLog](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *EmailInfoQuery) AllX(ctx context.Context) []*EmailInfo {
+func (_q *SystemLogQuery) AllX(ctx context.Context) []*SystemLog {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -202,20 +177,20 @@ func (_q *EmailInfoQuery) AllX(ctx context.Context) []*EmailInfo {
 	return nodes
 }
 
-// IDs executes the query and returns a list of EmailInfo IDs.
-func (_q *EmailInfoQuery) IDs(ctx context.Context) (ids []int, err error) {
+// IDs executes the query and returns a list of SystemLog IDs.
+func (_q *SystemLogQuery) IDs(ctx context.Context) (ids []int, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(emailinfo.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(systemlog.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *EmailInfoQuery) IDsX(ctx context.Context) []int {
+func (_q *SystemLogQuery) IDsX(ctx context.Context) []int {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -224,16 +199,16 @@ func (_q *EmailInfoQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (_q *EmailInfoQuery) Count(ctx context.Context) (int, error) {
+func (_q *SystemLogQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*EmailInfoQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*SystemLogQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *EmailInfoQuery) CountX(ctx context.Context) int {
+func (_q *SystemLogQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -242,7 +217,7 @@ func (_q *EmailInfoQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *EmailInfoQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *SystemLogQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -255,7 +230,7 @@ func (_q *EmailInfoQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *EmailInfoQuery) ExistX(ctx context.Context) bool {
+func (_q *SystemLogQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -263,34 +238,22 @@ func (_q *EmailInfoQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the EmailInfoQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the SystemLogQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *EmailInfoQuery) Clone() *EmailInfoQuery {
+func (_q *SystemLogQuery) Clone() *SystemLogQuery {
 	if _q == nil {
 		return nil
 	}
-	return &EmailInfoQuery{
+	return &SystemLogQuery{
 		config:     _q.config,
 		ctx:        _q.ctx.Clone(),
-		order:      append([]emailinfo.OrderOption{}, _q.order...),
+		order:      append([]systemlog.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.EmailInfo{}, _q.predicates...),
-		withUser:   _q.withUser.Clone(),
+		predicates: append([]predicate.SystemLog{}, _q.predicates...),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
-}
-
-// WithUser tells the query-builder to eager-load the nodes that are connected to
-// the "user" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *EmailInfoQuery) WithUser(opts ...func(*UserQuery)) *EmailInfoQuery {
-	query := (&UserClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withUser = query
-	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -299,19 +262,19 @@ func (_q *EmailInfoQuery) WithUser(opts ...func(*UserQuery)) *EmailInfoQuery {
 // Example:
 //
 //	var v []struct {
-//		Email string `json:"email,omitempty"`
+//		EventTime time.Time `json:"event_time,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.EmailInfo.Query().
-//		GroupBy(emailinfo.FieldEmail).
+//	client.SystemLog.Query().
+//		GroupBy(systemlog.FieldEventTime).
 //		Aggregate(postgresql.Count()).
 //		Scan(ctx, &v)
-func (_q *EmailInfoQuery) GroupBy(field string, fields ...string) *EmailInfoGroupBy {
+func (_q *SystemLogQuery) GroupBy(field string, fields ...string) *SystemLogGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &EmailInfoGroupBy{build: _q}
+	grbuild := &SystemLogGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = emailinfo.Label
+	grbuild.label = systemlog.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -322,26 +285,26 @@ func (_q *EmailInfoQuery) GroupBy(field string, fields ...string) *EmailInfoGrou
 // Example:
 //
 //	var v []struct {
-//		Email string `json:"email,omitempty"`
+//		EventTime time.Time `json:"event_time,omitempty"`
 //	}
 //
-//	client.EmailInfo.Query().
-//		Select(emailinfo.FieldEmail).
+//	client.SystemLog.Query().
+//		Select(systemlog.FieldEventTime).
 //		Scan(ctx, &v)
-func (_q *EmailInfoQuery) Select(fields ...string) *EmailInfoSelect {
+func (_q *SystemLogQuery) Select(fields ...string) *SystemLogSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &EmailInfoSelect{EmailInfoQuery: _q}
-	sbuild.label = emailinfo.Label
+	sbuild := &SystemLogSelect{SystemLogQuery: _q}
+	sbuild.label = systemlog.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a EmailInfoSelect configured with the given aggregations.
-func (_q *EmailInfoQuery) Aggregate(fns ...AggregateFunc) *EmailInfoSelect {
+// Aggregate returns a SystemLogSelect configured with the given aggregations.
+func (_q *SystemLogQuery) Aggregate(fns ...AggregateFunc) *SystemLogSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *EmailInfoQuery) prepareQuery(ctx context.Context) error {
+func (_q *SystemLogQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("postgresql: uninitialized interceptor (forgotten import postgresql/runtime?)")
@@ -353,7 +316,7 @@ func (_q *EmailInfoQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !emailinfo.ValidColumn(f) {
+		if !systemlog.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("postgresql: invalid field %q for query", f)}
 		}
 	}
@@ -367,28 +330,17 @@ func (_q *EmailInfoQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *EmailInfoQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*EmailInfo, error) {
+func (_q *SystemLogQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SystemLog, error) {
 	var (
-		nodes       = []*EmailInfo{}
-		withFKs     = _q.withFKs
-		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
-			_q.withUser != nil,
-		}
+		nodes = []*SystemLog{}
+		_spec = _q.querySpec()
 	)
-	if _q.withUser != nil {
-		withFKs = true
-	}
-	if withFKs {
-		_spec.Node.Columns = append(_spec.Node.Columns, emailinfo.ForeignKeys...)
-	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*EmailInfo).scanValues(nil, columns)
+		return (*SystemLog).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &EmailInfo{config: _q.config}
+		node := &SystemLog{config: _q.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -400,49 +352,10 @@ func (_q *EmailInfoQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Em
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withUser; query != nil {
-		if err := _q.loadUser(ctx, query, nodes, nil,
-			func(n *EmailInfo, e *User) { n.Edges.User = e }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
 }
 
-func (_q *EmailInfoQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*EmailInfo, init func(*EmailInfo), assign func(*EmailInfo, *User)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*EmailInfo)
-	for i := range nodes {
-		if nodes[i].user_email_info == nil {
-			continue
-		}
-		fk := *nodes[i].user_email_info
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(user.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "user_email_info" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-
-func (_q *EmailInfoQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *SystemLogQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -451,8 +364,8 @@ func (_q *EmailInfoQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *EmailInfoQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(emailinfo.Table, emailinfo.Columns, sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt))
+func (_q *SystemLogQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(systemlog.Table, systemlog.Columns, sqlgraph.NewFieldSpec(systemlog.FieldID, field.TypeInt))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -461,9 +374,9 @@ func (_q *EmailInfoQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, emailinfo.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, systemlog.FieldID)
 		for i := range fields {
-			if fields[i] != emailinfo.FieldID {
+			if fields[i] != systemlog.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -491,12 +404,12 @@ func (_q *EmailInfoQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *EmailInfoQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *SystemLogQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(emailinfo.Table)
+	t1 := builder.Table(systemlog.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = emailinfo.Columns
+		columns = systemlog.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -523,28 +436,28 @@ func (_q *EmailInfoQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// EmailInfoGroupBy is the group-by builder for EmailInfo entities.
-type EmailInfoGroupBy struct {
+// SystemLogGroupBy is the group-by builder for SystemLog entities.
+type SystemLogGroupBy struct {
 	selector
-	build *EmailInfoQuery
+	build *SystemLogQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *EmailInfoGroupBy) Aggregate(fns ...AggregateFunc) *EmailInfoGroupBy {
+func (_g *SystemLogGroupBy) Aggregate(fns ...AggregateFunc) *SystemLogGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *EmailInfoGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *SystemLogGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*EmailInfoQuery, *EmailInfoGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*SystemLogQuery, *SystemLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *EmailInfoGroupBy) sqlScan(ctx context.Context, root *EmailInfoQuery, v any) error {
+func (_g *SystemLogGroupBy) sqlScan(ctx context.Context, root *SystemLogQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -571,28 +484,28 @@ func (_g *EmailInfoGroupBy) sqlScan(ctx context.Context, root *EmailInfoQuery, v
 	return sql.ScanSlice(rows, v)
 }
 
-// EmailInfoSelect is the builder for selecting fields of EmailInfo entities.
-type EmailInfoSelect struct {
-	*EmailInfoQuery
+// SystemLogSelect is the builder for selecting fields of SystemLog entities.
+type SystemLogSelect struct {
+	*SystemLogQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *EmailInfoSelect) Aggregate(fns ...AggregateFunc) *EmailInfoSelect {
+func (_s *SystemLogSelect) Aggregate(fns ...AggregateFunc) *SystemLogSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *EmailInfoSelect) Scan(ctx context.Context, v any) error {
+func (_s *SystemLogSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*EmailInfoQuery, *EmailInfoSelect](ctx, _s.EmailInfoQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*SystemLogQuery, *SystemLogSelect](ctx, _s.SystemLogQuery, _s, _s.inters, v)
 }
 
-func (_s *EmailInfoSelect) sqlScan(ctx context.Context, root *EmailInfoQuery, v any) error {
+func (_s *SystemLogSelect) sqlScan(ctx context.Context, root *SystemLogQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {
