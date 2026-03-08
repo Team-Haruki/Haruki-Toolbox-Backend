@@ -30,6 +30,8 @@ const (
 	FieldBanned = "banned"
 	// FieldBanReason holds the string denoting the ban_reason field in the database.
 	FieldBanReason = "ban_reason"
+	// FieldCreatedAt holds the string denoting the created_at field in the database.
+	FieldCreatedAt = "created_at"
 	// EdgeSocialPlatformInfo holds the string denoting the social_platform_info edge name in mutations.
 	EdgeSocialPlatformInfo = "social_platform_info"
 	// EdgeAuthorizedSocialPlatforms holds the string denoting the authorized_social_platforms edge name in mutations.
@@ -99,6 +101,7 @@ var Columns = []string{
 	FieldRole,
 	FieldBanned,
 	FieldBanReason,
+	FieldCreatedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -193,6 +196,11 @@ func ByBanned(opts ...sql.OrderTermOption) OrderOption {
 // ByBanReason orders the results by the ban_reason field.
 func ByBanReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBanReason, opts...).ToFunc()
+}
+
+// ByCreatedAt orders the results by the created_at field.
+func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
 // BySocialPlatformInfoField orders the results by social_platform_info field.
