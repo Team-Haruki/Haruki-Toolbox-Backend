@@ -4,6 +4,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 type User struct {
@@ -21,6 +22,7 @@ func (User) Fields() []ent.Field {
 		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),
 		field.Bool("banned").Default(false),
 		field.String("ban_reason").Optional().Nillable(),
+		field.Time("created_at").Optional().Nillable(),
 	}
 }
 
@@ -32,5 +34,12 @@ func (User) Edges() []ent.Edge {
 		edge.To("ios_script_code", IOSScriptCode.Type).Unique(),
 		edge.To("oauth_authorizations", OAuthAuthorization.Type),
 		edge.To("oauth_tokens", OAuthToken.Type),
+	}
+}
+
+func (User) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("created_at"),
+		index.Fields("role", "banned"),
 	}
 }
