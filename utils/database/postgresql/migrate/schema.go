@@ -487,12 +487,25 @@ var (
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
 		{Name: "banned", Type: field.TypeBool, Default: false},
 		{Name: "ban_reason", Type: field.TypeString, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime, Nullable: true},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
 		Name:       "users",
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "user_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[9]},
+			},
+			{
+				Name:    "user_role_banned",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[6], UsersColumns[7]},
+			},
+		},
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{

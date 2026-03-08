@@ -13,6 +13,7 @@ import (
 	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -109,6 +110,20 @@ func (_c *UserCreate) SetBanReason(v string) *UserCreate {
 func (_c *UserCreate) SetNillableBanReason(v *string) *UserCreate {
 	if v != nil {
 		_c.SetBanReason(*v)
+	}
+	return _c
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_c *UserCreate) SetCreatedAt(v time.Time) *UserCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCreatedAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
 	return _c
 }
@@ -362,6 +377,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BanReason(); ok {
 		_spec.SetField(user.FieldBanReason, field.TypeString, value)
 		_node.BanReason = &value
+	}
+	if value, ok := _c.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+		_node.CreatedAt = &value
 	}
 	if nodes := _c.mutation.SocialPlatformInfoIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

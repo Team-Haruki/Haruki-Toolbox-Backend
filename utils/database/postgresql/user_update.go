@@ -14,6 +14,7 @@ import (
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -154,6 +155,26 @@ func (_u *UserUpdate) SetNillableBanReason(v *string) *UserUpdate {
 // ClearBanReason clears the value of the "ban_reason" field.
 func (_u *UserUpdate) ClearBanReason() *UserUpdate {
 	_u.mutation.ClearBanReason()
+	return _u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *UserUpdate) SetCreatedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableCreatedAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
+}
+
+// ClearCreatedAt clears the value of the "created_at" field.
+func (_u *UserUpdate) ClearCreatedAt() *UserUpdate {
+	_u.mutation.ClearCreatedAt()
 	return _u
 }
 
@@ -434,6 +455,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CreatedAtCleared() {
+		_spec.ClearField(user.FieldCreatedAt, field.TypeTime)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -817,6 +844,26 @@ func (_u *UserUpdateOne) ClearBanReason() *UserUpdateOne {
 	return _u
 }
 
+// SetCreatedAt sets the "created_at" field.
+func (_u *UserUpdateOne) SetCreatedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableCreatedAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
+}
+
+// ClearCreatedAt clears the value of the "created_at" field.
+func (_u *UserUpdateOne) ClearCreatedAt() *UserUpdateOne {
+	_u.mutation.ClearCreatedAt()
+	return _u
+}
+
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
 func (_u *UserUpdateOne) SetSocialPlatformInfoID(id int) *UserUpdateOne {
 	_u.mutation.SetSocialPlatformInfoID(id)
@@ -1124,6 +1171,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CreatedAtCleared() {
+		_spec.ClearField(user.FieldCreatedAt, field.TypeTime)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
