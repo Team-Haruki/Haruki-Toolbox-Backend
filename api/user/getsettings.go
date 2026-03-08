@@ -14,7 +14,6 @@ func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 		user, err := apiHelper.DBManager.DB.User.
 			Query().
 			Where(userSchema.IDEQ(userID)).
-			WithEmailInfo().
 			WithSocialPlatformInfo().
 			WithAuthorizedSocialPlatforms().
 			WithGameAccountBindings().

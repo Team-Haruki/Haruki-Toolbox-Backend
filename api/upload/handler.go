@@ -171,6 +171,38 @@ func HandleUpload(
 		if logErr != nil {
 			handler.Logger.Warnf("Failed to create upload log: %v", logErr)
 		}
+
+		targetType := "game_account"
+		targetID := fmt.Sprintf("%s:%d", server, *gameUserID)
+		action := "user.upload." + strings.ToLower(string(uploadMethod))
+		actorType := harukiAPIHelper.SystemLogActorTypeSystem
+		var actorUserID *string
+		if strings.TrimSpace(toolboxUserID) != "" {
+			actorType = harukiAPIHelper.SystemLogActorTypeUser
+			userIDCopy := toolboxUserID
+			actorUserID = &userIDCopy
+		}
+
+		systemLogErr := harukiAPIHelper.WriteSystemLog(logCtx, helper, harukiAPIHelper.SystemLogEntry{
+			ActorUserID: actorUserID,
+			ActorType:   actorType,
+			Action:      action,
+			TargetType:  &targetType,
+			TargetID:    &targetID,
+			Result: map[bool]string{
+				true:  harukiAPIHelper.SystemLogResultSuccess,
+				false: harukiAPIHelper.SystemLogResultFailure,
+			}[success],
+			Metadata: map[string]any{
+				"server":       string(server),
+				"gameUserId":   strconv.FormatInt(*gameUserID, 10),
+				"dataType":     string(dataType),
+				"uploadMethod": string(uploadMethod),
+			},
+		})
+		if systemLogErr != nil {
+			handler.Logger.Warnf("Failed to create system log: %v", systemLogErr)
+		}
 	}()
 	if err != nil {
 		return result, err

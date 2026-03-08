@@ -13,6 +13,8 @@ func RegisterUserSystemRoutes(helper *api.HarukiToolboxRouterHelpers) {
 	registerSocialPlatformRoutes(helper)
 	registerGameAccountBindingRoutes(helper)
 	registerGameDataRoutes(helper)
+	registerActivityLogRoutes(helper)
+	registerTicketRoutes(helper)
 	registerAuthorizeSocialPlatformRoutes(helper)
 	registerIOSUploadCodeRoutes(helper)
 	registerOAuthAuthorizationRoutes(helper)

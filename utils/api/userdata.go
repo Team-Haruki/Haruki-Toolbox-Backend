@@ -14,10 +14,12 @@ func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) Haruki
 	gameAccountBindings := buildGameAccountBindingsFromUser(user)
 	avatarURL := buildAvatarURLFromUser(user)
 	iosUploadCode := buildIOSUploadCodeFromUser(user)
+	role := string(user.Role)
 
 	return HarukiToolboxUserData{
 		Name:                        &user.Name,
 		UserID:                      &user.ID,
+		Role:                        &role,
 		AvatarPath:                  &avatarURL,
 		AllowCNMysekai:              &user.AllowCnMysekai,
 		IOSUploadCode:               iosUploadCode,
@@ -37,15 +39,9 @@ func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 }
 
 func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
-	if user.Edges.EmailInfo != nil {
-		return EmailInfo{
-			Email:    user.Edges.EmailInfo.Email,
-			Verified: user.Edges.EmailInfo.Verified,
-		}
-	}
 	return EmailInfo{
 		Email:    user.Email,
-		Verified: false,
+		Verified: true,
 	}
 }
 
