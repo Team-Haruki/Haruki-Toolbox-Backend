@@ -22,6 +22,11 @@ type TurnstileResponse struct {
 }
 
 func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
+	if config.Cfg.UserSystem.TurnstileBypass {
+		return &TurnstileResponse{
+			Success: true,
+		}, nil
+	}
 	payload := map[string]string{
 		"secret":   config.Cfg.UserSystem.CloudflareSecret,
 		"response": response,
