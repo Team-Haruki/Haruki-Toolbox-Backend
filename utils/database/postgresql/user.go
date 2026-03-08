@@ -4,7 +4,6 @@ package postgresql
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
@@ -29,6 +28,8 @@ type User struct {
 	AvatarPath *string `json:"avatar_path,omitempty"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
 	AllowCnMysekai bool `json:"allow_cn_mysekai,omitempty"`
+	// Role holds the value of the "role" field.
+	Role user.Role `json:"role,omitempty"`
 	// Banned holds the value of the "banned" field.
 	Banned bool `json:"banned,omitempty"`
 	// BanReason holds the value of the "ban_reason" field.
@@ -41,8 +42,6 @@ type User struct {
 
 // UserEdges holds the relations/edges for other nodes in the graph.
 type UserEdges struct {
-	// EmailInfo holds the value of the email_info edge.
-	EmailInfo *EmailInfo `json:"email_info,omitempty"`
 	// SocialPlatformInfo holds the value of the social_platform_info edge.
 	SocialPlatformInfo *SocialPlatformInfo `json:"social_platform_info,omitempty"`
 	// AuthorizedSocialPlatforms holds the value of the authorized_social_platforms edge.
@@ -57,18 +56,7 @@ type UserEdges struct {
 	OauthTokens []*OAuthToken `json:"oauth_tokens,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [7]bool
-}
-
-// EmailInfoOrErr returns the EmailInfo value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e UserEdges) EmailInfoOrErr() (*EmailInfo, error) {
-	if e.EmailInfo != nil {
-		return e.EmailInfo, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: emailinfo.Label}
-	}
-	return nil, &NotLoadedError{edge: "email_info"}
+	loadedTypes [6]bool
 }
 
 // SocialPlatformInfoOrErr returns the SocialPlatformInfo value or an error if the edge
@@ -76,7 +64,7 @@ func (e UserEdges) EmailInfoOrErr() (*EmailInfo, error) {
 func (e UserEdges) SocialPlatformInfoOrErr() (*SocialPlatformInfo, error) {
 	if e.SocialPlatformInfo != nil {
 		return e.SocialPlatformInfo, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: socialplatforminfo.Label}
 	}
 	return nil, &NotLoadedError{edge: "social_platform_info"}
@@ -85,7 +73,7 @@ func (e UserEdges) SocialPlatformInfoOrErr() (*SocialPlatformInfo, error) {
 // AuthorizedSocialPlatformsOrErr returns the AuthorizedSocialPlatforms value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) AuthorizedSocialPlatformsOrErr() ([]*AuthorizeSocialPlatformInfo, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[1] {
 		return e.AuthorizedSocialPlatforms, nil
 	}
 	return nil, &NotLoadedError{edge: "authorized_social_platforms"}
@@ -94,7 +82,7 @@ func (e UserEdges) AuthorizedSocialPlatformsOrErr() ([]*AuthorizeSocialPlatformI
 // GameAccountBindingsOrErr returns the GameAccountBindings value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[2] {
 		return e.GameAccountBindings, nil
 	}
 	return nil, &NotLoadedError{edge: "game_account_bindings"}
@@ -105,7 +93,7 @@ func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
 func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 	if e.IosScriptCode != nil {
 		return e.IosScriptCode, nil
-	} else if e.loadedTypes[4] {
+	} else if e.loadedTypes[3] {
 		return nil, &NotFoundError{label: iosscriptcode.Label}
 	}
 	return nil, &NotLoadedError{edge: "ios_script_code"}
@@ -114,7 +102,7 @@ func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 // OauthAuthorizationsOrErr returns the OauthAuthorizations value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) OauthAuthorizationsOrErr() ([]*OAuthAuthorization, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.OauthAuthorizations, nil
 	}
 	return nil, &NotLoadedError{edge: "oauth_authorizations"}
@@ -123,7 +111,7 @@ func (e UserEdges) OauthAuthorizationsOrErr() ([]*OAuthAuthorization, error) {
 // OauthTokensOrErr returns the OauthTokens value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) OauthTokensOrErr() ([]*OAuthToken, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[5] {
 		return e.OauthTokens, nil
 	}
 	return nil, &NotLoadedError{edge: "oauth_tokens"}
@@ -136,7 +124,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldAllowCnMysekai, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldBanReason:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -190,6 +178,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AllowCnMysekai = value.Bool
 			}
+		case user.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				_m.Role = user.Role(value.String)
+			}
 		case user.FieldBanned:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field banned", values[i])
@@ -214,11 +208,6 @@ func (_m *User) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *User) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
-}
-
-// QueryEmailInfo queries the "email_info" edge of the User entity.
-func (_m *User) QueryEmailInfo() *EmailInfoQuery {
-	return NewUserClient(_m.config).QueryEmailInfo(_m)
 }
 
 // QuerySocialPlatformInfo queries the "social_platform_info" edge of the User entity.
@@ -290,6 +279,9 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("allow_cn_mysekai=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowCnMysekai))
+	builder.WriteString(", ")
+	builder.WriteString("role=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Role))
 	builder.WriteString(", ")
 	builder.WriteString("banned=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Banned))

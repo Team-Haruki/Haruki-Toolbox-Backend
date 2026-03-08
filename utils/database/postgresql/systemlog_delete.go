@@ -4,34 +4,34 @@ package postgresql
 
 import (
 	"context"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/predicate"
+	"haruki-suite/utils/database/postgresql/systemlog"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
 
-// EmailInfoDelete is the builder for deleting a EmailInfo entity.
-type EmailInfoDelete struct {
+// SystemLogDelete is the builder for deleting a SystemLog entity.
+type SystemLogDelete struct {
 	config
 	hooks    []Hook
-	mutation *EmailInfoMutation
+	mutation *SystemLogMutation
 }
 
-// Where appends a list predicates to the EmailInfoDelete builder.
-func (_d *EmailInfoDelete) Where(ps ...predicate.EmailInfo) *EmailInfoDelete {
+// Where appends a list predicates to the SystemLogDelete builder.
+func (_d *SystemLogDelete) Where(ps ...predicate.SystemLog) *SystemLogDelete {
 	_d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (_d *EmailInfoDelete) Exec(ctx context.Context) (int, error) {
+func (_d *SystemLogDelete) Exec(ctx context.Context) (int, error) {
 	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *EmailInfoDelete) ExecX(ctx context.Context) int {
+func (_d *SystemLogDelete) ExecX(ctx context.Context) int {
 	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
@@ -39,8 +39,8 @@ func (_d *EmailInfoDelete) ExecX(ctx context.Context) int {
 	return n
 }
 
-func (_d *EmailInfoDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(emailinfo.Table, sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt))
+func (_d *SystemLogDelete) sqlExec(ctx context.Context) (int, error) {
+	_spec := sqlgraph.NewDeleteSpec(systemlog.Table, sqlgraph.NewFieldSpec(systemlog.FieldID, field.TypeInt))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -56,32 +56,32 @@ func (_d *EmailInfoDelete) sqlExec(ctx context.Context) (int, error) {
 	return affected, err
 }
 
-// EmailInfoDeleteOne is the builder for deleting a single EmailInfo entity.
-type EmailInfoDeleteOne struct {
-	_d *EmailInfoDelete
+// SystemLogDeleteOne is the builder for deleting a single SystemLog entity.
+type SystemLogDeleteOne struct {
+	_d *SystemLogDelete
 }
 
-// Where appends a list predicates to the EmailInfoDelete builder.
-func (_d *EmailInfoDeleteOne) Where(ps ...predicate.EmailInfo) *EmailInfoDeleteOne {
+// Where appends a list predicates to the SystemLogDelete builder.
+func (_d *SystemLogDeleteOne) Where(ps ...predicate.SystemLog) *SystemLogDeleteOne {
 	_d._d.mutation.Where(ps...)
 	return _d
 }
 
 // Exec executes the deletion query.
-func (_d *EmailInfoDeleteOne) Exec(ctx context.Context) error {
+func (_d *SystemLogDeleteOne) Exec(ctx context.Context) error {
 	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
 	case n == 0:
-		return &NotFoundError{emailinfo.Label}
+		return &NotFoundError{systemlog.Label}
 	default:
 		return nil
 	}
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (_d *EmailInfoDeleteOne) ExecX(ctx context.Context) {
+func (_d *SystemLogDeleteOne) ExecX(ctx context.Context) {
 	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}

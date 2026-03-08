@@ -3,6 +3,8 @@
 package user
 
 import (
+	"fmt"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -22,12 +24,12 @@ const (
 	FieldAvatarPath = "avatar_path"
 	// FieldAllowCnMysekai holds the string denoting the allow_cn_mysekai field in the database.
 	FieldAllowCnMysekai = "allow_cn_mysekai"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
 	// FieldBanned holds the string denoting the banned field in the database.
 	FieldBanned = "banned"
 	// FieldBanReason holds the string denoting the ban_reason field in the database.
 	FieldBanReason = "ban_reason"
-	// EdgeEmailInfo holds the string denoting the email_info edge name in mutations.
-	EdgeEmailInfo = "email_info"
 	// EdgeSocialPlatformInfo holds the string denoting the social_platform_info edge name in mutations.
 	EdgeSocialPlatformInfo = "social_platform_info"
 	// EdgeAuthorizedSocialPlatforms holds the string denoting the authorized_social_platforms edge name in mutations.
@@ -42,13 +44,6 @@ const (
 	EdgeOauthTokens = "oauth_tokens"
 	// Table holds the table name of the user in the database.
 	Table = "users"
-	// EmailInfoTable is the table that holds the email_info relation/edge.
-	EmailInfoTable = "email_infos"
-	// EmailInfoInverseTable is the table name for the EmailInfo entity.
-	// It exists in this package in order to avoid circular dependency with the "emailinfo" package.
-	EmailInfoInverseTable = "email_infos"
-	// EmailInfoColumn is the table column denoting the email_info relation/edge.
-	EmailInfoColumn = "user_email_info"
 	// SocialPlatformInfoTable is the table that holds the social_platform_info relation/edge.
 	SocialPlatformInfoTable = "social_platform_infos"
 	// SocialPlatformInfoInverseTable is the table name for the SocialPlatformInfo entity.
@@ -101,6 +96,7 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldAvatarPath,
 	FieldAllowCnMysekai,
+	FieldRole,
 	FieldBanned,
 	FieldBanReason,
 }
@@ -123,6 +119,33 @@ var (
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
+
+// Role defines the type for the "role" enum field.
+type Role string
+
+// RoleUser is the default value of the Role enum.
+const DefaultRole = RoleUser
+
+// Role values.
+const (
+	RoleUser       Role = "user"
+	RoleAdmin      Role = "admin"
+	RoleSuperAdmin Role = "super_admin"
+)
+
+func (r Role) String() string {
+	return string(r)
+}
+
+// RoleValidator is a validator for the "role" field enum values. It is called by the builders before save.
+func RoleValidator(r Role) error {
+	switch r {
+	case RoleUser, RoleAdmin, RoleSuperAdmin:
+		return nil
+	default:
+		return fmt.Errorf("user: invalid enum value for role field: %q", r)
+	}
+}
 
 // OrderOption defines the ordering options for the User queries.
 type OrderOption func(*sql.Selector)
@@ -157,6 +180,11 @@ func ByAllowCnMysekai(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAllowCnMysekai, opts...).ToFunc()
 }
 
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
 // ByBanned orders the results by the banned field.
 func ByBanned(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBanned, opts...).ToFunc()
@@ -165,13 +193,6 @@ func ByBanned(opts ...sql.OrderTermOption) OrderOption {
 // ByBanReason orders the results by the ban_reason field.
 func ByBanReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBanReason, opts...).ToFunc()
-}
-
-// ByEmailInfoField orders the results by email_info field.
-func ByEmailInfoField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newEmailInfoStep(), sql.OrderByField(field, opts...))
-	}
 }
 
 // BySocialPlatformInfoField orders the results by social_platform_info field.
@@ -242,13 +263,6 @@ func ByOauthTokens(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newOauthTokensStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
-}
-func newEmailInfoStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(EmailInfoInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2O, false, EmailInfoTable, EmailInfoColumn),
-	)
 }
 func newSocialPlatformInfoStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
