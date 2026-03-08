@@ -59,11 +59,20 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		ctx := c.Context()
 		userID := c.Locals("userID").(string)
 		clientID := c.Params("client_id")
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			writeUserAuditLog(c, apiHelper, "user.oauth.authorization.revoke", result, userID, map[string]any{
+				"reason":   reason,
+				"clientID": clientID,
+			})
+		}()
 
 		client, err := apiHelper.DBManager.DB.OAuthClient.Query().
 			Where(oauthclient.ClientIDEQ(clientID)).
 			Only(ctx)
 		if err != nil {
+			reason = "client_not_found"
 			return harukiAPIHelper.ErrorNotFound(c, "client not found")
 		}
 
@@ -76,6 +85,7 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Save(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to revoke oauth authorization: %v", err)
+			reason = "revoke_authorization_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to revoke authorization")
 		}
 
@@ -90,6 +100,8 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			harukiLogger.Errorf("Failed to revoke oauth tokens: %v", err)
 		}
 
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
 		return harukiAPIHelper.SuccessResponse[string](c, "authorization revoked", nil)
 	}
 }

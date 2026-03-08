@@ -1,6 +1,7 @@
 package api
 
 import (
+	"haruki-suite/api/admin"
 	"haruki-suite/api/ios"
 	"haruki-suite/api/misc"
 	oauth2Routes "haruki-suite/api/oauth2"
@@ -13,6 +14,7 @@ import (
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	misc.RegisterMiscRoutes(apiHelper)
+	admin.RegisterAdminRoutes(apiHelper)
 	user.RegisterUserSystemRoutes(apiHelper)
 	webhook.RegisterWebhookRoutes(apiHelper)
 	public.RegisterPublicAPIRoutes(apiHelper)

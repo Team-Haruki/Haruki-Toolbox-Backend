@@ -13,11 +13,6 @@ import (
 )
 
 func handleGetOwnData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	allowedKeySet := make(map[string]struct{}, len(apiHelper.PublicAPIAllowedKeys))
-	for _, k := range apiHelper.PublicAPIAllowedKeys {
-		allowedKeySet[k] = struct{}{}
-	}
-
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 
@@ -65,9 +60,14 @@ func handleGetOwnData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fib
 
 		requestKey := c.Query("key")
 		var resp any
+		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
+		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
+		for _, k := range publicAPIAllowedKeys {
+			allowedKeySet[k] = struct{}{}
+		}
 
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			resp, err = data.HandleSuiteRequest(c, apiHelper, gameUserID, server, requestKey, allowedKeySet, apiHelper.PublicAPIAllowedKeys)
+			resp, err = data.HandleSuiteRequest(c, apiHelper, gameUserID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
 		} else {
 			resp, err = data.HandleMysekaiRequest(c, apiHelper, gameUserID, server, requestKey)
 		}

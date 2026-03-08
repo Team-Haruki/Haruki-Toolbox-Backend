@@ -126,6 +126,7 @@ type RegisterOrLoginSuccessResponse struct {
 type HarukiToolboxUserData struct {
 	Name                        *string                        `json:"name,omitempty"`
 	UserID                      *string                        `json:"userId,omitempty"`
+	Role                        *string                        `json:"role,omitempty"`
 	AvatarPath                  *string                        `json:"avatarPath,omitempty"`
 	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitempty"`
 	IOSUploadCode               *string                        `json:"iosUploadCode,omitempty"`

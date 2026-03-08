@@ -27,10 +27,6 @@ func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType har
 }
 
 func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	allowedKeySet := make(map[string]struct{}, len(apiHelper.PublicAPIAllowedKeys))
-	for _, k := range apiHelper.PublicAPIAllowedKeys {
-		allowedKeySet[k] = struct{}{}
-	}
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		server, dataType, userID, userIDStr, err := parseParams(c)
@@ -51,9 +47,14 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if !validatePublicAPIAccess(record, dataType) {
 			return harukiAPIHelper.ErrorForbidden(c, "you are not allowed to access this player data.")
 		}
+		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
+		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
+		for _, k := range publicAPIAllowedKeys {
+			allowedKeySet[k] = struct{}{}
+		}
 		requestKey := c.Query("key")
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			resp, err = data.HandleSuiteRequest(c, apiHelper, userID, server, requestKey, allowedKeySet, apiHelper.PublicAPIAllowedKeys)
+			resp, err = data.HandleSuiteRequest(c, apiHelper, userID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
 		} else {
 			resp, err = data.HandleMysekaiRequest(c, apiHelper, userID, server, requestKey)
 		}

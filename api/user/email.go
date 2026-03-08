@@ -5,7 +5,6 @@ import (
 	"fmt"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
@@ -97,9 +96,9 @@ func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-		exists, err := apiHelper.DBManager.DB.EmailInfo.Query().Where(emailinfo.EmailEQ(req.Email)).Exist(ctx)
+		exists, err := apiHelper.DBManager.DB.User.Query().Where(user.EmailEQ(req.Email)).Exist(ctx)
 		if err != nil {
-			harukiLogger.Errorf("Failed to query email info: %v", err)
+			harukiLogger.Errorf("Failed to query user email: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
@@ -112,38 +111,41 @@ func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
+		userID := c.Locals("userID").(string)
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			writeUserAuditLog(c, apiHelper, "user.email.verify", result, userID, map[string]any{
+				"reason": reason,
+			})
+		}()
+
 		var req harukiAPIHelper.VerifyEmailPayload
 		if err := c.Bind().Body(&req); err != nil {
+			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 		ok, err := VerifyEmailHandler(c, req.Email, req.OneTimePassword, apiHelper)
 		if err != nil {
+			reason = "verify_email_otp_failed"
 			return err
 		}
 		if !ok {
+			reason = "verify_email_otp_failed"
 			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
 		}
-		userID := c.Locals("userID").(string)
 
 		emailTaken, err := apiHelper.DBManager.DB.User.Query().
 			Where(user.EmailEQ(req.Email), user.IDNEQ(userID)).
 			Exist(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to check email availability: %v", err)
+			reason = "check_email_taken_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to check email availability")
 		}
 		if emailTaken {
+			reason = "email_taken"
 			return harukiAPIHelper.ErrorBadRequest(c, "email already in use by another account")
-		}
-		emailInfoTaken, err := apiHelper.DBManager.DB.EmailInfo.Query().
-			Where(emailinfo.EmailEQ(req.Email), emailinfo.Not(emailinfo.HasUserWith(user.IDEQ(userID)))).
-			Exist(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to check email info availability: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to check email availability")
-		}
-		if emailInfoTaken {
-			return harukiAPIHelper.ErrorBadRequest(c, "email already verified by another account")
 		}
 
 		if _, err := apiHelper.DBManager.DB.User.
@@ -152,16 +154,8 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			SetEmail(req.Email).
 			Save(ctx); err != nil {
 			harukiLogger.Errorf("Failed to update user email: %v", err)
+			reason = "update_user_email_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
-		}
-		if _, err := apiHelper.DBManager.DB.EmailInfo.
-			Update().
-			Where(emailinfo.HasUserWith(user.IDEQ(userID))).
-			SetEmail(req.Email).
-			SetVerified(true).
-			Save(ctx); err != nil {
-			harukiLogger.Errorf("Failed to update email info: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to update email info")
 		}
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -171,6 +165,8 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			},
 		}
 		_ = harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID)
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
 		return harukiAPIHelper.SuccessResponse(c, "email verified", &ud)
 	}
 }

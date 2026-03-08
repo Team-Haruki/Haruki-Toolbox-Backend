@@ -78,23 +78,37 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			writeUserAuditLog(c, apiHelper, "user.game_account_binding.create", result, userID, map[string]any{
+				"reason":     reason,
+				"server":     serverStr,
+				"gameUserID": gameUserIDStr,
+			})
+		}()
 		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
 
 		if _, err := strconv.Atoi(gameUserIDStr); err != nil {
+			reason = "invalid_game_user_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
 		var req harukiAPIHelper.CreateGameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
+			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 		existing, err := queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query existing binding: %v", err)
+			reason = "query_existing_binding_failed"
 			return err
 		}
 		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
 		if resp := checkExistingBinding(c, ctx, apiHelper, existing, userID); resp != nil {
+			reason = "already_verified_or_bound"
+			result = harukiAPIHelper.SystemLogResultSuccess
 			harukiLogger.Infof("[GameAccountBinding] checkExistingBinding returned non-nil, short-circuiting")
 			return resp
 		}
@@ -102,12 +116,14 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
+			reason = "verification_code_missing"
 			harukiLogger.Infof("[GameAccountBinding] verification code not found: %v", err)
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		harukiLogger.Infof("[GameAccountBinding] verification code found, proceeding to Sekai API verification")
 
 		if err := verifyGameAccountOwnership(apiHelper, gameUserIDStr, serverStr, code); err != nil {
+			reason = "verify_ownership_failed"
 			harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership FAILED: %v", err)
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
@@ -115,6 +131,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 		if err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req); err != nil {
 			harukiLogger.Errorf("Failed to save game account binding: %v", err)
+			reason = "save_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
 
@@ -124,11 +141,14 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			reason = "query_bindings_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
 		return harukiAPIHelper.SuccessResponse(c, "verification succeeded", &ud)
 	}
 }
@@ -139,9 +159,19 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			writeUserAuditLog(c, apiHelper, "user.game_account_binding.update", result, userID, map[string]any{
+				"reason":     reason,
+				"server":     serverStr,
+				"gameUserID": gameUserIDStr,
+			})
+		}()
 
 		var req harukiAPIHelper.CreateGameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
+			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 
@@ -155,12 +185,15 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Only(ctx)
 
 		if err != nil || existing == nil {
+			reason = "binding_not_found"
 			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 		if existing.Edges.User.ID != userID {
+			reason = "binding_owned_by_other_user"
 			return harukiAPIHelper.ErrorForbidden(c, "this account is bound by another user")
 		}
 		if !existing.Verified {
+			reason = "binding_not_verified"
 			return harukiAPIHelper.ErrorBadRequest(c, "binding is not verified yet")
 		}
 
@@ -170,17 +203,21 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Save(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to update game account binding: %v", err)
+			reason = "update_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			reason = "query_bindings_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
 		return harukiAPIHelper.SuccessResponse(c, "binding updated successfully", &ud)
 	}
 }
@@ -191,6 +228,15 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		userID := c.Locals("userID").(string)
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			writeUserAuditLog(c, apiHelper, "user.game_account_binding.delete", result, userID, map[string]any{
+				"reason":     reason,
+				"server":     serverStr,
+				"gameUserID": gameUserIDStr,
+			})
+		}()
 
 		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
 			Query().
@@ -202,27 +248,33 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Only(ctx)
 
 		if err != nil || existing == nil {
+			reason = "binding_not_found"
 			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 
 		if existing.Edges.User.ID != userID {
+			reason = "binding_owned_by_other_user"
 			return harukiAPIHelper.ErrorForbidden(c, "not authorized to delete this binding")
 		}
 
 		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
 		if err != nil {
 			harukiLogger.Errorf("Failed to delete game account binding: %v", err)
+			reason = "delete_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get user bindings: %v", err)
+			reason = "query_bindings_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
 			GameAccountBindings: &bindings,
 		}
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
 		return harukiAPIHelper.SuccessResponse(c, "binding deleted successfully", &ud)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"haruki-suite/utils/database"
 	"haruki-suite/utils/sekaiapi"
 	smtp2 "haruki-suite/utils/smtp"
+	"sync"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -22,6 +23,7 @@ type HarukiToolboxRouterHelpers struct {
 	HarukiProxySecret    string
 	HarukiProxyUnpackKey string
 	WebhookJWTSecret     string
+	publicAPIKeysMu      sync.RWMutex
 }
 
 func NewHarukiToolboxDBHelpers(
@@ -39,13 +41,15 @@ func NewHarukiToolboxDBHelpers(
 	HarukiProxyUnpackKey string,
 	webhookJWTSecret string,
 ) *HarukiToolboxRouterHelpers {
+	copiedPublicAPIAllowedKeys := append([]string(nil), publicAPIAllowedKeys...)
+
 	return &HarukiToolboxRouterHelpers{
 		Router:               router,
 		DBManager:            dbManager,
 		SMTPClient:           smtpClient,
 		SessionHandler:       sessionHandler,
 		SekaiAPIClient:       sekaiAPIClient,
-		PublicAPIAllowedKeys: publicAPIAllowedKeys,
+		PublicAPIAllowedKeys: copiedPublicAPIAllowedKeys,
 		PrivateAPIToken:      privateAPIToken,
 		PrivateAPIUserAgent:  privateAPIUserAgent,
 		HarukiProxyUserAgent: harukiProxyUserAgent,
@@ -54,4 +58,16 @@ func NewHarukiToolboxDBHelpers(
 		HarukiProxyUnpackKey: HarukiProxyUnpackKey,
 		WebhookJWTSecret:     webhookJWTSecret,
 	}
+}
+
+func (h *HarukiToolboxRouterHelpers) GetPublicAPIAllowedKeys() []string {
+	h.publicAPIKeysMu.RLock()
+	defer h.publicAPIKeysMu.RUnlock()
+	return append([]string(nil), h.PublicAPIAllowedKeys...)
+}
+
+func (h *HarukiToolboxRouterHelpers) SetPublicAPIAllowedKeys(keys []string) {
+	h.publicAPIKeysMu.Lock()
+	defer h.publicAPIKeysMu.Unlock()
+	h.PublicAPIAllowedKeys = append([]string(nil), keys...)
 }
