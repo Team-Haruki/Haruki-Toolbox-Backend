@@ -18,6 +18,7 @@ func (User) Fields() []ent.Field {
 		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
+		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),
 		field.Bool("banned").Default(false),
 		field.String("ban_reason").Optional().Nillable(),
 	}
@@ -25,7 +26,6 @@ func (User) Fields() []ent.Field {
 
 func (User) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("email_info", EmailInfo.Type).Unique(),
 		edge.To("social_platform_info", SocialPlatformInfo.Type).Unique(),
 		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type),
 		edge.To("game_account_bindings", GameAccountBinding.Type),
