@@ -4,6 +4,7 @@ import (
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	harukiLogger "haruki-suite/utils/logger"
@@ -13,6 +14,16 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func mapOwnedBindingLookupError(err error) *fiber.Error {
+	if err == nil {
+		return nil
+	}
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusNotFound, "game account binding not found or not owned by you")
+	}
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account binding")
+}
 
 func handleGetOwnData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -55,7 +66,14 @@ func handleGetOwnData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fib
 			).
 			Only(ctx)
 
-		if err != nil || binding == nil {
+		if lookupErr := mapOwnedBindingLookupError(err); lookupErr != nil {
+			if lookupErr.Code == fiber.StatusNotFound {
+				return harukiAPIHelper.ErrorNotFound(c, lookupErr.Message)
+			}
+			harukiLogger.Errorf("Failed to query own game account binding: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, lookupErr.Message)
+		}
+		if binding == nil {
 			return harukiAPIHelper.ErrorNotFound(c, "game account binding not found or not owned by you")
 		}
 

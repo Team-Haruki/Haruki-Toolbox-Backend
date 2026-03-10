@@ -32,6 +32,11 @@ var (
 	errGameAccountVerificationCodeExpired     = errors.New("verification code expired or not found")
 	errGameAccountVerificationTooManyAttempts = errors.New("too many verification attempts, please generate a new code")
 	errGameAccountVerificationServiceUnstable = errors.New("verification service unavailable")
+	errGameAccountProfileRequestFailed        = errors.New("failed to request game account profile")
+	errGameAccountServerUnavailable           = errors.New("game server unavailable")
+	errGameAccountNotFound                    = errors.New("game account not found")
+	errGameAccountProfileEmpty                = errors.New("empty game account profile response")
+	errGameAccountProfileInvalid              = errors.New("invalid game account profile response")
 )
 
 func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -132,23 +137,37 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
-		if resp := checkExistingBinding(c, ctx, apiHelper, existing, userID); resp != nil {
-			reason = "already_verified_or_bound"
+		switch classifyExistingBinding(existing, userID) {
+		case existingBindingStateOwnedByOther:
+			reason = "binding_owned_by_other_user"
+			return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
+		case existingBindingStateVerifiedBySelf:
+			bindings, err := getUserBindings(ctx, apiHelper, userID)
+			if err != nil {
+				harukiLogger.Errorf("Failed to get user bindings: %v", err)
+				reason = "query_bindings_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
+			}
+			ud := harukiAPIHelper.HarukiToolboxUserData{
+				GameAccountBindings: &bindings,
+			}
 			result = harukiAPIHelper.SystemLogResultSuccess
-			harukiLogger.Infof("[GameAccountBinding] checkExistingBinding returned non-nil, short-circuiting")
-			return resp
+			reason = "already_verified"
+			harukiLogger.Infof("[GameAccountBinding] existing verified binding found, short-circuiting")
+			return harukiAPIHelper.SuccessResponse(c, "account already verified", &ud)
 		}
-		harukiLogger.Infof("[GameAccountBinding] checkExistingBinding passed, proceeding to verification code check")
+		harukiLogger.Infof("[GameAccountBinding] existing binding check passed, proceeding to verification code check")
 
 		code, err := getVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr)
 		if err != nil {
 			reason = "verification_code_missing"
-			if errors.Is(err, errGameAccountVerificationServiceUnstable) {
-				harukiLogger.Errorf("[GameAccountBinding] verification storage unavailable: %v", err)
-				return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
+			mapped := mapGameAccountVerificationCodeLookupError(err)
+			if mapped.Code >= fiber.StatusInternalServerError {
+				harukiLogger.Errorf("[GameAccountBinding] verification code lookup failed: %v", err)
+			} else {
+				harukiLogger.Infof("[GameAccountBinding] verification code lookup rejected: %v", err)
 			}
-			harukiLogger.Infof("[GameAccountBinding] verification code not found: %v", err)
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 		}
 		harukiLogger.Infof("[GameAccountBinding] verification code found, proceeding to Sekai API verification")
 
@@ -161,19 +180,25 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				}
 			}
 			reason = "verify_ownership_failed"
-			harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership FAILED: %v", err)
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			mapped := mapGameAccountOwnershipVerificationError(err)
+			if mapped.Code >= fiber.StatusInternalServerError {
+				harukiLogger.Errorf("[GameAccountBinding] verifyGameAccountOwnership failed: %v", err)
+			} else {
+				harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership rejected: %v", err)
+			}
+			return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 		}
 		harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership PASSED, saving binding")
 
 		if err := consumeGameAccountVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr, code); err != nil {
-			if errors.Is(err, errGameAccountVerificationServiceUnstable) {
+			mapped := mapGameAccountVerificationCodeLookupError(err)
+			if mapped.Code >= fiber.StatusInternalServerError {
 				harukiLogger.Errorf("Failed to consume game account verification code: %v", err)
 				reason = "verification_code_consume_failed"
-				return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
+			} else {
+				reason = "verification_code_expired"
 			}
-			reason = "verification_code_expired"
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 		}
 
 		if err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req); err != nil {
@@ -375,28 +400,25 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return existing, nil
 }
 
-func checkExistingBinding(c fiber.Ctx, ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, userID string) error {
+type existingBindingState uint8
+
+const (
+	existingBindingStateNone existingBindingState = iota
+	existingBindingStateOwnedByOther
+	existingBindingStateVerifiedBySelf
+)
+
+func classifyExistingBinding(existing *postgresql.GameAccountBinding, userID string) existingBindingState {
 	if existing == nil {
-		return nil
+		return existingBindingStateNone
 	}
-
 	if ownerID := bindingOwnerID(existing); ownerID != "" && ownerID != userID {
-		return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
+		return existingBindingStateOwnedByOther
 	}
-
 	if isBindingOwnedByUser(existing, userID) && existing.Verified {
-		bindings, err := getUserBindings(ctx, apiHelper, userID)
-		if err != nil {
-			harukiLogger.Errorf("Failed to get user bindings: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to query bindings")
-		}
-		ud := harukiAPIHelper.HarukiToolboxUserData{
-			GameAccountBindings: &bindings,
-		}
-		return harukiAPIHelper.SuccessResponse(c, "account already verified", &ud)
+		return existingBindingStateVerifiedBySelf
 	}
-
-	return nil
+	return existingBindingStateNone
 }
 
 func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) (string, error) {
@@ -449,33 +471,75 @@ func shouldIncrementGameAccountVerificationAttempt(err error) bool {
 	return errors.Is(err, errGameAccountVerificationCodeMissing) || errors.Is(err, errGameAccountVerificationCodeMismatch)
 }
 
+func mapGameAccountVerificationCodeLookupError(err error) *fiber.Error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, errGameAccountVerificationTooManyAttempts):
+		return fiber.NewError(fiber.StatusBadRequest, "too many verification attempts, please generate a new code")
+	case errors.Is(err, errGameAccountVerificationCodeExpired):
+		return fiber.NewError(fiber.StatusBadRequest, "verification code expired or not found")
+	case errors.Is(err, errGameAccountVerificationServiceUnstable):
+		return fiber.NewError(fiber.StatusInternalServerError, "verification service unavailable")
+	default:
+		return fiber.NewError(fiber.StatusBadRequest, "verification code not found")
+	}
+}
+
+func mapGameAccountOwnershipVerificationError(err error) *fiber.Error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, errGameAccountVerificationCodeMissing):
+		return fiber.NewError(fiber.StatusBadRequest, "verification code missing in game profile")
+	case errors.Is(err, errGameAccountVerificationCodeMismatch):
+		return fiber.NewError(fiber.StatusBadRequest, "verification code does not match game profile")
+	case errors.Is(err, errGameAccountNotFound):
+		return fiber.NewError(fiber.StatusBadRequest, "game account not found")
+	case errors.Is(err, errGameAccountServerUnavailable):
+		return fiber.NewError(fiber.StatusBadGateway, "game server unavailable")
+	case errors.Is(err, errGameAccountProfileRequestFailed):
+		return fiber.NewError(fiber.StatusBadGateway, "failed to query game account profile")
+	case errors.Is(err, errGameAccountProfileEmpty):
+		return fiber.NewError(fiber.StatusBadGateway, "empty game account profile response")
+	case errors.Is(err, errGameAccountProfileInvalid):
+		return fiber.NewError(fiber.StatusBadGateway, "invalid game account profile response")
+	default:
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to verify game account ownership")
+	}
+}
+
 func verifyGameAccountOwnership(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
 	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
-	if err != nil || resultInfo == nil {
-		return fmt.Errorf("request sekai account profile failed: %v", err)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errGameAccountProfileRequestFailed, err)
+	}
+	if resultInfo == nil {
+		return errGameAccountProfileRequestFailed
 	}
 	if !resultInfo.ServerAvailable {
-		return fmt.Errorf("server unavailable or under maintenance")
+		return errGameAccountServerUnavailable
 	}
 	if !resultInfo.AccountExists {
-		return fmt.Errorf("game account not found")
+		return errGameAccountNotFound
 	}
 	if !resultInfo.Body || len(body) == 0 {
-		return fmt.Errorf("empty user profile response")
+		return errGameAccountProfileEmpty
 	}
 
 	var data map[string]any
 	if err := sonic.Unmarshal(body, &data); err != nil {
-		return fmt.Errorf("failed to parse profile: %v", err)
+		return fmt.Errorf("%w: %v", errGameAccountProfileInvalid, err)
 	}
 
 	if _, hasError := data["errorCode"]; hasError {
-		errMsg, _ := data["errorMessage"].(string)
-		return fmt.Errorf("game account not found: %s", errMsg)
+		return errGameAccountNotFound
 	}
 	userProfile, ok := data["userProfile"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("userProfile missing in response")
+		return errGameAccountProfileInvalid
 	}
 	word, ok := userProfile["word"].(string)
 	if !ok {
@@ -544,6 +608,6 @@ func RegisterUserGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolb
 }
 
 func isNumericGameUserID(gameUserID string) bool {
-	_, err := strconv.Atoi(gameUserID)
+	_, err := strconv.ParseInt(gameUserID, 10, 64)
 	return err == nil
 }

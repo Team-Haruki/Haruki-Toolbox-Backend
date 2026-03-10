@@ -245,6 +245,23 @@ func (s *SessionHandler) VerifyKratosPassword(ctx context.Context, identifier st
 	return nil
 }
 
+func (s *SessionHandler) VerifyKratosPasswordByIdentityID(ctx context.Context, identityID string, password string) error {
+	identityID = strings.TrimSpace(identityID)
+	if identityID == "" {
+		return fmt.Errorf("%w: empty identity id", errKratosInvalidInput)
+	}
+
+	identity, err := s.fetchKratosIdentityByID(ctx, identityID)
+	if err != nil {
+		return err
+	}
+	identifier := platformIdentity.NormalizeEmail(extractKratosIdentityEmail(*identity))
+	if identifier == "" {
+		return fmt.Errorf("%w: identity email is empty", errKratosIdentityUnmapped)
+	}
+	return s.VerifyKratosPassword(ctx, identifier, password)
+}
+
 func (s *SessionHandler) RegisterWithKratosPassword(ctx context.Context, email string, password string, extraTraits map[string]any) (string, error) {
 	flowID, err := s.initKratosSelfServiceFlow(ctx, "/self-service/registration/api")
 	if err != nil {
@@ -575,6 +592,58 @@ func (s *SessionHandler) RevokeKratosSessionsByIdentityID(ctx context.Context, i
 		}
 		return fmt.Errorf("%w: revoke sessions failed status=%d body=%s", errKratosInvalidInput, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+}
+
+func (s *SessionHandler) fetchKratosIdentityByID(ctx context.Context, identityID string) (*kratosIdentityRecord, error) {
+	identityID = strings.TrimSpace(identityID)
+	if identityID == "" {
+		return nil, fmt.Errorf("%w: empty identity id", errKratosInvalidInput)
+	}
+	if strings.TrimSpace(s.KratosAdminURL) == "" {
+		return nil, fmt.Errorf("%w: kratos admin url is not configured", errIdentityProviderUnavailable)
+	}
+
+	endpoint, err := buildProviderEndpoint(s.KratosAdminURL, "/admin/identities/"+url.PathEscape(identityID))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", errIdentityProviderUnavailable, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: build get identity request: %v", errIdentityProviderUnavailable, err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.kratosHTTPClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: get identity request failed: %v", errIdentityProviderUnavailable, err)
+	}
+	defer func(body io.ReadCloser) {
+		_ = body.Close()
+	}(resp.Body)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: read get identity response: %v", errIdentityProviderUnavailable, err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("%w: identity not found", errKratosIdentityUnmapped)
+	}
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= http.StatusInternalServerError {
+			return nil, fmt.Errorf("%w: get identity failed status=%d body=%s", errIdentityProviderUnavailable, resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		return nil, fmt.Errorf("%w: get identity failed status=%d body=%s", errKratosInvalidInput, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var identity kratosIdentityRecord
+	if err := json.Unmarshal(body, &identity); err != nil {
+		return nil, fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
+	}
+	if strings.TrimSpace(identity.ID) == "" {
+		identity.ID = identityID
+	}
+	return &identity, nil
 }
 
 func (s *SessionHandler) RevokeKratosSessionByToken(ctx context.Context, sessionToken string) error {

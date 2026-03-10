@@ -5,6 +5,7 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	harukiMongo "haruki-suite/utils/database/mongo"
 	harukiLogger "haruki-suite/utils/logger"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -63,7 +64,10 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		webhookID := c.Locals("webhook_id").(string)
+		webhookID, ok := resolveWebhookIDFromLocals(c)
+		if !ok {
+			return nil
+		}
 		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(ctx, webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get subscribers for webhook %s: %v", webhookID, err)
@@ -77,16 +81,19 @@ func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID := c.Params("user_id")
-		webhookID := c.Locals("webhook_id").(string)
+		webhookID, ok := resolveWebhookIDFromLocals(c)
+		if !ok {
+			return nil
+		}
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		dataTypeStr := c.Params("data_type")
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
 		err = apiHelper.DBManager.Mongo.AddWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
@@ -101,16 +108,19 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID := c.Params("user_id")
-		webhookID := c.Locals("webhook_id").(string)
+		webhookID, ok := resolveWebhookIDFromLocals(c)
+		if !ok {
+			return nil
+		}
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		dataTypeStr := c.Params("data_type")
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
 		err = apiHelper.DBManager.Mongo.RemoveWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
@@ -128,4 +138,13 @@ func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 	api.RouteChain("/:server/:data_type/:user_id").
 		Put(handlePutWebhookUser(apiHelper)).
 		Delete(handleDeleteWebhookUser(apiHelper))
+}
+
+func resolveWebhookIDFromLocals(c fiber.Ctx) (string, bool) {
+	webhookID, ok := c.Locals("webhook_id").(string)
+	if !ok || strings.TrimSpace(webhookID) == "" {
+		_ = harukiAPIHelper.ErrorUnauthorized(c, "invalid webhook session")
+		return "", false
+	}
+	return webhookID, true
 }

@@ -273,3 +273,60 @@ func TestParseAdminUpdateAllowCNMysekaiPayload(t *testing.T) {
 		}
 	})
 }
+
+func TestResolveAdminUserEmailUpdateFinalizeOutcome(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name               string
+		localMirrorFailed  bool
+		sessionClearFailed bool
+		wantStatus         int
+		wantResult         string
+	}
+
+	tests := []testCase{
+		{
+			name:               "local mirror and session clear failed",
+			localMirrorFailed:  true,
+			sessionClearFailed: true,
+			wantStatus:         fiber.StatusInternalServerError,
+			wantResult:         "failure",
+		},
+		{
+			name:               "local mirror failed",
+			localMirrorFailed:  true,
+			sessionClearFailed: false,
+			wantStatus:         fiber.StatusInternalServerError,
+			wantResult:         "failure",
+		},
+		{
+			name:               "session clear failed",
+			localMirrorFailed:  false,
+			sessionClearFailed: true,
+			wantStatus:         fiber.StatusOK,
+			wantResult:         "success",
+		},
+		{
+			name:               "all success",
+			localMirrorFailed:  false,
+			sessionClearFailed: false,
+			wantStatus:         fiber.StatusOK,
+			wantResult:         "success",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotStatus, _, gotResult := resolveAdminUserEmailUpdateFinalizeOutcome(tc.localMirrorFailed, tc.sessionClearFailed)
+			if gotStatus != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", gotStatus, tc.wantStatus)
+			}
+			if gotResult != tc.wantResult {
+				t.Fatalf("result = %q, want %q", gotResult, tc.wantResult)
+			}
+		})
+	}
+}

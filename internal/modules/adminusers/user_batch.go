@@ -123,7 +123,7 @@ func executeBatchForceLogout(ctx context.Context, apiHelper *harukiAPIHelper.Har
 			kratosRevokeFailed = true
 		}
 	}
-	if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUserID); err != nil {
+	if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), targetUserID); err != nil {
 		return err
 	}
 	if kratosRevokeFailed {

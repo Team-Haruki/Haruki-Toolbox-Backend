@@ -156,7 +156,7 @@ func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 				resp.ClearedSessions = &clearedSessions
 			}
 		}
-		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUser.ID); err != nil {
+		if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), targetUser.ID); err != nil {
 			clearedSessions = false
 			resp.ClearedSessions = &clearedSessions
 		}
@@ -404,7 +404,7 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 					sessionClearFailed = true
 				}
 			}
-			if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUser.ID); err != nil {
+			if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), targetUser.ID); err != nil {
 				clearedSessions = false
 				resp.ClearedSessions = &clearedSessions
 				sessionClearFailed = true

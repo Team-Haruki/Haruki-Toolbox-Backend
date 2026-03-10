@@ -1,6 +1,9 @@
 package usertickets
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseUserTicketPriority(t *testing.T) {
 	v, err := parseUserTicketPriority("")
@@ -73,6 +76,56 @@ func TestNormalizeUserTicketCategory(t *testing.T) {
 		tooLong := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890too-long"
 		if _, err := normalizeUserTicketCategory(tooLong); err == nil {
 			t.Fatalf("expected error when category is too long")
+		}
+	})
+
+	t.Run("unicode category rune limit", func(t *testing.T) {
+		valid := strings.Repeat("你", 64)
+		got, err := normalizeUserTicketCategory(valid)
+		if err != nil {
+			t.Fatalf("normalizeUserTicketCategory returned error: %v", err)
+		}
+		if got != valid {
+			t.Fatalf("category = %q, want %q", got, valid)
+		}
+
+		invalid := strings.Repeat("你", 65)
+		if _, err := normalizeUserTicketCategory(invalid); err == nil {
+			t.Fatalf("expected error when unicode category exceeds rune limit")
+		}
+	})
+}
+
+func TestNormalizeUserTicketSubjectAndMessage(t *testing.T) {
+	t.Run("subject unicode limits", func(t *testing.T) {
+		valid := strings.Repeat("你", 200)
+		got, err := normalizeUserTicketSubject(valid)
+		if err != nil {
+			t.Fatalf("normalizeUserTicketSubject returned error: %v", err)
+		}
+		if got != valid {
+			t.Fatalf("subject = %q, want %q", got, valid)
+		}
+
+		invalid := strings.Repeat("你", 201)
+		if _, err := normalizeUserTicketSubject(invalid); err == nil {
+			t.Fatalf("expected subject exceeding rune limit to fail")
+		}
+	})
+
+	t.Run("message unicode limits", func(t *testing.T) {
+		valid := strings.Repeat("你", 4000)
+		got, err := normalizeUserTicketMessage(valid)
+		if err != nil {
+			t.Fatalf("normalizeUserTicketMessage returned error: %v", err)
+		}
+		if got != valid {
+			t.Fatalf("message = %q, want %q", got, valid)
+		}
+
+		invalid := strings.Repeat("你", 4001)
+		if _, err := normalizeUserTicketMessage(invalid); err == nil {
+			t.Fatalf("expected message exceeding rune limit to fail")
 		}
 	})
 }

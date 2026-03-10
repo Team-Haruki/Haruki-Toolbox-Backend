@@ -115,7 +115,7 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 	}
 	clientIP := c.IP()
 	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
-	if err != nil || !resp.Success {
+	if err != nil || resp == nil || !resp.Success {
 		return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 	}
 	limited, limitKey, limitMessage, err := checkSendEmailRateLimit(c, helper, clientIP, email)
@@ -189,6 +189,19 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 		harukiLogger.Warnf("Failed to clear OTP attempt key for %s: %v", email, err)
 	}
 	return true, nil
+}
+
+func resolveVerifyEmailFinalizeOutcome(localMirrorFailed, sessionClearFailed bool) (status int, message string, result string, reason string) {
+	if localMirrorFailed && sessionClearFailed {
+		return fiber.StatusInternalServerError, "email verified in identity provider, but local mirror sync failed and some sessions were not cleared", harukiAPIHelper.SystemLogResultFailure, "local_mirror_and_session_clear_failed"
+	}
+	if localMirrorFailed {
+		return fiber.StatusInternalServerError, "email verified in identity provider, but local mirror sync failed", harukiAPIHelper.SystemLogResultFailure, "local_mirror_failed"
+	}
+	if sessionClearFailed {
+		return fiber.StatusOK, "email verified, but failed to clear existing sessions", harukiAPIHelper.SystemLogResultSuccess, "ok_session_clear_failed"
+	}
+	return fiber.StatusOK, "email verified", harukiAPIHelper.SystemLogResultSuccess, "ok"
 }
 
 func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -333,28 +346,17 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 				sessionClearFailed = true
 			}
 		}
-		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
+		if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), userID); err != nil {
 			harukiLogger.Warnf("Failed to clear local user sessions after email update: %v", err)
 			sessionClearFailed = true
 		}
-		if localMirrorFailed && sessionClearFailed {
-			result = harukiAPIHelper.SystemLogResultSuccess
-			reason = "ok_local_mirror_and_session_clear_failed"
-			return harukiAPIHelper.SuccessResponse(c, "email verified, but local mirror sync failed and some sessions were not cleared", &ud)
+		status, message, finalResult, finalReason := resolveVerifyEmailFinalizeOutcome(localMirrorFailed, sessionClearFailed)
+		result = finalResult
+		reason = finalReason
+		if status == fiber.StatusOK {
+			return harukiAPIHelper.SuccessResponse(c, message, &ud)
 		}
-		if localMirrorFailed {
-			result = harukiAPIHelper.SystemLogResultSuccess
-			reason = "ok_local_mirror_failed"
-			return harukiAPIHelper.SuccessResponse(c, "email verified in identity provider, but local mirror sync failed", &ud)
-		}
-		if sessionClearFailed {
-			result = harukiAPIHelper.SystemLogResultSuccess
-			reason = "ok_session_clear_failed"
-			return harukiAPIHelper.SuccessResponse(c, "email verified, but failed to clear existing sessions", &ud)
-		}
-		result = harukiAPIHelper.SystemLogResultSuccess
-		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "email verified", &ud)
+		return harukiAPIHelper.UpdatedDataResponse[string](c, status, message, nil)
 	}
 }
 

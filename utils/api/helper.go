@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/redis/go-redis/v9"
 )
 
 type HarukiToolboxRouterHelpers struct {
@@ -163,4 +164,11 @@ func (h *HarukiToolboxRouterHelpers) SetWebhookJWTSecret(secret string) {
 	h.runtimeConfigMu.Lock()
 	defer h.runtimeConfigMu.Unlock()
 	h.WebhookJWTSecret = secret
+}
+
+func (h *HarukiToolboxRouterHelpers) RedisClient() *redis.Client {
+	if h == nil || h.DBManager == nil || h.DBManager.Redis == nil {
+		return nil
+	}
+	return h.DBManager.Redis.Redis
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"haruki-suite/config"
 	harukiLogger "haruki-suite/utils/logger"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -11,6 +13,12 @@ import (
 )
 
 const verifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+var (
+	turnstileClientMu    sync.RWMutex
+	turnstileClient      *resty.Client
+	turnstileClientProxy string
+)
 
 type TurnstileResponse struct {
 	Success     bool     `json:"success"`
@@ -35,10 +43,7 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 		payload["remoteip"] = remoteIP
 	}
 	body, _ := sonic.Marshal(payload)
-	client := resty.New().SetTimeout(5 * time.Second)
-	if config.Cfg.Proxy != "" {
-		client.SetProxy(config.Cfg.Proxy)
-	}
+	client := turnstileHTTPClient(config.Cfg.Proxy)
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(body).
@@ -53,4 +58,29 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 		return nil, fmt.Errorf("decode failed: %w", err)
 	}
 	return &result, nil
+}
+
+func turnstileHTTPClient(proxy string) *resty.Client {
+	proxy = strings.TrimSpace(proxy)
+
+	turnstileClientMu.RLock()
+	if turnstileClient != nil && turnstileClientProxy == proxy {
+		client := turnstileClient
+		turnstileClientMu.RUnlock()
+		return client
+	}
+	turnstileClientMu.RUnlock()
+
+	client := resty.New().SetTimeout(5 * time.Second)
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+
+	turnstileClientMu.Lock()
+	defer turnstileClientMu.Unlock()
+	if turnstileClient == nil || turnstileClientProxy != proxy {
+		turnstileClient = client
+		turnstileClientProxy = proxy
+	}
+	return turnstileClient
 }

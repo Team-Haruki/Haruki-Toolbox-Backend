@@ -5,8 +5,6 @@ import (
 	"errors"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -72,25 +70,24 @@ func TestBindingOwnerHelpers(t *testing.T) {
 	}
 }
 
-func TestCheckExistingBindingAllowsOrphanBinding(t *testing.T) {
+func TestClassifyExistingBinding(t *testing.T) {
 	t.Parallel()
 
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error {
-		orphan := &postgresql.GameAccountBinding{}
-		if err := checkExistingBinding(c, context.Background(), nil, orphan, "u-1"); err != nil {
-			return err
-		}
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
+	orphan := &postgresql.GameAccountBinding{}
+	if got := classifyExistingBinding(orphan, "u-1"); got != existingBindingStateNone {
+		t.Fatalf("classify orphan = %v, want %v", got, existingBindingStateNone)
 	}
-	if resp.StatusCode != fiber.StatusNoContent {
-		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
+
+	ownedByOther := &postgresql.GameAccountBinding{}
+	ownedByOther.Edges.User = &postgresql.User{ID: "u-2"}
+	if got := classifyExistingBinding(ownedByOther, "u-1"); got != existingBindingStateOwnedByOther {
+		t.Fatalf("classify owned-by-other = %v, want %v", got, existingBindingStateOwnedByOther)
+	}
+
+	verifiedBySelf := &postgresql.GameAccountBinding{Verified: true}
+	verifiedBySelf.Edges.User = &postgresql.User{ID: "u-1"}
+	if got := classifyExistingBinding(verifiedBySelf, "u-1"); got != existingBindingStateVerifiedBySelf {
+		t.Fatalf("classify verified-by-self = %v, want %v", got, existingBindingStateVerifiedBySelf)
 	}
 }
 
@@ -178,5 +175,135 @@ func TestShouldIncrementGameAccountVerificationAttempt(t *testing.T) {
 	}
 	if shouldIncrementGameAccountVerificationAttempt(errors.New("server unavailable")) {
 		t.Fatalf("non-verification error should not increment attempts")
+	}
+}
+
+func TestMapGameAccountVerificationCodeLookupError(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		inputErr   error
+		wantCode   int
+		wantDetail string
+	}{
+		{
+			name:       "too many attempts",
+			inputErr:   errGameAccountVerificationTooManyAttempts,
+			wantCode:   fiber.StatusBadRequest,
+			wantDetail: "too many verification attempts, please generate a new code",
+		},
+		{
+			name:       "code expired",
+			inputErr:   errGameAccountVerificationCodeExpired,
+			wantCode:   fiber.StatusBadRequest,
+			wantDetail: "verification code expired or not found",
+		},
+		{
+			name:       "storage unavailable",
+			inputErr:   errGameAccountVerificationServiceUnstable,
+			wantCode:   fiber.StatusInternalServerError,
+			wantDetail: "verification service unavailable",
+		},
+		{
+			name:       "unknown lookup error",
+			inputErr:   errors.New("boom"),
+			wantCode:   fiber.StatusBadRequest,
+			wantDetail: "verification code not found",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := mapGameAccountVerificationCodeLookupError(tc.inputErr)
+			if got == nil {
+				t.Fatalf("mapGameAccountVerificationCodeLookupError(%v) returned nil", tc.inputErr)
+			}
+			if got.Code != tc.wantCode {
+				t.Fatalf("status code = %d, want %d", got.Code, tc.wantCode)
+			}
+			if got.Message != tc.wantDetail {
+				t.Fatalf("message = %q, want %q", got.Message, tc.wantDetail)
+			}
+		})
+	}
+}
+
+func TestMapGameAccountOwnershipVerificationError(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		inputErr   error
+		wantCode   int
+		wantDetail string
+	}{
+		{
+			name:       "missing code in profile",
+			inputErr:   errGameAccountVerificationCodeMissing,
+			wantCode:   fiber.StatusBadRequest,
+			wantDetail: "verification code missing in game profile",
+		},
+		{
+			name:       "code mismatch",
+			inputErr:   errGameAccountVerificationCodeMismatch,
+			wantCode:   fiber.StatusBadRequest,
+			wantDetail: "verification code does not match game profile",
+		},
+		{
+			name:       "account not found",
+			inputErr:   errGameAccountNotFound,
+			wantCode:   fiber.StatusBadRequest,
+			wantDetail: "game account not found",
+		},
+		{
+			name:       "server unavailable",
+			inputErr:   errGameAccountServerUnavailable,
+			wantCode:   fiber.StatusBadGateway,
+			wantDetail: "game server unavailable",
+		},
+		{
+			name:       "upstream request failed",
+			inputErr:   errors.Join(errGameAccountProfileRequestFailed, errors.New("timeout")),
+			wantCode:   fiber.StatusBadGateway,
+			wantDetail: "failed to query game account profile",
+		},
+		{
+			name:       "empty profile",
+			inputErr:   errGameAccountProfileEmpty,
+			wantCode:   fiber.StatusBadGateway,
+			wantDetail: "empty game account profile response",
+		},
+		{
+			name:       "invalid profile",
+			inputErr:   errors.Join(errGameAccountProfileInvalid, errors.New("bad json")),
+			wantCode:   fiber.StatusBadGateway,
+			wantDetail: "invalid game account profile response",
+		},
+		{
+			name:       "unexpected error",
+			inputErr:   errors.New("panic"),
+			wantCode:   fiber.StatusInternalServerError,
+			wantDetail: "failed to verify game account ownership",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := mapGameAccountOwnershipVerificationError(tc.inputErr)
+			if got == nil {
+				t.Fatalf("mapGameAccountOwnershipVerificationError(%v) returned nil", tc.inputErr)
+			}
+			if got.Code != tc.wantCode {
+				t.Fatalf("status code = %d, want %d", got.Code, tc.wantCode)
+			}
+			if got.Message != tc.wantDetail {
+				t.Fatalf("message = %q, want %q", got.Message, tc.wantDetail)
+			}
+		})
 	}
 }

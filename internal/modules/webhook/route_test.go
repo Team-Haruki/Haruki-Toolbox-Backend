@@ -179,6 +179,54 @@ func TestValidateWebhookUser(t *testing.T) {
 	})
 }
 
+func TestResolveWebhookIDFromLocals(t *testing.T) {
+	t.Run("missing local returns unauthorized response", func(t *testing.T) {
+		app := fiber.New()
+		app.Get("/", func(c fiber.Ctx) error {
+			if _, ok := resolveWebhookIDFromLocals(c); !ok {
+				return nil
+			}
+			return c.SendStatus(fiber.StatusNoContent)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+		}
+	})
+
+	t.Run("valid local passes", func(t *testing.T) {
+		app := fiber.New()
+		app.Use(func(c fiber.Ctx) error {
+			c.Locals("webhook_id", "test-webhook")
+			return c.Next()
+		})
+		app.Get("/", func(c fiber.Ctx) error {
+			webhookID, ok := resolveWebhookIDFromLocals(c)
+			if !ok {
+				return nil
+			}
+			if webhookID != "test-webhook" {
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			return c.SendStatus(fiber.StatusNoContent)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusNoContent {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
+		}
+	})
+}
+
 func mustSignHS256Token(t *testing.T, claims jwt.MapClaims, secret string) string {
 	t.Helper()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

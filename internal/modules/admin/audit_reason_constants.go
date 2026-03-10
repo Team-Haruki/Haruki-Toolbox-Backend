@@ -128,6 +128,7 @@ const (
 	adminFailureReasonQueryUsageStatsFailed                = "query_usage_stats_failed"
 	adminFailureReasonQueryUserConflictFailed              = "query_user_conflict_failed"
 	adminFailureReasonQueryUserFailed                      = "query_user_failed"
+	adminFailureReasonReauthRequired                       = "reauth_required"
 	adminFailureReasonReassignBindingFailed                = "reassign_binding_failed"
 	adminFailureReasonResolveFriendGroupItemNextIdFailed   = "resolve_friend_group_item_next_id_failed"
 	adminFailureReasonResolveFriendLinkNextIdFailed        = "resolve_friend_link_next_id_failed"

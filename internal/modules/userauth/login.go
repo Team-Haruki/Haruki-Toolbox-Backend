@@ -80,9 +80,7 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 				logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "invalid_credentials")
 				return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
 			}
-			if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-				harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-			}
+			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 			harukiLogger.Errorf("Login failed for email %s: query error: %v", payload.Email, err)
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "query_user_failed")
 			return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
@@ -102,16 +100,12 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 		}
 		sessionToken, err := apiHelper.SessionHandler.IssueSession(user.ID)
 		if err != nil {
-			if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-				harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-			}
+			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 			harukiLogger.Errorf("Failed to issue session for user %s: %v", user.ID, err)
 			logLogin(harukiAPIHelper.SystemLogResultFailure, user.ID, string(user.Role), "issue_session_failed")
 			return harukiAPIHelper.ErrorInternal(c, "Could not issue session")
 		}
-		if err := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); err != nil {
-			harukiLogger.Warnf("Failed to release login rate limit reservation for email %s: %v", payload.Email, err)
-		}
+		finalizeLoginRateLimitReservation(c, apiHelper, payload.Email)
 		logLogin(harukiAPIHelper.SystemLogResultSuccess, user.ID, string(user.Role), "ok")
 		ud := harukiAPIHelper.BuildUserDataFromDBUser(user, &sessionToken)
 		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
@@ -129,6 +123,18 @@ func normalizeAuditRole(actorRole string) string {
 
 func isAdminAuditRole(role string) bool {
 	return role == "admin" || role == "super_admin"
+}
+
+func rollbackLoginRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string) {
+	if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), email); rollbackErr != nil {
+		harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", email, rollbackErr)
+	}
+}
+
+func finalizeLoginRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string) {
+	if err := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), email); err != nil {
+		harukiLogger.Warnf("Failed to release login rate limit reservation for email %s: %v", email, err)
+	}
 }
 
 func handleLoginViaKratos(
@@ -151,35 +157,34 @@ func handleLoginViaKratos(
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
 		}
 		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
-			if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-				harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-			}
+			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "identity_provider_unavailable")
 			return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
 		}
-		if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-			harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-		}
+		rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 		logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "kratos_login_failed")
 		return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
+	}
+	revokeIssuedSession := func(stage string) {
+		if revokeErr := apiHelper.SessionHandler.RevokeKratosSessionByToken(ctx, sessionToken); revokeErr != nil {
+			harukiLogger.Warnf("Failed to revoke issued Kratos session after %s for email %s: %v", stage, payload.Email, revokeErr)
+		}
 	}
 
 	userID, err := apiHelper.SessionHandler.ResolveUserIDFromKratosSession(ctx, sessionToken, "")
 	if err != nil {
+		revokeIssuedSession("resolve user")
 		if harukiAPIHelper.IsKratosIdentityUnmappedError(err) {
+			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "identity_unmapped")
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
 		}
 		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
-			if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-				harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-			}
+			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "identity_provider_unavailable")
 			return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
 		}
-		if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-			harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-		}
+		rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 		logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "resolve_identity_failed")
 		return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
 	}
@@ -193,18 +198,19 @@ func handleLoginViaKratos(
 		WithIosScriptCode().
 		Only(ctx)
 	if err != nil {
+		revokeIssuedSession("load local user")
 		if postgresql.IsNotFound(err) {
+			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "local_user_not_found")
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
 		}
-		if rollbackErr := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); rollbackErr != nil {
-			harukiLogger.Warnf("Failed to rollback login rate limit reservation for email %s: %v", payload.Email, rollbackErr)
-		}
+		rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
 		harukiLogger.Errorf("Kratos login succeeded but failed to query local user %s: %v", userID, err)
 		logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "query_user_failed")
 		return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
 	}
 	if user.Banned {
+		revokeIssuedSession("banned user")
 		banMessage := "Your account has been banned"
 		if user.BanReason != nil && *user.BanReason != "" {
 			banMessage = "Your account has been banned: " + *user.BanReason
@@ -213,9 +219,7 @@ func handleLoginViaKratos(
 		return harukiAPIHelper.ErrorForbidden(c, banMessage)
 	}
 
-	if err := releaseLoginRateLimitReservation(c, apiHelper, c.IP(), payload.Email); err != nil {
-		harukiLogger.Warnf("Failed to release login rate limit reservation for email %s: %v", payload.Email, err)
-	}
+	finalizeLoginRateLimitReservation(c, apiHelper, payload.Email)
 	logLogin(harukiAPIHelper.SystemLogResultSuccess, user.ID, string(user.Role), "ok")
 	ud := harukiAPIHelper.BuildUserDataFromDBUser(user, &sessionToken)
 	resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}

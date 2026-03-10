@@ -16,20 +16,20 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		uploadTypeStr := c.Params("upload_type")
 		server, err := harukiUtils.ParseSupportedInheritUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		uploadType, err := harukiUtils.ParseUploadDataType(uploadTypeStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid upload_type")
 		}
 		data := new(harukiUtils.InheritInformation)
 		if err := c.Bind().Body(data); err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "Validation error: "+err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType)
 		result, err := retriever.Run(ctx)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "failed to retrieve game data")
 		}
 		uploadServer := harukiUtils.SupportedDataUploadServer(server)
 		if err := uploadMysekaiDataIfNeeded(c, apiHelper, uploadType, result, uploadServer); err != nil {
@@ -61,7 +61,7 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
-		return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		return harukiAPIHelper.ErrorBadRequest(c, "failed to process mysekai upload")
 	}
 	return nil
 }
@@ -82,7 +82,7 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
-		return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		return harukiAPIHelper.ErrorBadRequest(c, "failed to process suite upload")
 	}
 	return nil
 }

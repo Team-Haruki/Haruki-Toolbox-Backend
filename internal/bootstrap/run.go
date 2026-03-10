@@ -126,6 +126,16 @@ func usersTableExists(ctx context.Context, entClient *dbManager.Client) (bool, e
 	return regclassName.Valid && strings.TrimSpace(regclassName.String) != "", nil
 }
 
+func ensureRedisReady(ctx context.Context, redisManager *harukiRedis.HarukiRedisManager) error {
+	if redisManager == nil || redisManager.Redis == nil {
+		return fmt.Errorf("redis client is not initialized")
+	}
+	if err := redisManager.Redis.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis ping failed: %w", err)
+	}
+	return nil
+}
+
 func Run(cfg harukiConfig.Config) error {
 	loggerWriter, closeMainLogFile, err := openMainLogWriter(cfg.Backend.MainLogFile)
 	if err != nil {
@@ -154,6 +164,9 @@ func Run(cfg harukiConfig.Config) error {
 	}
 
 	redisClient := harukiRedis.NewRedisClient(cfg.Redis)
+	if err := ensureRedisReady(context.Background(), redisClient); err != nil {
+		return fmt.Errorf("init Redis: %w", err)
+	}
 	entClient, err := dbManager.Open(cfg.UserSystem.DBType, cfg.UserSystem.DBURL)
 	if err != nil {
 		return fmt.Errorf("init PostgreSQL: %w", err)

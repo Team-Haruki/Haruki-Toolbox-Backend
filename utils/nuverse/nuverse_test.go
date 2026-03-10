@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/iancoleman/orderedmap"
@@ -145,6 +146,25 @@ func TestNuverseMasterRestorerCompactEventCards(t *testing.T) {
 	}
 	if len(eventCards) != 2 {
 		t.Fatalf("eventCards length mismatch: got %d, want 2", len(eventCards))
+	}
+}
+
+func TestNuverseMasterRestorerReturnsErrorOnCompactRestorePanic(t *testing.T) {
+	t.Parallel()
+
+	structPath := writeStructureFile(t, `{}`)
+	masterData := orderedmap.New()
+	masterData.SetEscapeHTML(false)
+
+	var brokenCompact *orderedmap.OrderedMap
+	masterData.Set("compactBroken", brokenCompact)
+
+	_, err := NuverseMasterRestorer(masterData, structPath)
+	if err == nil {
+		t.Fatalf("expected restore error for broken compact payload")
+	}
+	if !strings.Contains(err.Error(), "error restoring key compactBroken") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

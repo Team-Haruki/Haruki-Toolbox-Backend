@@ -3,6 +3,7 @@ package useroauth
 import (
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
 	"haruki-suite/utils/database/postgresql/oauthclient"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
@@ -79,6 +80,11 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			Where(oauthclient.ClientIDEQ(clientID)).
 			Only(ctx)
 		if err != nil {
+			if !postgresql.IsNotFound(err) {
+				harukiLogger.Errorf("Failed to query oauth client %s: %v", clientID, err)
+				reason = "query_client_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to query client")
+			}
 			reason = "client_not_found"
 			return harukiAPIHelper.ErrorNotFound(c, "client not found")
 		}

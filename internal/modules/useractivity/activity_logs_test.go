@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	harukiAPIHelper "haruki-suite/utils/api"
 
@@ -147,6 +148,7 @@ func TestSanitizeOwnActivityMetadataMap(t *testing.T) {
 			},
 		},
 		"long": strings.Repeat("x", maxUserActivityMetadataStringLength+10),
+		"utf8": strings.Repeat("你", maxUserActivityMetadataStringLength/3+10),
 	}
 
 	got := sanitizeOwnActivityMetadataMap(original)
@@ -189,6 +191,17 @@ func TestSanitizeOwnActivityMetadataMap(t *testing.T) {
 	}
 	if !strings.HasSuffix(longValue, "...") {
 		t.Fatalf("long should be truncated with suffix, got %q", longValue)
+	}
+
+	utf8Value, ok := got["utf8"].(string)
+	if !ok {
+		t.Fatalf("utf8 should be string, got %#v", got["utf8"])
+	}
+	if !strings.HasSuffix(utf8Value, "...") {
+		t.Fatalf("utf8 should be truncated with suffix, got %q", utf8Value)
+	}
+	if !utf8.ValidString(strings.TrimSuffix(utf8Value, "...")) {
+		t.Fatalf("utf8 truncated value should remain valid UTF-8, got %q", utf8Value)
 	}
 }
 
