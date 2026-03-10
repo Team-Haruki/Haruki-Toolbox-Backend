@@ -79,7 +79,9 @@ func NuverseMasterRestorer(
 		if key == "" || !strings.HasPrefix(key, compactPrefix) {
 			continue
 		}
-		restoreCompactKey(restoredCompactMaster, masterData, restoredFromCompact, key, value)
+		if err := restoreCompactKey(restoredCompactMaster, masterData, restoredFromCompact, key, value); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, key := range masterDataKeys {
@@ -87,7 +89,9 @@ func NuverseMasterRestorer(
 		if key == "" || strings.HasPrefix(key, compactPrefix) || restoredFromCompact[key] {
 			continue
 		}
-		restoreNormalKey(restoredCompactMaster, masterData, structures, key, value)
+		if err := restoreNormalKey(restoredCompactMaster, masterData, structures, key, value); err != nil {
+			return nil, err
+		}
 	}
 
 	return restoredCompactMaster, nil
@@ -99,23 +103,23 @@ func restoreCompactKey(
 	restoredFromCompact map[string]bool,
 	key string,
 	value any,
-) {
+) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			panic(fmt.Errorf("error restoring key %s: %v", key, r))
+			err = fmt.Errorf("error restoring key %s: %v", key, r)
 		}
 	}()
 
 	restoredCompactMaster.Set(key, value)
 	vOm, ok := value.(*orderedmap.OrderedMap)
 	if !ok {
-		return
+		return nil
 	}
 
 	data := RestoreCompactData(vOm)
 	newKeyOriginal := strings.TrimPrefix(key, compactPrefix)
 	if newKeyOriginal == "" {
-		return
+		return nil
 	}
 
 	newKey := lowerFirstLetter(newKeyOriginal)
@@ -128,6 +132,7 @@ func restoreCompactKey(
 	}
 	restoredCompactMaster.Set(newKey, structuredData)
 	restoredFromCompact[newKey] = true
+	return nil
 }
 
 func restoreNormalKey(
@@ -136,10 +141,10 @@ func restoreNormalKey(
 	structures *orderedmap.OrderedMap,
 	key string,
 	value any,
-) {
+) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			panic(fmt.Errorf("error restoring key %s: %v", key, r))
+			err = fmt.Errorf("error restoring key %s: %v", key, r)
 		}
 	}()
 
@@ -149,9 +154,10 @@ func restoreNormalKey(
 	finalValue, exists := masterData.Get(key)
 	if exists {
 		restoredCompactMaster.Set(key, finalValue)
-		return
+		return nil
 	}
 	restoredCompactMaster.Set(key, restoredValue)
+	return nil
 }
 
 func idMergeKeyFor(key string) string {

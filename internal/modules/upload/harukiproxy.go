@@ -102,17 +102,16 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		dataTypeStr := c.Params("data_type")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
-		gameUserIDInt, err := strconv.Atoi(gameUserIDStr)
+		gameUserID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid user_id")
 		}
-		gameUserID := int64(gameUserIDInt)
 		rawBody := c.Request().Body()
 		aad := fmt.Sprintf("%s|%s|%s", serverStr, gameUserIDStr, dataTypeStr)
 		decryptedBody, dErr := Unpack(rawBody, aad, apiHelper)
@@ -131,7 +130,7 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiUtils.UploadMethodHarukiProxy,
 		)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "failed to process upload")
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)
 	}

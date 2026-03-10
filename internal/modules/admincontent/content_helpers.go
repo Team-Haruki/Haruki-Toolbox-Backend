@@ -7,6 +7,7 @@ import (
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -62,10 +63,10 @@ func parseAdminFriendLinkPayload(c fiber.Ctx) (*adminFriendLinkPayload, error) {
 	if payload.URL == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "url is required")
 	}
-	if len(payload.Name) > 100 {
+	if utf8.RuneCountInString(payload.Name) > 100 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "name exceeds max length")
 	}
-	if len(payload.Description) > 300 {
+	if utf8.RuneCountInString(payload.Description) > 300 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "description exceeds max length")
 	}
 	if len(payload.Avatar) > 500 {
@@ -98,7 +99,7 @@ func parseAdminFriendGroupPayload(c fiber.Ctx) (*adminFriendGroupPayload, error)
 	if payload.Group == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "group is required")
 	}
-	if len(payload.Group) > 64 {
+	if utf8.RuneCountInString(payload.Group) > 64 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "group exceeds max length")
 	}
 	return &payload, nil
@@ -152,13 +153,13 @@ func parseAdminFriendGroupItemPayload(c fiber.Ctx) (*adminFriendGroupItemPayload
 	if payload.Detail == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "detail is required")
 	}
-	if len(payload.Name) > 64 {
+	if utf8.RuneCountInString(payload.Name) > 64 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "name exceeds max length")
 	}
-	if len(payload.GroupInfo) > 100 {
+	if utf8.RuneCountInString(payload.GroupInfo) > 100 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "groupInfo exceeds max length")
 	}
-	if len(payload.Detail) > 300 {
+	if utf8.RuneCountInString(payload.Detail) > 300 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "detail exceeds max length")
 	}
 	return &payload, nil

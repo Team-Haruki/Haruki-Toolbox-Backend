@@ -371,9 +371,15 @@ func handleRegisterViaKratos(
 			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
 		}
 	}
+	revokeIssuedSession := func(stage string) {
+		if revokeErr := apiHelper.SessionHandler.RevokeKratosSessionByToken(ctx, sessionToken); revokeErr != nil {
+			harukiLogger.Warnf("Failed to revoke issued Kratos session after %s for email %s: %v", stage, req.Email, revokeErr)
+		}
+	}
 
 	userID, err := apiHelper.SessionHandler.ResolveUserIDFromKratosSession(ctx, sessionToken, "")
 	if err != nil {
+		revokeIssuedSession("resolve user")
 		harukiLogger.Errorf("Kratos registration succeeded but resolve identity failed for email %s: %v", req.Email, err)
 		logRegister(harukiAPIHelper.SystemLogResultFailure, "", "resolve_identity_failed")
 		return harukiAPIHelper.ErrorInternal(c, "failed to create user")
@@ -397,6 +403,7 @@ func handleRegisterViaKratos(
 		WithIosScriptCode().
 		Only(ctx)
 	if err != nil {
+		revokeIssuedSession("load local user")
 		harukiLogger.Errorf("Failed to load provisioned user %s after Kratos registration: %v", userID, err)
 		logRegister(harukiAPIHelper.SystemLogResultFailure, userID, registerReasonCreateUserFailed)
 		return harukiAPIHelper.ErrorInternal(c, "failed to create user")

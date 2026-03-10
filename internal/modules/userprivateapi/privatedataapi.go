@@ -14,6 +14,43 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+func mapPrivateGameAccountLookupError(err error) *fiber.Error {
+	if err == nil {
+		return nil
+	}
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusNotFound, "game account not found")
+	}
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account")
+}
+
+func mapPrivateAuthorizationLookupError(err error) *fiber.Error {
+	if err == nil {
+		return nil
+	}
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to verify authorization")
+}
+
+func mapPrivateDataQueryError(err error) *fiber.Error {
+	if err == nil {
+		return nil
+	}
+	return fiber.NewError(fiber.StatusInternalServerError, "failed to query user data")
+}
+
+func mapPrivateBindingOwnerError(binding *postgresql.GameAccountBinding) *fiber.Error {
+	if binding == nil {
+		return fiber.NewError(fiber.StatusNotFound, "game account not found")
+	}
+	if binding.Edges.User == nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account owner")
+	}
+	if binding.Edges.User.Banned {
+		return fiber.NewError(fiber.StatusForbidden, "forbidden: account owner is banned")
+	}
+	return nil
+}
+
 func ValidateUserPermission(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if apiHelper == nil {
@@ -49,36 +86,57 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		}
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiApiHelper.ErrorBadRequest(c, err.Error())
+			return harukiApiHelper.ErrorBadRequest(c, "invalid server")
 		}
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiApiHelper.ErrorBadRequest(c, err.Error())
+			return harukiApiHelper.ErrorBadRequest(c, "invalid data_type")
 		}
-		userID, err := strconv.Atoi(userIDStr)
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			return harukiApiHelper.ErrorBadRequest(c, err.Error())
+			return harukiApiHelper.ErrorBadRequest(c, "invalid user_id")
 		}
 		gameAccountBinding, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
 			Where(
 				gameaccountbinding.ServerEQ(string(server)),
 				gameaccountbinding.GameUserIDEQ(userIDStr),
+				gameaccountbinding.VerifiedEQ(true),
 			).
-			First(ctx)
-		if err != nil {
-			return harukiApiHelper.ErrorNotFound(c, "game account not found")
+			WithUser(func(query *postgresql.UserQuery) {
+				query.WithSocialPlatformInfo()
+			}).
+			Only(ctx)
+		if lookupErr := mapPrivateGameAccountLookupError(err); lookupErr != nil {
+			if lookupErr.Code == fiber.StatusNotFound {
+				return harukiApiHelper.ErrorNotFound(c, lookupErr.Message)
+			}
+			harukiLogger.Errorf("Failed to query game account binding (server=%s,user_id=%s): %v", server, userIDStr, err)
+			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
 		}
-		dbUser, err := gameAccountBinding.QueryUser().WithSocialPlatformInfo().Only(ctx)
-		if err != nil {
-			return harukiApiHelper.ErrorNotFound(c, "game account not found")
+		if ownerErr := mapPrivateBindingOwnerError(gameAccountBinding); ownerErr != nil {
+			switch ownerErr.Code {
+			case fiber.StatusNotFound:
+				return harukiApiHelper.ErrorNotFound(c, ownerErr.Message)
+			case fiber.StatusForbidden:
+				return harukiApiHelper.ErrorForbidden(c, ownerErr.Message)
+			default:
+				harukiLogger.Errorf("Failed to query game account owner (server=%s,user_id=%s): %s", server, userIDStr, ownerErr.Message)
+				return harukiApiHelper.ErrorInternal(c, ownerErr.Message)
+			}
 		}
-		authorized := isUserAuthorized(c, apiHelper, dbUser, platform, platformUserID)
+		dbUser := gameAccountBinding.Edges.User
+		authorized, err := isUserAuthorized(c, apiHelper, dbUser, platform, platformUserID)
+		if lookupErr := mapPrivateAuthorizationLookupError(err); lookupErr != nil {
+			harukiLogger.Errorf("Failed to verify private api authorization (platform=%s,platform_user_id=%s): %v", platform, platformUserID, err)
+			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
+		}
 		if !authorized {
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
 		}
-		result, err := apiHelper.DBManager.Mongo.GetData(ctx, int64(userID), string(server), dataType)
-		if err != nil {
-			return harukiApiHelper.ErrorBadRequest(c, err.Error())
+		result, err := apiHelper.DBManager.Mongo.GetData(ctx, userID, string(server), dataType)
+		if lookupErr := mapPrivateDataQueryError(err); lookupErr != nil {
+			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
+			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
 		}
 		if result == nil {
 			return harukiApiHelper.ErrorNotFound(c, "user data not found")
@@ -87,11 +145,11 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 	}
 }
 
-func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) bool {
+func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) (bool, error) {
 	if dbUser.Edges.SocialPlatformInfo != nil &&
 		dbUser.Edges.SocialPlatformInfo.Platform == platform &&
 		dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
-		return true
+		return true, nil
 	}
 	exists, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
 		Where(
@@ -100,10 +158,10 @@ func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRoute
 			authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
 		).
 		Exist(c.Context())
-	if err == nil && exists {
-		return true
+	if err != nil {
+		return false, err
 	}
-	return false
+	return exists, nil
 }
 
 func processRequestKeys(c fiber.Ctx, result map[string]any) error {

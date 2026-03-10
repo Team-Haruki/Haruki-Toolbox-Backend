@@ -2,7 +2,6 @@ package public
 
 import (
 	"context"
-	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
@@ -18,6 +17,12 @@ import (
 )
 
 func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType harukiUtils.UploadDataType) bool {
+	if record == nil || !record.Verified {
+		return false
+	}
+	if record.Edges.User == nil || record.Edges.User.Banned {
+		return false
+	}
 	if dataType == harukiUtils.UploadDataTypeSuite {
 		return record.Suite != nil && record.Suite.AllowPublicApi
 	}
@@ -30,13 +35,17 @@ func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType har
 func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		server, dataType, userID, userIDStr, err := parseParams(c)
-		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		server, dataType, userID, userIDStr, parseErr := parseParams(c)
+		if parseErr != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, parseErr.Code, parseErr.Message, nil)
 		}
 
 		record, err := fetchAccountBinding(ctx, apiHelper, server, userIDStr)
 		if err != nil {
+			if !postgresql.IsNotFound(err) {
+				harukiLogger.Errorf("Failed to query account binding: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "failed to query account binding")
+			}
 			return harukiAPIHelper.ErrorNotFound(c, "account binding not found")
 		}
 		if !validatePublicAPIAccess(record, dataType) {
@@ -45,7 +54,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 
 		var resp any
 		if dataType != harukiUtils.UploadDataTypeMysekai {
-			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
+			cacheKey := harukiRedis.CacheKeyBuilderWithAllowedQuery(c, "public_access", "key")
 			if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
 				return c.JSON(resp)
 			}
@@ -69,28 +78,28 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
 		}
 		if dataType != harukiUtils.UploadDataTypeMysekai {
-			cacheKey := harukiRedis.CacheKeyBuilder(c, "public_access")
+			cacheKey := harukiRedis.CacheKeyBuilderWithAllowedQuery(c, "public_access", "key")
 			_ = apiHelper.DBManager.Redis.SetCache(ctx, cacheKey, resp, 300*time.Second)
 		}
 		return c.JSON(resp)
 	}
 }
 
-func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType, int64, string, error) {
+func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType, int64, string, *fiber.Error) {
 	serverStr := c.Params("server")
 	server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
-		return "", "", 0, "", err
+		return "", "", 0, "", fiber.NewError(fiber.StatusBadRequest, "invalid server")
 	}
 	dataTypeStr := c.Params("data_type")
 	dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 	if err != nil {
-		return "", "", 0, "", err
+		return "", "", 0, "", fiber.NewError(fiber.StatusBadRequest, "invalid data_type")
 	}
 	userIDStr := c.Params("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
-		return "", "", 0, "", fmt.Errorf("invalid userId, it must be integer")
+		return "", "", 0, "", fiber.NewError(fiber.StatusBadRequest, "invalid user_id")
 	}
 	return server, dataType, userID, userIDStr, nil
 }

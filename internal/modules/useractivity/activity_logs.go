@@ -10,6 +10,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -197,7 +198,11 @@ func truncateOwnActivityMetadataString(raw string) string {
 	if len(raw) <= maxUserActivityMetadataStringLength {
 		return raw
 	}
-	return raw[:maxUserActivityMetadataStringLength] + "..."
+	cut := raw[:maxUserActivityMetadataStringLength]
+	for !utf8.ValidString(cut) && len(cut) > 0 {
+		cut = cut[:len(cut)-1]
+	}
+	return cut + "..."
 }
 
 func sanitizeOwnActivityMetadataValue(key string, value any) any {

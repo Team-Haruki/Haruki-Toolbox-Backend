@@ -18,6 +18,9 @@ func TestTrimAndLimit(t *testing.T) {
 	if got := trimAndLimit("abcdef", 3); got != "abc" {
 		t.Fatalf("trimAndLimit limit failed, got %q", got)
 	}
+	if got := trimAndLimit("你好世界", 5); got != "你" {
+		t.Fatalf("trimAndLimit utf8 boundary failed, got %q", got)
+	}
 }
 
 func TestNormalizeSystemLogActorType(t *testing.T) {

@@ -15,10 +15,11 @@ func RegisterAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 
 func registerAdminConfigRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	cfg := adminGroup.Group("/config", adminCoreModule.RequireSuperAdmin(apiHelper))
+	requireReauth := RequireRecentAdminReauth(apiHelper)
 	cfg.Get("/public-api-keys", handleGetPublicAPIAllowedKeys(apiHelper))
-	cfg.Put("/public-api-keys", handleUpdatePublicAPIAllowedKeys(apiHelper))
+	cfg.Put("/public-api-keys", requireReauth, handleUpdatePublicAPIAllowedKeys(apiHelper))
 	cfg.Get("/runtime", handleGetRuntimeConfig(apiHelper))
-	cfg.Put("/runtime", handleUpdateRuntimeConfig(apiHelper))
+	cfg.Put("/runtime", requireReauth, handleUpdateRuntimeConfig(apiHelper))
 }
 
 func registerAdminSelfRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {

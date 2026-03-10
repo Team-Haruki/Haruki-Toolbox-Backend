@@ -5,6 +5,7 @@ import (
 	"haruki-suite/config"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
 	harukiOAuth2 "haruki-suite/utils/oauth2"
@@ -36,6 +37,9 @@ func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			Where(user.IDEQ(userID)).
 			Only(ctx)
 		if err != nil {
+			if !postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorInternal(c, "failed to query user")
+			}
 			return harukiAPIHelper.ErrorNotFound(c, "user not found")
 		}
 

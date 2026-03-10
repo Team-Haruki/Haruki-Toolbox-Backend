@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -101,6 +102,12 @@ type hydraRequestError struct {
 	Message string
 }
 
+var (
+	hydraHTTPClientMu      sync.RWMutex
+	hydraSharedHTTPClient  *http.Client
+	hydraSharedTimeoutNano int64
+)
+
 func (e *hydraRequestError) Error() string {
 	return fmt.Sprintf("hydra request failed with status %d: %s", e.Status, e.Message)
 }
@@ -112,7 +119,7 @@ func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 	apiHelper.Router.Get("/api/oauth2/login", handleHydraGetLoginRequest())
 	apiHelper.Router.Post("/api/oauth2/login/accept", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraAcceptLogin())
-	apiHelper.Router.Post("/api/oauth2/login/reject", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraRejectLogin())
+	apiHelper.Router.Post("/api/oauth2/login/reject", handleHydraRejectLogin())
 
 	apiHelper.Router.Get("/api/oauth2/consent", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraGetConsentRequest())
 	apiHelper.Router.Post("/api/oauth2/consent/accept", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraAcceptConsent(apiHelper))
@@ -275,6 +282,9 @@ func handleHydraGetConsentRequest() fiber.Handler {
 		if err != nil {
 			return respondHydraError(c, err, "failed to query consent request")
 		}
+		if err := ensureHydraConsentSubjectMatchesCurrentUser(c, resp); err != nil {
+			return respondHydraError(c, err, "failed to validate consent request subject")
+		}
 		return harukiAPIHelper.SuccessResponse(c, "ok", resp)
 	}
 }
@@ -312,6 +322,13 @@ func handleHydraRejectConsent() fiber.Handler {
 		payload.ConsentChallenge = normalizeChallenge(payload.ConsentChallenge, c.Query("consent_challenge"))
 		if payload.ConsentChallenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "consentChallenge is required")
+		}
+		consentReq, err := getHydraConsentRequest(c.Context(), payload.ConsentChallenge)
+		if err != nil {
+			return respondHydraError(c, err, "failed to query consent request")
+		}
+		if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
+			return respondHydraError(c, err, "failed to validate consent request subject")
 		}
 		if payload.Error == "" {
 			payload.Error = "access_denied"
@@ -352,6 +369,13 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		}
 
 		if !payload.Approved {
+			consentReq, err := getHydraConsentRequest(c.Context(), payload.ConsentChallenge)
+			if err != nil {
+				return respondHydraError(c, err, "failed to query consent request")
+			}
+			if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
+				return respondHydraError(c, err, "failed to validate consent request subject")
+			}
 			rejectResp, rejectErr := sendHydraAdminJSON(c.Context(), http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
 				"error":             "access_denied",
 				"error_description": "user denied the consent request",
@@ -458,6 +482,21 @@ func normalizeChallenge(bodyChallenge string, queryChallenge string) string {
 		return strings.TrimSpace(bodyChallenge)
 	}
 	return strings.TrimSpace(queryChallenge)
+}
+
+func ensureHydraConsentSubjectMatchesCurrentUser(c fiber.Ctx, consentReq *hydraConsentRequestResponse) error {
+	userID, err := userCoreModule.CurrentUserID(c)
+	if err != nil {
+		return err
+	}
+	if consentReq == nil {
+		return fiber.NewError(fiber.StatusBadGateway, "invalid consent request")
+	}
+	subject := strings.TrimSpace(consentReq.Subject)
+	if subject != "" && subject != userID {
+		return fiber.NewError(fiber.StatusForbidden, "consent request subject does not match current user")
+	}
+	return nil
 }
 
 func bindBodyIfPresent(c fiber.Ctx, payload any) error {
@@ -586,7 +625,26 @@ func respondHydraError(c fiber.Ctx, err error, fallback string) error {
 }
 
 func hydraHTTPClient() *http.Client {
-	return &http.Client{Timeout: harukiOAuth2.HydraRequestTimeout()}
+	timeout := harukiOAuth2.HydraRequestTimeout()
+	timeoutNano := timeout.Nanoseconds()
+
+	hydraHTTPClientMu.RLock()
+	if hydraSharedHTTPClient != nil && hydraSharedTimeoutNano == timeoutNano {
+		client := hydraSharedHTTPClient
+		hydraHTTPClientMu.RUnlock()
+		return client
+	}
+	hydraHTTPClientMu.RUnlock()
+
+	client := &http.Client{Timeout: timeout}
+
+	hydraHTTPClientMu.Lock()
+	defer hydraHTTPClientMu.Unlock()
+	if hydraSharedHTTPClient == nil || hydraSharedTimeoutNano != timeoutNano {
+		hydraSharedHTTPClient = client
+		hydraSharedTimeoutNano = timeoutNano
+	}
+	return hydraSharedHTTPClient
 }
 
 func copyHydraResponseHeaders(c fiber.Ctx, header http.Header) {

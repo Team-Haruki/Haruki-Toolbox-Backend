@@ -70,3 +70,49 @@ func TestCacheKeyBuilder(t *testing.T) {
 		t.Fatalf("CacheKeyBuilder = %q, want %q", got, want)
 	}
 }
+
+func TestCacheKeyBuilderWithAllowedQuery(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	var got string
+	app.Get("/public/jp/suite/:id", func(c fiber.Ctx) error {
+		got = CacheKeyBuilderWithAllowedQuery(c, publicAccessNamespace, "key")
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/public/jp/suite/123?key=upload_time&noise=1", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	want := "public_access:/public/jp/suite/123:query=b6715d065478a9abd37d540714b8b78d"
+	if got != want {
+		t.Fatalf("CacheKeyBuilderWithAllowedQuery = %q, want %q", got, want)
+	}
+}
+
+func TestCacheKeyBuilderWithAllowedQueryDropsAllUnknownParams(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	var got string
+	app.Get("/public/jp/suite/:id", func(c fiber.Ctx) error {
+		got = CacheKeyBuilderWithAllowedQuery(c, publicAccessNamespace, "key")
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/public/jp/suite/123?x=1&y=2", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	want := "public_access:/public/jp/suite/123:query=none"
+	if got != want {
+		t.Fatalf("CacheKeyBuilderWithAllowedQuery = %q, want %q", got, want)
+	}
+}

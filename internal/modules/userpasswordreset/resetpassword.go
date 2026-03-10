@@ -351,7 +351,7 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			reason = "update_password_failed"
 			return harukiAPIHelper.ErrorInternal(c, "Failed to update password")
 		}
-		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, u.ID); err != nil {
+		if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), u.ID); err != nil {
 			harukiLogger.Warnf("Failed to clear user sessions: %v", err)
 			sessionClearFailed = true
 			result = harukiAPIHelper.SystemLogResultSuccess
@@ -424,7 +424,7 @@ func handleResetPasswordViaKratos(
 			*sessionClearFailed = true
 		}
 	}
-	if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
+	if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), userID); err != nil {
 		harukiLogger.Warnf("Failed to clear user sessions: %v", err)
 		*sessionClearFailed = true
 	}

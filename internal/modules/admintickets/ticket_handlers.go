@@ -9,6 +9,7 @@ import (
 	"haruki-suite/utils/database/postgresql/ticketmessage"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"strings"
+	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -109,7 +110,8 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 		message := strings.TrimSpace(payload.Message)
-		if message == "" || len(message) > maxAdminTicketMessageLength {
+		messageLength := utf8.RuneCountInString(message)
+		if messageLength == 0 || messageLength > maxAdminTicketMessageLength {
 			return harukiAPIHelper.ErrorBadRequest(c, "message must be 1-4000 characters")
 		}
 
@@ -187,8 +189,9 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 
 		update := row.Update().SetStatus(statusValue)
 		if statusValue == ticket.StatusClosed {
-			now := adminNowUTC()
-			update.SetClosedAt(now)
+			if row.ClosedAt == nil {
+				update.SetClosedAt(adminNowUTC())
+			}
 		} else {
 			update.ClearClosedAt()
 		}

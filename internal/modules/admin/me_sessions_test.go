@@ -3,13 +3,18 @@ package admin
 import (
 	"context"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database"
+	harukiRedis "haruki-suite/utils/database/redis"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 func TestParseSessionTokenIDFromAuthorization(t *testing.T) {
@@ -135,6 +140,158 @@ func TestMapKratosSessionDeleteError(t *testing.T) {
 		}
 		if message != "failed to delete session" {
 			t.Fatalf("message = %q, want %q", message, "failed to delete session")
+		}
+	})
+}
+
+func newAdminSessionTestHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, string, *harukiRedis.HarukiRedisManager) {
+	t.Helper()
+
+	srv, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run() error: %v", err)
+	}
+	t.Cleanup(func() {
+		srv.Close()
+	})
+
+	client := goredis.NewClient(&goredis.Options{Addr: srv.Addr()})
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	signKey := "test-admin-sign-key"
+	redisManager := &harukiRedis.HarukiRedisManager{Redis: client}
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{
+			Redis: redisManager,
+		},
+		SessionHandler: harukiAPIHelper.NewSessionHandler(client, signKey),
+	}
+	return helper, signKey, redisManager
+}
+
+func signAdminSessionToken(t *testing.T, signKey, userID, sessionTokenID string) string {
+	t.Helper()
+
+	claims := harukiAPIHelper.SessionClaims{
+		UserID:       userID,
+		SessionToken: sessionTokenID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(signKey))
+	if err != nil {
+		t.Fatalf("SignedString returned error: %v", err)
+	}
+	return signed
+}
+
+func TestHandleDeleteAdminSessionLocalNotFound(t *testing.T) {
+	helper, signKey, _ := newAdminSessionTestHelper(t)
+
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "admin-1")
+		c.Locals("userRole", roleSuperAdmin)
+		return c.Next()
+	})
+	app.Delete("/sessions/:session_token_id", handleDeleteAdminSession(helper))
+
+	authToken := signAdminSessionToken(t, signKey, "admin-1", "current-session")
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/missing-session", nil)
+	req.Header.Set("Authorization", "Bearer "+authToken)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNotFound)
+	}
+}
+
+func TestHandleDeleteAdminSessionLocalSuccess(t *testing.T) {
+	helper, signKey, redisManager := newAdminSessionTestHelper(t)
+
+	if err := redisManager.Redis.Set(context.Background(), "admin-1:target-session", "1", time.Minute).Err(); err != nil {
+		t.Fatalf("seed redis session returned error: %v", err)
+	}
+
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "admin-1")
+		c.Locals("userRole", roleSuperAdmin)
+		return c.Next()
+	})
+	app.Delete("/sessions/:session_token_id", handleDeleteAdminSession(helper))
+
+	authToken := signAdminSessionToken(t, signKey, "admin-1", "current-session")
+	req := httptest.NewRequest(http.MethodDelete, "/sessions/target-session", nil)
+	req.Header.Set("Authorization", "Bearer "+authToken)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+
+	exists, err := redisManager.Redis.Exists(context.Background(), "admin-1:target-session").Result()
+	if err != nil {
+		t.Fatalf("query redis session returned error: %v", err)
+	}
+	if exists != 0 {
+		t.Fatalf("expected target session to be removed")
+	}
+}
+
+func TestRequireRecentAdminReauth(t *testing.T) {
+	helper, signKey, redisManager := newAdminSessionTestHelper(t)
+
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "admin-1")
+		c.Locals("userRole", roleSuperAdmin)
+		return c.Next()
+	})
+	app.Put("/", RequireRecentAdminReauth(helper), func(c fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	sessionTokenID := "current-session"
+	authToken := signAdminSessionToken(t, signKey, "admin-1", sessionTokenID)
+
+	t.Run("missing reauth marker", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+authToken)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusForbidden {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+		}
+	})
+
+	t.Run("valid reauth marker", func(t *testing.T) {
+		reauthKey := buildAdminReauthMarkerKey("admin-1", "local:"+sessionTokenID)
+		if err := redisManager.Redis.Set(context.Background(), reauthKey, "1", time.Minute).Err(); err != nil {
+			t.Fatalf("seed reauth marker returned error: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodPut, "/", nil)
+		req.Header.Set("Authorization", "Bearer "+authToken)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusNoContent {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
 		}
 	})
 }

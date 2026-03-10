@@ -1,7 +1,6 @@
 package admin
 
 import (
-	harukiConfig "haruki-suite/config"
 	adminCoreModule "haruki-suite/internal/modules/admincore"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"strings"
@@ -111,7 +110,6 @@ func handleUpdatePublicAPIAllowedKeys(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return respondFiberOrBadRequest(c, err, "invalid public api keys")
 		}
 
-		harukiConfig.Cfg.Others.PublicAPIAllowedKeys = append([]string(nil), sanitizedKeys...)
 		apiHelper.SetPublicAPIAllowedKeys(sanitizedKeys)
 
 		resp := publicAPIKeysResponse{PublicAPIAllowedKeys: sanitizedKeys}
@@ -144,7 +142,6 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 				return respondFiberOrBadRequest(c, err, "invalid public api keys")
 			}
 			apiHelper.SetPublicAPIAllowedKeys(sanitizedKeys)
-			harukiConfig.Cfg.Others.PublicAPIAllowedKeys = append([]string(nil), sanitizedKeys...)
 		}
 
 		privateAPIToken, err := sanitizeOptionalRuntimeSecret(payload.PrivateAPIToken, "privateApiToken")
@@ -170,34 +167,27 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 		if privateAPIToken != nil {
 			apiHelper.SetPrivateAPIToken(*privateAPIToken)
-			harukiConfig.Cfg.MongoDB.PrivateApiSecret = *privateAPIToken
 		}
 		if payload.PrivateAPIUserAgent != nil {
 			privateAPIUserAgent := strings.TrimSpace(*payload.PrivateAPIUserAgent)
 			apiHelper.SetPrivateAPIUserAgent(privateAPIUserAgent)
-			harukiConfig.Cfg.MongoDB.PrivateApiUserAgent = privateAPIUserAgent
 		}
 		if payload.HarukiProxyUserAgent != nil {
 			harukiProxyUserAgent := strings.TrimSpace(*payload.HarukiProxyUserAgent)
 			apiHelper.SetHarukiProxyUserAgent(harukiProxyUserAgent)
-			harukiConfig.Cfg.HarukiProxy.UserAgent = harukiProxyUserAgent
 		}
 		if payload.HarukiProxyVersion != nil {
 			harukiProxyVersion := strings.TrimSpace(*payload.HarukiProxyVersion)
 			apiHelper.SetHarukiProxyVersion(harukiProxyVersion)
-			harukiConfig.Cfg.HarukiProxy.Version = harukiProxyVersion
 		}
 		if harukiProxySecret != nil {
 			apiHelper.SetHarukiProxySecret(*harukiProxySecret)
-			harukiConfig.Cfg.HarukiProxy.Secret = *harukiProxySecret
 		}
 		if harukiProxyUnpackKey != nil {
 			apiHelper.SetHarukiProxyUnpackKey(*harukiProxyUnpackKey)
-			harukiConfig.Cfg.HarukiProxy.UnpackKey = *harukiProxyUnpackKey
 		}
 		if webhookJWTSecret != nil {
 			apiHelper.SetWebhookJWTSecret(*webhookJWTSecret)
-			harukiConfig.Cfg.Webhook.JWTSecret = *webhookJWTSecret
 		}
 
 		resp := buildRuntimeConfigResponse(apiHelper)

@@ -3,7 +3,6 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
-	harukiConfig "haruki-suite/config"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"net/http"
 	"net/http/httptest"
@@ -34,11 +33,6 @@ func TestSanitizePublicAPIAllowedKeys(t *testing.T) {
 }
 
 func TestHandleUpdatePublicAPIAllowedKeys(t *testing.T) {
-	originalCfg := append([]string(nil), harukiConfig.Cfg.Others.PublicAPIAllowedKeys...)
-	defer func() {
-		harukiConfig.Cfg.Others.PublicAPIAllowedKeys = originalCfg
-	}()
-
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
 	helper.SetPublicAPIAllowedKeys([]string{"initial"})
 
@@ -66,9 +60,6 @@ func TestHandleUpdatePublicAPIAllowedKeys(t *testing.T) {
 	updatedKeys := helper.GetPublicAPIAllowedKeys()
 	if len(updatedKeys) != 2 || updatedKeys[0] != "key-a" || updatedKeys[1] != "key-b" {
 		t.Fatalf("helper keys not updated as expected: %#v", updatedKeys)
-	}
-	if len(harukiConfig.Cfg.Others.PublicAPIAllowedKeys) != 2 || harukiConfig.Cfg.Others.PublicAPIAllowedKeys[0] != "key-a" || harukiConfig.Cfg.Others.PublicAPIAllowedKeys[1] != "key-b" {
-		t.Fatalf("config keys not updated as expected: %#v", harukiConfig.Cfg.Others.PublicAPIAllowedKeys)
 	}
 }
 
@@ -127,25 +118,6 @@ func TestSanitizeOptionalRuntimeSecret(t *testing.T) {
 }
 
 func TestHandleUpdateRuntimeConfig(t *testing.T) {
-	originalPublicKeys := append([]string(nil), harukiConfig.Cfg.Others.PublicAPIAllowedKeys...)
-	originalPrivateToken := harukiConfig.Cfg.MongoDB.PrivateApiSecret
-	originalPrivateUA := harukiConfig.Cfg.MongoDB.PrivateApiUserAgent
-	originalProxyUA := harukiConfig.Cfg.HarukiProxy.UserAgent
-	originalProxyVersion := harukiConfig.Cfg.HarukiProxy.Version
-	originalProxySecret := harukiConfig.Cfg.HarukiProxy.Secret
-	originalProxyUnpackKey := harukiConfig.Cfg.HarukiProxy.UnpackKey
-	originalWebhookSecret := harukiConfig.Cfg.Webhook.JWTSecret
-	defer func() {
-		harukiConfig.Cfg.Others.PublicAPIAllowedKeys = originalPublicKeys
-		harukiConfig.Cfg.MongoDB.PrivateApiSecret = originalPrivateToken
-		harukiConfig.Cfg.MongoDB.PrivateApiUserAgent = originalPrivateUA
-		harukiConfig.Cfg.HarukiProxy.UserAgent = originalProxyUA
-		harukiConfig.Cfg.HarukiProxy.Version = originalProxyVersion
-		harukiConfig.Cfg.HarukiProxy.Secret = originalProxySecret
-		harukiConfig.Cfg.HarukiProxy.UnpackKey = originalProxyUnpackKey
-		harukiConfig.Cfg.Webhook.JWTSecret = originalWebhookSecret
-	}()
-
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
 		PrivateAPIToken:      "old-token",
 		PrivateAPIUserAgent:  "old-agent",

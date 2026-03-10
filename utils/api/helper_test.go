@@ -1,6 +1,12 @@
 package api
 
-import "testing"
+import (
+	"haruki-suite/utils/database"
+	harukiRedis "haruki-suite/utils/database/redis"
+	"testing"
+
+	goredis "github.com/redis/go-redis/v9"
+)
 
 func TestPublicAPIAllowedKeysCopySemantics(t *testing.T) {
 	helper := &HarukiToolboxRouterHelpers{}
@@ -68,5 +74,29 @@ func TestRuntimeConfigGettersAndSetters(t *testing.T) {
 	helper.SetWebhookJWTSecret("webhook-secret")
 	if helper.GetWebhookJWTSecret() != "webhook-secret" {
 		t.Fatalf("webhook secret mismatch")
+	}
+}
+
+func TestRedisClientNilSafe(t *testing.T) {
+	var nilHelper *HarukiToolboxRouterHelpers
+	if got := nilHelper.RedisClient(); got != nil {
+		t.Fatalf("nil helper RedisClient() = %v, want nil", got)
+	}
+
+	helper := &HarukiToolboxRouterHelpers{}
+	if got := helper.RedisClient(); got != nil {
+		t.Fatalf("helper without db manager RedisClient() = %v, want nil", got)
+	}
+
+	helper.DBManager = &database.HarukiToolboxDBManager{}
+	if got := helper.RedisClient(); got != nil {
+		t.Fatalf("helper without redis manager RedisClient() = %v, want nil", got)
+	}
+
+	client := goredis.NewClient(&goredis.Options{Addr: "127.0.0.1:6379"})
+	defer func() { _ = client.Close() }()
+	helper.DBManager.Redis = &harukiRedis.HarukiRedisManager{Redis: client}
+	if got := helper.RedisClient(); got != client {
+		t.Fatalf("RedisClient() = %v, want %v", got, client)
 	}
 }

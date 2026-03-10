@@ -194,6 +194,81 @@ func TestVerifyKratosPasswordReturnsErrorWhenRevokeFails(t *testing.T) {
 	}
 }
 
+func TestVerifyKratosPasswordByIdentityIDSuccess(t *testing.T) {
+	t.Parallel()
+
+	var revokedSessionID string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/identities/identity-verify-id-1":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"identity-verify-id-1","traits":{"email":" verify-id@example.com "}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/self-service/login/api":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"verify-by-id-flow-1"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/self-service/login":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("Decode payload failed: %v", err)
+			}
+			if payload["identifier"] != "verify-id@example.com" {
+				t.Fatalf("identifier = %v, want %q", payload["identifier"], "verify-id@example.com")
+			}
+			if payload["password"] != "secret" {
+				t.Fatalf("password = %v, want %q", payload["password"], "secret")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"session_token":"verify-by-id-token-1"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/sessions/whoami":
+			if got := r.Header.Get("X-Session-Token"); got != "verify-by-id-token-1" {
+				t.Fatalf("X-Session-Token = %q, want %q", got, "verify-by-id-token-1")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"kratos-session-id-by-id-1","active":true,"identity":{"id":"identity-verify-id-1","traits":{"email":"verify-id@example.com"}}}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/admin/sessions/kratos-session-id-by-id-1":
+			revokedSessionID = "kratos-session-id-by-id-1"
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	handler := NewSessionHandler(newSessionTestRedisClient(t), "local-sign-key")
+	handler.ConfigureIdentityProvider("kratos", server.URL, server.URL, "X-Session-Token", "ory_kratos_session", true, true, 2*time.Second, nil)
+
+	if err := handler.VerifyKratosPasswordByIdentityID(context.Background(), "identity-verify-id-1", "secret"); err != nil {
+		t.Fatalf("VerifyKratosPasswordByIdentityID returned error: %v", err)
+	}
+	if revokedSessionID != "kratos-session-id-by-id-1" {
+		t.Fatalf("revokedSessionID = %q, want %q", revokedSessionID, "kratos-session-id-by-id-1")
+	}
+}
+
+func TestVerifyKratosPasswordByIdentityIDIdentityNotFound(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/admin/identities/missing-identity" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	handler := NewSessionHandler(newSessionTestRedisClient(t), "local-sign-key")
+	handler.ConfigureIdentityProvider("kratos", server.URL, server.URL, "X-Session-Token", "ory_kratos_session", true, true, 2*time.Second, nil)
+
+	err := handler.VerifyKratosPasswordByIdentityID(context.Background(), "missing-identity", "secret")
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !IsKratosIdentityUnmappedError(err) {
+		t.Fatalf("expected kratos identity unmapped error, got %v", err)
+	}
+}
+
 func TestUsesKratosProvider(t *testing.T) {
 	t.Parallel()
 

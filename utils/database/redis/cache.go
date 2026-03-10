@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	harukiLogger "haruki-suite/utils/logger"
+	"net/url"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -64,6 +67,29 @@ func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
 	fullPath := c.Path()
 	queryString := c.RequestCtx().QueryArgs().String()
 	return buildCacheKey(namespace, fullPath, queryString)
+}
+
+func CacheKeyBuilderWithAllowedQuery(c fiber.Ctx, namespace string, allowedQueryKeys ...string) string {
+	fullPath := c.Path()
+	if len(allowedQueryKeys) == 0 {
+		return buildCacheKey(namespace, fullPath, "")
+	}
+
+	keys := append([]string(nil), allowedQueryKeys...)
+	sort.Strings(keys)
+	values := url.Values{}
+	for _, key := range keys {
+		normalizedKey := strings.TrimSpace(key)
+		if normalizedKey == "" {
+			continue
+		}
+		normalizedValue := strings.TrimSpace(c.Query(normalizedKey))
+		if normalizedValue == "" {
+			continue
+		}
+		values.Set(normalizedKey, normalizedValue)
+	}
+	return buildCacheKey(namespace, fullPath, values.Encode())
 }
 
 func buildCacheKey(namespace, path, queryString string) string {

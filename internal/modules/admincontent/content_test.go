@@ -117,6 +117,30 @@ func TestParseAdminFriendGroupPayload(t *testing.T) {
 			t.Fatalf("response body = %q, want 推荐群聊", string(body))
 		}
 	})
+
+	t.Run("unicode rune limit", func(t *testing.T) {
+		validGroup := strings.Repeat("你", 64)
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"group":"`+validGroup+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+		}
+
+		invalidGroup := strings.Repeat("你", 65)
+		req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"group":"`+invalidGroup+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err = app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
+		}
+	})
 }
 
 func TestParseAdminFriendGroupItemPayload(t *testing.T) {

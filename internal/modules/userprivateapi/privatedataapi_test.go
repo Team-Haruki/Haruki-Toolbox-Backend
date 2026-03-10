@@ -3,6 +3,7 @@ package userprivateapi
 import (
 	"encoding/json"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -216,3 +217,124 @@ func TestProcessRequestKeys(t *testing.T) {
 		}
 	})
 }
+
+func TestMapPrivateGameAccountLookupError(t *testing.T) {
+	t.Run("nil error", func(t *testing.T) {
+		if got := mapPrivateGameAccountLookupError(nil); got != nil {
+			t.Fatalf("mapPrivateGameAccountLookupError(nil) = %#v, want nil", got)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		got := mapPrivateGameAccountLookupError(&postgresql.NotFoundError{})
+		if got == nil {
+			t.Fatalf("expected non-nil error")
+		}
+		if got.Code != fiber.StatusNotFound {
+			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusNotFound)
+		}
+		if got.Message != "game account not found" {
+			t.Fatalf("message = %q", got.Message)
+		}
+	})
+
+	t.Run("internal", func(t *testing.T) {
+		got := mapPrivateGameAccountLookupError(assertErr{})
+		if got == nil {
+			t.Fatalf("expected non-nil error")
+		}
+		if got.Code != fiber.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusInternalServerError)
+		}
+		if got.Message != "failed to query game account" {
+			t.Fatalf("message = %q", got.Message)
+		}
+	})
+}
+
+func TestMapPrivateAuthorizationLookupError(t *testing.T) {
+	if got := mapPrivateAuthorizationLookupError(nil); got != nil {
+		t.Fatalf("mapPrivateAuthorizationLookupError(nil) = %#v, want nil", got)
+	}
+	got := mapPrivateAuthorizationLookupError(assertErr{})
+	if got == nil {
+		t.Fatalf("expected non-nil error")
+	}
+	if got.Code != fiber.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", got.Code, fiber.StatusInternalServerError)
+	}
+	if got.Message != "failed to verify authorization" {
+		t.Fatalf("message = %q", got.Message)
+	}
+}
+
+func TestMapPrivateDataQueryError(t *testing.T) {
+	if got := mapPrivateDataQueryError(nil); got != nil {
+		t.Fatalf("mapPrivateDataQueryError(nil) = %#v, want nil", got)
+	}
+	got := mapPrivateDataQueryError(assertErr{})
+	if got == nil {
+		t.Fatalf("expected non-nil error")
+	}
+	if got.Code != fiber.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", got.Code, fiber.StatusInternalServerError)
+	}
+	if got.Message != "failed to query user data" {
+		t.Fatalf("message = %q", got.Message)
+	}
+}
+
+func TestMapPrivateBindingOwnerError(t *testing.T) {
+	t.Run("nil binding", func(t *testing.T) {
+		got := mapPrivateBindingOwnerError(nil)
+		if got == nil {
+			t.Fatalf("expected non-nil error")
+		}
+		if got.Code != fiber.StatusNotFound {
+			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusNotFound)
+		}
+		if got.Message != "game account not found" {
+			t.Fatalf("message = %q", got.Message)
+		}
+	})
+
+	t.Run("missing owner", func(t *testing.T) {
+		got := mapPrivateBindingOwnerError(&postgresql.GameAccountBinding{})
+		if got == nil {
+			t.Fatalf("expected non-nil error")
+		}
+		if got.Code != fiber.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusInternalServerError)
+		}
+		if got.Message != "failed to query game account owner" {
+			t.Fatalf("message = %q", got.Message)
+		}
+	})
+
+	t.Run("banned owner", func(t *testing.T) {
+		binding := &postgresql.GameAccountBinding{}
+		binding.Edges.User = &postgresql.User{Banned: true}
+		got := mapPrivateBindingOwnerError(binding)
+		if got == nil {
+			t.Fatalf("expected non-nil error")
+		}
+		if got.Code != fiber.StatusForbidden {
+			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusForbidden)
+		}
+		if got.Message != "forbidden: account owner is banned" {
+			t.Fatalf("message = %q", got.Message)
+		}
+	})
+
+	t.Run("valid owner", func(t *testing.T) {
+		binding := &postgresql.GameAccountBinding{}
+		binding.Edges.User = &postgresql.User{Banned: false}
+		if got := mapPrivateBindingOwnerError(binding); got != nil {
+			t.Fatalf("expected nil, got %#v", got)
+		}
+	})
+}
+
+type assertErr struct{}
+
+func (assertErr) Error() string { return "assert" }

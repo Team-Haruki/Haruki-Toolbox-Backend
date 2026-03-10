@@ -3,6 +3,7 @@ package api
 import (
 	"haruki-suite/utils/database/postgresql/systemlog"
 	"strings"
+	"unicode/utf8"
 )
 
 func ptrString(v string) *string {
@@ -16,7 +17,11 @@ func ptrString(v string) *string {
 func trimAndLimit(v string, maxLen int) string {
 	trimmed := strings.TrimSpace(v)
 	if maxLen > 0 && len(trimmed) > maxLen {
-		return trimmed[:maxLen]
+		cut := trimmed[:maxLen]
+		for !utf8.ValidString(cut) && len(cut) > 0 {
+			cut = cut[:len(cut)-1]
+		}
+		return cut
 	}
 	return trimmed
 }

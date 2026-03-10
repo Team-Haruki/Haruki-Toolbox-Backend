@@ -12,6 +12,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -22,6 +23,8 @@ const (
 	defaultUserTicketPageSize = 20
 	maxUserTicketPageSize     = 100
 	maxUserTicketCategoryLen  = 64
+	maxUserTicketSubjectLen   = 200
+	maxUserTicketMessageLen   = 4000
 )
 
 type userTicketListItem struct {
@@ -110,10 +113,28 @@ func parseUserTicketStatus(raw string) (ticket.Status, error) {
 
 func normalizeUserTicketCategory(raw string) (string, error) {
 	category := strings.TrimSpace(raw)
-	if len(category) > maxUserTicketCategoryLen {
+	if utf8.RuneCountInString(category) > maxUserTicketCategoryLen {
 		return "", fiber.NewError(fiber.StatusBadRequest, "category must be 0-64 characters")
 	}
 	return category, nil
+}
+
+func normalizeUserTicketSubject(raw string) (string, error) {
+	subject := strings.TrimSpace(raw)
+	subjectLength := utf8.RuneCountInString(subject)
+	if subjectLength == 0 || subjectLength > maxUserTicketSubjectLen {
+		return "", fiber.NewError(fiber.StatusBadRequest, "subject must be 1-200 characters")
+	}
+	return subject, nil
+}
+
+func normalizeUserTicketMessage(raw string) (string, error) {
+	message := strings.TrimSpace(raw)
+	messageLength := utf8.RuneCountInString(message)
+	if messageLength == 0 || messageLength > maxUserTicketMessageLen {
+		return "", fiber.NewError(fiber.StatusBadRequest, "message must be 1-4000 characters")
+	}
+	return message, nil
 }
 
 func buildUserTicketListItem(row *postgresql.Ticket) userTicketListItem {
@@ -173,15 +194,15 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 
-		subject := strings.TrimSpace(payload.Subject)
-		if subject == "" || len(subject) > 200 {
+		subject, err := normalizeUserTicketSubject(payload.Subject)
+		if err != nil {
 			reason = "invalid_subject"
-			return harukiAPIHelper.ErrorBadRequest(c, "subject must be 1-200 characters")
+			return respondUserTicketBadRequest(c, err, "invalid subject")
 		}
-		message := strings.TrimSpace(payload.Message)
-		if message == "" || len(message) > 4000 {
+		message, err := normalizeUserTicketMessage(payload.Message)
+		if err != nil {
 			reason = "invalid_message"
-			return harukiAPIHelper.ErrorBadRequest(c, "message must be 1-4000 characters")
+			return respondUserTicketBadRequest(c, err, "invalid message")
 		}
 		priority, err := parseUserTicketPriority(payload.Priority)
 		if err != nil {
@@ -387,9 +408,9 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
-		message := strings.TrimSpace(payload.Message)
-		if message == "" || len(message) > 4000 {
-			return harukiAPIHelper.ErrorBadRequest(c, "message must be 1-4000 characters")
+		message, err := normalizeUserTicketMessage(payload.Message)
+		if err != nil {
+			return respondUserTicketBadRequest(c, err, "invalid message")
 		}
 
 		row, err := queryOwnTicketByPublicID(c, apiHelper, userID, publicTicketID)
@@ -459,17 +480,24 @@ func handleCloseOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
 
-		now := time.Now().UTC()
-		updated, err := row.Update().
-			SetStatus(ticket.StatusClosed).
-			SetClosedAt(now).
-			Save(c.Context())
+		update := row.Update().SetStatus(ticket.StatusClosed)
+		if row.ClosedAt == nil {
+			update.SetClosedAt(time.Now().UTC())
+		}
+		updated, err := update.Save(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to close ticket")
 		}
 		resp := buildUserTicketListItem(updated)
 		return harukiAPIHelper.SuccessResponse(c, "ticket closed", &resp)
 	}
+}
+
+func respondUserTicketBadRequest(c fiber.Ctx, err error, fallback string) error {
+	if fiberErr, ok := err.(*fiber.Error); ok {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+	}
+	return harukiAPIHelper.ErrorBadRequest(c, fallback)
 }
 
 func RegisterUserTicketRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

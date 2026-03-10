@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -47,6 +48,22 @@ func removeAvatarFileIfExists(filePath string) error {
 	return nil
 }
 
+func normalizeProfileName(rawName *string) (*string, error) {
+	if rawName == nil {
+		return nil, nil
+	}
+	name := strings.TrimSpace(*rawName)
+	nameLength := utf8.RuneCountInString(name)
+	if nameLength == 0 || nameLength > 50 {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "Name must be 1-50 characters")
+	}
+	return &name, nil
+}
+
+func hasProfileUpdatePayload(payload harukiAPIHelper.UpdateProfilePayload) bool {
+	return payload.Name != nil || payload.AvatarBase64 != nil
+}
+
 func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
@@ -70,6 +87,20 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			reason = "invalid_payload"
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
+		if !hasProfileUpdatePayload(payload) {
+			reason = "empty_payload"
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "No profile fields to update", nil)
+		}
+
+		normalizedName, nameErr := normalizeProfileName(payload.Name)
+		if nameErr != nil {
+			reason = "invalid_name"
+			if fiberErr, ok := nameErr.(*fiber.Error); ok {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+			}
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Name must be 1-50 characters", nil)
+		}
+
 		ctx := c.Context()
 		currentUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(userID)).
@@ -136,13 +167,8 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			ub = ub.SetAvatarPath(avatarFileName)
 			updatedAvatar = true
 		}
-		if payload.Name != nil {
-			name := strings.TrimSpace(*payload.Name)
-			if len(name) == 0 || len(name) > 50 {
-				reason = "invalid_name"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Name must be 1-50 characters", nil)
-			}
-			ub = ub.SetName(name)
+		if normalizedName != nil {
+			ub = ub.SetName(*normalizedName)
 			updatedName = true
 		}
 		_, err = ub.Save(ctx)
@@ -163,8 +189,8 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			}
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{}
-		if payload.Name != nil {
-			ud.Name = payload.Name
+		if normalizedName != nil {
+			ud.Name = normalizedName
 		}
 		if payload.AvatarBase64 != nil {
 			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.AvatarURL, "/"), avatarFileName)
@@ -240,7 +266,7 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			reason = "update_password_failed"
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
 		}
-		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
+		if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), userID); err != nil {
 			harukiLogger.Warnf("Failed to clear user sessions: %v", err)
 			sessionClearFailed = true
 			result = harukiAPIHelper.SystemLogResultSuccess
@@ -276,16 +302,21 @@ func handleChangePasswordViaKratos(
 		*reason = "new_password_too_long"
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooLongMessage, nil)
 	}
-	if user.Email == "" {
-		*reason = "user_email_missing"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to verify user", nil)
+	if user.KratosIdentityID == nil || strings.TrimSpace(*user.KratosIdentityID) == "" {
+		*reason = "identity_not_linked"
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 	}
+	kratosIdentityID := strings.TrimSpace(*user.KratosIdentityID)
 
-	err := apiHelper.SessionHandler.VerifyKratosPassword(ctx, user.Email, payload.OldPassword)
+	err := apiHelper.SessionHandler.VerifyKratosPasswordByIdentityID(ctx, kratosIdentityID, payload.OldPassword)
 	if err != nil {
 		if harukiAPIHelper.IsKratosInvalidCredentialsError(err) || harukiAPIHelper.IsKratosInvalidInputError(err) {
 			*reason = "old_password_invalid"
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Old password is incorrect", nil)
+		}
+		if harukiAPIHelper.IsKratosIdentityUnmappedError(err) {
+			*reason = "identity_not_found"
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 		}
 		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
 			*reason = "identity_provider_unavailable"
@@ -296,11 +327,7 @@ func handleChangePasswordViaKratos(
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
 	}
 
-	if user.KratosIdentityID == nil || *user.KratosIdentityID == "" {
-		*reason = "identity_not_linked"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
-	}
-	if err := apiHelper.SessionHandler.UpdateKratosPasswordByIdentityID(ctx, *user.KratosIdentityID, payload.NewPassword); err != nil {
+	if err := apiHelper.SessionHandler.UpdateKratosPasswordByIdentityID(ctx, kratosIdentityID, payload.NewPassword); err != nil {
 		if harukiAPIHelper.IsKratosIdentityUnmappedError(err) {
 			*reason = "identity_not_found"
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
@@ -329,11 +356,11 @@ func handleChangePasswordViaKratos(
 		*localMirrorFailed = true
 	}
 
-	if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, strings.TrimSpace(*user.KratosIdentityID)); err != nil {
+	if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, kratosIdentityID); err != nil {
 		harukiLogger.Warnf("Failed to revoke Kratos sessions for user %s: %v", user.ID, err)
 		*sessionClearFailed = true
 	}
-	if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, user.ID); err != nil {
+	if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), user.ID); err != nil {
 		harukiLogger.Warnf("Failed to clear local user sessions: %v", err)
 		*sessionClearFailed = true
 	}
