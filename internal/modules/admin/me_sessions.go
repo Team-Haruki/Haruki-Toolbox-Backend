@@ -6,6 +6,7 @@ import (
 	adminCoreModule "haruki-suite/internal/modules/admincore"
 	platformAuthHeader "haruki-suite/internal/platform/authheader"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"sort"
 	"strings"
@@ -131,6 +132,101 @@ func listUserSessionItems(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return items, nil
 }
 
+func listUserKratosSessionItems(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, identityID string, currentSessionID string) ([]adminSessionItem, error) {
+	sessions, err := apiHelper.SessionHandler.ListKratosSessionsByIdentityID(ctx, identityID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := adminNowUTC()
+	items := make([]adminSessionItem, 0, len(sessions))
+	for _, session := range sessions {
+		sessionID := strings.TrimSpace(session.ID)
+		if sessionID == "" {
+			continue
+		}
+
+		item := adminSessionItem{
+			SessionTokenID: sessionID,
+			TTLSeconds:     -1,
+			Current:        sessionID == currentSessionID,
+		}
+		if session.ExpiresAt != nil {
+			expiresAt := session.ExpiresAt.UTC()
+			item.ExpiresAt = &expiresAt
+			ttl := int64(expiresAt.Sub(now) / time.Second)
+			if ttl < 0 {
+				ttl = 0
+			}
+			item.TTLSeconds = ttl
+		}
+		items = append(items, item)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Current != items[j].Current {
+			return items[i].Current
+		}
+		if items[i].TTLSeconds == items[j].TTLSeconds {
+			return items[i].SessionTokenID < items[j].SessionTokenID
+		}
+		return items[i].TTLSeconds > items[j].TTLSeconds
+	})
+
+	if len(items) > maxAdminSessionListCount {
+		items = items[:maxAdminSessionListCount]
+	}
+	return items, nil
+}
+
+func resolveAdminKratosIdentityID(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string) (string, error) {
+	dbUser, err := apiHelper.DBManager.DB.User.Query().
+		Where(userSchema.IDEQ(userID)).
+		Select(userSchema.FieldKratosIdentityID).
+		Only(ctx)
+	if err != nil {
+		return "", err
+	}
+	if dbUser.KratosIdentityID == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(*dbUser.KratosIdentityID), nil
+}
+
+func shouldUseKratosSessionInventory(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, currentLocalSessionTokenID, kratosHeaderToken, cookieHeader, bearerToken string) bool {
+	if apiHelper == nil || apiHelper.SessionHandler == nil || !apiHelper.SessionHandler.UsesKratosProvider() {
+		return false
+	}
+	if strings.TrimSpace(currentLocalSessionTokenID) != "" {
+		return false
+	}
+	if strings.TrimSpace(kratosHeaderToken) != "" || strings.TrimSpace(cookieHeader) != "" {
+		return true
+	}
+	return strings.TrimSpace(bearerToken) != ""
+}
+
+func resolveCurrentKratosSessionID(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bearerToken, kratosHeaderToken, cookieHeader string) (string, error) {
+	sessionToken := strings.TrimSpace(kratosHeaderToken)
+	if sessionToken == "" {
+		sessionToken = strings.TrimSpace(bearerToken)
+	}
+	return apiHelper.SessionHandler.ResolveKratosSessionID(ctx, sessionToken, cookieHeader)
+}
+
+func mapKratosSessionDeleteError(err error) (statusCode int, message string, known bool) {
+	switch {
+	case err == nil:
+		return fiber.StatusOK, "", false
+	case harukiAPIHelper.IsKratosSessionNotFoundError(err):
+		return fiber.StatusNotFound, "session not found", true
+	case harukiAPIHelper.IsKratosInvalidInputError(err):
+		return fiber.StatusBadRequest, "invalid session_token_id", true
+	default:
+		return fiber.StatusInternalServerError, "failed to delete session", false
+	}
+}
+
 func handleListAdminSessions(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, _, err := adminCoreModule.CurrentAdminActor(c)
@@ -138,15 +234,58 @@ func handleListAdminSessions(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return respondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
+		authHeader := c.Get("Authorization")
+		bearerToken, _ := platformAuthHeader.ExtractBearerToken(authHeader)
 		sessionSignKey := ""
 		if apiHelper != nil && apiHelper.SessionHandler != nil {
 			sessionSignKey = apiHelper.SessionHandler.SessionSignKey
 		}
-		currentSessionTokenID := parseSessionTokenIDFromAuthorization(c.Get("Authorization"), sessionSignKey)
-		items, err := listUserSessionItems(c.Context(), apiHelper, userID, currentSessionTokenID)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsList, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonListSessionsFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to list sessions")
+		currentSessionTokenID := parseSessionTokenIDFromAuthorization(authHeader, sessionSignKey)
+
+		kratosHeaderToken := ""
+		if apiHelper != nil && apiHelper.SessionHandler != nil {
+			kratosHeaderToken = strings.TrimSpace(c.Get(apiHelper.SessionHandler.KratosSessionHeader))
+		}
+		cookieHeader := strings.TrimSpace(c.Get("Cookie"))
+
+		useKratosSessions := shouldUseKratosSessionInventory(apiHelper, currentSessionTokenID, kratosHeaderToken, cookieHeader, bearerToken)
+		items := make([]adminSessionItem, 0, 8)
+		listedWithKratos := false
+		if useKratosSessions {
+			identityID, identityErr := resolveAdminKratosIdentityID(c.Context(), apiHelper, userID)
+			if identityErr != nil {
+				reason := adminFailureReasonQueryUserFailed
+				if postgresql.IsNotFound(identityErr) {
+					reason = adminFailureReasonTargetUserNotFound
+				}
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsList, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(reason, map[string]any{
+					"provider": "kratos",
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to list sessions")
+			}
+			if identityID != "" {
+				currentKratosSessionID := ""
+				if sessionID, sessionErr := resolveCurrentKratosSessionID(c.Context(), apiHelper, bearerToken, kratosHeaderToken, cookieHeader); sessionErr == nil {
+					currentKratosSessionID = sessionID
+				}
+				items, err = listUserKratosSessionItems(c.Context(), apiHelper, identityID, currentKratosSessionID)
+				if err != nil {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsList, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonListSessionsFailed, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "failed to list sessions")
+				}
+				listedWithKratos = true
+			}
+		}
+		if !listedWithKratos {
+			items, err = listUserSessionItems(c.Context(), apiHelper, userID, currentSessionTokenID)
+			if err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsList, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonListSessionsFailed, map[string]any{
+					"provider": "local",
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to list sessions")
+			}
 		}
 
 		resp := adminSessionListResponse{
@@ -156,7 +295,8 @@ func handleListAdminSessions(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			Items:       items,
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsList, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"total": len(items),
+			"total":    len(items),
+			"provider": map[bool]string{true: "kratos", false: "local"}[listedWithKratos],
 		})
 		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
 	}
@@ -175,16 +315,59 @@ func handleDeleteAdminSession(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorBadRequest(c, "session_token_id is required")
 		}
 
-		key := userID + ":" + sessionTokenID
-		affected, err := apiHelper.DBManager.Redis.Redis.Del(c.Context(), key).Result()
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsDelete, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteSessionFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to delete session")
+		authHeader := c.Get("Authorization")
+		bearerToken, _ := platformAuthHeader.ExtractBearerToken(authHeader)
+		sessionSignKey := ""
+		if apiHelper != nil && apiHelper.SessionHandler != nil {
+			sessionSignKey = apiHelper.SessionHandler.SessionSignKey
+		}
+		currentSessionTokenID := parseSessionTokenIDFromAuthorization(authHeader, sessionSignKey)
+		kratosHeaderToken := ""
+		if apiHelper != nil && apiHelper.SessionHandler != nil {
+			kratosHeaderToken = strings.TrimSpace(c.Get(apiHelper.SessionHandler.KratosSessionHeader))
+		}
+		cookieHeader := strings.TrimSpace(c.Get("Cookie"))
+		useKratosSessions := shouldUseKratosSessionInventory(apiHelper, currentSessionTokenID, kratosHeaderToken, cookieHeader, bearerToken)
+
+		affected := int64(0)
+		if useKratosSessions {
+			if err := apiHelper.SessionHandler.RevokeKratosSessionByID(c.Context(), sessionTokenID); err != nil {
+				if statusCode, message, known := mapKratosSessionDeleteError(err); known {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsDelete, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteSessionFailed, map[string]any{
+						"provider":   "kratos",
+						"statusCode": statusCode,
+						"message":    message,
+					}))
+					switch statusCode {
+					case fiber.StatusBadRequest:
+						return harukiAPIHelper.ErrorBadRequest(c, message)
+					case fiber.StatusNotFound:
+						return harukiAPIHelper.ErrorNotFound(c, message)
+					default:
+						return harukiAPIHelper.ErrorInternal(c, message)
+					}
+				}
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsDelete, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteSessionFailed, map[string]any{
+					"provider": "kratos",
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to delete session")
+			}
+			affected = 1
+		} else {
+			key := userID + ":" + sessionTokenID
+			affected, err = apiHelper.DBManager.Redis.Redis.Del(c.Context(), key).Result()
+			if err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsDelete, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteSessionFailed, map[string]any{
+					"provider": "local",
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to delete session")
+			}
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsDelete, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"sessionTokenID": sessionTokenID,
 			"affected":       affected,
+			"provider":       map[bool]string{true: "kratos", false: "local"}[useKratosSessions],
 		})
 		return harukiAPIHelper.SuccessResponse[string](c, "session deleted", nil)
 	}
@@ -217,7 +400,23 @@ func handleAdminReauth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return harukiAPIHelper.ErrorInternal(c, "failed to verify account")
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(dbUser.PasswordHash), []byte(payload.Password)); err != nil {
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
+			err := apiHelper.SessionHandler.VerifyKratosPassword(c.Context(), dbUser.Email, payload.Password)
+			if err != nil {
+				if harukiAPIHelper.IsKratosInvalidCredentialsError(err) || harukiAPIHelper.IsKratosInvalidInputError(err) {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeReauth, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPasswordMismatch, nil))
+					return harukiAPIHelper.ErrorForbidden(c, "password mismatch")
+				}
+				if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeReauth, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata("identity_provider_unavailable", nil))
+					return harukiAPIHelper.ErrorInternal(c, "failed to verify account")
+				}
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeReauth, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPasswordMismatch, map[string]any{
+					"provider": "kratos",
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to verify account")
+			}
+		} else if err := bcrypt.CompareHashAndPassword([]byte(dbUser.PasswordHash), []byte(payload.Password)); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeReauth, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPasswordMismatch, nil))
 			return harukiAPIHelper.ErrorForbidden(c, "password mismatch")
 		}

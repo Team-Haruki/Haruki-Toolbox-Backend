@@ -154,7 +154,7 @@ func handleForceLogoutUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 
 		targetUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
-			Select(userSchema.FieldID, userSchema.FieldRole).
+			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 			Only(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -178,14 +178,29 @@ func handleForceLogoutUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.ErrorInternal(c, "session store unavailable")
 		}
 
+		sessionClearFailed := false
+		kratosIdentityID := ""
+		if targetUser.KratosIdentityID != nil {
+			kratosIdentityID = strings.TrimSpace(*targetUser.KratosIdentityID)
+		}
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != "" {
+			if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(c.Context(), kratosIdentityID); err != nil {
+				sessionClearFailed = true
+			}
+		}
 		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUser.ID); err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserForceLogout, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClearSessionsFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to clear user sessions")
+			sessionClearFailed = true
 		}
 
 		resp := adminForceLogoutResponse{
 			UserID:          targetUser.ID,
-			ClearedSessions: true,
+			ClearedSessions: !sessionClearFailed,
+		}
+		if sessionClearFailed {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserForceLogout, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+				"sessionClearFailed": true,
+			})
+			return harukiAPIHelper.SuccessResponse(c, "user sessions cleared partially", &resp)
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserForceLogout, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
 		return harukiAPIHelper.SuccessResponse(c, "user sessions cleared", &resp)

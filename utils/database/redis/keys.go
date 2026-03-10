@@ -103,6 +103,14 @@ func BuildResetPasswordSendRateLimitTargetKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(email))
 }
 
+func BuildResetPasswordApplyRateLimitIPKey(clientIP string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionAttempt, KeyDimensionIP, clientIP)
+}
+
+func BuildResetPasswordApplyRateLimitTargetKey(target string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionAttempt, KeyDimensionUser, hashNormalizedIdentifier(target))
+}
+
 func BuildLoginRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionIP, clientIP)
 }

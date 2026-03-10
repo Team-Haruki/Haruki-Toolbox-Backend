@@ -13,8 +13,8 @@ user_system:
     timeout_seconds: 10
   session_sign_token: ""
   auth_provider: "local" # "local" | "kratos" | "auto"
-  kratos_public_url: ""
-  kratos_admin_url: ""
+  kratos_public_url: "" # required when auth_provider=kratos
+  kratos_admin_url: "" # required when auth_provider=kratos
   kratos_request_timeout_seconds: 10
   kratos_session_header: "X-Session-Token"
   kratos_session_cookie: "ory_kratos_session"

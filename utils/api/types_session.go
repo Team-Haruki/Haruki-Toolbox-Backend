@@ -16,6 +16,12 @@ type SessionClaims struct {
 	jwt.RegisteredClaims
 }
 
+type KratosSessionInfo struct {
+	ID        string
+	Active    bool
+	ExpiresAt *time.Time
+}
+
 type SessionHandler struct {
 	RedisClient *redis.Client
 
