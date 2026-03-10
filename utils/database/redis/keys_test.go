@@ -54,6 +54,16 @@ func TestBuildKeys(t *testing.T) {
 			want: "haruki:social:status-token:token-abc",
 		},
 		{
+			name: "status token owner",
+			got:  BuildStatusTokenOwnerKey("token-abc"),
+			want: "haruki:social:status-token:token-abc:user-id",
+		},
+		{
+			name: "status token binding",
+			got:  BuildStatusTokenBindingKey("token-abc"),
+			want: "haruki:social:status-token:token-abc:binding",
+		},
+		{
 			name: "otp attempt",
 			got:  BuildOTPAttemptKey(" A@Example.Com "),
 			want: "haruki:email:attempt:" + hashNormalizedIdentifier(" A@Example.Com "),

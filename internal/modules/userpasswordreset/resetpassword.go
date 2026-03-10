@@ -174,7 +174,11 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		clientIP := c.IP()
 		resp, err := cloudflare.ValidateTurnstile(payload.ChallengeToken, clientIP)
-		if err != nil || !resp.Success {
+		if err != nil {
+			reason = "challenge_service_unavailable"
+			return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
+		}
+		if resp == nil || !resp.Success {
 			reason = "invalid_challenge"
 			return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 		}

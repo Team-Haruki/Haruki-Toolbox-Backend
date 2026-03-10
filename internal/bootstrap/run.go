@@ -16,6 +16,7 @@ import (
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiHandler "haruki-suite/utils/handler"
 	harukiLogger "haruki-suite/utils/logger"
+	harukiOAuth2 "haruki-suite/utils/oauth2"
 	harukiSekaiAPIClient "haruki-suite/utils/sekaiapi"
 	harukiSMTP "haruki-suite/utils/smtp"
 	harukiVersion "haruki-suite/version"
@@ -136,7 +137,25 @@ func ensureRedisReady(ctx context.Context, redisManager *harukiRedis.HarukiRedis
 	return nil
 }
 
+func validateOAuth2ProviderConfig(cfg harukiConfig.Config) error {
+	provider := strings.ToLower(strings.TrimSpace(cfg.OAuth2.Provider))
+	if provider == "" || provider == harukiOAuth2.ProviderHydra {
+		if strings.TrimSpace(cfg.OAuth2.HydraPublicURL) == "" {
+			return fmt.Errorf("oauth2.hydra_public_url is required when oauth2.provider=hydra")
+		}
+		if strings.TrimSpace(cfg.OAuth2.HydraAdminURL) == "" {
+			return fmt.Errorf("oauth2.hydra_admin_url is required when oauth2.provider=hydra")
+		}
+		return nil
+	}
+	return fmt.Errorf("oauth2.provider=%q is unsupported; only hydra is supported", strings.TrimSpace(cfg.OAuth2.Provider))
+}
+
 func Run(cfg harukiConfig.Config) error {
+	if err := validateOAuth2ProviderConfig(cfg); err != nil {
+		return err
+	}
+
 	loggerWriter, closeMainLogFile, err := openMainLogWriter(cfg.Backend.MainLogFile)
 	if err != nil {
 		return fmt.Errorf("open main log file: %w", err)

@@ -48,11 +48,12 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		}()
 
 		idParam := c.Params("id")
-		userAccountID, err := strconv.Atoi(idParam)
+		userAccountID64, err := strconv.ParseInt(idParam, 10, 64)
 		if err != nil {
 			reason = "invalid_platform_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid id parameter")
 		}
+		userAccountID := int(userAccountID64)
 		var payload harukiAPIHelper.AuthorizeSocialPlatformPayload
 		if err := c.Bind().Body(&payload); err != nil {
 			reason = "invalid_payload"
@@ -135,14 +136,15 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		}()
 
 		idParam := c.Params("id")
-		authorizeSocialPlatformAccountID, err := strconv.Atoi(idParam)
+		authorizeSocialPlatformAccountID64, err := strconv.ParseInt(idParam, 10, 64)
 		if err != nil {
 			reason = "invalid_platform_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid id parameter")
 		}
+		authorizeSocialPlatformAccountID := int(authorizeSocialPlatformAccountID64)
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
-		_, err = client.Delete().
+		affected, err := client.Delete().
 			Where(
 				authorizesocialplatforminfo.UserID(toolboxUserID),
 				authorizesocialplatforminfo.PlatformIDEQ(authorizeSocialPlatformAccountID),
@@ -152,6 +154,10 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			harukiLogger.Errorf("Failed to delete authorized social platform: %v", err)
 			reason = "delete_authorized_social_platform_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete authorized social platform")
+		}
+		if affected == 0 {
+			reason = "authorized_social_platform_not_found"
+			return harukiAPIHelper.ErrorNotFound(c, "authorized social platform not found")
 		}
 		infos, err := client.Query().
 			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).

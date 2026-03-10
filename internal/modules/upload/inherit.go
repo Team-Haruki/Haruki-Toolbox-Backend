@@ -61,6 +61,9 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
+		if mapped := mapUploadProcessingError(err); mapped != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+		}
 		return harukiAPIHelper.ErrorBadRequest(c, "failed to process mysekai upload")
 	}
 	return nil
@@ -82,6 +85,9 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
+		if mapped := mapUploadProcessingError(err); mapped != nil {
+			return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+		}
 		return harukiAPIHelper.ErrorBadRequest(c, "failed to process suite upload")
 	}
 	return nil

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	harukiConfig "haruki-suite/config"
 	harukiRedis "haruki-suite/utils/database/redis"
 	"io"
 	"os"
@@ -98,4 +99,30 @@ func TestEnsureRedisReadySuccess(t *testing.T) {
 	if err := ensureRedisReady(context.Background(), manager); err != nil {
 		t.Fatalf("ensureRedisReady returned error: %v", err)
 	}
+}
+
+func TestValidateOAuth2ProviderConfig(t *testing.T) {
+	t.Run("hydra requires public and admin urls", func(t *testing.T) {
+		cfg := harukiConfig.Config{}
+		cfg.OAuth2.Provider = "hydra"
+		if err := validateOAuth2ProviderConfig(cfg); err == nil {
+			t.Fatalf("expected missing hydra urls to fail")
+		}
+		cfg.OAuth2.HydraPublicURL = "https://hydra-public.example.com"
+		if err := validateOAuth2ProviderConfig(cfg); err == nil {
+			t.Fatalf("expected missing admin url to fail")
+		}
+		cfg.OAuth2.HydraAdminURL = "https://hydra-admin.example.com"
+		if err := validateOAuth2ProviderConfig(cfg); err != nil {
+			t.Fatalf("expected complete hydra config to pass, got %v", err)
+		}
+	})
+
+	t.Run("builtin provider rejected", func(t *testing.T) {
+		cfg := harukiConfig.Config{}
+		cfg.OAuth2.Provider = "builtin"
+		if err := validateOAuth2ProviderConfig(cfg); err == nil {
+			t.Fatalf("expected builtin provider to be rejected")
+		}
+	})
 }

@@ -43,6 +43,9 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			harukiUtils.UploadMethodManual,
 		)
 		if err != nil {
+			if mapped := mapUploadProcessingError(err); mapped != nil {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+			}
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to process upload")
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded suite data.", serverStr, gameUserID), nil)

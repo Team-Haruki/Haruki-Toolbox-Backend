@@ -50,7 +50,11 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
 		}
 		result, err := cloudflare.ValidateTurnstile(payload.ChallengeToken, c.IP())
-		if err != nil || result == nil || !result.Success {
+		if err != nil {
+			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "challenge_service_unavailable")
+			return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
+		}
+		if result == nil || !result.Success {
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "invalid_challenge")
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid Turnstile challenge")
 		}

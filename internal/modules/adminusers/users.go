@@ -105,6 +105,7 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 				userSchema.FieldRole,
 				userSchema.FieldBanned,
 				userSchema.FieldBanReason,
+				userSchema.FieldKratosIdentityID,
 			).
 			Only(c.Context())
 		if err != nil {
@@ -168,10 +169,26 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			Banned:    updatedUser.Banned,
 			BanReason: updatedUser.BanReason,
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBan, adminAuditTargetTypeUser, updatedUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"hasReason": reason != nil,
-		})
-		return harukiAPIHelper.SuccessResponse(c, "user banned", &resp)
+		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+		clearedSessions := !sessionClearFailed
+		revokedOAuthTokens := !oauthRevokeFailed
+		resp.ClearedSessions = &clearedSessions
+		resp.RevokedOAuthTokens = &revokedOAuthTokens
+
+		message, success := resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed)
+		metadata := map[string]any{
+			"hasReason":          reason != nil,
+			"clearedSessions":    clearedSessions,
+			"revokedOAuthTokens": revokedOAuthTokens,
+			"sessionClearFailed": sessionClearFailed,
+			"oauthRevokeFailed":  oauthRevokeFailed,
+		}
+		resultState := harukiAPIHelper.SystemLogResultSuccess
+		if !success {
+			resultState = harukiAPIHelper.SystemLogResultFailure
+		}
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBan, adminAuditTargetTypeUser, updatedUser.ID, resultState, metadata)
+		return harukiAPIHelper.SuccessResponse(c, message, &resp)
 	}
 }
 

@@ -115,7 +115,10 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 	}
 	clientIP := c.IP()
 	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
-	if err != nil || resp == nil || !resp.Success {
+	if err != nil {
+		return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
+	}
+	if resp == nil || !resp.Success {
 		return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 	}
 	limited, limitKey, limitMessage, err := checkSendEmailRateLimit(c, helper, clientIP, email)

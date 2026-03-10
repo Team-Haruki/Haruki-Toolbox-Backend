@@ -23,13 +23,16 @@ import (
 )
 
 var (
-	userIDSuffixRegex       = regexp.MustCompile(`user/(\d+)`)
-	sharedHttpClient        *harukiHttp.Client
-	sharedHttpClientProxy   string
-	sharedHttpClientMu      sync.RWMutex
-	uploadSemaphore         = make(chan struct{}, 10)
-	uploadAuditSemaphore    = make(chan struct{}, 64)
-	sharedDataHandlerLogger = harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil)
+	userIDSuffixRegex          = regexp.MustCompile(`user/(\d+)`)
+	sharedHttpClient           *harukiHttp.Client
+	sharedHttpClientProxy      string
+	sharedHttpClientMu         sync.RWMutex
+	uploadSemaphore            = make(chan struct{}, 10)
+	uploadAuditSemaphore       = make(chan struct{}, 64)
+	sharedDataHandlerLogger    = harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil)
+	errUploadOwnershipMismatch = errors.New("upload game account ownership mismatch")
+	errUploadOwnerBanned       = errors.New("upload game account owner banned")
+	errUploadCNMysekaiDenied   = errors.New("upload cn mysekai denied")
 )
 
 func getSharedHTTPClient() *harukiHttp.Client {
@@ -89,7 +92,7 @@ func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType,
 	return "", 0
 }
 
-func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, userID *string) (bool, *bool, harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings, *bool, *bool, *string, error) {
+func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, uploadMethod harukiUtils.UploadMethod, userID *string) (bool, *bool, harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings, *bool, *bool, *string, error) {
 	var settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings
 	record, err := db.GameAccountBinding.
 		Query().
@@ -110,15 +113,13 @@ func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server 
 	var userBanned *bool
 	var banReason *string
 	if record.Edges.User != nil {
+		ownerID := strings.TrimSpace(record.Edges.User.ID)
 		a := record.Edges.User.AllowCnMysekai
 		allowCNMysekai = &a
 		banned := record.Edges.User.Banned
 		userBanned = &banned
 		banReason = record.Edges.User.BanReason
-		if userID != nil {
-			b := record.Edges.User.ID == *userID
-			belongs = &b
-		}
+		belongs = deriveUploadOwnership(ownerID, userID, uploadMethod)
 	}
 	settings = harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings{
 		Suite:   record.Suite,
@@ -153,7 +154,7 @@ func HandleUpload(
 		HttpClient:     getSharedHTTPClient(),
 		Logger:         sharedDataHandlerLogger,
 	}
-	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), userID)
+	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), uploadMethod, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +163,7 @@ func HandleUpload(
 		if banReason != nil && *banReason != "" {
 			banMessage = "account owner is banned: " + *banReason
 		}
-		return nil, errors.New(banMessage)
+		return nil, fmt.Errorf("%w: %s", errUploadOwnerBanned, banMessage)
 	}
 	if err := validateGameAccountBelonging(belongs); err != nil {
 		return nil, err
@@ -195,7 +196,7 @@ func HandleUpload(
 
 func validateGameAccountBelonging(belongs *bool) error {
 	if belongs != nil && !*belongs {
-		return errors.New("game account does not belong to the user")
+		return errUploadOwnershipMismatch
 	}
 	return nil
 }
@@ -219,10 +220,48 @@ func determinePublicAPIPermission(exists bool, dataType harukiUtils.UploadDataTy
 func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, userID *string, allowCNMySekai *bool) error {
 	if dataType == harukiUtils.UploadDataTypeMysekai && server == harukiUtils.SupportedDataUploadServerCN {
 		if userID != nil && allowCNMySekai != nil && !*allowCNMySekai {
-			return errors.New("illegal request")
+			return errUploadCNMysekaiDenied
 		}
 	}
 	return nil
+}
+
+func deriveUploadOwnership(ownerUserID string, currentUserID *string, uploadMethod harukiUtils.UploadMethod) *bool {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if ownerUserID == "" {
+		return nil
+	}
+	if currentUserID == nil {
+		if allowAnonymousBoundAccountUpload(uploadMethod) {
+			return nil
+		}
+		owned := false
+		return &owned
+	}
+	owned := strings.TrimSpace(*currentUserID) == ownerUserID
+	return &owned
+}
+
+func allowAnonymousBoundAccountUpload(uploadMethod harukiUtils.UploadMethod) bool {
+	switch uploadMethod {
+	case harukiUtils.UploadMethodIOSProxy, harukiUtils.UploadMethodInherit, harukiUtils.UploadMethodHarukiProxy:
+		return true
+	default:
+		return false
+	}
+}
+
+func mapUploadProcessingError(err error) *fiber.Error {
+	switch {
+	case errors.Is(err, errUploadOwnershipMismatch):
+		return fiber.NewError(fiber.StatusForbidden, "upload is not allowed for this bound account")
+	case errors.Is(err, errUploadOwnerBanned):
+		return fiber.NewError(fiber.StatusForbidden, "account owner is banned")
+	case errors.Is(err, errUploadCNMysekaiDenied):
+		return fiber.NewError(fiber.StatusForbidden, "cn mysekai upload is not allowed")
+	default:
+		return nil
+	}
 }
 
 func validateUploadResult(result *harukiUtils.HandleDataResult) error {
@@ -340,7 +379,7 @@ func HandleProxyUpload(
 		}
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+			return fiber.NewError(fiber.StatusBadRequest, "invalid server")
 		}
 		if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty &&
 			(mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0) {
@@ -390,6 +429,9 @@ func HandleProxyUpload(
 			}
 		}
 		if _, err := HandleUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper, harukiUtils.UploadMethodIOSProxy); err != nil {
+			if mapped := mapUploadProcessingError(err); mapped != nil {
+				return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+			}
 			harukiLogger.Warnf("Proxy upload persist failed for %s/%s/%s: %v", serverStr, userIDStr, dataType, err)
 			return fiber.NewError(fiber.StatusInternalServerError, "failed to process uploaded data")
 		}

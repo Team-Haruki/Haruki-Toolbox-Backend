@@ -216,6 +216,12 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			switch action {
 			case adminBatchActionBan:
 				affected, err = executeBatchBan(c.Context(), apiHelper, actorUserID, actorRole, targetUser.ID, reason)
+				if err == nil {
+					sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+					if sessionClearFailed || oauthRevokeFailed {
+						item.Message, _ = resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed)
+					}
+				}
 			case adminBatchActionUnban:
 				affected, err = executeBatchUnban(c.Context(), apiHelper, actorUserID, actorRole, targetUser.ID)
 			case adminBatchActionForceLogout:
@@ -224,8 +230,12 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 				err = fiber.NewError(fiber.StatusBadRequest, "unsupported batch action")
 			}
 			if err != nil {
-				item.Code = adminBatchResultCodeOperationFailed
-				item.Message = batchUserOperationFailureMessage(action)
+				if item.Code == "" {
+					item.Code = adminBatchResultCodeOperationFailed
+				}
+				if item.Message == "" {
+					item.Message = batchUserOperationFailureMessage(action)
+				}
 				results = append(results, item)
 				continue
 			}

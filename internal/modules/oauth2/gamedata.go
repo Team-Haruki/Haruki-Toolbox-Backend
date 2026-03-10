@@ -40,12 +40,12 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
 
 		gameUserID, err := strconv.ParseInt(gameUserIDStr, 10, 64)

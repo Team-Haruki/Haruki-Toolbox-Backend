@@ -120,6 +120,48 @@ func TestValidateGameAccountBelonging(t *testing.T) {
 	}
 }
 
+func TestDeriveUploadOwnership(t *testing.T) {
+	t.Parallel()
+
+	owner := "u1"
+	if got := deriveUploadOwnership("", nil, harukiUtils.UploadMethodManual); got != nil {
+		t.Fatalf("expected nil ownership for unbound account")
+	}
+	if got := deriveUploadOwnership(owner, nil, harukiUtils.UploadMethodManual); got == nil || *got {
+		t.Fatalf("expected anonymous upload to owned account to be rejected")
+	}
+	if got := deriveUploadOwnership(owner, &owner, harukiUtils.UploadMethodManual); got == nil || !*got {
+		t.Fatalf("expected owner upload to be accepted")
+	}
+	other := "u2"
+	if got := deriveUploadOwnership(owner, &other, harukiUtils.UploadMethodManual); got == nil || *got {
+		t.Fatalf("expected different user upload to be rejected")
+	}
+	if got := deriveUploadOwnership(owner, nil, harukiUtils.UploadMethodIOSProxy); got != nil {
+		t.Fatalf("expected trusted anonymous upload to skip ownership enforcement")
+	}
+	if got := deriveUploadOwnership(owner, nil, harukiUtils.UploadMethodInherit); got != nil {
+		t.Fatalf("expected inherit upload to skip ownership enforcement")
+	}
+}
+
+func TestMapUploadProcessingError(t *testing.T) {
+	t.Parallel()
+
+	if got := mapUploadProcessingError(errUploadOwnershipMismatch); got == nil || got.Code != 403 {
+		t.Fatalf("expected ownership mismatch to map to 403, got %#v", got)
+	}
+	if got := mapUploadProcessingError(errUploadOwnerBanned); got == nil || got.Code != 403 {
+		t.Fatalf("expected banned owner to map to 403, got %#v", got)
+	}
+	if got := mapUploadProcessingError(errUploadCNMysekaiDenied); got == nil || got.Code != 403 {
+		t.Fatalf("expected cn mysekai deny to map to 403, got %#v", got)
+	}
+	if got := mapUploadProcessingError(nil); got != nil {
+		t.Fatalf("expected nil error to stay nil, got %#v", got)
+	}
+}
+
 func TestGetSharedHTTPClientReloadsOnProxyChange(t *testing.T) {
 	originalCfg := harukiConfig.Cfg
 	sharedHttpClientMu.Lock()

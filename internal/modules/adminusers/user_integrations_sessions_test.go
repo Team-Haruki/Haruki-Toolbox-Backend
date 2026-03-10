@@ -80,3 +80,54 @@ func TestClearManagedUserSessionsReportsFailureWhenRedisUnavailable(t *testing.T
 		t.Fatalf("sessionClearFailed = false, want true")
 	}
 }
+
+func TestResolveManagedUserBanFinalizeOutcome(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		sessionClearFailed bool
+		oauthRevokeFailed  bool
+		wantMessage        string
+		wantSuccess        bool
+	}{
+		{
+			name:        "all cleanup succeeded",
+			wantMessage: "user banned",
+			wantSuccess: true,
+		},
+		{
+			name:               "session clear failed",
+			sessionClearFailed: true,
+			wantMessage:        "user banned, but failed to clear user sessions",
+			wantSuccess:        true,
+		},
+		{
+			name:              "oauth revoke failed",
+			oauthRevokeFailed: true,
+			wantMessage:       "user banned, but failed to revoke oauth tokens",
+			wantSuccess:       true,
+		},
+		{
+			name:               "all cleanup failed",
+			sessionClearFailed: true,
+			oauthRevokeFailed:  true,
+			wantMessage:        "user banned, but failed to clear user sessions and revoke oauth tokens",
+			wantSuccess:        false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotMessage, gotSuccess := resolveManagedUserBanFinalizeOutcome(tc.sessionClearFailed, tc.oauthRevokeFailed)
+			if gotMessage != tc.wantMessage {
+				t.Fatalf("message = %q, want %q", gotMessage, tc.wantMessage)
+			}
+			if gotSuccess != tc.wantSuccess {
+				t.Fatalf("success = %v, want %v", gotSuccess, tc.wantSuccess)
+			}
+		})
+	}
+}

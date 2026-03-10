@@ -35,6 +35,10 @@ func (h *DataHandler) HandleAndUpdateData(
 	if err != nil {
 		return nil, err
 	}
+	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
+		h.Logger.Errorf("Failed to update mongo data: %v", err)
+		return nil, err
+	}
 	if dataType != utils.UploadDataTypeMysekaiBirthdayParty {
 		rawCopy := make([]byte, len(raw))
 		copy(rawCopy, raw)
@@ -47,12 +51,8 @@ func (h *DataHandler) HandleAndUpdateData(
 			go DataSyncer(*expectedUserID, server, dataType, packedBody, settings)
 		}
 	}
-	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
-		h.Logger.Errorf("Failed to update mongo data: %v", err)
-		return nil, err
-	}
 	if isPublicAPI {
-		go h.CallWebhook(ctx, *expectedUserID, server, dataType)
+		go h.CallWebhookAsync(*expectedUserID, server, dataType)
 	}
 	return &utils.HandleDataResult{UserID: expectedUserID}, nil
 }
