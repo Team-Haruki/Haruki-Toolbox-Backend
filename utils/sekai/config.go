@@ -76,51 +76,6 @@ func GetServerConfig(server harukiUtils.SupportedInheritUploadServer) (*ServerCo
 	}
 }
 
-var proxyURL = harukiConfig.Cfg.Proxy
-var Api = map[harukiUtils.SupportedInheritUploadServer]string{
-	JP: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost),
-	EN: fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost),
-}
-var Headers = map[harukiUtils.SupportedInheritUploadServer]map[string]string{
-	JP: harukiConfig.Cfg.SekaiClient.JPServerInheritClientHeaders,
-	EN: harukiConfig.Cfg.SekaiClient.ENServerInheritClientHeaders,
-}
-var Version = map[harukiUtils.SupportedInheritUploadServer]string{
-	JP: harukiConfig.Cfg.SekaiClient.JPServerAppVersionUrl,
-	EN: harukiConfig.Cfg.SekaiClient.ENServerAppVersionUrl,
-}
-var InheritJWTToken = map[harukiUtils.SupportedInheritUploadServer]string{
-	JP: harukiConfig.Cfg.SekaiClient.JPServerInheritToken,
-	EN: harukiConfig.Cfg.SekaiClient.ENServerInheritToken,
-}
-var thisProxy = proxyURL
-var acquirePath = map[harukiUtils.UploadDataType]string{
-	harukiUtils.UploadDataTypeSuite:                "/suite/user/%d",
-	harukiUtils.UploadDataTypeMysekai:              "/user/%d/mysekai",
-	harukiUtils.UploadDataTypeMysekaiBirthdayParty: "/user/%d/mysekai/birthday-party/%d/delivery",
-}
-var allowedHeaders = map[string]struct{}{
-	"user-agent":        {},
-	"cookie":            {},
-	"x-forwarded-for":   {},
-	"accept-language":   {},
-	"accept":            {},
-	"accept-encoding":   {},
-	"x-devicemodel":     {},
-	"x-app-hash":        {},
-	"x-operatingsystem": {},
-	"x-kc":              {},
-	"x-unity-version":   {},
-	"x-app-version":     {},
-	"x-platform":        {},
-	"x-session-token":   {},
-	"x-asset-version":   {},
-	"x-request-id":      {},
-	"x-data-version":    {},
-	"content-type":      {},
-	"x-install-id":      {},
-}
-
 type Client struct {
 	server          harukiUtils.SupportedInheritUploadServer
 	api             string

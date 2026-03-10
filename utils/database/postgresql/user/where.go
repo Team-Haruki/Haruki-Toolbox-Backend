@@ -100,6 +100,11 @@ func BanReason(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBanReason, v))
 }
 
+// KratosIdentityID applies equality check predicate on the "kratos_identity_id" field. It's identical to KratosIdentityIDEQ.
+func KratosIdentityID(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldKratosIdentityID, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -488,6 +493,81 @@ func BanReasonEqualFold(v string) predicate.User {
 // BanReasonContainsFold applies the ContainsFold predicate on the "ban_reason" field.
 func BanReasonContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldBanReason, v))
+}
+
+// KratosIdentityIDEQ applies the EQ predicate on the "kratos_identity_id" field.
+func KratosIdentityIDEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDNEQ applies the NEQ predicate on the "kratos_identity_id" field.
+func KratosIdentityIDNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDIn applies the In predicate on the "kratos_identity_id" field.
+func KratosIdentityIDIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldKratosIdentityID, vs...))
+}
+
+// KratosIdentityIDNotIn applies the NotIn predicate on the "kratos_identity_id" field.
+func KratosIdentityIDNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldKratosIdentityID, vs...))
+}
+
+// KratosIdentityIDGT applies the GT predicate on the "kratos_identity_id" field.
+func KratosIdentityIDGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDGTE applies the GTE predicate on the "kratos_identity_id" field.
+func KratosIdentityIDGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDLT applies the LT predicate on the "kratos_identity_id" field.
+func KratosIdentityIDLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDLTE applies the LTE predicate on the "kratos_identity_id" field.
+func KratosIdentityIDLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDContains applies the Contains predicate on the "kratos_identity_id" field.
+func KratosIdentityIDContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDHasPrefix applies the HasPrefix predicate on the "kratos_identity_id" field.
+func KratosIdentityIDHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDHasSuffix applies the HasSuffix predicate on the "kratos_identity_id" field.
+func KratosIdentityIDHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDIsNil applies the IsNil predicate on the "kratos_identity_id" field.
+func KratosIdentityIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldKratosIdentityID))
+}
+
+// KratosIdentityIDNotNil applies the NotNil predicate on the "kratos_identity_id" field.
+func KratosIdentityIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldKratosIdentityID))
+}
+
+// KratosIdentityIDEqualFold applies the EqualFold predicate on the "kratos_identity_id" field.
+func KratosIdentityIDEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDContainsFold applies the ContainsFold predicate on the "kratos_identity_id" field.
+func KratosIdentityIDContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldKratosIdentityID, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

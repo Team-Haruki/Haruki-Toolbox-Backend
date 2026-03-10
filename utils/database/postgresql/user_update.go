@@ -158,6 +158,26 @@ func (_u *UserUpdate) ClearBanReason() *UserUpdate {
 	return _u
 }
 
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_u *UserUpdate) SetKratosIdentityID(v string) *UserUpdate {
+	_u.mutation.SetKratosIdentityID(v)
+	return _u
+}
+
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableKratosIdentityID(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetKratosIdentityID(*v)
+	}
+	return _u
+}
+
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (_u *UserUpdate) ClearKratosIdentityID() *UserUpdate {
+	_u.mutation.ClearKratosIdentityID()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *UserUpdate) SetCreatedAt(v time.Time) *UserUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -455,6 +475,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
+	}
+	if _u.mutation.KratosIdentityIDCleared() {
+		_spec.ClearField(user.FieldKratosIdentityID, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
@@ -844,6 +870,26 @@ func (_u *UserUpdateOne) ClearBanReason() *UserUpdateOne {
 	return _u
 }
 
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_u *UserUpdateOne) SetKratosIdentityID(v string) *UserUpdateOne {
+	_u.mutation.SetKratosIdentityID(v)
+	return _u
+}
+
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableKratosIdentityID(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetKratosIdentityID(*v)
+	}
+	return _u
+}
+
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (_u *UserUpdateOne) ClearKratosIdentityID() *UserUpdateOne {
+	_u.mutation.ClearKratosIdentityID()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *UserUpdateOne) SetCreatedAt(v time.Time) *UserUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -1171,6 +1217,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
+	}
+	if _u.mutation.KratosIdentityIDCleared() {
+		_spec.ClearField(user.FieldKratosIdentityID, field.TypeString)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)

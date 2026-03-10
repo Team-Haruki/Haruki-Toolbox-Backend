@@ -114,6 +114,20 @@ func (_c *UserCreate) SetNillableBanReason(v *string) *UserCreate {
 	return _c
 }
 
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_c *UserCreate) SetKratosIdentityID(v string) *UserCreate {
+	_c.mutation.SetKratosIdentityID(v)
+	return _c
+}
+
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableKratosIdentityID(v *string) *UserCreate {
+	if v != nil {
+		_c.SetKratosIdentityID(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *UserCreate) SetCreatedAt(v time.Time) *UserCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -377,6 +391,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BanReason(); ok {
 		_spec.SetField(user.FieldBanReason, field.TypeString, value)
 		_node.BanReason = &value
+	}
+	if value, ok := _c.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
+		_node.KratosIdentityID = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)

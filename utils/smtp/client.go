@@ -4,19 +4,35 @@ import (
 	"crypto/tls"
 	"fmt"
 	"haruki-suite/config"
+	"net"
 	"net/smtp"
 	"strings"
 	"time"
 )
 
-func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
+const defaultSMTPTimeout = 10 * time.Second
+
+func normalizeSMTPTimeout(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return defaultSMTPTimeout
+	}
+	return timeout
+}
+
+func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte, timeout time.Duration) error {
+	timeout = normalizeSMTPTimeout(timeout)
 	host := strings.Split(addr, ":")[0]
-	conn, err := tls.Dial("tcp", addr, &tls.Config{
+	dialer := &net.Dialer{Timeout: timeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
 		InsecureSkipVerify: false,
 		ServerName:         host,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to dial TLS: %w", err)
+	}
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("failed to set SMTP deadline: %w", err)
 	}
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -55,18 +71,21 @@ func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []by
 }
 
 type HarukiSMTPClient struct {
-	Addr string
-	Auth smtp.Auth
-	From string
+	Addr    string
+	Auth    smtp.Auth
+	From    string
+	Timeout time.Duration
 }
 
 func NewSMTPClient(cfg config.SMTPConfig) *HarukiSMTPClient {
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPAddr, cfg.SMTPPort)
 	auth := smtp.PlainAuth("", cfg.SMTPMail, cfg.SMTPPass, cfg.SMTPAddr)
+	timeout := normalizeSMTPTimeout(time.Duration(cfg.TimeoutSeconds) * time.Second)
 	return &HarukiSMTPClient{
-		Addr: addr,
-		Auth: auth,
-		From: cfg.SMTPMail,
+		Addr:    addr,
+		Auth:    auth,
+		From:    cfg.SMTPMail,
+		Timeout: timeout,
 	}
 }
 
@@ -91,5 +110,5 @@ func (c *HarukiSMTPClient) Send(to []string, subject, body string, displayName s
 	}
 	msgBuilder.WriteString("\r\n")
 	msgBuilder.WriteString(body)
-	return SendMailTLS(c.Addr, c.Auth, c.From, to, []byte(msgBuilder.String()))
+	return SendMailTLS(c.Addr, c.Auth, c.From, to, []byte(msgBuilder.String()), c.Timeout)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"haruki-suite/config"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -17,7 +18,20 @@ type OAuth2TokenClaims struct {
 	jwt.RegisteredClaims
 }
 
+func oauth2TokenSignKey() (string, error) {
+	signKey := strings.TrimSpace(config.Cfg.OAuth2.TokenSignKey)
+	if signKey == "" {
+		return "", fmt.Errorf("oauth2 token sign key is not configured")
+	}
+	return signKey, nil
+}
+
 func GenerateAccessToken(userID, clientID string, scopes []string, ttlSeconds int) (string, *time.Time, error) {
+	signKey, err := oauth2TokenSignKey()
+	if err != nil {
+		return "", nil, err
+	}
+
 	claims := OAuth2TokenClaims{
 		UserID:   userID,
 		ClientID: clientID,
@@ -34,7 +48,7 @@ func GenerateAccessToken(userID, clientID string, scopes []string, ttlSeconds in
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(config.Cfg.OAuth2.TokenSignKey))
+	signed, err := token.SignedString([]byte(signKey))
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to sign token: %w", err)
 	}
@@ -42,11 +56,16 @@ func GenerateAccessToken(userID, clientID string, scopes []string, ttlSeconds in
 }
 
 func ParseAccessToken(tokenStr string) (*OAuth2TokenClaims, error) {
+	signKey, err := oauth2TokenSignKey()
+	if err != nil {
+		return nil, err
+	}
+
 	parsed, err := jwt.ParseWithClaims(tokenStr, &OAuth2TokenClaims{}, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if t.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return []byte(config.Cfg.OAuth2.TokenSignKey), nil
+		return []byte(signKey), nil
 	})
 	if err != nil {
 		return nil, err

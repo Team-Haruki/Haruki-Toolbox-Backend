@@ -35,6 +35,8 @@ type User struct {
 	Banned bool `json:"banned,omitempty"`
 	// BanReason holds the value of the "ban_reason" field.
 	BanReason *string `json:"ban_reason,omitempty"`
+	// KratosIdentityID holds the value of the "kratos_identity_id" field.
+	KratosIdentityID *string `json:"kratos_identity_id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -127,7 +129,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldAllowCnMysekai, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -201,6 +203,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.BanReason = new(string)
 				*_m.BanReason = value.String
+			}
+		case user.FieldKratosIdentityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field kratos_identity_id", values[i])
+			} else if value.Valid {
+				_m.KratosIdentityID = new(string)
+				*_m.KratosIdentityID = value.String
 			}
 		case user.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -300,6 +309,11 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	if v := _m.BanReason; v != nil {
 		builder.WriteString("ban_reason=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.KratosIdentityID; v != nil {
+		builder.WriteString("kratos_identity_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

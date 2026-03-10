@@ -475,6 +475,33 @@ var (
 		Name:       "upload_logs",
 		Columns:    UploadLogsColumns,
 		PrimaryKey: []*schema.Column{UploadLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "uploadlog_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[7]},
+			},
+			{
+				Name:    "uploadlog_server_game_user_id_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[1], UploadLogsColumns[2], UploadLogsColumns[7]},
+			},
+			{
+				Name:    "uploadlog_upload_method_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[5], UploadLogsColumns[7]},
+			},
+			{
+				Name:    "uploadlog_data_type_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[4], UploadLogsColumns[7]},
+			},
+			{
+				Name:    "uploadlog_success_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[6], UploadLogsColumns[7]},
+			},
+		},
 	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
@@ -487,6 +514,7 @@ var (
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
 		{Name: "banned", Type: field.TypeBool, Default: false},
 		{Name: "ban_reason", Type: field.TypeString, Nullable: true},
+		{Name: "kratos_identity_id", Type: field.TypeString, Unique: true, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime, Nullable: true},
 	}
 	// UsersTable holds the schema information for the "users" table.
@@ -498,7 +526,7 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[9]},
+				Columns: []*schema.Column{UsersColumns[10]},
 			},
 			{
 				Name:    "user_role_banned",

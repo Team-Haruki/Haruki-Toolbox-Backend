@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"haruki-suite/entsrc/schema"
+	"haruki-suite/ent/schema"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
