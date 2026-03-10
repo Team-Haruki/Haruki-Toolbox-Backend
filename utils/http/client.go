@@ -8,6 +8,8 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+const defaultRequestTimeout = 15 * time.Second
+
 type Client struct {
 	Proxy   string
 	Timeout time.Duration
@@ -27,11 +29,11 @@ func (c *Client) init() error {
 		return nil
 	}
 	c.client = resty.New()
-	if c.Timeout != 0 {
-		c.client.SetTimeout(c.Timeout)
-	} else {
-		c.client.SetTimeout(15 * time.Second)
+	timeout := c.Timeout
+	if timeout == 0 {
+		timeout = defaultRequestTimeout
 	}
+	c.client.SetTimeout(timeout)
 	if c.Proxy != "" {
 		c.client.SetProxy(c.Proxy)
 	}
@@ -47,18 +49,23 @@ func (c *Client) Request(ctx context.Context, method, uri string, headers map[st
 	req := c.client.R().
 		SetContext(ctx).
 		SetHeaders(headers)
-	if body != nil && len(body) > 0 {
+	if len(body) > 0 {
 		req.SetBody(body)
 	}
 	resp, err := req.Execute(method, uri)
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	respHeaders := make(map[string]string, len(resp.Header()))
-	for k, v := range resp.Header() {
+	respHeaders := flattenHeaders(resp.Header())
+	return resp.StatusCode(), respHeaders, resp.Body(), nil
+}
+
+func flattenHeaders(headers map[string][]string) map[string]string {
+	respHeaders := make(map[string]string, len(headers))
+	for k, v := range headers {
 		if len(v) > 0 {
 			respHeaders[k] = v[0]
 		}
 	}
-	return resp.StatusCode(), respHeaders, resp.Body(), nil
+	return respHeaders
 }

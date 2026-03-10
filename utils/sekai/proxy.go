@@ -12,42 +12,117 @@ import (
 	"time"
 )
 
-var apiEndpoints = map[harukiUtils.SupportedDataUploadServer][2]string{
-	harukiUtils.SupportedDataUploadServerJP: {
-		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.JPServerAPIHost),
-		harukiConfig.Cfg.SekaiClient.JPServerAPIHost,
-	},
-	harukiUtils.SupportedDataUploadServerEN: {
-		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.ENServerAPIHost),
-		harukiConfig.Cfg.SekaiClient.ENServerAPIHost,
-	},
-	harukiUtils.SupportedDataUploadServerTW: {
-		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.TWServerAPIHost),
-		harukiConfig.Cfg.SekaiClient.TWServerAPIHost,
-	},
-	harukiUtils.SupportedDataUploadServerKR: {
-		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.KRServerAPIHost),
-		harukiConfig.Cfg.SekaiClient.KRServerAPIHost,
-	},
-	harukiUtils.SupportedDataUploadServerCN: {
-		fmt.Sprintf("https://%s/api", harukiConfig.Cfg.SekaiClient.CNServerAPIHost),
-		harukiConfig.Cfg.SekaiClient.CNServerAPIHost,
-	},
+var proxyPathByUploadType = map[harukiUtils.UploadDataType]string{
+	harukiUtils.UploadDataTypeSuite:                "/suite/user/%d",
+	harukiUtils.UploadDataTypeMysekai:              "/user/%d/mysekai",
+	harukiUtils.UploadDataTypeMysekaiBirthdayParty: "/user/%d/mysekai/birthday-party/%d/delivery",
+}
+
+var proxyAllowedHeaderSet = map[string]struct{}{
+	"user-agent":        {},
+	"cookie":            {},
+	"x-forwarded-for":   {},
+	"accept-language":   {},
+	"accept":            {},
+	"accept-encoding":   {},
+	"x-devicemodel":     {},
+	"x-app-hash":        {},
+	"x-operatingsystem": {},
+	"x-kc":              {},
+	"x-unity-version":   {},
+	"x-app-version":     {},
+	"x-platform":        {},
+	"x-session-token":   {},
+	"x-asset-version":   {},
+	"x-request-id":      {},
+	"x-data-version":    {},
+	"content-type":      {},
+	"x-install-id":      {},
 }
 
 func GetAPIEndpoint() map[harukiUtils.SupportedDataUploadServer][2]string {
-	return apiEndpoints
+	return buildAPIEndpoints()
+}
+
+func buildAPIEndpoints() map[harukiUtils.SupportedDataUploadServer][2]string {
+	cfg := harukiConfig.Cfg.SekaiClient
+	return map[harukiUtils.SupportedDataUploadServer][2]string{
+		harukiUtils.SupportedDataUploadServerJP: {
+			fmt.Sprintf("https://%s/api", cfg.JPServerAPIHost),
+			cfg.JPServerAPIHost,
+		},
+		harukiUtils.SupportedDataUploadServerEN: {
+			fmt.Sprintf("https://%s/api", cfg.ENServerAPIHost),
+			cfg.ENServerAPIHost,
+		},
+		harukiUtils.SupportedDataUploadServerTW: {
+			fmt.Sprintf("https://%s/api", cfg.TWServerAPIHost),
+			cfg.TWServerAPIHost,
+		},
+		harukiUtils.SupportedDataUploadServerKR: {
+			fmt.Sprintf("https://%s/api", cfg.KRServerAPIHost),
+			cfg.KRServerAPIHost,
+		},
+		harukiUtils.SupportedDataUploadServerCN: {
+			fmt.Sprintf("https://%s/api", cfg.CNServerAPIHost),
+			cfg.CNServerAPIHost,
+		},
+	}
 }
 
 func filterHeaders(headers map[string]string) map[string]string {
 	filtered := make(map[string]string)
 	for k, v := range headers {
 		kl := strings.ToLower(k)
-		if _, ok := allowedHeaders[kl]; ok {
+		if _, ok := proxyAllowedHeaderSet[kl]; ok {
 			filtered[kl] = v
 		}
 	}
 	return filtered
+}
+
+func resolveProxyEndpoint(server harukiUtils.SupportedDataUploadServer) (baseURL, host string, err error) {
+	endpoint, ok := GetAPIEndpoint()[server]
+	if !ok {
+		return "", "", fmt.Errorf("%w: %s", ErrInvalidServer, server)
+	}
+	return endpoint[0], endpoint[1], nil
+}
+
+func buildProxyPath(
+	dataType harukiUtils.UploadDataType,
+	method string,
+	userID int64,
+	mysekaiBirthdayPartyID *int64,
+) (string, error) {
+	pathTemplate, ok := proxyPathByUploadType[dataType]
+	if !ok {
+		return "", fmt.Errorf("%w: %s", ErrInvalidDataType, dataType)
+	}
+	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
+		if mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0 {
+			return "", NewAPIError(
+				"/birthday-party",
+				method,
+				0,
+				"birthday party ID is required but was not provided",
+				nil,
+			)
+		}
+		return fmt.Sprintf(pathTemplate, userID, *mysekaiBirthdayPartyID), nil
+	}
+	return fmt.Sprintf(pathTemplate, userID), nil
+}
+
+func appendQueryParams(url string, params map[string]string) string {
+	if len(params) == 0 {
+		return url
+	}
+	q := urlParse.Values{}
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	return url + "?" + q.Encode()
 }
 
 func HarukiSekaiProxyCallAPI(
@@ -62,36 +137,17 @@ func HarukiSekaiProxyCallAPI(
 	userID int64,
 	mysekaiBirthdayPartyID *int64,
 ) (*harukiUtils.SekaiDataRetrieverResponse, error) {
-	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
-		if mysekaiBirthdayPartyID == nil || *mysekaiBirthdayPartyID == 0 {
-			return nil, NewAPIError("/birthday-party", method, 0,
-				"birthday party ID is required but was not provided", nil)
-		}
+	baseURL, host, err := resolveProxyEndpoint(server)
+	if err != nil {
+		return nil, err
 	}
-	endpoint, ok := apiEndpoints[server]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidServer, server)
-	}
-	baseURL, host := endpoint[0], endpoint[1]
-	pathTemplate, ok := acquirePath[dataType]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidDataType, dataType)
+	path, err := buildProxyPath(dataType, method, userID, mysekaiBirthdayPartyID)
+	if err != nil {
+		return nil, err
 	}
 	filteredHeaders := filterHeaders(headers)
 	filteredHeaders["Host"] = host
-	var url string
-	if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
-		url = baseURL + fmt.Sprintf(pathTemplate, userID, *mysekaiBirthdayPartyID)
-	} else {
-		url = baseURL + fmt.Sprintf(pathTemplate, userID)
-	}
-	if len(params) > 0 {
-		q := urlParse.Values{}
-		for k, v := range params {
-			q.Set(k, v)
-		}
-		url += "?" + q.Encode()
-	}
+	url := appendQueryParams(baseURL+path, params)
 	client := harukiHttp.NewClient(proxy, 30*time.Second)
 	statusCode, respHeaders, respBody, err := client.Request(ctx, method, url, filteredHeaders, data)
 	if err != nil {

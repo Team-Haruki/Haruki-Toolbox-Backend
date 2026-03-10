@@ -2,86 +2,11 @@ package api
 
 import (
 	"context"
-	"haruki-suite/utils/database/postgresql/systemlog"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
-
-const (
-	SystemLogActorTypeAnonymous = "anonymous"
-	SystemLogActorTypeUser      = "user"
-	SystemLogActorTypeAdmin     = "admin"
-	SystemLogActorTypeSystem    = "system"
-
-	SystemLogResultSuccess = "success"
-	SystemLogResultFailure = "failure"
-)
-
-type SystemLogEntry struct {
-	EventTime   *time.Time
-	ActorUserID *string
-	ActorRole   *string
-	ActorType   string
-	Action      string
-	TargetType  *string
-	TargetID    *string
-	Result      string
-	IP          *string
-	UserAgent   *string
-	Method      *string
-	Path        *string
-	RequestID   *string
-	Metadata    map[string]any
-}
-
-func ptrString(v string) *string {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	out := v
-	return &out
-}
-
-func trimAndLimit(v string, maxLen int) string {
-	trimmed := strings.TrimSpace(v)
-	if maxLen > 0 && len(trimmed) > maxLen {
-		return trimmed[:maxLen]
-	}
-	return trimmed
-}
-
-func normalizeSystemLogActorType(raw string) systemlog.ActorType {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case SystemLogActorTypeUser:
-		return systemlog.ActorTypeUser
-	case SystemLogActorTypeAdmin:
-		return systemlog.ActorTypeAdmin
-	case SystemLogActorTypeSystem:
-		return systemlog.ActorTypeSystem
-	default:
-		return systemlog.ActorTypeAnonymous
-	}
-}
-
-func normalizeSystemLogResult(raw string) systemlog.Result {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case SystemLogResultFailure:
-		return systemlog.ResultFailure
-	default:
-		return systemlog.ResultSuccess
-	}
-}
-
-func roleToActorType(role string) string {
-	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "admin", "super_admin":
-		return SystemLogActorTypeAdmin
-	default:
-		return SystemLogActorTypeUser
-	}
-}
 
 func BuildSystemLogEntryFromFiber(c fiber.Ctx, action string, result string, targetType *string, targetID *string, metadata map[string]any) SystemLogEntry {
 	userID, _ := c.Locals("userID").(string)

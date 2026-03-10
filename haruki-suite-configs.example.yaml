@@ -10,7 +10,16 @@ user_system:
     smtp_mail: ""
     smtp_pass: ""
     mail_name: ""
+    timeout_seconds: 10
   session_sign_token: ""
+  auth_provider: "local" # "local" | "kratos" | "auto"
+  kratos_public_url: ""
+  kratos_admin_url: ""
+  kratos_request_timeout_seconds: 10
+  kratos_session_header: "X-Session-Token"
+  kratos_session_cookie: "ory_kratos_session"
+  kratos_auto_link_by_email: true
+  kratos_auto_provision_user: true
   avatar_save_dir: "avatars"
   frontend_url: ""
   social_platform_verify_token: ""
@@ -34,10 +43,16 @@ webhook:
   jwt_secret: ""
 
 oauth2:
+  provider: "hydra" # "builtin" | "hydra"
   auth_code_ttl: 300
   access_token_ttl: 3600
   refresh_token_ttl: 2592000
   token_sign_key: ""
+  hydra_public_url: "http://hydra-public:4444"
+  hydra_admin_url: "http://hydra-admin:4445"
+  hydra_client_id: ""
+  hydra_client_secret: ""
+  hydra_request_timeout_seconds: 10
 
 backend:
   host: "0.0.0.0"
@@ -45,6 +60,8 @@ backend:
   ssl: false
   ssl_cert: "fullchain.cer"
   ssl_key: "com.key"
+  auto_migrate: false
+  shutdown_timeout_seconds: 10
   log_level: "INFO"
   main_log_file: "main.log"
   access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"

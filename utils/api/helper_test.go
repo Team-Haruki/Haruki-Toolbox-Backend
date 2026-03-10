@@ -20,3 +20,53 @@ func TestPublicAPIAllowedKeysCopySemantics(t *testing.T) {
 		t.Fatalf("GetPublicAPIAllowedKeys leaked internal slice: %#v", again)
 	}
 }
+
+func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
+	input := []string{"a", "b"}
+	helper := NewHarukiToolboxRouterHelpers(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		input,
+		"private-token",
+		"private-agent",
+		"proxy-agent",
+		"v1",
+		"proxy-secret",
+		"proxy-unpack-key",
+		"webhook-secret",
+	)
+
+	input[0] = "mutated"
+	keys := helper.GetPublicAPIAllowedKeys()
+	if len(keys) != 2 || keys[0] != "a" || keys[1] != "b" {
+		t.Fatalf("constructor did not copy public keys: %#v", keys)
+	}
+}
+
+func TestRuntimeConfigGettersAndSetters(t *testing.T) {
+	helper := &HarukiToolboxRouterHelpers{}
+
+	helper.SetPrivateAPIToken("private-token")
+	helper.SetPrivateAPIUserAgent("private-agent")
+	token, userAgent := helper.GetPrivateAPIAuth()
+	if token != "private-token" || userAgent != "private-agent" {
+		t.Fatalf("private api auth mismatch: token=%q userAgent=%q", token, userAgent)
+	}
+
+	helper.SetHarukiProxyUserAgent("proxy-agent")
+	helper.SetHarukiProxyVersion("v1.2.3")
+	helper.SetHarukiProxySecret("proxy-secret")
+	helper.SetHarukiProxyUnpackKey("proxy-unpack")
+	harukiProxyUserAgent, harukiProxyVersion, harukiProxySecret, harukiProxyUnpackKey := helper.GetHarukiProxyConfig()
+	if harukiProxyUserAgent != "proxy-agent" || harukiProxyVersion != "v1.2.3" || harukiProxySecret != "proxy-secret" || harukiProxyUnpackKey != "proxy-unpack" {
+		t.Fatalf("haruki proxy config mismatch")
+	}
+
+	helper.SetWebhookJWTSecret("webhook-secret")
+	if helper.GetWebhookJWTSecret() != "webhook-secret" {
+		t.Fatalf("webhook secret mismatch")
+	}
+}

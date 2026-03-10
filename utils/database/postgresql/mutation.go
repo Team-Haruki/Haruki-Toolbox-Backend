@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/entsrc/schema"
+	"haruki-suite/ent/schema"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
@@ -11620,6 +11620,7 @@ type UserMutation struct {
 	role                               *user.Role
 	banned                             *bool
 	ban_reason                         *string
+	kratos_identity_id                 *string
 	created_at                         *time.Time
 	clearedFields                      map[string]struct{}
 	social_platform_info               *int
@@ -12061,6 +12062,55 @@ func (m *UserMutation) ResetBanReason() {
 	delete(m.clearedFields, user.FieldBanReason)
 }
 
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (m *UserMutation) SetKratosIdentityID(s string) {
+	m.kratos_identity_id = &s
+}
+
+// KratosIdentityID returns the value of the "kratos_identity_id" field in the mutation.
+func (m *UserMutation) KratosIdentityID() (r string, exists bool) {
+	v := m.kratos_identity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKratosIdentityID returns the old "kratos_identity_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldKratosIdentityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKratosIdentityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKratosIdentityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKratosIdentityID: %w", err)
+	}
+	return oldValue.KratosIdentityID, nil
+}
+
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (m *UserMutation) ClearKratosIdentityID() {
+	m.kratos_identity_id = nil
+	m.clearedFields[user.FieldKratosIdentityID] = struct{}{}
+}
+
+// KratosIdentityIDCleared returns if the "kratos_identity_id" field was cleared in this mutation.
+func (m *UserMutation) KratosIdentityIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldKratosIdentityID]
+	return ok
+}
+
+// ResetKratosIdentityID resets all changes to the "kratos_identity_id" field.
+func (m *UserMutation) ResetKratosIdentityID() {
+	m.kratos_identity_id = nil
+	delete(m.clearedFields, user.FieldKratosIdentityID)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *UserMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -12438,7 +12488,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -12462,6 +12512,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.ban_reason != nil {
 		fields = append(fields, user.FieldBanReason)
+	}
+	if m.kratos_identity_id != nil {
+		fields = append(fields, user.FieldKratosIdentityID)
 	}
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
@@ -12490,6 +12543,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Banned()
 	case user.FieldBanReason:
 		return m.BanReason()
+	case user.FieldKratosIdentityID:
+		return m.KratosIdentityID()
 	case user.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -12517,6 +12572,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldBanned(ctx)
 	case user.FieldBanReason:
 		return m.OldBanReason(ctx)
+	case user.FieldKratosIdentityID:
+		return m.OldKratosIdentityID(ctx)
 	case user.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -12584,6 +12641,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBanReason(v)
 		return nil
+	case user.FieldKratosIdentityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKratosIdentityID(v)
+		return nil
 	case user.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -12627,6 +12691,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldBanReason) {
 		fields = append(fields, user.FieldBanReason)
 	}
+	if m.FieldCleared(user.FieldKratosIdentityID) {
+		fields = append(fields, user.FieldKratosIdentityID)
+	}
 	if m.FieldCleared(user.FieldCreatedAt) {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -12649,6 +12716,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldBanReason:
 		m.ClearBanReason()
+		return nil
+	case user.FieldKratosIdentityID:
+		m.ClearKratosIdentityID()
 		return nil
 	case user.FieldCreatedAt:
 		m.ClearCreatedAt()
@@ -12684,6 +12754,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldBanReason:
 		m.ResetBanReason()
+		return nil
+	case user.FieldKratosIdentityID:
+		m.ResetKratosIdentityID()
 		return nil
 	case user.FieldCreatedAt:
 		m.ResetCreatedAt()

@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -17,6 +18,10 @@ func TestGetInt(t *testing.T) {
 		{name: "int32", val: int32(2), want: 2},
 		{name: "int64", val: int64(3), want: 3},
 		{name: "float64", val: float64(4), want: 4},
+		{name: "uint64", val: uint64(5), want: 5},
+		{name: "string", val: "6", want: 6},
+		{name: "json number", val: json.Number("7"), want: 7},
+		{name: "invalid string", val: "bad", want: 0},
 		{name: "missing", val: nil, want: 0},
 	}
 
