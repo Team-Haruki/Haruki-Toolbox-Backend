@@ -6,6 +6,7 @@ import (
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/user"
@@ -119,11 +120,11 @@ func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		userID, err := parseIOSProxyPathInt(userIDStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid user_id")
 		}
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 		proxyHandler := HandleProxyUpload(
@@ -142,11 +143,11 @@ func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		userID, err := parseIOSProxyPathInt(userIDStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid user_id")
 		}
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 		proxyHandler := HandleProxyUpload(
@@ -166,15 +167,15 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 		partyIdStr := c.Params("party_id")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 		userID, err := parseIOSProxyPathInt(userIDStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid user_id")
 		}
 		partyID, err := parseIOSProxyPathInt(partyIdStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid party_id")
 		}
 		logger.Infof("Received %s server mysekai birthday party delivery request from user %d for party id %d", server, userID, partyID)
 		proxyHandler := HandleProxyUpload(
@@ -198,14 +199,17 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
 			Only(ctx)
 		if err != nil {
-			return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
+			}
+			return harukiAPIHelper.ErrorInternal(c, "failed to validate upload code")
 		}
 		toolboxUserID := record.UserID
-		chunkIndex, err := strconv.Atoi(c.Get("X-Chunk-Index", ""))
+		chunkIndex64, err := strconv.ParseInt(c.Get("X-Chunk-Index", ""), 10, 64)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid X-Chunk-Index")
 		}
-		totalChunks, err := strconv.Atoi(c.Get("X-Total-Chunks", ""))
+		totalChunks64, err := strconv.ParseInt(c.Get("X-Total-Chunks", ""), 10, 64)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid X-Total-Chunks")
 		}
@@ -213,11 +217,11 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			ScriptVersion: c.Get("X-Script-Version"),
 			OriginalUrl:   c.Get("X-Original-Url"),
 			UploadId:      c.Get("X-Upload-Id"),
-			ChunkIndex:    chunkIndex,
-			TotalChunks:   totalChunks,
+			ChunkIndex:    int(chunkIndex64),
+			TotalChunks:   int(totalChunks64),
 		}
 		if err := validateDataUploadHeader(header); err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid upload headers")
 		}
 		if header.ScriptVersion == "" {
 			header.ScriptVersion = "unknown"

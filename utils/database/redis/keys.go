@@ -26,6 +26,7 @@ const (
 	KeyModuleSocial      = "social"
 	KeyActionStatusToken = "status-token"
 	KeyActionUserID      = "user-id"
+	KeyActionBinding     = "binding"
 
 	KeyModuleOAuth2 = "oauth2"
 	KeyActionCode   = "code"
@@ -81,6 +82,14 @@ func BuildSocialPlatformStatusTokenKey(platform, platformUserID string) string {
 
 func BuildStatusTokenKey(token string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionStatusToken, token)
+}
+
+func BuildStatusTokenOwnerKey(token string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionStatusToken, token, KeyActionUserID)
+}
+
+func BuildStatusTokenBindingKey(token string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionStatusToken, token, KeyActionBinding)
 }
 
 func BuildOTPAttemptKey(email string) string {

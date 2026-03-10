@@ -54,10 +54,12 @@ type updateUserBanPayload struct {
 }
 
 type userBanStatusResponse struct {
-	UserID    string  `json:"userId"`
-	Role      string  `json:"role"`
-	Banned    bool    `json:"banned"`
-	BanReason *string `json:"banReason,omitempty"`
+	UserID             string  `json:"userId"`
+	Role               string  `json:"role"`
+	Banned             bool    `json:"banned"`
+	BanReason          *string `json:"banReason,omitempty"`
+	ClearedSessions    *bool   `json:"clearedSessions,omitempty"`
+	RevokedOAuthTokens *bool   `json:"revokedOAuthTokens,omitempty"`
 }
 
 type batchUserOperationPayload struct {

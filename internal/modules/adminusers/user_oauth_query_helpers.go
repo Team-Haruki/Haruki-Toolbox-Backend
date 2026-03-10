@@ -35,7 +35,7 @@ func queryUserOAuthTokenStatsByClients(ctx context.Context, db *postgresql.Clien
 
 	statsByClientID := make(map[int]adminOAuthTokenStats, len(unique))
 	for _, clientDBID := range unique {
-		statsByClientID[clientDBID] = adminOAuthTokenStats{}
+		statsByClientID[clientDBID] = adminOAuthTokenStats{Exact: true}
 	}
 
 	baseQuery := db.OAuthToken.Query().Where(

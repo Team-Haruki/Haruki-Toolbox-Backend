@@ -1,6 +1,7 @@
 package cloudflare
 
 import (
+	"errors"
 	"haruki-suite/config"
 	"testing"
 )
@@ -50,5 +51,33 @@ func TestTurnstileHTTPClientReuseByProxy(t *testing.T) {
 	clientD := turnstileHTTPClient("http://127.0.0.1:8080")
 	if clientC != clientD {
 		t.Fatalf("expected same client instance for unchanged proxy")
+	}
+}
+
+func TestIsTurnstileServiceFailure(t *testing.T) {
+	t.Parallel()
+
+	if !isTurnstileServiceFailure([]string{"internal-error"}) {
+		t.Fatalf("expected internal-error to be treated as service failure")
+	}
+	if !isTurnstileServiceFailure([]string{"invalid-input-secret"}) {
+		t.Fatalf("expected invalid-input-secret to be treated as service failure")
+	}
+	if isTurnstileServiceFailure([]string{"timeout-or-duplicate"}) {
+		t.Fatalf("expected timeout-or-duplicate to be treated as client rejection")
+	}
+}
+
+func TestIsTurnstileUnavailable(t *testing.T) {
+	t.Parallel()
+
+	if !IsTurnstileUnavailable(ErrTurnstileUnavailable) {
+		t.Fatalf("expected sentinel error to be detected")
+	}
+	if !IsTurnstileUnavailable(errors.Join(ErrTurnstileUnavailable, errors.New("upstream"))) {
+		t.Fatalf("expected wrapped sentinel error to be detected")
+	}
+	if IsTurnstileUnavailable(errors.New("other")) {
+		t.Fatalf("unexpected detection for unrelated error")
 	}
 }

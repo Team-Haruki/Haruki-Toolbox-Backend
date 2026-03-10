@@ -161,7 +161,8 @@ func handleGetSystemLogDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		if idValue == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "id is required")
 		}
-		id, err := strconv.Atoi(idValue)
+		id64, err := strconv.ParseInt(idValue, 10, 64)
+		id := int(id64)
 		if err != nil || id <= 0 {
 			return harukiAPIHelper.ErrorBadRequest(c, "id must be a positive integer")
 		}

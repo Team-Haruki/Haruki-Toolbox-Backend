@@ -119,7 +119,7 @@ func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 	apiHelper.Router.Get("/api/oauth2/login", handleHydraGetLoginRequest())
 	apiHelper.Router.Post("/api/oauth2/login/accept", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraAcceptLogin())
-	apiHelper.Router.Post("/api/oauth2/login/reject", handleHydraRejectLogin())
+	apiHelper.Router.Post("/api/oauth2/login/reject", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraRejectLogin())
 
 	apiHelper.Router.Get("/api/oauth2/consent", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraGetConsentRequest())
 	apiHelper.Router.Post("/api/oauth2/consent/accept", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleHydraAcceptConsent(apiHelper))
@@ -411,11 +411,11 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 
 	grantScope, err := normalizeGrantedValues(consentReq.RequestedScope, requestedGrantScope)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid grantScope")
 	}
 	audience, err := normalizeGrantedValues(consentReq.RequestedAccessTokenAudience, requestedAudience)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid grantAccessTokenAudience")
 	}
 
 	dbUser, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.IDEQ(userID)).Only(ctx)

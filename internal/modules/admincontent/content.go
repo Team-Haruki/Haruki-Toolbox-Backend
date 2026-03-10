@@ -225,7 +225,7 @@ func handleAdminDeleteFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 }
 
 func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	content := adminGroup.Group("/content", adminCoreModule.RequireAdmin(apiHelper))
 
 	friendLinks := content.Group("/friend-links")

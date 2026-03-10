@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
@@ -90,5 +91,51 @@ func TestVerifyOAuth2TokenViaHydraIntrospection(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+	}
+}
+
+func TestVerifySessionOrOAuth2TokenFallsBackToSessionWithoutBearer(t *testing.T) {
+	app := fiber.New()
+	app.Get("/mixed", VerifySessionOrOAuth2Token(func(c fiber.Ctx) error {
+		c.Locals("userID", "session-user")
+		return c.Next()
+	}, nil, ScopeUserRead), func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{"userID": c.Locals("userID")})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/mixed", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	var decoded map[string]string
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if decoded["userID"] != "session-user" {
+		t.Fatalf("userID = %q, want %q", decoded["userID"], "session-user")
+	}
+}
+
+func TestVerifyOAuth2TokenSetsBearerChallengeOnMissingAuthorization(t *testing.T) {
+	app := fiber.New()
+	app.Get("/protected", VerifyOAuth2Token(nil, ScopeUserRead), func(c fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+	}
+	if got := resp.Header.Get("WWW-Authenticate"); !strings.HasPrefix(got, "Bearer realm=") {
+		t.Fatalf("WWW-Authenticate = %q, want bearer challenge", got)
 	}
 }

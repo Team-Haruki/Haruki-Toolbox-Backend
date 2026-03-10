@@ -7,12 +7,14 @@ import (
 	"fmt"
 	platformAuthHeader "haruki-suite/internal/platform/authheader"
 	"haruki-suite/utils/database/postgresql"
+	userSchema "haruki-suite/utils/database/postgresql/user"
 	harukiLogger "haruki-suite/utils/logger"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -33,6 +35,25 @@ type hydraIntrospectionError struct {
 	Status  int
 	Message string
 }
+
+type oauth2BearerAuthResult struct {
+	Subject  string
+	ClientID string
+	Scopes   []string
+}
+
+type oauth2BearerAuthFailure struct {
+	Status    int
+	ErrorCode string
+	Message   string
+	Scope     string
+}
+
+var (
+	hydraIntrospectionHTTPClientMu      sync.RWMutex
+	hydraIntrospectionSharedHTTPClient  *http.Client
+	hydraIntrospectionSharedTimeoutNano int64
+)
 
 func (e *hydraIntrospectionError) Error() string {
 	return fmt.Sprintf("hydra introspection failed with status %d: %s", e.Status, e.Message)
@@ -57,98 +78,130 @@ func buildBearerChallenge(errorCode, description, scope string) string {
 	return strings.Join(parts, ", ")
 }
 
-func VerifyOAuth2Token(_ *postgresql.Client, requiredScope string) fiber.Handler {
+func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		auth := c.Get("Authorization")
-		tokenStr, ok := platformAuthHeader.ExtractBearerToken(auth)
-		if !ok {
-			c.Set("WWW-Authenticate", buildBearerChallenge("", "", ""))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"status":  fiber.StatusUnauthorized,
-				"message": "missing or invalid authorization header",
-			})
+		result, authFailure := authenticateOAuth2BearerToken(c, db, requiredScope)
+		if authFailure != nil {
+			return respondOAuth2BearerError(c, authFailure)
 		}
-
-		introspection, err := introspectHydraToken(c.Context(), tokenStr)
-		if err != nil {
-			harukiLogger.Errorf("OAuth2 introspection failed: %v", err)
-			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"status":  fiber.StatusServiceUnavailable,
-				"message": "oauth2 introspection unavailable",
-			})
-		}
-
-		if !introspection.Active {
-			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "invalid or expired token", ""))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"status":  fiber.StatusUnauthorized,
-				"message": "invalid or expired token",
-			})
-		}
-
-		subject := strings.TrimSpace(introspection.Subject)
-		if subject == "" {
-			subject = strings.TrimSpace(introspection.Username)
-		}
-		if subject == "" {
-			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "token subject is missing", ""))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"status":  fiber.StatusUnauthorized,
-				"message": "token subject is missing",
-			})
-		}
-
-		now := time.Now().Unix()
-		if introspection.Exp > 0 && now >= introspection.Exp {
-			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "token expired", ""))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"status":  fiber.StatusUnauthorized,
-				"message": "token expired",
-			})
-		}
-		if introspection.Nbf > 0 && now < introspection.Nbf {
-			c.Set("WWW-Authenticate", buildBearerChallenge("invalid_token", "token not active yet", ""))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"status":  fiber.StatusUnauthorized,
-				"message": "token not active yet",
-			})
-		}
-
-		scopes := parseHydraScopeList(introspection.Scope)
-		if requiredScope != "" && !HasScope(scopes, requiredScope) {
-			c.Set("WWW-Authenticate", buildBearerChallenge("insufficient_scope", "insufficient scope", requiredScope))
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"status":  fiber.StatusForbidden,
-				"message": "insufficient scope",
-			})
-		}
-
-		c.Locals("userID", subject)
-		c.Locals("oauth2ClientID", introspection.ClientID)
-		c.Locals("oauth2Scopes", scopes)
+		applyOAuth2BearerAuthLocals(c, result)
 		return c.Next()
 	}
 }
 
 func VerifySessionOrOAuth2Token(sessionVerify fiber.Handler, db *postgresql.Client, requiredScope string) fiber.Handler {
-	oauth2Verify := VerifyOAuth2Token(db, requiredScope)
 	return func(c fiber.Ctx) error {
-		auth := c.Get("Authorization")
-		tokenStr, ok := platformAuthHeader.ExtractBearerToken(auth)
-		if !ok {
-			c.Set("WWW-Authenticate", buildBearerChallenge("", "", ""))
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"status":  fiber.StatusUnauthorized,
-				"message": "missing or invalid authorization header",
-			})
+		auth := strings.TrimSpace(c.Get("Authorization"))
+		if auth == "" {
+			return sessionVerify(c)
+		}
+		if _, ok := platformAuthHeader.ExtractBearerToken(auth); !ok {
+			return sessionVerify(c)
 		}
 
-		introspection, err := introspectHydraToken(c.Context(), tokenStr)
-		if err == nil && introspection.Active {
-			return oauth2Verify(c)
+		result, authFailure := authenticateOAuth2BearerToken(c, db, requiredScope)
+		if authFailure != nil {
+			return respondOAuth2BearerError(c, authFailure)
 		}
-		return sessionVerify(c)
+		applyOAuth2BearerAuthLocals(c, result)
+		return c.Next()
 	}
+}
+
+func respondOAuth2BearerError(c fiber.Ctx, failure *oauth2BearerAuthFailure) error {
+	if failure == nil {
+		return nil
+	}
+	if failure.Status == fiber.StatusUnauthorized || failure.ErrorCode != "" || failure.Scope != "" {
+		c.Set("WWW-Authenticate", buildBearerChallenge(failure.ErrorCode, failure.Message, failure.Scope))
+	}
+	return c.Status(failure.Status).JSON(fiber.Map{
+		"status":  failure.Status,
+		"message": failure.Message,
+	})
+}
+
+func applyOAuth2BearerAuthLocals(c fiber.Ctx, result *oauth2BearerAuthResult) {
+	if result == nil {
+		return
+	}
+	c.Locals("userID", result.Subject)
+	c.Locals("oauth2ClientID", result.ClientID)
+	c.Locals("oauth2Scopes", result.Scopes)
+}
+
+func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredScope string) (*oauth2BearerAuthResult, *oauth2BearerAuthFailure) {
+	tokenStr, ok := platformAuthHeader.ExtractBearerToken(c.Get("Authorization"))
+	if !ok {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, Message: "missing or invalid authorization header"}
+	}
+
+	introspection, err := introspectHydraToken(c.Context(), tokenStr)
+	if err != nil {
+		harukiLogger.Errorf("OAuth2 introspection failed: %v", err)
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 introspection unavailable"}
+	}
+	if !introspection.Active {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "invalid or expired token"}
+	}
+
+	subject := strings.TrimSpace(introspection.Subject)
+	if subject == "" {
+		subject = strings.TrimSpace(introspection.Username)
+	}
+	if subject == "" {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token subject is missing"}
+	}
+
+	now := time.Now().Unix()
+	if introspection.Exp > 0 && now >= introspection.Exp {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token expired"}
+	}
+	if introspection.Nbf > 0 && now < introspection.Nbf {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token not active yet"}
+	}
+
+	if subjectErr := ensureOAuth2BearerSubjectActive(c.Context(), db, subject); subjectErr != nil {
+		if fErr, ok := subjectErr.(*fiber.Error); ok {
+			if fErr.Code == fiber.StatusUnauthorized {
+				return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: fErr.Message}
+			}
+			return nil, &oauth2BearerAuthFailure{Status: fErr.Code, Message: fErr.Message}
+		}
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 subject validation unavailable"}
+	}
+
+	scopes := parseHydraScopeList(introspection.Scope)
+	if requiredScope != "" && !HasScope(scopes, requiredScope) {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusForbidden, ErrorCode: "insufficient_scope", Message: "insufficient scope", Scope: requiredScope}
+	}
+
+	return &oauth2BearerAuthResult{
+		Subject:  subject,
+		ClientID: introspection.ClientID,
+		Scopes:   scopes,
+	}, nil
+}
+
+func ensureOAuth2BearerSubjectActive(ctx context.Context, db *postgresql.Client, subject string) error {
+	if db == nil {
+		return nil
+	}
+	dbUser, err := db.User.Query().
+		Where(userSchema.IDEQ(strings.TrimSpace(subject))).
+		Select(userSchema.FieldBanned).
+		Only(ctx)
+	if err != nil {
+		if postgresql.IsNotFound(err) {
+			return fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
+		}
+		harukiLogger.Errorf("OAuth2 subject validation failed: %v", err)
+		return fiber.NewError(fiber.StatusServiceUnavailable, "oauth2 subject validation unavailable")
+	}
+	if dbUser.Banned {
+		return fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
+	}
+	return nil
 }
 
 func parseHydraScopeList(scopeRaw string) []string {
@@ -174,7 +227,7 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 
-	resp, err := (&http.Client{Timeout: HydraRequestTimeout()}).Do(req)
+	resp, err := hydraIntrospectionHTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call hydra introspection endpoint: %w", err)
 	}
@@ -206,6 +259,29 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 		return nil, fmt.Errorf("failed to decode hydra introspection payload: %w", err)
 	}
 	return &parsed, nil
+}
+
+func hydraIntrospectionHTTPClient() *http.Client {
+	timeout := HydraRequestTimeout()
+	timeoutNano := timeout.Nanoseconds()
+
+	hydraIntrospectionHTTPClientMu.RLock()
+	if hydraIntrospectionSharedHTTPClient != nil && hydraIntrospectionSharedTimeoutNano == timeoutNano {
+		client := hydraIntrospectionSharedHTTPClient
+		hydraIntrospectionHTTPClientMu.RUnlock()
+		return client
+	}
+	hydraIntrospectionHTTPClientMu.RUnlock()
+
+	client := &http.Client{Timeout: timeout}
+
+	hydraIntrospectionHTTPClientMu.Lock()
+	defer hydraIntrospectionHTTPClientMu.Unlock()
+	if hydraIntrospectionSharedHTTPClient == nil || hydraIntrospectionSharedTimeoutNano != timeoutNano {
+		hydraIntrospectionSharedHTTPClient = client
+		hydraIntrospectionSharedTimeoutNano = timeoutNano
+	}
+	return hydraIntrospectionSharedHTTPClient
 }
 
 func stringifyAny(value any) string {

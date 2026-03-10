@@ -203,7 +203,8 @@ func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
 		}
 
-		platformID, err := strconv.Atoi(strings.TrimSpace(c.Params("platform_id")))
+		platformID64, err := strconv.ParseInt(strings.TrimSpace(c.Params("platform_id")), 10, 64)
+		platformID := int(platformID64)
 		if err != nil || platformID <= 0 {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidPlatformId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "platform_id must be positive integer")
@@ -281,7 +282,8 @@ func handleDeleteUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
 		}
 
-		platformID, err := strconv.Atoi(strings.TrimSpace(c.Params("platform_id")))
+		platformID64, err := strconv.ParseInt(strings.TrimSpace(c.Params("platform_id")), 10, 64)
+		platformID := int(platformID64)
 		if err != nil || platformID <= 0 {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidPlatformId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "platform_id must be positive integer")

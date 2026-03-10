@@ -145,28 +145,25 @@ func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		}
 		clearedSessions := true
 		resp.ClearedSessions = &clearedSessions
-
-		kratosIdentityID := ""
-		if targetUser.KratosIdentityID != nil {
-			kratosIdentityID = strings.TrimSpace(*targetUser.KratosIdentityID)
-		}
-		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != "" {
-			if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(c.Context(), kratosIdentityID); err != nil {
-				clearedSessions = false
-				resp.ClearedSessions = &clearedSessions
-			}
-		}
-		if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), targetUser.ID); err != nil {
+		revokedOAuthTokens := true
+		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+		if sessionClearFailed {
 			clearedSessions = false
 			resp.ClearedSessions = &clearedSessions
 		}
-		if !clearedSessions {
+		if oauthRevokeFailed {
+			revokedOAuthTokens = false
+		}
+		if !clearedSessions || !revokedOAuthTokens {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserSoftDelete, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 				"hasReason":          reason != nil,
-				"sessionClearFailed": true,
-				"clearedSessions":    false,
+				"sessionClearFailed": sessionClearFailed,
+				"oauthRevokeFailed":  oauthRevokeFailed,
+				"clearedSessions":    clearedSessions,
+				"revokedOAuthTokens": revokedOAuthTokens,
 			})
-			return harukiAPIHelper.SuccessResponse(c, "user soft deleted, but failed to clear user sessions", &resp)
+			message, _ := resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed)
+			return harukiAPIHelper.SuccessResponse(c, strings.Replace(message, "user banned", "user soft deleted", 1), &resp)
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserSoftDelete, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{

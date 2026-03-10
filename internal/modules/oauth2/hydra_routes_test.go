@@ -184,7 +184,7 @@ func TestHandleHydraRejectConsentSubjectMismatch(t *testing.T) {
 	}
 }
 
-func TestRegisterHydraRoutesLoginRejectWithoutSession(t *testing.T) {
+func TestRegisterHydraRoutesLoginRejectRequiresSession(t *testing.T) {
 	original := config.Cfg
 	t.Cleanup(func() {
 		config.Cfg = original
@@ -213,8 +213,8 @@ func TestRegisterHydraRoutesLoginRejectWithoutSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 }
 

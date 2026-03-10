@@ -162,3 +162,7 @@ func RequireAnyRoleWithLookup(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 	}
 	return requireAnyRole(apiHelper, lookup, allowedRoles...)
 }
+
+func AdminRootGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Router {
+	return apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+}

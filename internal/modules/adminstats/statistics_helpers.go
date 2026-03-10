@@ -23,10 +23,11 @@ func parseStatisticsWindowHours(raw string) (int, error) {
 		return defaultStatisticsWindowHours, nil
 	}
 
-	hours, err := strconv.Atoi(trimmed)
+	hours64, err := strconv.ParseInt(trimmed, 10, 64)
 	if err != nil {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "hours must be an integer")
 	}
+	hours := int(hours64)
 	if hours <= 0 {
 		return 0, fiber.NewError(fiber.StatusBadRequest, "hours must be greater than 0")
 	}

@@ -1,6 +1,7 @@
 package cloudflare
 
 import (
+	"errors"
 	"fmt"
 	"haruki-suite/config"
 	harukiLogger "haruki-suite/utils/logger"
@@ -13,6 +14,8 @@ import (
 )
 
 const verifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+var ErrTurnstileUnavailable = errors.New("turnstile service unavailable")
 
 var (
 	turnstileClientMu    sync.RWMutex
@@ -27,6 +30,10 @@ type TurnstileResponse struct {
 	ErrorCodes  []string `json:"error-codes"`
 	Action      string   `json:"action,omitempty"`
 	Cdata       string   `json:"cdata,omitempty"`
+}
+
+func IsTurnstileUnavailable(err error) bool {
+	return errors.Is(err, ErrTurnstileUnavailable)
 }
 
 func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
@@ -50,14 +57,31 @@ func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
 		Post(verifyURL)
 	if err != nil {
 		harukiLogger.Errorf("Turnstile request failed: %v", err)
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("%w: request failed: %v", ErrTurnstileUnavailable, err)
+	}
+	if resp.StatusCode() != 200 {
+		harukiLogger.Errorf("Turnstile returned unexpected status %d: %s", resp.StatusCode(), string(resp.Body()))
+		return nil, fmt.Errorf("%w: unexpected status %d", ErrTurnstileUnavailable, resp.StatusCode())
 	}
 	var result TurnstileResponse
 	if err := sonic.Unmarshal(resp.Body(), &result); err != nil {
 		harukiLogger.Errorf("Turnstile response decode failed: %v, body: %s", err, string(resp.Body()))
-		return nil, fmt.Errorf("decode failed: %w", err)
+		return nil, fmt.Errorf("%w: decode failed: %v", ErrTurnstileUnavailable, err)
+	}
+	if !result.Success && isTurnstileServiceFailure(result.ErrorCodes) {
+		return &result, fmt.Errorf("%w: turnstile service rejected request", ErrTurnstileUnavailable)
 	}
 	return &result, nil
+}
+
+func isTurnstileServiceFailure(errorCodes []string) bool {
+	for _, code := range errorCodes {
+		switch strings.TrimSpace(code) {
+		case "internal-error", "missing-input-secret", "invalid-input-secret":
+			return true
+		}
+	}
+	return false
 }
 
 func turnstileHTTPClient(proxy string) *resty.Client {

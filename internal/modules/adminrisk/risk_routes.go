@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterAdminRiskRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	risk := adminGroup.Group("/risk", adminCoreModule.RequireAdmin(apiHelper))
 
 	events := risk.Group("/events")

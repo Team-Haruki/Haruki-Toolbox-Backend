@@ -7,7 +7,10 @@ import (
 	harukiVersion "haruki-suite/version"
 	"strings"
 	"sync"
+	"time"
 )
+
+const webhookCallbackTimeout = 10 * time.Second
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
 	h.Logger.Infof("Calling back WebHook API: %s", url)
@@ -75,4 +78,10 @@ func (h *DataHandler) CallWebhook(
 		}(url, bearer)
 	}
 	wg.Wait()
+}
+
+func (h *DataHandler) CallWebhookAsync(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
+	ctx, cancel := context.WithTimeout(context.Background(), webhookCallbackTimeout)
+	defer cancel()
+	h.CallWebhook(ctx, userID, server, dataType)
 }

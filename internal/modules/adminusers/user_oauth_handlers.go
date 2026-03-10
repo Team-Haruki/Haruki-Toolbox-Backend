@@ -2,12 +2,14 @@ package adminusers
 
 import (
 	adminCoreModule "haruki-suite/internal/modules/admincore"
+	oauth2Module "haruki-suite/internal/modules/oauth2"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
 	"haruki-suite/utils/database/postgresql/oauthclient"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
 	userSchema "haruki-suite/utils/database/postgresql/user"
+	"hash/fnv"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -53,6 +55,55 @@ func handleListUserOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxR
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidIncludeRevoked, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid include_revoked filter")
+		}
+		if oauth2Module.HydraOAuthManagementEnabled() {
+			if includeRevoked {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidIncludeRevoked, map[string]any{
+					"hydraMode": true,
+				}))
+				return harukiAPIHelper.ErrorBadRequest(c, "include_revoked is not supported in hydra mode")
+			}
+			sessions, err := oauth2Module.ListHydraConsentSessions(c.Context(), targetUser.ID)
+			if err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{
+					"hydraMode": true,
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to query oauth authorizations")
+			}
+
+			items := make([]adminOAuthAuthorizationListItem, 0, len(sessions))
+			for _, session := range sessions {
+				createdAt := adminNowUTC()
+				if session.HandledAt != nil {
+					createdAt = session.HandledAt.UTC()
+				}
+				items = append(items, adminOAuthAuthorizationListItem{
+					AuthorizationID:  stableHydraAuthorizationID(session.ConsentRequestID, session.ConsentRequest.Client.ClientID),
+					ConsentRequestID: session.ConsentRequestID,
+					ClientID:         session.ConsentRequest.Client.ClientID,
+					ClientName:       session.ConsentRequest.Client.ClientName,
+					ClientType:       oauth2Module.HydraClientTypeFromAuthMethod(session.ConsentRequest.Client.TokenEndpointAuthMethod),
+					ClientActive:     true,
+					Scopes:           append([]string(nil), session.GrantScope...),
+					CreatedAt:        createdAt,
+					Revoked:          false,
+					TokenStats:       adminOAuthTokenStats{Exact: false},
+				})
+			}
+
+			resp := adminOAuthAuthorizationListResponse{
+				GeneratedAt:    adminNowUTC(),
+				UserID:         targetUser.ID,
+				IncludeRevoked: false,
+				Total:          len(items),
+				Items:          items,
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+				"includeRevoked": false,
+				"total":          resp.Total,
+				"hydraMode":      true,
+			})
+			return harukiAPIHelper.SuccessResponse(c, "success", &resp)
 		}
 
 		authQuery := apiHelper.DBManager.DB.OAuthAuthorization.Query().
@@ -162,6 +213,64 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
+		if oauth2Module.HydraOAuthManagementEnabled() {
+			if strings.TrimSpace(clientID) != "" {
+				exists, checkErr := oauth2Module.HydraConsentSessionExistsForClient(c.Context(), targetUser.ID, clientID)
+				if checkErr != nil {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{
+						"hydraMode": true,
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
+				}
+				if !exists {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{
+						"clientId":  clientID,
+						"hydraMode": true,
+					}))
+					return harukiAPIHelper.ErrorNotFound(c, "client not found")
+				}
+			}
+			revokedAuthorizations := 0
+			revokedAuthorizationsExact := false
+			if sessions, listErr := oauth2Module.ListHydraConsentSessions(c.Context(), targetUser.ID); listErr == nil {
+				revokedAuthorizationsExact = true
+				for _, session := range sessions {
+					if clientID == "" || session.ConsentRequest.Client.ClientID == clientID {
+						revokedAuthorizations++
+					}
+				}
+			}
+			if err := oauth2Module.RevokeHydraConsentSessions(c.Context(), targetUser.ID, clientID); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{
+					"hydraMode": true,
+				}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
+			}
+			revokedTokens := 0
+			revokedTokensExact := false
+			var responseClientID *string
+			metadata := map[string]any{
+				"revokedAuthorizations":      revokedAuthorizations,
+				"revokedAuthorizationsExact": revokedAuthorizationsExact,
+				"revokedTokens":              revokedTokens,
+				"revokedTokensExact":         revokedTokensExact,
+				"hydraMode":                  true,
+			}
+			if clientID != "" {
+				responseClientID = &clientID
+				metadata["clientId"] = clientID
+			}
+			resp := adminRevokeOAuthResponse{
+				UserID:                     targetUser.ID,
+				ClientID:                   responseClientID,
+				RevokedAuthorizations:      revokedAuthorizations,
+				RevokedAuthorizationsExact: &revokedAuthorizationsExact,
+				RevokedTokens:              revokedTokens,
+				RevokedTokensExact:         &revokedTokensExact,
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, metadata)
+			return harukiAPIHelper.SuccessResponse(c, "oauth authorizations revoked", &resp)
+		}
 
 		var client *postgresql.OAuthClient
 		if clientID != "" {
@@ -224,14 +333,35 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			metadata["clientId"] = clientID
 		}
 
+		revokedAuthorizationsExact := true
+		revokedTokensExact := true
 		resp := adminRevokeOAuthResponse{
-			UserID:                targetUser.ID,
-			ClientID:              responseClientID,
-			RevokedAuthorizations: revokedAuthorizations,
-			RevokedTokens:         revokedTokens,
+			UserID:                     targetUser.ID,
+			ClientID:                   responseClientID,
+			RevokedAuthorizations:      revokedAuthorizations,
+			RevokedAuthorizationsExact: &revokedAuthorizationsExact,
+			RevokedTokens:              revokedTokens,
+			RevokedTokensExact:         &revokedTokensExact,
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, metadata)
 		return harukiAPIHelper.SuccessResponse(c, "oauth authorizations revoked", &resp)
 	}
+}
+
+func stableHydraAuthorizationID(consentRequestID, clientID string) int {
+	candidate := strings.TrimSpace(consentRequestID)
+	if candidate == "" {
+		candidate = strings.TrimSpace(clientID)
+	}
+	if candidate == "" {
+		return 1
+	}
+	hasher := fnv.New32a()
+	_, _ = hasher.Write([]byte(candidate))
+	value := int(hasher.Sum32() & 0x7fffffff)
+	if value == 0 {
+		return 1
+	}
+	return value
 }

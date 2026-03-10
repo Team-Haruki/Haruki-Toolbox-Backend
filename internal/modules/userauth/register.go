@@ -27,27 +27,28 @@ const (
 	registerAuditTargetTypeUser = "user"
 	registerAuditActorRoleUser  = "user"
 
-	registerReasonInvalidPayload                = "invalid_payload"
-	registerReasonInvalidChallenge              = "invalid_challenge"
-	registerReasonInvalidEmailOTP               = "invalid_email_otp"
-	registerReasonEmailUnavailable              = "email_unavailable"
-	registerReasonPasswordTooShort              = "password_too_short"
-	registerReasonPasswordTooLong               = "password_too_long"
-	registerReasonPasswordHashFailed            = "password_hash_failed"
-	registerReasonGenerateUIDFailed             = "generate_uid_failed"
-	registerReasonStartTransactionFailed        = "start_transaction_failed"
-	registerReasonCreateUserFailed              = "create_user_failed"
-	registerReasonGenerateUploadCode            = "generate_upload_code_failed"
-	registerReasonCreateIOSCodeFailed           = "create_ios_code_failed"
-	registerReasonCommitTransactionFailed       = "commit_transaction_failed"
-	registerReasonIssueSessionFailed            = "issue_session_failed"
-	registerReasonOK                            = "ok"
-	registerUIDGenerateMaxAttempts              = 3
-	registerUIDTimestampSuffixModulo            = 10000
-	registerUIDRandomRangeExclusive       int64 = 1000000
-	registerUIDFormat                           = "%04d%06d"
-	registerOTPAttemptLimit                     = 5
-	registerOTPAttemptTTL                       = 5 * time.Minute
+	registerReasonInvalidPayload                    = "invalid_payload"
+	registerReasonInvalidChallenge                  = "invalid_challenge"
+	registerReasonChallengeServiceUnavailable       = "challenge_service_unavailable"
+	registerReasonInvalidEmailOTP                   = "invalid_email_otp"
+	registerReasonEmailUnavailable                  = "email_unavailable"
+	registerReasonPasswordTooShort                  = "password_too_short"
+	registerReasonPasswordTooLong                   = "password_too_long"
+	registerReasonPasswordHashFailed                = "password_hash_failed"
+	registerReasonGenerateUIDFailed                 = "generate_uid_failed"
+	registerReasonStartTransactionFailed            = "start_transaction_failed"
+	registerReasonCreateUserFailed                  = "create_user_failed"
+	registerReasonGenerateUploadCode                = "generate_upload_code_failed"
+	registerReasonCreateIOSCodeFailed               = "create_ios_code_failed"
+	registerReasonCommitTransactionFailed           = "commit_transaction_failed"
+	registerReasonIssueSessionFailed                = "issue_session_failed"
+	registerReasonOK                                = "ok"
+	registerUIDGenerateMaxAttempts                  = 3
+	registerUIDTimestampSuffixModulo                = 10000
+	registerUIDRandomRangeExclusive           int64 = 1000000
+	registerUIDFormat                               = "%04d%06d"
+	registerOTPAttemptLimit                         = 5
+	registerOTPAttemptTTL                           = 5 * time.Minute
 )
 
 type registerCreateUserFailureDecision int
@@ -93,7 +94,11 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, "email is required")
 		}
 		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, c.IP())
-		if err != nil || vresp == nil || !vresp.Success {
+		if err != nil {
+			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonChallengeServiceUnavailable)
+			return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
+		}
+		if vresp == nil || !vresp.Success {
 			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonInvalidChallenge)
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid challenge token")
 		}

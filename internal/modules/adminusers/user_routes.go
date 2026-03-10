@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterAdminUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	users := adminGroup.Group("/users", adminCoreModule.RequireAdmin(apiHelper))
 
 	users.Get("", handleListUsers(apiHelper))

@@ -3,6 +3,7 @@ package adminusers
 import "time"
 
 type adminOAuthTokenStats struct {
+	Exact           bool       `json:"exact"`
 	Total           int        `json:"total"`
 	Active          int        `json:"active"`
 	Revoked         int        `json:"revoked"`
@@ -11,15 +12,16 @@ type adminOAuthTokenStats struct {
 }
 
 type adminOAuthAuthorizationListItem struct {
-	AuthorizationID int                  `json:"authorizationId"`
-	ClientID        string               `json:"clientId"`
-	ClientName      string               `json:"clientName"`
-	ClientType      string               `json:"clientType"`
-	ClientActive    bool                 `json:"clientActive"`
-	Scopes          []string             `json:"scopes"`
-	CreatedAt       time.Time            `json:"createdAt"`
-	Revoked         bool                 `json:"revoked"`
-	TokenStats      adminOAuthTokenStats `json:"tokenStats"`
+	AuthorizationID  int                  `json:"authorizationId"`
+	ConsentRequestID string               `json:"consentRequestId,omitempty"`
+	ClientID         string               `json:"clientId"`
+	ClientName       string               `json:"clientName"`
+	ClientType       string               `json:"clientType"`
+	ClientActive     bool                 `json:"clientActive"`
+	Scopes           []string             `json:"scopes"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	Revoked          bool                 `json:"revoked"`
+	TokenStats       adminOAuthTokenStats `json:"tokenStats"`
 }
 
 type adminOAuthAuthorizationListResponse struct {
@@ -31,8 +33,10 @@ type adminOAuthAuthorizationListResponse struct {
 }
 
 type adminRevokeOAuthResponse struct {
-	UserID                string  `json:"userId"`
-	ClientID              *string `json:"clientId,omitempty"`
-	RevokedAuthorizations int     `json:"revokedAuthorizations"`
-	RevokedTokens         int     `json:"revokedTokens"`
+	UserID                     string  `json:"userId"`
+	ClientID                   *string `json:"clientId,omitempty"`
+	RevokedAuthorizations      int     `json:"revokedAuthorizations"`
+	RevokedAuthorizationsExact *bool   `json:"revokedAuthorizationsExact,omitempty"`
+	RevokedTokens              int     `json:"revokedTokens"`
+	RevokedTokensExact         *bool   `json:"revokedTokensExact,omitempty"`
 }

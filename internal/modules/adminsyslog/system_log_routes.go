@@ -1,11 +1,12 @@
 package adminsyslog
 
 import (
+	adminCoreModule "haruki-suite/internal/modules/admincore"
 	harukiAPIHelper "haruki-suite/utils/api"
 )
 
 func RegisterAdminSystemLogRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	systemLogs := adminGroup.Group("/system-logs", requireAdmin(apiHelper))
 	systemLogs.Get("", handleQuerySystemLogs(apiHelper))
 	systemLogs.Get("/summary", handleGetSystemLogSummary(apiHelper))

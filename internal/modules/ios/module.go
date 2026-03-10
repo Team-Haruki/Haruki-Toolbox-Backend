@@ -30,7 +30,10 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
 			Only(ctx)
 		if err != nil {
-			return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
+			}
+			return harukiAPIHelper.ErrorInternal(c, "failed to validate upload code")
 		}
 		userID := record.UserID
 		filepath = strings.TrimPrefix(filepath, "/")
@@ -52,11 +55,11 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 		chunkSizeMB := 1
 		if chunkStr := c.Query("chunk"); chunkStr != "" {
-			parsed, err := strconv.Atoi(chunkStr)
+			parsed, err := strconv.ParseInt(chunkStr, 10, 64)
 			if err != nil || parsed < 1 || parsed > 10 {
 				return harukiAPIHelper.ErrorBadRequest(c, "chunk must be between 1 and 10 MB")
 			}
-			chunkSizeMB = parsed
+			chunkSizeMB = int(parsed)
 		}
 		regionStrs := strings.Split(regionsStr, "-")
 		var regions []harukiUtils.SupportedDataUploadServer

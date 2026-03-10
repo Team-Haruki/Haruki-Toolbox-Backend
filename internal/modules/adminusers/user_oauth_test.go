@@ -142,3 +142,22 @@ func TestParseAdminRevokeOAuthClientID(t *testing.T) {
 		})
 	}
 }
+
+func TestStableHydraAuthorizationID(t *testing.T) {
+	t.Run("stable for same consent request", func(t *testing.T) {
+		first := stableHydraAuthorizationID("consent-1", "client-a")
+		second := stableHydraAuthorizationID("consent-1", "client-a")
+		if first != second {
+			t.Fatalf("stableHydraAuthorizationID should be deterministic: %d != %d", first, second)
+		}
+		if first <= 0 {
+			t.Fatalf("stableHydraAuthorizationID should be positive, got %d", first)
+		}
+	})
+
+	t.Run("falls back to client id", func(t *testing.T) {
+		if got := stableHydraAuthorizationID("", "client-a"); got <= 0 {
+			t.Fatalf("expected positive fallback id, got %d", got)
+		}
+	})
+}

@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterAdminStatisticsRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	statistics := adminGroup.Group("/statistics", adminCoreModule.RequireAdmin(apiHelper))
 	statistics.Get("/dashboard", handleGetDashboardStatistics(apiHelper))
 	statistics.Get("/upload-logs", handleQueryUploadLogs(apiHelper))

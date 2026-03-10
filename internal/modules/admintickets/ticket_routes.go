@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterAdminTicketRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	tickets := adminGroup.Group("/tickets", adminCoreModule.RequireAdmin(apiHelper))
 	tickets.Get("", handleAdminListTickets(apiHelper))
 	tickets.Get("/:ticket_id", handleAdminGetTicketDetail(apiHelper))

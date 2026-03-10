@@ -14,11 +14,11 @@ import (
 )
 
 func parseAdminPathPositiveInt(raw string, name string) (int, error) {
-	value, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || value <= 0 {
+	value64, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || value64 <= 0 {
 		return 0, fiber.NewError(fiber.StatusBadRequest, name+" must be a positive integer")
 	}
-	return value, nil
+	return int(value64), nil
 }
 
 func sanitizeAdminTags(values []string) []string {

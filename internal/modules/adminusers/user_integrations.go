@@ -3,10 +3,12 @@ package adminusers
 import (
 	"context"
 	adminCoreModule "haruki-suite/internal/modules/admincore"
+	oauth2Module "haruki-suite/internal/modules/oauth2"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/oauthtoken"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"strconv"
 	"strings"
@@ -32,6 +34,44 @@ func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.Ha
 		sessionClearFailed = true
 	}
 	return sessionClearFailed
+}
+
+func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string) (oauthRevokeFailed bool) {
+	if oauth2Module.HydraOAuthManagementEnabled() {
+		if err := oauth2Module.RevokeHydraConsentSessions(ctx, targetUserID, ""); err != nil {
+			oauthRevokeFailed = true
+		}
+		return oauthRevokeFailed
+	}
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.DB == nil {
+		return true
+	}
+	if _, err := apiHelper.DBManager.DB.OAuthToken.Update().
+		Where(oauthtoken.HasUserWith(userSchema.IDEQ(strings.TrimSpace(targetUserID)))).
+		SetRevoked(true).
+		Save(ctx); err != nil {
+		oauthRevokeFailed = true
+	}
+	return oauthRevokeFailed
+}
+
+func cleanupManagedUserAccessAfterBan(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool, oauthRevokeFailed bool) {
+	sessionClearFailed = clearManagedUserSessions(ctx, apiHelper, targetUserID, kratosIdentityID)
+	oauthRevokeFailed = revokeManagedUserOAuthTokens(ctx, apiHelper, targetUserID)
+	return sessionClearFailed, oauthRevokeFailed
+}
+
+func resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed bool) (message string, success bool) {
+	if sessionClearFailed && oauthRevokeFailed {
+		return "user banned, but failed to clear user sessions and revoke oauth tokens", false
+	}
+	if sessionClearFailed {
+		return "user banned, but failed to clear user sessions", true
+	}
+	if oauthRevokeFailed {
+		return "user banned, but failed to revoke oauth tokens", true
+	}
+	return "user banned", true
 }
 
 func resolveAdminUserEmailUpdateFinalizeOutcome(localMirrorFailed, sessionClearFailed bool) (status int, message string, auditResult string) {
@@ -285,7 +325,7 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingGameUserId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
 		}
-		if _, err := strconv.Atoi(gameUserID); err != nil {
+		if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidGameUserId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}

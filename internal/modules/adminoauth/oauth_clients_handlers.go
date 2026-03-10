@@ -2,6 +2,7 @@ package adminoauth
 
 import (
 	adminCoreModule "haruki-suite/internal/modules/admincore"
+	oauth2Module "haruki-suite/internal/modules/oauth2"
 	platformPagination "haruki-suite/internal/platform/pagination"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
@@ -427,8 +428,24 @@ func handleDeleteOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 }
 
 func RegisterAdminOAuthClientRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	oauthClients := adminGroup.Group("/oauth-clients", adminCoreModule.RequireAdmin(apiHelper))
+	if oauth2Module.HydraOAuthManagementEnabled() {
+		unsupported := handleHydraBackedOAuthClientAdminUnavailable()
+		oauthClients.Post("", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		oauthClients.Get("", unsupported)
+		oauthClients.Get("/:client_id/authorizations", unsupported)
+		oauthClients.Get("/:client_id/statistics", unsupported)
+		oauthClients.Get("/:client_id/audit-logs", unsupported)
+		oauthClients.Get("/:client_id/audit-summary", unsupported)
+		oauthClients.Post("/:client_id/revoke", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		oauthClients.Post("/:client_id/restore", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		oauthClients.Put("/:client_id", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		oauthClients.Put("/:client_id/active", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		oauthClients.Post("/:client_id/rotate-secret", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		oauthClients.Delete("/:client_id", adminCoreModule.RequireSuperAdmin(apiHelper), unsupported)
+		return
+	}
 	oauthClients.Post("", adminCoreModule.RequireSuperAdmin(apiHelper), handleCreateOAuthClient(apiHelper))
 	oauthClients.Get("", handleListOAuthClients(apiHelper))
 	oauthClients.Get("/:client_id/authorizations", handleListOAuthClientAuthorizations(apiHelper))
@@ -441,4 +458,10 @@ func RegisterAdminOAuthClientRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRout
 	oauthClients.Put("/:client_id/active", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateOAuthClientActive(apiHelper))
 	oauthClients.Post("/:client_id/rotate-secret", adminCoreModule.RequireSuperAdmin(apiHelper), handleRotateOAuthClientSecret(apiHelper))
 	oauthClients.Delete("/:client_id", adminCoreModule.RequireSuperAdmin(apiHelper), handleDeleteOAuthClient(apiHelper))
+}
+
+func handleHydraBackedOAuthClientAdminUnavailable() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusNotImplemented, "oauth client admin api is unavailable while oauth2 is backed by hydra", nil)
+	}
 }

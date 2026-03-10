@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterAdminGlobalGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := apiHelper.Router.Group("/api/admin", apiHelper.SessionHandler.VerifySessionToken)
+	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
 	gameBindings := adminGroup.Group("/game-account-bindings", adminCoreModule.RequireAdmin(apiHelper))
 	gameBindings.Get("", handleAdminListGlobalGameAccountBindings(apiHelper))
 	gameBindings.Post("/batch-delete", handleAdminBatchDeleteGlobalGameAccountBindings(apiHelper))

@@ -61,3 +61,26 @@ func TestExtractBearerToken(t *testing.T) {
 		t.Fatalf("empty bearer token should fail")
 	}
 }
+
+func TestStatusTokenOwnedByUser(t *testing.T) {
+	t.Parallel()
+
+	if !statusTokenOwnedByUser("u1", "u1") {
+		t.Fatalf("expected matching owner to pass")
+	}
+	if statusTokenOwnedByUser("u1", "u2") {
+		t.Fatalf("expected mismatched owner to fail")
+	}
+	if statusTokenOwnedByUser("", "u1") {
+		t.Fatalf("expected empty owner to fail")
+	}
+}
+
+func TestSocialStatusTokenBindingStruct(t *testing.T) {
+	t.Parallel()
+
+	binding := socialStatusTokenBinding{Platform: "discord", UserID: "12345"}
+	if binding.Platform != "discord" || binding.UserID != "12345" {
+		t.Fatalf("unexpected binding contents: %#v", binding)
+	}
+}

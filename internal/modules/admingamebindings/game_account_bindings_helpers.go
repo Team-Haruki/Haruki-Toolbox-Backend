@@ -49,7 +49,7 @@ func parseAdminGlobalGameBindingQueryFilters(c fiber.Ctx) (*adminGlobalGameBindi
 		serverValue = string(server)
 	}
 	if gameUserID != "" {
-		if _, err := strconv.Atoi(gameUserID); err != nil {
+		if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
 			return nil, fiber.NewError(fiber.StatusBadRequest, "game_user_id must be numeric")
 		}
 	}
@@ -162,7 +162,7 @@ func parseAdminGameBindingPath(c fiber.Ctx) (string, string, error) {
 	if gameUserID == "" {
 		return "", "", fiber.NewError(fiber.StatusBadRequest, "game_user_id is required")
 	}
-	if _, err := strconv.Atoi(gameUserID); err != nil {
+	if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
 		return "", "", fiber.NewError(fiber.StatusBadRequest, "game_user_id must be numeric")
 	}
 	return string(server), gameUserID, nil
@@ -198,7 +198,7 @@ func parseAdminGameBindingRef(ref adminGlobalGameBindingRef) (string, string, er
 	if gameUserID == "" {
 		return "", "", fiber.NewError(fiber.StatusBadRequest, "gameUserId is required")
 	}
-	if _, err := strconv.Atoi(gameUserID); err != nil {
+	if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
 		return "", "", fiber.NewError(fiber.StatusBadRequest, "gameUserId must be numeric")
 	}
 
