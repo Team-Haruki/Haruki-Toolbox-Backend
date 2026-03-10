@@ -196,6 +196,14 @@ func Run(cfg harukiConfig.Config) error {
 		time.Duration(cfg.UserSystem.KratosRequestTimeout)*time.Second,
 		entClient,
 	)
+	if strings.EqualFold(strings.TrimSpace(cfg.UserSystem.AuthProvider), "kratos") {
+		if strings.TrimSpace(cfg.UserSystem.KratosPublicURL) == "" {
+			return fmt.Errorf("user_system.kratos_public_url is required when auth_provider=kratos")
+		}
+		if strings.TrimSpace(cfg.UserSystem.KratosAdminURL) == "" {
+			return fmt.Errorf("user_system.kratos_admin_url is required when auth_provider=kratos")
+		}
+	}
 
 	app := fiber.New(fiber.Config{
 		BodyLimit:   100 * 1024 * 1024,

@@ -8,6 +8,7 @@ import (
 	platformIdentity "haruki-suite/internal/platform/identity"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
+	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
@@ -22,9 +23,14 @@ import (
 )
 
 const (
-	resetPasswordSendRateLimitWindow = 10 * time.Minute
-	resetPasswordSendIPLimit         = 20
-	resetPasswordSendTargetLimit     = 3
+	resetPasswordSendRateLimitWindow  = 10 * time.Minute
+	resetPasswordSendIPLimit          = 20
+	resetPasswordSendTargetLimit      = 3
+	resetPasswordApplyRateLimitWindow = 10 * time.Minute
+	resetPasswordApplyIPLimit         = 30
+	resetPasswordApplyTargetLimit     = 8
+	resetPasswordMirrorRetryAttempts  = 3
+	resetPasswordMirrorRetryInterval  = 150 * time.Millisecond
 
 	resetPasswordRateLimitScriptLimitedByNone   = int64(0)
 	resetPasswordRateLimitScriptLimitedByIP     = int64(1)
@@ -50,7 +56,17 @@ return {0, ipCount, targetCount}
 )
 
 func respondResetPasswordRateLimited(c fiber.Ctx, key string, message string, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
-	retryAfter := int64(resetPasswordSendRateLimitWindow.Seconds())
+	return respondResetPasswordRateLimitedWithWindow(c, key, message, resetPasswordSendRateLimitWindow, apiHelper)
+}
+
+func respondResetPasswordRateLimitedWithWindow(
+	c fiber.Ctx,
+	key string,
+	message string,
+	window time.Duration,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+) error {
+	retryAfter := int64(window.Seconds())
 	if apiHelper != nil && apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil && apiHelper.DBManager.Redis.Redis != nil {
 		if ttl, err := apiHelper.DBManager.Redis.Redis.TTL(c.Context(), key).Result(); err == nil && ttl > 0 {
 			retryAfter = int64(ttl.Seconds())
@@ -96,6 +112,45 @@ func checkResetPasswordSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.Har
 	}
 }
 
+func checkResetPasswordApplyRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, target string) (limited bool, key string, message string, err error) {
+	ctx := c.Context()
+	target = strings.TrimSpace(target)
+	if normalizedEmail := platformIdentity.NormalizeEmail(target); normalizedEmail != "" && strings.Contains(normalizedEmail, "@") {
+		target = normalizedEmail
+	} else {
+		// In recovery-code-only flows, avoid per-code key bypass by binding target bucket to source IP.
+		target = "ip:" + strings.TrimSpace(clientIP)
+	}
+	ipKey := harukiRedis.BuildResetPasswordApplyRateLimitIPKey(clientIP)
+	targetKey := harukiRedis.BuildResetPasswordApplyRateLimitTargetKey(target)
+	values, err := apiHelper.DBManager.Redis.Redis.Eval(
+		ctx,
+		resetPasswordSendRateLimitReserveScript,
+		[]string{ipKey, targetKey},
+		resetPasswordApplyIPLimit,
+		resetPasswordApplyTargetLimit,
+		resetPasswordApplyRateLimitWindow.Milliseconds(),
+	).Int64Slice()
+	if err != nil {
+		harukiLogger.Errorf("Failed to reserve reset-password apply rate limit: %v", err)
+		return false, "", "", err
+	}
+	if len(values) != 3 {
+		return false, "", "", fmt.Errorf("unexpected reset-password apply rate limit script result length: %d", len(values))
+	}
+
+	switch values[0] {
+	case resetPasswordRateLimitScriptLimitedByIP:
+		return true, ipKey, "too many password reset attempts from this IP", nil
+	case resetPasswordRateLimitScriptLimitedByTarget:
+		return true, targetKey, "too many password reset attempts for this target", nil
+	case resetPasswordRateLimitScriptLimitedByNone:
+		return false, "", "", nil
+	default:
+		return false, "", "", fmt.Errorf("unexpected reset-password apply rate limit limitedBy marker: %d", values[0])
+	}
+}
+
 func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -130,7 +185,10 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		if limited {
 			reason = "rate_limited"
-			return respondResetPasswordRateLimited(c, limitKey, limitMessage, apiHelper)
+			return respondResetPasswordRateLimitedWithWindow(c, limitKey, limitMessage, resetPasswordSendRateLimitWindow, apiHelper)
+		}
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
+			return handleSendResetPasswordViaKratos(c, apiHelper, payload.Email, &result, &reason)
 		}
 
 		exists, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.EmailEqualFold(payload.Email)).Exist(ctx)
@@ -164,6 +222,27 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	}
 }
 
+func handleSendResetPasswordViaKratos(
+	c fiber.Ctx,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	email string,
+	result *string,
+	reason *string,
+) error {
+	if err := apiHelper.SessionHandler.StartKratosRecoveryByEmail(c.Context(), email); err != nil {
+		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
+			*reason = "identity_provider_unavailable"
+			return harukiAPIHelper.ErrorInternal(c, "reset service unavailable")
+		}
+		harukiLogger.Errorf("Failed to start Kratos recovery flow for %s: %v", email, err)
+		*reason = "start_kratos_recovery_failed"
+		return harukiAPIHelper.ErrorInternal(c, "reset service unavailable")
+	}
+	*result = harukiAPIHelper.SystemLogResultSuccess
+	*reason = "ok"
+	return harukiAPIHelper.SuccessResponse[string](c, "Reset password email sent", nil)
+}
+
 func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -171,10 +250,12 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
 		sessionClearFailed := false
+		localMirrorFailed := false
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.reset_password.apply", result, targetUserID, map[string]any{
 				"reason":             reason,
 				"sessionClearFailed": sessionClearFailed,
+				"localMirrorFailed":  localMirrorFailed,
 			})
 		}()
 
@@ -184,6 +265,30 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid payload")
 		}
 		payload.Email = platformIdentity.NormalizeEmail(payload.Email)
+		if userModule.IsPasswordTooShort(payload.Password) {
+			reason = "password_too_short"
+			return harukiAPIHelper.ErrorBadRequest(c, userModule.PasswordTooShortMessage)
+		}
+		if userModule.IsPasswordTooLong(payload.Password) {
+			reason = "password_too_long"
+			return harukiAPIHelper.ErrorBadRequest(c, userModule.PasswordTooLongMessage)
+		}
+		rateLimitTarget := payload.Email
+		if strings.TrimSpace(rateLimitTarget) == "" {
+			rateLimitTarget = payload.OneTimeSecret
+		}
+		limited, limitKey, limitMessage, err := checkResetPasswordApplyRateLimit(c, apiHelper, c.IP(), rateLimitTarget)
+		if err != nil {
+			reason = "rate_limit_check_failed"
+			return harukiAPIHelper.ErrorInternal(c, "reset service unavailable")
+		}
+		if limited {
+			reason = "rate_limited"
+			return respondResetPasswordRateLimited(c, limitKey, limitMessage, apiHelper)
+		}
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
+			return handleResetPasswordViaKratos(c, apiHelper, payload, &targetUserID, &result, &reason, &sessionClearFailed, &localMirrorFailed)
+		}
 		if payload.Email == "" {
 			reason = "invalid_email"
 			return harukiAPIHelper.ErrorBadRequest(c, "email is required")
@@ -219,31 +324,30 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			Where(userSchema.EmailEqualFold(payload.Email)).
 			Only(ctx)
 		if err != nil {
+			if postgresql.IsNotFound(err) {
+				reason = "user_not_found"
+				return harukiAPIHelper.ErrorBadRequest(c, "Reset code expired or invalid")
+			}
 			harukiLogger.Errorf("Failed to query user: %v", err)
 			reason = "query_user_failed"
 			return harukiAPIHelper.ErrorInternal(c, "Failed to locate user")
 		}
 		targetUserID = u.ID
-		if userModule.IsPasswordTooShort(payload.Password) {
-			reason = "password_too_short"
-			return harukiAPIHelper.ErrorBadRequest(c, userModule.PasswordTooShortMessage)
-		}
-		if userModule.IsPasswordTooLong(payload.Password) {
-			reason = "password_too_long"
-			return harukiAPIHelper.ErrorBadRequest(c, userModule.PasswordTooLongMessage)
-		}
 		hashed, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {
 			harukiLogger.Errorf("Failed to hash password: %v", err)
 			reason = "hash_password_failed"
 			return harukiAPIHelper.ErrorInternal(c, "Failed to hash password")
 		}
-		_, err = apiHelper.DBManager.DB.User.
-			UpdateOneID(u.ID).
-			SetPasswordHash(string(hashed)).
-			Save(ctx)
+		err = harukiAPIHelper.RetryOperation(ctx, resetPasswordMirrorRetryAttempts, resetPasswordMirrorRetryInterval, func() error {
+			_, updateErr := apiHelper.DBManager.DB.User.
+				UpdateOneID(u.ID).
+				SetPasswordHash(string(hashed)).
+				Save(ctx)
+			return updateErr
+		})
 		if err != nil {
-			harukiLogger.Errorf("Failed to update user password: %v", err)
+			harukiLogger.Errorf("Failed to update user password after retries: %v", err)
 			reason = "update_password_failed"
 			return harukiAPIHelper.ErrorInternal(c, "Failed to update password")
 		}
@@ -258,6 +362,91 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		reason = "ok"
 		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully", nil)
 	}
+}
+
+func handleResetPasswordViaKratos(
+	c fiber.Ctx,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	payload harukiAPIHelper.ResetPasswordPayload,
+	targetUserID *string,
+	result *string,
+	reason *string,
+	sessionClearFailed *bool,
+	localMirrorFailed *bool,
+) error {
+	recoveryCode := strings.TrimSpace(payload.OneTimeSecret)
+	if recoveryCode == "" {
+		*reason = "invalid_reset_secret"
+		return harukiAPIHelper.ErrorBadRequest(c, "Reset code expired or invalid")
+	}
+	ctx := c.Context()
+	userID, identityID, err := apiHelper.SessionHandler.ResetKratosPasswordByRecoveryCode(ctx, recoveryCode, payload.Password)
+	if err != nil {
+		switch {
+		case harukiAPIHelper.IsKratosInvalidCredentialsError(err), harukiAPIHelper.IsKratosInvalidInputError(err):
+			*reason = "invalid_reset_secret"
+			return harukiAPIHelper.ErrorBadRequest(c, "Reset code expired or invalid")
+		case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
+			*reason = "identity_not_linked"
+			return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
+		case harukiAPIHelper.IsIdentityProviderUnavailableError(err):
+			*reason = "identity_provider_unavailable"
+			return harukiAPIHelper.ErrorInternal(c, "Reset service unavailable")
+		default:
+			harukiLogger.Errorf("Failed to reset kratos password by recovery code: %v", err)
+			*reason = "update_kratos_password_failed"
+			return harukiAPIHelper.ErrorInternal(c, "Failed to update password")
+		}
+	}
+	if strings.TrimSpace(userID) == "" {
+		*reason = "invalid_user"
+		return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
+	}
+	*targetUserID = userID
+
+	if hashed, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost); err != nil {
+		harukiLogger.Errorf("Failed to hash password for local mirror (user=%s): %v", userID, err)
+		*localMirrorFailed = true
+	} else if err := harukiAPIHelper.RetryOperation(ctx, resetPasswordMirrorRetryAttempts, resetPasswordMirrorRetryInterval, func() error {
+		_, updateErr := apiHelper.DBManager.DB.User.
+			UpdateOneID(userID).
+			SetPasswordHash(string(hashed)).
+			Save(ctx)
+		return updateErr
+	}); err != nil {
+		harukiLogger.Errorf("Failed to mirror password hash locally (user=%s) after retries: %v", userID, err)
+		*localMirrorFailed = true
+	}
+
+	if strings.TrimSpace(identityID) != "" {
+		if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, identityID); err != nil {
+			harukiLogger.Warnf("Failed to revoke Kratos sessions for user %s: %v", userID, err)
+			*sessionClearFailed = true
+		}
+	}
+	if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
+		harukiLogger.Warnf("Failed to clear user sessions: %v", err)
+		*sessionClearFailed = true
+	}
+
+	if *localMirrorFailed && *sessionClearFailed {
+		*result = harukiAPIHelper.SystemLogResultSuccess
+		*reason = "ok_local_mirror_and_session_clear_failed"
+		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully, but local mirror sync failed and some sessions could not be cleared", nil)
+	}
+	if *localMirrorFailed {
+		*result = harukiAPIHelper.SystemLogResultSuccess
+		*reason = "ok_local_mirror_failed"
+		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully, but local mirror sync failed", nil)
+	}
+	if *sessionClearFailed {
+		*result = harukiAPIHelper.SystemLogResultSuccess
+		*reason = "ok_session_clear_failed"
+		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully, but failed to clear existing sessions", nil)
+	}
+	*result = harukiAPIHelper.SystemLogResultSuccess
+	*reason = "ok"
+	return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully", nil)
 }
 
 func buildResetPasswordURL(frontendURL, resetSecret, email string) string {

@@ -213,3 +213,30 @@ func TestVerifySessionTokenKratosModeProviderUnavailable(t *testing.T) {
 		t.Fatalf("message = %v, want %q", payload["message"], "identity provider unavailable")
 	}
 }
+
+func TestRevokeKratosSessionByIDNotFoundError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	handler := NewSessionHandler(newSessionTestRedisClient(t), "local-sign-key")
+	handler.ConfigureIdentityProvider("kratos", "http://kratos.example", server.URL, "X-Session-Token", "ory_kratos_session", true, true, 2*time.Second, nil)
+
+	err := handler.RevokeKratosSessionByID(context.Background(), "session-does-not-exist")
+	if err == nil {
+		t.Fatalf("expected revoke to fail on not found")
+	}
+	if !IsKratosSessionNotFoundError(err) {
+		t.Fatalf("expected IsKratosSessionNotFoundError=true, got err=%v", err)
+	}
+	if IsKratosInvalidInputError(err) {
+		t.Fatalf("session-not-found should not be classified as invalid input")
+	}
+}

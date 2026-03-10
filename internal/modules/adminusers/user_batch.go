@@ -115,8 +115,21 @@ func executeBatchUnban(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToo
 	).Save(ctx)
 }
 
-func executeBatchForceLogout(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string) error {
-	return harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUserID)
+func executeBatchForceLogout(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) error {
+	kratosRevokeFailed := false
+	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() &&
+		kratosIdentityID != nil && strings.TrimSpace(*kratosIdentityID) != "" {
+		if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, strings.TrimSpace(*kratosIdentityID)); err != nil {
+			kratosRevokeFailed = true
+		}
+	}
+	if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUserID); err != nil {
+		return err
+	}
+	if kratosRevokeFailed {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to revoke kratos sessions")
+	}
+	return nil
 }
 
 func batchUserOperationFailureMessage(action string) string {
@@ -183,7 +196,7 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 
 			targetUser, err := apiHelper.DBManager.DB.User.Query().
 				Where(userSchema.IDEQ(targetUserID)).
-				Select(userSchema.FieldID, userSchema.FieldRole).
+				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 				Only(c.Context())
 			if err != nil {
 				item.Code = adminBatchResultCodeUserNotFound
@@ -206,7 +219,7 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			case adminBatchActionUnban:
 				affected, err = executeBatchUnban(c.Context(), apiHelper, actorUserID, actorRole, targetUser.ID)
 			case adminBatchActionForceLogout:
-				err = executeBatchForceLogout(apiHelper, targetUser.ID)
+				err = executeBatchForceLogout(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
 			default:
 				err = fiber.NewError(fiber.StatusBadRequest, "unsupported batch action")
 			}
@@ -280,7 +293,7 @@ func handleBatchUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 			targetUser, err := apiHelper.DBManager.DB.User.Query().
 				Where(userSchema.IDEQ(targetUserID)).
-				Select(userSchema.FieldID, userSchema.FieldRole).
+				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 				Only(c.Context())
 			if err != nil {
 				item.Code = adminBatchResultCodeUserNotFound
@@ -361,7 +374,7 @@ func handleBatchUpdateUserAllowCNMysekai(apiHelper *harukiAPIHelper.HarukiToolbo
 
 			targetUser, err := apiHelper.DBManager.DB.User.Query().
 				Where(userSchema.IDEQ(targetUserID)).
-				Select(userSchema.FieldID, userSchema.FieldRole).
+				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 				Only(c.Context())
 			if err != nil {
 				item.Code = adminBatchResultCodeUserNotFound

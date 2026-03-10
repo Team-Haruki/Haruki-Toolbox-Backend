@@ -9,8 +9,14 @@ import (
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
+)
+
+const (
+	adminLocalMirrorRetryAttempts = 3
+	adminLocalMirrorRetryInterval = 150 * time.Millisecond
 )
 
 func handleListUserGameAccountBindings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -76,23 +82,89 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, nil))
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
 		}
+		kratosUpdated := false
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() &&
+			targetUser.KratosIdentityID != nil && strings.TrimSpace(*targetUser.KratosIdentityID) != "" {
+			if err := apiHelper.SessionHandler.UpdateKratosEmailByIdentityID(c.Context(), strings.TrimSpace(*targetUser.KratosIdentityID), payload.Email); err != nil {
+				switch {
+				case harukiAPIHelper.IsKratosIdentityConflictError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
+				case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorNotFound(c, "user identity not found")
+				case harukiAPIHelper.IsIdentityProviderUnavailableError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonIdentityProviderUnavailable, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "identity provider unavailable")
+				default:
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+				}
+			}
+			kratosUpdated = true
+		}
 
-		affected, err := applyManagedTargetUserUpdateGuards(
-			apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email),
-			actorUserID,
-			actorRole,
-			targetUser.ID,
-		).Save(c.Context())
+		affected := 0
+		err = harukiAPIHelper.RetryOperation(c.Context(), adminLocalMirrorRetryAttempts, adminLocalMirrorRetryInterval, func() error {
+			nextAffected, updateErr := applyManagedTargetUserUpdateGuards(
+				apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email),
+				actorUserID,
+				actorRole,
+				targetUser.ID,
+			).Save(c.Context())
+			if updateErr == nil {
+				affected = nextAffected
+			}
+			return updateErr
+		})
 		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+			if !kratosUpdated {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, nil))
+				return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+			}
+			resp := adminUserEmailResponse{
+				UserID:   targetUser.ID,
+				Email:    payload.Email,
+				Verified: true,
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+				"email":                 payload.Email,
+				"verified":              true,
+				"provider":              "kratos",
+				"localMirrorFailed":     true,
+				"localMirrorFailReason": "update_user_email_failed",
+			})
+			return harukiAPIHelper.SuccessResponse(c, "user email updated in identity provider, but local mirror sync failed", &resp)
 		}
 		if affected == 0 {
-			missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
-				"guardedUpdateMiss": true,
-			}))
-			return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to update user email")
+			if !kratosUpdated {
+				missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
+					"guardedUpdateMiss": true,
+				}))
+				return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to update user email")
+			}
+			resp := adminUserEmailResponse{
+				UserID:   targetUser.ID,
+				Email:    payload.Email,
+				Verified: true,
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+				"email":                 payload.Email,
+				"verified":              true,
+				"provider":              "kratos",
+				"localMirrorFailed":     true,
+				"localMirrorFailReason": "guarded_update_miss",
+			})
+			return harukiAPIHelper.SuccessResponse(c, "user email updated in identity provider, but local mirror sync failed", &resp)
 		}
 
 		resp := adminUserEmailResponse{

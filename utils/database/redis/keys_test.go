@@ -79,6 +79,16 @@ func TestBuildKeys(t *testing.T) {
 			want: "haruki:email:reset-password:send:target:" + hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
+			name: "reset password apply rate limit ip",
+			got:  BuildResetPasswordApplyRateLimitIPKey("127.0.0.1"),
+			want: "haruki:email:reset-password:attempt:ip:127.0.0.1",
+		},
+		{
+			name: "reset password apply rate limit target",
+			got:  BuildResetPasswordApplyRateLimitTargetKey(" A@Example.Com "),
+			want: "haruki:email:reset-password:attempt:target:" + hashNormalizedIdentifier(" A@Example.Com "),
+		},
+		{
 			name: "login rate limit ip",
 			got:  BuildLoginRateLimitIPKey("127.0.0.1"),
 			want: "haruki:email:login:attempt:ip:127.0.0.1",

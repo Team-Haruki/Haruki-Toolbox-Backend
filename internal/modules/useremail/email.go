@@ -7,6 +7,7 @@ import (
 	platformIdentity "haruki-suite/internal/platform/identity"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
+	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
@@ -223,10 +224,12 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
 		sessionClearFailed := false
+		localMirrorFailed := false
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.email.verify", result, userID, map[string]any{
 				"reason":             reason,
 				"sessionClearFailed": sessionClearFailed,
+				"localMirrorFailed":  localMirrorFailed,
 			})
 		}()
 
@@ -263,14 +266,59 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return harukiAPIHelper.ErrorBadRequest(c, "email already in use by another account")
 		}
 
+		currentUser, err := apiHelper.DBManager.DB.User.Query().
+			Where(userSchema.IDEQ(userID)).
+			Select(userSchema.FieldID, userSchema.FieldKratosIdentityID).
+			Only(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query current user for email verify: %v", err)
+			reason = "query_user_failed"
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
+			}
+			return harukiAPIHelper.ErrorInternal(c, "failed to query user")
+		}
+
+		kratosIdentityID := ""
+		if currentUser.KratosIdentityID != nil {
+			kratosIdentityID = strings.TrimSpace(*currentUser.KratosIdentityID)
+		}
+		kratosUpdated := false
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != "" {
+			if err := apiHelper.SessionHandler.UpdateKratosEmailByIdentityID(ctx, kratosIdentityID, req.Email); err != nil {
+				switch {
+				case harukiAPIHelper.IsKratosIdentityConflictError(err):
+					reason = "email_taken"
+					return harukiAPIHelper.ErrorBadRequest(c, "email already in use by another account")
+				case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
+					reason = "kratos_identity_unmapped"
+					return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
+				case harukiAPIHelper.IsIdentityProviderUnavailableError(err):
+					harukiLogger.Errorf("Failed to sync Kratos email for user %s: %v", userID, err)
+					reason = "identity_provider_unavailable"
+					return harukiAPIHelper.ErrorInternal(c, "identity provider unavailable")
+				default:
+					harukiLogger.Errorf("Failed to update Kratos email for user %s: %v", userID, err)
+					reason = "update_kratos_email_failed"
+					return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+				}
+			}
+			kratosUpdated = true
+		}
+
 		if _, err := apiHelper.DBManager.DB.User.
 			Update().
 			Where(userSchema.IDEQ(userID)).
 			SetEmail(req.Email).
 			Save(ctx); err != nil {
-			harukiLogger.Errorf("Failed to update user email: %v", err)
-			reason = "update_user_email_failed"
-			return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+			if kratosUpdated {
+				harukiLogger.Warnf("Kratos email updated but failed to sync local mirror for user %s: %v", userID, err)
+				localMirrorFailed = true
+			} else {
+				harukiLogger.Errorf("Failed to update user email: %v", err)
+				reason = "update_user_email_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+			}
 		}
 
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -279,9 +327,27 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 				Verified: true,
 			},
 		}
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != "" {
+			if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, kratosIdentityID); err != nil {
+				harukiLogger.Warnf("Failed to revoke Kratos sessions after email update for user %s: %v", userID, err)
+				sessionClearFailed = true
+			}
+		}
 		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, userID); err != nil {
-			harukiLogger.Warnf("Failed to clear user sessions after email update: %v", err)
+			harukiLogger.Warnf("Failed to clear local user sessions after email update: %v", err)
 			sessionClearFailed = true
+		}
+		if localMirrorFailed && sessionClearFailed {
+			result = harukiAPIHelper.SystemLogResultSuccess
+			reason = "ok_local_mirror_and_session_clear_failed"
+			return harukiAPIHelper.SuccessResponse(c, "email verified, but local mirror sync failed and some sessions were not cleared", &ud)
+		}
+		if localMirrorFailed {
+			result = harukiAPIHelper.SystemLogResultSuccess
+			reason = "ok_local_mirror_failed"
+			return harukiAPIHelper.SuccessResponse(c, "email verified in identity provider, but local mirror sync failed", &ud)
+		}
+		if sessionClearFailed {
 			result = harukiAPIHelper.SystemLogResultSuccess
 			reason = "ok_session_clear_failed"
 			return harukiAPIHelper.SuccessResponse(c, "email verified, but failed to clear existing sessions", &ud)

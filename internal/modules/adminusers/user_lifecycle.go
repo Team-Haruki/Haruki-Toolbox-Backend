@@ -8,9 +8,15 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	adminLocalPasswordMirrorRetryAttempts = 3
+	adminLocalPasswordMirrorRetryInterval = 150 * time.Millisecond
 )
 
 func buildSoftDeleteBanReason(reason *string) string {
@@ -45,7 +51,7 @@ func validateAdminPasswordInput(raw string) error {
 func queryAdminTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string) (*postgresql.User, error) {
 	targetUser, err := apiHelper.DBManager.DB.User.Query().
 		Where(userSchema.IDEQ(targetUserID)).
-		Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldBanReason).
+		Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldBanReason, userSchema.FieldKratosIdentityID).
 		Only(c.Context())
 	if err != nil {
 		return nil, err
@@ -139,9 +145,22 @@ func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		}
 		clearedSessions := true
 		resp.ClearedSessions = &clearedSessions
+
+		kratosIdentityID := ""
+		if targetUser.KratosIdentityID != nil {
+			kratosIdentityID = strings.TrimSpace(*targetUser.KratosIdentityID)
+		}
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != "" {
+			if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(c.Context(), kratosIdentityID); err != nil {
+				clearedSessions = false
+				resp.ClearedSessions = &clearedSessions
+			}
+		}
 		if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUser.ID); err != nil {
 			clearedSessions = false
 			resp.ClearedSessions = &clearedSessions
+		}
+		if !clearedSessions {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserSoftDelete, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 				"hasReason":          reason != nil,
 				"sessionClearFailed": true,
@@ -292,33 +311,81 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid password")
 		}
 
-		hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonHashPasswordFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
-		}
-
-		affected, err := applyManagedTargetUserUpdateGuards(
-			apiHelper.DBManager.DB.User.Update().SetPasswordHash(string(hashed)),
-			actorUserID,
-			actorRole,
-			targetUser.ID,
-		).Save(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdatePasswordFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to reset password")
-		}
-		if affected == 0 {
-			missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
-				"guardedUpdateMiss": true,
-			}))
-			return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to reset password")
-		}
-
 		forceLogout := true
 		if payload.ForceLogout != nil {
 			forceLogout = *payload.ForceLogout
+		}
+
+		kratosIdentityID := ""
+		if targetUser.KratosIdentityID != nil {
+			kratosIdentityID = strings.TrimSpace(*targetUser.KratosIdentityID)
+		}
+		kratosManaged := apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != ""
+		if kratosManaged {
+			if err := apiHelper.SessionHandler.UpdateKratosPasswordByIdentityID(c.Context(), kratosIdentityID, password); err != nil {
+				switch {
+				case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorNotFound(c, "user identity not found")
+				case harukiAPIHelper.IsIdentityProviderUnavailableError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonIdentityProviderUnavailable, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "identity provider unavailable")
+				default:
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdatePasswordFailed, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "failed to reset password")
+				}
+			}
+		}
+
+		localMirrorFailed := false
+		localMirrorFailureReason := ""
+		hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			if !kratosManaged {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonHashPasswordFailed, nil))
+				return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
+			}
+			localMirrorFailed = true
+			localMirrorFailureReason = "hash_password_failed"
+		} else {
+			affected := 0
+			err := harukiAPIHelper.RetryOperation(c.Context(), adminLocalPasswordMirrorRetryAttempts, adminLocalPasswordMirrorRetryInterval, func() error {
+				nextAffected, updateErr := applyManagedTargetUserUpdateGuards(
+					apiHelper.DBManager.DB.User.Update().SetPasswordHash(string(hashed)),
+					actorUserID,
+					actorRole,
+					targetUser.ID,
+				).Save(c.Context())
+				if updateErr == nil {
+					affected = nextAffected
+				}
+				return updateErr
+			})
+			if err != nil {
+				if !kratosManaged {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdatePasswordFailed, nil))
+					return harukiAPIHelper.ErrorInternal(c, "failed to reset password")
+				}
+				localMirrorFailed = true
+				localMirrorFailureReason = "update_password_failed"
+			}
+			if err == nil && affected == 0 {
+				if !kratosManaged {
+					missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
+						"guardedUpdateMiss": true,
+					}))
+					return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to reset password")
+				}
+				localMirrorFailed = true
+				localMirrorFailureReason = "guarded_update_miss"
+			}
 		}
 
 		resp := adminResetPasswordResponse{
@@ -326,30 +393,46 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			TemporaryPassword: temporaryPassword,
 			ForceLogout:       forceLogout,
 		}
+		sessionClearFailed := false
 		if forceLogout {
 			clearedSessions := true
 			resp.ClearedSessions = &clearedSessions
+			if kratosManaged {
+				if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(c.Context(), kratosIdentityID); err != nil {
+					clearedSessions = false
+					resp.ClearedSessions = &clearedSessions
+					sessionClearFailed = true
+				}
+			}
 			if err := harukiAPIHelper.ClearUserSessions(apiHelper.DBManager.Redis.Redis, targetUser.ID); err != nil {
 				clearedSessions = false
 				resp.ClearedSessions = &clearedSessions
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-					"generatedTemporaryPassword": temporaryPassword != "",
-					"forceLogout":                forceLogout,
-					"sessionClearFailed":         true,
-					"clearedSessions":            false,
-				})
-				return harukiAPIHelper.SuccessResponse(c, "password reset, but failed to clear user sessions", &resp)
+				sessionClearFailed = true
 			}
 		}
 
 		metadata := map[string]any{
 			"generatedTemporaryPassword": temporaryPassword != "",
 			"forceLogout":                forceLogout,
+			"localMirrorFailed":          localMirrorFailed,
+		}
+		if localMirrorFailureReason != "" {
+			metadata["localMirrorFailReason"] = localMirrorFailureReason
 		}
 		if resp.ClearedSessions != nil {
 			metadata["clearedSessions"] = *resp.ClearedSessions
+			metadata["sessionClearFailed"] = sessionClearFailed
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, metadata)
+		if localMirrorFailed && sessionClearFailed {
+			return harukiAPIHelper.SuccessResponse(c, "password reset, but local mirror sync failed and some sessions were not cleared", &resp)
+		}
+		if localMirrorFailed {
+			return harukiAPIHelper.SuccessResponse(c, "password reset, but local mirror sync failed", &resp)
+		}
+		if sessionClearFailed {
+			return harukiAPIHelper.SuccessResponse(c, "password reset, but failed to clear user sessions", &resp)
+		}
 		return harukiAPIHelper.SuccessResponse(c, "password reset", &resp)
 	}
 }

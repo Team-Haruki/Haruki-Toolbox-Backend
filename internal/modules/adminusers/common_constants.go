@@ -98,6 +98,7 @@ const (
 	adminFailureReasonQueryAuthorizedSocialPlatformsFailed = "query_authorized_social_platforms_failed"
 	adminFailureReasonQueryBindingsFailed                  = "query_bindings_failed"
 	adminFailureReasonQueryConflictFailed                  = "query_conflict_failed"
+	adminFailureReasonIdentityProviderUnavailable          = "identity_provider_unavailable"
 	adminFailureReasonQueryIosUploadCodeFailed             = "query_ios_upload_code_failed"
 	adminFailureReasonQuerySocialPlatformFailed            = "query_social_platform_failed"
 	adminFailureReasonQuerySystemLogsFailed                = "query_system_logs_failed"

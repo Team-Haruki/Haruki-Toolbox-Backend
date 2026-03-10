@@ -159,7 +159,7 @@ func resolveManageableTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 
 	targetUser, err := apiHelper.DBManager.DB.User.Query().
 		Where(userSchema.IDEQ(targetUserID)).
-		Select(userSchema.FieldID, userSchema.FieldRole).
+		Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 		Only(c.Context())
 	if err != nil {
 		if postgresql.IsNotFound(err) {
