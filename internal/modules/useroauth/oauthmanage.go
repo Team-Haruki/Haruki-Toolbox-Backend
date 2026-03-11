@@ -31,8 +31,12 @@ func handleListOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
+		hydraSubject, err := oauth2Module.CurrentHydraSubject(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
 		if oauth2Module.HydraOAuthManagementEnabled() {
-			sessions, err := oauth2Module.ListHydraConsentSessions(ctx, userID)
+			sessions, err := oauth2Module.ListHydraConsentSessions(ctx, hydraSubject)
 			if err != nil {
 				harukiLogger.Errorf("Failed to query hydra oauth consent sessions: %v", err)
 				return harukiAPIHelper.ErrorInternal(c, "failed to query authorizations")
@@ -92,6 +96,10 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
+		hydraSubject, err := oauth2Module.CurrentHydraSubject(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
 		clientID := c.Params("client_id")
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
@@ -103,7 +111,7 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}()
 		if oauth2Module.HydraOAuthManagementEnabled() {
 			if strings.TrimSpace(clientID) != "" {
-				exists, err := oauth2Module.HydraConsentSessionExistsForClient(ctx, userID, clientID)
+				exists, err := oauth2Module.HydraConsentSessionExistsForClient(ctx, hydraSubject, clientID)
 				if err != nil {
 					harukiLogger.Errorf("Failed to query hydra oauth consent sessions before revoke: %v", err)
 					reason = "query_client_failed"
@@ -114,7 +122,7 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 					return harukiAPIHelper.ErrorNotFound(c, "client not found")
 				}
 			}
-			if err := oauth2Module.RevokeHydraConsentSessions(ctx, userID, clientID); err != nil {
+			if err := oauth2Module.RevokeHydraConsentSessions(ctx, hydraSubject, clientID); err != nil {
 				harukiLogger.Errorf("Failed to revoke hydra oauth consent sessions: %v", err)
 				reason = "revoke_authorization_failed"
 				return harukiAPIHelper.ErrorInternal(c, "failed to revoke authorization")

@@ -35,6 +35,11 @@ const (
 	sessionProviderKratos = "kratos"
 	sessionProviderAuto   = "auto"
 
+	defaultAuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
+	defaultAuthProxySubjectHeader = "X-Kratos-Identity-Id"
+	defaultAuthProxyEmailHeader   = "X-User-Email"
+	defaultAuthProxyUserIDHeader  = "X-User-Id"
+
 	defaultKratosSessionHeader = "X-Session-Token"
 	defaultKratosSessionCookie = "ory_kratos_session"
 	defaultKratosTimeout       = 10 * time.Second
@@ -82,6 +87,51 @@ func IsKratosIdentityConflictError(err error) bool {
 
 func IsKratosInvalidInputError(err error) bool {
 	return errors.Is(err, errKratosInvalidInput)
+}
+
+type kratosRequestMetadataKey struct{}
+
+type kratosRequestMetadata struct {
+	UserAgent string
+	ClientIP  string
+}
+
+func WithHTTPRequestMetadata(ctx context.Context, userAgent string, clientIP string) context.Context {
+	return context.WithValue(ctx, kratosRequestMetadataKey{}, kratosRequestMetadata{
+		UserAgent: strings.TrimSpace(userAgent),
+		ClientIP:  strings.TrimSpace(clientIP),
+	})
+}
+
+type kratosRequestMetadataTransport struct {
+	base http.RoundTripper
+}
+
+func (t *kratosRequestMetadataTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	clone := req.Clone(req.Context())
+	if metadata, ok := clone.Context().Value(kratosRequestMetadataKey{}).(kratosRequestMetadata); ok {
+		if metadata.UserAgent != "" && strings.TrimSpace(clone.Header.Get("User-Agent")) == "" {
+			clone.Header.Set("User-Agent", metadata.UserAgent)
+		}
+		if metadata.ClientIP != "" {
+			if strings.TrimSpace(clone.Header.Get("X-Forwarded-For")) == "" {
+				clone.Header.Set("X-Forwarded-For", metadata.ClientIP)
+			}
+			if strings.TrimSpace(clone.Header.Get("X-Real-IP")) == "" {
+				clone.Header.Set("X-Real-IP", metadata.ClientIP)
+			}
+		}
+	}
+	return base.RoundTrip(clone)
+}
+
+type resolvedKratosSession struct {
+	UserID     string
+	IdentityID string
 }
 
 type kratosSessionWhoamiResponse struct {
@@ -154,6 +204,10 @@ func NewSessionHandler(redisClient *redis.Client, sessionSignKey string) *Sessio
 		RedisClient:             redisClient,
 		SessionSignKey:          sessionSignKey,
 		SessionProvider:         sessionProviderLocal,
+		AuthProxyTrustedHeader:  defaultAuthProxyTrustedHeader,
+		AuthProxySubjectHeader:  defaultAuthProxySubjectHeader,
+		AuthProxyEmailHeader:    defaultAuthProxyEmailHeader,
+		AuthProxyUserIDHeader:   defaultAuthProxyUserIDHeader,
 		KratosSessionHeader:     defaultKratosSessionHeader,
 		KratosSessionCookie:     defaultKratosSessionCookie,
 		KratosAutoLinkByEmail:   true,
@@ -195,6 +249,38 @@ func (s *SessionHandler) ConfigureIdentityProvider(
 	s.KratosHTTPClient = nil
 }
 
+func (s *SessionHandler) ConfigureAuthProxy(
+	enabled bool,
+	trustedHeader string,
+	trustedValue string,
+	subjectHeader string,
+	emailHeader string,
+	userIDHeader string,
+) {
+	s.AuthProxyEnabled = enabled
+	s.AuthProxyTrustedHeader = strings.TrimSpace(trustedHeader)
+	if s.AuthProxyTrustedHeader == "" {
+		s.AuthProxyTrustedHeader = defaultAuthProxyTrustedHeader
+	}
+	s.AuthProxyTrustedValue = strings.TrimSpace(trustedValue)
+	s.AuthProxySubjectHeader = strings.TrimSpace(subjectHeader)
+	if s.AuthProxySubjectHeader == "" {
+		s.AuthProxySubjectHeader = defaultAuthProxySubjectHeader
+	}
+	s.AuthProxyEmailHeader = strings.TrimSpace(emailHeader)
+	if s.AuthProxyEmailHeader == "" {
+		s.AuthProxyEmailHeader = defaultAuthProxyEmailHeader
+	}
+	s.AuthProxyUserIDHeader = strings.TrimSpace(userIDHeader)
+	if s.AuthProxyUserIDHeader == "" {
+		s.AuthProxyUserIDHeader = defaultAuthProxyUserIDHeader
+	}
+}
+
+func (s *SessionHandler) UsesAuthProxy() bool {
+	return s != nil && s.AuthProxyEnabled && strings.TrimSpace(s.AuthProxyTrustedHeader) != "" && strings.TrimSpace(s.AuthProxyTrustedValue) != ""
+}
+
 func (s *SessionHandler) hasKratosProviderConfigured() bool {
 	return strings.TrimSpace(s.KratosPublicURL) != ""
 }
@@ -207,7 +293,12 @@ func (s *SessionHandler) kratosHTTPClient() *http.Client {
 	if timeout <= 0 {
 		timeout = defaultKratosTimeout
 	}
-	return &http.Client{Timeout: timeout}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &kratosRequestMetadataTransport{
+			base: http.DefaultTransport,
+		},
+	}
 }
 
 func (s *SessionHandler) UsesKratosProvider() bool {
@@ -215,8 +306,60 @@ func (s *SessionHandler) UsesKratosProvider() bool {
 	return (provider == sessionProviderKratos || provider == sessionProviderAuto) && s.hasKratosProviderConfigured()
 }
 
+func (s *SessionHandler) resolveUserIDByKratosIdentityID(ctx context.Context, identityID string) (string, error) {
+	if s.DBClient == nil {
+		return "", fmt.Errorf("%w: database client is nil", errUserStoreUnavailable)
+	}
+	identityID = strings.TrimSpace(identityID)
+	if identityID == "" {
+		return "", fmt.Errorf("%w: empty identity id", errKratosInvalidInput)
+	}
+	matchedUser, err := s.DBClient.User.Query().
+		Where(userSchema.KratosIdentityIDEQ(identityID)).
+		Select(userSchema.FieldID).
+		Only(ctx)
+	if err != nil {
+		if postgresql.IsNotFound(err) {
+			return "", fmt.Errorf("%w: identity is not linked", errKratosIdentityUnmapped)
+		}
+		return "", fmt.Errorf("%w: query kratos identity map: %v", errUserStoreUnavailable, err)
+	}
+	return strings.TrimSpace(matchedUser.ID), nil
+}
+
+func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx) (string, string, bool, error) {
+	if !s.UsesAuthProxy() {
+		return "", "", false, nil
+	}
+	if strings.TrimSpace(c.Get(s.AuthProxyTrustedHeader)) != strings.TrimSpace(s.AuthProxyTrustedValue) {
+		return "", "", false, nil
+	}
+
+	identityID := strings.TrimSpace(c.Get(s.AuthProxySubjectHeader))
+	email := platformIdentity.NormalizeEmail(c.Get(s.AuthProxyEmailHeader))
+	userID := strings.TrimSpace(c.Get(s.AuthProxyUserIDHeader))
+	if userID == "" {
+		if identityID == "" {
+			return "", "", true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
+		}
+		resolvedUserID, err := s.resolveKratosIdentity(ctx, identityID, email)
+		if err != nil {
+			return "", "", true, err
+		}
+		userID = resolvedUserID
+	}
+	if identityID == "" {
+		return "", "", true, nil
+	}
+	return userID, identityID, true, nil
+}
+
 func (s *SessionHandler) ResolveUserIDFromKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (string, error) {
-	return s.verifyKratosSession(ctx, sessionToken, cookieHeader)
+	resolved, err := s.resolveKratosSession(ctx, sessionToken, cookieHeader)
+	if err != nil {
+		return "", err
+	}
+	return resolved.UserID, nil
 }
 
 func (s *SessionHandler) LoginWithKratosPassword(ctx context.Context, identifier string, password string) (string, error) {
@@ -730,11 +873,8 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	bearerToken, hasBearerToken := platformAuthHeader.ExtractBearerToken(authHeader)
 	kratosHeaderToken := strings.TrimSpace(c.Get(s.KratosSessionHeader))
 	cookieHeader := strings.TrimSpace(c.Get("Cookie"))
-	if !hasBearerToken && kratosHeaderToken == "" && cookieHeader == "" {
-		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
-	}
 
-	applyResolvedUserID := func(userID string) error {
+	applyResolvedUserIdentity := func(userID string, identityID string) error {
 		userID = strings.TrimSpace(userID)
 		if userID == "" {
 			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
@@ -744,23 +884,38 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "user ID mismatch", nil)
 		}
 		c.Locals("userID", userID)
+		if trimmedIdentityID := strings.TrimSpace(identityID); trimmedIdentityID != "" {
+			c.Locals("identityID", trimmedIdentityID)
+		}
 		return c.Next()
+	}
+
+	requestCtx := WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
+	if proxyUserID, proxyIdentityID, handled, err := s.verifyAuthProxySession(requestCtx, c); handled {
+		if err != nil {
+			return respondSessionVerifyError(c, err)
+		}
+		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID)
+	}
+
+	if !hasBearerToken && kratosHeaderToken == "" && cookieHeader == "" {
+		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
 	}
 
 	provider := normalizeSessionProvider(s.SessionProvider)
 	switch provider {
 	case sessionProviderKratos:
 		kratosToken := firstNonEmpty(kratosHeaderToken, bearerToken)
-		userID, err := s.verifyKratosSession(c.Context(), kratosToken, cookieHeader)
+		resolved, err := s.resolveKratosSession(requestCtx, kratosToken, cookieHeader)
 		if err != nil {
 			return respondSessionVerifyError(c, err)
 		}
-		return applyResolvedUserID(userID)
+		return applyResolvedUserIdentity(resolved.UserID, resolved.IdentityID)
 	case sessionProviderAuto:
 		if hasBearerToken {
 			userID, err := s.verifyLocalSession(c.Context(), bearerToken)
 			if err == nil {
-				return applyResolvedUserID(userID)
+				return applyResolvedUserIdentity(userID, "")
 			}
 			if errors.Is(err, errSessionStoreUnavailable) {
 				return respondSessionVerifyError(c, err)
@@ -770,11 +925,11 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid token", nil)
 		}
 		kratosToken := firstNonEmpty(kratosHeaderToken, bearerToken)
-		userID, err := s.verifyKratosSession(c.Context(), kratosToken, cookieHeader)
+		resolved, err := s.resolveKratosSession(requestCtx, kratosToken, cookieHeader)
 		if err != nil {
 			return respondSessionVerifyError(c, err)
 		}
-		return applyResolvedUserID(userID)
+		return applyResolvedUserIdentity(resolved.UserID, resolved.IdentityID)
 	default:
 		if !hasBearerToken {
 			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
@@ -783,7 +938,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		if err != nil {
 			return respondSessionVerifyError(c, err)
 		}
-		return applyResolvedUserID(userID)
+		return applyResolvedUserIdentity(userID, "")
 	}
 }
 
@@ -843,29 +998,43 @@ func (s *SessionHandler) verifyLocalSession(ctx context.Context, tokenStr string
 }
 
 func (s *SessionHandler) verifyKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (string, error) {
+	resolved, err := s.resolveKratosSession(ctx, sessionToken, cookieHeader)
+	if err != nil {
+		return "", err
+	}
+	return resolved.UserID, nil
+}
+
+func (s *SessionHandler) resolveKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (*resolvedKratosSession, error) {
 	if !s.hasKratosProviderConfigured() {
-		return "", fmt.Errorf("%w: kratos public url is not configured", errIdentityProviderUnavailable)
+		return nil, fmt.Errorf("%w: kratos public url is not configured", errIdentityProviderUnavailable)
 	}
 	sessionToken = strings.TrimSpace(sessionToken)
 	cookieHeader = strings.TrimSpace(cookieHeader)
 	if sessionToken == "" && cookieHeader == "" {
-		return "", fmt.Errorf("%w: missing session token", errSessionUnauthorized)
+		return nil, fmt.Errorf("%w: missing session token", errSessionUnauthorized)
 	}
 
 	whoami, err := s.fetchKratosWhoami(ctx, sessionToken, cookieHeader)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if !whoami.Active {
-		return "", fmt.Errorf("%w: kratos session is not active", errSessionUnauthorized)
+		return nil, fmt.Errorf("%w: kratos session is not active", errSessionUnauthorized)
 	}
 	identityID := strings.TrimSpace(whoami.Identity.ID)
 	if identityID == "" {
-		return "", fmt.Errorf("%w: kratos identity id is empty", errSessionUnauthorized)
+		return nil, fmt.Errorf("%w: kratos identity id is empty", errSessionUnauthorized)
 	}
 	email := platformIdentity.NormalizeEmail(extractKratosIdentityEmail(whoami.Identity))
-
-	return s.resolveKratosIdentity(ctx, identityID, email)
+	userID, err := s.resolveKratosIdentity(ctx, identityID, email)
+	if err != nil {
+		return nil, err
+	}
+	return &resolvedKratosSession{
+		UserID:     userID,
+		IdentityID: identityID,
+	}, nil
 }
 
 func extractKratosIdentityEmail(identity kratosIdentityRecord) string {

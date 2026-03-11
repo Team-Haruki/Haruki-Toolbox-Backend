@@ -206,7 +206,7 @@ func handleHydraGetLoginRequest() fiber.Handler {
 
 func handleHydraAcceptLogin() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID, err := userCoreModule.CurrentUserID(c)
+		hydraSubject, err := CurrentHydraSubject(c)
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
@@ -224,7 +224,7 @@ func handleHydraAcceptLogin() fiber.Handler {
 		}
 
 		requestBody := map[string]any{
-			"subject":      userID,
+			"subject":      hydraSubject,
 			"remember":     payload.Remember,
 			"remember_for": payload.RememberFor,
 		}
@@ -295,6 +295,10 @@ func handleHydraAcceptConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
+		hydraSubject, err := CurrentHydraSubject(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
 
 		var payload hydraConsentAcceptPayload
 		if err := bindBodyIfPresent(c, &payload); err != nil {
@@ -305,7 +309,7 @@ func handleHydraAcceptConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorBadRequest(c, "consentChallenge is required")
 		}
 
-		redirect, err := acceptHydraConsent(c.Context(), apiHelper, userID, payload.ConsentChallenge, payload.GrantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
+		redirect, err := acceptHydraConsent(c.Context(), apiHelper, userID, hydraSubject, payload.ConsentChallenge, payload.GrantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
 		if err != nil {
 			return respondHydraError(c, err, "failed to accept consent request")
 		}
@@ -358,6 +362,10 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
+		hydraSubject, err := CurrentHydraSubject(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
 
 		var payload hydraLegacyConsentPayload
 		if err := bindBodyIfPresent(c, &payload); err != nil {
@@ -392,7 +400,7 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			grantScope = strings.Fields(payload.Scope)
 		}
 
-		redirect, acceptErr := acceptHydraConsent(c.Context(), apiHelper, userID, payload.ConsentChallenge, grantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
+		redirect, acceptErr := acceptHydraConsent(c.Context(), apiHelper, userID, hydraSubject, payload.ConsentChallenge, grantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
 		if acceptErr != nil {
 			return respondHydraError(c, acceptErr, "failed to accept consent request")
 		}
@@ -400,12 +408,12 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 	}
 }
 
-func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string, consentChallenge string, requestedGrantScope []string, requestedAudience []string, remember bool, rememberFor int64) (*hydraRedirectResponse, error) {
+func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string, hydraSubject string, consentChallenge string, requestedGrantScope []string, requestedAudience []string, remember bool, rememberFor int64) (*hydraRedirectResponse, error) {
 	consentReq, err := getHydraConsentRequest(ctx, consentChallenge)
 	if err != nil {
 		return nil, err
 	}
-	if consentReq.Subject != "" && consentReq.Subject != userID {
+	if subject := strings.TrimSpace(consentReq.Subject); subject != "" && subject != strings.TrimSpace(hydraSubject) && subject != strings.TrimSpace(userID) {
 		return nil, fiber.NewError(fiber.StatusForbidden, "consent request subject does not match current user")
 	}
 
@@ -485,18 +493,10 @@ func normalizeChallenge(bodyChallenge string, queryChallenge string) string {
 }
 
 func ensureHydraConsentSubjectMatchesCurrentUser(c fiber.Ctx, consentReq *hydraConsentRequestResponse) error {
-	userID, err := userCoreModule.CurrentUserID(c)
-	if err != nil {
-		return err
-	}
 	if consentReq == nil {
 		return fiber.NewError(fiber.StatusBadGateway, "invalid consent request")
 	}
-	subject := strings.TrimSpace(consentReq.Subject)
-	if subject != "" && subject != userID {
-		return fiber.NewError(fiber.StatusForbidden, "consent request subject does not match current user")
-	}
-	return nil
+	return CurrentHydraSubjectMatches(c, consentReq.Subject)
 }
 
 func bindBodyIfPresent(c fiber.Ctx, payload any) error {

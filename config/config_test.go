@@ -66,6 +66,18 @@ func TestLoad(t *testing.T) {
 		if cfg.UserSystem.KratosSessionCookie != "ory_kratos_session" {
 			t.Fatalf("UserSystem.KratosSessionCookie = %q, want %q", cfg.UserSystem.KratosSessionCookie, "ory_kratos_session")
 		}
+		if cfg.UserSystem.AuthProxyTrustedHeader != "X-Auth-Proxy-Secret" {
+			t.Fatalf("UserSystem.AuthProxyTrustedHeader = %q, want %q", cfg.UserSystem.AuthProxyTrustedHeader, "X-Auth-Proxy-Secret")
+		}
+		if cfg.UserSystem.AuthProxySubjectHeader != "X-Kratos-Identity-Id" {
+			t.Fatalf("UserSystem.AuthProxySubjectHeader = %q, want %q", cfg.UserSystem.AuthProxySubjectHeader, "X-Kratos-Identity-Id")
+		}
+		if cfg.UserSystem.AuthProxyEmailHeader != "X-User-Email" {
+			t.Fatalf("UserSystem.AuthProxyEmailHeader = %q, want %q", cfg.UserSystem.AuthProxyEmailHeader, "X-User-Email")
+		}
+		if cfg.UserSystem.AuthProxyUserIDHeader != "X-User-Id" {
+			t.Fatalf("UserSystem.AuthProxyUserIDHeader = %q, want %q", cfg.UserSystem.AuthProxyUserIDHeader, "X-User-Id")
+		}
 		if !cfg.UserSystem.KratosAutoLinkByEmail {
 			t.Fatalf("UserSystem.KratosAutoLinkByEmail = %v, want true", cfg.UserSystem.KratosAutoLinkByEmail)
 		}

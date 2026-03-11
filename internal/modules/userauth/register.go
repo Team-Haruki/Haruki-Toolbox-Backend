@@ -63,7 +63,7 @@ var registerRandInt = rand.Int
 
 func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		logRegister := func(result string, targetUserID string, reason string) {
 			targetType := registerAuditTargetTypeUser
 			var targetIDPtr *string
@@ -244,7 +244,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 }
 
 func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) (bool, error) {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
 	var attemptCount int
@@ -288,7 +288,7 @@ func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 }
 
 func checkEmailAvailability(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	normalizedEmail := platformIdentity.NormalizeEmail(email)
 	userExists, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.EmailEqualFold(normalizedEmail)).Exist(ctx)
 	if err != nil {
@@ -352,7 +352,7 @@ func handleRegisterViaKratos(
 	req harukiAPIHelper.RegisterPayload,
 	logRegister func(result string, targetUserID string, reason string),
 ) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	traits := map[string]any{}
 	if name := strings.TrimSpace(req.Name); name != "" {
 		traits["name"] = name
