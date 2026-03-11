@@ -90,7 +90,7 @@ func respondEmailSendRateLimited(c fiber.Ctx, key string, message string, helper
 }
 
 func checkSendEmailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) (limited bool, key string, message string, err error) {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildEmailVerifySendRateLimitIPKey(clientIP)
 	targetKey := harukiRedis.BuildEmailVerifySendRateLimitTargetKey(email)
@@ -123,7 +123,7 @@ func checkSendEmailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxR
 }
 
 func releaseSendEmailRateLimitReservation(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildEmailVerifySendRateLimitIPKey(clientIP)
 	targetKey := harukiRedis.BuildEmailVerifySendRateLimitTargetKey(email)
@@ -151,7 +151,7 @@ func validateAndReserveEmailSend(c fiber.Ctx, email, challengeToken string, help
 }
 
 func sendVerificationCode(c fiber.Ctx, email string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	code, err := GenerateCode(false)
 	if err != nil {
 		harukiLogger.Errorf("Failed to generate code: %v", err)
@@ -192,7 +192,7 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 }
 
 func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	if email == "" {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "email is required")
@@ -254,7 +254,7 @@ func resolveVerifyEmailFinalizeOutcome(localMirrorFailed, sessionClearFailed boo
 
 func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		var req harukiAPIHelper.SendEmailPayload
 		if err := c.Bind().Body(&req); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
@@ -290,7 +290,7 @@ func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 
 func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")

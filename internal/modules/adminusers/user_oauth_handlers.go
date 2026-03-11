@@ -32,7 +32,7 @@ func handleListUserOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxR
 
 		targetUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
-			Select(userSchema.FieldID, userSchema.FieldRole).
+			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 			Only(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -57,13 +57,14 @@ func handleListUserOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxR
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid include_revoked filter")
 		}
 		if oauth2Module.HydraOAuthManagementEnabled() {
+			hydraSubject := oauth2Module.PreferredHydraSubject(targetUser.ID, targetUser.KratosIdentityID)
 			if includeRevoked {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidIncludeRevoked, map[string]any{
 					"hydraMode": true,
 				}))
 				return harukiAPIHelper.ErrorBadRequest(c, "include_revoked is not supported in hydra mode")
 			}
-			sessions, err := oauth2Module.ListHydraConsentSessions(c.Context(), targetUser.ID)
+			sessions, err := oauth2Module.ListHydraConsentSessions(c.Context(), hydraSubject)
 			if err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{
 					"hydraMode": true,
@@ -189,7 +190,7 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 
 		targetUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
-			Select(userSchema.FieldID, userSchema.FieldRole).
+			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 			Only(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -214,8 +215,9 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
 		if oauth2Module.HydraOAuthManagementEnabled() {
+			hydraSubject := oauth2Module.PreferredHydraSubject(targetUser.ID, targetUser.KratosIdentityID)
 			if strings.TrimSpace(clientID) != "" {
-				exists, checkErr := oauth2Module.HydraConsentSessionExistsForClient(c.Context(), targetUser.ID, clientID)
+				exists, checkErr := oauth2Module.HydraConsentSessionExistsForClient(c.Context(), hydraSubject, clientID)
 				if checkErr != nil {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{
 						"hydraMode": true,
@@ -232,7 +234,7 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			}
 			revokedAuthorizations := 0
 			revokedAuthorizationsExact := false
-			if sessions, listErr := oauth2Module.ListHydraConsentSessions(c.Context(), targetUser.ID); listErr == nil {
+			if sessions, listErr := oauth2Module.ListHydraConsentSessions(c.Context(), hydraSubject); listErr == nil {
 				revokedAuthorizationsExact = true
 				for _, session := range sessions {
 					if clientID == "" || session.ConsentRequest.Client.ClientID == clientID {
@@ -240,7 +242,7 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 					}
 				}
 			}
-			if err := oauth2Module.RevokeHydraConsentSessions(c.Context(), targetUser.ID, clientID); err != nil {
+			if err := oauth2Module.RevokeHydraConsentSessions(c.Context(), hydraSubject, clientID); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{
 					"hydraMode": true,
 				}))

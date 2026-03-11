@@ -70,6 +70,12 @@ type UserSystemConfig struct {
 	SMTP                      SMTPConfig `yaml:"smtp"`
 	SessionSignToken          string     `yaml:"session_sign_token"`
 	AuthProvider              string     `yaml:"auth_provider"`
+	AuthProxyEnabled          bool       `yaml:"auth_proxy_enabled"`
+	AuthProxyTrustedHeader    string     `yaml:"auth_proxy_trusted_header"`
+	AuthProxyTrustedValue     string     `yaml:"auth_proxy_trusted_value"`
+	AuthProxySubjectHeader    string     `yaml:"auth_proxy_subject_header"`
+	AuthProxyEmailHeader      string     `yaml:"auth_proxy_email_header"`
+	AuthProxyUserIDHeader     string     `yaml:"auth_proxy_user_id_header"`
 	KratosPublicURL           string     `yaml:"kratos_public_url"`
 	KratosAdminURL            string     `yaml:"kratos_admin_url"`
 	KratosRequestTimeout      int        `yaml:"kratos_request_timeout_seconds"`
@@ -238,6 +244,10 @@ func Load(configPath string) (Config, error) {
 		},
 		UserSystem: UserSystemConfig{
 			AuthProvider:            "local",
+			AuthProxyTrustedHeader:  "X-Auth-Proxy-Secret",
+			AuthProxySubjectHeader:  "X-Kratos-Identity-Id",
+			AuthProxyEmailHeader:    "X-User-Email",
+			AuthProxyUserIDHeader:   "X-User-Id",
 			KratosRequestTimeout:    10,
 			KratosSessionHeader:     "X-Session-Token",
 			KratosSessionCookie:     "ory_kratos_session",
@@ -269,6 +279,18 @@ func Load(configPath string) (Config, error) {
 	}
 	if cfg.UserSystem.KratosRequestTimeout <= 0 {
 		cfg.UserSystem.KratosRequestTimeout = 10
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedHeader) == "" {
+		cfg.UserSystem.AuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
+		cfg.UserSystem.AuthProxySubjectHeader = "X-Kratos-Identity-Id"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyEmailHeader) == "" {
+		cfg.UserSystem.AuthProxyEmailHeader = "X-User-Email"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyUserIDHeader) == "" {
+		cfg.UserSystem.AuthProxyUserIDHeader = "X-User-Id"
 	}
 	if strings.TrimSpace(cfg.UserSystem.KratosSessionHeader) == "" {
 		cfg.UserSystem.KratosSessionHeader = "X-Session-Token"

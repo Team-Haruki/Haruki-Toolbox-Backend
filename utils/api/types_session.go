@@ -28,6 +28,13 @@ type SessionHandler struct {
 	SessionSignKey  string
 	SessionProvider string
 
+	AuthProxyEnabled       bool
+	AuthProxyTrustedHeader string
+	AuthProxyTrustedValue  string
+	AuthProxySubjectHeader string
+	AuthProxyEmailHeader   string
+	AuthProxyUserIDHeader  string
+
 	KratosPublicURL         string
 	KratosAdminURL          string
 	KratosSessionHeader     string

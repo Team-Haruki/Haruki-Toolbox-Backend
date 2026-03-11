@@ -168,6 +168,17 @@ func validateUserSystemConfig(cfg harukiConfig.Config) error {
 	if provider != "kratos" && strings.TrimSpace(cfg.UserSystem.SessionSignToken) == "" {
 		return fmt.Errorf("user_system.session_sign_token is required when auth_provider=%s", provider)
 	}
+	if cfg.UserSystem.AuthProxyEnabled {
+		if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedHeader) == "" {
+			return fmt.Errorf("user_system.auth_proxy_trusted_header is required when auth_proxy_enabled=true")
+		}
+		if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedValue) == "" {
+			return fmt.Errorf("user_system.auth_proxy_trusted_value is required when auth_proxy_enabled=true")
+		}
+		if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
+			return fmt.Errorf("user_system.auth_proxy_subject_header is required when auth_proxy_enabled=true")
+		}
+	}
 	return nil
 }
 
@@ -294,6 +305,14 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.KratosAutoProvisionUser,
 		time.Duration(cfg.UserSystem.KratosRequestTimeout)*time.Second,
 		entClient,
+	)
+	sessionHandler.ConfigureAuthProxy(
+		cfg.UserSystem.AuthProxyEnabled,
+		cfg.UserSystem.AuthProxyTrustedHeader,
+		cfg.UserSystem.AuthProxyTrustedValue,
+		cfg.UserSystem.AuthProxySubjectHeader,
+		cfg.UserSystem.AuthProxyEmailHeader,
+		cfg.UserSystem.AuthProxyUserIDHeader,
 	)
 	if strings.EqualFold(strings.TrimSpace(cfg.UserSystem.AuthProvider), "kratos") {
 		if strings.TrimSpace(cfg.UserSystem.KratosPublicURL) == "" {

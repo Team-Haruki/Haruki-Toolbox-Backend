@@ -319,7 +319,7 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		kratosManaged := apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() && kratosIdentityID != ""
 		if kratosManaged {
-			if err := apiHelper.SessionHandler.UpdateKratosPasswordByIdentityID(c.Context(), kratosIdentityID, password); err != nil {
+			if err := apiHelper.SessionHandler.UpdateKratosPasswordByIdentityID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), kratosIdentityID, password); err != nil {
 				switch {
 				case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{
@@ -395,7 +395,7 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			clearedSessions := true
 			resp.ClearedSessions = &clearedSessions
 			if kratosManaged {
-				if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(c.Context(), kratosIdentityID); err != nil {
+				if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), kratosIdentityID); err != nil {
 					clearedSessions = false
 					resp.ClearedSessions = &clearedSessions
 					sessionClearFailed = true

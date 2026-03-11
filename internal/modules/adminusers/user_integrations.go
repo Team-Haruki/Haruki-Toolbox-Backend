@@ -51,9 +51,10 @@ func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.Ha
 	return sessionClearFailed
 }
 
-func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string) (oauthRevokeFailed bool) {
+func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (oauthRevokeFailed bool) {
 	if oauth2Module.HydraOAuthManagementEnabled() {
-		if err := oauth2Module.RevokeHydraConsentSessions(ctx, targetUserID, ""); err != nil {
+		subject := oauth2Module.PreferredHydraSubject(targetUserID, kratosIdentityID)
+		if err := oauth2Module.RevokeHydraConsentSessions(ctx, subject, ""); err != nil {
 			oauthRevokeFailed = true
 		}
 		return oauthRevokeFailed
@@ -72,7 +73,7 @@ func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelpe
 
 func cleanupManagedUserAccessAfterBan(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool, oauthRevokeFailed bool) {
 	sessionClearFailed = clearManagedUserSessions(ctx, apiHelper, targetUserID, kratosIdentityID)
-	oauthRevokeFailed = revokeManagedUserOAuthTokens(ctx, apiHelper, targetUserID)
+	oauthRevokeFailed = revokeManagedUserOAuthTokens(ctx, apiHelper, targetUserID, kratosIdentityID)
 	return sessionClearFailed, oauthRevokeFailed
 }
 
@@ -170,7 +171,7 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		localMirrorFailReason := ""
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() &&
 			targetUser.KratosIdentityID != nil && strings.TrimSpace(*targetUser.KratosIdentityID) != "" {
-			if err := apiHelper.SessionHandler.UpdateKratosEmailByIdentityID(c.Context(), strings.TrimSpace(*targetUser.KratosIdentityID), payload.Email); err != nil {
+			if err := apiHelper.SessionHandler.UpdateKratosEmailByIdentityID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), strings.TrimSpace(*targetUser.KratosIdentityID), payload.Email); err != nil {
 				switch {
 				case harukiAPIHelper.IsKratosIdentityConflictError(err):
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, map[string]any{

@@ -15,7 +15,7 @@ import (
 
 func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		logLogin := func(result string, targetUserID string, actorRole string, reason string) {
 			targetType := "user"
 			var targetIDPtr *string
@@ -147,7 +147,7 @@ func handleLoginViaKratos(
 	payload harukiAPIHelper.LoginPayload,
 	logLogin func(result string, targetUserID string, actorRole string, reason string),
 ) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 
 	sessionToken, err := apiHelper.SessionHandler.LoginWithKratosPassword(ctx, payload.Email, payload.Password)
 	if err != nil {

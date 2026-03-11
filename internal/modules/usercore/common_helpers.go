@@ -18,6 +18,15 @@ func CurrentUserID(c fiber.Ctx) (string, error) {
 	return userID, nil
 }
 
+func CurrentKratosIdentityID(c fiber.Ctx) (string, error) {
+	identityID, ok := c.Locals("identityID").(string)
+	identityID = strings.TrimSpace(identityID)
+	if !ok || identityID == "" {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "kratos identity not authenticated")
+	}
+	return identityID, nil
+}
+
 func CheckUserNotBanned(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := CurrentUserID(c)

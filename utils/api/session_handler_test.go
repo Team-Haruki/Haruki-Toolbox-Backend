@@ -220,3 +220,38 @@ func TestClearUserSessionsWithNilRedisClient(t *testing.T) {
 		t.Fatalf("expected nil redis client to fail")
 	}
 }
+
+func TestVerifySessionTokenUsesTrustedAuthProxyHeaders(t *testing.T) {
+	handler := NewSessionHandler(nil, "")
+	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Email", "X-User-Id")
+
+	app := fiber.New()
+	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"userID":     c.Locals("userID"),
+			"identityID": c.Locals("identityID"),
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/u-proxy/profile", nil)
+	req.Header.Set("X-Auth-Proxy-Secret", "proxy-secret")
+	req.Header.Set("X-User-Id", "u-proxy")
+	req.Header.Set("X-Kratos-Identity-Id", "kratos-proxy-1")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	var payload map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if payload["userID"] != "u-proxy" {
+		t.Fatalf("userID = %q, want %q", payload["userID"], "u-proxy")
+	}
+	if payload["identityID"] != "kratos-proxy-1" {
+		t.Fatalf("identityID = %q, want %q", payload["identityID"], "kratos-proxy-1")
+	}
+}

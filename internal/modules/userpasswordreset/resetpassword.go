@@ -95,7 +95,7 @@ func respondResetPasswordRateLimitedWithWindow(
 }
 
 func checkResetPasswordSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) (limited bool, key string, message string, err error) {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildResetPasswordSendRateLimitIPKey(clientIP)
 	targetKey := harukiRedis.BuildResetPasswordSendRateLimitTargetKey(email)
@@ -128,7 +128,7 @@ func checkResetPasswordSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.Har
 }
 
 func releaseResetPasswordSendRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildResetPasswordSendRateLimitIPKey(clientIP)
 	targetKey := harukiRedis.BuildResetPasswordSendRateLimitTargetKey(email)
@@ -137,7 +137,7 @@ func releaseResetPasswordSendRateLimitReservation(c fiber.Ctx, apiHelper *haruki
 }
 
 func checkResetPasswordApplyRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, target string) (limited bool, key string, message string, err error) {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	target = strings.TrimSpace(target)
 	if normalizedEmail := platformIdentity.NormalizeEmail(target); normalizedEmail != "" && strings.Contains(normalizedEmail, "@") {
 		target = normalizedEmail
@@ -177,7 +177,7 @@ func checkResetPasswordApplyRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.Ha
 
 func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
 		defer func() {
@@ -296,7 +296,7 @@ func handleSendResetPasswordViaKratos(
 
 func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		targetUserID := ""
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
@@ -430,7 +430,7 @@ func handleResetPasswordViaKratos(
 		*reason = "invalid_reset_secret"
 		return harukiAPIHelper.ErrorBadRequest(c, "Reset code expired or invalid")
 	}
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	userID, identityID, err := apiHelper.SessionHandler.ResetKratosPasswordByRecoveryCode(ctx, recoveryCode, payload.Password)
 	if err != nil {
 		switch {

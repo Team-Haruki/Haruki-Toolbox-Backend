@@ -110,7 +110,7 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Name must be 1-50 characters", nil)
 		}
 
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		currentUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(userID)).
 			Select(userSchema.FieldID, userSchema.FieldAvatarPath).
@@ -244,7 +244,7 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			reason = "invalid_payload"
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
-		ctx := c.Context()
+		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		u, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.IDEQ(userID)).Only(ctx)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -308,7 +308,7 @@ func handleChangePasswordViaKratos(
 	sessionClearFailed *bool,
 	localMirrorFailed *bool,
 ) error {
-	ctx := c.Context()
+	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	if user == nil {
 		*reason = "invalid_user"
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)

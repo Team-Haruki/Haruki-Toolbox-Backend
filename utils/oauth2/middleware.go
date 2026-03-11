@@ -37,9 +37,11 @@ type hydraIntrospectionError struct {
 }
 
 type oauth2BearerAuthResult struct {
-	Subject  string
-	ClientID string
-	Scopes   []string
+	Subject    string
+	UserID     string
+	IdentityID string
+	ClientID   string
+	Scopes     []string
 }
 
 type oauth2BearerAuthFailure struct {
@@ -125,7 +127,10 @@ func applyOAuth2BearerAuthLocals(c fiber.Ctx, result *oauth2BearerAuthResult) {
 	if result == nil {
 		return
 	}
-	c.Locals("userID", result.Subject)
+	c.Locals("userID", strings.TrimSpace(result.UserID))
+	if identityID := strings.TrimSpace(result.IdentityID); identityID != "" {
+		c.Locals("identityID", identityID)
+	}
 	c.Locals("oauth2ClientID", result.ClientID)
 	c.Locals("oauth2Scopes", result.Scopes)
 }
@@ -161,7 +166,8 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token not active yet"}
 	}
 
-	if subjectErr := ensureOAuth2BearerSubjectActive(c.Context(), db, subject); subjectErr != nil {
+	resolvedUserID, resolvedIdentityID, subjectErr := resolveOAuth2BearerSubject(c.Context(), db, subject)
+	if subjectErr != nil {
 		if fErr, ok := subjectErr.(*fiber.Error); ok {
 			if fErr.Code == fiber.StatusUnauthorized {
 				return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: fErr.Message}
@@ -177,31 +183,61 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 	}
 
 	return &oauth2BearerAuthResult{
-		Subject:  subject,
-		ClientID: introspection.ClientID,
-		Scopes:   scopes,
+		Subject:    subject,
+		UserID:     resolvedUserID,
+		IdentityID: resolvedIdentityID,
+		ClientID:   introspection.ClientID,
+		Scopes:     scopes,
 	}, nil
 }
 
-func ensureOAuth2BearerSubjectActive(ctx context.Context, db *postgresql.Client, subject string) error {
-	if db == nil {
-		return nil
+func resolveOAuth2BearerSubject(ctx context.Context, db *postgresql.Client, subject string) (string, string, error) {
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return "", "", fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
 	}
+	if db == nil {
+		return subject, subject, nil
+	}
+
 	dbUser, err := db.User.Query().
-		Where(userSchema.IDEQ(strings.TrimSpace(subject))).
-		Select(userSchema.FieldBanned).
+		Where(userSchema.KratosIdentityIDEQ(subject)).
+		Select(userSchema.FieldID, userSchema.FieldBanned, userSchema.FieldKratosIdentityID).
+		Only(ctx)
+	if err == nil {
+		if dbUser.Banned {
+			return "", "", fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
+		}
+		identityID := subject
+		if dbUser.KratosIdentityID != nil && strings.TrimSpace(*dbUser.KratosIdentityID) != "" {
+			identityID = strings.TrimSpace(*dbUser.KratosIdentityID)
+		}
+		return strings.TrimSpace(dbUser.ID), identityID, nil
+	}
+	if err != nil && !postgresql.IsNotFound(err) {
+		harukiLogger.Errorf("OAuth2 subject validation failed by kratos identity id: %v", err)
+		return "", "", fiber.NewError(fiber.StatusServiceUnavailable, "oauth2 subject validation unavailable")
+	}
+
+	dbUser, err = db.User.Query().
+		Where(userSchema.IDEQ(subject)).
+		Select(userSchema.FieldID, userSchema.FieldBanned, userSchema.FieldKratosIdentityID).
 		Only(ctx)
 	if err != nil {
 		if postgresql.IsNotFound(err) {
-			return fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
+			return "", "", fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
 		}
-		harukiLogger.Errorf("OAuth2 subject validation failed: %v", err)
-		return fiber.NewError(fiber.StatusServiceUnavailable, "oauth2 subject validation unavailable")
+		harukiLogger.Errorf("OAuth2 subject validation failed by local user id: %v", err)
+		return "", "", fiber.NewError(fiber.StatusServiceUnavailable, "oauth2 subject validation unavailable")
 	}
 	if dbUser.Banned {
-		return fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
+		return "", "", fiber.NewError(fiber.StatusUnauthorized, "token subject is invalid")
 	}
-	return nil
+	identityID := subject
+	if dbUser.KratosIdentityID != nil && strings.TrimSpace(*dbUser.KratosIdentityID) != "" {
+		identityID = strings.TrimSpace(*dbUser.KratosIdentityID)
+	}
+	return strings.TrimSpace(dbUser.ID), identityID, nil
 }
 
 func parseHydraScopeList(scopeRaw string) []string {

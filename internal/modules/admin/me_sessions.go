@@ -255,7 +255,7 @@ func resolveCurrentAdminSessionMarker(c fiber.Ctx, apiHelper *harukiAPIHelper.Ha
 		return "", fiber.NewError(fiber.StatusUnauthorized, "missing token")
 	}
 
-	sessionID, err := resolveCurrentKratosSessionID(c.Context(), apiHelper, bearerToken, kratosHeaderToken, cookieHeader)
+	sessionID, err := resolveCurrentKratosSessionID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), apiHelper, bearerToken, kratosHeaderToken, cookieHeader)
 	if err != nil {
 		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
 			return "", fiber.NewError(fiber.StatusInternalServerError, "identity provider unavailable")
@@ -367,7 +367,7 @@ func handleListAdminSessions(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		items := make([]adminSessionItem, 0, 8)
 		listedWithKratos := false
 		if useKratosSessions {
-			identityID, identityErr := resolveAdminKratosIdentityID(c.Context(), apiHelper, userID)
+			identityID, identityErr := resolveAdminKratosIdentityID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), apiHelper, userID)
 			if identityErr != nil {
 				reason := adminFailureReasonQueryUserFailed
 				if postgresql.IsNotFound(identityErr) {
@@ -383,10 +383,10 @@ func handleListAdminSessions(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			}
 			if identityID != "" {
 				currentKratosSessionID := ""
-				if sessionID, sessionErr := resolveCurrentKratosSessionID(c.Context(), apiHelper, bearerToken, kratosHeaderToken, cookieHeader); sessionErr == nil {
+				if sessionID, sessionErr := resolveCurrentKratosSessionID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), apiHelper, bearerToken, kratosHeaderToken, cookieHeader); sessionErr == nil {
 					currentKratosSessionID = sessionID
 				}
-				items, err = listUserKratosSessionItems(c.Context(), apiHelper, identityID, currentKratosSessionID)
+				items, err = listUserKratosSessionItems(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), apiHelper, identityID, currentKratosSessionID)
 				if err != nil {
 					reason := adminFailureReasonListSessionsFailed
 					if harukiAPIHelper.IsKratosIdentityUnmappedError(err) {
@@ -456,7 +456,7 @@ func handleDeleteAdminSession(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 
 		affected := int64(0)
 		if useKratosSessions {
-			if err := apiHelper.SessionHandler.RevokeKratosSessionByID(c.Context(), sessionTokenID); err != nil {
+			if err := apiHelper.SessionHandler.RevokeKratosSessionByID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), sessionTokenID); err != nil {
 				if statusCode, message, known := mapKratosSessionDeleteError(err); known {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeSessionsDelete, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteSessionFailed, map[string]any{
 						"provider":   "kratos",
@@ -548,7 +548,7 @@ func handleAdminReauth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 				return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
 			}
 
-			err := apiHelper.SessionHandler.VerifyKratosPasswordByIdentityID(c.Context(), strings.TrimSpace(*dbUser.KratosIdentityID), payload.Password)
+			err := apiHelper.SessionHandler.VerifyKratosPasswordByIdentityID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), strings.TrimSpace(*dbUser.KratosIdentityID), payload.Password)
 			if err != nil {
 				if harukiAPIHelper.IsKratosInvalidCredentialsError(err) || harukiAPIHelper.IsKratosInvalidInputError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeReauth, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPasswordMismatch, nil))
