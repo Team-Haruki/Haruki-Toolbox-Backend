@@ -1,29 +1,9 @@
 package api
 
 import (
-	"haruki-suite/entsrc/schema"
+	"haruki-suite/ent/schema"
 	"haruki-suite/utils"
-
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/redis/go-redis/v9"
 )
-
-type SessionClaims struct {
-	UserID       string `json:"userId"`
-	SessionToken string `json:"sessionToken"`
-	jwt.RegisteredClaims
-}
-
-type SessionHandler struct {
-	RedisClient    *redis.Client
-	SessionSignKey string
-}
-
-type GenericResponse[T any] struct {
-	Status      int    `json:"status"`
-	Message     string `json:"message"`
-	UpdatedData *T     `json:"updatedData,omitempty"`
-}
 
 type HarukiToolboxGameAccountPrivacySettings struct {
 	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
@@ -126,6 +106,7 @@ type RegisterOrLoginSuccessResponse struct {
 type HarukiToolboxUserData struct {
 	Name                        *string                        `json:"name,omitempty"`
 	UserID                      *string                        `json:"userId,omitempty"`
+	Role                        *string                        `json:"role,omitempty"`
 	AvatarPath                  *string                        `json:"avatarPath,omitempty"`
 	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitempty"`
 	IOSUploadCode               *string                        `json:"iosUploadCode,omitempty"`

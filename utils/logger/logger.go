@@ -41,10 +41,11 @@ var levelMap = map[string]logLevel{
 }
 
 type Logger struct {
-	name   string
-	level  logLevel
-	mu     sync.Mutex
-	writer io.Writer
+	name    string
+	level   logLevel
+	mu      sync.Mutex
+	writer  io.Writer
+	colored bool
 }
 
 var DefaultLogger *Logger
@@ -66,10 +67,29 @@ func NewLogger(name string, level string, writer io.Writer) *Logger {
 		lvl = INFO
 	}
 	return &Logger{
-		name:   name,
-		level:  lvl,
-		writer: writer,
+		name:    name,
+		level:   lvl,
+		writer:  writer,
+		colored: writerSupportsColor(writer),
 	}
+}
+
+func writerSupportsColor(writer io.Writer) bool {
+	if writer == nil {
+		return false
+	}
+	if os.Getenv("NO_COLOR") != "" || strings.EqualFold(strings.TrimSpace(os.Getenv("TERM")), "dumb") {
+		return false
+	}
+	file, ok := writer.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func (l *Logger) logf(level logLevel, format string, args ...any) {
@@ -77,14 +97,21 @@ func (l *Logger) logf(level logLevel, format string, args ...any) {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
-
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	ts := fmt.Sprintf("%s[%s]%s", colorGreen, now, colorReset)
 
-	lvlColor := levelColors[level]
-	lvlStr := fmt.Sprintf("%s%s%s", lvlColor, levelNames[level], colorReset)
-
-	name := fmt.Sprintf("[%s%s%s]", colorMagenta, l.name, colorReset)
+	var ts string
+	var lvlStr string
+	var name string
+	if l.colored {
+		ts = fmt.Sprintf("%s[%s]%s", colorGreen, now, colorReset)
+		lvlColor := levelColors[level]
+		lvlStr = fmt.Sprintf("%s%s%s", lvlColor, levelNames[level], colorReset)
+		name = fmt.Sprintf("[%s%s%s]", colorMagenta, l.name, colorReset)
+	} else {
+		ts = fmt.Sprintf("[%s]", now)
+		lvlStr = levelNames[level]
+		name = fmt.Sprintf("[%s]", l.name)
+	}
 
 	line := fmt.Sprintf("%s[%s]%s %s\n", ts, lvlStr, name, msg)
 

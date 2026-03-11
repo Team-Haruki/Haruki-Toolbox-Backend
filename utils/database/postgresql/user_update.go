@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
@@ -15,6 +14,7 @@ import (
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -59,6 +59,26 @@ func (_u *UserUpdate) SetNillableEmail(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetEmail(*v)
 	}
+	return _u
+}
+
+// SetEmailVerified sets the "email_verified" field.
+func (_u *UserUpdate) SetEmailVerified(v bool) *UserUpdate {
+	_u.mutation.SetEmailVerified(v)
+	return _u
+}
+
+// SetNillableEmailVerified sets the "email_verified" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableEmailVerified(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetEmailVerified(*v)
+	}
+	return _u
+}
+
+// ClearEmailVerified clears the value of the "email_verified" field.
+func (_u *UserUpdate) ClearEmailVerified() *UserUpdate {
+	_u.mutation.ClearEmailVerified()
 	return _u
 }
 
@@ -110,6 +130,20 @@ func (_u *UserUpdate) SetNillableAllowCnMysekai(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetRole sets the "role" field.
+func (_u *UserUpdate) SetRole(v user.Role) *UserUpdate {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRole(v *user.Role) *UserUpdate {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
 // SetBanned sets the "banned" field.
 func (_u *UserUpdate) SetBanned(v bool) *UserUpdate {
 	_u.mutation.SetBanned(v)
@@ -144,23 +178,44 @@ func (_u *UserUpdate) ClearBanReason() *UserUpdate {
 	return _u
 }
 
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_u *UserUpdate) SetEmailInfoID(id int) *UserUpdate {
-	_u.mutation.SetEmailInfoID(id)
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_u *UserUpdate) SetKratosIdentityID(v string) *UserUpdate {
+	_u.mutation.SetKratosIdentityID(v)
 	return _u
 }
 
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_u *UserUpdate) SetNillableEmailInfoID(id *int) *UserUpdate {
-	if id != nil {
-		_u = _u.SetEmailInfoID(*id)
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableKratosIdentityID(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetKratosIdentityID(*v)
 	}
 	return _u
 }
 
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdate) SetEmailInfo(v *EmailInfo) *UserUpdate {
-	return _u.SetEmailInfoID(v.ID)
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (_u *UserUpdate) ClearKratosIdentityID() *UserUpdate {
+	_u.mutation.ClearKratosIdentityID()
+	return _u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *UserUpdate) SetCreatedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableCreatedAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
+}
+
+// ClearCreatedAt clears the value of the "created_at" field.
+func (_u *UserUpdate) ClearCreatedAt() *UserUpdate {
+	_u.mutation.ClearCreatedAt()
+	return _u
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -264,12 +319,6 @@ func (_u *UserUpdate) AddOauthTokens(v ...*OAuthToken) *UserUpdate {
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
-}
-
-// ClearEmailInfo clears the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdate) ClearEmailInfo() *UserUpdate {
-	_u.mutation.ClearEmailInfo()
-	return _u
 }
 
 // ClearSocialPlatformInfo clears the "social_platform_info" edge to the SocialPlatformInfo entity.
@@ -395,7 +444,20 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *UserUpdate) check() error {
+	if v, ok := _u.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -410,6 +472,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.EmailVerified(); ok {
+		_spec.SetField(user.FieldEmailVerified, field.TypeBool, value)
+	}
+	if _u.mutation.EmailVerifiedCleared() {
+		_spec.ClearField(user.FieldEmailVerified, field.TypeBool)
+	}
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 	}
@@ -422,6 +490,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+	}
 	if value, ok := _u.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
 	}
@@ -431,34 +502,17 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
 	}
-	if _u.mutation.EmailInfoCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := _u.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
 	}
-	if nodes := _u.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if _u.mutation.KratosIdentityIDCleared() {
+		_spec.ClearField(user.FieldKratosIdentityID, field.TypeString)
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CreatedAtCleared() {
+		_spec.ClearField(user.FieldCreatedAt, field.TypeTime)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -746,6 +800,26 @@ func (_u *UserUpdateOne) SetNillableEmail(v *string) *UserUpdateOne {
 	return _u
 }
 
+// SetEmailVerified sets the "email_verified" field.
+func (_u *UserUpdateOne) SetEmailVerified(v bool) *UserUpdateOne {
+	_u.mutation.SetEmailVerified(v)
+	return _u
+}
+
+// SetNillableEmailVerified sets the "email_verified" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableEmailVerified(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetEmailVerified(*v)
+	}
+	return _u
+}
+
+// ClearEmailVerified clears the value of the "email_verified" field.
+func (_u *UserUpdateOne) ClearEmailVerified() *UserUpdateOne {
+	_u.mutation.ClearEmailVerified()
+	return _u
+}
+
 // SetPasswordHash sets the "password_hash" field.
 func (_u *UserUpdateOne) SetPasswordHash(v string) *UserUpdateOne {
 	_u.mutation.SetPasswordHash(v)
@@ -794,6 +868,20 @@ func (_u *UserUpdateOne) SetNillableAllowCnMysekai(v *bool) *UserUpdateOne {
 	return _u
 }
 
+// SetRole sets the "role" field.
+func (_u *UserUpdateOne) SetRole(v user.Role) *UserUpdateOne {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRole(v *user.Role) *UserUpdateOne {
+	if v != nil {
+		_u.SetRole(*v)
+	}
+	return _u
+}
+
 // SetBanned sets the "banned" field.
 func (_u *UserUpdateOne) SetBanned(v bool) *UserUpdateOne {
 	_u.mutation.SetBanned(v)
@@ -828,23 +916,44 @@ func (_u *UserUpdateOne) ClearBanReason() *UserUpdateOne {
 	return _u
 }
 
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_u *UserUpdateOne) SetEmailInfoID(id int) *UserUpdateOne {
-	_u.mutation.SetEmailInfoID(id)
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_u *UserUpdateOne) SetKratosIdentityID(v string) *UserUpdateOne {
+	_u.mutation.SetKratosIdentityID(v)
 	return _u
 }
 
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableEmailInfoID(id *int) *UserUpdateOne {
-	if id != nil {
-		_u = _u.SetEmailInfoID(*id)
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableKratosIdentityID(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetKratosIdentityID(*v)
 	}
 	return _u
 }
 
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdateOne) SetEmailInfo(v *EmailInfo) *UserUpdateOne {
-	return _u.SetEmailInfoID(v.ID)
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (_u *UserUpdateOne) ClearKratosIdentityID() *UserUpdateOne {
+	_u.mutation.ClearKratosIdentityID()
+	return _u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *UserUpdateOne) SetCreatedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableCreatedAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
+}
+
+// ClearCreatedAt clears the value of the "created_at" field.
+func (_u *UserUpdateOne) ClearCreatedAt() *UserUpdateOne {
+	_u.mutation.ClearCreatedAt()
+	return _u
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -948,12 +1057,6 @@ func (_u *UserUpdateOne) AddOauthTokens(v ...*OAuthToken) *UserUpdateOne {
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
-}
-
-// ClearEmailInfo clears the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdateOne) ClearEmailInfo() *UserUpdateOne {
-	_u.mutation.ClearEmailInfo()
-	return _u
 }
 
 // ClearSocialPlatformInfo clears the "social_platform_info" edge to the SocialPlatformInfo entity.
@@ -1092,7 +1195,20 @@ func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *UserUpdateOne) check() error {
+	if v, ok := _u.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -1124,6 +1240,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.EmailVerified(); ok {
+		_spec.SetField(user.FieldEmailVerified, field.TypeBool, value)
+	}
+	if _u.mutation.EmailVerifiedCleared() {
+		_spec.ClearField(user.FieldEmailVerified, field.TypeBool)
+	}
 	if value, ok := _u.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 	}
@@ -1136,6 +1258,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+	}
 	if value, ok := _u.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
 	}
@@ -1145,34 +1270,17 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
 	}
-	if _u.mutation.EmailInfoCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := _u.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
 	}
-	if nodes := _u.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if _u.mutation.KratosIdentityIDCleared() {
+		_spec.ClearField(user.FieldKratosIdentityID, field.TypeString)
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CreatedAtCleared() {
+		_spec.ClearField(user.FieldCreatedAt, field.TypeTime)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{

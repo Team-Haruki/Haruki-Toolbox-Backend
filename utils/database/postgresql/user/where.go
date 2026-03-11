@@ -4,6 +4,7 @@ package user
 
 import (
 	"haruki-suite/utils/database/postgresql/predicate"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -74,6 +75,11 @@ func Email(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldEmail, v))
 }
 
+// EmailVerified applies equality check predicate on the "email_verified" field. It's identical to EmailVerifiedEQ.
+func EmailVerified(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldEmailVerified, v))
+}
+
 // PasswordHash applies equality check predicate on the "password_hash" field. It's identical to PasswordHashEQ.
 func PasswordHash(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldPasswordHash, v))
@@ -97,6 +103,16 @@ func Banned(v bool) predicate.User {
 // BanReason applies equality check predicate on the "ban_reason" field. It's identical to BanReasonEQ.
 func BanReason(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBanReason, v))
+}
+
+// KratosIdentityID applies equality check predicate on the "kratos_identity_id" field. It's identical to KratosIdentityIDEQ.
+func KratosIdentityID(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldKratosIdentityID, v))
+}
+
+// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
+func CreatedAt(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
 }
 
 // NameEQ applies the EQ predicate on the "name" field.
@@ -227,6 +243,26 @@ func EmailEqualFold(v string) predicate.User {
 // EmailContainsFold applies the ContainsFold predicate on the "email" field.
 func EmailContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldEmail, v))
+}
+
+// EmailVerifiedEQ applies the EQ predicate on the "email_verified" field.
+func EmailVerifiedEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldEmailVerified, v))
+}
+
+// EmailVerifiedNEQ applies the NEQ predicate on the "email_verified" field.
+func EmailVerifiedNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldEmailVerified, v))
+}
+
+// EmailVerifiedIsNil applies the IsNil predicate on the "email_verified" field.
+func EmailVerifiedIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldEmailVerified))
+}
+
+// EmailVerifiedNotNil applies the NotNil predicate on the "email_verified" field.
+func EmailVerifiedNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldEmailVerified))
 }
 
 // PasswordHashEQ applies the EQ predicate on the "password_hash" field.
@@ -379,6 +415,26 @@ func AllowCnMysekaiNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldAllowCnMysekai, v))
 }
 
+// RoleEQ applies the EQ predicate on the "role" field.
+func RoleEQ(v Role) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRole, v))
+}
+
+// RoleNEQ applies the NEQ predicate on the "role" field.
+func RoleNEQ(v Role) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRole, v))
+}
+
+// RoleIn applies the In predicate on the "role" field.
+func RoleIn(vs ...Role) predicate.User {
+	return predicate.User(sql.FieldIn(FieldRole, vs...))
+}
+
+// RoleNotIn applies the NotIn predicate on the "role" field.
+func RoleNotIn(vs ...Role) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldRole, vs...))
+}
+
 // BannedEQ applies the EQ predicate on the "banned" field.
 func BannedEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBanned, v))
@@ -464,27 +520,129 @@ func BanReasonContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldBanReason, v))
 }
 
-// HasEmailInfo applies the HasEdge predicate on the "email_info" edge.
-func HasEmailInfo() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, EmailInfoTable, EmailInfoColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
+// KratosIdentityIDEQ applies the EQ predicate on the "kratos_identity_id" field.
+func KratosIdentityIDEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldKratosIdentityID, v))
 }
 
-// HasEmailInfoWith applies the HasEdge predicate on the "email_info" edge with a given conditions (other predicates).
-func HasEmailInfoWith(preds ...predicate.EmailInfo) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newEmailInfoStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
+// KratosIdentityIDNEQ applies the NEQ predicate on the "kratos_identity_id" field.
+func KratosIdentityIDNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDIn applies the In predicate on the "kratos_identity_id" field.
+func KratosIdentityIDIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldKratosIdentityID, vs...))
+}
+
+// KratosIdentityIDNotIn applies the NotIn predicate on the "kratos_identity_id" field.
+func KratosIdentityIDNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldKratosIdentityID, vs...))
+}
+
+// KratosIdentityIDGT applies the GT predicate on the "kratos_identity_id" field.
+func KratosIdentityIDGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDGTE applies the GTE predicate on the "kratos_identity_id" field.
+func KratosIdentityIDGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDLT applies the LT predicate on the "kratos_identity_id" field.
+func KratosIdentityIDLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDLTE applies the LTE predicate on the "kratos_identity_id" field.
+func KratosIdentityIDLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDContains applies the Contains predicate on the "kratos_identity_id" field.
+func KratosIdentityIDContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDHasPrefix applies the HasPrefix predicate on the "kratos_identity_id" field.
+func KratosIdentityIDHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDHasSuffix applies the HasSuffix predicate on the "kratos_identity_id" field.
+func KratosIdentityIDHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDIsNil applies the IsNil predicate on the "kratos_identity_id" field.
+func KratosIdentityIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldKratosIdentityID))
+}
+
+// KratosIdentityIDNotNil applies the NotNil predicate on the "kratos_identity_id" field.
+func KratosIdentityIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldKratosIdentityID))
+}
+
+// KratosIdentityIDEqualFold applies the EqualFold predicate on the "kratos_identity_id" field.
+func KratosIdentityIDEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldKratosIdentityID, v))
+}
+
+// KratosIdentityIDContainsFold applies the ContainsFold predicate on the "kratos_identity_id" field.
+func KratosIdentityIDContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldKratosIdentityID, v))
+}
+
+// CreatedAtEQ applies the EQ predicate on the "created_at" field.
+func CreatedAtEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
+func CreatedAtNEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldCreatedAt, v))
+}
+
+// CreatedAtIn applies the In predicate on the "created_at" field.
+func CreatedAtIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldIn(FieldCreatedAt, vs...))
+}
+
+// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
+func CreatedAtNotIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldCreatedAt, vs...))
+}
+
+// CreatedAtGT applies the GT predicate on the "created_at" field.
+func CreatedAtGT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGT(FieldCreatedAt, v))
+}
+
+// CreatedAtGTE applies the GTE predicate on the "created_at" field.
+func CreatedAtGTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldCreatedAt, v))
+}
+
+// CreatedAtLT applies the LT predicate on the "created_at" field.
+func CreatedAtLT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLT(FieldCreatedAt, v))
+}
+
+// CreatedAtLTE applies the LTE predicate on the "created_at" field.
+func CreatedAtLTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// CreatedAtIsNil applies the IsNil predicate on the "created_at" field.
+func CreatedAtIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldCreatedAt))
+}
+
+// CreatedAtNotNil applies the NotNil predicate on the "created_at" field.
+func CreatedAtNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldCreatedAt))
 }
 
 // HasSocialPlatformInfo applies the HasEdge predicate on the "social_platform_info" edge.

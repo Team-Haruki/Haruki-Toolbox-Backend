@@ -6,6 +6,128 @@ import (
 	"testing"
 )
 
+func TestLoad(t *testing.T) {
+	t.Run("reject empty path", func(t *testing.T) {
+		if _, err := Load(""); err == nil {
+			t.Fatalf("expected Load with empty path to fail")
+		}
+	})
+
+	t.Run("load config yaml", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("backend:\n  host: 127.0.0.1\n  port: 3000\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.Backend.Host != "127.0.0.1" {
+			t.Fatalf("Backend.Host = %q, want %q", cfg.Backend.Host, "127.0.0.1")
+		}
+		if cfg.Backend.Port != 3000 {
+			t.Fatalf("Backend.Port = %d, want %d", cfg.Backend.Port, 3000)
+		}
+	})
+
+	t.Run("apply defaults", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("{}\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.Backend.AutoMigrate {
+			t.Fatalf("Backend.AutoMigrate = %v, want %v", cfg.Backend.AutoMigrate, false)
+		}
+		if cfg.Backend.ShutdownTimeout != 10 {
+			t.Fatalf("Backend.ShutdownTimeout = %d, want %d", cfg.Backend.ShutdownTimeout, 10)
+		}
+		if cfg.UserSystem.SMTP.TimeoutSeconds != 10 {
+			t.Fatalf("UserSystem.SMTP.TimeoutSeconds = %d, want %d", cfg.UserSystem.SMTP.TimeoutSeconds, 10)
+		}
+		if cfg.UserSystem.AuthProvider != "local" {
+			t.Fatalf("UserSystem.AuthProvider = %q, want %q", cfg.UserSystem.AuthProvider, "local")
+		}
+		if cfg.UserSystem.KratosRequestTimeout != 10 {
+			t.Fatalf("UserSystem.KratosRequestTimeout = %d, want %d", cfg.UserSystem.KratosRequestTimeout, 10)
+		}
+		if cfg.UserSystem.KratosSessionHeader != "X-Session-Token" {
+			t.Fatalf("UserSystem.KratosSessionHeader = %q, want %q", cfg.UserSystem.KratosSessionHeader, "X-Session-Token")
+		}
+		if cfg.UserSystem.KratosSessionCookie != "ory_kratos_session" {
+			t.Fatalf("UserSystem.KratosSessionCookie = %q, want %q", cfg.UserSystem.KratosSessionCookie, "ory_kratos_session")
+		}
+		if cfg.UserSystem.AuthProxyTrustedHeader != "X-Auth-Proxy-Secret" {
+			t.Fatalf("UserSystem.AuthProxyTrustedHeader = %q, want %q", cfg.UserSystem.AuthProxyTrustedHeader, "X-Auth-Proxy-Secret")
+		}
+		if cfg.UserSystem.AuthProxySubjectHeader != "X-Kratos-Identity-Id" {
+			t.Fatalf("UserSystem.AuthProxySubjectHeader = %q, want %q", cfg.UserSystem.AuthProxySubjectHeader, "X-Kratos-Identity-Id")
+		}
+		if cfg.UserSystem.AuthProxyEmailHeader != "X-User-Email" {
+			t.Fatalf("UserSystem.AuthProxyEmailHeader = %q, want %q", cfg.UserSystem.AuthProxyEmailHeader, "X-User-Email")
+		}
+		if cfg.UserSystem.AuthProxyUserIDHeader != "X-User-Id" {
+			t.Fatalf("UserSystem.AuthProxyUserIDHeader = %q, want %q", cfg.UserSystem.AuthProxyUserIDHeader, "X-User-Id")
+		}
+		if !cfg.UserSystem.KratosAutoLinkByEmail {
+			t.Fatalf("UserSystem.KratosAutoLinkByEmail = %v, want true", cfg.UserSystem.KratosAutoLinkByEmail)
+		}
+		if !cfg.UserSystem.KratosAutoProvisionUser {
+			t.Fatalf("UserSystem.KratosAutoProvisionUser = %v, want true", cfg.UserSystem.KratosAutoProvisionUser)
+		}
+	})
+
+	t.Run("normalize auth provider aliases", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("user_system:\n  auth_provider: hybrid\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.UserSystem.AuthProvider != "auto" {
+			t.Fatalf("UserSystem.AuthProvider = %q, want %q", cfg.UserSystem.AuthProvider, "auto")
+		}
+	})
+}
+
+func TestLoadGlobalFromEnvOrDefault(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.yaml")
+	content := []byte("user_system:\n  session_sign_token: abc\n")
+	if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	prevCfg := Cfg
+	t.Cleanup(func() { Cfg = prevCfg })
+
+	t.Setenv("HARUKI_CONFIG_PATH", cfgPath)
+	resolvedPath, err := LoadGlobalFromEnvOrDefault()
+	if err != nil {
+		t.Fatalf("LoadGlobalFromEnvOrDefault returned error: %v", err)
+	}
+	if !sameExistingPath(resolvedPath, cfgPath) {
+		t.Fatalf("resolvedPath = %q, want %q", resolvedPath, cfgPath)
+	}
+	if Cfg.UserSystem.SessionSignToken != "abc" {
+		t.Fatalf("Cfg.UserSystem.SessionSignToken = %q, want %q", Cfg.UserSystem.SessionSignToken, "abc")
+	}
+}
+
 func TestFindConfigPath(t *testing.T) {
 	t.Run("finds file in current directory", func(t *testing.T) {
 		tmp := t.TempDir()

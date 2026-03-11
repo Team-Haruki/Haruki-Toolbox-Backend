@@ -4,11 +4,11 @@ package postgresql
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -23,16 +23,24 @@ type User struct {
 	Name string `json:"name,omitempty"`
 	// Email holds the value of the "email" field.
 	Email string `json:"email,omitempty"`
+	// EmailVerified holds the value of the "email_verified" field.
+	EmailVerified *bool `json:"email_verified,omitempty"`
 	// PasswordHash holds the value of the "password_hash" field.
 	PasswordHash string `json:"password_hash,omitempty"`
 	// AvatarPath holds the value of the "avatar_path" field.
 	AvatarPath *string `json:"avatar_path,omitempty"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
 	AllowCnMysekai bool `json:"allow_cn_mysekai,omitempty"`
+	// Role holds the value of the "role" field.
+	Role user.Role `json:"role,omitempty"`
 	// Banned holds the value of the "banned" field.
 	Banned bool `json:"banned,omitempty"`
 	// BanReason holds the value of the "ban_reason" field.
 	BanReason *string `json:"ban_reason,omitempty"`
+	// KratosIdentityID holds the value of the "kratos_identity_id" field.
+	KratosIdentityID *string `json:"kratos_identity_id,omitempty"`
+	// CreatedAt holds the value of the "created_at" field.
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges        UserEdges `json:"edges"`
@@ -41,8 +49,6 @@ type User struct {
 
 // UserEdges holds the relations/edges for other nodes in the graph.
 type UserEdges struct {
-	// EmailInfo holds the value of the email_info edge.
-	EmailInfo *EmailInfo `json:"email_info,omitempty"`
 	// SocialPlatformInfo holds the value of the social_platform_info edge.
 	SocialPlatformInfo *SocialPlatformInfo `json:"social_platform_info,omitempty"`
 	// AuthorizedSocialPlatforms holds the value of the authorized_social_platforms edge.
@@ -57,18 +63,7 @@ type UserEdges struct {
 	OauthTokens []*OAuthToken `json:"oauth_tokens,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [7]bool
-}
-
-// EmailInfoOrErr returns the EmailInfo value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e UserEdges) EmailInfoOrErr() (*EmailInfo, error) {
-	if e.EmailInfo != nil {
-		return e.EmailInfo, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: emailinfo.Label}
-	}
-	return nil, &NotLoadedError{edge: "email_info"}
+	loadedTypes [6]bool
 }
 
 // SocialPlatformInfoOrErr returns the SocialPlatformInfo value or an error if the edge
@@ -76,7 +71,7 @@ func (e UserEdges) EmailInfoOrErr() (*EmailInfo, error) {
 func (e UserEdges) SocialPlatformInfoOrErr() (*SocialPlatformInfo, error) {
 	if e.SocialPlatformInfo != nil {
 		return e.SocialPlatformInfo, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: socialplatforminfo.Label}
 	}
 	return nil, &NotLoadedError{edge: "social_platform_info"}
@@ -85,7 +80,7 @@ func (e UserEdges) SocialPlatformInfoOrErr() (*SocialPlatformInfo, error) {
 // AuthorizedSocialPlatformsOrErr returns the AuthorizedSocialPlatforms value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) AuthorizedSocialPlatformsOrErr() ([]*AuthorizeSocialPlatformInfo, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[1] {
 		return e.AuthorizedSocialPlatforms, nil
 	}
 	return nil, &NotLoadedError{edge: "authorized_social_platforms"}
@@ -94,7 +89,7 @@ func (e UserEdges) AuthorizedSocialPlatformsOrErr() ([]*AuthorizeSocialPlatformI
 // GameAccountBindingsOrErr returns the GameAccountBindings value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[2] {
 		return e.GameAccountBindings, nil
 	}
 	return nil, &NotLoadedError{edge: "game_account_bindings"}
@@ -105,7 +100,7 @@ func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
 func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 	if e.IosScriptCode != nil {
 		return e.IosScriptCode, nil
-	} else if e.loadedTypes[4] {
+	} else if e.loadedTypes[3] {
 		return nil, &NotFoundError{label: iosscriptcode.Label}
 	}
 	return nil, &NotLoadedError{edge: "ios_script_code"}
@@ -114,7 +109,7 @@ func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 // OauthAuthorizationsOrErr returns the OauthAuthorizations value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) OauthAuthorizationsOrErr() ([]*OAuthAuthorization, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.OauthAuthorizations, nil
 	}
 	return nil, &NotLoadedError{edge: "oauth_authorizations"}
@@ -123,7 +118,7 @@ func (e UserEdges) OauthAuthorizationsOrErr() ([]*OAuthAuthorization, error) {
 // OauthTokensOrErr returns the OauthTokens value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) OauthTokensOrErr() ([]*OAuthToken, error) {
-	if e.loadedTypes[6] {
+	if e.loadedTypes[5] {
 		return e.OauthTokens, nil
 	}
 	return nil, &NotLoadedError{edge: "oauth_tokens"}
@@ -134,10 +129,12 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldAllowCnMysekai, user.FieldBanned:
+		case user.FieldEmailVerified, user.FieldAllowCnMysekai, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldBanReason:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
+		case user.FieldCreatedAt:
+			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -171,6 +168,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Email = value.String
 			}
+		case user.FieldEmailVerified:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field email_verified", values[i])
+			} else if value.Valid {
+				_m.EmailVerified = new(bool)
+				*_m.EmailVerified = value.Bool
+			}
 		case user.FieldPasswordHash:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field password_hash", values[i])
@@ -190,6 +194,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AllowCnMysekai = value.Bool
 			}
+		case user.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				_m.Role = user.Role(value.String)
+			}
 		case user.FieldBanned:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field banned", values[i])
@@ -203,6 +213,20 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				_m.BanReason = new(string)
 				*_m.BanReason = value.String
 			}
+		case user.FieldKratosIdentityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field kratos_identity_id", values[i])
+			} else if value.Valid {
+				_m.KratosIdentityID = new(string)
+				*_m.KratosIdentityID = value.String
+			}
+		case user.FieldCreatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field created_at", values[i])
+			} else if value.Valid {
+				_m.CreatedAt = new(time.Time)
+				*_m.CreatedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -214,11 +238,6 @@ func (_m *User) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *User) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
-}
-
-// QueryEmailInfo queries the "email_info" edge of the User entity.
-func (_m *User) QueryEmailInfo() *EmailInfoQuery {
-	return NewUserClient(_m.config).QueryEmailInfo(_m)
 }
 
 // QuerySocialPlatformInfo queries the "social_platform_info" edge of the User entity.
@@ -280,6 +299,11 @@ func (_m *User) String() string {
 	builder.WriteString("email=")
 	builder.WriteString(_m.Email)
 	builder.WriteString(", ")
+	if v := _m.EmailVerified; v != nil {
+		builder.WriteString("email_verified=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("password_hash=")
 	builder.WriteString(_m.PasswordHash)
 	builder.WriteString(", ")
@@ -291,12 +315,25 @@ func (_m *User) String() string {
 	builder.WriteString("allow_cn_mysekai=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AllowCnMysekai))
 	builder.WriteString(", ")
+	builder.WriteString("role=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Role))
+	builder.WriteString(", ")
 	builder.WriteString("banned=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Banned))
 	builder.WriteString(", ")
 	if v := _m.BanReason; v != nil {
 		builder.WriteString("ban_reason=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.KratosIdentityID; v != nil {
+		builder.WriteString("kratos_identity_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.CreatedAt; v != nil {
+		builder.WriteString("created_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')
 	return builder.String()

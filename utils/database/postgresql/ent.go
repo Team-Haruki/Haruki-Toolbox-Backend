@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
@@ -16,7 +15,12 @@ import (
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
 	"haruki-suite/utils/database/postgresql/oauthclient"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
+	"haruki-suite/utils/database/postgresql/riskevent"
+	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/systemlog"
+	"haruki-suite/utils/database/postgresql/ticket"
+	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
 	"reflect"
@@ -86,7 +90,6 @@ func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			authorizesocialplatforminfo.Table: authorizesocialplatforminfo.ValidColumn,
-			emailinfo.Table:                   emailinfo.ValidColumn,
 			friendlink.Table:                  friendlink.ValidColumn,
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
 			group.Table:                       group.ValidColumn,
@@ -95,7 +98,12 @@ func checkColumn(t, c string) error {
 			oauthauthorization.Table:          oauthauthorization.ValidColumn,
 			oauthclient.Table:                 oauthclient.ValidColumn,
 			oauthtoken.Table:                  oauthtoken.ValidColumn,
+			riskevent.Table:                   riskevent.ValidColumn,
+			riskrule.Table:                    riskrule.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,
+			systemlog.Table:                   systemlog.ValidColumn,
+			ticket.Table:                      ticket.ValidColumn,
+			ticketmessage.Table:               ticketmessage.ValidColumn,
 			uploadlog.Table:                   uploadlog.ValidColumn,
 			user.Table:                        user.ValidColumn,
 		})

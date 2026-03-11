@@ -1,9 +1,10 @@
 package config
 
 import (
-	harukiLogger "haruki-suite/utils/logger"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -65,8 +66,23 @@ type UserSystemConfig struct {
 	DBType                    string     `yaml:"db_type"`
 	DBURL                     string     `yaml:"db_url"`
 	CloudflareSecret          string     `yaml:"cloudflare_secret"`
+	TurnstileBypass           bool       `yaml:"turnstile_bypass"`
 	SMTP                      SMTPConfig `yaml:"smtp"`
 	SessionSignToken          string     `yaml:"session_sign_token"`
+	AuthProvider              string     `yaml:"auth_provider"`
+	AuthProxyEnabled          bool       `yaml:"auth_proxy_enabled"`
+	AuthProxyTrustedHeader    string     `yaml:"auth_proxy_trusted_header"`
+	AuthProxyTrustedValue     string     `yaml:"auth_proxy_trusted_value"`
+	AuthProxySubjectHeader    string     `yaml:"auth_proxy_subject_header"`
+	AuthProxyEmailHeader      string     `yaml:"auth_proxy_email_header"`
+	AuthProxyUserIDHeader     string     `yaml:"auth_proxy_user_id_header"`
+	KratosPublicURL           string     `yaml:"kratos_public_url"`
+	KratosAdminURL            string     `yaml:"kratos_admin_url"`
+	KratosRequestTimeout      int        `yaml:"kratos_request_timeout_seconds"`
+	KratosSessionHeader       string     `yaml:"kratos_session_header"`
+	KratosSessionCookie       string     `yaml:"kratos_session_cookie"`
+	KratosAutoLinkByEmail     bool       `yaml:"kratos_auto_link_by_email"`
+	KratosAutoProvisionUser   bool       `yaml:"kratos_auto_provision_user"`
 	AvatarSaveDir             string     `yaml:"avatar_save_dir"`
 	AvatarURL                 string     `yaml:"avatar_url"`
 	FrontendURL               string     `yaml:"frontend_url"`
@@ -79,6 +95,8 @@ type BackendConfig struct {
 	SSL              bool     `yaml:"ssl"`
 	SSLCert          string   `yaml:"ssl_cert"`
 	SSLKey           string   `yaml:"ssl_key"`
+	AutoMigrate      bool     `yaml:"auto_migrate"`
+	ShutdownTimeout  int      `yaml:"shutdown_timeout_seconds"`
 	LogLevel         string   `yaml:"log_level"`
 	MainLogFile      string   `yaml:"main_log_file"`
 	AccessLog        string   `yaml:"access_log"`
@@ -93,11 +111,12 @@ type BackendConfig struct {
 }
 
 type SMTPConfig struct {
-	SMTPAddr string `yaml:"smtp_addr"`
-	SMTPPort int    `yaml:"smtp_port"`
-	SMTPMail string `yaml:"smtp_mail"`
-	SMTPPass string `yaml:"smtp_pass"`
-	MailName string `yaml:"mail_name"`
+	SMTPAddr       string `yaml:"smtp_addr"`
+	SMTPPort       int    `yaml:"smtp_port"`
+	SMTPMail       string `yaml:"smtp_mail"`
+	SMTPPass       string `yaml:"smtp_pass"`
+	MailName       string `yaml:"mail_name"`
+	TimeoutSeconds int    `yaml:"timeout_seconds"`
 }
 
 type HarukiProxyConfig struct {
@@ -139,10 +158,16 @@ type OthersConfig struct {
 }
 
 type OAuth2Config struct {
-	AuthCodeTTL     int    `yaml:"auth_code_ttl"`
-	AccessTokenTTL  int    `yaml:"access_token_ttl"`
-	RefreshTokenTTL int    `yaml:"refresh_token_ttl"`
-	TokenSignKey    string `yaml:"token_sign_key"`
+	Provider                  string `yaml:"provider"`
+	AuthCodeTTL               int    `yaml:"auth_code_ttl"`
+	AccessTokenTTL            int    `yaml:"access_token_ttl"`
+	RefreshTokenTTL           int    `yaml:"refresh_token_ttl"`
+	TokenSignKey              string `yaml:"token_sign_key"`
+	HydraPublicURL            string `yaml:"hydra_public_url"`
+	HydraAdminURL             string `yaml:"hydra_admin_url"`
+	HydraClientID             string `yaml:"hydra_client_id"`
+	HydraClientSecret         string `yaml:"hydra_client_secret"`
+	HydraRequestTimeoutSecond int    `yaml:"hydra_request_timeout_seconds"`
 }
 
 type Config struct {
@@ -162,6 +187,8 @@ type Config struct {
 }
 
 var Cfg Config
+
+const defaultConfigFilename = "haruki-suite-configs.yaml"
 
 func findConfigPath(filename string) string {
 	wd, err := os.Getwd()
@@ -183,21 +210,117 @@ func findConfigPath(filename string) string {
 	return filename
 }
 
-func init() {
-	logger := harukiLogger.NewLogger("ConfigLoader", "DEBUG", nil)
-	configPath := findConfigPath("haruki-suite-configs.yaml")
-	f, err := os.Open(configPath)
+func resolveConfigPathFromEnvOrDefault() string {
+	configPath := strings.TrimSpace(os.Getenv("HARUKI_CONFIG_PATH"))
+	if configPath == "" {
+		configPath = findConfigPath(defaultConfigFilename)
+	}
+	return configPath
+}
+
+func Load(configPath string) (Config, error) {
+	path := strings.TrimSpace(configPath)
+	if path == "" {
+		return Config{}, fmt.Errorf("config path is empty")
+	}
+
+	f, err := os.Open(path)
 	if err != nil {
-		logger.Errorf("Failed to open config file (%s): %v", configPath, err)
-		os.Exit(1)
+		return Config{}, fmt.Errorf("open config file %q: %w", path, err)
 	}
 	defer func(f *os.File) {
 		_ = f.Close()
 	}(f)
 
 	decoder := yaml.NewDecoder(f)
-	if err := decoder.Decode(&Cfg); err != nil {
-		logger.Errorf("Failed to parse config: %v", err)
-		os.Exit(1)
+	cfg := Config{
+		Backend: BackendConfig{
+			AutoMigrate:     false,
+			ShutdownTimeout: 10,
+		},
+		OAuth2: OAuth2Config{
+			Provider:                  "hydra",
+			HydraRequestTimeoutSecond: 10,
+		},
+		UserSystem: UserSystemConfig{
+			AuthProvider:            "local",
+			AuthProxyTrustedHeader:  "X-Auth-Proxy-Secret",
+			AuthProxySubjectHeader:  "X-Kratos-Identity-Id",
+			AuthProxyEmailHeader:    "X-User-Email",
+			AuthProxyUserIDHeader:   "X-User-Id",
+			KratosRequestTimeout:    10,
+			KratosSessionHeader:     "X-Session-Token",
+			KratosSessionCookie:     "ory_kratos_session",
+			KratosAutoLinkByEmail:   true,
+			KratosAutoProvisionUser: true,
+			SMTP: SMTPConfig{
+				TimeoutSeconds: 10,
+			},
+		},
 	}
+	if err := decoder.Decode(&cfg); err != nil {
+		return Config{}, fmt.Errorf("parse config file %q: %w", path, err)
+	}
+	if cfg.Backend.ShutdownTimeout <= 0 {
+		cfg.Backend.ShutdownTimeout = 10
+	}
+	if cfg.UserSystem.SMTP.TimeoutSeconds <= 0 {
+		cfg.UserSystem.SMTP.TimeoutSeconds = 10
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.UserSystem.AuthProvider)) {
+	case "", "local":
+		cfg.UserSystem.AuthProvider = "local"
+	case "kratos":
+		cfg.UserSystem.AuthProvider = "kratos"
+	case "auto", "hybrid":
+		cfg.UserSystem.AuthProvider = "auto"
+	default:
+		return Config{}, fmt.Errorf("invalid user_system.auth_provider %q", strings.TrimSpace(cfg.UserSystem.AuthProvider))
+	}
+	if cfg.UserSystem.KratosRequestTimeout <= 0 {
+		cfg.UserSystem.KratosRequestTimeout = 10
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedHeader) == "" {
+		cfg.UserSystem.AuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
+		cfg.UserSystem.AuthProxySubjectHeader = "X-Kratos-Identity-Id"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyEmailHeader) == "" {
+		cfg.UserSystem.AuthProxyEmailHeader = "X-User-Email"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyUserIDHeader) == "" {
+		cfg.UserSystem.AuthProxyUserIDHeader = "X-User-Id"
+	}
+	if strings.TrimSpace(cfg.UserSystem.KratosSessionHeader) == "" {
+		cfg.UserSystem.KratosSessionHeader = "X-Session-Token"
+	}
+	if strings.TrimSpace(cfg.UserSystem.KratosSessionCookie) == "" {
+		cfg.UserSystem.KratosSessionCookie = "ory_kratos_session"
+	}
+	if strings.TrimSpace(cfg.OAuth2.Provider) == "" {
+		cfg.OAuth2.Provider = "hydra"
+	}
+	if cfg.OAuth2.HydraRequestTimeoutSecond <= 0 {
+		cfg.OAuth2.HydraRequestTimeoutSecond = 10
+	}
+
+	return cfg, nil
+}
+
+func LoadGlobal(configPath string) error {
+	cfg, err := Load(configPath)
+	if err != nil {
+		return err
+	}
+	Cfg = cfg
+	return nil
+}
+
+func LoadGlobalFromEnvOrDefault() (string, error) {
+	configPath := resolveConfigPathFromEnvOrDefault()
+	if err := LoadGlobal(configPath); err != nil {
+		return configPath, err
+	}
+	return configPath, nil
 }

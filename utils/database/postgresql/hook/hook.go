@@ -20,18 +20,6 @@ func (f AuthorizeSocialPlatformInfoFunc) Mutate(ctx context.Context, m postgresq
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.AuthorizeSocialPlatformInfoMutation", m)
 }
 
-// The EmailInfoFunc type is an adapter to allow the use of ordinary
-// function as EmailInfo mutator.
-type EmailInfoFunc func(context.Context, *postgresql.EmailInfoMutation) (postgresql.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f EmailInfoFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
-	if mv, ok := m.(*postgresql.EmailInfoMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.EmailInfoMutation", m)
-}
-
 // The FriendLinkFunc type is an adapter to allow the use of ordinary
 // function as FriendLink mutator.
 type FriendLinkFunc func(context.Context, *postgresql.FriendLinkMutation) (postgresql.Value, error)
@@ -128,6 +116,30 @@ func (f OAuthTokenFunc) Mutate(ctx context.Context, m postgresql.Mutation) (post
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.OAuthTokenMutation", m)
 }
 
+// The RiskEventFunc type is an adapter to allow the use of ordinary
+// function as RiskEvent mutator.
+type RiskEventFunc func(context.Context, *postgresql.RiskEventMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RiskEventFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.RiskEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.RiskEventMutation", m)
+}
+
+// The RiskRuleFunc type is an adapter to allow the use of ordinary
+// function as RiskRule mutator.
+type RiskRuleFunc func(context.Context, *postgresql.RiskRuleMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RiskRuleFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.RiskRuleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.RiskRuleMutation", m)
+}
+
 // The SocialPlatformInfoFunc type is an adapter to allow the use of ordinary
 // function as SocialPlatformInfo mutator.
 type SocialPlatformInfoFunc func(context.Context, *postgresql.SocialPlatformInfoMutation) (postgresql.Value, error)
@@ -138,6 +150,42 @@ func (f SocialPlatformInfoFunc) Mutate(ctx context.Context, m postgresql.Mutatio
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SocialPlatformInfoMutation", m)
+}
+
+// The SystemLogFunc type is an adapter to allow the use of ordinary
+// function as SystemLog mutator.
+type SystemLogFunc func(context.Context, *postgresql.SystemLogMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SystemLogFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.SystemLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SystemLogMutation", m)
+}
+
+// The TicketFunc type is an adapter to allow the use of ordinary
+// function as Ticket mutator.
+type TicketFunc func(context.Context, *postgresql.TicketMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TicketFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.TicketMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.TicketMutation", m)
+}
+
+// The TicketMessageFunc type is an adapter to allow the use of ordinary
+// function as TicketMessage mutator.
+type TicketMessageFunc func(context.Context, *postgresql.TicketMessageMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TicketMessageFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.TicketMessageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.TicketMessageMutation", m)
 }
 
 // The UploadLogFunc type is an adapter to allow the use of ordinary

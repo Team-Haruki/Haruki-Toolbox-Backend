@@ -7,6 +7,7 @@ It also utilizes Redis for efficient caching to speed up API responses.
 + `PostgreSQL`
 + `MongoDB`
 + `Redis`
++ `Go 1.26.0` (for local development)
 
 ## How to Use
 
@@ -17,6 +18,12 @@ It also utilizes Redis for efficient caching to speed up API responses.
 5. Edit `haruki-suite-configs.yaml` and configure it
 6. Open Terminal, and `cd` to the directory
 7. Run `HarukiToolboxBackend`
+
+## Development Notes
+
+- Start from [`docs/README.md`](./docs/README.md) for the full documentation index.
+- See [`docs/development.md`](./docs/development.md) for toolchain/config resolution rules.
+- See [`docs/architecture.md`](./docs/architecture.md) for API and module package structure.
 
 ## License
 

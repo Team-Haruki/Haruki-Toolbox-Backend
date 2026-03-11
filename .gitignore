@@ -30,8 +30,15 @@ go.work.sum
 # Editor/IDE
 .idea/
 .vscode/
+.gocache/
 
 haruki-suite-configs.yaml
+haruki-suite-configs.prod-backup.yaml
+HarukiToolboxBackend
+haruki-toolbox-backend
+logs/
+test.json
+dist/
 
 
 

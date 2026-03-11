@@ -7,7 +7,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
@@ -30,7 +29,6 @@ type UserQuery struct {
 	order                         []user.OrderOption
 	inters                        []Interceptor
 	predicates                    []predicate.User
-	withEmailInfo                 *EmailInfoQuery
 	withSocialPlatformInfo        *SocialPlatformInfoQuery
 	withAuthorizedSocialPlatforms *AuthorizeSocialPlatformInfoQuery
 	withGameAccountBindings       *GameAccountBindingQuery
@@ -71,28 +69,6 @@ func (_q *UserQuery) Unique(unique bool) *UserQuery {
 func (_q *UserQuery) Order(o ...user.OrderOption) *UserQuery {
 	_q.order = append(_q.order, o...)
 	return _q
-}
-
-// QueryEmailInfo chains the current query on the "email_info" edge.
-func (_q *UserQuery) QueryEmailInfo() *EmailInfoQuery {
-	query := (&EmailInfoClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, selector),
-			sqlgraph.To(emailinfo.Table, emailinfo.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, user.EmailInfoTable, user.EmailInfoColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // QuerySocialPlatformInfo chains the current query on the "social_platform_info" edge.
@@ -419,7 +395,6 @@ func (_q *UserQuery) Clone() *UserQuery {
 		order:                         append([]user.OrderOption{}, _q.order...),
 		inters:                        append([]Interceptor{}, _q.inters...),
 		predicates:                    append([]predicate.User{}, _q.predicates...),
-		withEmailInfo:                 _q.withEmailInfo.Clone(),
 		withSocialPlatformInfo:        _q.withSocialPlatformInfo.Clone(),
 		withAuthorizedSocialPlatforms: _q.withAuthorizedSocialPlatforms.Clone(),
 		withGameAccountBindings:       _q.withGameAccountBindings.Clone(),
@@ -430,17 +405,6 @@ func (_q *UserQuery) Clone() *UserQuery {
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
-}
-
-// WithEmailInfo tells the query-builder to eager-load the nodes that are connected to
-// the "email_info" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserQuery) WithEmailInfo(opts ...func(*EmailInfoQuery)) *UserQuery {
-	query := (&EmailInfoClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withEmailInfo = query
-	return _q
 }
 
 // WithSocialPlatformInfo tells the query-builder to eager-load the nodes that are connected to
@@ -587,8 +551,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [7]bool{
-			_q.withEmailInfo != nil,
+		loadedTypes = [6]bool{
 			_q.withSocialPlatformInfo != nil,
 			_q.withAuthorizedSocialPlatforms != nil,
 			_q.withGameAccountBindings != nil,
@@ -614,12 +577,6 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
-	}
-	if query := _q.withEmailInfo; query != nil {
-		if err := _q.loadEmailInfo(ctx, query, nodes, nil,
-			func(n *User, e *EmailInfo) { n.Edges.EmailInfo = e }); err != nil {
-			return nil, err
-		}
 	}
 	if query := _q.withSocialPlatformInfo; query != nil {
 		if err := _q.loadSocialPlatformInfo(ctx, query, nodes, nil,
@@ -670,34 +627,6 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	return nodes, nil
 }
 
-func (_q *UserQuery) loadEmailInfo(ctx context.Context, query *EmailInfoQuery, nodes []*User, init func(*User), assign func(*User, *EmailInfo)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*User)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-	}
-	query.withFKs = true
-	query.Where(predicate.EmailInfo(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(user.EmailInfoColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.user_email_info
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "user_email_info" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "user_email_info" returned %v for node %v`, *fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
 func (_q *UserQuery) loadSocialPlatformInfo(ctx context.Context, query *SocialPlatformInfoQuery, nodes []*User, init func(*User), assign func(*User, *SocialPlatformInfo)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*User)

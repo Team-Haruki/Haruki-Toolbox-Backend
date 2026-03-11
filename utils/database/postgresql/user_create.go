@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/oauthauthorization"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
+	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -35,6 +35,20 @@ func (_c *UserCreate) SetName(v string) *UserCreate {
 // SetEmail sets the "email" field.
 func (_c *UserCreate) SetEmail(v string) *UserCreate {
 	_c.mutation.SetEmail(v)
+	return _c
+}
+
+// SetEmailVerified sets the "email_verified" field.
+func (_c *UserCreate) SetEmailVerified(v bool) *UserCreate {
+	_c.mutation.SetEmailVerified(v)
+	return _c
+}
+
+// SetNillableEmailVerified sets the "email_verified" field if the given value is not nil.
+func (_c *UserCreate) SetNillableEmailVerified(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetEmailVerified(*v)
+	}
 	return _c
 }
 
@@ -72,6 +86,20 @@ func (_c *UserCreate) SetNillableAllowCnMysekai(v *bool) *UserCreate {
 	return _c
 }
 
+// SetRole sets the "role" field.
+func (_c *UserCreate) SetRole(v user.Role) *UserCreate {
+	_c.mutation.SetRole(v)
+	return _c
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_c *UserCreate) SetNillableRole(v *user.Role) *UserCreate {
+	if v != nil {
+		_c.SetRole(*v)
+	}
+	return _c
+}
+
 // SetBanned sets the "banned" field.
 func (_c *UserCreate) SetBanned(v bool) *UserCreate {
 	_c.mutation.SetBanned(v)
@@ -100,29 +128,38 @@ func (_c *UserCreate) SetNillableBanReason(v *string) *UserCreate {
 	return _c
 }
 
-// SetID sets the "id" field.
-func (_c *UserCreate) SetID(v string) *UserCreate {
-	_c.mutation.SetID(v)
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_c *UserCreate) SetKratosIdentityID(v string) *UserCreate {
+	_c.mutation.SetKratosIdentityID(v)
 	return _c
 }
 
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_c *UserCreate) SetEmailInfoID(id int) *UserCreate {
-	_c.mutation.SetEmailInfoID(id)
-	return _c
-}
-
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_c *UserCreate) SetNillableEmailInfoID(id *int) *UserCreate {
-	if id != nil {
-		_c = _c.SetEmailInfoID(*id)
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableKratosIdentityID(v *string) *UserCreate {
+	if v != nil {
+		_c.SetKratosIdentityID(*v)
 	}
 	return _c
 }
 
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_c *UserCreate) SetEmailInfo(v *EmailInfo) *UserCreate {
-	return _c.SetEmailInfoID(v.ID)
+// SetCreatedAt sets the "created_at" field.
+func (_c *UserCreate) SetCreatedAt(v time.Time) *UserCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableCreatedAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
+// SetID sets the "id" field.
+func (_c *UserCreate) SetID(v string) *UserCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -262,6 +299,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultAllowCnMysekai
 		_c.mutation.SetAllowCnMysekai(v)
 	}
+	if _, ok := _c.mutation.Role(); !ok {
+		v := user.DefaultRole
+		_c.mutation.SetRole(v)
+	}
 	if _, ok := _c.mutation.Banned(); !ok {
 		v := user.DefaultBanned
 		_c.mutation.SetBanned(v)
@@ -281,6 +322,14 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
+	}
+	if _, ok := _c.mutation.Role(); !ok {
+		return &ValidationError{Name: "role", err: errors.New(`postgresql: missing required field "User.role"`)}
+	}
+	if v, ok := _c.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Banned(); !ok {
 		return &ValidationError{Name: "banned", err: errors.New(`postgresql: missing required field "User.banned"`)}
@@ -333,6 +382,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 		_node.Email = value
 	}
+	if value, ok := _c.mutation.EmailVerified(); ok {
+		_spec.SetField(user.FieldEmailVerified, field.TypeBool, value)
+		_node.EmailVerified = &value
+	}
 	if value, ok := _c.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
 		_node.PasswordHash = value
@@ -345,6 +398,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 		_node.AllowCnMysekai = value
 	}
+	if value, ok := _c.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
+		_node.Role = value
+	}
 	if value, ok := _c.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
 		_node.Banned = value
@@ -353,21 +410,13 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldBanReason, field.TypeString, value)
 		_node.BanReason = &value
 	}
-	if nodes := _c.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
+	if value, ok := _c.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
+		_node.KratosIdentityID = &value
+	}
+	if value, ok := _c.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+		_node.CreatedAt = &value
 	}
 	if nodes := _c.mutation.SocialPlatformInfoIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

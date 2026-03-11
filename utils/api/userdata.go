@@ -5,6 +5,7 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils"
 	"haruki-suite/utils/database/postgresql"
+	"strings"
 )
 
 func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
@@ -14,10 +15,12 @@ func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) Haruki
 	gameAccountBindings := buildGameAccountBindingsFromUser(user)
 	avatarURL := buildAvatarURLFromUser(user)
 	iosUploadCode := buildIOSUploadCodeFromUser(user)
+	role := string(user.Role)
 
 	return HarukiToolboxUserData{
 		Name:                        &user.Name,
 		UserID:                      &user.ID,
+		Role:                        &role,
 		AvatarPath:                  &avatarURL,
 		AllowCNMysekai:              &user.AllowCnMysekai,
 		IOSUploadCode:               iosUploadCode,
@@ -37,16 +40,23 @@ func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 }
 
 func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
-	if user.Edges.EmailInfo != nil {
-		return EmailInfo{
-			Email:    user.Edges.EmailInfo.Email,
-			Verified: user.Edges.EmailInfo.Verified,
-		}
-	}
 	return EmailInfo{
 		Email:    user.Email,
-		Verified: false,
+		Verified: resolveUserEmailVerified(user),
 	}
+}
+
+func resolveUserEmailVerified(user *postgresql.User) bool {
+	if user == nil || strings.TrimSpace(user.Email) == "" {
+		return false
+	}
+	if user.EmailVerified != nil {
+		return *user.EmailVerified
+	}
+	if user.KratosIdentityID != nil && strings.TrimSpace(*user.KratosIdentityID) != "" {
+		return false
+	}
+	return true
 }
 
 func buildSocialPlatformInfoFromUser(user *postgresql.User) *SocialPlatformInfo {

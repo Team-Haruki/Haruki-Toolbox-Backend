@@ -83,9 +83,9 @@ func HandleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeSuite, projection)
 	if err != nil {
 		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
-		return nil, fiber.NewError(fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err))
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get user data")
 	}
-	if result == nil || len(result) == 0 {
+	if len(result) == 0 {
 		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 
@@ -117,9 +117,9 @@ func HandleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxR
 	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeMysekai, projection)
 	if err != nil {
 		harukiLogger.Errorf("Failed to fetch mongo data: %v", err)
-		return nil, fiber.NewError(fiber.StatusInternalServerError, fmt.Sprintf("Failed to get user data: %v", err))
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get user data")
 	}
-	if result == nil || len(result) == 0 {
+	if len(result) == 0 {
 		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 

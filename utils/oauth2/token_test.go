@@ -3,7 +3,11 @@ package oauth2
 import (
 	"encoding/hex"
 	"haruki-suite/config"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestGenerateAndParseAccessToken(t *testing.T) {
@@ -81,6 +85,25 @@ func TestParseAccessTokenWithWrongSignKeyFails(t *testing.T) {
 	}
 }
 
+func TestAccessTokenRequiresSignKey(t *testing.T) {
+	original := config.Cfg.OAuth2.TokenSignKey
+	defer func() {
+		config.Cfg.OAuth2.TokenSignKey = original
+	}()
+
+	config.Cfg.OAuth2.TokenSignKey = "   "
+
+	if _, _, err := GenerateAccessToken("user-1", "client-1", []string{"user:read"}, 3600); err == nil {
+		t.Fatalf("GenerateAccessToken should fail when sign key is empty")
+	}
+
+	if _, err := ParseAccessToken("invalid-token"); err == nil {
+		t.Fatalf("ParseAccessToken should fail when sign key is empty")
+	} else if !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGenerateRandomTokenLengthAndFormat(t *testing.T) {
 	token, err := GenerateRandomToken(32)
 	if err != nil {
@@ -108,5 +131,32 @@ func TestGenerateAuthorizationAndRefreshTokenLength(t *testing.T) {
 	}
 	if len(refreshToken) != 64 {
 		t.Fatalf("refresh token length = %d, want 64", len(refreshToken))
+	}
+}
+
+func TestParseAccessTokenRejectsNonHS256Token(t *testing.T) {
+	original := config.Cfg.OAuth2.TokenSignKey
+	config.Cfg.OAuth2.TokenSignKey = "unit-test-sign-key"
+	defer func() {
+		config.Cfg.OAuth2.TokenSignKey = original
+	}()
+
+	claims := OAuth2TokenClaims{
+		UserID:   "user-1",
+		ClientID: "client-1",
+		Scopes:   []string{"user:read"},
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	signed, err := token.SignedString([]byte(config.Cfg.OAuth2.TokenSignKey))
+	if err != nil {
+		t.Fatalf("SignedString returned error: %v", err)
+	}
+
+	if _, err := ParseAccessToken(signed); err == nil {
+		t.Fatalf("ParseAccessToken should reject non-HS256 tokens")
 	}
 }
