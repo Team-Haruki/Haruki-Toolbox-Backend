@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	harukiLogger "haruki-suite/utils/logger"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -16,6 +17,20 @@ type MongoDBManager struct {
 	webhookUserCollection *mongo.Collection
 }
 
+func (m *MongoDBManager) Ping(ctx context.Context) error {
+	if m == nil || m.client == nil {
+		return fmt.Errorf("mongo client is nil")
+	}
+	return m.client.Ping(ctx, nil)
+}
+
+func (m *MongoDBManager) Disconnect(ctx context.Context) error {
+	if m == nil || m.client == nil {
+		return nil
+	}
+	return m.client.Disconnect(ctx)
+}
+
 func NewMongoDBManager(
 	ctx context.Context,
 	dbURL, db, suite, mysekai, webhookUser, webhookUserUser string,
@@ -27,6 +42,7 @@ func NewMongoDBManager(
 	}
 
 	if err := client.Ping(ctx, nil); err != nil {
+		_ = client.Disconnect(ctx)
 		harukiLogger.Errorf("Failed to ping MongoDB: %v", err)
 		return nil, err
 	}

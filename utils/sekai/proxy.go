@@ -21,7 +21,6 @@ var proxyPathByUploadType = map[harukiUtils.UploadDataType]string{
 var proxyAllowedHeaderSet = map[string]struct{}{
 	"user-agent":        {},
 	"cookie":            {},
-	"x-forwarded-for":   {},
 	"accept-language":   {},
 	"accept":            {},
 	"accept-encoding":   {},
@@ -149,13 +148,13 @@ func HarukiSekaiProxyCallAPI(
 	filteredHeaders["Host"] = host
 	url := appendQueryParams(baseURL+path, params)
 	client := harukiHttp.NewClient(proxy, 30*time.Second)
-	statusCode, respHeaders, respBody, err := client.Request(ctx, method, url, filteredHeaders, data)
+	statusCode, respHeaders, respBody, err := client.RequestWithHeaders(ctx, method, url, filteredHeaders, data)
 	if err != nil {
 		return nil, NewAPIError(url, method, 0, "HTTP request failed", err)
 	}
 	rawBody := make([]byte, len(respBody))
 	copy(rawBody, respBody)
-	newHeaders := make(map[string]string, len(respHeaders))
+	newHeaders := make(map[string][]string, len(respHeaders))
 	maps.Copy(newHeaders, respHeaders)
 	return &harukiUtils.SekaiDataRetrieverResponse{
 		RawBody:    rawBody,

@@ -118,7 +118,10 @@ func mergeUserEvents(oldData, newData map[string]any) []any {
 		if !ok {
 			continue
 		}
-		eventID := getInt(e, fieldEventID)
+		eventID, ok := getRequiredInt(e, fieldEventID)
+		if !ok {
+			continue
+		}
 		if old, exists := latestEvents[eventID]; !exists || shouldReplaceEvent(e, old) {
 			latestEvents[eventID] = e
 		}
@@ -156,9 +159,17 @@ func mergeWorldBlooms(oldData, newData map[string]any) []any {
 		if !ok {
 			continue
 		}
+		eventID, ok := getRequiredInt(b, fieldEventID)
+		if !ok {
+			continue
+		}
+		charID, ok := getRequiredInt(b, fieldGameCharacterID)
+		if !ok {
+			continue
+		}
 		key := bloomKey{
-			EventID: getInt(b, fieldEventID),
-			CharID:  getInt(b, fieldGameCharacterID),
+			EventID: eventID,
+			CharID:  charID,
 		}
 		if old, exists := latestBlooms[key]; !exists || shouldReplaceBloom(b, old) {
 			latestBlooms[key] = b

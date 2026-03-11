@@ -38,6 +38,20 @@ func (_c *UserCreate) SetEmail(v string) *UserCreate {
 	return _c
 }
 
+// SetEmailVerified sets the "email_verified" field.
+func (_c *UserCreate) SetEmailVerified(v bool) *UserCreate {
+	_c.mutation.SetEmailVerified(v)
+	return _c
+}
+
+// SetNillableEmailVerified sets the "email_verified" field if the given value is not nil.
+func (_c *UserCreate) SetNillableEmailVerified(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetEmailVerified(*v)
+	}
+	return _c
+}
+
 // SetPasswordHash sets the "password_hash" field.
 func (_c *UserCreate) SetPasswordHash(v string) *UserCreate {
 	_c.mutation.SetPasswordHash(v)
@@ -367,6 +381,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 		_node.Email = value
+	}
+	if value, ok := _c.mutation.EmailVerified(); ok {
+		_spec.SetField(user.FieldEmailVerified, field.TypeBool, value)
+		_node.EmailVerified = &value
 	}
 	if value, ok := _c.mutation.PasswordHash(); ok {
 		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)

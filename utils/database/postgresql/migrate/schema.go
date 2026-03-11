@@ -508,6 +508,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "email", Type: field.TypeString, Unique: true},
+		{Name: "email_verified", Type: field.TypeBool, Nullable: true},
 		{Name: "password_hash", Type: field.TypeString},
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
@@ -526,12 +527,12 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[10]},
+				Columns: []*schema.Column{UsersColumns[11]},
 			},
 			{
 				Name:    "user_role_banned",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[6], UsersColumns[7]},
+				Columns: []*schema.Column{UsersColumns[7], UsersColumns[8]},
 			},
 		},
 	}
