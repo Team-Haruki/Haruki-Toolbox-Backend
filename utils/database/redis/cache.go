@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	"net/url"
 	"sort"
@@ -212,6 +213,15 @@ func (r *HarukiRedisManager) IncrementWithTTL(ctx context.Context, key string, t
 		return 0, err
 	}
 	return result, nil
+}
+
+func (r *HarukiRedisManager) ClearPublicGameDataCaches(ctx context.Context, server string, userID int64) error {
+	for _, dataType := range []string{string(harukiUtils.UploadDataTypeSuite), string(harukiUtils.UploadDataTypeMysekai)} {
+		if err := r.ClearCache(ctx, dataType, server, userID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server string, userID int64) error {

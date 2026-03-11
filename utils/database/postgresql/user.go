@@ -23,6 +23,8 @@ type User struct {
 	Name string `json:"name,omitempty"`
 	// Email holds the value of the "email" field.
 	Email string `json:"email,omitempty"`
+	// EmailVerified holds the value of the "email_verified" field.
+	EmailVerified *bool `json:"email_verified,omitempty"`
 	// PasswordHash holds the value of the "password_hash" field.
 	PasswordHash string `json:"password_hash,omitempty"`
 	// AvatarPath holds the value of the "avatar_path" field.
@@ -127,7 +129,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldAllowCnMysekai, user.FieldBanned:
+		case user.FieldEmailVerified, user.FieldAllowCnMysekai, user.FieldBanned:
 			values[i] = new(sql.NullBool)
 		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
@@ -165,6 +167,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field email", values[i])
 			} else if value.Valid {
 				_m.Email = value.String
+			}
+		case user.FieldEmailVerified:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field email_verified", values[i])
+			} else if value.Valid {
+				_m.EmailVerified = new(bool)
+				*_m.EmailVerified = value.Bool
 			}
 		case user.FieldPasswordHash:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -289,6 +298,11 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("email=")
 	builder.WriteString(_m.Email)
+	builder.WriteString(", ")
+	if v := _m.EmailVerified; v != nil {
+		builder.WriteString("email_verified=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("password_hash=")
 	builder.WriteString(_m.PasswordHash)

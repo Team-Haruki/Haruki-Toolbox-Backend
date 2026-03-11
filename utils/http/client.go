@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"fmt"
+	harukiLogger "haruki-suite/utils/logger"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -19,7 +20,7 @@ type Client struct {
 func NewClient(proxy string, timeout time.Duration) *Client {
 	client := &Client{Proxy: proxy, Timeout: timeout}
 	if err := client.init(); err != nil {
-		fmt.Printf("Failed to initialize HTTP client: %v\n", err)
+		harukiLogger.Errorf("Failed to initialize HTTP client: %v", err)
 	}
 	return client
 }
@@ -41,6 +42,14 @@ func (c *Client) init() error {
 }
 
 func (c *Client) Request(ctx context.Context, method, uri string, headers map[string]string, body []byte) (int, map[string]string, []byte, error) {
+	statusCode, respHeaders, respBody, err := c.RequestWithHeaders(ctx, method, uri, headers, body)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return statusCode, flattenHeaders(respHeaders), respBody, nil
+}
+
+func (c *Client) RequestWithHeaders(ctx context.Context, method, uri string, headers map[string]string, body []byte) (int, map[string][]string, []byte, error) {
 	if c.client == nil {
 		if err := c.init(); err != nil {
 			return 0, nil, nil, fmt.Errorf("failed to initialize client: %w", err)
@@ -56,16 +65,28 @@ func (c *Client) Request(ctx context.Context, method, uri string, headers map[st
 	if err != nil {
 		return 0, nil, nil, err
 	}
-	respHeaders := flattenHeaders(resp.Header())
+	respHeaders := cloneHeaders(resp.Header())
 	return resp.StatusCode(), respHeaders, resp.Body(), nil
 }
 
 func flattenHeaders(headers map[string][]string) map[string]string {
 	respHeaders := make(map[string]string, len(headers))
-	for k, v := range headers {
-		if len(v) > 0 {
-			respHeaders[k] = v[0]
+	for k, values := range headers {
+		if len(values) == 0 {
+			continue
 		}
+		respHeaders[k] = values[0]
+	}
+	return respHeaders
+}
+
+func cloneHeaders(headers map[string][]string) map[string][]string {
+	respHeaders := make(map[string][]string, len(headers))
+	for k, values := range headers {
+		if len(values) == 0 {
+			continue
+		}
+		respHeaders[k] = append([]string(nil), values...)
 	}
 	return respHeaders
 }

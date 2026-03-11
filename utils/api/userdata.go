@@ -5,6 +5,7 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils"
 	"haruki-suite/utils/database/postgresql"
+	"strings"
 )
 
 func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
@@ -41,8 +42,21 @@ func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
 	return EmailInfo{
 		Email:    user.Email,
-		Verified: true,
+		Verified: resolveUserEmailVerified(user),
 	}
+}
+
+func resolveUserEmailVerified(user *postgresql.User) bool {
+	if user == nil || strings.TrimSpace(user.Email) == "" {
+		return false
+	}
+	if user.EmailVerified != nil {
+		return *user.EmailVerified
+	}
+	if user.KratosIdentityID != nil && strings.TrimSpace(*user.KratosIdentityID) != "" {
+		return false
+	}
+	return true
 }
 
 func buildSocialPlatformInfoFromUser(user *postgresql.User) *SocialPlatformInfo {

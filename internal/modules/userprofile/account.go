@@ -31,7 +31,16 @@ import (
 const (
 	localMirrorRetryAttempts = 3
 	localMirrorRetryInterval = 150 * time.Millisecond
+	maxAvatarPixels          = int64(4096 * 4096)
 )
+
+func ensureAvatarSaveDir(baseDir string) error {
+	trimmed := strings.TrimSpace(baseDir)
+	if trimmed == "" {
+		return fmt.Errorf("avatar save dir is empty")
+	}
+	return os.MkdirAll(trimmed, 0755)
+}
 
 func buildAvatarFilePath(baseDir, avatarFileName string) string {
 	return filepath.Join(baseDir, filepath.Base(strings.TrimSpace(avatarFileName)))
@@ -151,12 +160,22 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				reason = "unsupported_avatar_format"
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Unsupported image format. Allowed: PNG, JPEG, GIF, WebP", nil)
 			}
-			if _, _, err := image.Decode(bytes.NewReader(decodedAvatar)); err != nil {
+			cfg, _, err := image.DecodeConfig(bytes.NewReader(decodedAvatar))
+			if err != nil {
 				harukiLogger.Warnf("Invalid image data from user %s: %v", userID, err)
 				reason = "invalid_avatar_image"
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid or corrupted image data", nil)
 			}
+			if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxAvatarPixels {
+				reason = "avatar_too_large"
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image dimensions are too large", nil)
+			}
 			avatarFileName = uuid.NewString() + ext
+			if err := ensureAvatarSaveDir(config.Cfg.UserSystem.AvatarSaveDir); err != nil {
+				harukiLogger.Errorf("Failed to prepare avatar directory: %v", err)
+				reason = "save_avatar_failed"
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
+			}
 			savePath := buildAvatarFilePath(config.Cfg.UserSystem.AvatarSaveDir, avatarFileName)
 			if err := os.WriteFile(savePath, decodedAvatar, 0644); err != nil {
 				harukiLogger.Errorf("Failed to save avatar file: %v", err)

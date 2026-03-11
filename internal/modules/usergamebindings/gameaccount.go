@@ -79,6 +79,20 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 	}
 }
 
+func clearGameAccountPublicCaches(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil {
+		return
+	}
+	gameUserID, err := strconv.ParseInt(strings.TrimSpace(gameUserIDStr), 10, 64)
+	if err != nil {
+		harukiLogger.Warnf("Failed to parse game user id for cache clear: server=%s gameUserID=%s err=%v", serverStr, gameUserIDStr, err)
+		return
+	}
+	if err := apiHelper.DBManager.Redis.ClearPublicGameDataCaches(ctx, serverStr, gameUserID); err != nil {
+		harukiLogger.Warnf("Failed to clear public game data caches: server=%s gameUserID=%s err=%v", serverStr, gameUserIDStr, err)
+	}
+}
+
 func getUserBindings(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string) ([]harukiAPIHelper.GameAccountBinding, error) {
 	bindings, err := apiHelper.DBManager.DB.GameAccountBinding.
 		Query().
@@ -206,6 +220,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "save_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
+		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
@@ -291,6 +306,7 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "update_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
 		}
+		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
@@ -365,6 +381,7 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "delete_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
 		}
+		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {

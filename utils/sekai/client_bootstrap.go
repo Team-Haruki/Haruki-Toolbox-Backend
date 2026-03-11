@@ -17,6 +17,18 @@ type appVersionPayload struct {
 	AssetVersion string `json:"assetVersion"`
 }
 
+func buildCookieHeader(setCookies []string) string {
+	pairs := make([]string, 0, len(setCookies))
+	for _, raw := range setCookies {
+		pair := strings.TrimSpace(strings.SplitN(raw, ";", 2)[0])
+		if pair == "" {
+			continue
+		}
+		pairs = append(pairs, pair)
+	}
+	return strings.Join(pairs, "; ")
+}
+
 func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	if c.server != JP {
 		return nil
@@ -27,17 +39,19 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	var lastErr error
 
 	for i := range retries {
-		status, headers, _, err := c.httpClient.Request(ctx, httpMethodPost, url, nil, nil)
+		status, headers, _, err := c.httpClient.RequestWithHeaders(ctx, httpMethodPost, url, nil, nil)
 		if err != nil {
 			lastErr = err
 			c.logger.Warnf("Cookie request failed (attempt %d/%d): %v", i+1, retries, err)
 			continue
 		}
 		if status == statusCodeOK {
-			if cookie, ok := headers["Set-Cookie"]; ok && cookie != "" {
-				c.headers["Cookie"] = cookie
-				c.logger.Infof("JP server cookies parsed.")
-				return nil
+			if cookies, ok := headers["Set-Cookie"]; ok {
+				if cookieHeader := buildCookieHeader(cookies); cookieHeader != "" {
+					c.headers["Cookie"] = cookieHeader
+					c.logger.Infof("JP server cookies parsed.")
+					return nil
+				}
 			}
 			lastErr = fmt.Errorf("empty Set-Cookie header")
 			c.logger.Errorf("Cookie response missing Set-Cookie header")

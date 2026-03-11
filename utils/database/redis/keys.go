@@ -58,6 +58,10 @@ func BuildSocialPlatformVerifyKey(platform, platformUserID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionVerify, platform, platformUserID)
 }
 
+func BuildSocialPlatformVerifyAttemptKey(platform, platformUserID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionVerify, KeyActionAttempt, platform, platformUserID)
+}
+
 func BuildSocialPlatformUserIDKey(platform, platformUserID string) string {
 	return buildKey(
 		KeyPrefixHaruki,

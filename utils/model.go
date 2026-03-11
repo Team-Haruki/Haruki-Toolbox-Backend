@@ -3,9 +3,9 @@ package utils
 import "time"
 
 type SekaiDataRetrieverResponse struct {
-	RawBody    []byte            `json:"raw_body"`
-	StatusCode int               `json:"status_code"`
-	NewHeaders map[string]string `json:"new_headers,omitempty"`
+	RawBody    []byte              `json:"raw_body"`
+	StatusCode int                 `json:"status_code"`
+	NewHeaders map[string][]string `json:"new_headers,omitempty"`
 }
 
 type SekaiInheritDataRetrieverResponse struct {

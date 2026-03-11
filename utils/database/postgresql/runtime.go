@@ -332,11 +332,11 @@ func init() {
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.
-	userDescAllowCnMysekai := userFields[5].Descriptor()
+	userDescAllowCnMysekai := userFields[6].Descriptor()
 	// user.DefaultAllowCnMysekai holds the default value on creation for the allow_cn_mysekai field.
 	user.DefaultAllowCnMysekai = userDescAllowCnMysekai.Default.(bool)
 	// userDescBanned is the schema descriptor for banned field.
-	userDescBanned := userFields[7].Descriptor()
+	userDescBanned := userFields[8].Descriptor()
 	// user.DefaultBanned holds the default value on creation for the banned field.
 	user.DefaultBanned = userDescBanned.Default.(bool)
 	// userDescID is the schema descriptor for id field.

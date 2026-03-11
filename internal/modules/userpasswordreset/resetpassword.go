@@ -53,6 +53,21 @@ if targetCount > tonumber(ARGV[2]) then
 end
 return {0, ipCount, targetCount}
 `
+
+	resetPasswordSendRateLimitReleaseScript = `
+for i=1,#KEYS do
+  local current = redis.call('GET', KEYS[i])
+  if current then
+    local num = tonumber(current)
+    if num == nil or num <= 1 then
+      redis.call('DEL', KEYS[i])
+    else
+      redis.call('DECR', KEYS[i])
+    end
+  end
+end
+return 1
+`
 )
 
 func respondResetPasswordRateLimited(c fiber.Ctx, key string, message string, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
@@ -110,6 +125,15 @@ func checkResetPasswordSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.Har
 	default:
 		return false, "", "", fmt.Errorf("unexpected reset-password send rate limit limitedBy marker: %d", values[0])
 	}
+}
+
+func releaseResetPasswordSendRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) error {
+	ctx := c.Context()
+	email = platformIdentity.NormalizeEmail(email)
+	ipKey := harukiRedis.BuildResetPasswordSendRateLimitIPKey(clientIP)
+	targetKey := harukiRedis.BuildResetPasswordSendRateLimitTargetKey(email)
+	_, err := apiHelper.DBManager.Redis.Redis.Eval(ctx, resetPasswordSendRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
+	return err
 }
 
 func checkResetPasswordApplyRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, target string) (limited bool, key string, message string, err error) {
@@ -191,8 +215,28 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			reason = "rate_limited"
 			return respondResetPasswordRateLimitedWithWindow(c, limitKey, limitMessage, resetPasswordSendRateLimitWindow, apiHelper)
 		}
+		reservationCommitted := false
+		redisKey := ""
+		secretStored := false
+		defer func() {
+			if reservationCommitted {
+				return
+			}
+			if secretStored && redisKey != "" {
+				if delErr := apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey); delErr != nil {
+					harukiLogger.Warnf("Failed to rollback reset secret for %s: %v", payload.Email, delErr)
+				}
+			}
+			if releaseErr := releaseResetPasswordSendRateLimitReservation(c, apiHelper, clientIP, payload.Email); releaseErr != nil {
+				harukiLogger.Warnf("Failed to release reset-password rate limit reservation for %s: %v", payload.Email, releaseErr)
+			}
+		}()
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
-			return handleSendResetPasswordViaKratos(c, apiHelper, payload.Email, &result, &reason)
+			err := handleSendResetPasswordViaKratos(c, apiHelper, payload.Email, &result, &reason)
+			if err == nil {
+				reservationCommitted = true
+			}
+			return err
 		}
 
 		exists, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.EmailEqualFold(payload.Email)).Exist(ctx)
@@ -202,24 +246,27 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if !exists {
+			reservationCommitted = true
 			result = harukiAPIHelper.SystemLogResultSuccess
 			reason = "ok"
 			return harukiAPIHelper.SuccessResponse[string](c, "Reset password email sent", nil)
 		}
 		resetSecret := uuid.NewString()
 		resetURL := buildResetPasswordURL(config.Cfg.UserSystem.FrontendURL, resetSecret, payload.Email)
-		redisKey := harukiRedis.BuildResetPasswordKey(payload.Email)
+		redisKey = harukiRedis.BuildResetPasswordKey(payload.Email)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, redisKey, resetSecret, 30*time.Minute); err != nil {
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			reason = "save_reset_secret_failed"
 			return harukiAPIHelper.ErrorInternal(c, "Failed to store secret")
 		}
+		secretStored = true
 		body := strings.ReplaceAll(smtp.ResetPasswordTemplate, "{{LINK}}", resetURL)
 		if err := apiHelper.SMTPClient.Send([]string{payload.Email}, "您的重设密码请求 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
 			harukiLogger.Errorf("Failed to send email: %v", err)
 			reason = "send_email_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to send email")
 		}
+		reservationCommitted = true
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
 		return harukiAPIHelper.SuccessResponse[string](c, "Reset password email sent", nil)

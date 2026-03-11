@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"crypto/subtle"
 	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
@@ -39,7 +40,7 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 
 		requestUserAgent := c.Get("User-Agent")
 		requestSecret := c.Get("X-Haruki-Toolbox-Secret")
-		if requestSecret != expectedSecret {
+		if subtle.ConstantTimeCompare([]byte(requestSecret), []byte(expectedSecret)) != 1 {
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid HarukiProxy Secret")
 		}
 		matches := userAgentRegex.FindStringSubmatch(requestUserAgent)

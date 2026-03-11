@@ -265,7 +265,7 @@ func Load(configPath string) (Config, error) {
 	case "auto", "hybrid":
 		cfg.UserSystem.AuthProvider = "auto"
 	default:
-		cfg.UserSystem.AuthProvider = "local"
+		return Config{}, fmt.Errorf("invalid user_system.auth_provider %q", strings.TrimSpace(cfg.UserSystem.AuthProvider))
 	}
 	if cfg.UserSystem.KratosRequestTimeout <= 0 {
 		cfg.UserSystem.KratosRequestTimeout = 10

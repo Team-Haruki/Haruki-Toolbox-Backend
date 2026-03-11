@@ -1,14 +1,28 @@
 package admingamebindings
 
 import (
+	"context"
 	adminCoreModule "haruki-suite/internal/modules/admincore"
 	platformPagination "haruki-suite/internal/platform/pagination"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
+	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func clearGlobalBindingPublicCaches(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server, gameUserID string) {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil {
+		return
+	}
+	parsedUserID, err := strconv.ParseInt(strings.TrimSpace(gameUserID), 10, 64)
+	if err != nil {
+		return
+	}
+	_ = apiHelper.DBManager.Redis.ClearPublicGameDataCaches(ctx, server, parsedUserID)
+}
 
 func handleAdminListGlobalGameAccountBindings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -102,6 +116,7 @@ func handleAdminDeleteGlobalGameAccountBinding(apiHelper *harukiAPIHelper.Haruki
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalDelete, adminAuditTargetTypeGameAccount, server+":"+gameUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteBindingFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
 		}
+		clearGlobalBindingPublicCaches(c.Context(), apiHelper, server, gameUserID)
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalDelete, adminAuditTargetTypeGameAccount, server+":"+gameUserID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"sourceUserID": row.Edges.User.ID,
@@ -225,6 +240,7 @@ func handleAdminBatchDeleteGlobalGameAccountBindings(apiHelper *harukiAPIHelper.
 				results = append(results, result)
 				continue
 			}
+			clearGlobalBindingPublicCaches(c.Context(), apiHelper, item.Server, item.GameUserID)
 
 			result.Success = true
 			successCount++

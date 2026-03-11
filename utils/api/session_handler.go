@@ -517,12 +517,6 @@ func (s *SessionHandler) FindKratosIdentityIDByEmail(ctx context.Context, email 
 			return identityID, nil
 		}
 	}
-	if len(identities) == 1 {
-		identityID := strings.TrimSpace(identities[0].ID)
-		if identityID != "" {
-			return identityID, nil
-		}
-	}
 	return "", fmt.Errorf("%w: ambiguous or empty identity result for email", errKratosInvalidInput)
 }
 

@@ -219,7 +219,7 @@ func determinePublicAPIPermission(exists bool, dataType harukiUtils.UploadDataTy
 
 func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, userID *string, allowCNMySekai *bool) error {
 	if dataType == harukiUtils.UploadDataTypeMysekai && server == harukiUtils.SupportedDataUploadServerCN {
-		if userID != nil && allowCNMySekai != nil && !*allowCNMySekai {
+		if allowCNMySekai != nil && !*allowCNMySekai {
 			return errUploadCNMysekaiDenied
 		}
 	}
@@ -360,6 +360,20 @@ func persistUploadAuditLog(
 	}
 }
 
+func applyProxyResponseHeaders(c fiber.Ctx, headers map[string][]string) {
+	for key, values := range headers {
+		if len(values) == 0 {
+			continue
+		}
+		c.Set(key, values[0])
+		if len(values) > 1 {
+			for _, value := range values[1:] {
+				c.Append(key, value)
+			}
+		}
+	}
+}
+
 func HandleProxyUpload(
 	proxy string,
 	dataType harukiUtils.UploadDataType,
@@ -422,9 +436,7 @@ func HandleProxyUpload(
 			}
 			isRefreshed, ok := dataMap["isRefreshed"].(bool)
 			if !ok || !isRefreshed {
-				for k, v := range resp.NewHeaders {
-					c.Set(k, v)
-				}
+				applyProxyResponseHeaders(c, resp.NewHeaders)
 				return c.Status(resp.StatusCode).Send(resp.RawBody)
 			}
 		}
@@ -435,9 +447,7 @@ func HandleProxyUpload(
 			harukiLogger.Warnf("Proxy upload persist failed for %s/%s/%s: %v", serverStr, userIDStr, dataType, err)
 			return fiber.NewError(fiber.StatusInternalServerError, "failed to process uploaded data")
 		}
-		for k, v := range resp.NewHeaders {
-			c.Set(k, v)
-		}
+		applyProxyResponseHeaders(c, resp.NewHeaders)
 		return c.Status(resp.StatusCode).Send(resp.RawBody)
 	}
 }

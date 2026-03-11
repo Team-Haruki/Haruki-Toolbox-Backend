@@ -10,6 +10,7 @@ import (
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/oauthtoken"
 	userSchema "haruki-suite/utils/database/postgresql/user"
+	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,20 @@ const (
 	adminLocalMirrorRetryAttempts = 3
 	adminLocalMirrorRetryInterval = 150 * time.Millisecond
 )
+
+func clearManagedBindingPublicCaches(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server, gameUserID string) {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil {
+		return
+	}
+	parsedUserID, err := strconv.ParseInt(strings.TrimSpace(gameUserID), 10, 64)
+	if err != nil {
+		harukiLogger.Warnf("Failed to parse managed binding game user id for cache clear: server=%s gameUserID=%s err=%v", server, gameUserID, err)
+		return
+	}
+	if err := apiHelper.DBManager.Redis.ClearPublicGameDataCaches(ctx, server, parsedUserID); err != nil {
+		harukiLogger.Warnf("Failed to clear managed binding public caches: server=%s gameUserID=%s err=%v", server, gameUserID, err)
+	}
+}
 
 func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool) {
 	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() &&
@@ -185,7 +200,7 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		affected := 0
 		err = harukiAPIHelper.RetryOperation(c.Context(), adminLocalMirrorRetryAttempts, adminLocalMirrorRetryInterval, func() error {
 			nextAffected, updateErr := applyManagedTargetUserUpdateGuards(
-				apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email),
+				apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email).SetEmailVerified(true),
 				actorUserID,
 				actorRole,
 				targetUser.ID,
@@ -366,6 +381,7 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateBindingFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to update game account binding")
 			}
+			clearManagedBindingPublicCaches(c.Context(), apiHelper, string(server), gameUserID)
 		} else {
 			created = true
 			if _, err := apiHelper.DBManager.DB.GameAccountBinding.Create().
@@ -455,6 +471,7 @@ func handleDeleteUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteBindingFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
 		}
+		clearManagedBindingPublicCaches(c.Context(), apiHelper, string(server), gameUserID)
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"server":     string(server),

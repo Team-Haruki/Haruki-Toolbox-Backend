@@ -12,6 +12,10 @@ import (
 
 const webhookCallbackTimeout = 10 * time.Second
 
+func isHTTPSuccessStatus(statusCode int) bool {
+	return statusCode >= 200 && statusCode < 300
+}
+
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
 	h.Logger.Infof("Calling back WebHook API: %s", url)
 	headers := map[string]string{
@@ -25,7 +29,7 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return
 	}
-	if statusCode == 200 {
+	if isHTTPSuccessStatus(statusCode) {
 		h.Logger.Infof("Called back WebHook API %s successfully.", url)
 	} else {
 		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, statusCode)

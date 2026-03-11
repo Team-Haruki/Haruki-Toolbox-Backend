@@ -37,6 +37,9 @@ import (
 )
 
 const (
+	startupDependencyTimeout = 15 * time.Second
+	resourceCloseTimeout     = 5 * time.Second
+
 	checkUsersTableExistsSQL = `SELECT to_regclass('public.users')`
 
 	createUsersEmailLowerUniqueIndexSQL = `
@@ -49,6 +52,10 @@ FROM users
 GROUP BY LOWER(email)
 HAVING COUNT(*) > 1
 LIMIT 1;
+`
+	createUsersEmailVerifiedColumnSQL = `
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS email_verified BOOLEAN;
 `
 	createUsersKratosIdentityColumnSQL = `
 ALTER TABLE users
@@ -99,6 +106,18 @@ func ensureUsersEmailLowerUniqueIndex(ctx context.Context, entClient *dbManager.
 	return nil
 }
 
+func ensureUsersEmailVerifiedColumn(ctx context.Context, entClient *dbManager.Client) error {
+	sqlDB := entClient.SQLDB()
+	if sqlDB == nil {
+		return fmt.Errorf("underlying SQL DB is not available")
+	}
+
+	if _, err := sqlDB.ExecContext(ctx, createUsersEmailVerifiedColumnSQL); err != nil {
+		return fmt.Errorf("add users.email_verified column: %w", err)
+	}
+	return nil
+}
+
 func ensureUsersKratosIdentityColumn(ctx context.Context, entClient *dbManager.Client) error {
 	sqlDB := entClient.SQLDB()
 	if sqlDB == nil {
@@ -137,6 +156,21 @@ func ensureRedisReady(ctx context.Context, redisManager *harukiRedis.HarukiRedis
 	return nil
 }
 
+func startupContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), startupDependencyTimeout)
+}
+
+func validateUserSystemConfig(cfg harukiConfig.Config) error {
+	provider := strings.ToLower(strings.TrimSpace(cfg.UserSystem.AuthProvider))
+	if provider == "" {
+		provider = "local"
+	}
+	if provider != "kratos" && strings.TrimSpace(cfg.UserSystem.SessionSignToken) == "" {
+		return fmt.Errorf("user_system.session_sign_token is required when auth_provider=%s", provider)
+	}
+	return nil
+}
+
 func validateOAuth2ProviderConfig(cfg harukiConfig.Config) error {
 	provider := strings.ToLower(strings.TrimSpace(cfg.OAuth2.Provider))
 	if provider == "" || provider == harukiOAuth2.ProviderHydra {
@@ -155,6 +189,9 @@ func Run(cfg harukiConfig.Config) error {
 	if err := validateOAuth2ProviderConfig(cfg); err != nil {
 		return err
 	}
+	if err := validateUserSystemConfig(cfg); err != nil {
+		return err
+	}
 
 	loggerWriter, closeMainLogFile, err := openMainLogWriter(cfg.Backend.MainLogFile)
 	if err != nil {
@@ -169,8 +206,9 @@ func Run(cfg harukiConfig.Config) error {
 	mainLogger.Infof("Powered By Haruki Dev Team")
 
 	sekaiAPIClient := harukiSekaiAPIClient.NewHarukiSekaiAPIClient(cfg.SekaiAPI.APIEndpoint, cfg.SekaiAPI.APIToken)
+	mongoCtx, cancelMongoInit := startupContext()
 	mongoManager, err := harukiMongo.NewMongoDBManager(
-		context.Background(),
+		mongoCtx,
 		cfg.MongoDB.URL,
 		cfg.MongoDB.DB,
 		cfg.MongoDB.Suite,
@@ -178,14 +216,26 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.MongoDB.Webhook,
 		cfg.MongoDB.WebhookUser,
 	)
+	cancelMongoInit()
 	if err != nil {
 		return fmt.Errorf("init MongoDB: %w", err)
 	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), resourceCloseTimeout)
+		defer cancel()
+		_ = mongoManager.Disconnect(closeCtx)
+	}()
 
 	redisClient := harukiRedis.NewRedisClient(cfg.Redis)
-	if err := ensureRedisReady(context.Background(), redisClient); err != nil {
+	defer func() {
+		_ = redisClient.Close()
+	}()
+	redisCtx, cancelRedisInit := startupContext()
+	if err := ensureRedisReady(redisCtx, redisClient); err != nil {
+		cancelRedisInit()
 		return fmt.Errorf("init Redis: %w", err)
 	}
+	cancelRedisInit()
 	entClient, err := dbManager.Open(cfg.UserSystem.DBType, cfg.UserSystem.DBURL)
 	if err != nil {
 		return fmt.Errorf("init PostgreSQL: %w", err)
@@ -194,13 +244,18 @@ func Run(cfg harukiConfig.Config) error {
 		_ = entClient.Close()
 	}()
 	if cfg.Backend.AutoMigrate {
-		if err := entClient.Schema.Create(context.Background()); err != nil {
+		schemaCtx, cancelSchema := startupContext()
+		if err := entClient.Schema.Create(schemaCtx); err != nil {
+			cancelSchema()
 			return fmt.Errorf("create schema resources: %w", err)
 		}
+		cancelSchema()
 		mainLogger.Infof("auto schema migration completed")
 	} else {
 		mainLogger.Infof("auto schema migration disabled")
-		exists, existsErr := usersTableExists(context.Background(), entClient)
+		existsCtx, cancelExists := startupContext()
+		exists, existsErr := usersTableExists(existsCtx, entClient)
+		cancelExists()
 		if existsErr != nil {
 			return fmt.Errorf("check schema state when auto_migrate disabled: %w", existsErr)
 		}
@@ -208,12 +263,24 @@ func Run(cfg harukiConfig.Config) error {
 			return fmt.Errorf("database schema is not initialized (users table missing) while backend.auto_migrate=false")
 		}
 	}
-	if err := ensureUsersEmailLowerUniqueIndex(context.Background(), entClient); err != nil {
+	usersEmailCtx, cancelUsersEmail := startupContext()
+	if err := ensureUsersEmailLowerUniqueIndex(usersEmailCtx, entClient); err != nil {
+		cancelUsersEmail()
 		return fmt.Errorf("ensure case-insensitive email uniqueness: %w", err)
 	}
-	if err := ensureUsersKratosIdentityColumn(context.Background(), entClient); err != nil {
+	cancelUsersEmail()
+	usersEmailVerifiedCtx, cancelUsersEmailVerified := startupContext()
+	if err := ensureUsersEmailVerifiedColumn(usersEmailVerifiedCtx, entClient); err != nil {
+		cancelUsersEmailVerified()
+		return fmt.Errorf("ensure email verified column: %w", err)
+	}
+	cancelUsersEmailVerified()
+	usersKratosCtx, cancelUsersKratos := startupContext()
+	if err := ensureUsersKratosIdentityColumn(usersKratosCtx, entClient); err != nil {
+		cancelUsersKratos()
 		return fmt.Errorf("ensure kratos identity mapping column: %w", err)
 	}
+	cancelUsersKratos()
 
 	smtpClient := harukiSMTP.NewSMTPClient(cfg.UserSystem.SMTP)
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, cfg.UserSystem.SessionSignToken)

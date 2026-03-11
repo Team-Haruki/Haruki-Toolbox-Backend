@@ -46,6 +46,21 @@ if targetCount > tonumber(ARGV[2]) then
 end
 return {0, ipCount, targetCount}
 `
+
+	emailSendRateLimitReleaseScript = `
+for i=1,#KEYS do
+  local current = redis.call('GET', KEYS[i])
+  if current then
+    local num = tonumber(current)
+    if num == nil or num <= 1 then
+      redis.call('DEL', KEYS[i])
+    else
+      redis.call('DECR', KEYS[i])
+    end
+  end
+end
+return 1
+`
 )
 
 func GenerateCode(antiCensor bool) (string, error) {
@@ -107,27 +122,36 @@ func checkSendEmailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxR
 	}
 }
 
-func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+func releaseSendEmailRateLimitReservation(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) error {
 	ctx := c.Context()
 	email = platformIdentity.NormalizeEmail(email)
-	if email == "" {
-		return harukiAPIHelper.ErrorBadRequest(c, "email is required")
-	}
+	ipKey := harukiRedis.BuildEmailVerifySendRateLimitIPKey(clientIP)
+	targetKey := harukiRedis.BuildEmailVerifySendRateLimitTargetKey(email)
+	_, err := helper.DBManager.Redis.Redis.Eval(ctx, emailSendRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
+	return err
+}
+
+func validateAndReserveEmailSend(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (string, error) {
 	clientIP := c.IP()
 	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
 	if err != nil {
-		return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
+		return "", harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
 	}
 	if resp == nil || !resp.Success {
-		return harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
+		return "", harukiAPIHelper.ErrorBadRequest(c, "captcha verify failed")
 	}
 	limited, limitKey, limitMessage, err := checkSendEmailRateLimit(c, helper, clientIP, email)
 	if err != nil {
-		return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
+		return "", harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
 	}
 	if limited {
-		return respondEmailSendRateLimited(c, limitKey, limitMessage, helper)
+		return "", respondEmailSendRateLimited(c, limitKey, limitMessage, helper)
 	}
+	return clientIP, nil
+}
+
+func sendVerificationCode(c fiber.Ctx, email string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+	ctx := c.Context()
 	code, err := GenerateCode(false)
 	if err != nil {
 		harukiLogger.Errorf("Failed to generate code: %v", err)
@@ -140,8 +164,29 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 	}
 	body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
 	if err := helper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
+		if delErr := helper.DBManager.Redis.DeleteCache(ctx, redisKey); delErr != nil {
+			harukiLogger.Warnf("Failed to rollback verification code for %s: %v", email, delErr)
+		}
 		harukiLogger.Errorf("Failed to send email: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to send email")
+	}
+	return nil
+}
+
+func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+	email = platformIdentity.NormalizeEmail(email)
+	if email == "" {
+		return harukiAPIHelper.ErrorBadRequest(c, "email is required")
+	}
+	clientIP, err := validateAndReserveEmailSend(c, email, challengeToken, helper)
+	if err != nil {
+		return err
+	}
+	if err := sendVerificationCode(c, email, helper); err != nil {
+		if releaseErr := releaseSendEmailRateLimitReservation(c, helper, clientIP, email); releaseErr != nil {
+			harukiLogger.Warnf("Failed to release email send rate limit reservation for %s: %v", email, releaseErr)
+		}
+		return err
 	}
 	return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
 }
@@ -218,15 +263,28 @@ func handleSendEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 		if req.Email == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "email is required")
 		}
+		clientIP, err := validateAndReserveEmailSend(c, req.Email, req.ChallengeToken, apiHelper)
+		if err != nil {
+			return err
+		}
 		exists, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.EmailEqualFold(req.Email)).Exist(ctx)
 		if err != nil {
+			if releaseErr := releaseSendEmailRateLimitReservation(c, apiHelper, clientIP, req.Email); releaseErr != nil {
+				harukiLogger.Warnf("Failed to release email send rate limit reservation for %s: %v", req.Email, releaseErr)
+			}
 			harukiLogger.Errorf("Failed to query user email: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
-			return harukiAPIHelper.ErrorBadRequest(c, "email already exists")
+			return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
 		}
-		return SendEmailHandler(c, req.Email, req.ChallengeToken, apiHelper)
+		if err := sendVerificationCode(c, req.Email, apiHelper); err != nil {
+			if releaseErr := releaseSendEmailRateLimitReservation(c, apiHelper, clientIP, req.Email); releaseErr != nil {
+				harukiLogger.Warnf("Failed to release email send rate limit reservation for %s: %v", req.Email, releaseErr)
+			}
+			return err
+		}
+		return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
 	}
 }
 

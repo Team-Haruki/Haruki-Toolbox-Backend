@@ -25,6 +25,37 @@ type socialStatusTokenBinding struct {
 	UserID   string `json:"userId"`
 }
 
+const (
+	socialPlatformVerifyTTL         = 5 * time.Minute
+	socialPlatformVerifyMaxAttempts = 5
+)
+
+func getSocialPlatformVerifyAttemptCount(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) (int, error) {
+	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
+	var attemptCount int
+	found, err := apiHelper.DBManager.Redis.GetCache(c.Context(), attemptKey, &attemptCount)
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, nil
+	}
+	return attemptCount, nil
+}
+
+func incrementSocialPlatformVerifyAttempt(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) error {
+	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
+	_, err := apiHelper.DBManager.Redis.IncrementWithTTL(c.Context(), attemptKey, socialPlatformVerifyTTL)
+	return err
+}
+
+func clearSocialPlatformVerifyAttempt(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) {
+	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
+	if err := apiHelper.DBManager.Redis.DeleteCache(c.Context(), attemptKey); err != nil {
+		harukiLogger.Warnf("Failed to clear social platform verify attempt key: %v", err)
+	}
+}
+
 func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -181,7 +212,8 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			{Key: statusTokenBindingKey, Value: socialStatusTokenBinding{Platform: string(req.Platform), UserID: req.UserID}},
 			{Key: userIDKey, Value: userID},
 			{Key: statusTokenMappingKey, Value: statusToken},
-		}, 5*time.Minute); err != nil {
+			{Key: harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(req.Platform), req.UserID), Value: 0},
+		}, socialPlatformVerifyTTL); err != nil {
 			harukiLogger.Errorf("Failed to save social verification state: %v", err)
 			reason = "save_verification_state_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to save verification state")
@@ -344,6 +376,20 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
+		if !isSupportedSocialPlatform(req.Platform) {
+			reason = "unsupported_platform"
+			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
+		}
+		attemptCount, err := getSocialPlatformVerifyAttemptCount(c, apiHelper, req.Platform, req.UserID)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get social verify attempt count: %v", err)
+			reason = "get_attempt_count_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to get verification key")
+		}
+		if attemptCount >= socialPlatformVerifyMaxAttempts {
+			reason = "too_many_attempts"
+			return harukiAPIHelper.ErrorBadRequest(c, "too many verification attempts, please generate a new code")
+		}
 
 		storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(req.Platform), req.UserID)
 		var code string
@@ -358,6 +404,11 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorBadRequest(c, "verification key expired or not found")
 		}
 		if req.OneTimePassword != code {
+			if err := incrementSocialPlatformVerifyAttempt(c, apiHelper, req.Platform, req.UserID); err != nil {
+				harukiLogger.Errorf("Failed to increment social verify attempt count: %v", err)
+				reason = "increment_attempt_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to save verification state")
+			}
 			reason = "invalid_one_time_password"
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid one time password")
 		}
@@ -427,7 +478,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		}
 
 		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
-		if err := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "true", 5*time.Minute); err != nil {
+		if err := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "true", socialPlatformVerifyTTL); err != nil {
 			_ = tx.Rollback()
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			reason = "set_status_token_failed"
@@ -435,7 +486,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		}
 
 		if err := tx.Commit(); err != nil {
-			if resetErr := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "false", 5*time.Minute); resetErr != nil {
+			if resetErr := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "false", socialPlatformVerifyTTL); resetErr != nil {
 				harukiLogger.Warnf("Failed to restore social platform status token after commit failure: %v", resetErr)
 			}
 			harukiLogger.Errorf("Failed to commit social platform verify transaction: %v", err)
@@ -443,6 +494,10 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
 		}
 
+		if err := apiHelper.DBManager.Redis.DeleteCache(ctx, storageKey); err != nil {
+			harukiLogger.Warnf("Failed to clear social platform verification key: %v", err)
+		}
+		clearSocialPlatformVerifyAttempt(c, apiHelper, req.Platform, req.UserID)
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
 		return harukiAPIHelper.SuccessResponse[string](c, "social platform verified", nil)

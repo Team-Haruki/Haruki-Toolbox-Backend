@@ -126,7 +126,7 @@ func sendData(url string, userID int64, server utils.SupportedDataUploadServer, 
 		logger.Warnf("Failed to sync data to %s: %v", url, err)
 		return
 	}
-	if resp.StatusCode() != 200 {
+	if !isHTTPSuccessStatus(resp.StatusCode()) {
 		logger.Warnf("Failed to sync data to %s: status code %v", url, resp.Status())
 	} else {
 		logger.Infof("Successfully sync data to %s", url)
