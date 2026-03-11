@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"haruki-suite/utils"
 	harukiVersion "haruki-suite/version"
+	"net"
+	urlpkg "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +16,39 @@ const webhookCallbackTimeout = 10 * time.Second
 
 func isHTTPSuccessStatus(statusCode int) bool {
 	return statusCode >= 200 && statusCode < 300
+}
+
+func isWebhookCallbackHostAllowed(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return !isPrivateOrLocalIP(ip)
+	}
+	return true
+}
+
+func isPrivateOrLocalIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
+}
+
+func validateWebhookCallbackURL(rawURL string) (string, bool) {
+	parsed, err := urlpkg.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", false
+	}
+	hostname := strings.TrimSpace(parsed.Hostname())
+	if !isWebhookCallbackHostAllowed(hostname) {
+		return "", false
+	}
+	return parsed.String(), true
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
@@ -45,14 +80,17 @@ func parseWebhookCallback(cb map[string]any) (string, string, bool) {
 	if !ok || strings.TrimSpace(url) == "" {
 		return "", "", false
 	}
+	validatedURL, ok := validateWebhookCallbackURL(url)
+	if !ok {
+		return "", "", false
+	}
 	bearer, _ := cb["bearer"].(string)
 	if bearer == "" {
-		// Backward-compat for old data that may contain uppercase field names.
 		if legacy, ok := cb["Bearer"].(string); ok {
 			bearer = legacy
 		}
 	}
-	return url, bearer, true
+	return validatedURL, bearer, true
 }
 
 func (h *DataHandler) CallWebhook(
