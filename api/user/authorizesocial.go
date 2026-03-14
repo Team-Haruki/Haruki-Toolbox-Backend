@@ -2,6 +2,7 @@ package user
 
 import (
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	harukiLogger "haruki-suite/utils/logger"
@@ -52,23 +53,24 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		existing, err := client.Query().
 			Where(
 				authorizesocialplatforminfo.UserID(toolboxUserID),
-				authorizesocialplatforminfo.Platform(payload.Platform),
-				authorizesocialplatforminfo.PlatformUserID(payload.UserID),
+				authorizesocialplatforminfo.PlatformID(userAccountID),
 			).
 			Only(ctx)
-		if err == nil && existing != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "this social platform account is authorized")
+		if err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorBadRequest(c, "social platform not found")
+			}
+			harukiLogger.Errorf("Failed to query authorized social platform: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query social platform")
 		}
-		_, err = client.Create().
-			SetUserID(toolboxUserID).
-			SetPlatformID(userAccountID).
+		_, err = client.UpdateOne(existing).
 			SetPlatform(payload.Platform).
 			SetPlatformUserID(payload.UserID).
 			SetComment(payload.Comment).
 			Save(ctx)
 		if err != nil {
-			harukiLogger.Errorf("Failed to create authorized social platform: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to add social platform")
+			harukiLogger.Errorf("Failed to update authorized social platform: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform")
 		}
 		infos, err := client.Query().
 			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
