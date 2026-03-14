@@ -154,10 +154,10 @@ type HarukiBotVerifySocialPlatformPayload struct {
 }
 
 type AuthorizeSocialPlatformInfo struct {
-	ID       int    `json:"id"`
-	Platform string `json:"platform"`
-	UserID   string `json:"userId"`
-	Comment  string `json:"comment"`
+	PlatformID int    `json:"platformId"`
+	Platform   string `json:"platform"`
+	UserID     string `json:"userId"`
+	Comment    string `json:"comment"`
 }
 
 type GameAccountBinding struct {
