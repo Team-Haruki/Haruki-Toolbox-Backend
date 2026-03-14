@@ -80,7 +80,7 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				ID:       i.PlatformID,
+				PlatformID: i.PlatformID,
 				Platform: i.Platform,
 				UserID:   i.PlatformUserID,
 				Comment:  i.Comment,
@@ -123,7 +123,7 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				ID:       i.PlatformID,
+				PlatformID: i.PlatformID,
 				Platform: i.Platform,
 				UserID:   i.PlatformUserID,
 				Comment:  i.Comment,
