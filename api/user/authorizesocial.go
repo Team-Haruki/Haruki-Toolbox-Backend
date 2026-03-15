@@ -8,6 +8,7 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -95,6 +96,77 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	}
 }
 
+func handleCreateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		toolboxUserID := c.Params("toolbox_user_id")
+		var payload harukiAPIHelper.AuthorizeSocialPlatformPayload
+		if err := c.Bind().Body(&payload); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
+		}
+
+		switch harukiAPIHelper.SocialPlatform(payload.Platform) {
+		case harukiAPIHelper.SocialPlatformQQ, harukiAPIHelper.SocialPlatformQQBot,
+			harukiAPIHelper.SocialPlatformDiscord, harukiAPIHelper.SocialPlatformTelegram:
+
+		default:
+			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
+		}
+		ctx := c.Context()
+		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
+		newPlatformID := 1
+		latest, err := client.Query().
+			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
+			Order(authorizesocialplatforminfo.ByPlatformID(sql.OrderDesc())).
+			First(ctx)
+		if err != nil && !postgresql.IsNotFound(err) {
+			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query social platforms")
+		}
+		if latest != nil {
+			newPlatformID = latest.PlatformID + 1
+		}
+		_, err = client.Create().
+			SetUserID(toolboxUserID).
+			SetPlatform(payload.Platform).
+			SetPlatformUserID(payload.UserID).
+			SetPlatformID(newPlatformID).
+			SetNillableComment(func() *string {
+				if payload.Comment == "" {
+					return nil
+				}
+				return &payload.Comment
+			}()).
+			Save(ctx)
+		if err != nil {
+			if postgresql.IsConstraintError(err) {
+				return harukiAPIHelper.ErrorBadRequest(c, "a social platform entry with this platform_id already exists for the user")
+			}
+			harukiLogger.Errorf("Failed to create authorized social platform: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to create social platform")
+		}
+		infos, err := client.Query().
+			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
+			All(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
+		}
+		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
+		for _, i := range infos {
+			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
+				PlatformID: i.PlatformID,
+				Platform:   i.Platform,
+				UserID:     i.PlatformUserID,
+				Comment:    i.Comment,
+			})
+		}
+		ud := harukiAPIHelper.HarukiToolboxUserData{
+			AuthorizeSocialPlatformInfo: &resp,
+		}
+		return harukiAPIHelper.SuccessResponse(c, "authorized social platform created", &ud)
+	}
+}
+
 func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
@@ -139,8 +211,11 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 }
 
 func registerAuthorizeSocialPlatformRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform/:id")
+	base := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform")
 
+	base.Post("/", apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatform(apiHelper))
+
+	r := base.Group("/:id")
 	r.RouteChain("/").
 		Put(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), verifyUserHasVerifiedSocialPlatform(apiHelper), handleAuthorizeSocialPlatform(apiHelper)).
 		Delete(apiHelper.SessionHandler.VerifySessionToken, checkUserNotBanned(apiHelper), verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
