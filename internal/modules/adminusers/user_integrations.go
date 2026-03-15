@@ -8,7 +8,6 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
@@ -53,22 +52,13 @@ func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.Ha
 
 func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (oauthRevokeFailed bool) {
 	if oauth2Module.HydraOAuthManagementEnabled() {
-		subject := oauth2Module.PreferredHydraSubject(targetUserID, kratosIdentityID)
-		if err := oauth2Module.RevokeHydraConsentSessions(ctx, subject, ""); err != nil {
+		subjects := oauth2Module.HydraSubjectsForUser(targetUserID, kratosIdentityID)
+		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, subjects, ""); err != nil {
 			oauthRevokeFailed = true
 		}
 		return oauthRevokeFailed
 	}
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.DB == nil {
-		return true
-	}
-	if _, err := apiHelper.DBManager.DB.OAuthToken.Update().
-		Where(oauthtoken.HasUserWith(userSchema.IDEQ(strings.TrimSpace(targetUserID)))).
-		SetRevoked(true).
-		Save(ctx); err != nil {
-		oauthRevokeFailed = true
-	}
-	return oauthRevokeFailed
+	return true
 }
 
 func cleanupManagedUserAccessAfterBan(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool, oauthRevokeFailed bool) {
@@ -201,7 +191,7 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		affected := 0
 		err = harukiAPIHelper.RetryOperation(c.Context(), adminLocalMirrorRetryAttempts, adminLocalMirrorRetryInterval, func() error {
 			nextAffected, updateErr := applyManagedTargetUserUpdateGuards(
-				apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email).SetEmailVerified(true),
+				apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email),
 				actorUserID,
 				actorRole,
 				targetUser.ID,
@@ -234,7 +224,7 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		resp := adminUserEmailResponse{
 			UserID:   targetUser.ID,
 			Email:    payload.Email,
-			Verified: true,
+			Verified: false,
 		}
 		sessionClearFailed := clearManagedUserSessions(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
 

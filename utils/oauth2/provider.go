@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	ProviderBuiltin = "builtin"
-	ProviderHydra   = "hydra"
+	ProviderHydra = "hydra"
 )
 
 func OAuth2Provider() string {
@@ -28,6 +27,14 @@ func UseHydraProvider() bool {
 
 func HydraPublicEndpoint(endpointPath string) (string, error) {
 	return buildHydraEndpoint(config.Cfg.OAuth2.HydraPublicURL, endpointPath)
+}
+
+func HydraBrowserEndpoint(endpointPath string) (string, error) {
+	baseURL := strings.TrimSpace(config.Cfg.OAuth2.HydraBrowserURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(config.Cfg.OAuth2.HydraPublicURL)
+	}
+	return buildHydraEndpoint(baseURL, endpointPath)
 }
 
 func HydraAdminEndpoint(endpointPath string) (string, error) {

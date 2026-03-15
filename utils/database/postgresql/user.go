@@ -23,10 +23,6 @@ type User struct {
 	Name string `json:"name,omitempty"`
 	// Email holds the value of the "email" field.
 	Email string `json:"email,omitempty"`
-	// EmailVerified holds the value of the "email_verified" field.
-	EmailVerified *bool `json:"email_verified,omitempty"`
-	// PasswordHash holds the value of the "password_hash" field.
-	PasswordHash string `json:"password_hash,omitempty"`
 	// AvatarPath holds the value of the "avatar_path" field.
 	AvatarPath *string `json:"avatar_path,omitempty"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
@@ -57,13 +53,9 @@ type UserEdges struct {
 	GameAccountBindings []*GameAccountBinding `json:"game_account_bindings,omitempty"`
 	// IosScriptCode holds the value of the ios_script_code edge.
 	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitempty"`
-	// OauthAuthorizations holds the value of the oauth_authorizations edge.
-	OauthAuthorizations []*OAuthAuthorization `json:"oauth_authorizations,omitempty"`
-	// OauthTokens holds the value of the oauth_tokens edge.
-	OauthTokens []*OAuthToken `json:"oauth_tokens,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [4]bool
 }
 
 // SocialPlatformInfoOrErr returns the SocialPlatformInfo value or an error if the edge
@@ -106,32 +98,14 @@ func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 	return nil, &NotLoadedError{edge: "ios_script_code"}
 }
 
-// OauthAuthorizationsOrErr returns the OauthAuthorizations value or an error if the edge
-// was not loaded in eager-loading.
-func (e UserEdges) OauthAuthorizationsOrErr() ([]*OAuthAuthorization, error) {
-	if e.loadedTypes[4] {
-		return e.OauthAuthorizations, nil
-	}
-	return nil, &NotLoadedError{edge: "oauth_authorizations"}
-}
-
-// OauthTokensOrErr returns the OauthTokens value or an error if the edge
-// was not loaded in eager-loading.
-func (e UserEdges) OauthTokensOrErr() ([]*OAuthToken, error) {
-	if e.loadedTypes[5] {
-		return e.OauthTokens, nil
-	}
-	return nil, &NotLoadedError{edge: "oauth_tokens"}
-}
-
 // scanValues returns the types for scanning values from sql.Rows.
 func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldEmailVerified, user.FieldAllowCnMysekai, user.FieldBanned:
+		case user.FieldAllowCnMysekai, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldPasswordHash, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -167,19 +141,6 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field email", values[i])
 			} else if value.Valid {
 				_m.Email = value.String
-			}
-		case user.FieldEmailVerified:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field email_verified", values[i])
-			} else if value.Valid {
-				_m.EmailVerified = new(bool)
-				*_m.EmailVerified = value.Bool
-			}
-		case user.FieldPasswordHash:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field password_hash", values[i])
-			} else if value.Valid {
-				_m.PasswordHash = value.String
 			}
 		case user.FieldAvatarPath:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -260,16 +221,6 @@ func (_m *User) QueryIosScriptCode() *IOSScriptCodeQuery {
 	return NewUserClient(_m.config).QueryIosScriptCode(_m)
 }
 
-// QueryOauthAuthorizations queries the "oauth_authorizations" edge of the User entity.
-func (_m *User) QueryOauthAuthorizations() *OAuthAuthorizationQuery {
-	return NewUserClient(_m.config).QueryOauthAuthorizations(_m)
-}
-
-// QueryOauthTokens queries the "oauth_tokens" edge of the User entity.
-func (_m *User) QueryOauthTokens() *OAuthTokenQuery {
-	return NewUserClient(_m.config).QueryOauthTokens(_m)
-}
-
 // Update returns a builder for updating this User.
 // Note that you need to call User.Unwrap() before calling this method if this User
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -298,14 +249,6 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("email=")
 	builder.WriteString(_m.Email)
-	builder.WriteString(", ")
-	if v := _m.EmailVerified; v != nil {
-		builder.WriteString("email_verified=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	builder.WriteString("password_hash=")
-	builder.WriteString(_m.PasswordHash)
 	builder.WriteString(", ")
 	if v := _m.AvatarPath; v != nil {
 		builder.WriteString("avatar_path=")

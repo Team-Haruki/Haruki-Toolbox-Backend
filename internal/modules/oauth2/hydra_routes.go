@@ -131,7 +131,7 @@ func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 func handleHydraAuthorizeRedirect() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		targetURL, err := harukiOAuth2.HydraPublicEndpoint("/oauth2/auth")
+		targetURL, err := harukiOAuth2.HydraBrowserEndpoint("/oauth2/auth")
 		if err != nil {
 			harukiLogger.Errorf("Hydra authorize endpoint is not configured: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "oauth2 provider is not configured")

@@ -3,9 +3,11 @@ ARG VERSION=dev
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 WORKDIR /app
-COPY . .
 RUN apk add --no-cache build-base
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
 RUN go build \
     -trimpath \
     -ldflags="-s -w \
@@ -30,5 +32,5 @@ RUN apk --no-cache add ca-certificates tzdata
 COPY --from=builder /app/haruki-toolbox-backend .
 RUN mkdir -p logs
 
-EXPOSE 6666
+EXPOSE 16666
 ENTRYPOINT ["./haruki-toolbox-backend"]

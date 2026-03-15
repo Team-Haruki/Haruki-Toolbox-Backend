@@ -24,12 +24,6 @@ type Tx struct {
 	GroupList *GroupListClient
 	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
 	IOSScriptCode *IOSScriptCodeClient
-	// OAuthAuthorization is the client for interacting with the OAuthAuthorization builders.
-	OAuthAuthorization *OAuthAuthorizationClient
-	// OAuthClient is the client for interacting with the OAuthClient builders.
-	OAuthClient *OAuthClientClient
-	// OAuthToken is the client for interacting with the OAuthToken builders.
-	OAuthToken *OAuthTokenClient
 	// RiskEvent is the client for interacting with the RiskEvent builders.
 	RiskEvent *RiskEventClient
 	// RiskRule is the client for interacting with the RiskRule builders.
@@ -183,9 +177,6 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupList = NewGroupListClient(tx.config)
 	tx.IOSScriptCode = NewIOSScriptCodeClient(tx.config)
-	tx.OAuthAuthorization = NewOAuthAuthorizationClient(tx.config)
-	tx.OAuthClient = NewOAuthClientClient(tx.config)
-	tx.OAuthToken = NewOAuthTokenClient(tx.config)
 	tx.RiskEvent = NewRiskEventClient(tx.config)
 	tx.RiskRule = NewRiskRuleClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)

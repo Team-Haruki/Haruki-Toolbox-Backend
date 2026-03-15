@@ -41,8 +41,12 @@ if current == ARGV[1] or current == ARGV[2] then
   return 1
 end
 return -1
-`
+	`
 )
+
+func PublicAccessNamespace() string {
+	return publicAccessNamespace
+}
 
 type CachePath struct {
 	Namespace   string
@@ -219,6 +223,35 @@ func (r *HarukiRedisManager) ClearPublicGameDataCaches(ctx context.Context, serv
 	for _, dataType := range []string{string(harukiUtils.UploadDataTypeSuite), string(harukiUtils.UploadDataTypeMysekai)} {
 		if err := r.ClearCache(ctx, dataType, server, userID); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (r *HarukiRedisManager) ClearNamespace(ctx context.Context, namespace string) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return fmt.Errorf("namespace is empty")
+	}
+
+	var cursor uint64
+	pattern := namespace + ":*"
+	for {
+		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("clear redis namespace scan failed: %w", err)
+		}
+		if len(keys) > 0 {
+			if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
+				return fmt.Errorf("clear redis namespace delete failed: %w", err)
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
 		}
 	}
 	return nil

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,44 +31,8 @@ func newSessionTestRedisClient(t *testing.T) *redis.Client {
 	return client
 }
 
-func TestVerifySessionTokenUsesHandlerSignKey(t *testing.T) {
-	redisClient := newSessionTestRedisClient(t)
-	handler := NewSessionHandler(redisClient, "handler-sign-key")
-
-	token, err := handler.IssueSession("u1")
-	if err != nil {
-		t.Fatalf("IssueSession returned error: %v", err)
-	}
-
-	app := fiber.New()
-	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusNoContent {
-		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
-	}
-
-	reqLower := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
-	reqLower.Header.Set("Authorization", "bearer "+token)
-	respLower, err := app.Test(reqLower)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
-	if respLower.StatusCode != fiber.StatusNoContent {
-		t.Fatalf("lowercase bearer status code = %d, want %d", respLower.StatusCode, fiber.StatusNoContent)
-	}
-}
-
-func TestVerifySessionTokenFailsWhenSignKeyMissing(t *testing.T) {
-	redisClient := newSessionTestRedisClient(t)
-	handler := NewSessionHandler(redisClient, "")
+func TestVerifySessionTokenRequiresConfiguredKratosProvider(t *testing.T) {
+	handler := NewSessionHandler(newSessionTestRedisClient(t), "")
 
 	app := fiber.New()
 	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
@@ -81,95 +45,6 @@ func TestVerifySessionTokenFailsWhenSignKeyMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
-	}
-
-	reqInvalidScheme := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
-	reqInvalidScheme.Header.Set("Authorization", "Basic abc")
-	respInvalidScheme, err := app.Test(reqInvalidScheme)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
-	if respInvalidScheme.StatusCode != fiber.StatusUnauthorized {
-		t.Fatalf("invalid scheme status code = %d, want %d", respInvalidScheme.StatusCode, fiber.StatusUnauthorized)
-	}
-}
-
-func TestVerifySessionTokenRejectsNonHS256Token(t *testing.T) {
-	redisClient := newSessionTestRedisClient(t)
-	handler := NewSessionHandler(redisClient, "handler-sign-key")
-
-	if err := redisClient.Set(t.Context(), "u1:s1", "1", 7*24*time.Hour).Err(); err != nil {
-		t.Fatalf("redis.Set returned error: %v", err)
-	}
-
-	claims := SessionClaims{
-		UserID:       "u1",
-		SessionToken: "s1",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	signed, err := token.SignedString([]byte("handler-sign-key"))
-	if err != nil {
-		t.Fatalf("SignedString returned error: %v", err)
-	}
-
-	app := fiber.New()
-	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
-	req.Header.Set("Authorization", "Bearer "+signed)
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
-	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
-	}
-}
-
-func TestVerifySessionTokenReturnsServiceUnavailableOnRedisError(t *testing.T) {
-	handler := NewSessionHandler(redis.NewClient(&redis.Options{
-		Addr:         "127.0.0.1:1",
-		DialTimeout:  100 * time.Millisecond,
-		ReadTimeout:  100 * time.Millisecond,
-		WriteTimeout: 100 * time.Millisecond,
-	}), "handler-sign-key")
-	t.Cleanup(func() {
-		_ = handler.RedisClient.Close()
-	})
-
-	claims := SessionClaims{
-		UserID:       "u1",
-		SessionToken: "s1",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte("handler-sign-key"))
-	if err != nil {
-		t.Fatalf("SignedString returned error: %v", err)
-	}
-
-	app := fiber.New()
-	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
-	req.Header.Set("Authorization", "Bearer "+signed)
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test returned error: %v", err)
-	}
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusServiceUnavailable)
 	}
@@ -178,8 +53,8 @@ func TestVerifySessionTokenReturnsServiceUnavailableOnRedisError(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
-	if payload["message"] != "session store unavailable" {
-		t.Fatalf("message = %v, want %q", payload["message"], "session store unavailable")
+	if payload["message"] != "identity provider unavailable" {
+		t.Fatalf("message = %v, want %q", payload["message"], "identity provider unavailable")
 	}
 }
 
@@ -216,7 +91,7 @@ func TestClearUserSessions(t *testing.T) {
 }
 
 func TestClearUserSessionsWithNilRedisClient(t *testing.T) {
-	if err := ClearUserSessionsWithContext(t.Context(), nil, "u1"); err == nil {
+	if err := ClearUserSessionsWithContext(context.Background(), nil, "u1"); err == nil {
 		t.Fatalf("expected nil redis client to fail")
 	}
 }
@@ -253,5 +128,31 @@ func TestVerifySessionTokenUsesTrustedAuthProxyHeaders(t *testing.T) {
 	}
 	if payload["identityID"] != "kratos-proxy-1" {
 		t.Fatalf("identityID = %q, want %q", payload["identityID"], "kratos-proxy-1")
+	}
+}
+
+func TestVerifySessionTokenRequiresTrustedAuthProxyWhenEnabled(t *testing.T) {
+	handler := NewSessionHandler(nil, "")
+	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Email", "X-User-Id")
+
+	app := fiber.New()
+	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if payload["message"] != "missing auth proxy identity" {
+		t.Fatalf("message = %v, want %q", payload["message"], "missing auth proxy identity")
 	}
 }

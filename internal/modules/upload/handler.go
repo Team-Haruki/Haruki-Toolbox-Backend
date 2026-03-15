@@ -169,7 +169,7 @@ func HandleUpload(
 		return nil, err
 	}
 	allowPublicAPI := determinePublicAPIPermission(exists, dataType, settings)
-	if err := validateCNMysekaiAccess(dataType, server, userID, allowCNMySekai); err != nil {
+	if err := validateCNMysekaiAccess(dataType, server, allowCNMySekai); err != nil {
 		return nil, err
 	}
 	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID, settings)
@@ -217,8 +217,9 @@ func determinePublicAPIPermission(exists bool, dataType harukiUtils.UploadDataTy
 	return false
 }
 
-func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, userID *string, allowCNMySekai *bool) error {
-	if dataType == harukiUtils.UploadDataTypeMysekai && server == harukiUtils.SupportedDataUploadServerCN {
+func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, allowCNMySekai *bool) error {
+	if server == harukiUtils.SupportedDataUploadServerCN &&
+		(dataType == harukiUtils.UploadDataTypeMysekai || dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty) {
 		if allowCNMySekai != nil && !*allowCNMySekai {
 			return errUploadCNMysekaiDenied
 		}

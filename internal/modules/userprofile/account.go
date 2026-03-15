@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"haruki-suite/config"
 	userModule "haruki-suite/internal/modules/user"
+	userauth "haruki-suite/internal/modules/userauth"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	_ "golang.org/x/image/webp"
 )
 
@@ -258,43 +258,8 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
 			return handleChangePasswordViaKratos(c, apiHelper, u, payload, &result, &reason, &sessionClearFailed, &localMirrorFailed)
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(payload.OldPassword)); err != nil {
-			reason = "old_password_invalid"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Old password is incorrect", nil)
-		}
-		if userModule.IsPasswordTooShort(payload.NewPassword) {
-			reason = "new_password_too_short"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooShortMessage, nil)
-		}
-		if userModule.IsPasswordTooLong(payload.NewPassword) {
-			reason = "new_password_too_long"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooLongMessage, nil)
-		}
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), bcrypt.DefaultCost)
-		if err != nil {
-			harukiLogger.Errorf("Failed to hash password: %v", err)
-			reason = "hash_password_failed"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
-		}
-		_, err = apiHelper.DBManager.DB.User.
-			Update().Where(userSchema.IDEQ(userID)).
-			SetPasswordHash(string(hashedPassword)).
-			Save(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to update password: %v", err)
-			reason = "update_password_failed"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
-		}
-		if err := harukiAPIHelper.ClearUserSessions(apiHelper.RedisClient(), userID); err != nil {
-			harukiLogger.Warnf("Failed to clear user sessions: %v", err)
-			sessionClearFailed = true
-			result = harukiAPIHelper.SystemLogResultSuccess
-			reason = "ok_session_clear_failed"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated, but failed to clear existing sessions", nil)
-		}
-		result = harukiAPIHelper.SystemLogResultSuccess
-		reason = "ok"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
+		reason = "managed_identity_required"
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
 	}
 }
 
@@ -360,20 +325,7 @@ func handleChangePasswordViaKratos(
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
 	}
 
-	if hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), bcrypt.DefaultCost); err != nil {
-		harukiLogger.Errorf("Failed to hash password for local mirror (user=%s): %v", user.ID, err)
-		*localMirrorFailed = true
-	} else if err := harukiAPIHelper.RetryOperation(ctx, localMirrorRetryAttempts, localMirrorRetryInterval, func() error {
-		_, updateErr := apiHelper.DBManager.DB.User.
-			Update().
-			Where(userSchema.IDEQ(user.ID)).
-			SetPasswordHash(string(hashedPassword)).
-			Save(ctx)
-		return updateErr
-	}); err != nil {
-		harukiLogger.Errorf("Failed to mirror password hash locally for user %s after retries: %v", user.ID, err)
-		*localMirrorFailed = true
-	}
+	_ = localMirrorFailed
 
 	if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, kratosIdentityID); err != nil {
 		harukiLogger.Warnf("Failed to revoke Kratos sessions for user %s: %v", user.ID, err)
@@ -408,5 +360,9 @@ func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
 	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleUpdateProfile(apiHelper))
+	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesManagedBrowserAuth() {
+		r.Put("/change-password", userauth.LegacyAuthDisabledHandler())
+		return
+	}
 	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleChangePassword(apiHelper))
 }

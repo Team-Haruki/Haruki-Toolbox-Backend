@@ -15,17 +15,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-)
-
-var (
-	dataChunks      = make(map[string][]harukiUtils.DataChunk)
-	dataChunkTotals = make(map[string]int)
-	dataChunksMutex sync.RWMutex
-	dataChunksSize  int64
 )
 
 const (
@@ -35,41 +27,6 @@ const (
 	chunkUploadIDSepChar = "|"
 	asyncUploadTimeout   = 2 * time.Minute
 )
-
-func init() {
-	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
-		for range ticker.C {
-			cleanExpiredChunks()
-		}
-	}()
-}
-
-func cleanExpiredChunks() {
-	dataChunksMutex.Lock()
-	defer dataChunksMutex.Unlock()
-	now := time.Now()
-	for uploadID, chunks := range dataChunks {
-		if len(chunks) > 0 {
-			latestActivity := chunks[0].Time
-			for _, chunk := range chunks[1:] {
-				if chunk.Time.After(latestActivity) {
-					latestActivity = chunk.Time
-				}
-			}
-			if now.Sub(latestActivity) > 5*time.Minute {
-				for _, chunk := range chunks {
-					dataChunksSize -= int64(len(chunk.Data))
-				}
-				delete(dataChunks, uploadID)
-				delete(dataChunkTotals, uploadID)
-			}
-		} else {
-			delete(dataChunks, uploadID)
-			delete(dataChunkTotals, uploadID)
-		}
-	}
-}
 
 type dataUploadHeader struct {
 	ScriptVersion string `header:"X-Script-Version"`
@@ -98,20 +55,6 @@ func validateDataUploadHeader(header *dataUploadHeader) error {
 
 func buildChunkUploadKey(toolboxUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID int64, uploadID string) string {
 	return fmt.Sprintf("%s%s%s%s%d%s%s", toolboxUserID, chunkUploadIDSepChar, server, chunkUploadIDSepChar, gameUserID, chunkUploadIDSepChar, uploadID)
-}
-
-func hasAllChunks(chunks []harukiUtils.DataChunk, totalChunks int) bool {
-	if len(chunks) != totalChunks {
-		return false
-	}
-	seen := make(map[int]struct{}, len(chunks))
-	for _, chunk := range chunks {
-		if chunk.ChunkIndex < 0 || chunk.ChunkIndex >= totalChunks {
-			return false
-		}
-		seen[chunk.ChunkIndex] = struct{}{}
-	}
-	return len(seen) == totalChunks
 }
 
 func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
@@ -259,105 +202,69 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if !matched {
 			return harukiAPIHelper.ErrorBadRequest(c, "Game user ID does not match your bound accounts")
 		}
-		now := time.Now()
 		body := c.Request().Body()
 		if len(body) == 0 {
 			return harukiAPIHelper.ErrorBadRequest(c, "empty upload body")
 		}
-		chunkCopy := make([]byte, len(body))
-		copy(chunkCopy, body)
+		if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil || apiHelper.DBManager.Redis.Redis == nil {
+			return harukiAPIHelper.ErrorInternal(c, "upload store unavailable")
+		}
+		redisClient := apiHelper.DBManager.Redis.Redis
 		uploadKey := buildChunkUploadKey(toolboxUserID, server, gameUserId, header.UploadId)
-		dataChunksMutex.Lock()
-		if expectedTotal, ok := dataChunkTotals[uploadKey]; ok {
-			if expectedTotal != header.TotalChunks {
-				dataChunksMutex.Unlock()
-				return harukiAPIHelper.ErrorBadRequest(c, "inconsistent X-Total-Chunks for this upload")
+		persistResult, err := persistIOSUploadChunk(ctx, redisClient, uploadKey, header.TotalChunks, header.ChunkIndex, body)
+		if err != nil {
+			logger.Errorf("Failed to persist upload chunk for %s: %v", uploadKey, err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to store upload chunk")
+		}
+		switch persistResult.State {
+		case iosUploadChunkStateInconsistentTotal:
+			return harukiAPIHelper.ErrorBadRequest(c, "inconsistent X-Total-Chunks for this upload")
+		case iosUploadChunkStateTooLarge:
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusRequestEntityTooLarge, "upload is too large", nil)
+		case iosUploadChunkStateIncomplete, iosUploadChunkStateCompleteAlreadyClaimed:
+			return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
+		}
+
+		completedChunks, err := loadIOSUploadChunks(ctx, redisClient, uploadKey, header.TotalChunks)
+		if err != nil {
+			if resetErr := resetIOSUploadClaim(ctx, redisClient, uploadKey); resetErr != nil {
+				logger.Warnf("Failed to reset upload claim for %s: %v", uploadKey, resetErr)
 			}
-		} else {
-			dataChunkTotals[uploadKey] = header.TotalChunks
+			logger.Errorf("Failed to load completed upload chunks for %s: %v", uploadKey, err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to assemble upload chunks")
 		}
-		chunks := dataChunks[uploadKey]
-		replacedIndex := -1
-		oldChunkLen := 0
-		for i := range chunks {
-			if chunks[i].ChunkIndex == header.ChunkIndex {
-				replacedIndex = i
-				oldChunkLen = len(chunks[i].Data)
-				break
+		if err := clearIOSUploadChunks(ctx, redisClient, uploadKey); err != nil {
+			logger.Warnf("Failed to clear completed upload chunks for %s: %v", uploadKey, err)
+		}
+
+		toolboxUserIDCopy := toolboxUserID
+		go func(chunks []harukiUtils.DataChunk, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string, toolboxUserID string) {
+			sort.Slice(chunks, func(x, y int) bool {
+				return chunks[x].ChunkIndex < chunks[y].ChunkIndex
+			})
+			totalLen := 0
+			for _, c := range chunks {
+				totalLen += len(c.Data)
 			}
-		}
-		sizeDelta := int64(len(chunkCopy) - oldChunkLen)
-		if dataChunksSize+sizeDelta > maxDataChunksSize {
-			dataChunksMutex.Unlock()
-			return harukiAPIHelper.ErrorInternal(c, "Server upload buffer full, try again later")
-		}
-		dataChunksSize += sizeDelta
-		newChunk := harukiUtils.DataChunk{
-			ChunkIndex: header.ChunkIndex,
-			Data:       chunkCopy,
-			Time:       now,
-		}
-		if replacedIndex >= 0 {
-			chunks[replacedIndex] = newChunk
-		} else {
-			chunks = append(chunks, newChunk)
-		}
-		dataChunks[uploadKey] = chunks
-		var completedChunks []harukiUtils.DataChunk
-		if hasAllChunks(chunks, header.TotalChunks) {
-			completedChunks = append(completedChunks, chunks...)
-			for _, chunk := range completedChunks {
-				dataChunksSize -= int64(len(chunk.Data))
+			payload := make([]byte, totalLen)
+			offset := 0
+			for _, c := range chunks {
+				copy(payload[offset:], c.Data)
+				offset += len(c.Data)
 			}
-			delete(dataChunks, uploadKey)
-			delete(dataChunkTotals, uploadKey)
-		}
-		dataChunksMutex.Unlock()
-		if completedChunks != nil {
-			completedChunksCopy := cloneDataChunks(completedChunks)
-			toolboxUserIDCopy := toolboxUserID
-			go func(chunks []harukiUtils.DataChunk, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string, toolboxUserID string) {
-				sort.Slice(chunks, func(x, y int) bool {
-					return chunks[x].ChunkIndex < chunks[y].ChunkIndex
-				})
-				totalLen := 0
-				for _, c := range chunks {
-					totalLen += len(c.Data)
-				}
-				payload := make([]byte, totalLen)
-				offset := 0
-				for _, c := range chunks {
-					copy(payload[offset:], c.Data)
-					offset += len(c.Data)
-				}
-				uploadCtx, cancel := context.WithTimeout(context.Background(), asyncUploadTimeout)
-				defer cancel()
-				_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, &toolboxUserID, apiHelper, harukiUtils.UploadMethodIOSScript)
-				if err != nil {
-					logger.Errorf("HandleUpload failed: %v", err)
-				}
-			}(completedChunksCopy, gameUserId, server, string(uploadType), toolboxUserIDCopy)
-		}
+			uploadCtx, cancel := context.WithTimeout(context.Background(), asyncUploadTimeout)
+			defer cancel()
+			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, &toolboxUserID, apiHelper, harukiUtils.UploadMethodIOSScript)
+			if err != nil {
+				logger.Errorf("HandleUpload failed: %v", err)
+			}
+		}(completedChunks, gameUserId, server, string(uploadType), toolboxUserIDCopy)
 		return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 	}
 }
 
 func parseIOSProxyPathInt(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
-}
-
-func cloneDataChunks(chunks []harukiUtils.DataChunk) []harukiUtils.DataChunk {
-	cloned := make([]harukiUtils.DataChunk, 0, len(chunks))
-	for _, chunk := range chunks {
-		dataCopy := make([]byte, len(chunk.Data))
-		copy(dataCopy, chunk.Data)
-		cloned = append(cloned, harukiUtils.DataChunk{
-			ChunkIndex: chunk.ChunkIndex,
-			Data:       dataCopy,
-			Time:       chunk.Time,
-		})
-	}
-	return cloned
 }
 
 func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

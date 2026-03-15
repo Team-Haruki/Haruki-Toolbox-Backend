@@ -159,11 +159,8 @@ type OthersConfig struct {
 
 type OAuth2Config struct {
 	Provider                  string `yaml:"provider"`
-	AuthCodeTTL               int    `yaml:"auth_code_ttl"`
-	AccessTokenTTL            int    `yaml:"access_token_ttl"`
-	RefreshTokenTTL           int    `yaml:"refresh_token_ttl"`
-	TokenSignKey              string `yaml:"token_sign_key"`
 	HydraPublicURL            string `yaml:"hydra_public_url"`
+	HydraBrowserURL           string `yaml:"hydra_browser_url"`
 	HydraAdminURL             string `yaml:"hydra_admin_url"`
 	HydraClientID             string `yaml:"hydra_client_id"`
 	HydraClientSecret         string `yaml:"hydra_client_secret"`
@@ -243,7 +240,7 @@ func Load(configPath string) (Config, error) {
 			HydraRequestTimeoutSecond: 10,
 		},
 		UserSystem: UserSystemConfig{
-			AuthProvider:            "local",
+			AuthProvider:            "kratos",
 			AuthProxyTrustedHeader:  "X-Auth-Proxy-Secret",
 			AuthProxySubjectHeader:  "X-Kratos-Identity-Id",
 			AuthProxyEmailHeader:    "X-User-Email",
@@ -268,12 +265,8 @@ func Load(configPath string) (Config, error) {
 		cfg.UserSystem.SMTP.TimeoutSeconds = 10
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.UserSystem.AuthProvider)) {
-	case "", "local":
-		cfg.UserSystem.AuthProvider = "local"
-	case "kratos":
+	case "", "kratos":
 		cfg.UserSystem.AuthProvider = "kratos"
-	case "auto", "hybrid":
-		cfg.UserSystem.AuthProvider = "auto"
 	default:
 		return Config{}, fmt.Errorf("invalid user_system.auth_provider %q", strings.TrimSpace(cfg.UserSystem.AuthProvider))
 	}

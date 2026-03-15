@@ -7,6 +7,25 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+func TestHydraSubjectsForUser(t *testing.T) {
+	t.Parallel()
+
+	identityID := "kratos-1"
+	subjects := HydraSubjectsForUser("u-1", &identityID)
+	if len(subjects) != 2 {
+		t.Fatalf("len(subjects) = %d, want 2", len(subjects))
+	}
+	if subjects[0] != "kratos-1" || subjects[1] != "u-1" {
+		t.Fatalf("subjects = %#v, want [kratos-1 u-1]", subjects)
+	}
+
+	sameIdentityID := "u-1"
+	subjects = HydraSubjectsForUser("u-1", &sameIdentityID)
+	if len(subjects) != 1 || subjects[0] != "u-1" {
+		t.Fatalf("subjects with duplicate identity = %#v, want [u-1]", subjects)
+	}
+}
+
 func TestCurrentHydraSubjectPrefersIdentityID(t *testing.T) {
 	t.Parallel()
 

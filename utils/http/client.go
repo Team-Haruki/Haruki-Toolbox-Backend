@@ -1,9 +1,12 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	harukiLogger "haruki-suite/utils/logger"
+	"io"
+	stdhttp "net/http"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -49,6 +52,14 @@ func (c *Client) Request(ctx context.Context, method, uri string, headers map[st
 	return statusCode, flattenHeaders(respHeaders), respBody, nil
 }
 
+func (c *Client) RequestNoRedirect(ctx context.Context, method, uri string, headers map[string]string, body []byte) (int, map[string]string, []byte, error) {
+	statusCode, respHeaders, respBody, err := c.requestRaw(ctx, method, uri, headers, body, true)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return statusCode, flattenHeaders(respHeaders), respBody, nil
+}
+
 func (c *Client) RequestWithHeaders(ctx context.Context, method, uri string, headers map[string]string, body []byte) (int, map[string][]string, []byte, error) {
 	if c.client == nil {
 		if err := c.init(); err != nil {
@@ -67,6 +78,47 @@ func (c *Client) RequestWithHeaders(ctx context.Context, method, uri string, hea
 	}
 	respHeaders := cloneHeaders(resp.Header())
 	return resp.StatusCode(), respHeaders, resp.Body(), nil
+}
+
+func (c *Client) requestRaw(ctx context.Context, method, uri string, headers map[string]string, body []byte, disableRedirects bool) (int, map[string][]string, []byte, error) {
+	if c.client == nil {
+		if err := c.init(); err != nil {
+			return 0, nil, nil, fmt.Errorf("failed to initialize client: %w", err)
+		}
+	}
+
+	req, err := stdhttp.NewRequestWithContext(ctx, method, uri, bytes.NewReader(body))
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	baseClient := c.client.GetClient()
+	rawClient := &stdhttp.Client{
+		Transport: baseClient.Transport,
+		Timeout:   baseClient.Timeout,
+	}
+	if disableRedirects {
+		rawClient.CheckRedirect = func(req *stdhttp.Request, via []*stdhttp.Request) error {
+			return stdhttp.ErrUseLastResponse
+		}
+	}
+
+	resp, err := rawClient.Do(req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	defer func(body io.ReadCloser) {
+		_ = body.Close()
+	}(resp.Body)
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return resp.StatusCode, cloneHeaders(resp.Header), respBody, nil
 }
 
 func flattenHeaders(headers map[string][]string) map[string]string {

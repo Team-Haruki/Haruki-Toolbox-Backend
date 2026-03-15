@@ -6,15 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 )
-
-type SessionClaims struct {
-	UserID       string `json:"userId"`
-	SessionToken string `json:"sessionToken"`
-	jwt.RegisteredClaims
-}
 
 type KratosSessionInfo struct {
 	ID        string
@@ -25,7 +18,6 @@ type KratosSessionInfo struct {
 type SessionHandler struct {
 	RedisClient *redis.Client
 
-	SessionSignKey  string
 	SessionProvider string
 
 	AuthProxyEnabled       bool

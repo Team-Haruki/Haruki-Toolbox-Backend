@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-	"golang.org/x/crypto/bcrypt"
 
 	userSchema "haruki-suite/utils/database/postgresql/user"
 )
@@ -71,9 +70,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 				targetID := targetUserID
 				targetIDPtr = &targetID
 			}
-			entry := harukiAPIHelper.BuildSystemLogEntryFromFiber(c, registerAuditAction, result, &targetType, targetIDPtr, map[string]any{
-				"reason": reason,
-			})
+			entry := harukiAPIHelper.BuildSystemLogEntryFromFiber(c, registerAuditAction, result, &targetType, targetIDPtr, map[string]any{"reason": reason})
 			if targetUserID != "" {
 				entry.ActorUserID = &targetUserID
 				role := registerAuditActorRoleUser
@@ -126,120 +123,8 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
 			return handleRegisterViaKratos(c, apiHelper, req, logRegister)
 		}
-		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			harukiLogger.Errorf("Failed to hash password: %v", err)
-			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonPasswordHashFailed)
-			return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
-		}
-
-		uploadCode, err := userModule.GenerateUploadCode()
-		if err != nil {
-			harukiLogger.Errorf("Failed to generate upload code: %v", err)
-			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonGenerateUploadCode)
-			return harukiAPIHelper.ErrorInternal(c, "failed to generate upload code")
-		}
-
-		var uid string
-		var newUser *postgresql.User
-		var tx *postgresql.Tx
-		for attempt := range registerUIDGenerateMaxAttempts {
-			tx, err = apiHelper.DBManager.DB.Tx(ctx)
-			if err != nil {
-				harukiLogger.Errorf("Failed to start register transaction: %v", err)
-				logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonStartTransactionFailed)
-				return harukiAPIHelper.ErrorInternal(c, "failed to create user")
-			}
-
-			uid, err = generateRegisterUID(time.Now())
-			if err != nil {
-				_ = tx.Rollback()
-				tx = nil
-				harukiLogger.Errorf("Failed to generate register uid: %v", err)
-				logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonGenerateUIDFailed)
-				return harukiAPIHelper.ErrorInternal(c, "failed to create user")
-			}
-			newUser, err = tx.User.Create().
-				SetID(uid).
-				SetName(req.Name).
-				SetEmail(req.Email).
-				SetPasswordHash(string(passwordHash)).
-				SetNillableAvatarPath(nil).
-				SetCreatedAt(time.Now().UTC()).
-				Save(ctx)
-			if err == nil {
-				break
-			}
-			_ = tx.Rollback()
-			tx = nil
-
-			emailTaken, emailCheckErr := queryRegisterEmailConflict(ctx, apiHelper, req.Email, err)
-			if emailCheckErr != nil {
-				harukiLogger.Errorf("Failed to query email conflict during register: %v", emailCheckErr)
-				logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonCreateUserFailed)
-				return harukiAPIHelper.ErrorInternal(c, "failed to create user")
-			}
-
-			switch decideRegisterCreateUserFailure(err, emailTaken) {
-			case registerCreateUserFailureDecisionRetryUID:
-				harukiLogger.Warnf("UID collision on attempt %d, retrying...", attempt+1)
-				continue
-			case registerCreateUserFailureDecisionEmailConflict:
-				logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonEmailUnavailable)
-				return harukiAPIHelper.ErrorBadRequest(c, "email already in use")
-			default:
-				break
-			}
-		}
-		if err != nil {
-			if tx != nil {
-				_ = tx.Rollback()
-			}
-			harukiLogger.Errorf("Failed to create user after retries: %v", err)
-			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonCreateUserFailed)
-			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
-		}
-		_, err = tx.IOSScriptCode.Create().
-			SetUserID(uid).
-			SetUploadCode(uploadCode).
-			Save(ctx)
-		if err != nil {
-			_ = tx.Rollback()
-			harukiLogger.Errorf("Failed to create iOS script code: %v", err)
-			logRegister(harukiAPIHelper.SystemLogResultFailure, uid, registerReasonCreateIOSCodeFailed)
-			return harukiAPIHelper.ErrorInternal(c, "failed to create upload code")
-		}
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
-			harukiLogger.Errorf("Failed to commit register transaction: %v", err)
-			logRegister(harukiAPIHelper.SystemLogResultFailure, uid, registerReasonCommitTransactionFailed)
-			return harukiAPIHelper.ErrorInternal(c, "failed to create user")
-		}
-
-		signedToken, err := apiHelper.SessionHandler.IssueSession(uid)
-		if err != nil {
-			harukiLogger.Errorf("Failed to issue session for user %s: %v", uid, err)
-			cleanupRegisteredUserAfterSessionIssueFailure(ctx, apiHelper, uid)
-			logRegister(harukiAPIHelper.SystemLogResultFailure, uid, registerReasonIssueSessionFailed)
-			return harukiAPIHelper.ErrorInternal(c, "Failed to create session")
-		}
-		role := string(newUser.Role)
-		ud := harukiAPIHelper.HarukiToolboxUserData{
-			Name:                        &newUser.Name,
-			UserID:                      &uid,
-			Role:                        &role,
-			AvatarPath:                  nil,
-			AllowCNMysekai:              &newUser.AllowCnMysekai,
-			IOSUploadCode:               &uploadCode,
-			EmailInfo:                   &harukiAPIHelper.EmailInfo{Email: req.Email, Verified: true},
-			SocialPlatformInfo:          nil,
-			AuthorizeSocialPlatformInfo: nil,
-			GameAccountBindings:         nil,
-			SessionToken:                &signedToken,
-		}
-		logRegister(harukiAPIHelper.SystemLogResultSuccess, uid, registerReasonOK)
-		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "register success", UserData: ud}
-		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
+		logRegister(harukiAPIHelper.SystemLogResultFailure, "", "managed_identity_required")
+		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, ManagedIdentityMessage, nil)
 	}
 }
 

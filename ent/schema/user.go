@@ -16,8 +16,6 @@ func (User) Fields() []ent.Field {
 		field.String("name"),
 		field.String("id").NotEmpty().Unique().Immutable(),
 		field.String("email").Unique(),
-		field.Bool("email_verified").Optional().Nillable(),
-		field.String("password_hash"),
 		field.String("avatar_path").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
 		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),
@@ -34,8 +32,6 @@ func (User) Edges() []ent.Edge {
 		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type),
 		edge.To("game_account_bindings", GameAccountBinding.Type),
 		edge.To("ios_script_code", IOSScriptCode.Type).Unique(),
-		edge.To("oauth_authorizations", OAuthAuthorization.Type),
-		edge.To("oauth_tokens", OAuthToken.Type),
 	}
 }
 

@@ -54,8 +54,8 @@ func TestLoad(t *testing.T) {
 		if cfg.UserSystem.SMTP.TimeoutSeconds != 10 {
 			t.Fatalf("UserSystem.SMTP.TimeoutSeconds = %d, want %d", cfg.UserSystem.SMTP.TimeoutSeconds, 10)
 		}
-		if cfg.UserSystem.AuthProvider != "local" {
-			t.Fatalf("UserSystem.AuthProvider = %q, want %q", cfg.UserSystem.AuthProvider, "local")
+		if cfg.UserSystem.AuthProvider != "kratos" {
+			t.Fatalf("UserSystem.AuthProvider = %q, want %q", cfg.UserSystem.AuthProvider, "kratos")
 		}
 		if cfg.UserSystem.KratosRequestTimeout != 10 {
 			t.Fatalf("UserSystem.KratosRequestTimeout = %d, want %d", cfg.UserSystem.KratosRequestTimeout, 10)
@@ -86,7 +86,7 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
-	t.Run("normalize auth provider aliases", func(t *testing.T) {
+	t.Run("reject legacy auth provider aliases", func(t *testing.T) {
 		tmp := t.TempDir()
 		cfgPath := filepath.Join(tmp, "cfg.yaml")
 		content := []byte("user_system:\n  auth_provider: hybrid\n")
@@ -94,12 +94,8 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("WriteFile failed: %v", err)
 		}
 
-		cfg, err := Load(cfgPath)
-		if err != nil {
-			t.Fatalf("Load returned error: %v", err)
-		}
-		if cfg.UserSystem.AuthProvider != "auto" {
-			t.Fatalf("UserSystem.AuthProvider = %q, want %q", cfg.UserSystem.AuthProvider, "auto")
+		if _, err := Load(cfgPath); err == nil {
+			t.Fatalf("expected legacy auth provider alias to be rejected")
 		}
 	})
 }
@@ -107,7 +103,7 @@ func TestLoad(t *testing.T) {
 func TestLoadGlobalFromEnvOrDefault(t *testing.T) {
 	tmp := t.TempDir()
 	cfgPath := filepath.Join(tmp, "cfg.yaml")
-	content := []byte("user_system:\n  session_sign_token: abc\n")
+	content := []byte("user_system:\n  kratos_public_url: http://kratos-public\n  kratos_admin_url: http://kratos-admin\n")
 	if err := os.WriteFile(cfgPath, content, 0600); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
@@ -123,8 +119,8 @@ func TestLoadGlobalFromEnvOrDefault(t *testing.T) {
 	if !sameExistingPath(resolvedPath, cfgPath) {
 		t.Fatalf("resolvedPath = %q, want %q", resolvedPath, cfgPath)
 	}
-	if Cfg.UserSystem.SessionSignToken != "abc" {
-		t.Fatalf("Cfg.UserSystem.SessionSignToken = %q, want %q", Cfg.UserSystem.SessionSignToken, "abc")
+	if Cfg.UserSystem.KratosPublicURL != "http://kratos-public" {
+		t.Fatalf("Cfg.UserSystem.KratosPublicURL = %q, want %q", Cfg.UserSystem.KratosPublicURL, "http://kratos-public")
 	}
 }
 
