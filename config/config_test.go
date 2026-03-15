@@ -33,6 +33,48 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("expand env placeholders in yaml", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("user_system:\n  kratos_public_url: ${KRATOS_PUBLIC_BASE_URL}\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		t.Setenv("KRATOS_PUBLIC_BASE_URL", "http://kratos-from-env")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.UserSystem.KratosPublicURL != "http://kratos-from-env" {
+			t.Fatalf("UserSystem.KratosPublicURL = %q, want %q", cfg.UserSystem.KratosPublicURL, "http://kratos-from-env")
+		}
+	})
+
+	t.Run("env overrides scalar yaml values", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("backend:\n  port: 3000\nredis:\n  password: from-yaml\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		t.Setenv("BACKEND_PORT", "4000")
+		t.Setenv("REDIS_PASSWORD", "from-env")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.Backend.Port != 4000 {
+			t.Fatalf("Backend.Port = %d, want %d", cfg.Backend.Port, 4000)
+		}
+		if cfg.Redis.Password != "from-env" {
+			t.Fatalf("Redis.Password = %q, want %q", cfg.Redis.Password, "from-env")
+		}
+	})
+
 	t.Run("apply defaults", func(t *testing.T) {
 		tmp := t.TempDir()
 		cfgPath := filepath.Join(tmp, "cfg.yaml")

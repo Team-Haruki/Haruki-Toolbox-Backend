@@ -35,6 +35,15 @@ type importUserRow struct {
 	PasswordHash string
 }
 
+type toolRuntimeConfig struct {
+	DBType              string
+	DBURL               string
+	KratosPublicURL     string
+	KratosAdminURL      string
+	KratosSessionHeader string
+	KratosSessionCookie string
+}
+
 func main() {
 	apply := flag.Bool("apply", false, "apply import to Kratos (default: dry-run)")
 	batchSize := flag.Int("batch-size", 200, "number of users fetched per DB batch")
@@ -42,6 +51,12 @@ func main() {
 	resumeFrom := flag.String("resume-from", "", "resume from user ID (exclusive)")
 	requestTimeout := flag.Duration("request-timeout", 10*time.Second, "timeout per Kratos request")
 	stateFile := flag.String("state-file", ".codex-dev/kratos-user-import-state.json", "state file path for apply mode")
+	dbTypeFlag := flag.String("db-type", "", "override source DB type; when provided with the other required flags the tool can run without HARUKI_CONFIG_PATH")
+	dbURLFlag := flag.String("db-url", "", "override source DB URL; when provided with the other required flags the tool can run without HARUKI_CONFIG_PATH")
+	kratosPublicURLFlag := flag.String("kratos-public-url", "", "override Kratos public URL; optional when only admin lookup/import is needed")
+	kratosAdminURLFlag := flag.String("kratos-admin-url", "", "override Kratos admin URL")
+	kratosSessionHeaderFlag := flag.String("kratos-session-header", "", "override Kratos session header name")
+	kratosSessionCookieFlag := flag.String("kratos-session-cookie", "", "override Kratos session cookie name")
 	flag.Parse()
 
 	if *batchSize <= 0 || *requestTimeout <= 0 {
@@ -49,18 +64,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	configPath, err := config.LoadGlobalFromEnvOrDefault()
+	runtimeCfg, configPath, err := resolveRuntimeConfig(*dbTypeFlag, *dbURLFlag, *kratosPublicURLFlag, *kratosAdminURLFlag, *kratosSessionHeaderFlag, *kratosSessionCookieFlag)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load config failed: %v\n", err)
-		os.Exit(1)
-	}
-	cfg := config.Cfg
-	if strings.TrimSpace(cfg.UserSystem.KratosAdminURL) == "" {
-		fmt.Fprintln(os.Stderr, "user_system.kratos_admin_url is empty, abort")
+		fmt.Fprintf(os.Stderr, "resolve runtime config failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	dbClient, err := postgresql.Open(cfg.UserSystem.DBType, cfg.UserSystem.DBURL)
+	dbClient, err := postgresql.Open(runtimeCfg.DBType, runtimeCfg.DBURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open database failed: %v\n", err)
 		os.Exit(1)
@@ -73,7 +83,7 @@ func main() {
 	}
 
 	sessionHandler := harukiAPIHelper.NewSessionHandler(nil, "")
-	sessionHandler.ConfigureIdentityProvider("kratos", cfg.UserSystem.KratosPublicURL, cfg.UserSystem.KratosAdminURL, cfg.UserSystem.KratosSessionHeader, cfg.UserSystem.KratosSessionCookie, true, true, time.Duration(cfg.UserSystem.KratosRequestTimeout)*time.Second, nil)
+	sessionHandler.ConfigureIdentityProvider("kratos", runtimeCfg.KratosPublicURL, runtimeCfg.KratosAdminURL, runtimeCfg.KratosSessionHeader, runtimeCfg.KratosSessionCookie, true, true, *requestTimeout, nil)
 
 	state := importState{}
 	if *apply {
@@ -93,6 +103,8 @@ func main() {
 	} else {
 		fmt.Println("Mode: DRY-RUN")
 	}
+	fmt.Printf("Source DB: type=%s url=%s\n", runtimeCfg.DBType, redactDSN(runtimeCfg.DBURL))
+	fmt.Printf("Kratos: admin=%s public=%s\n", runtimeCfg.KratosAdminURL, runtimeCfg.KratosPublicURL)
 	fmt.Printf("Batch size: %d\nResume from: %q\nLimit: %d (0 means unlimited)\nRequest timeout: %s\n", *batchSize, state.LastID, *limit, requestTimeout.String())
 
 	remaining := *limit
@@ -122,7 +134,7 @@ func main() {
 				}
 				continue
 			}
-			identityID, mode, err := importUserToKratos(ctx, sessionHandler, cfg.UserSystem.KratosAdminURL, *requestTimeout, row)
+			identityID, mode, err := importUserToKratos(ctx, sessionHandler, runtimeCfg.KratosAdminURL, *requestTimeout, row)
 			if err != nil {
 				state.Failed++
 				fmt.Fprintf(os.Stderr, "[fail] user=%s email=%s err=%v\n", row.ID, row.Email, err)
@@ -189,6 +201,77 @@ func fetchImportUsers(ctx context.Context, sqlDB *stdsql.DB, afterID string, lim
 func updateUserKratosIdentityID(ctx context.Context, sqlDB *stdsql.DB, userID, identityID string) error {
 	_, err := sqlDB.ExecContext(ctx, "UPDATE users SET kratos_identity_id = $1 WHERE id = $2", strings.TrimSpace(identityID), strings.TrimSpace(userID))
 	return err
+}
+
+func resolveRuntimeConfig(dbTypeRaw, dbURLRaw, kratosPublicURLRaw, kratosAdminURLRaw, kratosSessionHeaderRaw, kratosSessionCookieRaw string) (toolRuntimeConfig, string, error) {
+	runtimeCfg := toolRuntimeConfig{
+		DBType:              strings.TrimSpace(dbTypeRaw),
+		DBURL:               strings.TrimSpace(dbURLRaw),
+		KratosPublicURL:     strings.TrimSpace(kratosPublicURLRaw),
+		KratosAdminURL:      strings.TrimSpace(kratosAdminURLRaw),
+		KratosSessionHeader: strings.TrimSpace(kratosSessionHeaderRaw),
+		KratosSessionCookie: strings.TrimSpace(kratosSessionCookieRaw),
+	}
+
+	needConfig := runtimeCfg.DBURL == "" || runtimeCfg.KratosAdminURL == ""
+	configPath := "<flag-overrides>"
+	if needConfig {
+		loadedConfigPath, err := config.LoadGlobalFromEnvOrDefault()
+		if err != nil {
+			return toolRuntimeConfig{}, "", err
+		}
+		configPath = loadedConfigPath
+		cfg := config.Cfg
+		runtimeCfg.DBType = firstNonEmpty(runtimeCfg.DBType, cfg.UserSystem.DBType)
+		runtimeCfg.DBURL = firstNonEmpty(runtimeCfg.DBURL, cfg.UserSystem.DBURL)
+		runtimeCfg.KratosPublicURL = firstNonEmpty(runtimeCfg.KratosPublicURL, cfg.UserSystem.KratosPublicURL)
+		runtimeCfg.KratosAdminURL = firstNonEmpty(runtimeCfg.KratosAdminURL, cfg.UserSystem.KratosAdminURL)
+		runtimeCfg.KratosSessionHeader = firstNonEmpty(runtimeCfg.KratosSessionHeader, cfg.UserSystem.KratosSessionHeader)
+		runtimeCfg.KratosSessionCookie = firstNonEmpty(runtimeCfg.KratosSessionCookie, cfg.UserSystem.KratosSessionCookie)
+	}
+
+	runtimeCfg.DBType = firstNonEmpty(runtimeCfg.DBType, "postgres")
+	runtimeCfg.KratosSessionHeader = firstNonEmpty(runtimeCfg.KratosSessionHeader, "X-Session-Token")
+	runtimeCfg.KratosSessionCookie = firstNonEmpty(runtimeCfg.KratosSessionCookie, "ory_kratos_session")
+
+	if runtimeCfg.DBURL == "" {
+		return toolRuntimeConfig{}, "", fmt.Errorf("source db url is empty; set --db-url or configure user_system.db_url")
+	}
+	if runtimeCfg.KratosAdminURL == "" {
+		return toolRuntimeConfig{}, "", fmt.Errorf("kratos admin url is empty; set --kratos-admin-url or configure user_system.kratos_admin_url")
+	}
+	if runtimeCfg.KratosPublicURL == "" {
+		runtimeCfg.KratosPublicURL = runtimeCfg.KratosAdminURL
+	}
+
+	return runtimeCfg, configPath, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func redactDSN(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return trimmed
+	}
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		if username != "" {
+			parsed.User = url.UserPassword(username, "***")
+		}
+	}
+	return parsed.String()
 }
 
 func importUserToKratos(ctx context.Context, sessionHandler *harukiAPIHelper.SessionHandler, kratosAdminURL string, requestTimeout time.Duration, row importUserRow) (string, string, error) {
