@@ -75,16 +75,6 @@ func Email(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldEmail, v))
 }
 
-// EmailVerified applies equality check predicate on the "email_verified" field. It's identical to EmailVerifiedEQ.
-func EmailVerified(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldEmailVerified, v))
-}
-
-// PasswordHash applies equality check predicate on the "password_hash" field. It's identical to PasswordHashEQ.
-func PasswordHash(v string) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldPasswordHash, v))
-}
-
 // AvatarPath applies equality check predicate on the "avatar_path" field. It's identical to AvatarPathEQ.
 func AvatarPath(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAvatarPath, v))
@@ -243,91 +233,6 @@ func EmailEqualFold(v string) predicate.User {
 // EmailContainsFold applies the ContainsFold predicate on the "email" field.
 func EmailContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldEmail, v))
-}
-
-// EmailVerifiedEQ applies the EQ predicate on the "email_verified" field.
-func EmailVerifiedEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldEmailVerified, v))
-}
-
-// EmailVerifiedNEQ applies the NEQ predicate on the "email_verified" field.
-func EmailVerifiedNEQ(v bool) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldEmailVerified, v))
-}
-
-// EmailVerifiedIsNil applies the IsNil predicate on the "email_verified" field.
-func EmailVerifiedIsNil() predicate.User {
-	return predicate.User(sql.FieldIsNull(FieldEmailVerified))
-}
-
-// EmailVerifiedNotNil applies the NotNil predicate on the "email_verified" field.
-func EmailVerifiedNotNil() predicate.User {
-	return predicate.User(sql.FieldNotNull(FieldEmailVerified))
-}
-
-// PasswordHashEQ applies the EQ predicate on the "password_hash" field.
-func PasswordHashEQ(v string) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldPasswordHash, v))
-}
-
-// PasswordHashNEQ applies the NEQ predicate on the "password_hash" field.
-func PasswordHashNEQ(v string) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldPasswordHash, v))
-}
-
-// PasswordHashIn applies the In predicate on the "password_hash" field.
-func PasswordHashIn(vs ...string) predicate.User {
-	return predicate.User(sql.FieldIn(FieldPasswordHash, vs...))
-}
-
-// PasswordHashNotIn applies the NotIn predicate on the "password_hash" field.
-func PasswordHashNotIn(vs ...string) predicate.User {
-	return predicate.User(sql.FieldNotIn(FieldPasswordHash, vs...))
-}
-
-// PasswordHashGT applies the GT predicate on the "password_hash" field.
-func PasswordHashGT(v string) predicate.User {
-	return predicate.User(sql.FieldGT(FieldPasswordHash, v))
-}
-
-// PasswordHashGTE applies the GTE predicate on the "password_hash" field.
-func PasswordHashGTE(v string) predicate.User {
-	return predicate.User(sql.FieldGTE(FieldPasswordHash, v))
-}
-
-// PasswordHashLT applies the LT predicate on the "password_hash" field.
-func PasswordHashLT(v string) predicate.User {
-	return predicate.User(sql.FieldLT(FieldPasswordHash, v))
-}
-
-// PasswordHashLTE applies the LTE predicate on the "password_hash" field.
-func PasswordHashLTE(v string) predicate.User {
-	return predicate.User(sql.FieldLTE(FieldPasswordHash, v))
-}
-
-// PasswordHashContains applies the Contains predicate on the "password_hash" field.
-func PasswordHashContains(v string) predicate.User {
-	return predicate.User(sql.FieldContains(FieldPasswordHash, v))
-}
-
-// PasswordHashHasPrefix applies the HasPrefix predicate on the "password_hash" field.
-func PasswordHashHasPrefix(v string) predicate.User {
-	return predicate.User(sql.FieldHasPrefix(FieldPasswordHash, v))
-}
-
-// PasswordHashHasSuffix applies the HasSuffix predicate on the "password_hash" field.
-func PasswordHashHasSuffix(v string) predicate.User {
-	return predicate.User(sql.FieldHasSuffix(FieldPasswordHash, v))
-}
-
-// PasswordHashEqualFold applies the EqualFold predicate on the "password_hash" field.
-func PasswordHashEqualFold(v string) predicate.User {
-	return predicate.User(sql.FieldEqualFold(FieldPasswordHash, v))
-}
-
-// PasswordHashContainsFold applies the ContainsFold predicate on the "password_hash" field.
-func PasswordHashContainsFold(v string) predicate.User {
-	return predicate.User(sql.FieldContainsFold(FieldPasswordHash, v))
 }
 
 // AvatarPathEQ applies the EQ predicate on the "avatar_path" field.
@@ -729,52 +634,6 @@ func HasIosScriptCode() predicate.User {
 func HasIosScriptCodeWith(preds ...predicate.IOSScriptCode) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := newIosScriptCodeStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasOauthAuthorizations applies the HasEdge predicate on the "oauth_authorizations" edge.
-func HasOauthAuthorizations() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, OauthAuthorizationsTable, OauthAuthorizationsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasOauthAuthorizationsWith applies the HasEdge predicate on the "oauth_authorizations" edge with a given conditions (other predicates).
-func HasOauthAuthorizationsWith(preds ...predicate.OAuthAuthorization) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newOauthAuthorizationsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasOauthTokens applies the HasEdge predicate on the "oauth_tokens" edge.
-func HasOauthTokens() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, OauthTokensTable, OauthTokensColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasOauthTokensWith applies the HasEdge predicate on the "oauth_tokens" edge with a given conditions (other predicates).
-func HasOauthTokensWith(preds ...predicate.OAuthToken) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newOauthTokensStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

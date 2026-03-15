@@ -12,9 +12,6 @@ import (
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthclient"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/riskevent"
 	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -95,9 +92,6 @@ func checkColumn(t, c string) error {
 			group.Table:                       group.ValidColumn,
 			grouplist.Table:                   grouplist.ValidColumn,
 			iosscriptcode.Table:               iosscriptcode.ValidColumn,
-			oauthauthorization.Table:          oauthauthorization.ValidColumn,
-			oauthclient.Table:                 oauthclient.ValidColumn,
-			oauthtoken.Table:                  oauthtoken.ValidColumn,
 			riskevent.Table:                   riskevent.ValidColumn,
 			riskrule.Table:                    riskrule.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,

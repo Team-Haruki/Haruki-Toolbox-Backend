@@ -51,6 +51,33 @@ func TestBuildHydraEndpoint(t *testing.T) {
 	})
 }
 
+func TestHydraBrowserEndpoint(t *testing.T) {
+	original := config.Cfg
+	t.Cleanup(func() {
+		config.Cfg = original
+	})
+
+	config.Cfg.OAuth2.HydraPublicURL = "http://hydra:4444"
+	config.Cfg.OAuth2.HydraBrowserURL = "https://gateway.example.com"
+
+	got, err := HydraBrowserEndpoint("/oauth2/auth")
+	if err != nil {
+		t.Fatalf("HydraBrowserEndpoint returned error: %v", err)
+	}
+	if got != "https://gateway.example.com/oauth2/auth" {
+		t.Fatalf("HydraBrowserEndpoint() = %q", got)
+	}
+
+	config.Cfg.OAuth2.HydraBrowserURL = ""
+	got, err = HydraBrowserEndpoint("/oauth2/auth")
+	if err != nil {
+		t.Fatalf("HydraBrowserEndpoint fallback returned error: %v", err)
+	}
+	if got != "http://hydra:4444/oauth2/auth" {
+		t.Fatalf("HydraBrowserEndpoint() fallback = %q", got)
+	}
+}
+
 func TestHydraRequestTimeout(t *testing.T) {
 	original := config.Cfg
 	t.Cleanup(func() {

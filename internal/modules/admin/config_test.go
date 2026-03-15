@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database"
+	harukiRedis "haruki-suite/utils/database/redis"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 func TestSanitizePublicAPIAllowedKeys(t *testing.T) {
@@ -170,5 +175,106 @@ func TestHandleUpdateRuntimeConfig(t *testing.T) {
 	}
 	if len(helper.GetPublicAPIAllowedKeys()) != 2 {
 		t.Fatalf("public api keys not updated: %#v", helper.GetPublicAPIAllowedKeys())
+	}
+}
+
+func newAdminConfigRedisHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *harukiRedis.HarukiRedisManager) {
+	t.Helper()
+
+	srv, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run() error: %v", err)
+	}
+	t.Cleanup(func() {
+		srv.Close()
+	})
+
+	client := goredis.NewClient(&goredis.Options{Addr: srv.Addr()})
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	redisManager := &harukiRedis.HarukiRedisManager{Redis: client}
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{
+			Redis: redisManager,
+		},
+	}
+	return helper, redisManager
+}
+
+func TestHandleUpdatePublicAPIAllowedKeysClearsPublicCache(t *testing.T) {
+	helper, redisManager := newAdminConfigRedisHelper(t)
+	if err := redisManager.SetCache(t.Context(), "public_access:/public/jp/suite/1001:query=abc", map[string]any{"x": 1}, time.Minute); err != nil {
+		t.Fatalf("seed cache returned error: %v", err)
+	}
+
+	app := fiber.New()
+	app.Put("/", handleUpdatePublicAPIAllowedKeys(helper))
+
+	body, err := json.Marshal(map[string]any{
+		"publicApiAllowedKeys": []string{"key-a"},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+
+	exists, err := redisManager.Redis.Exists(t.Context(), "public_access:/public/jp/suite/1001:query=abc").Result()
+	if err != nil {
+		t.Fatalf("Exists returned error: %v", err)
+	}
+	if exists != 0 {
+		t.Fatalf("expected public cache entry to be cleared")
+	}
+}
+
+func TestHandleUpdateRuntimeConfigPropagatesAcrossHelpers(t *testing.T) {
+	helper1, redisManager := newAdminConfigRedisHelper(t)
+	helper2 := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{
+			Redis: redisManager,
+		},
+	}
+
+	app := fiber.New()
+	app.Put("/", handleUpdateRuntimeConfig(helper1))
+
+	body, err := json.Marshal(map[string]any{
+		"publicApiAllowedKeys": []string{"shared-key"},
+		"privateApiToken":      "shared-private-token",
+		"webhookJwtSecret":     "shared-webhook-secret",
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+
+	privateAPIToken, _ := helper2.GetPrivateAPIAuth()
+	if privateAPIToken != "shared-private-token" {
+		t.Fatalf("helper2 private api token = %q, want %q", privateAPIToken, "shared-private-token")
+	}
+	if helper2.GetWebhookJWTSecret() != "shared-webhook-secret" {
+		t.Fatalf("helper2 webhook secret = %q, want %q", helper2.GetWebhookJWTSecret(), "shared-webhook-secret")
+	}
+	keys := helper2.GetPublicAPIAllowedKeys()
+	if len(keys) != 1 || keys[0] != "shared-key" {
+		t.Fatalf("helper2 public api keys = %#v, want [shared-key]", keys)
 	}
 }

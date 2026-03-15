@@ -109,14 +109,24 @@ func TestBuildKeys(t *testing.T) {
 			want: "haruki:email:login:attempt:target:" + hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
-			name: "oauth2 auth code",
-			got:  BuildOAuth2AuthCodeKey("code123"),
-			want: "haruki:oauth2:code:code123",
-		},
-		{
 			name: "upload ingress rate limit",
 			got:  BuildUploadIngressRateLimitKey(1700000000, "127.0.0.1|POST|/inherit/:server/:upload_type/submit"),
 			want: "haruki:rate-limit:upload-ingress:1700000000:127.0.0.1|POST|/inherit/:server/:upload_type/submit",
+		},
+		{
+			name: "ios upload chunk meta",
+			got:  BuildIOSUploadChunkMetaKey("toolbox-user|jp|123456|upload-id"),
+			want: "haruki:upload:ios:chunk-meta:toolbox-user|jp|123456|upload-id",
+		},
+		{
+			name: "ios upload chunk data",
+			got:  BuildIOSUploadChunkDataKey("toolbox-user|jp|123456|upload-id"),
+			want: "haruki:upload:ios:chunk-data:toolbox-user|jp|123456|upload-id",
+		},
+		{
+			name: "ios upload chunk claim",
+			got:  BuildIOSUploadChunkClaimKey("toolbox-user|jp|123456|upload-id"),
+			want: "haruki:upload:ios:chunk-claim:toolbox-user|jp|123456|upload-id",
 		},
 	}
 

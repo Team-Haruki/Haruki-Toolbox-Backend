@@ -50,11 +50,8 @@ func resolveUserEmailVerified(user *postgresql.User) bool {
 	if user == nil || strings.TrimSpace(user.Email) == "" {
 		return false
 	}
-	if user.EmailVerified != nil {
-		return *user.EmailVerified
-	}
 	if user.KratosIdentityID != nil && strings.TrimSpace(*user.KratosIdentityID) != "" {
-		return false
+		return true
 	}
 	return true
 }

@@ -77,17 +77,19 @@ func TestDeterminePublicAPIPermission(t *testing.T) {
 func TestValidateCNMysekaiAccess(t *testing.T) {
 	t.Parallel()
 
-	userID := "1241241241"
 	deny := false
 	allow := true
 
-	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeMysekai, harukiUtils.SupportedDataUploadServerCN, &userID, &deny); err == nil {
+	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeMysekai, harukiUtils.SupportedDataUploadServerCN, &deny); err == nil {
 		t.Fatalf("expected illegal request when cn mysekai is disabled")
 	}
-	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeMysekai, harukiUtils.SupportedDataUploadServerCN, &userID, &allow); err != nil {
+	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeMysekai, harukiUtils.SupportedDataUploadServerCN, &allow); err != nil {
 		t.Fatalf("unexpected error when cn mysekai is enabled: %v", err)
 	}
-	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeSuite, harukiUtils.SupportedDataUploadServerCN, &userID, &deny); err != nil {
+	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeMysekaiBirthdayParty, harukiUtils.SupportedDataUploadServerCN, &deny); err == nil {
+		t.Fatalf("expected cn mysekai birthday party upload to be blocked when disabled")
+	}
+	if err := validateCNMysekaiAccess(harukiUtils.UploadDataTypeSuite, harukiUtils.SupportedDataUploadServerCN, &deny); err != nil {
 		t.Fatalf("suite uploads should not be blocked by cn mysekai flag: %v", err)
 	}
 }

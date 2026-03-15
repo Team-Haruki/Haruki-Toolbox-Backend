@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	adminCoreModule "haruki-suite/internal/modules/admincore"
+	userauth "haruki-suite/internal/modules/userauth"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -342,49 +342,10 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 
 		localMirrorFailed := false
 		localMirrorFailureReason := ""
-		hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			if !kratosManaged {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonHashPasswordFailed, nil))
-				return harukiAPIHelper.ErrorInternal(c, "failed to hash password")
-			}
-			localMirrorFailed = true
-			localMirrorFailureReason = "hash_password_failed"
-		} else {
-			affected := 0
-			err := harukiAPIHelper.RetryOperation(c.Context(), adminLocalPasswordMirrorRetryAttempts, adminLocalPasswordMirrorRetryInterval, func() error {
-				nextAffected, updateErr := applyManagedTargetUserUpdateGuards(
-					apiHelper.DBManager.DB.User.Update().SetPasswordHash(string(hashed)),
-					actorUserID,
-					actorRole,
-					targetUser.ID,
-				).Save(c.Context())
-				if updateErr == nil {
-					affected = nextAffected
-				}
-				return updateErr
-			})
-			if err != nil {
-				if !kratosManaged {
-					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdatePasswordFailed, nil))
-					return harukiAPIHelper.ErrorInternal(c, "failed to reset password")
-				}
-				localMirrorFailed = true
-				localMirrorFailureReason = "update_password_failed"
-			}
-			if err == nil && affected == 0 {
-				if !kratosManaged {
-					missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
-					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
-						"guardedUpdateMiss": true,
-					}))
-					return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to reset password")
-				}
-				localMirrorFailed = true
-				localMirrorFailureReason = "guarded_update_miss"
-			}
+		if !kratosManaged {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{"reason": "managed_identity_required"}))
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
 		}
-
 		resp := adminResetPasswordResponse{
 			UserID:            targetUser.ID,
 			TemporaryPassword: temporaryPassword,

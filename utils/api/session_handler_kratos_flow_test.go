@@ -272,19 +272,19 @@ func TestVerifyKratosPasswordByIdentityIDIdentityNotFound(t *testing.T) {
 func TestUsesKratosProvider(t *testing.T) {
 	t.Parallel()
 
-	handler := NewSessionHandler(newSessionTestRedisClient(t), "local-sign-key")
+	handler := NewSessionHandler(newSessionTestRedisClient(t), "")
 	if handler.UsesKratosProvider() {
 		t.Fatalf("UsesKratosProvider should be false by default")
 	}
 
-	handler.ConfigureIdentityProvider("auto", "http://kratos.example", "", "", "", true, true, 2*time.Second, nil)
+	handler.ConfigureIdentityProvider("kratos", "http://kratos.example", "", "", "", true, true, 2*time.Second, nil)
 	if !handler.UsesKratosProvider() {
-		t.Fatalf("UsesKratosProvider should be true when provider=auto and kratos URL set")
+		t.Fatalf("UsesKratosProvider should be true when provider=kratos and kratos URL set")
 	}
 
 	handler.ConfigureIdentityProvider("local", "http://kratos.example", "", "", "", true, true, 2*time.Second, nil)
-	if handler.UsesKratosProvider() {
-		t.Fatalf("UsesKratosProvider should be false when provider=local")
+	if !handler.UsesKratosProvider() {
+		t.Fatalf("legacy provider aliases should be coerced to kratos mode")
 	}
 }
 

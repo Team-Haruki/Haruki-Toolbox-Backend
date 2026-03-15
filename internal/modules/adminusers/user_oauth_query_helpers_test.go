@@ -1,3 +1,5 @@
+//go:build legacy_oauth
+
 package adminusers
 
 import (

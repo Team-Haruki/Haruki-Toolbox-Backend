@@ -1,9 +1,12 @@
 package upload
 
 import (
+	"context"
 	harukiUtils "haruki-suite/utils"
 	"testing"
-	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 func TestValidateDataUploadHeader(t *testing.T) {
@@ -92,136 +95,135 @@ func TestBuildChunkUploadKey(t *testing.T) {
 	}
 }
 
-func TestHasAllChunks(t *testing.T) {
+func TestIOSUploadChunkStoreLifecycle(t *testing.T) {
 	t.Parallel()
 
-	all := []harukiUtils.DataChunk{
-		{ChunkIndex: 2},
-		{ChunkIndex: 0},
-		{ChunkIndex: 1},
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
+
+	first, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, 0, []byte("ab"))
+	if err != nil {
+		t.Fatalf("persistIOSUploadChunk(first) returned error: %v", err)
 	}
-	if !hasAllChunks(all, 3) {
-		t.Fatalf("hasAllChunks should return true when all chunk indices are present")
+	if first.State != iosUploadChunkStateIncomplete || first.Count != 1 || first.Size != 2 {
+		t.Fatalf("first persist result = %#v", first)
 	}
 
-	missing := []harukiUtils.DataChunk{
-		{ChunkIndex: 0},
-		{ChunkIndex: 2},
+	second, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, 1, []byte("cd"))
+	if err != nil {
+		t.Fatalf("persistIOSUploadChunk(second) returned error: %v", err)
 	}
-	if hasAllChunks(missing, 3) {
-		t.Fatalf("hasAllChunks should return false when chunks are missing")
-	}
-
-	duplicate := []harukiUtils.DataChunk{
-		{ChunkIndex: 0},
-		{ChunkIndex: 0},
-		{ChunkIndex: 2},
-	}
-	if hasAllChunks(duplicate, 3) {
-		t.Fatalf("hasAllChunks should return false when chunk indices are duplicated")
+	if second.State != iosUploadChunkStateCompleteClaimed || second.Count != 2 || second.Size != 4 {
+		t.Fatalf("second persist result = %#v", second)
 	}
 
-	outOfRange := []harukiUtils.DataChunk{
-		{ChunkIndex: 0},
-		{ChunkIndex: 1},
-		{ChunkIndex: 3},
+	chunks, err := loadIOSUploadChunks(ctx, client, uploadKey, 2)
+	if err != nil {
+		t.Fatalf("loadIOSUploadChunks returned error: %v", err)
 	}
-	if hasAllChunks(outOfRange, 3) {
-		t.Fatalf("hasAllChunks should return false when a chunk index is out of range")
+	if len(chunks) != 2 {
+		t.Fatalf("len(chunks) = %d, want 2", len(chunks))
+	}
+	if got := string(chunks[0].Data) + string(chunks[1].Data); got != "abcd" && got != "cdab" {
+		t.Fatalf("unexpected chunk payloads: %#v", chunks)
+	}
+
+	if err := clearIOSUploadChunks(ctx, client, uploadKey); err != nil {
+		t.Fatalf("clearIOSUploadChunks returned error: %v", err)
+	}
+
+	metaKey, chunkDataKey, claimKey := iosUploadRedisKeys(uploadKey)
+	exists, err := client.Exists(ctx, metaKey, chunkDataKey, claimKey).Result()
+	if err != nil {
+		t.Fatalf("Exists returned error: %v", err)
+	}
+	if exists != 0 {
+		t.Fatalf("expected upload keys to be cleared")
 	}
 }
 
-func TestCleanExpiredChunks(t *testing.T) {
-	backupChunks, backupTotals, backupSize := snapshotChunkStoreState()
-	defer restoreChunkStoreState(backupChunks, backupTotals, backupSize)
+func TestIOSUploadChunkStoreRejectsInconsistentTotals(t *testing.T) {
+	t.Parallel()
 
-	now := time.Now()
-	setChunkStoreState(
-		map[string][]harukiUtils.DataChunk{
-			"expired": {
-				{
-					ChunkIndex: 0,
-					Time:       now.Add(-6 * time.Minute),
-					Data:       []byte{1, 2},
-				},
-			},
-			"active": {
-				{
-					ChunkIndex: 0,
-					Time:       now.Add(-1 * time.Minute),
-					Data:       []byte{3},
-				},
-			},
-			"empty": {},
-		},
-		map[string]int{
-			"expired": 1,
-			"active":  1,
-			"empty":   1,
-		},
-		3,
-	)
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
 
-	cleanExpiredChunks()
-
-	dataChunksMutex.RLock()
-	defer dataChunksMutex.RUnlock()
-
-	if _, ok := dataChunks["expired"]; ok {
-		t.Fatalf("expired chunk set should be removed")
+	if _, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, 0, []byte("ab")); err != nil {
+		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
 	}
-	if _, ok := dataChunks["empty"]; ok {
-		t.Fatalf("empty chunk set should be removed")
+	result, err := persistIOSUploadChunk(ctx, client, uploadKey, 3, 1, []byte("cd"))
+	if err != nil {
+		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
 	}
-	if _, ok := dataChunks["active"]; !ok {
-		t.Fatalf("active chunk set should remain")
-	}
-	if _, ok := dataChunkTotals["active"]; !ok {
-		t.Fatalf("active total should remain")
-	}
-	if dataChunksSize != 1 {
-		t.Fatalf("dataChunksSize = %d, want 1", dataChunksSize)
+	if result.State != iosUploadChunkStateInconsistentTotal {
+		t.Fatalf("state = %d, want %d", result.State, iosUploadChunkStateInconsistentTotal)
 	}
 }
 
-func snapshotChunkStoreState() (map[string][]harukiUtils.DataChunk, map[string]int, int64) {
-	dataChunksMutex.RLock()
-	defer dataChunksMutex.RUnlock()
+func TestIOSUploadChunkStoreClaimsCompletionOnce(t *testing.T) {
+	t.Parallel()
 
-	chunksCopy := make(map[string][]harukiUtils.DataChunk, len(dataChunks))
-	for key, chunks := range dataChunks {
-		copied := make([]harukiUtils.DataChunk, len(chunks))
-		for i := range chunks {
-			copied[i] = chunks[i]
-			if chunks[i].Data != nil {
-				copiedData := make([]byte, len(chunks[i].Data))
-				copy(copiedData, chunks[i].Data)
-				copied[i].Data = copiedData
-			}
-		}
-		chunksCopy[key] = copied
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
+
+	first, err := persistIOSUploadChunk(ctx, client, uploadKey, 1, 0, []byte("ab"))
+	if err != nil {
+		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
+	}
+	if first.State != iosUploadChunkStateCompleteClaimed {
+		t.Fatalf("first state = %d, want %d", first.State, iosUploadChunkStateCompleteClaimed)
 	}
 
-	totalsCopy := make(map[string]int, len(dataChunkTotals))
-	for key, total := range dataChunkTotals {
-		totalsCopy[key] = total
+	second, err := persistIOSUploadChunk(ctx, client, uploadKey, 1, 0, []byte("ab"))
+	if err != nil {
+		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
+	}
+	if second.State != iosUploadChunkStateCompleteAlreadyClaimed {
+		t.Fatalf("second state = %d, want %d", second.State, iosUploadChunkStateCompleteAlreadyClaimed)
+	}
+}
+
+func TestIOSUploadChunkStoreEnforcesMaxSize(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
+	metaKey, _, _ := iosUploadRedisKeys(uploadKey)
+
+	if err := client.HSet(ctx, metaKey, map[string]any{
+		"total": 2,
+		"size":  maxDataChunksSize - 1,
+	}).Err(); err != nil {
+		t.Fatalf("HSet returned error: %v", err)
 	}
 
-	return chunksCopy, totalsCopy, dataChunksSize
+	result, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, 1, []byte("ab"))
+	if err != nil {
+		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
+	}
+	if result.State != iosUploadChunkStateTooLarge {
+		t.Fatalf("state = %d, want %d", result.State, iosUploadChunkStateTooLarge)
+	}
 }
 
-func restoreChunkStoreState(chunks map[string][]harukiUtils.DataChunk, totals map[string]int, size int64) {
-	dataChunksMutex.Lock()
-	defer dataChunksMutex.Unlock()
-	dataChunks = chunks
-	dataChunkTotals = totals
-	dataChunksSize = size
-}
+func newIOSUploadRedisClient(t *testing.T) *goredis.Client {
+	t.Helper()
 
-func setChunkStoreState(chunks map[string][]harukiUtils.DataChunk, totals map[string]int, size int64) {
-	dataChunksMutex.Lock()
-	defer dataChunksMutex.Unlock()
-	dataChunks = chunks
-	dataChunkTotals = totals
-	dataChunksSize = size
+	srv, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run() error: %v", err)
+	}
+	t.Cleanup(func() {
+		srv.Close()
+	})
+
+	client := goredis.NewClient(&goredis.Options{Addr: srv.Addr()})
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	return client
 }

@@ -7,25 +7,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func PreferredHydraSubject(userID string, kratosIdentityID *string) string {
-	if kratosIdentityID != nil {
-		if trimmedIdentityID := strings.TrimSpace(*kratosIdentityID); trimmedIdentityID != "" {
-			return trimmedIdentityID
-		}
-	}
-	return strings.TrimSpace(userID)
-}
-
-func CurrentHydraSubjects(c fiber.Ctx) ([]string, error) {
-	identityID, identityErr := userCoreModule.CurrentKratosIdentityID(c)
-	userID, userErr := userCoreModule.CurrentUserID(c)
-	if identityErr != nil && userErr != nil {
-		return nil, userErr
-	}
-
-	subjects := make([]string, 0, 2)
-	seen := make(map[string]struct{}, 2)
-	for _, candidate := range []string{identityID, userID} {
+func normalizeHydraSubjects(values ...string) []string {
+	subjects := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, candidate := range values {
 		candidate = strings.TrimSpace(candidate)
 		if candidate == "" {
 			continue
@@ -36,6 +21,33 @@ func CurrentHydraSubjects(c fiber.Ctx) ([]string, error) {
 		seen[candidate] = struct{}{}
 		subjects = append(subjects, candidate)
 	}
+	return subjects
+}
+
+func HydraSubjectsForUser(userID string, kratosIdentityID *string) []string {
+	identityID := ""
+	if kratosIdentityID != nil {
+		identityID = *kratosIdentityID
+	}
+	return normalizeHydraSubjects(identityID, userID)
+}
+
+func PreferredHydraSubject(userID string, kratosIdentityID *string) string {
+	subjects := HydraSubjectsForUser(userID, kratosIdentityID)
+	if len(subjects) > 0 {
+		return subjects[0]
+	}
+	return ""
+}
+
+func CurrentHydraSubjects(c fiber.Ctx) ([]string, error) {
+	identityID, identityErr := userCoreModule.CurrentKratosIdentityID(c)
+	userID, userErr := userCoreModule.CurrentUserID(c)
+	if identityErr != nil && userErr != nil {
+		return nil, userErr
+	}
+
+	subjects := normalizeHydraSubjects(identityID, userID)
 	if len(subjects) == 0 {
 		if userErr != nil {
 			return nil, userErr

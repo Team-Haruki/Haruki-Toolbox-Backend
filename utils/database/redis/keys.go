@@ -28,8 +28,14 @@ const (
 	KeyActionUserID      = "user-id"
 	KeyActionBinding     = "binding"
 
-	KeyModuleOAuth2 = "oauth2"
-	KeyActionCode   = "code"
+	KeyModuleConfig  = "config"
+	KeyActionRuntime = "runtime"
+
+	KeyModuleUpload     = "upload"
+	KeyActionIOS        = "ios"
+	KeyActionChunkMeta  = "chunk-meta"
+	KeyActionChunkData  = "chunk-data"
+	KeyActionChunkClaim = "chunk-claim"
 
 	KeyModuleRateLimit     = "rate-limit"
 	KeyActionUploadIngress = "upload-ingress"
@@ -132,10 +138,6 @@ func BuildLoginRateLimitTargetKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionUser, hashNormalizedIdentifier(email))
 }
 
-func BuildOAuth2AuthCodeKey(code string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2, KeyActionCode, code)
-}
-
 func BuildUploadIngressRateLimitKey(windowUnix int64, bucket string) string {
 	return buildKey(
 		KeyPrefixHaruki,
@@ -144,6 +146,22 @@ func BuildUploadIngressRateLimitKey(windowUnix int64, bucket string) string {
 		strconv.FormatInt(windowUnix, 10),
 		bucket,
 	)
+}
+
+func BuildIOSUploadChunkMetaKey(uploadKey string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkMeta, uploadKey)
+}
+
+func BuildIOSUploadChunkDataKey(uploadKey string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkData, uploadKey)
+}
+
+func BuildIOSUploadChunkClaimKey(uploadKey string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkClaim, uploadKey)
+}
+
+func BuildRuntimeConfigKey() string {
+	return buildKey(KeyPrefixHaruki, KeyModuleConfig, KeyActionRuntime)
 }
 
 func buildKey(parts ...string) string {

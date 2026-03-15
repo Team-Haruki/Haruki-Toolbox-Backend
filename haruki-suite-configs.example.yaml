@@ -12,7 +12,7 @@ user_system:
     mail_name: ""
     timeout_seconds: 10
   session_sign_token: ""
-  auth_provider: "local" # "local" | "kratos" | "auto"
+  auth_provider: "kratos" # kratos only
   auth_proxy_enabled: false # enable when backend is behind Oathkeeper
   auth_proxy_trusted_header: "X-Auth-Proxy-Secret"
   auth_proxy_trusted_value: ""
@@ -49,12 +49,9 @@ webhook:
   jwt_secret: ""
 
 oauth2:
-  provider: "hydra" # "builtin" | "hydra"
-  auth_code_ttl: 300
-  access_token_ttl: 3600
-  refresh_token_ttl: 2592000
-  token_sign_key: ""
-  hydra_public_url: "http://hydra-public:4444"
+  provider: "hydra" # hydra only
+  hydra_public_url: "http://hydra-public:4444" # backend internal call target
+  hydra_browser_url: "" # optional browser-facing public entrypoint; defaults to hydra_public_url
   hydra_admin_url: "http://hydra-admin:4445"
   hydra_client_id: ""
   hydra_client_secret: ""

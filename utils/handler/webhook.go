@@ -14,6 +14,8 @@ import (
 
 const webhookCallbackTimeout = 10 * time.Second
 
+var webhookIPAddrLookup = net.DefaultResolver.LookupIPAddr
+
 func isHTTPSuccessStatus(statusCode int) bool {
 	return statusCode >= 200 && statusCode < 300
 }
@@ -44,9 +46,25 @@ func validateWebhookCallbackURL(rawURL string) (string, bool) {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return "", false
 	}
+	if parsed.User != nil {
+		return "", false
+	}
 	hostname := strings.TrimSpace(parsed.Hostname())
 	if !isWebhookCallbackHostAllowed(hostname) {
 		return "", false
+	}
+	if ip := net.ParseIP(hostname); ip == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		addrs, err := webhookIPAddrLookup(ctx, hostname)
+		if err != nil || len(addrs) == 0 {
+			return "", false
+		}
+		for _, addr := range addrs {
+			if isPrivateOrLocalIP(addr.IP) {
+				return "", false
+			}
+		}
 	}
 	return parsed.String(), true
 }
@@ -59,7 +77,13 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	if bearer != "" {
 		headers["Authorization"] = "Bearer " + bearer
 	}
-	statusCode, _, _, err := h.HttpClient.Request(ctx, "POST", url, headers, nil)
+	if validatedURL, ok := validateWebhookCallbackURL(url); ok {
+		url = validatedURL
+	} else {
+		h.Logger.Warnf("Skipped webhook callback after URL validation failed: %s", url)
+		return
+	}
+	statusCode, _, _, err := h.HttpClient.RequestNoRedirect(ctx, "POST", url, headers, nil)
 	if err != nil {
 		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return

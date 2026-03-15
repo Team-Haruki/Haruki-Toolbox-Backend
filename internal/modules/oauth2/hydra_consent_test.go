@@ -5,6 +5,7 @@ import (
 	"haruki-suite/config"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 )
 
@@ -107,5 +108,90 @@ func TestHydraConsentSessionExistsForClient(t *testing.T) {
 	}
 	if exists {
 		t.Fatalf("expected client-b to be absent")
+	}
+}
+
+func TestListHydraConsentSessionsForSubjectsDeduplicates(t *testing.T) {
+	original := config.Cfg
+	t.Cleanup(func() {
+		config.Cfg = original
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("subject") {
+		case "kratos-1":
+			_, _ = w.Write([]byte(`[{"consent_request_id":"c-shared","grant_scope":["user:read"],"consent_request":{"client":{"client_id":"client-a","client_name":"Client A","token_endpoint_auth_method":"none"}}}]`))
+		case "u-1":
+			_, _ = w.Write([]byte(`[{"consent_request_id":"c-shared","grant_scope":["user:read"],"consent_request":{"client":{"client_id":"client-a","client_name":"Client A","token_endpoint_auth_method":"none"}}},{"consent_request_id":"c-legacy","grant_scope":["bindings:read"],"consent_request":{"client":{"client_id":"client-b","client_name":"Client B","token_endpoint_auth_method":"client_secret_basic"}}}]`))
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+
+	config.Cfg.OAuth2.HydraAdminURL = server.URL
+	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+
+	sessions, err := ListHydraConsentSessionsForSubjects(context.Background(), []string{"kratos-1", "u-1"})
+	if err != nil {
+		t.Fatalf("ListHydraConsentSessionsForSubjects returned error: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("len(sessions) = %d, want 2", len(sessions))
+	}
+	if sessions[0].ConsentRequestID != "c-shared" {
+		t.Fatalf("first consent request id = %q, want %q", sessions[0].ConsentRequestID, "c-shared")
+	}
+	if sessions[1].ConsentRequestID != "c-legacy" {
+		t.Fatalf("second consent request id = %q, want %q", sessions[1].ConsentRequestID, "c-legacy")
+	}
+
+	exists, err := HydraConsentSessionExistsForSubjects(context.Background(), []string{"kratos-1", "u-1"}, "client-b")
+	if err != nil {
+		t.Fatalf("HydraConsentSessionExistsForSubjects returned error: %v", err)
+	}
+	if !exists {
+		t.Fatalf("expected client-b to exist across subjects")
+	}
+}
+
+func TestRevokeHydraConsentSessionsForSubjectsRevokesAllSubjects(t *testing.T) {
+	original := config.Cfg
+	t.Cleanup(func() {
+		config.Cfg = original
+	})
+
+	seenSubjects := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		seenSubjects = append(seenSubjects, r.URL.Query().Get("subject"))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	config.Cfg.OAuth2.HydraAdminURL = server.URL
+	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+
+	if err := RevokeHydraConsentSessionsForSubjects(context.Background(), []string{"kratos-1", "u-1", "kratos-1"}, "client-a"); err != nil {
+		t.Fatalf("RevokeHydraConsentSessionsForSubjects returned error: %v", err)
+	}
+	slices.Sort(seenSubjects)
+	if len(seenSubjects) != 2 {
+		t.Fatalf("len(seenSubjects) = %d, want 2", len(seenSubjects))
+	}
+	if seenSubjects[0] != "kratos-1" || seenSubjects[1] != "u-1" {
+		t.Fatalf("seenSubjects = %#v, want [kratos-1 u-1]", seenSubjects)
 	}
 }

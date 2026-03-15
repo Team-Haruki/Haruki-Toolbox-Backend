@@ -53,10 +53,6 @@ GROUP BY LOWER(email)
 HAVING COUNT(*) > 1
 LIMIT 1;
 `
-	createUsersEmailVerifiedColumnSQL = `
-ALTER TABLE users
-ADD COLUMN IF NOT EXISTS email_verified BOOLEAN;
-`
 	createUsersKratosIdentityColumnSQL = `
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS kratos_identity_id TEXT;
@@ -106,18 +102,6 @@ func ensureUsersEmailLowerUniqueIndex(ctx context.Context, entClient *dbManager.
 	return nil
 }
 
-func ensureUsersEmailVerifiedColumn(ctx context.Context, entClient *dbManager.Client) error {
-	sqlDB := entClient.SQLDB()
-	if sqlDB == nil {
-		return fmt.Errorf("underlying SQL DB is not available")
-	}
-
-	if _, err := sqlDB.ExecContext(ctx, createUsersEmailVerifiedColumnSQL); err != nil {
-		return fmt.Errorf("add users.email_verified column: %w", err)
-	}
-	return nil
-}
-
 func ensureUsersKratosIdentityColumn(ctx context.Context, entClient *dbManager.Client) error {
 	sqlDB := entClient.SQLDB()
 	if sqlDB == nil {
@@ -163,10 +147,16 @@ func startupContext() (context.Context, context.CancelFunc) {
 func validateUserSystemConfig(cfg harukiConfig.Config) error {
 	provider := strings.ToLower(strings.TrimSpace(cfg.UserSystem.AuthProvider))
 	if provider == "" {
-		provider = "local"
+		provider = "kratos"
 	}
-	if provider != "kratos" && strings.TrimSpace(cfg.UserSystem.SessionSignToken) == "" {
-		return fmt.Errorf("user_system.session_sign_token is required when auth_provider=%s", provider)
+	if provider != "kratos" {
+		return fmt.Errorf("user_system.auth_provider=%q is unsupported; only kratos is supported", strings.TrimSpace(cfg.UserSystem.AuthProvider))
+	}
+	if strings.TrimSpace(cfg.UserSystem.KratosPublicURL) == "" {
+		return fmt.Errorf("user_system.kratos_public_url is required")
+	}
+	if strings.TrimSpace(cfg.UserSystem.KratosAdminURL) == "" {
+		return fmt.Errorf("user_system.kratos_admin_url is required")
 	}
 	if cfg.UserSystem.AuthProxyEnabled {
 		if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedHeader) == "" {
@@ -280,12 +270,6 @@ func Run(cfg harukiConfig.Config) error {
 		return fmt.Errorf("ensure case-insensitive email uniqueness: %w", err)
 	}
 	cancelUsersEmail()
-	usersEmailVerifiedCtx, cancelUsersEmailVerified := startupContext()
-	if err := ensureUsersEmailVerifiedColumn(usersEmailVerifiedCtx, entClient); err != nil {
-		cancelUsersEmailVerified()
-		return fmt.Errorf("ensure email verified column: %w", err)
-	}
-	cancelUsersEmailVerified()
 	usersKratosCtx, cancelUsersKratos := startupContext()
 	if err := ensureUsersKratosIdentityColumn(usersKratosCtx, entClient); err != nil {
 		cancelUsersKratos()
@@ -314,15 +298,6 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.AuthProxyEmailHeader,
 		cfg.UserSystem.AuthProxyUserIDHeader,
 	)
-	if strings.EqualFold(strings.TrimSpace(cfg.UserSystem.AuthProvider), "kratos") {
-		if strings.TrimSpace(cfg.UserSystem.KratosPublicURL) == "" {
-			return fmt.Errorf("user_system.kratos_public_url is required when auth_provider=kratos")
-		}
-		if strings.TrimSpace(cfg.UserSystem.KratosAdminURL) == "" {
-			return fmt.Errorf("user_system.kratos_admin_url is required when auth_provider=kratos")
-		}
-	}
-
 	app := fiber.New(fiber.Config{
 		BodyLimit:   100 * 1024 * 1024,
 		JSONEncoder: sonic.Marshal,

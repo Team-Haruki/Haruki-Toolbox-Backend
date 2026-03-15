@@ -2,20 +2,13 @@ package adminoauth
 
 import (
 	"encoding/json"
-	adminCoreModule "haruki-suite/internal/modules/admincore"
 	platformPagination "haruki-suite/internal/platform/pagination"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthclient"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
-	userSchema "haruki-suite/utils/database/postgresql/user"
 	"mime"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
-	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -86,25 +79,15 @@ func parseAdminOAuthClientAuthorizationsFilters(c fiber.Ctx) (*adminOAuthClientA
 	if err != nil {
 		return nil, err
 	}
-
 	page, pageSize, err := platformPagination.ParsePageAndPageSize(c, defaultAdminOAuthClientAuthorizationPage, defaultAdminOAuthClientAuthorizationPageSize, maxAdminOAuthClientAuthorizationPageSize)
 	if err != nil {
 		return nil, err
 	}
-
-	return &adminOAuthClientAuthorizationsFilters{
-		IncludeRevoked: includeRevoked,
-		Page:           page,
-		PageSize:       pageSize,
-	}, nil
+	return &adminOAuthClientAuthorizationsFilters{IncludeRevoked: includeRevoked, Page: page, PageSize: pageSize}, nil
 }
 
 func parseAdminOAuthClientRevokeOptionsFromJSON(body []byte) (adminOAuthClientRevokeOptions, error) {
-	options := adminOAuthClientRevokeOptions{
-		RevokeAuthorizations: true,
-		RevokeTokens:         true,
-	}
-
+	options := adminOAuthClientRevokeOptions{RevokeAuthorizations: true, RevokeTokens: true}
 	var payload struct {
 		TargetUserID              string `json:"targetUserId"`
 		TargetUserIDSnake         string `json:"target_user_id"`
@@ -116,13 +99,7 @@ func parseAdminOAuthClientRevokeOptionsFromJSON(body []byte) (adminOAuthClientRe
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return adminOAuthClientRevokeOptions{}, fiber.NewError(fiber.StatusBadRequest, "invalid request payload")
 	}
-
-	targetUserID := strings.TrimSpace(payload.TargetUserID)
-	if targetUserID == "" {
-		targetUserID = strings.TrimSpace(payload.TargetUserIDSnake)
-	}
-	options.TargetUserID = targetUserID
-
+	options.TargetUserID = strings.TrimSpace(firstNonEmptyString(payload.TargetUserID, payload.TargetUserIDSnake))
 	if payload.RevokeAuthorizations != nil {
 		options.RevokeAuthorizations = *payload.RevokeAuthorizations
 	} else if payload.RevokeAuthorizationsSnake != nil {
@@ -133,51 +110,30 @@ func parseAdminOAuthClientRevokeOptionsFromJSON(body []byte) (adminOAuthClientRe
 	} else if payload.RevokeTokensSnake != nil {
 		options.RevokeTokens = *payload.RevokeTokensSnake
 	}
-
 	return options, nil
 }
 
 func parseAdminOAuthClientRevokeOptionsFromForm(body []byte) (adminOAuthClientRevokeOptions, error) {
-	options := adminOAuthClientRevokeOptions{
-		RevokeAuthorizations: true,
-		RevokeTokens:         true,
-	}
-
+	options := adminOAuthClientRevokeOptions{RevokeAuthorizations: true, RevokeTokens: true}
 	values, err := url.ParseQuery(string(body))
 	if err != nil {
 		return adminOAuthClientRevokeOptions{}, fiber.NewError(fiber.StatusBadRequest, "invalid form payload")
 	}
-
-	targetUserID := strings.TrimSpace(values.Get("target_user_id"))
-	if targetUserID == "" {
-		targetUserID = strings.TrimSpace(values.Get("targetUserId"))
+	options.TargetUserID = strings.TrimSpace(firstNonEmptyString(values.Get("targetUserId"), values.Get("target_user_id")))
+	if raw := strings.TrimSpace(firstNonEmptyString(values.Get("revokeAuthorizations"), values.Get("revoke_authorizations"))); raw != "" {
+		v, err := parseBoolLike(raw, "revokeAuthorizations")
+		if err != nil {
+			return adminOAuthClientRevokeOptions{}, err
+		}
+		options.RevokeAuthorizations = v
 	}
-	options.TargetUserID = targetUserID
-
-	revokeAuthorizationsRaw := strings.TrimSpace(values.Get("revoke_authorizations"))
-	if revokeAuthorizationsRaw == "" {
-		revokeAuthorizationsRaw = strings.TrimSpace(values.Get("revokeAuthorizations"))
+	if raw := strings.TrimSpace(firstNonEmptyString(values.Get("revokeTokens"), values.Get("revoke_tokens"))); raw != "" {
+		v, err := parseBoolLike(raw, "revokeTokens")
+		if err != nil {
+			return adminOAuthClientRevokeOptions{}, err
+		}
+		options.RevokeTokens = v
 	}
-	revokeAuthorizations, err := adminCoreModule.ParseOptionalBoolField(revokeAuthorizationsRaw, "revoke_authorizations")
-	if err != nil {
-		return adminOAuthClientRevokeOptions{}, err
-	}
-	if revokeAuthorizations != nil {
-		options.RevokeAuthorizations = *revokeAuthorizations
-	}
-
-	revokeTokensRaw := strings.TrimSpace(values.Get("revoke_tokens"))
-	if revokeTokensRaw == "" {
-		revokeTokensRaw = strings.TrimSpace(values.Get("revokeTokens"))
-	}
-	revokeTokens, err := adminCoreModule.ParseOptionalBoolField(revokeTokensRaw, "revoke_tokens")
-	if err != nil {
-		return adminOAuthClientRevokeOptions{}, err
-	}
-	if revokeTokens != nil {
-		options.RevokeTokens = *revokeTokens
-	}
-
 	return options, nil
 }
 
@@ -186,7 +142,6 @@ func parseAdminOAuthClientRevokeOptions(c fiber.Ctx) (adminOAuthClientRevokeOpti
 	if len(body) == 0 || strings.TrimSpace(string(body)) == "" {
 		return adminOAuthClientRevokeOptions{RevokeAuthorizations: true, RevokeTokens: true}, nil
 	}
-
 	rawContentType := strings.TrimSpace(c.Get("Content-Type"))
 	if rawContentType == "" {
 		if looksLikeJSONBody(body) {
@@ -197,12 +152,10 @@ func parseAdminOAuthClientRevokeOptions(c fiber.Ctx) (adminOAuthClientRevokeOpti
 		}
 		return adminOAuthClientRevokeOptions{}, fiber.NewError(fiber.StatusBadRequest, "invalid request payload")
 	}
-
 	mediaType, _, err := mime.ParseMediaType(rawContentType)
 	if err != nil {
 		return adminOAuthClientRevokeOptions{}, fiber.NewError(fiber.StatusBadRequest, "invalid Content-Type")
 	}
-
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
 	case contentTypeApplicationJSON:
 		return parseAdminOAuthClientRevokeOptionsFromJSON(body)
@@ -213,271 +166,18 @@ func parseAdminOAuthClientRevokeOptions(c fiber.Ctx) (adminOAuthClientRevokeOpti
 	}
 }
 
-func handleListOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		clientID := strings.TrimSpace(c.Params("client_id"))
-		if clientID == "" {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
-			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
 		}
-
-		filters, err := parseAdminOAuthClientAuthorizationsFilters(c)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidQueryFilters, nil))
-			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid query filters")
-		}
-
-		dbClient, err := apiHelper.DBManager.DB.OAuthClient.Query().
-			Where(oauthclient.ClientIDEQ(clientID)).
-			Only(c.Context())
-		if err != nil {
-			if postgresql.IsNotFound(err) {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, nil))
-				return harukiAPIHelper.ErrorNotFound(c, "client not found")
-			}
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
-		}
-
-		baseQuery := apiHelper.DBManager.DB.OAuthAuthorization.Query().
-			Where(oauthauthorization.HasClientWith(oauthclient.IDEQ(dbClient.ID)))
-		if !filters.IncludeRevoked {
-			baseQuery = baseQuery.Where(oauthauthorization.RevokedEQ(false))
-		}
-
-		total, err := baseQuery.Clone().Count(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCountAuthorizationsFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to count oauth authorizations")
-		}
-
-		offset := (filters.Page - 1) * filters.PageSize
-		rows, err := baseQuery.Clone().
-			WithUser().
-			Order(
-				oauthauthorization.ByCreatedAt(sql.OrderDesc()),
-				oauthauthorization.ByID(sql.OrderDesc()),
-			).
-			Limit(filters.PageSize).
-			Offset(offset).
-			All(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth authorizations")
-		}
-
-		userIDs := make([]string, 0, len(rows))
-		for _, row := range rows {
-			if row.Edges.User == nil {
-				continue
-			}
-			userIDs = append(userIDs, row.Edges.User.ID)
-		}
-		tokenStatsByUserID, err := queryOAuthClientTokenStatsByUsers(c.Context(), apiHelper.DBManager.DB, dbClient.ID, userIDs)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryTokenStatsFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth token stats")
-		}
-
-		items := make([]adminOAuthClientAuthorizationListItem, 0, len(rows))
-		for _, row := range rows {
-			if row.Edges.User == nil {
-				continue
-			}
-			tokenStats := tokenStatsByUserID[row.Edges.User.ID]
-
-			items = append(items, adminOAuthClientAuthorizationListItem{
-				AuthorizationID: row.ID,
-				User: adminOAuthClientAuthorizationUser{
-					UserID: row.Edges.User.ID,
-					Name:   row.Edges.User.Name,
-					Email:  row.Edges.User.Email,
-					Role:   adminCoreModule.NormalizeRole(string(row.Edges.User.Role)),
-					Banned: row.Edges.User.Banned,
-				},
-				Scopes:     append([]string(nil), row.Scopes...),
-				CreatedAt:  row.CreatedAt.UTC(),
-				Revoked:    row.Revoked,
-				TokenStats: tokenStats,
-			})
-		}
-
-		totalPages := platformPagination.CalculateTotalPages(total, filters.PageSize)
-
-		resp := adminOAuthClientAuthorizationsResponse{
-			GeneratedAt:    adminNowUTC(),
-			ClientID:       dbClient.ClientID,
-			ClientName:     dbClient.Name,
-			IncludeRevoked: filters.IncludeRevoked,
-			Page:           filters.Page,
-			PageSize:       filters.PageSize,
-			Total:          total,
-			TotalPages:     totalPages,
-			HasMore:        platformPagination.HasMoreByOffset(filters.Page, filters.PageSize, total),
-			Items:          items,
-		}
-
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"includeRevoked": filters.IncludeRevoked,
-			"total":          total,
-		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
 	}
+	return ""
 }
 
-func handleRevokeOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		clientID := strings.TrimSpace(c.Params("client_id"))
-		if clientID == "" {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
-			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
-		}
-
-		_, _, err := adminCoreModule.CurrentAdminActor(c)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
-			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
-		}
-
-		options, err := parseAdminOAuthClientRevokeOptions(c)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
-			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
-		}
-
-		if !options.RevokeAuthorizations && !options.RevokeTokens {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonNothingToRevoke, nil))
-			return harukiAPIHelper.ErrorBadRequest(c, "at least one revoke option must be true")
-		}
-
-		dbClient, err := apiHelper.DBManager.DB.OAuthClient.Query().
-			Where(oauthclient.ClientIDEQ(clientID)).
-			Only(c.Context())
-		if err != nil {
-			if postgresql.IsNotFound(err) {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, nil))
-				return harukiAPIHelper.ErrorNotFound(c, "client not found")
-			}
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
-		}
-
-		if options.TargetUserID != "" {
-			if _, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.IDEQ(options.TargetUserID)).Only(c.Context()); err != nil {
-				if postgresql.IsNotFound(err) {
-					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{"targetUserID": options.TargetUserID}))
-					return harukiAPIHelper.ErrorNotFound(c, "target user not found")
-				}
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryTargetUserFailed, nil))
-				return harukiAPIHelper.ErrorInternal(c, "failed to query target user")
-			}
-		}
-
-		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonStartTransactionFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to start transaction")
-		}
-
-		baseAuthUpdate := tx.OAuthAuthorization.Update().
-			Where(oauthauthorization.HasClientWith(oauthclient.IDEQ(dbClient.ID)))
-		baseTokenUpdate := tx.OAuthToken.Update().
-			Where(oauthtoken.HasClientWith(oauthclient.IDEQ(dbClient.ID)))
-		if options.TargetUserID != "" {
-			baseAuthUpdate = baseAuthUpdate.Where(oauthauthorization.HasUserWith(userSchema.IDEQ(options.TargetUserID)))
-			baseTokenUpdate = baseTokenUpdate.Where(oauthtoken.HasUserWith(userSchema.IDEQ(options.TargetUserID)))
-		}
-
-		revokedAuthorizations := 0
-		if options.RevokeAuthorizations {
-			revokedAuthorizations, err = baseAuthUpdate.SetRevoked(true).Save(c.Context())
-			if err != nil {
-				_ = tx.Rollback()
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, nil))
-				return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
-			}
-		}
-
-		revokedTokens := 0
-		if options.RevokeTokens {
-			revokedTokens, err = baseTokenUpdate.SetRevoked(true).Save(c.Context())
-			if err != nil {
-				_ = tx.Rollback()
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, nil))
-				return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth tokens")
-			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCommitTransactionFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to commit oauth revoke")
-		}
-
-		var targetUserID *string
-		if options.TargetUserID != "" {
-			target := options.TargetUserID
-			targetUserID = &target
-		}
-
-		resp := adminOAuthClientRevokeResponse{
-			ClientID:              dbClient.ClientID,
-			TargetUserID:          targetUserID,
-			RevokeAuthorizations:  options.RevokeAuthorizations,
-			RevokeTokens:          options.RevokeTokens,
-			RevokedAuthorizations: revokedAuthorizations,
-			RevokedTokens:         revokedTokens,
-		}
-
-		metadata := map[string]any{
-			"revokeAuthorizations":  options.RevokeAuthorizations,
-			"revokeTokens":          options.RevokeTokens,
-			"revokedAuthorizations": revokedAuthorizations,
-			"revokedTokens":         revokedTokens,
-		}
-		if options.TargetUserID != "" {
-			metadata["targetUserID"] = options.TargetUserID
-		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, metadata)
-		return harukiAPIHelper.SuccessResponse(c, "oauth client authorizations revoked", &resp)
+func parseBoolLike(raw string, fieldName string) (bool, error) {
+	if parsed, err := strconv.ParseBool(strings.TrimSpace(raw)); err == nil {
+		return parsed, nil
 	}
-}
-
-func handleRestoreOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		clientID := strings.TrimSpace(c.Params("client_id"))
-		if clientID == "" {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
-			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
-		}
-
-		_, _, err := adminCoreModule.CurrentAdminActor(c)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
-			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
-		}
-
-		dbClient, err := apiHelper.DBManager.DB.OAuthClient.Query().
-			Where(oauthclient.ClientIDEQ(clientID)).
-			Only(c.Context())
-		if err != nil {
-			if postgresql.IsNotFound(err) {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, nil))
-				return harukiAPIHelper.ErrorNotFound(c, "client not found")
-			}
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
-		}
-
-		updatedClient, err := apiHelper.DBManager.DB.OAuthClient.UpdateOneID(dbClient.ID).
-			SetActive(true).
-			Save(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRestoreClientFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to restore oauth client")
-		}
-
-		resp := adminOAuthClientRestoreResponse{ClientID: updatedClient.ClientID, Active: updatedClient.Active}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "oauth client restored", &resp)
-	}
+	return false, fiber.NewError(fiber.StatusBadRequest, "invalid "+fieldName)
 }

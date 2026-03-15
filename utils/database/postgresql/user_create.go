@@ -9,8 +9,6 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
 	"time"
@@ -35,26 +33,6 @@ func (_c *UserCreate) SetName(v string) *UserCreate {
 // SetEmail sets the "email" field.
 func (_c *UserCreate) SetEmail(v string) *UserCreate {
 	_c.mutation.SetEmail(v)
-	return _c
-}
-
-// SetEmailVerified sets the "email_verified" field.
-func (_c *UserCreate) SetEmailVerified(v bool) *UserCreate {
-	_c.mutation.SetEmailVerified(v)
-	return _c
-}
-
-// SetNillableEmailVerified sets the "email_verified" field if the given value is not nil.
-func (_c *UserCreate) SetNillableEmailVerified(v *bool) *UserCreate {
-	if v != nil {
-		_c.SetEmailVerified(*v)
-	}
-	return _c
-}
-
-// SetPasswordHash sets the "password_hash" field.
-func (_c *UserCreate) SetPasswordHash(v string) *UserCreate {
-	_c.mutation.SetPasswordHash(v)
 	return _c
 }
 
@@ -230,36 +208,6 @@ func (_c *UserCreate) SetIosScriptCode(v *IOSScriptCode) *UserCreate {
 	return _c.SetIosScriptCodeID(v.ID)
 }
 
-// AddOauthAuthorizationIDs adds the "oauth_authorizations" edge to the OAuthAuthorization entity by IDs.
-func (_c *UserCreate) AddOauthAuthorizationIDs(ids ...int) *UserCreate {
-	_c.mutation.AddOauthAuthorizationIDs(ids...)
-	return _c
-}
-
-// AddOauthAuthorizations adds the "oauth_authorizations" edges to the OAuthAuthorization entity.
-func (_c *UserCreate) AddOauthAuthorizations(v ...*OAuthAuthorization) *UserCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddOauthAuthorizationIDs(ids...)
-}
-
-// AddOauthTokenIDs adds the "oauth_tokens" edge to the OAuthToken entity by IDs.
-func (_c *UserCreate) AddOauthTokenIDs(ids ...int) *UserCreate {
-	_c.mutation.AddOauthTokenIDs(ids...)
-	return _c
-}
-
-// AddOauthTokens adds the "oauth_tokens" edges to the OAuthToken entity.
-func (_c *UserCreate) AddOauthTokens(v ...*OAuthToken) *UserCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddOauthTokenIDs(ids...)
-}
-
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -316,9 +264,6 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.Email(); !ok {
 		return &ValidationError{Name: "email", err: errors.New(`postgresql: missing required field "User.email"`)}
-	}
-	if _, ok := _c.mutation.PasswordHash(); !ok {
-		return &ValidationError{Name: "password_hash", err: errors.New(`postgresql: missing required field "User.password_hash"`)}
 	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
@@ -381,14 +326,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 		_node.Email = value
-	}
-	if value, ok := _c.mutation.EmailVerified(); ok {
-		_spec.SetField(user.FieldEmailVerified, field.TypeBool, value)
-		_node.EmailVerified = &value
-	}
-	if value, ok := _c.mutation.PasswordHash(); ok {
-		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
-		_node.PasswordHash = value
 	}
 	if value, ok := _c.mutation.AvatarPath(); ok {
 		_spec.SetField(user.FieldAvatarPath, field.TypeString, value)
@@ -475,38 +412,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.OauthAuthorizationsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.OauthTokensIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

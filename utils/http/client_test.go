@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	stdhttp "net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +73,34 @@ func TestFlattenHeaders(t *testing.T) {
 	}
 	if _, ok := out["X-B"]; ok {
 		t.Fatalf("X-B should not exist for empty values")
+	}
+}
+
+func TestRequestNoRedirectDoesNotFollowRedirect(t *testing.T) {
+	t.Parallel()
+
+	targetReached := false
+	targetServer := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		targetReached = true
+		w.WriteHeader(stdhttp.StatusOK)
+	}))
+	defer targetServer.Close()
+
+	redirectServer := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		stdhttp.Redirect(w, r, targetServer.URL, stdhttp.StatusFound)
+	}))
+	defer redirectServer.Close()
+
+	c := NewClient("", 5*time.Second)
+	status, _, _, err := c.RequestNoRedirect(context.Background(), stdhttp.MethodPost, redirectServer.URL, nil, nil)
+	if err != nil {
+		t.Fatalf("RequestNoRedirect returned error: %v", err)
+	}
+	if status != stdhttp.StatusFound {
+		t.Fatalf("status = %d, want %d", status, stdhttp.StatusFound)
+	}
+	if targetReached {
+		t.Fatalf("redirect target should not be reached")
 	}
 }
 

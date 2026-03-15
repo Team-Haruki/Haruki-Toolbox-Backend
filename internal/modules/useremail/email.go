@@ -3,6 +3,7 @@ package useremail
 import (
 	"crypto/rand"
 	"fmt"
+	userauth "haruki-suite/internal/modules/userauth"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	platformIdentity "haruki-suite/internal/platform/identity"
 	harukiAPIHelper "haruki-suite/utils/api"
@@ -423,6 +424,12 @@ func handleVerifyEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 
 func RegisterUserEmailRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	email := apiHelper.Router.Group("/api/email")
+	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesManagedBrowserAuth() {
+		disabled := userauth.LegacyAuthDisabledHandler()
+		email.Post("/send", disabled)
+		email.Post("/verify", disabled)
+		return
+	}
 
 	email.Post("/send", handleSendEmail(apiHelper))
 	email.Post("/verify", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleVerifyEmail(apiHelper))

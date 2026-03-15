@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -23,9 +22,7 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 				targetID := targetUserID
 				targetIDPtr = &targetID
 			}
-			entry := harukiAPIHelper.BuildSystemLogEntryFromFiber(c, "user.login", result, &targetType, targetIDPtr, map[string]any{
-				"reason": reason,
-			})
+			entry := harukiAPIHelper.BuildSystemLogEntryFromFiber(c, "user.login", result, &targetType, targetIDPtr, map[string]any{"reason": reason})
 			if targetUserID != "" {
 				entry.ActorUserID = &targetUserID
 				roleLower := normalizeAuditRole(actorRole)
@@ -67,53 +64,12 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "rate_limited")
 			return respondLoginRateLimited(c, rateLimitKey, rateLimitMessage, apiHelper)
 		}
-		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
-			return handleLoginViaKratos(c, apiHelper, payload, logLogin)
-		}
-		user, err := apiHelper.DBManager.DB.User.
-			Query().
-			Where(userSchema.EmailEqualFold(payload.Email)).
-			WithSocialPlatformInfo().
-			WithAuthorizedSocialPlatforms().
-			WithGameAccountBindings().
-			WithIosScriptCode().
-			Only(ctx)
-		if err != nil {
-			if postgresql.IsNotFound(err) {
-				harukiLogger.Infof("Login failed for email %s: user not found", payload.Email)
-				logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "invalid_credentials")
-				return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
-			}
+		if apiHelper == nil || apiHelper.SessionHandler == nil || !apiHelper.SessionHandler.UsesKratosProvider() {
 			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
-			harukiLogger.Errorf("Login failed for email %s: query error: %v", payload.Email, err)
-			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "query_user_failed")
-			return harukiAPIHelper.ErrorInternal(c, "login service unavailable")
+			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "managed_identity_required")
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, ManagedIdentityMessage, nil)
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(payload.Password)); err != nil {
-			harukiLogger.Infof("Login failed for email %s: invalid password", payload.Email)
-			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "invalid_credentials")
-			return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
-		}
-		if user.Banned {
-			banMessage := "Your account has been banned"
-			if user.BanReason != nil && *user.BanReason != "" {
-				banMessage = "Your account has been banned: " + *user.BanReason
-			}
-			logLogin(harukiAPIHelper.SystemLogResultFailure, user.ID, string(user.Role), "banned")
-			return harukiAPIHelper.ErrorForbidden(c, banMessage)
-		}
-		sessionToken, err := apiHelper.SessionHandler.IssueSession(user.ID)
-		if err != nil {
-			rollbackLoginRateLimitReservation(c, apiHelper, payload.Email)
-			harukiLogger.Errorf("Failed to issue session for user %s: %v", user.ID, err)
-			logLogin(harukiAPIHelper.SystemLogResultFailure, user.ID, string(user.Role), "issue_session_failed")
-			return harukiAPIHelper.ErrorInternal(c, "Could not issue session")
-		}
-		finalizeLoginRateLimitReservation(c, apiHelper, payload.Email)
-		logLogin(harukiAPIHelper.SystemLogResultSuccess, user.ID, string(user.Role), "ok")
-		ud := harukiAPIHelper.BuildUserDataFromDBUser(user, &sessionToken)
-		resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
-		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
+		return handleLoginViaKratos(c, apiHelper, payload, logLogin)
 	}
 }
 
