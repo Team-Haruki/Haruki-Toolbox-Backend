@@ -73,10 +73,10 @@ func buildAuthorizeSocialPlatformInfoFromUser(user *postgresql.User) []Authorize
 		result = make([]AuthorizeSocialPlatformInfo, 0, len(user.Edges.AuthorizedSocialPlatforms))
 		for _, a := range user.Edges.AuthorizedSocialPlatforms {
 			result = append(result, AuthorizeSocialPlatformInfo{
-				ID:       a.ID,
-				Platform: a.Platform,
-				UserID:   a.PlatformUserID,
-				Comment:  a.Comment,
+				PlatformID: a.PlatformID,
+				Platform:   a.Platform,
+				UserID:     a.PlatformUserID,
+				Comment:    a.Comment,
 			})
 		}
 	}
