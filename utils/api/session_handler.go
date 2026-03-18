@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,10 +31,12 @@ const (
 
 	sessionProviderKratos = "kratos"
 
-	defaultAuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
-	defaultAuthProxySubjectHeader = "X-Kratos-Identity-Id"
-	defaultAuthProxyEmailHeader   = "X-User-Email"
-	defaultAuthProxyUserIDHeader  = "X-User-Id"
+	defaultAuthProxyTrustedHeader       = "X-Auth-Proxy-Secret"
+	defaultAuthProxySubjectHeader       = "X-Kratos-Identity-Id"
+	defaultAuthProxyNameHeader          = "X-User-Name"
+	defaultAuthProxyEmailHeader         = "X-User-Email"
+	defaultAuthProxyEmailVerifiedHeader = "X-User-Email-Verified"
+	defaultAuthProxyUserIDHeader        = "X-User-Id"
 
 	defaultKratosSessionHeader = "X-Session-Token"
 	defaultKratosSessionCookie = "ory_kratos_session"
@@ -125,8 +128,10 @@ func (t *kratosRequestMetadataTransport) RoundTrip(req *http.Request) (*http.Res
 }
 
 type resolvedKratosSession struct {
-	UserID     string
-	IdentityID string
+	UserID        string
+	IdentityID    string
+	DisplayName   *string
+	EmailVerified *bool
 }
 
 type kratosSessionWhoamiResponse struct {
@@ -148,7 +153,9 @@ type kratosIdentityRecord struct {
 }
 
 type kratosVerifiableRecord struct {
-	Value string `json:"value"`
+	Value    string `json:"value"`
+	Verified bool   `json:"verified"`
+	Status   string `json:"status"`
 }
 
 type kratosFlowResponse struct {
@@ -192,18 +199,20 @@ func normalizeSessionProvider(provider string) string {
 
 func NewSessionHandler(redisClient *redis.Client, _ string) *SessionHandler {
 	return &SessionHandler{
-		RedisClient:             redisClient,
-		SessionProvider:         sessionProviderKratos,
-		AuthProxyTrustedHeader:  defaultAuthProxyTrustedHeader,
-		AuthProxySubjectHeader:  defaultAuthProxySubjectHeader,
-		AuthProxyEmailHeader:    defaultAuthProxyEmailHeader,
-		AuthProxyUserIDHeader:   defaultAuthProxyUserIDHeader,
-		KratosSessionHeader:     defaultKratosSessionHeader,
-		KratosSessionCookie:     defaultKratosSessionCookie,
-		KratosAutoLinkByEmail:   true,
-		KratosAutoProvisionUser: true,
-		KratosRequestTimeout:    defaultKratosTimeout,
-		KratosIdentityResolver:  nil,
+		RedisClient:                  redisClient,
+		SessionProvider:              sessionProviderKratos,
+		AuthProxyTrustedHeader:       defaultAuthProxyTrustedHeader,
+		AuthProxySubjectHeader:       defaultAuthProxySubjectHeader,
+		AuthProxyNameHeader:          defaultAuthProxyNameHeader,
+		AuthProxyEmailHeader:         defaultAuthProxyEmailHeader,
+		AuthProxyEmailVerifiedHeader: defaultAuthProxyEmailVerifiedHeader,
+		AuthProxyUserIDHeader:        defaultAuthProxyUserIDHeader,
+		KratosSessionHeader:          defaultKratosSessionHeader,
+		KratosSessionCookie:          defaultKratosSessionCookie,
+		KratosAutoLinkByEmail:        true,
+		KratosAutoProvisionUser:      true,
+		KratosRequestTimeout:         defaultKratosTimeout,
+		KratosIdentityResolver:       nil,
 	}
 }
 
@@ -244,7 +253,9 @@ func (s *SessionHandler) ConfigureAuthProxy(
 	trustedHeader string,
 	trustedValue string,
 	subjectHeader string,
+	nameHeader string,
 	emailHeader string,
+	emailVerifiedHeader string,
 	userIDHeader string,
 ) {
 	s.AuthProxyEnabled = enabled
@@ -257,9 +268,17 @@ func (s *SessionHandler) ConfigureAuthProxy(
 	if s.AuthProxySubjectHeader == "" {
 		s.AuthProxySubjectHeader = defaultAuthProxySubjectHeader
 	}
+	s.AuthProxyNameHeader = strings.TrimSpace(nameHeader)
+	if s.AuthProxyNameHeader == "" {
+		s.AuthProxyNameHeader = defaultAuthProxyNameHeader
+	}
 	s.AuthProxyEmailHeader = strings.TrimSpace(emailHeader)
 	if s.AuthProxyEmailHeader == "" {
 		s.AuthProxyEmailHeader = defaultAuthProxyEmailHeader
+	}
+	s.AuthProxyEmailVerifiedHeader = strings.TrimSpace(emailVerifiedHeader)
+	if s.AuthProxyEmailVerifiedHeader == "" {
+		s.AuthProxyEmailVerifiedHeader = defaultAuthProxyEmailVerifiedHeader
 	}
 	s.AuthProxyUserIDHeader = strings.TrimSpace(userIDHeader)
 	if s.AuthProxyUserIDHeader == "" {
@@ -321,31 +340,76 @@ func (s *SessionHandler) resolveUserIDByKratosIdentityID(ctx context.Context, id
 	return strings.TrimSpace(matchedUser.ID), nil
 }
 
-func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx) (string, string, bool, error) {
+func parseAuthProxyBooleanHeader(raw string) *bool {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
+func extractKratosIdentityName(identity kratosIdentityRecord) string {
+	return extractNameFromTraitValue(identity.Traits)
+}
+
+func extractNameFromTraitValue(value any) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		if direct, ok := typed["name"].(string); ok {
+			if name := strings.TrimSpace(direct); name != "" {
+				return name
+			}
+		}
+		for _, child := range typed {
+			if name := extractNameFromTraitValue(child); name != "" {
+				return name
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if name := extractNameFromTraitValue(child); name != "" {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx) (string, string, *string, *bool, bool, error) {
 	if !s.UsesAuthProxy() {
-		return "", "", false, nil
+		return "", "", nil, nil, false, nil
 	}
 	if strings.TrimSpace(c.Get(s.AuthProxyTrustedHeader)) != strings.TrimSpace(s.AuthProxyTrustedValue) {
-		return "", "", false, nil
+		return "", "", nil, nil, false, nil
 	}
 
 	identityID := strings.TrimSpace(c.Get(s.AuthProxySubjectHeader))
+	displayName := strings.TrimSpace(c.Get(s.AuthProxyNameHeader))
+	var displayNamePtr *string
+	if displayName != "" {
+		displayNamePtr = &displayName
+	}
 	email := platformIdentity.NormalizeEmail(c.Get(s.AuthProxyEmailHeader))
+	emailVerified := parseAuthProxyBooleanHeader(c.Get(s.AuthProxyEmailVerifiedHeader))
 	userID := strings.TrimSpace(c.Get(s.AuthProxyUserIDHeader))
 	if userID == "" {
 		if identityID == "" {
-			return "", "", true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
+			return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
 		}
 		resolvedUserID, err := s.resolveKratosIdentity(ctx, identityID, email)
 		if err != nil {
-			return "", "", true, err
+			return "", "", displayNamePtr, emailVerified, true, err
 		}
 		userID = resolvedUserID
 	}
 	if identityID == "" {
-		return "", "", true, nil
+		return "", "", displayNamePtr, emailVerified, true, nil
 	}
-	return userID, identityID, true, nil
+	return userID, identityID, displayNamePtr, emailVerified, true, nil
 }
 
 func (s *SessionHandler) ResolveUserIDFromKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (string, error) {
@@ -843,7 +907,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	kratosHeaderToken := strings.TrimSpace(c.Get(s.KratosSessionHeader))
 	cookieHeader := strings.TrimSpace(c.Get("Cookie"))
 
-	applyResolvedUserIdentity := func(userID string, identityID string) error {
+	applyResolvedUserIdentity := func(userID string, identityID string, displayName *string, emailVerified *bool) error {
 		userID = strings.TrimSpace(userID)
 		if userID == "" {
 			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
@@ -856,15 +920,21 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		if trimmedIdentityID := strings.TrimSpace(identityID); trimmedIdentityID != "" {
 			c.Locals("identityID", trimmedIdentityID)
 		}
+		if displayName != nil && strings.TrimSpace(*displayName) != "" {
+			c.Locals("displayName", strings.TrimSpace(*displayName))
+		}
+		if emailVerified != nil {
+			c.Locals("emailVerified", *emailVerified)
+		}
 		return c.Next()
 	}
 
 	requestCtx := WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
-	if proxyUserID, proxyIdentityID, handled, err := s.verifyAuthProxySession(requestCtx, c); handled {
+	if proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified, handled, err := s.verifyAuthProxySession(requestCtx, c); handled {
 		if err != nil {
 			return respondSessionVerifyError(c, err)
 		}
-		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID)
+		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified)
 	}
 	if s.UsesAuthProxy() {
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing auth proxy identity", nil)
@@ -882,7 +952,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	if err != nil {
 		return respondSessionVerifyError(c, err)
 	}
-	return applyResolvedUserIdentity(resolved.UserID, resolved.IdentityID)
+	return applyResolvedUserIdentity(resolved.UserID, resolved.IdentityID, resolved.DisplayName, resolved.EmailVerified)
 }
 
 func respondSessionVerifyError(c fiber.Ctx, err error) error {
@@ -932,14 +1002,22 @@ func (s *SessionHandler) resolveKratosSession(ctx context.Context, sessionToken 
 	if identityID == "" {
 		return nil, fmt.Errorf("%w: kratos identity id is empty", errSessionUnauthorized)
 	}
+	displayName := strings.TrimSpace(extractKratosIdentityName(whoami.Identity))
+	var displayNamePtr *string
+	if displayName != "" {
+		displayNamePtr = &displayName
+	}
 	email := platformIdentity.NormalizeEmail(extractKratosIdentityEmail(whoami.Identity))
+	emailVerified := extractKratosIdentityEmailVerification(whoami.Identity)
 	userID, err := s.resolveKratosIdentity(ctx, identityID, email)
 	if err != nil {
 		return nil, err
 	}
 	return &resolvedKratosSession{
-		UserID:     userID,
-		IdentityID: identityID,
+		UserID:        userID,
+		IdentityID:    identityID,
+		DisplayName:   displayNamePtr,
+		EmailVerified: emailVerified,
 	}, nil
 }
 
@@ -953,6 +1031,26 @@ func extractKratosIdentityEmail(identity kratosIdentityRecord) string {
 		}
 	}
 	return ""
+}
+
+func extractKratosIdentityEmailVerification(identity kratosIdentityRecord) *bool {
+	traitsEmail := platformIdentity.NormalizeEmail(extractEmailFromTraitValue(identity.Traits))
+	for _, address := range identity.VerifiableAddresses {
+		addressEmail := platformIdentity.NormalizeEmail(address.Value)
+		if addressEmail == "" {
+			continue
+		}
+		if traitsEmail != "" && addressEmail != traitsEmail {
+			continue
+		}
+
+		verified := address.Verified
+		if !verified && strings.EqualFold(strings.TrimSpace(address.Status), "completed") {
+			verified = true
+		}
+		return &verified
+	}
+	return nil
 }
 
 func extractEmailFromTraitValue(value any) string {

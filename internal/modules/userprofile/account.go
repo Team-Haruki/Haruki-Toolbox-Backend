@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -57,20 +56,8 @@ func removeAvatarFileIfExists(filePath string) error {
 	return nil
 }
 
-func normalizeProfileName(rawName *string) (*string, error) {
-	if rawName == nil {
-		return nil, nil
-	}
-	name := strings.TrimSpace(*rawName)
-	nameLength := utf8.RuneCountInString(name)
-	if nameLength == 0 || nameLength > 50 {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "Name must be 1-50 characters")
-	}
-	return &name, nil
-}
-
 func hasProfileUpdatePayload(payload harukiAPIHelper.UpdateProfilePayload) bool {
-	return payload.Name != nil || payload.AvatarBase64 != nil
+	return payload.AvatarBase64 != nil
 }
 
 func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -81,12 +68,11 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		}
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
-		updatedName := false
 		updatedAvatar := false
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.profile.update", result, userID, map[string]any{
 				"reason":        reason,
-				"updatedName":   updatedName,
+				"updatedName":   false,
 				"updatedAvatar": updatedAvatar,
 			})
 		}()
@@ -99,15 +85,6 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if !hasProfileUpdatePayload(payload) {
 			reason = "empty_payload"
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "No profile fields to update", nil)
-		}
-
-		normalizedName, nameErr := normalizeProfileName(payload.Name)
-		if nameErr != nil {
-			reason = "invalid_name"
-			if fiberErr, ok := nameErr.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
-			}
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Name must be 1-50 characters", nil)
 		}
 
 		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
@@ -186,10 +163,6 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			ub = ub.SetAvatarPath(avatarFileName)
 			updatedAvatar = true
 		}
-		if normalizedName != nil {
-			ub = ub.SetName(*normalizedName)
-			updatedName = true
-		}
 		_, err = ub.Save(ctx)
 		if err != nil {
 			if newAvatarSavePath != "" {
@@ -208,9 +181,6 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			}
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{}
-		if normalizedName != nil {
-			ud.Name = normalizedName
-		}
 		if payload.AvatarBase64 != nil {
 			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.AvatarURL, "/"), avatarFileName)
 			ud.AvatarPath = &url

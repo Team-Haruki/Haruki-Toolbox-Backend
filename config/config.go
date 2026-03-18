@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -64,30 +65,32 @@ type ThirdPartyDataProviderConfig struct {
 }
 
 type UserSystemConfig struct {
-	DBType                    string     `yaml:"db_type"`
-	DBURL                     string     `yaml:"db_url"`
-	CloudflareSecret          string     `yaml:"cloudflare_secret"`
-	TurnstileBypass           bool       `yaml:"turnstile_bypass"`
-	SMTP                      SMTPConfig `yaml:"smtp"`
-	SessionSignToken          string     `yaml:"session_sign_token"`
-	AuthProvider              string     `yaml:"auth_provider"`
-	AuthProxyEnabled          bool       `yaml:"auth_proxy_enabled"`
-	AuthProxyTrustedHeader    string     `yaml:"auth_proxy_trusted_header"`
-	AuthProxyTrustedValue     string     `yaml:"auth_proxy_trusted_value"`
-	AuthProxySubjectHeader    string     `yaml:"auth_proxy_subject_header"`
-	AuthProxyEmailHeader      string     `yaml:"auth_proxy_email_header"`
-	AuthProxyUserIDHeader     string     `yaml:"auth_proxy_user_id_header"`
-	KratosPublicURL           string     `yaml:"kratos_public_url"`
-	KratosAdminURL            string     `yaml:"kratos_admin_url"`
-	KratosRequestTimeout      int        `yaml:"kratos_request_timeout_seconds"`
-	KratosSessionHeader       string     `yaml:"kratos_session_header"`
-	KratosSessionCookie       string     `yaml:"kratos_session_cookie"`
-	KratosAutoLinkByEmail     bool       `yaml:"kratos_auto_link_by_email"`
-	KratosAutoProvisionUser   bool       `yaml:"kratos_auto_provision_user"`
-	AvatarSaveDir             string     `yaml:"avatar_save_dir"`
-	AvatarURL                 string     `yaml:"avatar_url"`
-	FrontendURL               string     `yaml:"frontend_url"`
-	SocialPlatformVerifyToken string     `yaml:"social_platform_verify_token"`
+	DBType                       string     `yaml:"db_type"`
+	DBURL                        string     `yaml:"db_url"`
+	CloudflareSecret             string     `yaml:"cloudflare_secret"`
+	TurnstileBypass              bool       `yaml:"turnstile_bypass"`
+	SMTP                         SMTPConfig `yaml:"smtp"`
+	SessionSignToken             string     `yaml:"session_sign_token"`
+	AuthProvider                 string     `yaml:"auth_provider"`
+	AuthProxyEnabled             bool       `yaml:"auth_proxy_enabled"`
+	AuthProxyTrustedHeader       string     `yaml:"auth_proxy_trusted_header"`
+	AuthProxyTrustedValue        string     `yaml:"auth_proxy_trusted_value"`
+	AuthProxySubjectHeader       string     `yaml:"auth_proxy_subject_header"`
+	AuthProxyNameHeader          string     `yaml:"auth_proxy_name_header"`
+	AuthProxyEmailHeader         string     `yaml:"auth_proxy_email_header"`
+	AuthProxyEmailVerifiedHeader string     `yaml:"auth_proxy_email_verified_header"`
+	AuthProxyUserIDHeader        string     `yaml:"auth_proxy_user_id_header"`
+	KratosPublicURL              string     `yaml:"kratos_public_url"`
+	KratosAdminURL               string     `yaml:"kratos_admin_url"`
+	KratosRequestTimeout         int        `yaml:"kratos_request_timeout_seconds"`
+	KratosSessionHeader          string     `yaml:"kratos_session_header"`
+	KratosSessionCookie          string     `yaml:"kratos_session_cookie"`
+	KratosAutoLinkByEmail        bool       `yaml:"kratos_auto_link_by_email"`
+	KratosAutoProvisionUser      bool       `yaml:"kratos_auto_provision_user"`
+	AvatarSaveDir                string     `yaml:"avatar_save_dir"`
+	AvatarURL                    string     `yaml:"avatar_url"`
+	FrontendURL                  string     `yaml:"frontend_url"`
+	SocialPlatformVerifyToken    string     `yaml:"social_platform_verify_token"`
 }
 
 type BackendConfig struct {
@@ -102,7 +105,6 @@ type BackendConfig struct {
 	MainLogFile      string   `yaml:"main_log_file"`
 	AccessLog        string   `yaml:"access_log"`
 	AccessLogPath    string   `yaml:"access_log_path"`
-	AllowCORS        []string `yaml:"allow_cors"`
 	CSPConnectSrc    []string `yaml:"csp_connect_src"`
 	EnableTrustProxy bool     `yaml:"enable_trust_proxy"`
 	TrustProxies     []string `yaml:"trusted_proxies"`
@@ -237,16 +239,18 @@ func Load(configPath string) (Config, error) {
 			HydraRequestTimeoutSecond: 10,
 		},
 		UserSystem: UserSystemConfig{
-			AuthProvider:            "kratos",
-			AuthProxyTrustedHeader:  "X-Auth-Proxy-Secret",
-			AuthProxySubjectHeader:  "X-Kratos-Identity-Id",
-			AuthProxyEmailHeader:    "X-User-Email",
-			AuthProxyUserIDHeader:   "X-User-Id",
-			KratosRequestTimeout:    10,
-			KratosSessionHeader:     "X-Session-Token",
-			KratosSessionCookie:     "ory_kratos_session",
-			KratosAutoLinkByEmail:   true,
-			KratosAutoProvisionUser: true,
+			AuthProvider:                 "kratos",
+			AuthProxyTrustedHeader:       "X-Auth-Proxy-Secret",
+			AuthProxySubjectHeader:       "X-Kratos-Identity-Id",
+			AuthProxyNameHeader:          "X-User-Name",
+			AuthProxyEmailHeader:         "X-User-Email",
+			AuthProxyEmailVerifiedHeader: "X-User-Email-Verified",
+			AuthProxyUserIDHeader:        "X-User-Id",
+			KratosRequestTimeout:         10,
+			KratosSessionHeader:          "X-Session-Token",
+			KratosSessionCookie:          "ory_kratos_session",
+			KratosAutoLinkByEmail:        true,
+			KratosAutoProvisionUser:      true,
 			SMTP: SMTPConfig{
 				TimeoutSeconds: 10,
 			},
@@ -279,8 +283,14 @@ func Load(configPath string) (Config, error) {
 	if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
 		cfg.UserSystem.AuthProxySubjectHeader = "X-Kratos-Identity-Id"
 	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyNameHeader) == "" {
+		cfg.UserSystem.AuthProxyNameHeader = "X-User-Name"
+	}
 	if strings.TrimSpace(cfg.UserSystem.AuthProxyEmailHeader) == "" {
 		cfg.UserSystem.AuthProxyEmailHeader = "X-User-Email"
+	}
+	if strings.TrimSpace(cfg.UserSystem.AuthProxyEmailVerifiedHeader) == "" {
+		cfg.UserSystem.AuthProxyEmailVerifiedHeader = "X-User-Email-Verified"
 	}
 	if strings.TrimSpace(cfg.UserSystem.AuthProxyUserIDHeader) == "" {
 		cfg.UserSystem.AuthProxyUserIDHeader = "X-User-Id"
@@ -337,6 +347,9 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := overrideInt(&cfg.UserSystem.SMTP.TimeoutSeconds, "SMTP_TIMEOUT_SECONDS"); err != nil {
 		return err
 	}
+	if err := applySMTPConnectionURIFallback(cfg); err != nil {
+		return err
+	}
 	overrideString(&cfg.UserSystem.SessionSignToken, "SESSION_SIGN_TOKEN")
 	overrideString(&cfg.UserSystem.AuthProvider, "AUTH_PROVIDER")
 	if err := overrideBool(&cfg.UserSystem.AuthProxyEnabled, "AUTH_PROXY_ENABLED"); err != nil {
@@ -345,7 +358,9 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.UserSystem.AuthProxyTrustedHeader, "AUTH_PROXY_TRUSTED_HEADER")
 	overrideString(&cfg.UserSystem.AuthProxyTrustedValue, "AUTH_PROXY_TRUSTED_VALUE", "OATHKEEPER_SHARED_SECRET")
 	overrideString(&cfg.UserSystem.AuthProxySubjectHeader, "AUTH_PROXY_SUBJECT_HEADER")
+	overrideString(&cfg.UserSystem.AuthProxyNameHeader, "AUTH_PROXY_NAME_HEADER")
 	overrideString(&cfg.UserSystem.AuthProxyEmailHeader, "AUTH_PROXY_EMAIL_HEADER")
+	overrideString(&cfg.UserSystem.AuthProxyEmailVerifiedHeader, "AUTH_PROXY_EMAIL_VERIFIED_HEADER")
 	overrideString(&cfg.UserSystem.AuthProxyUserIDHeader, "AUTH_PROXY_USER_ID_HEADER")
 	overrideString(&cfg.UserSystem.KratosPublicURL, "KRATOS_PUBLIC_URL", "KRATOS_PUBLIC_BASE_URL")
 	overrideString(&cfg.UserSystem.KratosAdminURL, "KRATOS_ADMIN_URL", "KRATOS_ADMIN_BASE_URL")
@@ -384,9 +399,6 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.Backend.MainLogFile, "BACKEND_MAIN_LOG_FILE")
 	overrideString(&cfg.Backend.AccessLog, "BACKEND_ACCESS_LOG")
 	overrideString(&cfg.Backend.AccessLogPath, "BACKEND_ACCESS_LOG_PATH")
-	if err := overrideCSV(&cfg.Backend.AllowCORS, "BACKEND_ALLOW_CORS"); err != nil {
-		return err
-	}
 	if err := overrideCSV(&cfg.Backend.CSPConnectSrc, "BACKEND_CSP_CONNECT_SRC"); err != nil {
 		return err
 	}
@@ -422,6 +434,67 @@ func applyEnvOverrides(cfg *Config) error {
 		return err
 	}
 
+	return nil
+}
+
+func applySMTPConnectionURIFallback(cfg *Config) error {
+	connectionURI := strings.TrimSpace(os.Getenv("SMTP_CONNECTION_URI"))
+	if connectionURI == "" {
+		return nil
+	}
+	parsed, err := url.Parse(connectionURI)
+	if err != nil {
+		return fmt.Errorf("parse SMTP_CONNECTION_URI: %w", err)
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return fmt.Errorf("parse SMTP_CONNECTION_URI: missing smtp host")
+	}
+	portValue := strings.TrimSpace(parsed.Port())
+	if portValue == "" {
+		switch strings.ToLower(strings.TrimSpace(parsed.Scheme)) {
+		case "smtps":
+			portValue = "465"
+		case "smtp":
+			portValue = "587"
+		default:
+			portValue = "25"
+		}
+	}
+	port, err := strconv.Atoi(portValue)
+	if err != nil {
+		return fmt.Errorf("parse SMTP_CONNECTION_URI port %q: %w", portValue, err)
+	}
+
+	username := ""
+	password := ""
+	if parsed.User != nil {
+		username = strings.TrimSpace(parsed.User.Username())
+		if pass, ok := parsed.User.Password(); ok {
+			password = strings.TrimSpace(pass)
+		}
+	}
+
+	if strings.TrimSpace(cfg.UserSystem.SMTP.SMTPAddr) == "" {
+		cfg.UserSystem.SMTP.SMTPAddr = host
+	}
+	if cfg.UserSystem.SMTP.SMTPPort <= 0 {
+		cfg.UserSystem.SMTP.SMTPPort = port
+	}
+	if strings.TrimSpace(cfg.UserSystem.SMTP.SMTPMail) == "" {
+		switch {
+		case username != "":
+			cfg.UserSystem.SMTP.SMTPMail = username
+		default:
+			fromAddress := strings.TrimSpace(os.Getenv("SMTP_FROM_ADDRESS"))
+			if fromAddress != "" {
+				cfg.UserSystem.SMTP.SMTPMail = fromAddress
+			}
+		}
+	}
+	if strings.TrimSpace(cfg.UserSystem.SMTP.SMTPPass) == "" && password != "" {
+		cfg.UserSystem.SMTP.SMTPPass = password
+	}
 	return nil
 }
 

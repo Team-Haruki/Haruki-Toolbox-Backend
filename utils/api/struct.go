@@ -75,7 +75,6 @@ type GenerateSocialPlatformCodePayload struct {
 }
 
 type UpdateProfilePayload struct {
-	Name         *string `json:"name"`
 	AvatarBase64 *string `json:"avatarBase64"`
 }
 

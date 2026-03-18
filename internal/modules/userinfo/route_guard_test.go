@@ -51,3 +51,24 @@ func TestGameDataRouteRejectsMismatchedUserID(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
 	}
 }
+
+func TestMeRouteDoesNotRequireToolboxUserIDParam(t *testing.T) {
+	t.Parallel()
+
+	app := fiber.New()
+	app.Get("/api/user/me",
+		func(c fiber.Ctx) error {
+			c.Locals("userID", "u-100")
+			return c.Next()
+		},
+		func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) },
+	)
+
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/api/user/me", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+}

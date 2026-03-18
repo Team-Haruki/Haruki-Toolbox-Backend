@@ -102,6 +102,63 @@ func TestVerifySessionTokenKratosMode(t *testing.T) {
 	}
 }
 
+func TestVerifySessionTokenKratosModePropagatesEmailVerified(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/sessions/whoami" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("X-Session-Token"); got != "kratos-token-verify" {
+			http.Error(w, "missing session token", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"active":true,"identity":{"id":"identity-verify-1","traits":{"email":"kratos.user@example.com"},"verifiable_addresses":[{"value":"kratos.user@example.com","verified":false,"status":"sent"}]}}`))
+	}))
+	defer server.Close()
+
+	handler := NewSessionHandler(newSessionTestRedisClient(t), "local-sign-key")
+	handler.ConfigureIdentityProvider("kratos", server.URL, "", "X-Session-Token", "ory_kratos_session", true, true, 2*time.Second, nil)
+	handler.KratosIdentityResolver = func(ctx context.Context, identityID string, email string) (string, error) {
+		return "u1", nil
+	}
+
+	app := fiber.New()
+	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"userID":        c.Locals("userID"),
+			"emailVerified": c.Locals("emailVerified"),
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/u1/profile", nil)
+	req.Header.Set("Authorization", "Bearer kratos-token-verify")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if payload["userID"] != "u1" {
+		t.Fatalf("userID = %v, want %q", payload["userID"], "u1")
+	}
+	emailVerified, ok := payload["emailVerified"].(bool)
+	if !ok {
+		t.Fatalf("emailVerified type = %T, want bool", payload["emailVerified"])
+	}
+	if emailVerified {
+		t.Fatalf("emailVerified = %v, want %v", emailVerified, false)
+	}
+}
+
 func TestVerifySessionTokenLegacyProviderAliasUsesKratos(t *testing.T) {
 	t.Parallel()
 
