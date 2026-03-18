@@ -2,10 +2,19 @@ package adminoauth
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 )
 
+// validSQLIdentifier matches a simple SQL identifier, optionally qualified with a single dot,
+// e.g. "created_at" or "table.created_at". This prevents injection via arbitrary SQL syntax.
+var validSQLIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$`)
+
 func buildAdminOAuthBucketExpressionSQL(bucket, createdAtColumn string) (string, error) {
+	if !validSQLIdentifier.MatchString(createdAtColumn) {
+		return "", fmt.Errorf("invalid createdAtColumn")
+	}
+
 	switch bucket {
 	case adminOAuthClientTrendBucketHour:
 		return fmt.Sprintf("date_trunc('hour', %s AT TIME ZONE 'UTC')", createdAtColumn), nil
