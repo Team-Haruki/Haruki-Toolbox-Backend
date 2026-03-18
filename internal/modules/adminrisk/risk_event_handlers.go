@@ -118,11 +118,11 @@ func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 		idValue := strings.TrimSpace(c.Params("event_id"))
-		id64, err := strconv.ParseInt(idValue, 10, 64)
-		id := int(id64)
+		id, err := strconv.Atoi(idValue)
 		if err != nil || id <= 0 {
 			return harukiAPIHelper.ErrorBadRequest(c, "event_id must be a positive integer")
 		}
+
 
 		var payload resolveRiskEventPayload
 		if len(c.Body()) > 0 {
