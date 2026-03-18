@@ -81,7 +81,17 @@ func parseAdminOAuthClientAuditFilters(c fiber.Ctx, now time.Time) (*adminOAuthC
 	if err != nil {
 		return nil, err
 	}
-	return &adminOAuthClientAuditFilters{From: from, To: to, ActorTypes: actorTypes, ActorUserID: strings.TrimSpace(c.Query("actor_user_id")), Action: strings.TrimSpace(c.Query("action")), Result: result, Page: page, PageSize: pageSize, Sort: sortValue}, nil
+	return &adminOAuthClientAuditFilters{
+		From:        from,
+		To:          to,
+		ActorTypes:  actorTypes,
+		ActorUserID: strings.TrimSpace(c.Query("actor_user_id")),
+		Action:      strings.TrimSpace(c.Query("action")),
+		Result:      result,
+		Page:        page,
+		PageSize:    pageSize,
+		Sort:        sortValue,
+	}, nil
 }
 
 func applyAdminOAuthClientAuditFilters(query *postgresql.SystemLogQuery, clientID string, filters *adminOAuthClientAuditFilters) *postgresql.SystemLogQuery {
