@@ -260,10 +260,10 @@ func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 			PlatformID: platformID,
 			Created:    created,
 			Record: harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				ID:       platformID,
-				Platform: payload.Platform,
-				UserID:   payload.UserID,
-				Comment:  payload.Comment,
+				PlatformID: platformID,
+				Platform:   payload.Platform,
+				UserID:     payload.UserID,
+				Comment:    payload.Comment,
 			},
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{

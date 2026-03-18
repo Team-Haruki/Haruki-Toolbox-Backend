@@ -199,10 +199,10 @@ func buildAdminAuthorizedSocialItems(rows []*postgresql.AuthorizeSocialPlatformI
 	items := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-			ID:       row.PlatformID,
-			Platform: row.Platform,
-			UserID:   row.PlatformUserID,
-			Comment:  row.Comment,
+			PlatformID: row.PlatformID,
+			Platform:   row.Platform,
+			UserID:     row.PlatformUserID,
+			Comment:    row.Comment,
 		})
 	}
 	return items
