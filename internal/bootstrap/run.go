@@ -31,7 +31,6 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
-	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	_ "github.com/lib/pq"
 )
@@ -295,7 +294,9 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.AuthProxyTrustedHeader,
 		cfg.UserSystem.AuthProxyTrustedValue,
 		cfg.UserSystem.AuthProxySubjectHeader,
+		cfg.UserSystem.AuthProxyNameHeader,
 		cfg.UserSystem.AuthProxyEmailHeader,
+		cfg.UserSystem.AuthProxyEmailVerifiedHeader,
 		cfg.UserSystem.AuthProxyUserIDHeader,
 	)
 	app := fiber.New(fiber.Config{
@@ -337,20 +338,6 @@ func Run(cfg harukiConfig.Config) error {
 		c.Locals("cspNonce", nonce)
 		return c.Next()
 	})
-
-	allowedOrigins := make(map[string]struct{}, len(cfg.Backend.AllowCORS))
-	for _, origin := range cfg.Backend.AllowCORS {
-		allowedOrigins[origin] = struct{}{}
-	}
-	app.Use(cors.New(cors.Config{
-		AllowOriginsFunc: func(origin string) bool {
-			_, ok := allowedOrigins[origin]
-			return ok
-		},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Request-ID"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
-		AllowCredentials: true,
-	}))
 
 	if cfg.Backend.AccessLog != "" {
 		loggerConfig := logger.Config{

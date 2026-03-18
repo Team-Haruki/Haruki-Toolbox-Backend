@@ -114,8 +114,14 @@ func TestLoad(t *testing.T) {
 		if cfg.UserSystem.AuthProxySubjectHeader != "X-Kratos-Identity-Id" {
 			t.Fatalf("UserSystem.AuthProxySubjectHeader = %q, want %q", cfg.UserSystem.AuthProxySubjectHeader, "X-Kratos-Identity-Id")
 		}
+		if cfg.UserSystem.AuthProxyNameHeader != "X-User-Name" {
+			t.Fatalf("UserSystem.AuthProxyNameHeader = %q, want %q", cfg.UserSystem.AuthProxyNameHeader, "X-User-Name")
+		}
 		if cfg.UserSystem.AuthProxyEmailHeader != "X-User-Email" {
 			t.Fatalf("UserSystem.AuthProxyEmailHeader = %q, want %q", cfg.UserSystem.AuthProxyEmailHeader, "X-User-Email")
+		}
+		if cfg.UserSystem.AuthProxyEmailVerifiedHeader != "X-User-Email-Verified" {
+			t.Fatalf("UserSystem.AuthProxyEmailVerifiedHeader = %q, want %q", cfg.UserSystem.AuthProxyEmailVerifiedHeader, "X-User-Email-Verified")
 		}
 		if cfg.UserSystem.AuthProxyUserIDHeader != "X-User-Id" {
 			t.Fatalf("UserSystem.AuthProxyUserIDHeader = %q, want %q", cfg.UserSystem.AuthProxyUserIDHeader, "X-User-Id")
@@ -138,6 +144,58 @@ func TestLoad(t *testing.T) {
 
 		if _, err := Load(cfgPath); err == nil {
 			t.Fatalf("expected legacy auth provider alias to be rejected")
+		}
+	})
+
+	t.Run("fallback smtp config from SMTP_CONNECTION_URI", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("{}\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		t.Setenv("SMTP_CONNECTION_URI", "smtps://no-reply%40mail.example.com:test-pass@smtp.example.com:465")
+		t.Setenv("SMTP_FROM_NAME", "Haruki Test Sender")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.UserSystem.SMTP.SMTPAddr != "smtp.example.com" {
+			t.Fatalf("SMTPAddr = %q, want %q", cfg.UserSystem.SMTP.SMTPAddr, "smtp.example.com")
+		}
+		if cfg.UserSystem.SMTP.SMTPPort != 465 {
+			t.Fatalf("SMTPPort = %d, want %d", cfg.UserSystem.SMTP.SMTPPort, 465)
+		}
+		if cfg.UserSystem.SMTP.SMTPMail != "no-reply@mail.example.com" {
+			t.Fatalf("SMTPMail = %q, want %q", cfg.UserSystem.SMTP.SMTPMail, "no-reply@mail.example.com")
+		}
+		if cfg.UserSystem.SMTP.SMTPPass != "test-pass" {
+			t.Fatalf("SMTPPass = %q, want %q", cfg.UserSystem.SMTP.SMTPPass, "test-pass")
+		}
+		if cfg.UserSystem.SMTP.MailName != "Haruki Test Sender" {
+			t.Fatalf("MailName = %q, want %q", cfg.UserSystem.SMTP.MailName, "Haruki Test Sender")
+		}
+	})
+
+	t.Run("fallback smtp mail from SMTP_FROM_ADDRESS when URI username is empty", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("{}\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		t.Setenv("SMTP_CONNECTION_URI", "smtps://:test-pass@smtp.example.com:465")
+		t.Setenv("SMTP_FROM_ADDRESS", "no-reply@example.com")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.UserSystem.SMTP.SMTPMail != "no-reply@example.com" {
+			t.Fatalf("SMTPMail = %q, want %q", cfg.UserSystem.SMTP.SMTPMail, "no-reply@example.com")
 		}
 	})
 }

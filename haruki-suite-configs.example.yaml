@@ -17,7 +17,9 @@ user_system:
   auth_proxy_trusted_header: "X-Auth-Proxy-Secret"
   auth_proxy_trusted_value: ""
   auth_proxy_subject_header: "X-Kratos-Identity-Id"
+  auth_proxy_name_header: "X-User-Name"
   auth_proxy_email_header: "X-User-Email"
+  auth_proxy_email_verified_header: "X-User-Email-Verified"
   auth_proxy_user_id_header: "X-User-Id"
   kratos_public_url: "" # required when auth_provider=kratos
   kratos_admin_url: "" # required when auth_provider=kratos
@@ -69,8 +71,6 @@ backend:
   main_log_file: "main.log"
   access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"
   access_log_path: "access.log"
-  allow_cors:
-    - ""
   enable_trust_proxy: true
   trusted_proxies:
     - "127.0.0.0/8"

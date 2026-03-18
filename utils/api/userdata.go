@@ -9,7 +9,11 @@ import (
 )
 
 func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
-	emailInfo := buildEmailInfoFromUser(user)
+	return BuildUserDataFromDBUserWithEmailVerified(user, sessionToken, nil)
+}
+
+func BuildUserDataFromDBUserWithEmailVerified(user *postgresql.User, sessionToken *string, emailVerifiedOverride *bool) HarukiToolboxUserData {
+	emailInfo := buildEmailInfoFromUser(user, emailVerifiedOverride)
 	socialPlatformInfo := buildSocialPlatformInfoFromUser(user)
 	authorizeSocialPlatformInfo := buildAuthorizeSocialPlatformInfoFromUser(user)
 	gameAccountBindings := buildGameAccountBindingsFromUser(user)
@@ -39,19 +43,19 @@ func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 	return nil
 }
 
-func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
+func buildEmailInfoFromUser(user *postgresql.User, emailVerifiedOverride *bool) EmailInfo {
 	return EmailInfo{
 		Email:    user.Email,
-		Verified: resolveUserEmailVerified(user),
+		Verified: resolveUserEmailVerified(user, emailVerifiedOverride),
 	}
 }
 
-func resolveUserEmailVerified(user *postgresql.User) bool {
+func resolveUserEmailVerified(user *postgresql.User, emailVerifiedOverride *bool) bool {
+	if emailVerifiedOverride != nil {
+		return *emailVerifiedOverride
+	}
 	if user == nil || strings.TrimSpace(user.Email) == "" {
 		return false
-	}
-	if user.KratosIdentityID != nil && strings.TrimSpace(*user.KratosIdentityID) != "" {
-		return true
 	}
 	return true
 }
