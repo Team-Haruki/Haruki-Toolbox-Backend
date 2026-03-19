@@ -141,3 +141,69 @@ func TestCurrentKratosIdentityID(t *testing.T) {
 		}
 	})
 }
+
+func TestRequireVerifiedEmail(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allow when email verified is true", func(t *testing.T) {
+		t.Parallel()
+
+		app := fiber.New()
+		app.Get("/verified",
+			func(c fiber.Ctx) error {
+				c.Locals("emailVerified", true)
+				return c.Next()
+			},
+			RequireVerifiedEmail(),
+			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) },
+		)
+
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/verified", nil))
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+		}
+	})
+
+	t.Run("reject when email verified is false", func(t *testing.T) {
+		t.Parallel()
+
+		app := fiber.New()
+		app.Get("/verified",
+			func(c fiber.Ctx) error {
+				c.Locals("emailVerified", false)
+				return c.Next()
+			},
+			RequireVerifiedEmail(),
+			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) },
+		)
+
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/verified", nil))
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusForbidden {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+		}
+	})
+
+	t.Run("reject when email verified is missing", func(t *testing.T) {
+		t.Parallel()
+
+		app := fiber.New()
+		app.Get("/verified",
+			RequireVerifiedEmail(),
+			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) },
+		)
+
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/verified", nil))
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusForbidden {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+		}
+	})
+}

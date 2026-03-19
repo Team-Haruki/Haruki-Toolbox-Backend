@@ -24,7 +24,5 @@ func registerAdminConfigRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 func registerAdminSelfRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	me := adminGroup.Group("/me", adminCoreModule.RequireAdmin(apiHelper))
-	me.Get("/sessions", handleListAdminSessions(apiHelper))
-	me.Delete("/sessions/:session_token_id", handleDeleteAdminSession(apiHelper))
 	me.Post("/reauth", handleAdminReauth(apiHelper))
 }

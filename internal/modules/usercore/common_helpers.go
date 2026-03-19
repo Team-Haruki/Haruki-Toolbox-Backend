@@ -4,6 +4,7 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -71,6 +72,27 @@ func RequireSelfUserParam(paramName string) fiber.Handler {
 		}
 
 		return c.Next()
+	}
+}
+
+func IsCurrentUserEmailVerified(c fiber.Ctx) bool {
+	switch value := c.Locals("emailVerified").(type) {
+	case bool:
+		return value
+	case string:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		return err == nil && parsed
+	default:
+		return false
+	}
+}
+
+func RequireVerifiedEmail() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		if IsCurrentUserEmailVerified(c) {
+			return c.Next()
+		}
+		return harukiAPIHelper.ErrorForbidden(c, "email must be verified before binding social platform")
 	}
 }
 
