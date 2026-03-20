@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 )
@@ -23,6 +24,7 @@ func (Group) Fields() []ent.Field {
 
 func (Group) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("group_list", GroupList.Type),
+		edge.To("group_list", GroupList.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 	}
 }

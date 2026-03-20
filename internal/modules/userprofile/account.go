@@ -113,7 +113,9 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			base64Data := *payload.AvatarBase64
 			if strings.Contains(base64Data, ";base64,") {
 				parts := strings.SplitN(base64Data, ";base64,", 2)
-				base64Data = parts[1]
+				if len(parts) == 2 {
+					base64Data = parts[1]
+				}
 			}
 			decodedAvatar, err := base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {

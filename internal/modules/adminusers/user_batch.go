@@ -161,6 +161,31 @@ func mapBatchManagedUpdateMiss(err error) (string, string) {
 	}
 }
 
+type batchUserInfo struct {
+	ID               string
+	Role             string
+	KratosIdentityID *string
+}
+
+func batchFetchUsers(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userIDs []string) (map[string]*batchUserInfo, error) {
+	users, err := apiHelper.DBManager.DB.User.Query().
+		Where(userSchema.IDIn(userIDs...)).
+		Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]*batchUserInfo, len(users))
+	for _, u := range users {
+		result[u.ID] = &batchUserInfo{
+			ID:               u.ID,
+			Role:             string(u.Role),
+			KratosIdentityID: u.KratosIdentityID,
+		}
+	}
+	return result, nil
+}
+
 func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, action string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
@@ -191,21 +216,26 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 
 		results := make([]batchUserOperationItemResult, 0, len(userIDs))
 		successCount := 0
+
+		// Batch fetch all users at once to avoid N+1 queries
+		userMap, err := batchFetchUsers(c.Context(), apiHelper, userIDs)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBatchPrefix+action, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDatabaseError, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to fetch users")
+		}
+
 		for _, targetUserID := range userIDs {
 			item := batchUserOperationItemResult{UserID: targetUserID}
 
-			targetUser, err := apiHelper.DBManager.DB.User.Query().
-				Where(userSchema.IDEQ(targetUserID)).
-				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
-				Only(c.Context())
-			if err != nil {
+			targetUser, found := userMap[targetUserID]
+			if !found {
 				item.Code = adminBatchResultCodeUserNotFound
 				item.Message = "user not found"
 				results = append(results, item)
 				continue
 			}
 
-			if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, targetUser.ID, string(targetUser.Role)); err != nil {
+			if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, targetUser.ID, targetUser.Role); err != nil {
 				item.Code = adminFailureReasonPermissionDenied
 				item.Message = "insufficient permissions"
 				results = append(results, item)
@@ -298,21 +328,26 @@ func handleBatchUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 		results := make([]batchUserOperationItemResult, 0, len(payload.UserIDs))
 		successCount := 0
+
+		// Batch fetch all users at once to avoid N+1 queries
+		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBatchRole, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDatabaseError, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to fetch users")
+		}
+
 		for _, targetUserID := range payload.UserIDs {
 			item := batchUserOperationItemResult{UserID: targetUserID}
 
-			targetUser, err := apiHelper.DBManager.DB.User.Query().
-				Where(userSchema.IDEQ(targetUserID)).
-				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
-				Only(c.Context())
-			if err != nil {
+			targetUser, found := userMap[targetUserID]
+			if !found {
 				item.Code = adminBatchResultCodeUserNotFound
 				item.Message = "user not found"
 				results = append(results, item)
 				continue
 			}
 
-			if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, targetUser.ID, string(targetUser.Role)); err != nil {
+			if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, targetUser.ID, targetUser.Role); err != nil {
 				item.Code = adminFailureReasonPermissionDenied
 				item.Message = "insufficient permissions"
 				results = append(results, item)
@@ -379,21 +414,26 @@ func handleBatchUpdateUserAllowCNMysekai(apiHelper *harukiAPIHelper.HarukiToolbo
 
 		results := make([]batchUserOperationItemResult, 0, len(payload.UserIDs))
 		successCount := 0
+
+		// Batch fetch all users at once to avoid N+1 queries
+		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBatchAllowCN, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDatabaseError, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to fetch users")
+		}
+
 		for _, targetUserID := range payload.UserIDs {
 			item := batchUserOperationItemResult{UserID: targetUserID}
 
-			targetUser, err := apiHelper.DBManager.DB.User.Query().
-				Where(userSchema.IDEQ(targetUserID)).
-				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
-				Only(c.Context())
-			if err != nil {
+			targetUser, found := userMap[targetUserID]
+			if !found {
 				item.Code = adminBatchResultCodeUserNotFound
 				item.Message = "user not found"
 				results = append(results, item)
 				continue
 			}
 
-			if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, targetUser.ID, string(targetUser.Role)); err != nil {
+			if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, targetUser.ID, targetUser.Role); err != nil {
 				item.Code = adminFailureReasonPermissionDenied
 				item.Message = "insufficient permissions"
 				results = append(results, item)

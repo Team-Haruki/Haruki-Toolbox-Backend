@@ -42,16 +42,25 @@ func mergeAndSortData(
 	valueIDs map[any]bool,
 	idKey string,
 ) []*orderedmap.OrderedMap {
-	merged := make([]*orderedmap.OrderedMap, 0)
-	if vs, ok := value.([]interface{}); ok {
-		for _, x := range vs {
-			m := convertToOrderedMap(x)
-			if m == nil {
-				continue
-			}
-			if id, ok := m.Get(idKey); ok && !valueIDs[id] {
-				merged = append(merged, m)
-			}
+	vs, ok := value.([]interface{})
+	if !ok {
+		merged := make([]*orderedmap.OrderedMap, len(arr))
+		copy(merged, arr)
+		sort.SliceStable(merged, func(i, j int) bool {
+			vi, _ := merged[i].Get(idKey)
+			vj, _ := merged[j].Get(idKey)
+			return toInt64(vi) < toInt64(vj)
+		})
+		return merged
+	}
+	merged := make([]*orderedmap.OrderedMap, 0, len(vs)+len(arr))
+	for _, x := range vs {
+		m := convertToOrderedMap(x)
+		if m == nil {
+			continue
+		}
+		if id, ok := m.Get(idKey); ok && !valueIDs[id] {
+			merged = append(merged, m)
 		}
 	}
 	merged = append(merged, arr...)

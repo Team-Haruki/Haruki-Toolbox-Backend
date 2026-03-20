@@ -230,7 +230,21 @@ func buildAdminOAuthClientTrendPoints(from, to time.Time, bucket string, authori
 }
 
 func buildAdminOAuthClientTrendPointsFromCounts(from, to time.Time, bucket string, authorizationCounts, tokenCounts map[int64]int) []adminOAuthClientTrendPoint {
-	points := make([]adminOAuthClientTrendPoint, 0)
+	// Estimate capacity based on time range and bucket size
+	var estimatedBuckets int
+	bucketDuration := time.Hour // default hour
+	switch bucket {
+	case "day":
+		bucketDuration = 24 * time.Hour
+	case "hour":
+		bucketDuration = time.Hour
+	}
+	if bucketDuration > 0 {
+		estimatedBuckets = int(to.Sub(from)/bucketDuration) + 2
+	} else {
+		estimatedBuckets = 32
+	}
+	points := make([]adminOAuthClientTrendPoint, 0, estimatedBuckets)
 	for cursor := truncateTimeByBucket(from.UTC(), bucket); !cursor.After(to.UTC()); cursor = nextTimeBucketStart(cursor, bucket) {
 		bucketUnix := cursor.Unix()
 		points = append(points, adminOAuthClientTrendPoint{BucketStart: cursor, AuthorizationCreated: authorizationCounts[bucketUnix], TokenIssued: tokenCounts[bucketUnix]})

@@ -33,7 +33,8 @@ func (Ticket) Fields() []ent.Field {
 
 func (Ticket) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("messages", TicketMessage.Type),
+		edge.To("messages", TicketMessage.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 	}
 }
 

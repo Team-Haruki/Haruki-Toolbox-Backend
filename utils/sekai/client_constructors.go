@@ -47,7 +47,7 @@ func NewSekaiClientWithConfig(cfg ClientConfig) *HarukiSekaiClient {
 		headers:         cloneHeaders(cfg.Headers),
 		inheritJWTToken: cfg.InheritJWTToken,
 		httpClient:      httpClient,
-		logger:          harukiLogger.NewLogger("SekaiClient", "DEBUG", nil),
+		logger:          harukiLogger.NewLoggerFromGlobal("SekaiClient"),
 	}
 }
 

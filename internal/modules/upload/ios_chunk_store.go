@@ -151,6 +151,10 @@ func loadIOSUploadChunks(
 	}
 
 	_, chunkDataKey, _ := iosUploadRedisKeys(uploadKey)
+
+	iosUploadChunkStoreMu.Lock()
+	defer iosUploadChunkStoreMu.Unlock()
+
 	rawChunks, err := redisClient.HGetAll(ctx, chunkDataKey).Result()
 	if err != nil {
 		return nil, err

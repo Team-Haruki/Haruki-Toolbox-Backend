@@ -753,12 +753,12 @@ func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *haru
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	userCh := make(chan *postgresql.User)
-	records := make([]hydraClientAuthorizationRecord, 0)
+	records := make([]hydraClientAuthorizationRecord, 0, len(users)) // pre-allocate for expected records
 	var recordsMu sync.Mutex
 
 	for i := 0; i < workerCount; i++ {
 		g.Go(func() error {
-			localRecords := make([]hydraClientAuthorizationRecord, 0)
+			localRecords := make([]hydraClientAuthorizationRecord, 0, len(users)/workerCount+1)
 			for user := range userCh {
 				subjects := oauth2Module.HydraSubjectsForUser(user.ID, user.KratosIdentityID)
 				if len(subjects) == 0 {
@@ -783,8 +783,8 @@ func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *haru
 				return nil
 			}
 			recordsMu.Lock()
+			defer recordsMu.Unlock()
 			records = append(records, localRecords...)
-			recordsMu.Unlock()
 			return nil
 		})
 	}

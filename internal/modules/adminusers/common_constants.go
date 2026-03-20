@@ -119,6 +119,7 @@ const (
 	adminFailureReasonUpdateSocialPlatformFailed           = "update_social_platform_failed"
 	adminFailureReasonUpdateUserEmailFailed                = "update_user_email_failed"
 	adminFailureReasonUpdateUserFailed                     = "update_user_failed"
+	adminFailureReasonDatabaseError                        = "database_error"
 )
 
 const (

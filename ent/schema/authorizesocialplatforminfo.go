@@ -23,7 +23,11 @@ func (AuthorizeSocialPlatformInfo) Fields() []ent.Field {
 
 func (AuthorizeSocialPlatformInfo) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.From("user", User.Type).Ref("authorized_social_platforms").Field("user_id").Required().Unique(),
+		edge.From("user", User.Type).
+			Ref("authorized_social_platforms").
+			Field("user_id").
+			Required().
+			Unique(),
 	}
 }
 

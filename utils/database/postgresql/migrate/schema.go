@@ -28,7 +28,7 @@ var (
 				Symbol:     "authorize_social_platform_infos_users_authorized_social_platforms",
 				Columns:    []*schema.Column{AuthorizeSocialPlatformInfosColumns[5]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
@@ -116,7 +116,7 @@ var (
 				Symbol:     "group_lists_groups_group_list",
 				Columns:    []*schema.Column{GroupListsColumns[6]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -136,7 +136,7 @@ var (
 				Symbol:     "ios_script_codes_users_ios_script_code",
 				Columns:    []*schema.Column{IosScriptCodesColumns[2]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -235,7 +235,7 @@ var (
 				Symbol:     "social_platform_infos_users_social_platform_info",
 				Columns:    []*schema.Column{SocialPlatformInfosColumns[4]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
@@ -355,7 +355,7 @@ var (
 				Symbol:     "ticket_messages_tickets_messages",
 				Columns:    []*schema.Column{TicketMessagesColumns[6]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{

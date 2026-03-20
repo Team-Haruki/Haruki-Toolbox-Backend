@@ -187,7 +187,7 @@ func fetchImportUsers(ctx context.Context, sqlDB *stdsql.DB, afterID string, lim
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	result := make([]importUserRow, 0)
+	result := make([]importUserRow, 0, 128) // pre-allocate for batch processing
 	for rows.Next() {
 		var row importUserRow
 		if err := rows.Scan(&row.ID, &row.Email, &row.PasswordHash); err != nil {

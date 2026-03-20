@@ -39,7 +39,39 @@ const (
 	startupDependencyTimeout = 15 * time.Second
 	resourceCloseTimeout     = 5 * time.Second
 
-	checkUsersTableExistsSQL = `SELECT to_regclass('public.users')`
+	checkUsersTableExistsSQL                = `SELECT to_regclass('public.users')`
+	checkUsersKratosIdentityColumnExistsSQL = `
+SELECT EXISTS (
+	SELECT 1
+	FROM information_schema.columns
+	WHERE table_schema = 'public'
+		AND table_name = 'users'
+		AND column_name = 'kratos_identity_id'
+);
+`
+	checkUsersKratosIdentityUniqueIndexExistsSQL = `
+SELECT EXISTS (
+	SELECT 1
+	FROM pg_indexes
+	WHERE schemaname = 'public'
+		AND tablename = 'users'
+		AND indexdef ILIKE '%UNIQUE INDEX%'
+		AND indexdef ILIKE '%(kratos_identity_id)%'
+);
+`
+	checkUsersEmailLowerUniqueIndexExistsSQL = `
+SELECT EXISTS (
+	SELECT 1
+	FROM pg_indexes
+	WHERE schemaname = 'public'
+		AND tablename = 'users'
+		AND indexdef ILIKE '%UNIQUE INDEX%'
+		AND (
+			indexdef ILIKE '%lower((email)::text)%'
+			OR indexdef ILIKE '%lower(email)%'
+		)
+);
+`
 
 	createUsersEmailLowerUniqueIndexSQL = `
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique_idx
@@ -116,6 +148,69 @@ func ensureUsersKratosIdentityColumn(ctx context.Context, entClient *dbManager.C
 	return nil
 }
 
+func querySchemaExists(ctx context.Context, entClient *dbManager.Client, query string) (bool, error) {
+	sqlDB := entClient.SQLDB()
+	if sqlDB == nil {
+		return false, fmt.Errorf("underlying SQL DB is not available")
+	}
+
+	var exists bool
+	if err := sqlDB.QueryRowContext(ctx, query).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func validateUsersEmailLowerUniqueIndex(ctx context.Context, entClient *dbManager.Client) error {
+	exists, err := querySchemaExists(ctx, entClient, checkUsersEmailLowerUniqueIndexExistsSQL)
+	if err != nil {
+		return fmt.Errorf("check users lower(email) unique index: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("users lower(email) unique index is missing; run schema migration or enable backend.auto_migrate")
+	}
+	return nil
+}
+
+func validateUsersKratosIdentityColumn(ctx context.Context, entClient *dbManager.Client) error {
+	columnExists, err := querySchemaExists(ctx, entClient, checkUsersKratosIdentityColumnExistsSQL)
+	if err != nil {
+		return fmt.Errorf("check users.kratos_identity_id column: %w", err)
+	}
+	if !columnExists {
+		return fmt.Errorf("users.kratos_identity_id column is missing; run schema migration or enable backend.auto_migrate")
+	}
+
+	indexExists, err := querySchemaExists(ctx, entClient, checkUsersKratosIdentityUniqueIndexExistsSQL)
+	if err != nil {
+		return fmt.Errorf("check users.kratos_identity_id unique index: %w", err)
+	}
+	if !indexExists {
+		return fmt.Errorf("users.kratos_identity_id unique index is missing; run schema migration or enable backend.auto_migrate")
+	}
+	return nil
+}
+
+func ensureUsersSchemaCompatibility(ctx context.Context, entClient *dbManager.Client, autoMigrate bool) error {
+	if autoMigrate {
+		if err := ensureUsersEmailLowerUniqueIndex(ctx, entClient); err != nil {
+			return err
+		}
+		if err := ensureUsersKratosIdentityColumn(ctx, entClient); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := validateUsersEmailLowerUniqueIndex(ctx, entClient); err != nil {
+		return err
+	}
+	if err := validateUsersKratosIdentityColumn(ctx, entClient); err != nil {
+		return err
+	}
+	return nil
+}
+
 func usersTableExists(ctx context.Context, entClient *dbManager.Client) (bool, error) {
 	sqlDB := entClient.SQLDB()
 	if sqlDB == nil {
@@ -167,6 +262,9 @@ func validateUserSystemConfig(cfg harukiConfig.Config) error {
 		if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
 			return fmt.Errorf("user_system.auth_proxy_subject_header is required when auth_proxy_enabled=true")
 		}
+		if strings.TrimSpace(cfg.UserSystem.AuthProxySessionHeader) == "" {
+			return fmt.Errorf("user_system.auth_proxy_session_header is required when auth_proxy_enabled=true")
+		}
 	}
 	return nil
 }
@@ -200,6 +298,10 @@ func Run(cfg harukiConfig.Config) error {
 	defer func() {
 		_ = closeMainLogFile()
 	}()
+
+	// Set global log level and file writer for NewLoggerFromGlobal
+	harukiLogger.SetGlobalLogLevel(cfg.Backend.LogLevel)
+	harukiLogger.SetGlobalFileWriter(loggerWriter)
 
 	mainLogger := harukiLogger.NewLogger("Main", cfg.Backend.LogLevel, loggerWriter)
 	mainLogger.Infof("%s", fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
@@ -263,18 +365,12 @@ func Run(cfg harukiConfig.Config) error {
 			return fmt.Errorf("database schema is not initialized (users table missing) while backend.auto_migrate=false")
 		}
 	}
-	usersEmailCtx, cancelUsersEmail := startupContext()
-	if err := ensureUsersEmailLowerUniqueIndex(usersEmailCtx, entClient); err != nil {
-		cancelUsersEmail()
-		return fmt.Errorf("ensure case-insensitive email uniqueness: %w", err)
+	usersSchemaCtx, cancelUsersSchema := startupContext()
+	if err := ensureUsersSchemaCompatibility(usersSchemaCtx, entClient, cfg.Backend.AutoMigrate); err != nil {
+		cancelUsersSchema()
+		return fmt.Errorf("ensure users schema compatibility: %w", err)
 	}
-	cancelUsersEmail()
-	usersKratosCtx, cancelUsersKratos := startupContext()
-	if err := ensureUsersKratosIdentityColumn(usersKratosCtx, entClient); err != nil {
-		cancelUsersKratos()
-		return fmt.Errorf("ensure kratos identity mapping column: %w", err)
-	}
-	cancelUsersKratos()
+	cancelUsersSchema()
 
 	smtpClient := harukiSMTP.NewSMTPClient(cfg.UserSystem.SMTP)
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, cfg.UserSystem.SessionSignToken)
@@ -299,6 +395,7 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.AuthProxyEmailVerifiedHeader,
 		cfg.UserSystem.AuthProxyUserIDHeader,
 	)
+	sessionHandler.ConfigureAuthProxySessionHeader(cfg.UserSystem.AuthProxySessionHeader)
 	app := fiber.New(fiber.Config{
 		BodyLimit:   100 * 1024 * 1024,
 		JSONEncoder: sonic.Marshal,

@@ -28,6 +28,7 @@ type SessionHandler struct {
 	AuthProxyEmailHeader         string
 	AuthProxyEmailVerifiedHeader string
 	AuthProxyUserIDHeader        string
+	AuthProxySessionHeader       string
 
 	KratosPublicURL         string
 	KratosAdminURL          string

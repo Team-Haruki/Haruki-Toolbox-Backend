@@ -230,3 +230,90 @@ func TestRequireRecentAdminReauth(t *testing.T) {
 		}
 	})
 }
+
+func TestRequireRecentAdminReauthAuthProxySession(t *testing.T) {
+	helper, redisManager := newAdminSessionTestHelper(t)
+	helper.SessionHandler.ConfigureIdentityProvider("kratos", "http://kratos.example", "http://kratos-admin.example", "X-Session-Token", "ory_kratos_session", true, true, 2*time.Second, nil)
+	helper.SessionHandler.ConfigureAuthProxy(
+		true,
+		"X-Auth-Proxy-Secret",
+		"shared-secret",
+		"X-Kratos-Identity-Id",
+		"X-User-Name",
+		"X-User-Email",
+		"X-User-Email-Verified",
+		"X-User-Id",
+	)
+	helper.SessionHandler.ConfigureAuthProxySessionHeader("X-Auth-Proxy-Session-Id")
+
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "admin-1")
+		c.Locals("userRole", roleSuperAdmin)
+		c.Locals("identityID", "kratos-admin-1")
+		return c.Next()
+	})
+	app.Put("/", RequireRecentAdminReauth(helper), func(c fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	t.Run("missing reauth marker", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/", nil)
+		req.Header.Set("X-Auth-Proxy-Secret", "shared-secret")
+		req.Header.Set("X-Kratos-Identity-Id", "kratos-admin-1")
+		req.Header.Set("X-Auth-Proxy-Session-Id", "session-a")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusForbidden {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+		}
+	})
+
+	t.Run("missing auth proxy session header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/", nil)
+		req.Header.Set("X-Auth-Proxy-Secret", "shared-secret")
+		req.Header.Set("X-Kratos-Identity-Id", "kratos-admin-1")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
+		}
+	})
+
+	t.Run("valid reauth marker", func(t *testing.T) {
+		reauthKey := buildAdminReauthMarkerKey("admin-1", "authproxy-session:session-a")
+		if err := redisManager.Redis.Set(context.Background(), reauthKey, "1", time.Minute).Err(); err != nil {
+			t.Fatalf("seed reauth marker returned error: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodPut, "/", nil)
+		req.Header.Set("X-Auth-Proxy-Secret", "shared-secret")
+		req.Header.Set("X-Kratos-Identity-Id", "kratos-admin-1")
+		req.Header.Set("X-Auth-Proxy-Session-Id", "session-a")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusNoContent {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
+		}
+	})
+
+	t.Run("different auth proxy session cannot reuse marker", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/", nil)
+		req.Header.Set("X-Auth-Proxy-Secret", "shared-secret")
+		req.Header.Set("X-Kratos-Identity-Id", "kratos-admin-1")
+		req.Header.Set("X-Auth-Proxy-Session-Id", "session-b")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusForbidden {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+		}
+	})
+}

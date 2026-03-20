@@ -24,7 +24,7 @@ func NewSekaiDataRetriever(
 ) *HarukiSekaiDataRetriever {
 	client, err := newRetrieverClient(server, inherit)
 	if err != nil {
-		logger := harukiLogger.NewLogger("SekaiDataRetriever", "DEBUG", nil)
+		logger := harukiLogger.NewLoggerFromGlobal("SekaiDataRetriever")
 		msg := fmt.Sprintf("failed to build retriever client: %v", err)
 		logger.Errorf("%s", msg)
 		return &HarukiSekaiDataRetriever{
@@ -38,7 +38,7 @@ func NewSekaiDataRetriever(
 	return &HarukiSekaiDataRetriever{
 		client:       client,
 		uploadType:   uploadType,
-		logger:       harukiLogger.NewLogger("SekaiDataRetriever", "DEBUG", nil),
+		logger:       harukiLogger.NewLoggerFromGlobal("SekaiDataRetriever"),
 		isErrorExist: false,
 		ErrorMessage: "",
 	}

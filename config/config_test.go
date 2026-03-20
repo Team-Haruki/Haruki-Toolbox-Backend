@@ -126,6 +126,9 @@ func TestLoad(t *testing.T) {
 		if cfg.UserSystem.AuthProxyUserIDHeader != "X-User-Id" {
 			t.Fatalf("UserSystem.AuthProxyUserIDHeader = %q, want %q", cfg.UserSystem.AuthProxyUserIDHeader, "X-User-Id")
 		}
+		if cfg.UserSystem.AuthProxySessionHeader != "" {
+			t.Fatalf("UserSystem.AuthProxySessionHeader = %q, want empty", cfg.UserSystem.AuthProxySessionHeader)
+		}
 		if !cfg.UserSystem.KratosAutoLinkByEmail {
 			t.Fatalf("UserSystem.KratosAutoLinkByEmail = %v, want true", cfg.UserSystem.KratosAutoLinkByEmail)
 		}
@@ -196,6 +199,25 @@ func TestLoad(t *testing.T) {
 		}
 		if cfg.UserSystem.SMTP.SMTPMail != "no-reply@example.com" {
 			t.Fatalf("SMTPMail = %q, want %q", cfg.UserSystem.SMTP.SMTPMail, "no-reply@example.com")
+		}
+	})
+
+	t.Run("env overrides auth proxy session header", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("{}\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		t.Setenv("AUTH_PROXY_SESSION_HEADER", "X-Auth-Proxy-Session-Id")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.UserSystem.AuthProxySessionHeader != "X-Auth-Proxy-Session-Id" {
+			t.Fatalf("UserSystem.AuthProxySessionHeader = %q, want %q", cfg.UserSystem.AuthProxySessionHeader, "X-Auth-Proxy-Session-Id")
 		}
 	})
 }

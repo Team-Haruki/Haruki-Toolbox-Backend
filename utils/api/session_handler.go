@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	platformAuthHeader "haruki-suite/internal/platform/authheader"
@@ -21,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"github.com/redis/go-redis/v9"
 )
@@ -284,6 +284,13 @@ func (s *SessionHandler) ConfigureAuthProxy(
 	if s.AuthProxyUserIDHeader == "" {
 		s.AuthProxyUserIDHeader = defaultAuthProxyUserIDHeader
 	}
+}
+
+func (s *SessionHandler) ConfigureAuthProxySessionHeader(sessionHeader string) {
+	if s == nil {
+		return
+	}
+	s.AuthProxySessionHeader = strings.TrimSpace(sessionHeader)
 }
 
 func (s *SessionHandler) UsesAuthProxy() bool {
@@ -624,7 +631,7 @@ func (s *SessionHandler) ListKratosSessionsByIdentityID(ctx context.Context, ide
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var parsed []kratosAdminSessionRecord
-		if err := json.Unmarshal(body, &parsed); err != nil {
+		if err := sonic.Unmarshal(body, &parsed); err != nil {
 			return nil, fmt.Errorf("%w: decode list sessions response: %v", errIdentityProviderUnavailable, err)
 		}
 		items := make([]KratosSessionInfo, 0, len(parsed))
@@ -761,7 +768,7 @@ func (s *SessionHandler) FindKratosIdentityIDByEmail(ctx context.Context, email 
 	}
 
 	var identities []kratosIdentityRecord
-	if err := json.Unmarshal(body, &identities); err != nil {
+	if err := sonic.Unmarshal(body, &identities); err != nil {
 		return "", fmt.Errorf("%w: decode list identities response: %v", errIdentityProviderUnavailable, err)
 	}
 	if len(identities) == 0 {
@@ -892,7 +899,7 @@ func (s *SessionHandler) fetchKratosIdentityByID(ctx context.Context, identityID
 	}
 
 	var identity kratosIdentityRecord
-	if err := json.Unmarshal(body, &identity); err != nil {
+	if err := sonic.Unmarshal(body, &identity); err != nil {
 		return nil, fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
 	}
 	if strings.TrimSpace(identity.ID) == "" {
@@ -993,6 +1000,11 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	if proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified, handled, err := s.verifyAuthProxySession(requestCtx, c); handled {
 		if err != nil {
 			return respondSessionVerifyError(c, err)
+		}
+		if sessionHeader := strings.TrimSpace(s.AuthProxySessionHeader); sessionHeader != "" {
+			if sessionID := strings.TrimSpace(c.Get(sessionHeader)); sessionID != "" {
+				c.Locals("authProxySessionID", sessionID)
+			}
 		}
 		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified)
 	}
@@ -1349,7 +1361,7 @@ func (s *SessionHandler) fetchKratosWhoami(ctx context.Context, sessionToken str
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var parsed kratosSessionWhoamiResponse
-		if err := json.Unmarshal(body, &parsed); err != nil {
+		if err := sonic.Unmarshal(body, &parsed); err != nil {
 			return nil, fmt.Errorf("%w: decode whoami payload: %v", errIdentityProviderUnavailable, err)
 		}
 		return &parsed, nil
@@ -1397,7 +1409,7 @@ func (s *SessionHandler) initKratosSelfServiceFlow(ctx context.Context, initPath
 	}
 
 	var parsed kratosFlowResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	if err := sonic.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("%w: decode init flow response: %v", errIdentityProviderUnavailable, err)
 	}
 	flowID := strings.TrimSpace(parsed.ID)
@@ -1424,7 +1436,7 @@ func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submit
 	query.Set("flow", strings.TrimSpace(flowID))
 	endpoint.RawQuery = query.Encode()
 
-	encoded, err := json.Marshal(payload)
+	encoded, err := sonic.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("%w: encode payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -1453,7 +1465,7 @@ func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submit
 	}
 
 	var parsed kratosAuthSubmitResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	if err := sonic.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("%w: decode submit response: %v", errIdentityProviderUnavailable, err)
 	}
 	sessionToken := strings.TrimSpace(parsed.SessionToken)
@@ -1479,7 +1491,7 @@ func (s *SessionHandler) submitKratosRecoveryFlow(ctx context.Context, flowID st
 	query.Set("flow", strings.TrimSpace(flowID))
 	endpoint.RawQuery = query.Encode()
 
-	encoded, err := json.Marshal(map[string]any{
+	encoded, err := sonic.Marshal(map[string]any{
 		"method": method,
 		"email":  email,
 	})
@@ -1537,7 +1549,7 @@ func (s *SessionHandler) verifyKratosRecoveryCode(ctx context.Context, recoveryC
 	query.Set("flow", strings.TrimSpace(flowID))
 	endpoint.RawQuery = query.Encode()
 
-	encoded, err := json.Marshal(map[string]any{
+	encoded, err := sonic.Marshal(map[string]any{
 		"method": "code",
 		"code":   strings.TrimSpace(recoveryCode),
 	})
@@ -1567,7 +1579,7 @@ func (s *SessionHandler) verifyKratosRecoveryCode(ctx context.Context, recoveryC
 	}
 
 	var parsed kratosRecoveryFlowSubmitResponse
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	if err := sonic.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("%w: decode recovery response: %v", errIdentityProviderUnavailable, err)
 	}
 	sessionToken := strings.TrimSpace(extractSessionTokenFromRecoveryPayload(body, parsed))
@@ -1580,7 +1592,7 @@ func (s *SessionHandler) verifyKratosRecoveryCode(ctx context.Context, recoveryC
 func classifyKratosFlowError(statusCode int, body []byte) error {
 	bodyText := strings.TrimSpace(string(body))
 	var payload kratosErrorPayload
-	_ = json.Unmarshal(body, &payload)
+	_ = sonic.Unmarshal(body, &payload)
 	reason := strings.TrimSpace(extractKratosErrorReason(payload, bodyText))
 	reasonLower := strings.ToLower(reason)
 
@@ -1641,7 +1653,7 @@ func (s *SessionHandler) updateKratosPasswordViaPatch(ctx context.Context, ident
 			"value": newPassword,
 		},
 	}
-	encoded, err := json.Marshal(patchPayload)
+	encoded, err := sonic.Marshal(patchPayload)
 	if err != nil {
 		return fmt.Errorf("%w: encode patch payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -1692,7 +1704,7 @@ func (s *SessionHandler) updateKratosEmailViaPatch(ctx context.Context, identity
 			"value": email,
 		},
 	}
-	encoded, err := json.Marshal(patchPayload)
+	encoded, err := sonic.Marshal(patchPayload)
 	if err != nil {
 		return fmt.Errorf("%w: encode patch payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -1767,11 +1779,11 @@ func (s *SessionHandler) updateKratosPasswordViaPut(ctx context.Context, identit
 	}
 
 	var identity map[string]any
-	if err := json.Unmarshal(getBody, &identity); err != nil {
+	if err := sonic.Unmarshal(getBody, &identity); err != nil {
 		return fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
 	}
 	applyPasswordIntoKratosIdentity(identity, newPassword)
-	encoded, err := json.Marshal(identity)
+	encoded, err := sonic.Marshal(identity)
 	if err != nil {
 		return fmt.Errorf("%w: encode identity update payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -1840,11 +1852,11 @@ func (s *SessionHandler) updateKratosEmailViaPut(ctx context.Context, identityID
 	}
 
 	var identity map[string]any
-	if err := json.Unmarshal(getBody, &identity); err != nil {
+	if err := sonic.Unmarshal(getBody, &identity); err != nil {
 		return fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
 	}
 	applyEmailIntoKratosIdentity(identity, email)
-	encoded, err := json.Marshal(identity)
+	encoded, err := sonic.Marshal(identity)
 	if err != nil {
 		return fmt.Errorf("%w: encode identity update payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -1926,7 +1938,7 @@ func extractSessionTokenFromRecoveryPayload(rawBody []byte, parsed kratosRecover
 	}
 
 	var raw any
-	if err := json.Unmarshal(rawBody, &raw); err != nil {
+	if err := sonic.Unmarshal(rawBody, &raw); err != nil {
 		return ""
 	}
 	return extractSessionTokenFromAny(raw)
