@@ -10,6 +10,7 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,10 +61,18 @@ type CacheItem struct {
 }
 
 func GetClearCachePaths(server string, dataType string, userID int64) []CachePath {
+	var pathBuilder strings.Builder
+	pathBuilder.Grow(len("/public/") + len(server) + len(dataType) + 24)
+	pathBuilder.WriteString("/public/")
+	pathBuilder.WriteString(server)
+	pathBuilder.WriteByte('/')
+	pathBuilder.WriteString(dataType)
+	pathBuilder.WriteByte('/')
+	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
 	return []CachePath{
 		{
 			Namespace: publicAccessNamespace,
-			Path:      fmt.Sprintf("/public/%s/%s/%d", server, dataType, userID),
+			Path:      pathBuilder.String(),
 		},
 	}
 }
@@ -98,7 +107,14 @@ func CacheKeyBuilderWithAllowedQuery(c fiber.Ctx, namespace string, allowedQuery
 }
 
 func buildCacheKey(namespace, path, queryString string) string {
-	return fmt.Sprintf(cacheKeyFormat, namespace, path, getQueryHash(queryString))
+	var sb strings.Builder
+	sb.Grow(len(namespace) + len(path) + 40) // pre-allocate: namespace + path + "query=" + hash
+	sb.WriteString(namespace)
+	sb.WriteByte(':')
+	sb.WriteString(path)
+	sb.WriteString(":query=")
+	sb.WriteString(getQueryHash(queryString))
+	return sb.String()
 }
 
 func getQueryHash(queryString string) string {

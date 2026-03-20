@@ -3,7 +3,6 @@ package oauth2
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	userCoreModule "haruki-suite/internal/modules/usercore"
@@ -18,6 +17,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -512,7 +512,7 @@ func getHydraLoginRequest(ctx context.Context, challenge string) (*hydraLoginReq
 		return nil, err
 	}
 	var parsed hydraLoginRequestResponse
-	if err := json.Unmarshal(response, &parsed); err != nil {
+	if err := sonic.Unmarshal(response, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra login request: %w", err)
 	}
 	return &parsed, nil
@@ -524,7 +524,7 @@ func getHydraConsentRequest(ctx context.Context, challenge string) (*hydraConsen
 		return nil, err
 	}
 	var parsed hydraConsentRequestResponse
-	if err := json.Unmarshal(response, &parsed); err != nil {
+	if err := sonic.Unmarshal(response, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra consent request: %w", err)
 	}
 	return &parsed, nil
@@ -536,7 +536,7 @@ func sendHydraAdminJSON(ctx context.Context, method string, endpointPath string,
 		return nil, err
 	}
 	var parsed hydraRedirectResponse
-	if err := json.Unmarshal(response, &parsed); err != nil {
+	if err := sonic.Unmarshal(response, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra redirect response: %w", err)
 	}
 	return &parsed, nil
@@ -553,7 +553,7 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 
 	var requestBody []byte
 	if payload != nil {
-		requestBody, err = json.Marshal(payload)
+		requestBody, err = sonic.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode hydra request body: %w", err)
 		}
@@ -587,7 +587,7 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message := http.StatusText(resp.StatusCode)
 		var hydraErr hydraErrorResponse
-		if err := json.Unmarshal(body, &hydraErr); err == nil {
+		if err := sonic.Unmarshal(body, &hydraErr); err == nil {
 			for _, candidate := range []string{hydraErr.ErrorDescription, hydraErr.Message, hydraErr.Error} {
 				if strings.TrimSpace(candidate) != "" {
 					message = candidate
@@ -628,22 +628,16 @@ func hydraHTTPClient() *http.Client {
 	timeout := harukiOAuth2.HydraRequestTimeout()
 	timeoutNano := timeout.Nanoseconds()
 
-	hydraHTTPClientMu.RLock()
-	if hydraSharedHTTPClient != nil && hydraSharedTimeoutNano == timeoutNano {
-		client := hydraSharedHTTPClient
-		hydraHTTPClientMu.RUnlock()
-		return client
-	}
-	hydraHTTPClientMu.RUnlock()
-
-	client := &http.Client{Timeout: timeout}
-
 	hydraHTTPClientMu.Lock()
 	defer hydraHTTPClientMu.Unlock()
-	if hydraSharedHTTPClient == nil || hydraSharedTimeoutNano != timeoutNano {
-		hydraSharedHTTPClient = client
-		hydraSharedTimeoutNano = timeoutNano
+
+	if hydraSharedHTTPClient != nil && hydraSharedTimeoutNano == timeoutNano {
+		return hydraSharedHTTPClient
 	}
+
+	client := &http.Client{Timeout: timeout}
+	hydraSharedHTTPClient = client
+	hydraSharedTimeoutNano = timeoutNano
 	return hydraSharedHTTPClient
 }
 

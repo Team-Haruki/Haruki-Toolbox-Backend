@@ -80,6 +80,7 @@ type UserSystemConfig struct {
 	AuthProxyEmailHeader         string     `yaml:"auth_proxy_email_header"`
 	AuthProxyEmailVerifiedHeader string     `yaml:"auth_proxy_email_verified_header"`
 	AuthProxyUserIDHeader        string     `yaml:"auth_proxy_user_id_header"`
+	AuthProxySessionHeader       string     `yaml:"auth_proxy_session_header"`
 	KratosPublicURL              string     `yaml:"kratos_public_url"`
 	KratosAdminURL               string     `yaml:"kratos_admin_url"`
 	KratosRequestTimeout         int        `yaml:"kratos_request_timeout_seconds"`
@@ -362,6 +363,7 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.UserSystem.AuthProxyEmailHeader, "AUTH_PROXY_EMAIL_HEADER")
 	overrideString(&cfg.UserSystem.AuthProxyEmailVerifiedHeader, "AUTH_PROXY_EMAIL_VERIFIED_HEADER")
 	overrideString(&cfg.UserSystem.AuthProxyUserIDHeader, "AUTH_PROXY_USER_ID_HEADER")
+	overrideString(&cfg.UserSystem.AuthProxySessionHeader, "AUTH_PROXY_SESSION_HEADER")
 	overrideString(&cfg.UserSystem.KratosPublicURL, "KRATOS_PUBLIC_URL", "KRATOS_PUBLIC_BASE_URL")
 	overrideString(&cfg.UserSystem.KratosAdminURL, "KRATOS_ADMIN_URL", "KRATOS_ADMIN_BASE_URL")
 	if err := overrideInt(&cfg.UserSystem.KratosRequestTimeout, "KRATOS_REQUEST_TIMEOUT_SECONDS"); err != nil {

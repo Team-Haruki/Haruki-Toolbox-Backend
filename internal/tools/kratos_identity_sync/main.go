@@ -192,7 +192,7 @@ func fetchSyncUsers(ctx context.Context, sqlDB *stdsql.DB, afterID string, limit
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	result := make([]syncUserRow, 0)
+	result := make([]syncUserRow, 0, 128) // pre-allocate for batch processing
 	for rows.Next() {
 		var row syncUserRow
 		var emailVerified stdsql.NullBool

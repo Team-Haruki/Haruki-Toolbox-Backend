@@ -160,7 +160,38 @@ func buildAdminReauthMarkerKey(userID, sessionMarker string) string {
 	return adminReauthMarkerPrefix + strings.TrimSpace(userID) + ":" + strings.TrimSpace(sessionMarker)
 }
 
+func resolveCurrentAuthProxySessionMarker(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (string, error) {
+	if apiHelper == nil || apiHelper.SessionHandler == nil || !apiHelper.SessionHandler.UsesAuthProxy() {
+		return "", nil
+	}
+
+	trustedHeader := strings.TrimSpace(apiHelper.SessionHandler.AuthProxyTrustedHeader)
+	trustedValue := strings.TrimSpace(apiHelper.SessionHandler.AuthProxyTrustedValue)
+	if trustedHeader == "" || trustedValue == "" {
+		return "", nil
+	}
+	if strings.TrimSpace(c.Get(trustedHeader)) != trustedValue {
+		return "", nil
+	}
+
+	if sessionID, ok := c.Locals("authProxySessionID").(string); ok && strings.TrimSpace(sessionID) != "" {
+		return "authproxy-session:" + strings.TrimSpace(sessionID), nil
+	}
+	sessionHeader := strings.TrimSpace(apiHelper.SessionHandler.AuthProxySessionHeader)
+	if sessionHeader == "" {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "invalid user session")
+	}
+	if sessionID := strings.TrimSpace(c.Get(sessionHeader)); sessionID != "" {
+		return "authproxy-session:" + sessionID, nil
+	}
+	return "", fiber.NewError(fiber.StatusUnauthorized, "invalid user session")
+}
+
 func resolveCurrentAdminSessionMarker(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (string, error) {
+	if sessionMarker, err := resolveCurrentAuthProxySessionMarker(c, apiHelper); err != nil || sessionMarker != "" {
+		return sessionMarker, err
+	}
+
 	if apiHelper == nil || apiHelper.SessionHandler == nil || !apiHelper.SessionHandler.UsesKratosProvider() {
 		return "", fiber.NewError(fiber.StatusUnauthorized, "invalid user session")
 	}

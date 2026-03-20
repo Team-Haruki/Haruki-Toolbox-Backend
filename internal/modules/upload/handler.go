@@ -29,7 +29,7 @@ var (
 	sharedHttpClientMu         sync.RWMutex
 	uploadSemaphore            = make(chan struct{}, 10)
 	uploadAuditSemaphore       = make(chan struct{}, 64)
-	sharedDataHandlerLogger    = harukiLogger.NewLogger("SekaiDataHandler", "DEBUG", nil)
+	sharedDataHandlerLogger    = harukiLogger.NewLoggerFromGlobal("SekaiDataHandler")
 	errUploadOwnershipMismatch = errors.New("upload game account ownership mismatch")
 	errUploadOwnerBanned       = errors.New("upload game account owner banned")
 	errUploadCNMysekaiDenied   = errors.New("upload cn mysekai denied")

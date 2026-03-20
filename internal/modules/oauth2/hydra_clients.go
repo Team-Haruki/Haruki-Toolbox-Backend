@@ -3,7 +3,6 @@ package oauth2
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	harukiOAuth2 "haruki-suite/utils/oauth2"
 )
 
@@ -212,7 +212,7 @@ func listHydraOAuthClientsPage(ctx context.Context, pageToken string) ([]HydraOA
 
 	var clients []HydraOAuthClient
 	if len(body) > 0 {
-		if err := json.Unmarshal(body, &clients); err != nil {
+		if err := sonic.Unmarshal(body, &clients); err != nil {
 			return nil, "", fmt.Errorf("failed to decode hydra oauth clients: %w", err)
 		}
 	}
@@ -225,7 +225,7 @@ func sendHydraClientRequest(ctx context.Context, method string, endpointPath str
 		return nil, err
 	}
 	var client HydraOAuthClient
-	if err := json.Unmarshal(responseBody, &client); err != nil {
+	if err := sonic.Unmarshal(responseBody, &client); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra oauth client response: %w", err)
 	}
 	return &client, nil
@@ -238,7 +238,7 @@ func sendHydraClientRequestRaw(ctx context.Context, method string, endpointPath 
 	}
 	var requestBody []byte
 	if payload != nil {
-		requestBody, err = json.Marshal(payload)
+		requestBody, err = sonic.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode hydra oauth client payload: %w", err)
 		}
@@ -272,7 +272,7 @@ func sendHydraClientRequestRaw(ctx context.Context, method string, endpointPath 
 func parseHydraRequestError(status int, body []byte) error {
 	message := http.StatusText(status)
 	var hydraErr hydraErrorResponse
-	if err := json.Unmarshal(body, &hydraErr); err == nil {
+	if err := sonic.Unmarshal(body, &hydraErr); err == nil {
 		for _, candidate := range []string{hydraErr.ErrorDescription, hydraErr.Message, hydraErr.Error} {
 			if strings.TrimSpace(candidate) != "" {
 				message = candidate

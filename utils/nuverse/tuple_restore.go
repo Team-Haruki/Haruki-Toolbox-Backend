@@ -98,15 +98,16 @@ func processNestedArray(
 	i int,
 	second []interface{},
 ) []*orderedmap.OrderedMap {
-	subList := make([]*orderedmap.OrderedMap, 0)
 	if i >= len(arrayData) {
-		return subList
+		return nil
 	}
 
 	arr, ok := arrayData[i].([]interface{})
 	if !ok {
-		return subList
+		return nil
 	}
+
+	subList := make([]*orderedmap.OrderedMap, 0, len(arr))
 
 	for _, sub := range arr {
 		subArr, ok := sub.([]interface{})

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -279,7 +280,7 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 	if resp.StatusCode != http.StatusOK {
 		message := http.StatusText(resp.StatusCode)
 		var parsed map[string]any
-		if err := json.Unmarshal(respBody, &parsed); err == nil {
+		if err := sonic.Unmarshal(respBody, &parsed); err == nil {
 			for _, key := range []string{"error_description", "message", "error"} {
 				if value := strings.TrimSpace(stringifyAny(parsed[key])); value != "" {
 					message = value
@@ -291,7 +292,7 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 	}
 
 	var parsed hydraIntrospectionResponse
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
+	if err := sonic.Unmarshal(respBody, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra introspection payload: %w", err)
 	}
 	return &parsed, nil

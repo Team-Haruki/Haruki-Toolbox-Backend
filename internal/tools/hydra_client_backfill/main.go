@@ -64,7 +64,7 @@ func main() {
 	}
 	fmt.Printf("Client count: %d\n", len(clients))
 
-	generatedSecrets := make([]emittedSecret, 0)
+	generatedSecrets := make([]emittedSecret, 0, len(clients))
 	created := 0
 	updated := 0
 	skipped := 0
@@ -158,7 +158,8 @@ func fetchLegacyOAuthClients(ctx context.Context, sqlDB *stdsql.DB, includeInact
 	if sqlDB == nil {
 		return nil, fmt.Errorf("underlying SQL DB is not available")
 	}
-	query := "SELECT client_id, name, client_type, active, redirect_uris, scopes FROM oauth_clients"
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString("SELECT client_id, name, client_type, active, redirect_uris, scopes FROM oauth_clients")
 	clauses := make([]string, 0, 2)
 	args := make([]any, 0, 2)
 	if !includeInactive {
@@ -170,18 +171,20 @@ func fetchLegacyOAuthClients(ctx context.Context, sqlDB *stdsql.DB, includeInact
 		args = append(args, strings.TrimSpace(clientID))
 	}
 	if len(clauses) > 0 {
-		query += " WHERE " + strings.Join(clauses, " AND ")
+		queryBuilder.WriteString(" WHERE ")
+		queryBuilder.WriteString(strings.Join(clauses, " AND "))
 	}
-	query += " ORDER BY client_id ASC"
+	queryBuilder.WriteString(" ORDER BY client_id ASC")
 	if limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", limit)
+		queryBuilder.WriteString(fmt.Sprintf(" LIMIT %d", limit))
 	}
+	query := queryBuilder.String()
 	rows, err := sqlDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	result := make([]legacyOAuthClientRow, 0)
+	result := make([]legacyOAuthClientRow, 0, 64) // pre-allocate for common case
 	for rows.Next() {
 		var row legacyOAuthClientRow
 		var redirectURIsRaw []byte

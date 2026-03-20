@@ -269,7 +269,7 @@ func parseIOSProxyPathInt(raw string) (int64, error) {
 
 func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	api := apiHelper.Router.Group("/ios")
-	logger := harukiLogger.NewLogger("HarukiSekaiIOS", "DEBUG", nil)
+	logger := harukiLogger.NewLoggerFromGlobal("HarukiSekaiIOS")
 	proxyGuard := openUploadEntryGuard(apiHelper)
 
 	api.Post("/script/:upload_code/upload", handleIOSScriptUploadWithValidation(apiHelper, logger))

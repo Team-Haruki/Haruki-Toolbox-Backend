@@ -3,13 +3,18 @@ package bootstrap
 import (
 	"context"
 	harukiConfig "haruki-suite/config"
+	dbManager "haruki-suite/utils/database/postgresql"
 	harukiRedis "haruki-suite/utils/database/redis"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -101,6 +106,82 @@ func TestEnsureRedisReadySuccess(t *testing.T) {
 	}
 }
 
+func newBootstrapSQLMockClient(t *testing.T) (*dbManager.Client, sqlmock.Sqlmock) {
+	t.Helper()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	client := dbManager.NewClient(dbManager.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	return client, mock
+}
+
+func expectSchemaExistsQuery(mock sqlmock.Sqlmock, query string, exists bool) {
+	rows := sqlmock.NewRows([]string{"exists"}).AddRow(exists)
+	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnRows(rows)
+}
+
+func TestEnsureUsersSchemaCompatibilityValidatesWithoutDDLWhenAutoMigrateDisabled(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+
+	expectSchemaExistsQuery(mock, checkUsersEmailLowerUniqueIndexExistsSQL, true)
+	expectSchemaExistsQuery(mock, checkUsersKratosIdentityColumnExistsSQL, true)
+	expectSchemaExistsQuery(mock, checkUsersKratosIdentityUniqueIndexExistsSQL, true)
+
+	if err := ensureUsersSchemaCompatibility(context.Background(), client, false); err != nil {
+		t.Fatalf("ensureUsersSchemaCompatibility returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestEnsureUsersSchemaCompatibilityFailsWhenManualSchemaIsIncomplete(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+
+	expectSchemaExistsQuery(mock, checkUsersEmailLowerUniqueIndexExistsSQL, true)
+	expectSchemaExistsQuery(mock, checkUsersKratosIdentityColumnExistsSQL, false)
+
+	err := ensureUsersSchemaCompatibility(context.Background(), client, false)
+	if err == nil {
+		t.Fatalf("expected ensureUsersSchemaCompatibility to fail for missing kratos column")
+	}
+	if !strings.Contains(err.Error(), "users.kratos_identity_id column is missing") {
+		t.Fatalf("error = %v, want missing kratos_identity_id column", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestEnsureUsersSchemaCompatibilityCreatesDDLWhenAutoMigrateEnabled(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+
+	duplicateRows := sqlmock.NewRows([]string{"normalized_email", "cnt"})
+	mock.ExpectQuery(regexp.QuoteMeta(findUsersEmailLowerDuplicateSQL)).WillReturnRows(duplicateRows)
+	mock.ExpectExec(regexp.QuoteMeta(createUsersEmailLowerUniqueIndexSQL)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(createUsersKratosIdentityColumnSQL)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(createUsersKratosIdentityUniqueIndexSQL)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	if err := ensureUsersSchemaCompatibility(context.Background(), client, true); err != nil {
+		t.Fatalf("ensureUsersSchemaCompatibility returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func TestValidateOAuth2ProviderConfig(t *testing.T) {
 	t.Run("hydra requires public and admin urls", func(t *testing.T) {
 		cfg := harukiConfig.Config{}
@@ -123,6 +204,26 @@ func TestValidateOAuth2ProviderConfig(t *testing.T) {
 		cfg.OAuth2.Provider = "builtin"
 		if err := validateOAuth2ProviderConfig(cfg); err == nil {
 			t.Fatalf("expected builtin provider to be rejected")
+		}
+	})
+}
+
+func TestValidateUserSystemConfig(t *testing.T) {
+	t.Run("auth proxy requires session header", func(t *testing.T) {
+		cfg := harukiConfig.Config{}
+		cfg.UserSystem.AuthProvider = "kratos"
+		cfg.UserSystem.KratosPublicURL = "https://kratos-public.example.com"
+		cfg.UserSystem.KratosAdminURL = "https://kratos-admin.example.com"
+		cfg.UserSystem.AuthProxyEnabled = true
+		cfg.UserSystem.AuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
+		cfg.UserSystem.AuthProxyTrustedValue = "shared-secret"
+		cfg.UserSystem.AuthProxySubjectHeader = "X-Kratos-Identity-Id"
+		if err := validateUserSystemConfig(cfg); err == nil {
+			t.Fatalf("expected missing auth proxy session header to fail")
+		}
+		cfg.UserSystem.AuthProxySessionHeader = "X-Auth-Proxy-Session-Id"
+		if err := validateUserSystemConfig(cfg); err != nil {
+			t.Fatalf("expected complete auth proxy config to pass, got %v", err)
 		}
 	})
 }

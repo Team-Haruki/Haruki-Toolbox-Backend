@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -28,10 +29,15 @@ func (User) Fields() []ent.Field {
 
 func (User) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("social_platform_info", SocialPlatformInfo.Type).Unique(),
-		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type),
+		edge.To("social_platform_info", SocialPlatformInfo.Type).
+			Unique().
+			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("game_account_bindings", GameAccountBinding.Type),
-		edge.To("ios_script_code", IOSScriptCode.Type).Unique(),
+		edge.To("ios_script_code", IOSScriptCode.Type).
+			Unique().
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 	}
 }
 

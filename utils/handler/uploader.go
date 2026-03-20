@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	logger     = harukiLogger.NewLogger("HarukiDataSyncer", "DEBUG", nil)
+	logger     = harukiLogger.NewLoggerFromGlobal("HarukiDataSyncer")
 	httpClient *resty.Client
 )
 
@@ -37,6 +37,12 @@ var zstdEncoderPool = sync.Pool{
 	},
 }
 
+var bytesBufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
 func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
 
 	msgpackBytes, err := sekai.DecryptToMsgpack(rawData, server)
@@ -44,13 +50,15 @@ func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]
 		return nil, fmt.Errorf("failed to decrypt data: %w", err)
 	}
 
-	var buf bytes.Buffer
+	buf := bytesBufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
 	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
-	encoder.Reset(&buf)
+	encoder.Reset(buf)
 
 	if err := streamjson.Convert(msgpackBytes, encoder); err != nil {
 		encoder.Close()
 		zstdEncoderPool.Put(encoder)
+		bytesBufferPool.Put(buf)
 		return nil, fmt.Errorf("failed to stream convert msgpack to json+zstd: %w", err)
 	}
 
@@ -58,11 +66,16 @@ func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]
 
 	if err := encoder.Close(); err != nil {
 		zstdEncoderPool.Put(encoder)
+		bytesBufferPool.Put(buf)
 		return nil, fmt.Errorf("failed to close zstd writer: %w", err)
 	}
 	zstdEncoderPool.Put(encoder)
 
-	return buf.Bytes(), nil
+	// Copy result before returning buffer to pool
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	bytesBufferPool.Put(buf)
+	return result, nil
 }
 
 func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
@@ -84,13 +97,15 @@ func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServ
 		return nil, fmt.Errorf("failed to marshal restored data to json: %w", err)
 	}
 
-	var buf bytes.Buffer
+	buf := bytesBufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
 	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
-	encoder.Reset(&buf)
+	encoder.Reset(buf)
 
 	if _, err := encoder.Write(jsonBytes); err != nil {
 		encoder.Close()
 		zstdEncoderPool.Put(encoder)
+		bytesBufferPool.Put(buf)
 		return nil, fmt.Errorf("failed to write json to zstd encoder: %w", err)
 	}
 
@@ -98,11 +113,16 @@ func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServ
 
 	if err := encoder.Close(); err != nil {
 		zstdEncoderPool.Put(encoder)
+		bytesBufferPool.Put(buf)
 		return nil, fmt.Errorf("failed to close zstd writer: %w", err)
 	}
 	zstdEncoderPool.Put(encoder)
 
-	return buf.Bytes(), nil
+	// Copy result before returning buffer to pool
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	bytesBufferPool.Put(buf)
+	return result, nil
 }
 
 func sendData(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, data []byte, encoding string, headers map[string]string) {
