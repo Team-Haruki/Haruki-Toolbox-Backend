@@ -19,7 +19,6 @@ import (
 	userActivityModule "haruki-suite/internal/modules/useractivity"
 	userAuthModule "haruki-suite/internal/modules/userauth"
 	userAuthorizeSocialModule "haruki-suite/internal/modules/userauthorizesocial"
-	userEmailModule "haruki-suite/internal/modules/useremail"
 	userGameBindingsModule "haruki-suite/internal/modules/usergamebindings"
 	userInfoModule "haruki-suite/internal/modules/userinfo"
 	userOAuthModule "haruki-suite/internal/modules/useroauth"
@@ -60,7 +59,6 @@ func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	userInfoModule.RegisterUserInfoRoutes(apiHelper)
 	userPrivateAPIModule.RegisterUserPrivateAPIRoutes(apiHelper)
 	userAuthModule.RegisterUserAuthRoutes(apiHelper)
-	userEmailModule.RegisterUserEmailRoutes(apiHelper)
 	userPasswordResetModule.RegisterUserResetPasswordRoutes(apiHelper)
 	userProfileModule.RegisterUserProfileRoutes(apiHelper)
 	userOAuthModule.RegisterUserOAuthAuthorizationRoutes(apiHelper)

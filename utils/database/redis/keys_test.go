@@ -49,6 +49,16 @@ func TestBuildKeys(t *testing.T) {
 			want: "haruki:social:verify:discord:42:status-token",
 		},
 		{
+			name: "qq mail send rate limit user",
+			got:  BuildQQMailSendRateLimitUserKey("u1"),
+			want: "haruki:social:qq-mail:send:user:u1",
+		},
+		{
+			name: "qq mail send rate limit target",
+			got:  BuildQQMailSendRateLimitTargetKey(" 123456 "),
+			want: "haruki:social:qq-mail:send:target:" + hashNormalizedIdentifier(" 123456 "),
+		},
+		{
 			name: "status token",
 			got:  BuildStatusTokenKey("token-abc"),
 			want: "haruki:social:status-token:token-abc",
