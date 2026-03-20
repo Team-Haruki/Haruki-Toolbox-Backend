@@ -90,6 +90,14 @@ func BuildSocialPlatformStatusTokenKey(platform, platformUserID string) string {
 	)
 }
 
+func BuildQQMailSendRateLimitUserKey(userID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "qq-mail", KeyActionSend, "user", strings.TrimSpace(userID))
+}
+
+func BuildQQMailSendRateLimitTargetKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "qq-mail", KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(qq))
+}
+
 func BuildStatusTokenKey(token string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionStatusToken, token)
 }
