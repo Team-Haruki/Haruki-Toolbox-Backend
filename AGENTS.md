@@ -1,21 +1,23 @@
 # AGENTS.md
 
-## Project Summary
+## 项目概览
 
-Haruki Toolbox Backend is a Go 1.26 backend built around:
+Haruki Toolbox Backend 是一个基于 Go 1.26 的后端项目，核心技术栈包括：
 
-- Fiber for HTTP routing
-- Ent for PostgreSQL schema and ORM
-- MongoDB for uploaded game data and webhook storage
-- Redis for sessions, cache-style state, and rate-limit style state
-- Ory Kratos for managed identity flows
-- Ory Hydra for OAuth2
+- Fiber：HTTP 路由与中间件
+- Ent：PostgreSQL schema 与 ORM
+- MongoDB：游戏数据、Webhook 等文档型数据存储
+- Redis：缓存、验证码状态、限流状态、会话辅助状态
+- Ory Kratos：浏览器身份体系与自助认证流程
+- Ory Hydra：OAuth2 / OIDC
 
-Default local config file: `haruki-suite-configs.yaml`
+默认本地配置文件为 `haruki-suite-configs.yaml`。
 
-## Source Of Truth
+## 当前仓库结构
 
-Primary application source lives in:
+当前仓库以源码为中心，不再保留部署包快照、迁移临时目录或运行期产物。
+
+主源码目录：
 
 - `main.go`
 - `api/`
@@ -23,107 +25,133 @@ Primary application source lives in:
 - `ent/`
 - `internal/`
 - `utils/`
+- `.github/copilot-instructions.md`
+- `docs/`（当前主要用于架构与 Ory 说明）
 
-Do not treat these as primary runtime source unless explicitly asked:
+请不要在没有明确需求的情况下重新引入以下类型的内容：
 
-- `deploy/upload/haruki-server-package/`
-- `db_export/`
-- `.codex-dev/`
-- local binaries like `kratos_identity_sync` and `kratos_user_import`
-- test data files such as `mysekai_test_file` and `suite_test_file`
+- 部署快照目录
+- 一次性迁移脚本目录
+- 本地构建产物
+- 调试缓存目录
+- 临时导出数据目录
 
-`deploy/upload/haruki-server-package/` contains packaging snapshots and mirrored code. In normal feature work, edit the root source tree, not the packaged copy.
+## 分层规则
 
-## Repository Layout
+- `main.go` 只负责加载配置并进入启动流程。
+- `api/` 只负责注册路由，不承载业务逻辑。
+- `internal/bootstrap/` 负责启动装配、依赖初始化、配置校验。
+- `internal/modules/...` 放业务处理逻辑。
+- `internal/platform/...` 放跨模块复用但偏业务的平台能力。
+- `utils/...` 放基础设施、通用 helper、外部系统适配器。
 
-- `main.go`: config load and bootstrap entry only
-- `api/`: thin route assembly only
-- `internal/bootstrap/`: startup assembly and dependency wiring
-- `internal/modules/`: business handlers and module logic
-- `internal/platform/`: reusable cross-module helpers
-- `utils/`: infrastructure adapters and shared helpers
-- `ent/schema/`: Ent schema source
-- `utils/database/postgresql/`: generated Ent code
-- `docs/`: architecture, development, auth migration, API notes
-- `scripts/`: local development and Ory stack helpers
+## Ory 相关工作准则
 
-## Architectural Rules
+### 1. 身份体系默认前提
 
-- Keep `api/` thin. Do not put business logic there.
-- Keep `main.go` thin. Startup wiring belongs in `internal/bootstrap/`.
-- Keep handlers thin: parse input, call module logic, return response.
-- Prefer extending existing helpers in `admincore`, `usercore`, `internal/platform`, and `utils/...` over introducing parallel helpers.
-- Put domain behavior in `internal/modules/...`.
-- Put generic infrastructure behavior in `utils/...`.
+- 浏览器身份提供者只支持 `Kratos`
+- OAuth2 提供者只支持 `Hydra`
+- 浏览器受保护 API 的标准部署模式是 `Oathkeeper -> Backend`
 
-## Auth And Security Rules
+### 2. 不要重新引入旧浏览器认证体系
 
-- Kratos is the supported managed browser auth provider.
-- Hydra is the supported OAuth2 provider.
-- Do not introduce new legacy browser-auth flows.
-- If auth proxy is enabled, preserve trusted-header checks.
-- Session-sensitive admin flows must remain session-scoped, not just identity-scoped.
-- Auth proxy deployments now rely on `user_system.auth_proxy_session_header`; do not silently fall back to identity-only markers for reauthentication-sensitive behavior.
+当 `SessionHandler.UsesManagedBrowserAuth()` 成立时，旧浏览器认证入口应保持禁用：
 
-## Database And Schema Rules
+- `/api/user/login`
+- `/api/user/register`
+- `/api/user/reset-password/send`
+- `/api/user/reset-password`
+- `/api/user/:toolbox_user_id/change-password`
 
-- If you edit `ent/schema/...`, run:
+这些入口在当前架构里应返回 `410 Gone` 或转为 Ory 驱动的实现，不要再把它们改回本地密码体系。
+
+### 3. Auth Proxy 约束
+
+如果启用了 `user_system.auth_proxy_enabled`：
+
+- 必须保留 trusted header 校验
+- 必须保留 `user_system.auth_proxy_session_header`
+- 涉及管理员二次确认、敏感操作复用校验等逻辑时，必须使用“代理会话级标识”，不能只用 `user_id` 或 `kratos_identity_id`
+
+当前实现对 `auth_proxy_session_header` 有启动期强校验，不能省略。
+
+### 4. Hydra Subject 规则
+
+Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 user ID”的策略：
+
+- 新逻辑优先使用 `users.kratos_identity_id`
+- 兼容逻辑仍允许旧 `users.id`
+
+如果改动：
+
+- `CurrentHydraSubject`
+- `CurrentHydraSubjects`
+- `HydraSubjectsForUser`
+- OAuth2 introspection subject 映射
+
+必须保证兼容过渡期行为不被破坏。
+
+### 5. SessionHandler 是 Ory 集成核心
+
+与 Kratos / Auth Proxy / 会话验证相关的改动，优先集中在：
+
+- `utils/api/session_handler.go`
+
+避免在各业务模块里复制一套会话解析、Kratos whoami 查询、header 信任逻辑。
+
+## 数据与模型规则
+
+- Ent schema 源码在 `ent/schema/...`
+- 生成产物在 `utils/database/postgresql/...`
+- 如果修改了 `ent/schema/...`，同步运行：
   - `go generate ./ent`
-- After schema edits, verify generated files under `utils/database/postgresql/` changed as expected.
-- Do not hand-edit generated Ent files unless explicitly required.
-- Production commonly runs with `backend.auto_migrate: false`; avoid changes that only work when auto-migrate is enabled.
-- If startup schema compatibility checks are touched, keep both auto-migrate and manual-schema paths working.
+- 不要手改生成文件，除非任务明确要求
 
-## Logging Rules
+## 日志规则
 
-- Prefer project logger helpers over ad hoc logging.
-- Global loggers should respect current global log level and writer configuration.
-- Avoid package-level logger construction that freezes stale bootstrap settings unless the logger implementation is explicitly dynamic.
+- 优先使用项目 logger helper
+- 全局 logger 应遵循当前启动时设置的 log level 和 writer
+- 避免在包级提前固化旧日志配置
 
-## API And Docs Rules
+## 测试规则
 
-- If changing routes, payloads, or response shapes, check whether `openapi.yaml` or docs need updates.
-- Reuse response helpers in `utils/api`.
-- Preserve existing JSON field naming and error response patterns in the touched module.
+优先跑最小必要验证：
 
-## Audit And Permission Rules
-
-- Admin write paths should usually emit admin audit logs.
-- User write paths should usually emit user audit logs.
-- Reuse `admincore` and `usercore` for actor resolution, permission checks, and shared middleware.
-
-## Testing Expectations
-
-Prefer the smallest meaningful validation set first:
-
-- touched-package tests, for example:
-  - `go test ./internal/modules/admin ./utils/api`
-- cross-cutting verification:
+- 触达包测试，例如：
+  - `go test ./internal/modules/userauth ./utils/api`
+- 涉及 Ory 会话、OAuth2、Auth Proxy 的跨模块改动时：
   - `go test ./...`
-- Ent generation after schema changes:
+- 涉及 Ent schema 时：
   - `go generate ./ent`
 
-Add tests near the changed module or utility.
+Ory 相关改动尤其建议关注：
 
-## Useful Commands
+- `utils/api/session_handler*_test.go`
+- `utils/oauth2/*_test.go`
+- 对应业务模块的 route / managed identity 测试
 
-- Run locally:
-  - `HARUKI_CONFIG_PATH=./haruki-suite-configs.yaml go run ./main.go`
-- Run all tests:
-  - `go test ./...`
-- Regenerate Ent:
-  - `go generate ./ent`
-- Ory stack helper:
-  - `scripts/ory-stack.sh help`
-  - `scripts/ory-stack.sh bootstrap`
+## 文档规则
 
-## Change Checklist
+如果改动以下内容，应同步更新文档：
 
-Before finishing, verify:
+- Ory 架构
+- 浏览器认证行为
+- OAuth2 行为
+- 受保护 API 接入方式
+- Auth Proxy header 约定
 
-- code was added in the correct layer
-- tests were added or updated near the changed logic
-- Ent was regenerated if schema changed
-- auth/session logic is still session-safe
-- docs or OpenAPI were updated if behavior changed
-- packaged mirror code under `deploy/upload/haruki-server-package/` was not edited by accident
+当前 Ory 总体说明文档为：
+
+- `docs/ory-suite-usage.zh-CN.md`
+
+## 提交前检查清单
+
+提交前至少确认：
+
+- 代码放在正确层级
+- 没有把 Ory 逻辑分散到重复 helper
+- 没有重新引入旧本地浏览器认证流程
+- `auth_proxy_session_header` 相关行为仍然成立
+- Hydra subject 兼容逻辑未被破坏
+- 测试已覆盖触达变更
+- 若改动了 Ory 行为，文档已同步
