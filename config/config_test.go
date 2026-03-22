@@ -52,6 +52,24 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("preserve fiber logger placeholders when env is missing", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("backend:\n  access_log: \"[${time}] ${ip} | ${status} - ${latency} ${method} ${path} (Sent: ${bytesSent})\\n\"\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		want := "[${time}] ${ip} | ${status} - ${latency} ${method} ${path} (Sent: ${bytesSent})\n"
+		if cfg.Backend.AccessLog != want {
+			t.Fatalf("Backend.AccessLog = %q, want %q", cfg.Backend.AccessLog, want)
+		}
+	})
+
 	t.Run("env overrides scalar yaml values", func(t *testing.T) {
 		tmp := t.TempDir()
 		cfgPath := filepath.Join(tmp, "cfg.yaml")

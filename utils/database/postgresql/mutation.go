@@ -8677,6 +8677,7 @@ type UploadLogMutation struct {
 	data_type       *string
 	upload_method   *string
 	success         *bool
+	error_message   *string
 	upload_time     *time.Time
 	clearedFields   map[string]struct{}
 	done            bool
@@ -9011,6 +9012,55 @@ func (m *UploadLogMutation) ResetSuccess() {
 	m.success = nil
 }
 
+// SetErrorMessage sets the "error_message" field.
+func (m *UploadLogMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *UploadLogMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *UploadLogMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[uploadlog.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *UploadLogMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *UploadLogMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, uploadlog.FieldErrorMessage)
+}
+
 // SetUploadTime sets the "upload_time" field.
 func (m *UploadLogMutation) SetUploadTime(t time.Time) {
 	m.upload_time = &t
@@ -9081,7 +9131,7 @@ func (m *UploadLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UploadLogMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.server != nil {
 		fields = append(fields, uploadlog.FieldServer)
 	}
@@ -9099,6 +9149,9 @@ func (m *UploadLogMutation) Fields() []string {
 	}
 	if m.success != nil {
 		fields = append(fields, uploadlog.FieldSuccess)
+	}
+	if m.error_message != nil {
+		fields = append(fields, uploadlog.FieldErrorMessage)
 	}
 	if m.upload_time != nil {
 		fields = append(fields, uploadlog.FieldUploadTime)
@@ -9123,6 +9176,8 @@ func (m *UploadLogMutation) Field(name string) (ent.Value, bool) {
 		return m.UploadMethod()
 	case uploadlog.FieldSuccess:
 		return m.Success()
+	case uploadlog.FieldErrorMessage:
+		return m.ErrorMessage()
 	case uploadlog.FieldUploadTime:
 		return m.UploadTime()
 	}
@@ -9146,6 +9201,8 @@ func (m *UploadLogMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldUploadMethod(ctx)
 	case uploadlog.FieldSuccess:
 		return m.OldSuccess(ctx)
+	case uploadlog.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
 	case uploadlog.FieldUploadTime:
 		return m.OldUploadTime(ctx)
 	}
@@ -9199,6 +9256,13 @@ func (m *UploadLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSuccess(v)
 		return nil
+	case uploadlog.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
 	case uploadlog.FieldUploadTime:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -9239,6 +9303,9 @@ func (m *UploadLogMutation) ClearedFields() []string {
 	if m.FieldCleared(uploadlog.FieldToolboxUserID) {
 		fields = append(fields, uploadlog.FieldToolboxUserID)
 	}
+	if m.FieldCleared(uploadlog.FieldErrorMessage) {
+		fields = append(fields, uploadlog.FieldErrorMessage)
+	}
 	return fields
 }
 
@@ -9255,6 +9322,9 @@ func (m *UploadLogMutation) ClearField(name string) error {
 	switch name {
 	case uploadlog.FieldToolboxUserID:
 		m.ClearToolboxUserID()
+		return nil
+	case uploadlog.FieldErrorMessage:
+		m.ClearErrorMessage()
 		return nil
 	}
 	return fmt.Errorf("unknown UploadLog nullable field %s", name)
@@ -9281,6 +9351,9 @@ func (m *UploadLogMutation) ResetField(name string) error {
 		return nil
 	case uploadlog.FieldSuccess:
 		m.ResetSuccess()
+		return nil
+	case uploadlog.FieldErrorMessage:
+		m.ResetErrorMessage()
 		return nil
 	case uploadlog.FieldUploadTime:
 		m.ResetUploadTime()

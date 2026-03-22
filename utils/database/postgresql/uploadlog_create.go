@@ -64,6 +64,20 @@ func (_c *UploadLogCreate) SetSuccess(v bool) *UploadLogCreate {
 	return _c
 }
 
+// SetErrorMessage sets the "error_message" field.
+func (_c *UploadLogCreate) SetErrorMessage(v string) *UploadLogCreate {
+	_c.mutation.SetErrorMessage(v)
+	return _c
+}
+
+// SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
+func (_c *UploadLogCreate) SetNillableErrorMessage(v *string) *UploadLogCreate {
+	if v != nil {
+		_c.SetErrorMessage(*v)
+	}
+	return _c
+}
+
 // SetUploadTime sets the "upload_time" field.
 func (_c *UploadLogCreate) SetUploadTime(v time.Time) *UploadLogCreate {
 	_c.mutation.SetUploadTime(v)
@@ -191,6 +205,10 @@ func (_c *UploadLogCreate) createSpec() (*UploadLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Success(); ok {
 		_spec.SetField(uploadlog.FieldSuccess, field.TypeBool, value)
 		_node.Success = value
+	}
+	if value, ok := _c.mutation.ErrorMessage(); ok {
+		_spec.SetField(uploadlog.FieldErrorMessage, field.TypeString, value)
+		_node.ErrorMessage = &value
 	}
 	if value, ok := _c.mutation.UploadTime(); ok {
 		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)

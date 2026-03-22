@@ -31,6 +31,7 @@ type UploadLogListItem struct {
 	DataType      string    `json:"dataType"`
 	UploadMethod  string    `json:"uploadMethod"`
 	Success       bool      `json:"success"`
+	ErrorMessage  *string   `json:"errorMessage,omitempty"`
 	UploadTime    time.Time `json:"uploadTime"`
 }
 
@@ -88,6 +89,7 @@ func BuildUploadLogItems(rows []*postgresql.UploadLog) []UploadLogListItem {
 			DataType:      row.DataType,
 			UploadMethod:  row.UploadMethod,
 			Success:       row.Success,
+			ErrorMessage:  row.ErrorMessage,
 			UploadTime:    row.UploadTime.UTC(),
 		})
 	}

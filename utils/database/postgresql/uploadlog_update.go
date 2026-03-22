@@ -118,6 +118,26 @@ func (_u *UploadLogUpdate) SetNillableSuccess(v *bool) *UploadLogUpdate {
 	return _u
 }
 
+// SetErrorMessage sets the "error_message" field.
+func (_u *UploadLogUpdate) SetErrorMessage(v string) *UploadLogUpdate {
+	_u.mutation.SetErrorMessage(v)
+	return _u
+}
+
+// SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableErrorMessage(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetErrorMessage(*v)
+	}
+	return _u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (_u *UploadLogUpdate) ClearErrorMessage() *UploadLogUpdate {
+	_u.mutation.ClearErrorMessage()
+	return _u
+}
+
 // SetUploadTime sets the "upload_time" field.
 func (_u *UploadLogUpdate) SetUploadTime(v time.Time) *UploadLogUpdate {
 	_u.mutation.SetUploadTime(v)
@@ -221,6 +241,12 @@ func (_u *UploadLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Success(); ok {
 		_spec.SetField(uploadlog.FieldSuccess, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ErrorMessage(); ok {
+		_spec.SetField(uploadlog.FieldErrorMessage, field.TypeString, value)
+	}
+	if _u.mutation.ErrorMessageCleared() {
+		_spec.ClearField(uploadlog.FieldErrorMessage, field.TypeString)
 	}
 	if value, ok := _u.mutation.UploadTime(); ok {
 		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)
@@ -332,6 +358,26 @@ func (_u *UploadLogUpdateOne) SetNillableSuccess(v *bool) *UploadLogUpdateOne {
 	if v != nil {
 		_u.SetSuccess(*v)
 	}
+	return _u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (_u *UploadLogUpdateOne) SetErrorMessage(v string) *UploadLogUpdateOne {
+	_u.mutation.SetErrorMessage(v)
+	return _u
+}
+
+// SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableErrorMessage(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetErrorMessage(*v)
+	}
+	return _u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (_u *UploadLogUpdateOne) ClearErrorMessage() *UploadLogUpdateOne {
+	_u.mutation.ClearErrorMessage()
 	return _u
 }
 
@@ -468,6 +514,12 @@ func (_u *UploadLogUpdateOne) sqlSave(ctx context.Context) (_node *UploadLog, er
 	}
 	if value, ok := _u.mutation.Success(); ok {
 		_spec.SetField(uploadlog.FieldSuccess, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ErrorMessage(); ok {
+		_spec.SetField(uploadlog.FieldErrorMessage, field.TypeString, value)
+	}
+	if _u.mutation.ErrorMessageCleared() {
+		_spec.ClearField(uploadlog.FieldErrorMessage, field.TypeString)
 	}
 	if value, ok := _u.mutation.UploadTime(); ok {
 		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)

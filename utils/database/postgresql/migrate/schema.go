@@ -375,6 +375,7 @@ var (
 		{Name: "data_type", Type: field.TypeString},
 		{Name: "upload_method", Type: field.TypeString},
 		{Name: "success", Type: field.TypeBool},
+		{Name: "error_message", Type: field.TypeString, Nullable: true},
 		{Name: "upload_time", Type: field.TypeTime},
 	}
 	// UploadLogsTable holds the schema information for the "upload_logs" table.
@@ -386,27 +387,27 @@ var (
 			{
 				Name:    "uploadlog_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[7]},
+				Columns: []*schema.Column{UploadLogsColumns[8]},
 			},
 			{
 				Name:    "uploadlog_server_game_user_id_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[1], UploadLogsColumns[2], UploadLogsColumns[7]},
+				Columns: []*schema.Column{UploadLogsColumns[1], UploadLogsColumns[2], UploadLogsColumns[8]},
 			},
 			{
 				Name:    "uploadlog_upload_method_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[5], UploadLogsColumns[7]},
+				Columns: []*schema.Column{UploadLogsColumns[5], UploadLogsColumns[8]},
 			},
 			{
 				Name:    "uploadlog_data_type_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[4], UploadLogsColumns[7]},
+				Columns: []*schema.Column{UploadLogsColumns[4], UploadLogsColumns[8]},
 			},
 			{
 				Name:    "uploadlog_success_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[6], UploadLogsColumns[7]},
+				Columns: []*schema.Column{UploadLogsColumns[6], UploadLogsColumns[8]},
 			},
 		},
 	}

@@ -41,6 +41,9 @@ func (UploadLog) Fields() []ent.Field {
 		field.String("upload_method").
 			Comment("manual harukiproxy iosproxy inherit"),
 		field.Bool("success"),
+		field.String("error_message").
+			Optional().
+			Nillable(),
 		field.Time("upload_time"),
 	}
 }
