@@ -131,12 +131,14 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 }
 
 func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper))
+	for _, prefix := range []string{"/webhook", "/api/webhook"} {
+		api := apiHelper.Router.Group(prefix, ValidateWebhookUser(apiHelper))
 
-	api.Get("/subscribers", handleGetSubscribers(apiHelper))
-	api.RouteChain("/:server/:data_type/:user_id").
-		Put(handlePutWebhookUser(apiHelper)).
-		Delete(handleDeleteWebhookUser(apiHelper))
+		api.Get("/subscribers", handleGetSubscribers(apiHelper))
+		api.RouteChain("/:server/:data_type/:user_id").
+			Put(handlePutWebhookUser(apiHelper)).
+			Delete(handleDeleteWebhookUser(apiHelper))
+	}
 }
 
 func resolveWebhookIDFromLocals(c fiber.Ctx) (string, bool) {

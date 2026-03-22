@@ -48,6 +48,6 @@ func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 }
 
 func registerFriendLinksRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/misc")
+	api := apiHelper.Router.Group("/api/misc")
 	api.Get("/friend_links", handleGetFriendLinks(apiHelper))
 }

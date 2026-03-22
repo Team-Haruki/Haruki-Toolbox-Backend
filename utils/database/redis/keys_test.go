@@ -120,8 +120,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "upload ingress rate limit",
-			got:  BuildUploadIngressRateLimitKey(1700000000, "127.0.0.1|POST|/inherit/:server/:upload_type/submit"),
-			want: "haruki:rate-limit:upload-ingress:1700000000:127.0.0.1|POST|/inherit/:server/:upload_type/submit",
+			got:  BuildUploadIngressRateLimitKey(1700000000, "127.0.0.1|POST|/api/inherit/:server/:upload_type"),
+			want: "haruki:rate-limit:upload-ingress:1700000000:127.0.0.1|POST|/api/inherit/:server/:upload_type",
 		},
 		{
 			name: "ios upload chunk meta",

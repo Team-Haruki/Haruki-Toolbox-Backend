@@ -116,6 +116,8 @@ func fetchAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 }
 
 func RegisterPublicRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	group := apiHelper.Router.Group("/public/:server/:data_type")
-	group.Get("/:user_id", handlePublicDataRequest(apiHelper))
+	for _, prefix := range []string{"/public/:server/:data_type", "/api/public/:server/:data_type"} {
+		group := apiHelper.Router.Group(prefix)
+		group.Get("/:user_id", handlePublicDataRequest(apiHelper))
+	}
 }
