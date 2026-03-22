@@ -49,7 +49,6 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 
 func (r *HarukiSekaiDataRetriever) runSuiteFollowupCalls(ctx context.Context) {
 	retrieverSleep(1 * time.Second)
-	r.logger.Debugf("%s server making follow-up suite calls...", upperServerName(r.client.server))
 
 	if err := callAndIgnoreError(ctx, r.client, suiteFollowupPath(r.client.userID), httpMethodGet, nil); err != nil {
 		r.logger.Warnf("Follow-up suite call failed (non-critical): %v", err)
