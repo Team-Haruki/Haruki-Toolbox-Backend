@@ -47,3 +47,9 @@ type UploadLog func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
+
+// WebhookEndpoint is the predicate function for webhookendpoint builders.
+type WebhookEndpoint func(*sql.Selector)
+
+// WebhookSubscription is the predicate function for webhooksubscription builders.
+type WebhookSubscription func(*sql.Selector)

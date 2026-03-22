@@ -441,6 +441,68 @@ var (
 			},
 		},
 	}
+	// WebhookEndpointsColumns holds the columns for the "webhook_endpoints" table.
+	WebhookEndpointsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "credential", Type: field.TypeString},
+		{Name: "callback_url", Type: field.TypeString},
+		{Name: "bearer", Type: field.TypeString, Nullable: true},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// WebhookEndpointsTable holds the schema information for the "webhook_endpoints" table.
+	WebhookEndpointsTable = &schema.Table{
+		Name:       "webhook_endpoints",
+		Columns:    WebhookEndpointsColumns,
+		PrimaryKey: []*schema.Column{WebhookEndpointsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "webhookendpoint_credential",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookEndpointsColumns[1]},
+			},
+		},
+	}
+	// WebhookSubscriptionsColumns holds the columns for the "webhook_subscriptions" table.
+	WebhookSubscriptionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "user_id", Type: field.TypeString},
+		{Name: "server", Type: field.TypeString},
+		{Name: "data_type", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "webhook_id", Type: field.TypeString},
+	}
+	// WebhookSubscriptionsTable holds the schema information for the "webhook_subscriptions" table.
+	WebhookSubscriptionsTable = &schema.Table{
+		Name:       "webhook_subscriptions",
+		Columns:    WebhookSubscriptionsColumns,
+		PrimaryKey: []*schema.Column{WebhookSubscriptionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "webhook_subscriptions_webhook_endpoints_subscriptions",
+				Columns:    []*schema.Column{WebhookSubscriptionsColumns[5]},
+				RefColumns: []*schema.Column{WebhookEndpointsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "webhooksubscription_user_id_server_data_type",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[1], WebhookSubscriptionsColumns[2], WebhookSubscriptionsColumns[3]},
+			},
+			{
+				Name:    "webhooksubscription_webhook_id",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[5]},
+			},
+			{
+				Name:    "webhooksubscription_user_id_server_data_type_webhook_id",
+				Unique:  true,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[1], WebhookSubscriptionsColumns[2], WebhookSubscriptionsColumns[3], WebhookSubscriptionsColumns[5]},
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuthorizeSocialPlatformInfosTable,
@@ -457,6 +519,8 @@ var (
 		TicketMessagesTable,
 		UploadLogsTable,
 		UsersTable,
+		WebhookEndpointsTable,
+		WebhookSubscriptionsTable,
 	}
 )
 
@@ -484,5 +548,12 @@ func init() {
 	TicketMessagesTable.ForeignKeys[0].RefTable = TicketsTable
 	TicketMessagesTable.Annotation = &entsql.Annotation{
 		Table: "ticket_messages",
+	}
+	WebhookEndpointsTable.Annotation = &entsql.Annotation{
+		Table: "webhook_endpoints",
+	}
+	WebhookSubscriptionsTable.ForeignKeys[0].RefTable = WebhookEndpointsTable
+	WebhookSubscriptionsTable.Annotation = &entsql.Annotation{
+		Table: "webhook_subscriptions",
 	}
 }

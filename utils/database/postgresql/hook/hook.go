@@ -176,6 +176,30 @@ func (f UserFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.UserMutation", m)
 }
 
+// The WebhookEndpointFunc type is an adapter to allow the use of ordinary
+// function as WebhookEndpoint mutator.
+type WebhookEndpointFunc func(context.Context, *postgresql.WebhookEndpointMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WebhookEndpointFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.WebhookEndpointMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.WebhookEndpointMutation", m)
+}
+
+// The WebhookSubscriptionFunc type is an adapter to allow the use of ordinary
+// function as WebhookSubscription mutator.
+type WebhookSubscriptionFunc func(context.Context, *postgresql.WebhookSubscriptionMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WebhookSubscriptionFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.WebhookSubscriptionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.WebhookSubscriptionMutation", m)
+}
+
 // Condition is a hook condition function.
 type Condition func(context.Context, postgresql.Mutation) bool
 

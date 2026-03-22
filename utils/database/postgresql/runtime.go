@@ -17,6 +17,8 @@ import (
 	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
+	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	"haruki-suite/utils/database/postgresql/webhooksubscription"
 	"time"
 )
 
@@ -290,4 +292,48 @@ func init() {
 	userDescID := userFields[1].Descriptor()
 	// user.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	user.IDValidator = userDescID.Validators[0].(func(string) error)
+	webhookendpointFields := schema.WebhookEndpoint{}.Fields()
+	_ = webhookendpointFields
+	// webhookendpointDescCredential is the schema descriptor for credential field.
+	webhookendpointDescCredential := webhookendpointFields[1].Descriptor()
+	// webhookendpoint.CredentialValidator is a validator for the "credential" field. It is called by the builders before save.
+	webhookendpoint.CredentialValidator = webhookendpointDescCredential.Validators[0].(func(string) error)
+	// webhookendpointDescCallbackURL is the schema descriptor for callback_url field.
+	webhookendpointDescCallbackURL := webhookendpointFields[2].Descriptor()
+	// webhookendpoint.CallbackURLValidator is a validator for the "callback_url" field. It is called by the builders before save.
+	webhookendpoint.CallbackURLValidator = webhookendpointDescCallbackURL.Validators[0].(func(string) error)
+	// webhookendpointDescEnabled is the schema descriptor for enabled field.
+	webhookendpointDescEnabled := webhookendpointFields[4].Descriptor()
+	// webhookendpoint.DefaultEnabled holds the default value on creation for the enabled field.
+	webhookendpoint.DefaultEnabled = webhookendpointDescEnabled.Default.(bool)
+	// webhookendpointDescCreatedAt is the schema descriptor for created_at field.
+	webhookendpointDescCreatedAt := webhookendpointFields[5].Descriptor()
+	// webhookendpoint.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webhookendpoint.DefaultCreatedAt = webhookendpointDescCreatedAt.Default.(func() time.Time)
+	// webhookendpointDescID is the schema descriptor for id field.
+	webhookendpointDescID := webhookendpointFields[0].Descriptor()
+	// webhookendpoint.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	webhookendpoint.IDValidator = webhookendpointDescID.Validators[0].(func(string) error)
+	webhooksubscriptionFields := schema.WebhookSubscription{}.Fields()
+	_ = webhooksubscriptionFields
+	// webhooksubscriptionDescUserID is the schema descriptor for user_id field.
+	webhooksubscriptionDescUserID := webhooksubscriptionFields[0].Descriptor()
+	// webhooksubscription.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	webhooksubscription.UserIDValidator = webhooksubscriptionDescUserID.Validators[0].(func(string) error)
+	// webhooksubscriptionDescServer is the schema descriptor for server field.
+	webhooksubscriptionDescServer := webhooksubscriptionFields[1].Descriptor()
+	// webhooksubscription.ServerValidator is a validator for the "server" field. It is called by the builders before save.
+	webhooksubscription.ServerValidator = webhooksubscriptionDescServer.Validators[0].(func(string) error)
+	// webhooksubscriptionDescDataType is the schema descriptor for data_type field.
+	webhooksubscriptionDescDataType := webhooksubscriptionFields[2].Descriptor()
+	// webhooksubscription.DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
+	webhooksubscription.DataTypeValidator = webhooksubscriptionDescDataType.Validators[0].(func(string) error)
+	// webhooksubscriptionDescWebhookID is the schema descriptor for webhook_id field.
+	webhooksubscriptionDescWebhookID := webhooksubscriptionFields[3].Descriptor()
+	// webhooksubscription.WebhookIDValidator is a validator for the "webhook_id" field. It is called by the builders before save.
+	webhooksubscription.WebhookIDValidator = webhooksubscriptionDescWebhookID.Validators[0].(func(string) error)
+	// webhooksubscriptionDescCreatedAt is the schema descriptor for created_at field.
+	webhooksubscriptionDescCreatedAt := webhooksubscriptionFields[4].Descriptor()
+	// webhooksubscription.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webhooksubscription.DefaultCreatedAt = webhooksubscriptionDescCreatedAt.Default.(func() time.Time)
 }
