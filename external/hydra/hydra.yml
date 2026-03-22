@@ -1,0 +1,25 @@
+# Static fallback structure for Hydra.
+# Shared runtime values are injected via docker-compose environment variables.
+
+serve:
+  cookies:
+    same_site_mode: Lax
+
+urls:
+  self:
+    issuer: "https://toolbox-api.example.com"
+  login: "https://toolbox-api.example.com/api/oauth2/login"
+  consent: "https://toolbox-api.example.com/api/oauth2/consent"
+  logout: "https://toolbox-api.example.com/logout"
+
+secrets:
+  system:
+    - "change-me-hydra-system-secret-32bytes"
+
+oidc:
+  subject_identifiers:
+    supported_types:
+      - public
+      - pairwise
+    pairwise:
+      salt: "change-me-hydra-subject-salt-32bytes"

@@ -1,0 +1,71 @@
+# Static Oathkeeper structure config.
+# Shared runtime values are injected via docker-compose environment variables.
+
+log:
+  level: info
+  format: json
+
+serve:
+  proxy:
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://toolbox.example.com"
+      allowed_methods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+      allowed_headers:
+          - Authorization
+          - Content-Type
+          - Cookie
+          - X-Requested-With
+      exposed_headers:
+          - Content-Type
+      allow_credentials: true
+
+errors:
+  fallback:
+    - json
+  handlers:
+    json:
+      enabled: true
+      config:
+        verbose: true
+
+access_rules:
+  matching_strategy: regexp
+  repositories:
+    - file:///etc/config/oathkeeper/access-rules.yml
+
+authenticators:
+  noop:
+    enabled: true
+  cookie_session:
+    enabled: true
+    config:
+      check_session_url: http://kratos:4433/sessions/whoami
+      preserve_path: true
+      extra_from: "@this"
+      subject_from: "identity.id"
+      only:
+        - ory_kratos_session
+
+authorizers:
+  allow:
+    enabled: true
+
+mutators:
+  noop:
+    enabled: true
+  header:
+    enabled: true
+    config:
+      headers:
+        X-Auth-Proxy-Secret: "change-me-auth-proxy-secret"
+        X-Kratos-Identity-Id: "{{ print .Subject }}"
+        X-User-Name: "{{ print .Extra.identity.traits.name }}"
+        X-User-Email: "{{ print .Extra.identity.traits.email }}"
+        X-User-Email-Verified: "{{ if gt (len .Extra.identity.verifiable_addresses) 0 }}{{ (index .Extra.identity.verifiable_addresses 0).verified }}{{ else }}false{{ end }}"
