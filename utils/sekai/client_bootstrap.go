@@ -20,13 +20,58 @@ type appVersionPayload struct {
 func buildCookieHeader(setCookies []string) string {
 	pairs := make([]string, 0, len(setCookies))
 	for _, raw := range setCookies {
-		pair := strings.TrimSpace(strings.SplitN(raw, ";", 2)[0])
+		for _, pair := range extractCookiePairs(raw) {
+			if pair == "" {
+				continue
+			}
+			pairs = append(pairs, pair)
+		}
+	}
+	return strings.Join(pairs, "; ")
+}
+
+func extractCookiePairs(raw string) []string {
+	segments := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ';' || r == ','
+	})
+	pairs := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		pair := strings.TrimSpace(segment)
 		if pair == "" {
 			continue
 		}
-		pairs = append(pairs, pair)
+		name, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		if name == "" || strings.ContainsAny(name, " \t\r\n") || isCookieAttributeName(name) {
+			continue
+		}
+		pairs = append(pairs, name+"="+strings.TrimSpace(value))
 	}
-	return strings.Join(pairs, "; ")
+	return pairs
+}
+
+func isCookieAttributeName(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "expires", "max-age", "domain", "path", "samesite", "priority", "version", "comment":
+		return true
+	default:
+		return false
+	}
+}
+
+func cookiePairNames(pairs []string) []string {
+	names := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		name, _, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		names = append(names, strings.TrimSpace(name))
+	}
+	return names
 }
 
 func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
@@ -47,7 +92,11 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 		}
 		if status == statusCodeOK {
 			if cookies, ok := headers["Set-Cookie"]; ok {
-				if cookieHeader := buildCookieHeader(cookies); cookieHeader != "" {
+				pairs := make([]string, 0, len(cookies))
+				for _, rawCookie := range cookies {
+					pairs = append(pairs, extractCookiePairs(rawCookie)...)
+				}
+				if cookieHeader := strings.Join(pairs, "; "); cookieHeader != "" {
 					c.headers["Cookie"] = cookieHeader
 					c.logger.Infof("JP server cookies parsed.")
 					return nil
