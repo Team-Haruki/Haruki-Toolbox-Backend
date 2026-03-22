@@ -40,6 +40,10 @@ type Tx struct {
 	UploadLog *UploadLogClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// WebhookEndpoint is the client for interacting with the WebhookEndpoint builders.
+	WebhookEndpoint *WebhookEndpointClient
+	// WebhookSubscription is the client for interacting with the WebhookSubscription builders.
+	WebhookSubscription *WebhookSubscriptionClient
 
 	// lazily loaded.
 	client     *Client
@@ -185,6 +189,8 @@ func (tx *Tx) init() {
 	tx.TicketMessage = NewTicketMessageClient(tx.config)
 	tx.UploadLog = NewUploadLogClient(tx.config)
 	tx.User = NewUserClient(tx.config)
+	tx.WebhookEndpoint = NewWebhookEndpointClient(tx.config)
+	tx.WebhookSubscription = NewWebhookSubscriptionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

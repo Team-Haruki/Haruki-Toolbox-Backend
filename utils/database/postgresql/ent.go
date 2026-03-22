@@ -20,6 +20,8 @@ import (
 	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
+	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	"haruki-suite/utils/database/postgresql/webhooksubscription"
 	"reflect"
 	"sync"
 
@@ -100,6 +102,8 @@ func checkColumn(t, c string) error {
 			ticketmessage.Table:               ticketmessage.ValidColumn,
 			uploadlog.Table:                   uploadlog.ValidColumn,
 			user.Table:                        user.ValidColumn,
+			webhookendpoint.Table:             webhookendpoint.ValidColumn,
+			webhooksubscription.Table:         webhooksubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
