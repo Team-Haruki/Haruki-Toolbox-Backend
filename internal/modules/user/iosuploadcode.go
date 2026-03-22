@@ -82,8 +82,4 @@ func handleGenerateIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 func RegisterUserRoutes(helper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	api := helper.Router.Group("/api/user")
 	api.Post("/:toolbox_user_id/ios/generate-upload-code", helper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(helper), handleGenerateIOSUploadCode(helper))
-
-	// Legacy compatibility route. Keep temporarily to avoid breaking old clients.
-	legacy := helper.Router.Group("/user")
-	legacy.Post("/:toolbox_user_id/ios/generate-upload-code", helper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(helper), handleGenerateIOSUploadCode(helper))
 }

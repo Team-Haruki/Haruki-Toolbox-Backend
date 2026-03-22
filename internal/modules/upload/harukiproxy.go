@@ -141,7 +141,9 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 }
 
 func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/harukiproxy/:server/:user_id/:data_type", validateHarukiProxyClientHeader(apiHelper))
+	for _, prefix := range []string{"/harukiproxy/:server/:user_id/:data_type", "/api/harukiproxy/:server/:user_id/:data_type"} {
+		api := apiHelper.Router.Group(prefix, validateHarukiProxyClientHeader(apiHelper))
 
-	api.Post("/upload", handleHarukiProxyUpload(apiHelper))
+		api.Post("/upload", handleHarukiProxyUpload(apiHelper))
+	}
 }

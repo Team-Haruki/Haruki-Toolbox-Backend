@@ -268,12 +268,14 @@ func parseIOSProxyPathInt(raw string) (int64, error) {
 }
 
 func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/ios")
 	logger := harukiLogger.NewLoggerFromGlobal("HarukiSekaiIOS")
 	proxyGuard := openUploadEntryGuard(apiHelper)
+	for _, prefix := range []string{"/ios", "/api/ios"} {
+		api := apiHelper.Router.Group(prefix)
 
-	api.Post("/script/:upload_code/upload", handleIOSScriptUploadWithValidation(apiHelper, logger))
-	api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, logger))
-	api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, logger))
-	api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, logger))
+		api.Post("/script/:upload_code/upload", handleIOSScriptUploadWithValidation(apiHelper, logger))
+		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, logger))
+		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, logger))
+		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, logger))
+	}
 }

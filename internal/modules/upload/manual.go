@@ -53,7 +53,7 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 }
 
 func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/manual/:server/:user_id/:data_type", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper))
+	api := apiHelper.Router.Group("/api/manual/:server/:user_id/:data_type", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper))
 
 	api.Post("/upload", handleManualUpload(apiHelper))
 }

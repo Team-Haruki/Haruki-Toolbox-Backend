@@ -181,7 +181,7 @@ func processRequestKeys(c fiber.Ctx, result map[string]any) error {
 }
 
 func RegisterUserPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/private/:server/:data_type/:user_id", ValidateUserPermission(apiHelper))
+	api := apiHelper.Router.Group("/api/private/:server/:data_type/:user_id", ValidateUserPermission(apiHelper))
 
 	api.Get("/", handleGetPrivateData(apiHelper))
 }

@@ -94,7 +94,7 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 }
 
 func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/inherit/:server/:upload_type", openUploadEntryGuard(apiHelper))
+	api := apiHelper.Router.Group("/api/inherit/:server/:upload_type", openUploadEntryGuard(apiHelper))
 
 	api.Post("/submit", handleInheritSubmit(apiHelper))
 }

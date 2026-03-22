@@ -55,7 +55,7 @@ func TestConsumeOpenUploadRateLimit(t *testing.T) {
 
 	apiHelper := newTestAPIHelperWithRedis(t)
 	now := time.Unix(1700000000, 0).UTC()
-	key := "127.0.0.1|POST|/inherit/:server/:upload_type"
+	key := "127.0.0.1|POST|/api/inherit/:server/:upload_type"
 
 	for i := 0; i < openUploadRateLimitPerMinute; i++ {
 		allowed, retryAfter, err := consumeOpenUploadRateLimit(context.Background(), apiHelper, key, now)
