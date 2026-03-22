@@ -1,0 +1,146 @@
+# Static fallback structure for Kratos.
+# Shared runtime values are injected via docker-compose environment variables.
+
+version: v0.13.0
+
+dsn: "postgres://kratos:change-me-kratos-db@postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4"
+
+serve:
+  public:
+    base_url: "https://toolbox-auth.example.com/"
+    cors:
+      enabled: true
+      allowed_origins:
+        - "https://toolbox.example.com"
+  admin:
+    base_url: http://kratos:4434/
+
+selfservice:
+  default_browser_return_url: "https://toolbox.example.com/"
+  allowed_return_urls:
+    - "https://toolbox.example.com"
+    - "https://toolbox-api.example.com"
+  methods:
+    password:
+      enabled: true
+    code:
+      max_submissions: 3
+    passkey:
+      enabled: true
+      config:
+        rp:
+          display_name: Haruki Toolbox
+          id: toolbox.example.com
+          origins:
+            - https://toolbox.example.com
+    oidc:
+      enabled: true
+      config:
+        providers:
+          - id: google
+            provider: google
+            client_id: change-me-google-client-id
+            client_secret: change-me-google-client-secret
+            mapper_url: file:///etc/config/kratos/oidc.google.jsonnet
+            scope:
+              - email
+              - profile
+            requested_claims:
+              id_token:
+                email:
+                  essential: true
+                email_verified:
+                  essential: true
+                name: null
+                given_name: null
+                family_name: null
+    totp:
+      enabled: true
+      config:
+        issuer: Haruki Toolbox
+    lookup_secret:
+      enabled: true
+    webauthn:
+      enabled: true
+      config:
+        passwordless: false
+        rp:
+          display_name: Haruki Toolbox
+          id: toolbox.example.com
+          origins:
+            - https://toolbox.example.com
+  flows:
+    error:
+      ui_url: "https://toolbox.example.com/user/error"
+    settings:
+      ui_url: "https://toolbox.example.com/user/settings"
+      privileged_session_max_age: 15m
+      required_aal: highest_available
+    recovery:
+      enabled: true
+      ui_url: "https://toolbox.example.com/user/recovery"
+      use: code
+    verification:
+      enabled: true
+      ui_url: "https://toolbox.example.com/user/verification"
+      use: code
+      after:
+        default_browser_return_url: "https://toolbox.example.com/"
+    logout:
+      after:
+        default_browser_return_url: "https://toolbox.example.com/user/login"
+    login:
+      ui_url: "https://toolbox.example.com/user/login"
+      lifespan: 10m
+    registration:
+      lifespan: 10m
+      ui_url: "https://toolbox.example.com/user/register"
+      after:
+        password:
+          hooks:
+            - hook: session
+            - hook: show_verification_ui
+        passkey:
+          hooks:
+            - hook: session
+            - hook: show_verification_ui
+        oidc:
+          hooks:
+            - hook: session
+            - hook: show_verification_ui
+
+session:
+  cookie:
+    domain: haruki.seiunx.com
+  whoami:
+    required_aal: aal1
+
+log:
+  level: info
+  format: text
+
+secrets:
+  cookie:
+    - "change-me-kratos-cookie-secret-32bytes"
+  cipher:
+    - "change-me-kratos-cipher-secret-32bytes"
+
+ciphers:
+  algorithm: xchacha20-poly1305
+
+hashers:
+  algorithm: bcrypt
+  bcrypt:
+    cost: 8
+
+identity:
+  default_schema_id: default
+  schemas:
+    - id: default
+      url: file:///etc/config/kratos/identity.schema.json
+
+courier:
+  smtp:
+    connection_uri: "smtps://smtp-user:smtp-password@smtp.your-provider.com:465/"
+    from_address: "no-reply@example.com"
+    from_name: "Haruki Toolbox"

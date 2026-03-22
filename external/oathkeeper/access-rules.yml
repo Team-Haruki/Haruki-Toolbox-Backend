@@ -1,0 +1,207 @@
+- id: hydra-public-openid
+  match:
+    url: <http|https>://<[^/]+>/.well-known/<.*>
+    methods: [GET]
+  upstream:
+    url: http://hydra:4444
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: hydra-public-oauth
+  match:
+    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/jwks.json|userinfo>
+    methods: [GET, POST]
+  upstream:
+    url: http://hydra:4444
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-oauth-authorize
+  match:
+    url: <http|https>://<[^/]+>/api/oauth2/authorize
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-health
+  match:
+    url: <http|https>://<[^/]+>/api/health
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-misc
+  match:
+    url: <http|https>://<[^/]+>/api/misc/<.*>
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-game-data
+  match:
+    url: <http|https>://<[^/]+>/<public/.*|api/public/.*>
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-upload-entry
+  match:
+    url: <http|https>://<[^/]+>/<ios/.*|api/ios/.*|api/inherit/.*>
+    methods: [GET, POST, PUT]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-legacy-auth
+  match:
+    url: <http|https>://<[^/]+>/api/user/<login|register|reset-password|reset-password/send>
+    methods: [POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-email
+  match:
+    url: <http|https>://<[^/]+>/api/email/<send|verify>
+    methods: [POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-social-verify
+  match:
+    url: <http|https>://<[^/]+>/api/verify-social-platform
+    methods: [POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-direct-auth
+  match:
+    url: <http|https>://<[^/]+>/<harukiproxy/.*|api/harukiproxy/.*|webhook/.*|api/webhook/.*|api/oauth2/user/.*|api/oauth2/game-data/.*|api/private/.*>
+    methods: [GET, POST, PUT, DELETE]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-oauth-proxy
+  match:
+    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login>
+    methods: [GET, POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-protected-oauth-consent
+  match:
+    url: <http|https>://<[^/]+>/api/oauth2/<login/accept|login/reject|consent|consent/accept|consent/reject|authorize/consent>
+    methods: [GET, POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-manual-upload
+  match:
+    url: <http|https>://<[^/]+>/<api/manual/.*|api/user/.*>
+    methods: [POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-user
+  match:
+    url: <http|https>://<[^/]+>/api/user/<.*>
+    methods: [GET, POST, PUT, PATCH, DELETE]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-admin
+  match:
+    url: <http|https>://<[^/]+>/api/admin/<.*>
+    methods: [GET, POST, PUT, PATCH, DELETE]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
