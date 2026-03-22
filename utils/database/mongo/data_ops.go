@@ -97,9 +97,12 @@ func (m *MongoDBManager) buildFinalData(oldData, data map[string]any) bson.M {
 	if mergedBlooms := mergeWorldBlooms(oldData, data); mergedBlooms != nil {
 		finalData[fieldUserWorldBlooms] = mergedBlooms
 	}
+	if mergedGachas := mergeUserGachas(oldData, data); mergedGachas != nil {
+		finalData[fieldUserGachas] = mergedGachas
+	}
 
 	for key, value := range data {
-		if key != fieldUserEvents && key != fieldUserWorldBlooms {
+		if key != fieldUserEvents && key != fieldUserWorldBlooms && key != fieldUserGachas {
 			finalData[key] = value
 		}
 	}
@@ -108,13 +111,13 @@ func (m *MongoDBManager) buildFinalData(oldData, data map[string]any) bson.M {
 }
 
 func mergeUserEvents(oldData, newData map[string]any) []any {
-	oldEvents, _ := oldData[fieldUserEvents].(bson.A)
-	newEvents, _ := newData[fieldUserEvents].([]any)
+	oldEvents := extractAnySlice(oldData[fieldUserEvents])
+	newEvents := extractAnySlice(newData[fieldUserEvents])
 	allEvents := append(oldEvents, newEvents...)
 
 	latestEvents := make(map[int64]map[string]any)
 	for _, ev := range allEvents {
-		e, ok := ev.(map[string]any)
+		e, ok := normalizeDocument(ev)
 		if !ok {
 			continue
 		}
@@ -149,13 +152,13 @@ type bloomKey struct {
 }
 
 func mergeWorldBlooms(oldData, newData map[string]any) []any {
-	oldBlooms, _ := oldData[fieldUserWorldBlooms].(bson.A)
-	newBlooms, _ := newData[fieldUserWorldBlooms].([]any)
+	oldBlooms := extractAnySlice(oldData[fieldUserWorldBlooms])
+	newBlooms := extractAnySlice(newData[fieldUserWorldBlooms])
 	allBlooms := append(oldBlooms, newBlooms...)
 
 	latestBlooms := make(map[bloomKey]map[string]any)
 	for _, bv := range allBlooms {
-		b, ok := bv.(map[string]any)
+		b, ok := normalizeDocument(bv)
 		if !ok {
 			continue
 		}
@@ -191,6 +194,86 @@ func shouldReplaceBloom(newBloom, oldBloom map[string]any) bool {
 	newPoint := getInt(newBloom, fieldWorldBloomChapterPoint)
 	oldPoint := getInt(oldBloom, fieldWorldBloomChapterPoint)
 	return newPoint >= oldPoint
+}
+
+type gachaKey struct {
+	GachaID         int64
+	GachaBehaviorID int64
+}
+
+func mergeUserGachas(oldData, newData map[string]any) []any {
+	oldGachas := extractAnySlice(oldData[fieldUserGachas])
+	newGachas := extractAnySlice(newData[fieldUserGachas])
+	allGachas := append(oldGachas, newGachas...)
+
+	latestGachas := make(map[gachaKey]map[string]any)
+	for _, gv := range allGachas {
+		gacha, ok := normalizeDocument(gv)
+		if !ok {
+			continue
+		}
+		gachaID, ok := getRequiredInt(gacha, fieldGachaID)
+		if !ok {
+			continue
+		}
+		gachaBehaviorID, ok := getRequiredInt(gacha, fieldGachaBehaviorID)
+		if !ok {
+			continue
+		}
+		key := gachaKey{
+			GachaID:         gachaID,
+			GachaBehaviorID: gachaBehaviorID,
+		}
+		if old, exists := latestGachas[key]; !exists || shouldReplaceGacha(gacha, old) {
+			latestGachas[key] = gacha
+		}
+	}
+
+	if len(latestGachas) == 0 {
+		return nil
+	}
+
+	arr := make([]any, 0, len(latestGachas))
+	for _, v := range latestGachas {
+		arr = append(arr, v)
+	}
+	return arr
+}
+
+func shouldReplaceGacha(newGacha, oldGacha map[string]any) bool {
+	newLastSpinAt := getInt(newGacha, fieldLastSpinAt)
+	oldLastSpinAt := getInt(oldGacha, fieldLastSpinAt)
+	return newLastSpinAt >= oldLastSpinAt
+}
+
+func extractAnySlice(value any) []any {
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case []any:
+		return typed
+	case bson.A:
+		return []any(typed)
+	default:
+		return nil
+	}
+}
+
+func normalizeDocument(value any) (map[string]any, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return typed, true
+	case bson.M:
+		return map[string]any(typed), true
+	case bson.D:
+		converted := make(map[string]any, len(typed))
+		for _, item := range typed {
+			converted[item.Key] = item.Value
+		}
+		return converted, true
+	default:
+		return nil, false
+	}
 }
 
 func (m *MongoDBManager) GetData(
