@@ -1,0 +1,473 @@
+package adminusers
+
+import (
+	"context"
+	adminCoreModule "haruki-suite/internal/modules/admincore"
+	oauth2Module "haruki-suite/internal/modules/oauth2"
+	harukiUtils "haruki-suite/utils"
+	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
+	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	userSchema "haruki-suite/utils/database/postgresql/user"
+	harukiLogger "haruki-suite/utils/logger"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gofiber/fiber/v3"
+)
+
+const (
+	adminLocalMirrorRetryAttempts = 3
+	adminLocalMirrorRetryInterval = 150 * time.Millisecond
+)
+
+func clearManagedBindingPublicCaches(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server, gameUserID string) {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil {
+		return
+	}
+	parsedUserID, err := strconv.ParseInt(strings.TrimSpace(gameUserID), 10, 64)
+	if err != nil {
+		harukiLogger.Warnf("Failed to parse managed binding game user id for cache clear: server=%s gameUserID=%s err=%v", server, gameUserID, err)
+		return
+	}
+	if err := apiHelper.DBManager.Redis.ClearPublicGameDataCaches(ctx, server, parsedUserID); err != nil {
+		harukiLogger.Warnf("Failed to clear managed binding public caches: server=%s gameUserID=%s err=%v", server, gameUserID, err)
+	}
+}
+
+func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool) {
+	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() &&
+		kratosIdentityID != nil && strings.TrimSpace(*kratosIdentityID) != "" {
+		if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, strings.TrimSpace(*kratosIdentityID)); err != nil {
+			sessionClearFailed = true
+		}
+	}
+
+	if err := harukiAPIHelper.ClearUserSessionsWithContext(ctx, apiHelper.RedisClient(), targetUserID); err != nil {
+		sessionClearFailed = true
+	}
+	return sessionClearFailed
+}
+
+func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (oauthRevokeFailed bool) {
+	if oauth2Module.HydraOAuthManagementEnabled() {
+		subjects := oauth2Module.HydraSubjectsForUser(targetUserID, kratosIdentityID)
+		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, subjects, ""); err != nil {
+			oauthRevokeFailed = true
+		}
+		return oauthRevokeFailed
+	}
+	return true
+}
+
+func cleanupManagedUserAccessAfterBan(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool, oauthRevokeFailed bool) {
+	sessionClearFailed = clearManagedUserSessions(ctx, apiHelper, targetUserID, kratosIdentityID)
+	oauthRevokeFailed = revokeManagedUserOAuthTokens(ctx, apiHelper, targetUserID, kratosIdentityID)
+	return sessionClearFailed, oauthRevokeFailed
+}
+
+func resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed bool) (message string, success bool) {
+	if sessionClearFailed && oauthRevokeFailed {
+		return "user banned, but failed to clear user sessions and revoke oauth tokens", false
+	}
+	if sessionClearFailed {
+		return "user banned, but failed to clear user sessions", true
+	}
+	if oauthRevokeFailed {
+		return "user banned, but failed to revoke oauth tokens", true
+	}
+	return "user banned", true
+}
+
+func resolveAdminUserEmailUpdateFinalizeOutcome(localMirrorFailed, sessionClearFailed bool) (status int, message string, auditResult string) {
+	if localMirrorFailed && sessionClearFailed {
+		return fiber.StatusInternalServerError, "user email updated in identity provider, but local mirror sync failed and some sessions were not cleared", harukiAPIHelper.SystemLogResultFailure
+	}
+	if localMirrorFailed {
+		return fiber.StatusInternalServerError, "user email updated in identity provider, but local mirror sync failed", harukiAPIHelper.SystemLogResultFailure
+	}
+	if sessionClearFailed {
+		return fiber.StatusOK, "user email updated, but failed to clear user sessions", harukiAPIHelper.SystemLogResultSuccess
+	}
+	return fiber.StatusOK, "user email updated", harukiAPIHelper.SystemLogResultSuccess
+}
+
+func handleListUserGameAccountBindings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		const action = adminAuditActionUserGameBindingsList
+		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
+		}
+
+		rows, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
+			Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(targetUser.ID))).
+			All(c.Context())
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryBindingsFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to query game account bindings")
+		}
+
+		resp := adminUserGameBindingsResponse{
+			GeneratedAt: adminNowUTC(),
+			UserID:      targetUser.ID,
+			Total:       len(rows),
+			Items:       buildAdminGameBindingItems(rows),
+		}
+
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+			"total": resp.Total,
+		})
+		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+	}
+}
+
+func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		const action = adminAuditActionUserEmailUpdate
+		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
+		}
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
+		payload, err := parseAdminManagedEmailPayload(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
+			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
+		}
+
+		userConflict, err := apiHelper.DBManager.DB.User.Query().
+			Where(
+				userSchema.EmailEqualFold(payload.Email),
+				userSchema.IDNEQ(targetUser.ID),
+			).
+			Exist(c.Context())
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryUserConflictFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to check email conflict")
+		}
+		if userConflict {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, nil))
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
+		}
+		kratosUpdated := false
+		localMirrorFailed := false
+		localMirrorFailReason := ""
+		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() &&
+			targetUser.KratosIdentityID != nil && strings.TrimSpace(*targetUser.KratosIdentityID) != "" {
+			if err := apiHelper.SessionHandler.UpdateKratosEmailByIdentityID(harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP()), strings.TrimSpace(*targetUser.KratosIdentityID), payload.Email); err != nil {
+				switch {
+				case harukiAPIHelper.IsKratosIdentityConflictError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
+				case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorNotFound(c, "user identity not found")
+				case harukiAPIHelper.IsIdentityProviderUnavailableError(err):
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonIdentityProviderUnavailable, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "identity provider unavailable")
+				default:
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, map[string]any{
+						"provider": "kratos",
+					}))
+					return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+				}
+			}
+			kratosUpdated = true
+		}
+
+		affected := 0
+		err = harukiAPIHelper.RetryOperation(c.Context(), adminLocalMirrorRetryAttempts, adminLocalMirrorRetryInterval, func() error {
+			nextAffected, updateErr := applyManagedTargetUserUpdateGuards(
+				apiHelper.DBManager.DB.User.Update().SetEmail(payload.Email),
+				actorUserID,
+				actorRole,
+				targetUser.ID,
+			).Save(c.Context())
+			if updateErr == nil {
+				affected = nextAffected
+			}
+			return updateErr
+		})
+		if err != nil {
+			if !kratosUpdated {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, nil))
+				return harukiAPIHelper.ErrorInternal(c, "failed to update user email")
+			}
+			localMirrorFailed = true
+			localMirrorFailReason = "update_user_email_failed"
+		}
+		if err == nil && affected == 0 {
+			if !kratosUpdated {
+				missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
+					"guardedUpdateMiss": true,
+				}))
+				return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to update user email")
+			}
+			localMirrorFailed = true
+			localMirrorFailReason = "guarded_update_miss"
+		}
+
+		resp := adminUserEmailResponse{
+			UserID:   targetUser.ID,
+			Email:    payload.Email,
+			Verified: false,
+		}
+		sessionClearFailed := clearManagedUserSessions(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+
+		metadata := map[string]any{
+			"email":              payload.Email,
+			"verified":           true,
+			"localMirrorFailed":  localMirrorFailed,
+			"sessionClearFailed": sessionClearFailed,
+		}
+		if localMirrorFailReason != "" {
+			metadata["localMirrorFailReason"] = localMirrorFailReason
+		}
+
+		status, message, auditResult := resolveAdminUserEmailUpdateFinalizeOutcome(localMirrorFailed, sessionClearFailed)
+		if auditResult == harukiAPIHelper.SystemLogResultSuccess {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, auditResult, metadata)
+		} else {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, auditResult, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, metadata))
+		}
+		if status == fiber.StatusOK {
+			return harukiAPIHelper.SuccessResponse(c, message, &resp)
+		}
+		return harukiAPIHelper.UpdatedDataResponse[string](c, status, message, nil)
+	}
+}
+
+func handleUpdateUserAllowCNMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		const action = adminAuditActionUserAllowCNUpdate
+		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
+		}
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
+		payload, err := parseAdminUpdateAllowCNMysekaiPayload(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
+			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
+		}
+
+		affected, err := applyManagedTargetUserUpdateGuards(
+			apiHelper.DBManager.DB.User.Update().SetAllowCnMysekai(*payload.AllowCNMysekai),
+			actorUserID,
+			actorRole,
+			targetUser.ID,
+		).Save(c.Context())
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateAllowCnMysekaiFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to update allow_cn_mysekai")
+		}
+		if affected == 0 {
+			missErr := resolveManagedTargetUserUpdateMiss(c, apiHelper, actorUserID, actorRole, targetUser.ID)
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
+				"guardedUpdateMiss": true,
+			}))
+			return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to update allow_cn_mysekai")
+		}
+
+		updated, err := apiHelper.DBManager.DB.User.Query().
+			Where(userSchema.IDEQ(targetUser.ID)).
+			Select(userSchema.FieldID, userSchema.FieldAllowCnMysekai).
+			Only(c.Context())
+		if err != nil {
+			if postgresql.IsNotFound(err) {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, nil))
+				return harukiAPIHelper.ErrorNotFound(c, "user not found")
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryTargetUserFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to query user")
+		}
+
+		resp := adminUserAllowCNMysekaiResponse{
+			UserID:         updated.ID,
+			AllowCNMysekai: updated.AllowCnMysekai,
+		}
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+			"allowCNMysekai": updated.AllowCnMysekai,
+		})
+		return harukiAPIHelper.SuccessResponse(c, "allow_cn_mysekai updated", &resp)
+	}
+}
+
+func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		const action = adminAuditActionUserGameBindingUpsert
+		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
+		}
+
+		serverRaw := strings.TrimSpace(c.Params("server"))
+		server, err := harukiUtils.ParseSupportedDataUploadServer(serverRaw)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidServer, nil))
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
+		}
+		gameUserID := strings.TrimSpace(c.Params("game_user_id"))
+		if gameUserID == "" {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingGameUserId, nil))
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
+		}
+		if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidGameUserId, nil))
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
+		}
+
+		payload, err := parseAdminGameBindingPayload(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
+			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
+		}
+
+		existing, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
+			Where(
+				gameaccountbinding.ServerEQ(string(server)),
+				gameaccountbinding.GameUserIDEQ(gameUserID),
+			).
+			WithUser().
+			Only(c.Context())
+		if err != nil && !postgresql.IsNotFound(err) {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryBindingFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to query existing binding")
+		}
+
+		created := false
+		if existing != nil {
+			if existing.Edges.User == nil || existing.Edges.User.ID != targetUser.ID {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonBindingOwnedByOtherUser, map[string]any{
+					"server":     string(server),
+					"gameUserID": gameUserID,
+				}))
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding belongs to another user", nil)
+			}
+
+			if _, err := existing.Update().
+				SetVerified(true).
+				SetSuite(payload.Suite).
+				SetMysekai(payload.MySekai).
+				Save(c.Context()); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateBindingFailed, nil))
+				return harukiAPIHelper.ErrorInternal(c, "failed to update game account binding")
+			}
+			clearManagedBindingPublicCaches(c.Context(), apiHelper, string(server), gameUserID)
+		} else {
+			created = true
+			if _, err := apiHelper.DBManager.DB.GameAccountBinding.Create().
+				SetServer(string(server)).
+				SetGameUserID(gameUserID).
+				SetVerified(true).
+				SetSuite(payload.Suite).
+				SetMysekai(payload.MySekai).
+				SetUserID(targetUser.ID).
+				Save(c.Context()); err != nil {
+				if postgresql.IsConstraintError(err) {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonBindingConflict, nil))
+					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding conflict", nil)
+				}
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateBindingFailed, nil))
+				return harukiAPIHelper.ErrorInternal(c, "failed to create game account binding")
+			}
+		}
+
+		resp := adminUserGameBindingUpsertResponse{
+			UserID:     targetUser.ID,
+			Server:     string(server),
+			GameUserID: gameUserID,
+			Created:    created,
+			Binding: harukiAPIHelper.GameAccountBinding{
+				Server:   server,
+				UserID:   gameUserID,
+				Verified: true,
+				Suite:    payload.Suite,
+				Mysekai:  payload.MySekai,
+			},
+		}
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+			"server":     string(server),
+			"gameUserID": gameUserID,
+			"created":    created,
+		})
+		return harukiAPIHelper.SuccessResponse(c, "game account binding upserted", &resp)
+	}
+}
+
+func handleDeleteUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		const action = adminAuditActionUserGameBindingDelete
+		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
+		}
+
+		serverRaw := strings.TrimSpace(c.Params("server"))
+		server, err := harukiUtils.ParseSupportedDataUploadServer(serverRaw)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidServer, nil))
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
+		}
+		gameUserID := strings.TrimSpace(c.Params("game_user_id"))
+		if gameUserID == "" {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingGameUserId, nil))
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
+		}
+
+		existing, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
+			Where(
+				gameaccountbinding.ServerEQ(string(server)),
+				gameaccountbinding.GameUserIDEQ(gameUserID),
+			).
+			WithUser().
+			Only(c.Context())
+		if err != nil {
+			if postgresql.IsNotFound(err) {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonBindingNotFound, nil))
+				return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryBindingFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
+		}
+
+		if existing.Edges.User == nil || existing.Edges.User.ID != targetUser.ID {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonBindingOwnedByOtherUser, map[string]any{
+				"server":     string(server),
+				"gameUserID": gameUserID,
+			}))
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding belongs to another user", nil)
+		}
+
+		if err := apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(c.Context()); err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteBindingFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
+		}
+		clearManagedBindingPublicCaches(c.Context(), apiHelper, string(server), gameUserID)
+
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+			"server":     string(server),
+			"gameUserID": gameUserID,
+		})
+		return harukiAPIHelper.SuccessResponse[string](c, "game account binding deleted", nil)
+	}
+}

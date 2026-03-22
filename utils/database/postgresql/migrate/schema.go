@@ -28,7 +28,7 @@ var (
 				Symbol:     "authorize_social_platform_infos_users_authorized_social_platforms",
 				Columns:    []*schema.Column{AuthorizeSocialPlatformInfosColumns[5]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
@@ -36,27 +36,6 @@ var (
 				Name:    "authorizesocialplatforminfo_user_id_platform_id",
 				Unique:  true,
 				Columns: []*schema.Column{AuthorizeSocialPlatformInfosColumns[5], AuthorizeSocialPlatformInfosColumns[3]},
-			},
-		},
-	}
-	// EmailInfosColumns holds the columns for the "email_infos" table.
-	EmailInfosColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "email", Type: field.TypeString, Unique: true},
-		{Name: "verified", Type: field.TypeBool, Default: false},
-		{Name: "user_email_info", Type: field.TypeString, Unique: true, Nullable: true},
-	}
-	// EmailInfosTable holds the schema information for the "email_infos" table.
-	EmailInfosTable = &schema.Table{
-		Name:       "email_infos",
-		Columns:    EmailInfosColumns,
-		PrimaryKey: []*schema.Column{EmailInfosColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "email_infos_users_email_info",
-				Columns:    []*schema.Column{EmailInfosColumns[3]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.SetNull,
 			},
 		},
 	}
@@ -137,7 +116,7 @@ var (
 				Symbol:     "group_lists_groups_group_list",
 				Columns:    []*schema.Column{GroupListsColumns[6]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -157,100 +136,84 @@ var (
 				Symbol:     "ios_script_codes_users_ios_script_code",
 				Columns:    []*schema.Column{IosScriptCodesColumns[2]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
-	// OauthAuthorizationsColumns holds the columns for the "oauth_authorizations" table.
-	OauthAuthorizationsColumns = []*schema.Column{
+	// RiskEventsColumns holds the columns for the "risk_events" table.
+	RiskEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "scopes", Type: field.TypeJSON},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "revoked", Type: field.TypeBool, Default: false},
-		{Name: "oauth_client_authorizations", Type: field.TypeInt},
-		{Name: "user_oauth_authorizations", Type: field.TypeString},
+		{Name: "event_time", Type: field.TypeTime},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "resolved"}, Default: "open"},
+		{Name: "severity", Type: field.TypeEnum, Enums: []string{"low", "medium", "high", "critical"}, Default: "medium"},
+		{Name: "source", Type: field.TypeString, Size: 64, Default: "manual"},
+		{Name: "actor_user_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "target_user_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "ip", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "action", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "reason", Type: field.TypeString, Nullable: true, Size: 300},
+		{Name: "resolved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "resolved_by", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
-	// OauthAuthorizationsTable holds the schema information for the "oauth_authorizations" table.
-	OauthAuthorizationsTable = &schema.Table{
-		Name:       "oauth_authorizations",
-		Columns:    OauthAuthorizationsColumns,
-		PrimaryKey: []*schema.Column{OauthAuthorizationsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "oauth_authorizations_oauth_clients_authorizations",
-				Columns:    []*schema.Column{OauthAuthorizationsColumns[4]},
-				RefColumns: []*schema.Column{OauthClientsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "oauth_authorizations_users_oauth_authorizations",
-				Columns:    []*schema.Column{OauthAuthorizationsColumns[5]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
+	// RiskEventsTable holds the schema information for the "risk_events" table.
+	RiskEventsTable = &schema.Table{
+		Name:       "risk_events",
+		Columns:    RiskEventsColumns,
+		PrimaryKey: []*schema.Column{RiskEventsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "oauthauthorization_user_oauth_authorizations_oauth_client_authorizations",
-				Unique:  true,
-				Columns: []*schema.Column{OauthAuthorizationsColumns[5], OauthAuthorizationsColumns[4]},
+				Name:    "riskevent_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{RiskEventsColumns[1]},
+			},
+			{
+				Name:    "riskevent_status_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{RiskEventsColumns[2], RiskEventsColumns[1]},
+			},
+			{
+				Name:    "riskevent_target_user_id_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{RiskEventsColumns[6], RiskEventsColumns[1]},
+			},
+			{
+				Name:    "riskevent_actor_user_id_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{RiskEventsColumns[5], RiskEventsColumns[1]},
+			},
+			{
+				Name:    "riskevent_ip_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{RiskEventsColumns[7], RiskEventsColumns[1]},
 			},
 		},
 	}
-	// OauthClientsColumns holds the columns for the "oauth_clients" table.
-	OauthClientsColumns = []*schema.Column{
+	// RiskRulesColumns holds the columns for the "risk_rules" table.
+	RiskRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "client_id", Type: field.TypeString, Unique: true},
-		{Name: "client_secret", Type: field.TypeString},
-		{Name: "name", Type: field.TypeString},
-		{Name: "client_type", Type: field.TypeString, Default: "public"},
-		{Name: "redirect_uris", Type: field.TypeJSON},
-		{Name: "scopes", Type: field.TypeJSON},
-		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "rule_key", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 300},
+		{Name: "config", Type: field.TypeJSON},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true, Size: 64},
 	}
-	// OauthClientsTable holds the schema information for the "oauth_clients" table.
-	OauthClientsTable = &schema.Table{
-		Name:       "oauth_clients",
-		Columns:    OauthClientsColumns,
-		PrimaryKey: []*schema.Column{OauthClientsColumns[0]},
+	// RiskRulesTable holds the schema information for the "risk_rules" table.
+	RiskRulesTable = &schema.Table{
+		Name:       "risk_rules",
+		Columns:    RiskRulesColumns,
+		PrimaryKey: []*schema.Column{RiskRulesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "oauthclient_client_id",
+				Name:    "riskrule_rule_key",
 				Unique:  true,
-				Columns: []*schema.Column{OauthClientsColumns[1]},
-			},
-		},
-	}
-	// OauthTokensColumns holds the columns for the "oauth_tokens" table.
-	OauthTokensColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "access_token", Type: field.TypeString, Unique: true},
-		{Name: "refresh_token", Type: field.TypeString, Unique: true, Nullable: true},
-		{Name: "scopes", Type: field.TypeJSON},
-		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
-		{Name: "revoked", Type: field.TypeBool, Default: false},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "oauth_client_tokens", Type: field.TypeInt},
-		{Name: "user_oauth_tokens", Type: field.TypeString},
-	}
-	// OauthTokensTable holds the schema information for the "oauth_tokens" table.
-	OauthTokensTable = &schema.Table{
-		Name:       "oauth_tokens",
-		Columns:    OauthTokensColumns,
-		PrimaryKey: []*schema.Column{OauthTokensColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "oauth_tokens_oauth_clients_tokens",
-				Columns:    []*schema.Column{OauthTokensColumns[7]},
-				RefColumns: []*schema.Column{OauthClientsColumns[0]},
-				OnDelete:   schema.NoAction,
+				Columns: []*schema.Column{RiskRulesColumns[1]},
 			},
 			{
-				Symbol:     "oauth_tokens_users_oauth_tokens",
-				Columns:    []*schema.Column{OauthTokensColumns[8]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				Name:    "riskrule_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{RiskRulesColumns[5]},
 			},
 		},
 	}
@@ -272,7 +235,7 @@ var (
 				Symbol:     "social_platform_infos_users_social_platform_info",
 				Columns:    []*schema.Column{SocialPlatformInfosColumns[4]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
@@ -280,6 +243,126 @@ var (
 				Name:    "socialplatforminfo_platform_platform_user_id",
 				Unique:  true,
 				Columns: []*schema.Column{SocialPlatformInfosColumns[1], SocialPlatformInfosColumns[2]},
+			},
+		},
+	}
+	// SystemLogsColumns holds the columns for the "system_logs" table.
+	SystemLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "event_time", Type: field.TypeTime},
+		{Name: "actor_user_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "actor_role", Type: field.TypeString, Nullable: true, Size: 32},
+		{Name: "actor_type", Type: field.TypeEnum, Enums: []string{"anonymous", "user", "admin", "system"}, Default: "anonymous"},
+		{Name: "action", Type: field.TypeString, Size: 128},
+		{Name: "target_type", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "target_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "result", Type: field.TypeEnum, Enums: []string{"success", "failure"}, Default: "success"},
+		{Name: "ip", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "user_agent", Type: field.TypeString, Nullable: true, Size: 1024},
+		{Name: "method", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "path", Type: field.TypeString, Nullable: true, Size: 512},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+	}
+	// SystemLogsTable holds the schema information for the "system_logs" table.
+	SystemLogsTable = &schema.Table{
+		Name:       "system_logs",
+		Columns:    SystemLogsColumns,
+		PrimaryKey: []*schema.Column{SystemLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "systemlog_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{SystemLogsColumns[1]},
+			},
+			{
+				Name:    "systemlog_actor_user_id_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{SystemLogsColumns[2], SystemLogsColumns[1]},
+			},
+			{
+				Name:    "systemlog_action_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{SystemLogsColumns[5], SystemLogsColumns[1]},
+			},
+			{
+				Name:    "systemlog_target_type_target_id_event_time",
+				Unique:  false,
+				Columns: []*schema.Column{SystemLogsColumns[6], SystemLogsColumns[7], SystemLogsColumns[1]},
+			},
+		},
+	}
+	// TicketsColumns holds the columns for the "tickets" table.
+	TicketsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "ticket_id", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "creator_user_id", Type: field.TypeString, Size: 64},
+		{Name: "subject", Type: field.TypeString, Size: 200},
+		{Name: "category", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "priority", Type: field.TypeEnum, Enums: []string{"low", "normal", "high", "urgent"}, Default: "normal"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "pending_user", "pending_admin", "resolved", "closed"}, Default: "open"},
+		{Name: "assignee_admin_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "closed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+	}
+	// TicketsTable holds the schema information for the "tickets" table.
+	TicketsTable = &schema.Table{
+		Name:       "tickets",
+		Columns:    TicketsColumns,
+		PrimaryKey: []*schema.Column{TicketsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticket_ticket_id",
+				Unique:  true,
+				Columns: []*schema.Column{TicketsColumns[1]},
+			},
+			{
+				Name:    "ticket_creator_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{TicketsColumns[2], TicketsColumns[8]},
+			},
+			{
+				Name:    "ticket_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{TicketsColumns[6], TicketsColumns[8]},
+			},
+			{
+				Name:    "ticket_assignee_admin_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{TicketsColumns[7], TicketsColumns[8]},
+			},
+		},
+	}
+	// TicketMessagesColumns holds the columns for the "ticket_messages" table.
+	TicketMessagesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "sender_user_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "sender_role", Type: field.TypeEnum, Enums: []string{"user", "admin", "system"}, Default: "user"},
+		{Name: "message", Type: field.TypeString, Size: 4000},
+		{Name: "internal", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "ticket_id", Type: field.TypeInt},
+	}
+	// TicketMessagesTable holds the schema information for the "ticket_messages" table.
+	TicketMessagesTable = &schema.Table{
+		Name:       "ticket_messages",
+		Columns:    TicketMessagesColumns,
+		PrimaryKey: []*schema.Column{TicketMessagesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "ticket_messages_tickets_messages",
+				Columns:    []*schema.Column{TicketMessagesColumns[6]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticketmessage_ticket_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{TicketMessagesColumns[6], TicketMessagesColumns[5]},
 			},
 		},
 	}
@@ -292,6 +375,7 @@ var (
 		{Name: "data_type", Type: field.TypeString},
 		{Name: "upload_method", Type: field.TypeString},
 		{Name: "success", Type: field.TypeBool},
+		{Name: "error_message", Type: field.TypeString, Nullable: true},
 		{Name: "upload_time", Type: field.TypeTime},
 	}
 	// UploadLogsTable holds the schema information for the "upload_logs" table.
@@ -299,63 +383,178 @@ var (
 		Name:       "upload_logs",
 		Columns:    UploadLogsColumns,
 		PrimaryKey: []*schema.Column{UploadLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "uploadlog_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[8]},
+			},
+			{
+				Name:    "uploadlog_server_game_user_id_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[1], UploadLogsColumns[2], UploadLogsColumns[8]},
+			},
+			{
+				Name:    "uploadlog_upload_method_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[5], UploadLogsColumns[8]},
+			},
+			{
+				Name:    "uploadlog_data_type_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[4], UploadLogsColumns[8]},
+			},
+			{
+				Name:    "uploadlog_success_upload_time",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[6], UploadLogsColumns[8]},
+			},
+		},
 	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "email", Type: field.TypeString, Unique: true},
-		{Name: "password_hash", Type: field.TypeString},
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
+		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
 		{Name: "banned", Type: field.TypeBool, Default: false},
 		{Name: "ban_reason", Type: field.TypeString, Nullable: true},
+		{Name: "kratos_identity_id", Type: field.TypeString, Unique: true, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime, Nullable: true},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
 		Name:       "users",
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "user_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[9]},
+			},
+			{
+				Name:    "user_role_banned",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[5], UsersColumns[6]},
+			},
+		},
+	}
+	// WebhookEndpointsColumns holds the columns for the "webhook_endpoints" table.
+	WebhookEndpointsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "credential", Type: field.TypeString},
+		{Name: "callback_url", Type: field.TypeString},
+		{Name: "bearer", Type: field.TypeString, Nullable: true},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// WebhookEndpointsTable holds the schema information for the "webhook_endpoints" table.
+	WebhookEndpointsTable = &schema.Table{
+		Name:       "webhook_endpoints",
+		Columns:    WebhookEndpointsColumns,
+		PrimaryKey: []*schema.Column{WebhookEndpointsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "webhookendpoint_credential",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookEndpointsColumns[1]},
+			},
+		},
+	}
+	// WebhookSubscriptionsColumns holds the columns for the "webhook_subscriptions" table.
+	WebhookSubscriptionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "user_id", Type: field.TypeString},
+		{Name: "server", Type: field.TypeString},
+		{Name: "data_type", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "webhook_id", Type: field.TypeString},
+	}
+	// WebhookSubscriptionsTable holds the schema information for the "webhook_subscriptions" table.
+	WebhookSubscriptionsTable = &schema.Table{
+		Name:       "webhook_subscriptions",
+		Columns:    WebhookSubscriptionsColumns,
+		PrimaryKey: []*schema.Column{WebhookSubscriptionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "webhook_subscriptions_webhook_endpoints_subscriptions",
+				Columns:    []*schema.Column{WebhookSubscriptionsColumns[5]},
+				RefColumns: []*schema.Column{WebhookEndpointsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "webhooksubscription_user_id_server_data_type",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[1], WebhookSubscriptionsColumns[2], WebhookSubscriptionsColumns[3]},
+			},
+			{
+				Name:    "webhooksubscription_webhook_id",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[5]},
+			},
+			{
+				Name:    "webhooksubscription_user_id_server_data_type_webhook_id",
+				Unique:  true,
+				Columns: []*schema.Column{WebhookSubscriptionsColumns[1], WebhookSubscriptionsColumns[2], WebhookSubscriptionsColumns[3], WebhookSubscriptionsColumns[5]},
+			},
+		},
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuthorizeSocialPlatformInfosTable,
-		EmailInfosTable,
 		FriendLinksTable,
 		GameAccountBindingsTable,
 		GroupsTable,
 		GroupListsTable,
 		IosScriptCodesTable,
-		OauthAuthorizationsTable,
-		OauthClientsTable,
-		OauthTokensTable,
+		RiskEventsTable,
+		RiskRulesTable,
 		SocialPlatformInfosTable,
+		SystemLogsTable,
+		TicketsTable,
+		TicketMessagesTable,
 		UploadLogsTable,
 		UsersTable,
+		WebhookEndpointsTable,
+		WebhookSubscriptionsTable,
 	}
 )
 
 func init() {
 	AuthorizeSocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
-	EmailInfosTable.ForeignKeys[0].RefTable = UsersTable
 	GameAccountBindingsTable.ForeignKeys[0].RefTable = UsersTable
 	GameAccountBindingsTable.Annotation = &entsql.Annotation{
 		Table: "game_account_bindings",
 	}
 	GroupListsTable.ForeignKeys[0].RefTable = GroupsTable
 	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
-	OauthAuthorizationsTable.ForeignKeys[0].RefTable = OauthClientsTable
-	OauthAuthorizationsTable.ForeignKeys[1].RefTable = UsersTable
-	OauthAuthorizationsTable.Annotation = &entsql.Annotation{
-		Table: "oauth_authorizations",
+	RiskEventsTable.Annotation = &entsql.Annotation{
+		Table: "risk_events",
 	}
-	OauthClientsTable.Annotation = &entsql.Annotation{
-		Table: "oauth_clients",
-	}
-	OauthTokensTable.ForeignKeys[0].RefTable = OauthClientsTable
-	OauthTokensTable.ForeignKeys[1].RefTable = UsersTable
-	OauthTokensTable.Annotation = &entsql.Annotation{
-		Table: "oauth_tokens",
+	RiskRulesTable.Annotation = &entsql.Annotation{
+		Table: "risk_rules",
 	}
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
+	SystemLogsTable.Annotation = &entsql.Annotation{
+		Table: "system_logs",
+	}
+	TicketsTable.Annotation = &entsql.Annotation{
+		Table: "tickets",
+	}
+	TicketMessagesTable.ForeignKeys[0].RefTable = TicketsTable
+	TicketMessagesTable.Annotation = &entsql.Annotation{
+		Table: "ticket_messages",
+	}
+	WebhookEndpointsTable.Annotation = &entsql.Annotation{
+		Table: "webhook_endpoints",
+	}
+	WebhookSubscriptionsTable.ForeignKeys[0].RefTable = WebhookEndpointsTable
+	WebhookSubscriptionsTable.Annotation = &entsql.Annotation{
+		Table: "webhook_subscriptions",
+	}
 }

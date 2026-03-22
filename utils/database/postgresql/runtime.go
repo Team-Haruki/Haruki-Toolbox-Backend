@@ -3,19 +3,22 @@
 package postgresql
 
 import (
-	"haruki-suite/entsrc/schema"
-	"haruki-suite/utils/database/postgresql/emailinfo"
+	"haruki-suite/ent/schema"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthclient"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
+	"haruki-suite/utils/database/postgresql/riskevent"
+	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/systemlog"
+	"haruki-suite/utils/database/postgresql/ticket"
+	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
+	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	"haruki-suite/utils/database/postgresql/webhooksubscription"
 	"time"
 )
 
@@ -23,12 +26,6 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
-	emailinfoFields := schema.EmailInfo{}.Fields()
-	_ = emailinfoFields
-	// emailinfoDescVerified is the schema descriptor for verified field.
-	emailinfoDescVerified := emailinfoFields[1].Descriptor()
-	// emailinfo.DefaultVerified holds the default value on creation for the verified field.
-	emailinfo.DefaultVerified = emailinfoDescVerified.Default.(bool)
 	friendlinkFields := schema.FriendLink{}.Fields()
 	_ = friendlinkFields
 	// friendlinkDescName is the schema descriptor for name field.
@@ -87,62 +84,182 @@ func init() {
 	iosscriptcodeDescUploadCode := iosscriptcodeFields[1].Descriptor()
 	// iosscriptcode.UploadCodeValidator is a validator for the "upload_code" field. It is called by the builders before save.
 	iosscriptcode.UploadCodeValidator = iosscriptcodeDescUploadCode.Validators[0].(func(string) error)
-	oauthauthorizationFields := schema.OAuthAuthorization{}.Fields()
-	_ = oauthauthorizationFields
-	// oauthauthorizationDescCreatedAt is the schema descriptor for created_at field.
-	oauthauthorizationDescCreatedAt := oauthauthorizationFields[1].Descriptor()
-	// oauthauthorization.DefaultCreatedAt holds the default value on creation for the created_at field.
-	oauthauthorization.DefaultCreatedAt = oauthauthorizationDescCreatedAt.Default.(func() time.Time)
-	// oauthauthorizationDescRevoked is the schema descriptor for revoked field.
-	oauthauthorizationDescRevoked := oauthauthorizationFields[2].Descriptor()
-	// oauthauthorization.DefaultRevoked holds the default value on creation for the revoked field.
-	oauthauthorization.DefaultRevoked = oauthauthorizationDescRevoked.Default.(bool)
-	oauthclientFields := schema.OAuthClient{}.Fields()
-	_ = oauthclientFields
-	// oauthclientDescClientID is the schema descriptor for client_id field.
-	oauthclientDescClientID := oauthclientFields[0].Descriptor()
-	// oauthclient.ClientIDValidator is a validator for the "client_id" field. It is called by the builders before save.
-	oauthclient.ClientIDValidator = oauthclientDescClientID.Validators[0].(func(string) error)
-	// oauthclientDescClientSecret is the schema descriptor for client_secret field.
-	oauthclientDescClientSecret := oauthclientFields[1].Descriptor()
-	// oauthclient.ClientSecretValidator is a validator for the "client_secret" field. It is called by the builders before save.
-	oauthclient.ClientSecretValidator = oauthclientDescClientSecret.Validators[0].(func(string) error)
-	// oauthclientDescName is the schema descriptor for name field.
-	oauthclientDescName := oauthclientFields[2].Descriptor()
-	// oauthclient.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	oauthclient.NameValidator = oauthclientDescName.Validators[0].(func(string) error)
-	// oauthclientDescClientType is the schema descriptor for client_type field.
-	oauthclientDescClientType := oauthclientFields[3].Descriptor()
-	// oauthclient.DefaultClientType holds the default value on creation for the client_type field.
-	oauthclient.DefaultClientType = oauthclientDescClientType.Default.(string)
-	// oauthclientDescActive is the schema descriptor for active field.
-	oauthclientDescActive := oauthclientFields[6].Descriptor()
-	// oauthclient.DefaultActive holds the default value on creation for the active field.
-	oauthclient.DefaultActive = oauthclientDescActive.Default.(bool)
-	// oauthclientDescCreatedAt is the schema descriptor for created_at field.
-	oauthclientDescCreatedAt := oauthclientFields[7].Descriptor()
-	// oauthclient.DefaultCreatedAt holds the default value on creation for the created_at field.
-	oauthclient.DefaultCreatedAt = oauthclientDescCreatedAt.Default.(func() time.Time)
-	oauthtokenFields := schema.OAuthToken{}.Fields()
-	_ = oauthtokenFields
-	// oauthtokenDescAccessToken is the schema descriptor for access_token field.
-	oauthtokenDescAccessToken := oauthtokenFields[0].Descriptor()
-	// oauthtoken.AccessTokenValidator is a validator for the "access_token" field. It is called by the builders before save.
-	oauthtoken.AccessTokenValidator = oauthtokenDescAccessToken.Validators[0].(func(string) error)
-	// oauthtokenDescRevoked is the schema descriptor for revoked field.
-	oauthtokenDescRevoked := oauthtokenFields[4].Descriptor()
-	// oauthtoken.DefaultRevoked holds the default value on creation for the revoked field.
-	oauthtoken.DefaultRevoked = oauthtokenDescRevoked.Default.(bool)
-	// oauthtokenDescCreatedAt is the schema descriptor for created_at field.
-	oauthtokenDescCreatedAt := oauthtokenFields[5].Descriptor()
-	// oauthtoken.DefaultCreatedAt holds the default value on creation for the created_at field.
-	oauthtoken.DefaultCreatedAt = oauthtokenDescCreatedAt.Default.(func() time.Time)
+	riskeventFields := schema.RiskEvent{}.Fields()
+	_ = riskeventFields
+	// riskeventDescEventTime is the schema descriptor for event_time field.
+	riskeventDescEventTime := riskeventFields[0].Descriptor()
+	// riskevent.DefaultEventTime holds the default value on creation for the event_time field.
+	riskevent.DefaultEventTime = riskeventDescEventTime.Default.(func() time.Time)
+	// riskeventDescSource is the schema descriptor for source field.
+	riskeventDescSource := riskeventFields[3].Descriptor()
+	// riskevent.DefaultSource holds the default value on creation for the source field.
+	riskevent.DefaultSource = riskeventDescSource.Default.(string)
+	// riskevent.SourceValidator is a validator for the "source" field. It is called by the builders before save.
+	riskevent.SourceValidator = riskeventDescSource.Validators[0].(func(string) error)
+	// riskeventDescActorUserID is the schema descriptor for actor_user_id field.
+	riskeventDescActorUserID := riskeventFields[4].Descriptor()
+	// riskevent.ActorUserIDValidator is a validator for the "actor_user_id" field. It is called by the builders before save.
+	riskevent.ActorUserIDValidator = riskeventDescActorUserID.Validators[0].(func(string) error)
+	// riskeventDescTargetUserID is the schema descriptor for target_user_id field.
+	riskeventDescTargetUserID := riskeventFields[5].Descriptor()
+	// riskevent.TargetUserIDValidator is a validator for the "target_user_id" field. It is called by the builders before save.
+	riskevent.TargetUserIDValidator = riskeventDescTargetUserID.Validators[0].(func(string) error)
+	// riskeventDescIP is the schema descriptor for ip field.
+	riskeventDescIP := riskeventFields[6].Descriptor()
+	// riskevent.IPValidator is a validator for the "ip" field. It is called by the builders before save.
+	riskevent.IPValidator = riskeventDescIP.Validators[0].(func(string) error)
+	// riskeventDescAction is the schema descriptor for action field.
+	riskeventDescAction := riskeventFields[7].Descriptor()
+	// riskevent.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	riskevent.ActionValidator = riskeventDescAction.Validators[0].(func(string) error)
+	// riskeventDescReason is the schema descriptor for reason field.
+	riskeventDescReason := riskeventFields[8].Descriptor()
+	// riskevent.ReasonValidator is a validator for the "reason" field. It is called by the builders before save.
+	riskevent.ReasonValidator = riskeventDescReason.Validators[0].(func(string) error)
+	// riskeventDescResolvedBy is the schema descriptor for resolved_by field.
+	riskeventDescResolvedBy := riskeventFields[10].Descriptor()
+	// riskevent.ResolvedByValidator is a validator for the "resolved_by" field. It is called by the builders before save.
+	riskevent.ResolvedByValidator = riskeventDescResolvedBy.Validators[0].(func(string) error)
+	riskruleFields := schema.RiskRule{}.Fields()
+	_ = riskruleFields
+	// riskruleDescRuleKey is the schema descriptor for rule_key field.
+	riskruleDescRuleKey := riskruleFields[0].Descriptor()
+	// riskrule.RuleKeyValidator is a validator for the "rule_key" field. It is called by the builders before save.
+	riskrule.RuleKeyValidator = riskruleDescRuleKey.Validators[0].(func(string) error)
+	// riskruleDescDescription is the schema descriptor for description field.
+	riskruleDescDescription := riskruleFields[1].Descriptor()
+	// riskrule.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	riskrule.DescriptionValidator = riskruleDescDescription.Validators[0].(func(string) error)
+	// riskruleDescCreatedAt is the schema descriptor for created_at field.
+	riskruleDescCreatedAt := riskruleFields[3].Descriptor()
+	// riskrule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	riskrule.DefaultCreatedAt = riskruleDescCreatedAt.Default.(func() time.Time)
+	// riskruleDescUpdatedAt is the schema descriptor for updated_at field.
+	riskruleDescUpdatedAt := riskruleFields[4].Descriptor()
+	// riskrule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	riskrule.DefaultUpdatedAt = riskruleDescUpdatedAt.Default.(func() time.Time)
+	// riskrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	riskrule.UpdateDefaultUpdatedAt = riskruleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// riskruleDescUpdatedBy is the schema descriptor for updated_by field.
+	riskruleDescUpdatedBy := riskruleFields[5].Descriptor()
+	// riskrule.UpdatedByValidator is a validator for the "updated_by" field. It is called by the builders before save.
+	riskrule.UpdatedByValidator = riskruleDescUpdatedBy.Validators[0].(func(string) error)
 	socialplatforminfoFields := schema.SocialPlatformInfo{}.Fields()
 	_ = socialplatforminfoFields
 	// socialplatforminfoDescVerified is the schema descriptor for verified field.
 	socialplatforminfoDescVerified := socialplatforminfoFields[2].Descriptor()
 	// socialplatforminfo.DefaultVerified holds the default value on creation for the verified field.
 	socialplatforminfo.DefaultVerified = socialplatforminfoDescVerified.Default.(bool)
+	systemlogFields := schema.SystemLog{}.Fields()
+	_ = systemlogFields
+	// systemlogDescEventTime is the schema descriptor for event_time field.
+	systemlogDescEventTime := systemlogFields[0].Descriptor()
+	// systemlog.DefaultEventTime holds the default value on creation for the event_time field.
+	systemlog.DefaultEventTime = systemlogDescEventTime.Default.(func() time.Time)
+	// systemlogDescActorUserID is the schema descriptor for actor_user_id field.
+	systemlogDescActorUserID := systemlogFields[1].Descriptor()
+	// systemlog.ActorUserIDValidator is a validator for the "actor_user_id" field. It is called by the builders before save.
+	systemlog.ActorUserIDValidator = systemlogDescActorUserID.Validators[0].(func(string) error)
+	// systemlogDescActorRole is the schema descriptor for actor_role field.
+	systemlogDescActorRole := systemlogFields[2].Descriptor()
+	// systemlog.ActorRoleValidator is a validator for the "actor_role" field. It is called by the builders before save.
+	systemlog.ActorRoleValidator = systemlogDescActorRole.Validators[0].(func(string) error)
+	// systemlogDescAction is the schema descriptor for action field.
+	systemlogDescAction := systemlogFields[4].Descriptor()
+	// systemlog.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	systemlog.ActionValidator = func() func(string) error {
+		validators := systemlogDescAction.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(action string) error {
+			for _, fn := range fns {
+				if err := fn(action); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// systemlogDescTargetType is the schema descriptor for target_type field.
+	systemlogDescTargetType := systemlogFields[5].Descriptor()
+	// systemlog.TargetTypeValidator is a validator for the "target_type" field. It is called by the builders before save.
+	systemlog.TargetTypeValidator = systemlogDescTargetType.Validators[0].(func(string) error)
+	// systemlogDescTargetID is the schema descriptor for target_id field.
+	systemlogDescTargetID := systemlogFields[6].Descriptor()
+	// systemlog.TargetIDValidator is a validator for the "target_id" field. It is called by the builders before save.
+	systemlog.TargetIDValidator = systemlogDescTargetID.Validators[0].(func(string) error)
+	// systemlogDescIP is the schema descriptor for ip field.
+	systemlogDescIP := systemlogFields[8].Descriptor()
+	// systemlog.IPValidator is a validator for the "ip" field. It is called by the builders before save.
+	systemlog.IPValidator = systemlogDescIP.Validators[0].(func(string) error)
+	// systemlogDescUserAgent is the schema descriptor for user_agent field.
+	systemlogDescUserAgent := systemlogFields[9].Descriptor()
+	// systemlog.UserAgentValidator is a validator for the "user_agent" field. It is called by the builders before save.
+	systemlog.UserAgentValidator = systemlogDescUserAgent.Validators[0].(func(string) error)
+	// systemlogDescMethod is the schema descriptor for method field.
+	systemlogDescMethod := systemlogFields[10].Descriptor()
+	// systemlog.MethodValidator is a validator for the "method" field. It is called by the builders before save.
+	systemlog.MethodValidator = systemlogDescMethod.Validators[0].(func(string) error)
+	// systemlogDescPath is the schema descriptor for path field.
+	systemlogDescPath := systemlogFields[11].Descriptor()
+	// systemlog.PathValidator is a validator for the "path" field. It is called by the builders before save.
+	systemlog.PathValidator = systemlogDescPath.Validators[0].(func(string) error)
+	// systemlogDescRequestID is the schema descriptor for request_id field.
+	systemlogDescRequestID := systemlogFields[12].Descriptor()
+	// systemlog.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	systemlog.RequestIDValidator = systemlogDescRequestID.Validators[0].(func(string) error)
+	ticketFields := schema.Ticket{}.Fields()
+	_ = ticketFields
+	// ticketDescTicketID is the schema descriptor for ticket_id field.
+	ticketDescTicketID := ticketFields[0].Descriptor()
+	// ticket.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
+	ticket.TicketIDValidator = ticketDescTicketID.Validators[0].(func(string) error)
+	// ticketDescCreatorUserID is the schema descriptor for creator_user_id field.
+	ticketDescCreatorUserID := ticketFields[1].Descriptor()
+	// ticket.CreatorUserIDValidator is a validator for the "creator_user_id" field. It is called by the builders before save.
+	ticket.CreatorUserIDValidator = ticketDescCreatorUserID.Validators[0].(func(string) error)
+	// ticketDescSubject is the schema descriptor for subject field.
+	ticketDescSubject := ticketFields[2].Descriptor()
+	// ticket.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	ticket.SubjectValidator = ticketDescSubject.Validators[0].(func(string) error)
+	// ticketDescCategory is the schema descriptor for category field.
+	ticketDescCategory := ticketFields[3].Descriptor()
+	// ticket.CategoryValidator is a validator for the "category" field. It is called by the builders before save.
+	ticket.CategoryValidator = ticketDescCategory.Validators[0].(func(string) error)
+	// ticketDescAssigneeAdminID is the schema descriptor for assignee_admin_id field.
+	ticketDescAssigneeAdminID := ticketFields[6].Descriptor()
+	// ticket.AssigneeAdminIDValidator is a validator for the "assignee_admin_id" field. It is called by the builders before save.
+	ticket.AssigneeAdminIDValidator = ticketDescAssigneeAdminID.Validators[0].(func(string) error)
+	// ticketDescCreatedAt is the schema descriptor for created_at field.
+	ticketDescCreatedAt := ticketFields[7].Descriptor()
+	// ticket.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ticket.DefaultCreatedAt = ticketDescCreatedAt.Default.(func() time.Time)
+	// ticketDescUpdatedAt is the schema descriptor for updated_at field.
+	ticketDescUpdatedAt := ticketFields[8].Descriptor()
+	// ticket.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	ticket.DefaultUpdatedAt = ticketDescUpdatedAt.Default.(func() time.Time)
+	// ticket.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	ticket.UpdateDefaultUpdatedAt = ticketDescUpdatedAt.UpdateDefault.(func() time.Time)
+	ticketmessageFields := schema.TicketMessage{}.Fields()
+	_ = ticketmessageFields
+	// ticketmessageDescSenderUserID is the schema descriptor for sender_user_id field.
+	ticketmessageDescSenderUserID := ticketmessageFields[1].Descriptor()
+	// ticketmessage.SenderUserIDValidator is a validator for the "sender_user_id" field. It is called by the builders before save.
+	ticketmessage.SenderUserIDValidator = ticketmessageDescSenderUserID.Validators[0].(func(string) error)
+	// ticketmessageDescMessage is the schema descriptor for message field.
+	ticketmessageDescMessage := ticketmessageFields[3].Descriptor()
+	// ticketmessage.MessageValidator is a validator for the "message" field. It is called by the builders before save.
+	ticketmessage.MessageValidator = ticketmessageDescMessage.Validators[0].(func(string) error)
+	// ticketmessageDescInternal is the schema descriptor for internal field.
+	ticketmessageDescInternal := ticketmessageFields[4].Descriptor()
+	// ticketmessage.DefaultInternal holds the default value on creation for the internal field.
+	ticketmessage.DefaultInternal = ticketmessageDescInternal.Default.(bool)
+	// ticketmessageDescCreatedAt is the schema descriptor for created_at field.
+	ticketmessageDescCreatedAt := ticketmessageFields[5].Descriptor()
+	// ticketmessage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ticketmessage.DefaultCreatedAt = ticketmessageDescCreatedAt.Default.(func() time.Time)
 	uploadlogFields := schema.UploadLog{}.Fields()
 	_ = uploadlogFields
 	// uploadlogDescServer is the schema descriptor for server field.
@@ -164,7 +281,7 @@ func init() {
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.
-	userDescAllowCnMysekai := userFields[5].Descriptor()
+	userDescAllowCnMysekai := userFields[4].Descriptor()
 	// user.DefaultAllowCnMysekai holds the default value on creation for the allow_cn_mysekai field.
 	user.DefaultAllowCnMysekai = userDescAllowCnMysekai.Default.(bool)
 	// userDescBanned is the schema descriptor for banned field.
@@ -175,4 +292,48 @@ func init() {
 	userDescID := userFields[1].Descriptor()
 	// user.IDValidator is a validator for the "id" field. It is called by the builders before save.
 	user.IDValidator = userDescID.Validators[0].(func(string) error)
+	webhookendpointFields := schema.WebhookEndpoint{}.Fields()
+	_ = webhookendpointFields
+	// webhookendpointDescCredential is the schema descriptor for credential field.
+	webhookendpointDescCredential := webhookendpointFields[1].Descriptor()
+	// webhookendpoint.CredentialValidator is a validator for the "credential" field. It is called by the builders before save.
+	webhookendpoint.CredentialValidator = webhookendpointDescCredential.Validators[0].(func(string) error)
+	// webhookendpointDescCallbackURL is the schema descriptor for callback_url field.
+	webhookendpointDescCallbackURL := webhookendpointFields[2].Descriptor()
+	// webhookendpoint.CallbackURLValidator is a validator for the "callback_url" field. It is called by the builders before save.
+	webhookendpoint.CallbackURLValidator = webhookendpointDescCallbackURL.Validators[0].(func(string) error)
+	// webhookendpointDescEnabled is the schema descriptor for enabled field.
+	webhookendpointDescEnabled := webhookendpointFields[4].Descriptor()
+	// webhookendpoint.DefaultEnabled holds the default value on creation for the enabled field.
+	webhookendpoint.DefaultEnabled = webhookendpointDescEnabled.Default.(bool)
+	// webhookendpointDescCreatedAt is the schema descriptor for created_at field.
+	webhookendpointDescCreatedAt := webhookendpointFields[5].Descriptor()
+	// webhookendpoint.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webhookendpoint.DefaultCreatedAt = webhookendpointDescCreatedAt.Default.(func() time.Time)
+	// webhookendpointDescID is the schema descriptor for id field.
+	webhookendpointDescID := webhookendpointFields[0].Descriptor()
+	// webhookendpoint.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	webhookendpoint.IDValidator = webhookendpointDescID.Validators[0].(func(string) error)
+	webhooksubscriptionFields := schema.WebhookSubscription{}.Fields()
+	_ = webhooksubscriptionFields
+	// webhooksubscriptionDescUserID is the schema descriptor for user_id field.
+	webhooksubscriptionDescUserID := webhooksubscriptionFields[0].Descriptor()
+	// webhooksubscription.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	webhooksubscription.UserIDValidator = webhooksubscriptionDescUserID.Validators[0].(func(string) error)
+	// webhooksubscriptionDescServer is the schema descriptor for server field.
+	webhooksubscriptionDescServer := webhooksubscriptionFields[1].Descriptor()
+	// webhooksubscription.ServerValidator is a validator for the "server" field. It is called by the builders before save.
+	webhooksubscription.ServerValidator = webhooksubscriptionDescServer.Validators[0].(func(string) error)
+	// webhooksubscriptionDescDataType is the schema descriptor for data_type field.
+	webhooksubscriptionDescDataType := webhooksubscriptionFields[2].Descriptor()
+	// webhooksubscription.DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
+	webhooksubscription.DataTypeValidator = webhooksubscriptionDescDataType.Validators[0].(func(string) error)
+	// webhooksubscriptionDescWebhookID is the schema descriptor for webhook_id field.
+	webhooksubscriptionDescWebhookID := webhooksubscriptionFields[3].Descriptor()
+	// webhooksubscription.WebhookIDValidator is a validator for the "webhook_id" field. It is called by the builders before save.
+	webhooksubscription.WebhookIDValidator = webhooksubscriptionDescWebhookID.Validators[0].(func(string) error)
+	// webhooksubscriptionDescCreatedAt is the schema descriptor for created_at field.
+	webhooksubscriptionDescCreatedAt := webhooksubscriptionFields[4].Descriptor()
+	// webhooksubscription.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webhooksubscription.DefaultCreatedAt = webhooksubscriptionDescCreatedAt.Default.(func() time.Time)
 }

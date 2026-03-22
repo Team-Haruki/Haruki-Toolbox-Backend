@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
 	"io"
+	"net"
 	"testing"
 )
 
@@ -107,15 +109,15 @@ func TestParseWebhookCallback(t *testing.T) {
 		},
 		{
 			name:       "lowercase bearer",
-			in:         map[string]any{"callback_url": "https://example.com", "bearer": "abc"},
-			wantURL:    "https://example.com",
+			in:         map[string]any{"callback_url": "https://93.184.216.34", "bearer": "abc"},
+			wantURL:    "https://93.184.216.34",
 			wantBearer: "abc",
 			wantOK:     true,
 		},
 		{
 			name:       "legacy Bearer field fallback",
-			in:         map[string]any{"callback_url": "https://example.com", "Bearer": "legacy"},
-			wantURL:    "https://example.com",
+			in:         map[string]any{"callback_url": "https://93.184.216.34", "Bearer": "legacy"},
+			wantURL:    "https://93.184.216.34",
 			wantBearer: "legacy",
 			wantOK:     true,
 		},
@@ -136,6 +138,43 @@ func TestParseWebhookCallback(t *testing.T) {
 				t.Fatalf("parseWebhookCallback bearer = %q, want %q", gotBearer, tc.wantBearer)
 			}
 		})
+	}
+}
+
+func TestValidateWebhookCallbackURLRejectsResolvedPrivateIP(t *testing.T) {
+	originalLookup := webhookIPAddrLookup
+	webhookIPAddrLookup = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+	}
+	defer func() {
+		webhookIPAddrLookup = originalLookup
+	}()
+
+	if _, ok := ValidateWebhookCallbackURL("https://example.com/callback"); ok {
+		t.Fatalf("expected callback URL resolving to loopback IP to be rejected")
+	}
+}
+
+func TestValidateWebhookCallbackURLAcceptsResolvedPublicIP(t *testing.T) {
+	originalLookup := webhookIPAddrLookup
+	webhookIPAddrLookup = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+	}
+	defer func() {
+		webhookIPAddrLookup = originalLookup
+	}()
+
+	if got, ok := ValidateWebhookCallbackURL("https://example.com/callback"); !ok || got != "https://example.com/callback" {
+		t.Fatalf("ValidateWebhookCallbackURL returned (%q, %v), want (%q, true)", got, ok, "https://example.com/callback")
+	}
+}
+
+func TestValidateWebhookCallbackURLPreservesPathPlaceholders(t *testing.T) {
+	t.Parallel()
+
+	rawURL := "https://93.184.216.34/webhook/{server}/{data_type}/{user_id}"
+	if got, ok := ValidateWebhookCallbackURL(rawURL); !ok || got != rawURL {
+		t.Fatalf("ValidateWebhookCallbackURL returned (%q, %v), want (%q, true)", got, ok, rawURL)
 	}
 }
 

@@ -9,9 +9,6 @@ import (
 // AuthorizeSocialPlatformInfo is the predicate function for authorizesocialplatforminfo builders.
 type AuthorizeSocialPlatformInfo func(*sql.Selector)
 
-// EmailInfo is the predicate function for emailinfo builders.
-type EmailInfo func(*sql.Selector)
-
 // FriendLink is the predicate function for friendlink builders.
 type FriendLink func(*sql.Selector)
 
@@ -27,20 +24,32 @@ type GroupList func(*sql.Selector)
 // IOSScriptCode is the predicate function for iosscriptcode builders.
 type IOSScriptCode func(*sql.Selector)
 
-// OAuthAuthorization is the predicate function for oauthauthorization builders.
-type OAuthAuthorization func(*sql.Selector)
+// RiskEvent is the predicate function for riskevent builders.
+type RiskEvent func(*sql.Selector)
 
-// OAuthClient is the predicate function for oauthclient builders.
-type OAuthClient func(*sql.Selector)
-
-// OAuthToken is the predicate function for oauthtoken builders.
-type OAuthToken func(*sql.Selector)
+// RiskRule is the predicate function for riskrule builders.
+type RiskRule func(*sql.Selector)
 
 // SocialPlatformInfo is the predicate function for socialplatforminfo builders.
 type SocialPlatformInfo func(*sql.Selector)
+
+// SystemLog is the predicate function for systemlog builders.
+type SystemLog func(*sql.Selector)
+
+// Ticket is the predicate function for ticket builders.
+type Ticket func(*sql.Selector)
+
+// TicketMessage is the predicate function for ticketmessage builders.
+type TicketMessage func(*sql.Selector)
 
 // UploadLog is the predicate function for uploadlog builders.
 type UploadLog func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
+
+// WebhookEndpoint is the predicate function for webhookendpoint builders.
+type WebhookEndpoint func(*sql.Selector)
+
+// WebhookSubscription is the predicate function for webhooksubscription builders.
+type WebhookSubscription func(*sql.Selector)

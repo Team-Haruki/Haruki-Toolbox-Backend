@@ -7,12 +7,15 @@ import (
 	"strings"
 )
 
-var HarukiIOSMitMHostnameMapping = map[harukiUtils.SupportedDataUploadServer][]string{
-	harukiUtils.SupportedDataUploadServerJP: {harukiConfig.Cfg.SekaiClient.JPServerAPIHost},
-	harukiUtils.SupportedDataUploadServerEN: {harukiConfig.Cfg.SekaiClient.ENServerAPIHost},
-	harukiUtils.SupportedDataUploadServerTW: {harukiConfig.Cfg.SekaiClient.TWServerAPIHost, harukiConfig.Cfg.SekaiClient.TWServerAPIHost2},
-	harukiUtils.SupportedDataUploadServerKR: {harukiConfig.Cfg.SekaiClient.KRServerAPIHost, harukiConfig.Cfg.SekaiClient.KRServerAPIHost2},
-	harukiUtils.SupportedDataUploadServerCN: {harukiConfig.Cfg.SekaiClient.CNServerAPIHost, harukiConfig.Cfg.SekaiClient.CNServerAPIHost2},
+func getHarukiIOSMitMHostnameMapping() map[harukiUtils.SupportedDataUploadServer][]string {
+	cfg := harukiConfig.Cfg.SekaiClient
+	return map[harukiUtils.SupportedDataUploadServer][]string{
+		harukiUtils.SupportedDataUploadServerJP: {cfg.JPServerAPIHost},
+		harukiUtils.SupportedDataUploadServerEN: {cfg.ENServerAPIHost},
+		harukiUtils.SupportedDataUploadServerTW: {cfg.TWServerAPIHost, cfg.TWServerAPIHost2},
+		harukiUtils.SupportedDataUploadServerKR: {cfg.KRServerAPIHost, cfg.KRServerAPIHost2},
+		harukiUtils.SupportedDataUploadServerCN: {cfg.CNServerAPIHost, cfg.CNServerAPIHost2},
+	}
 }
 
 type Rule struct {
@@ -29,11 +32,16 @@ type RuleSet struct {
 }
 
 func GetHostnames(regions []harukiUtils.SupportedDataUploadServer) []string {
+	mapping := getHarukiIOSMitMHostnameMapping()
 	var hostnames []string
 	seen := make(map[string]bool)
 	for _, region := range regions {
-		hosts := HarukiIOSMitMHostnameMapping[region]
+		hosts := mapping[region]
 		for _, h := range hosts {
+			h = strings.TrimSpace(h)
+			if h == "" {
+				continue
+			}
 			if !seen[h] {
 				seen[h] = true
 				hostnames = append(hostnames, h)
@@ -44,12 +52,17 @@ func GetHostnames(regions []harukiUtils.SupportedDataUploadServer) []string {
 }
 
 func GenerateRuleSet(req *ModuleRequest, endpoint string, endpointType string) *RuleSet {
+	mapping := getHarukiIOSMitMHostnameMapping()
 	rs := &RuleSet{
 		Hostnames: GetHostnames(req.Regions),
 	}
 	for _, region := range req.Regions {
-		hosts := HarukiIOSMitMHostnameMapping[region]
+		hosts := mapping[region]
 		for _, host := range hosts {
+			host = strings.TrimSpace(host)
+			if host == "" {
+				continue
+			}
 			for _, dt := range req.DataTypes {
 				rules := generateRulesForDataType(host, string(region), dt, req.Mode, req.UploadCode, endpoint, req.ChunkSizeMB, endpointType)
 				rs.RewriteRules = append(rs.RewriteRules, rules.RewriteRules...)

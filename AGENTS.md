@@ -1,0 +1,157 @@
+# AGENTS.md
+
+## 项目概览
+
+Haruki Toolbox Backend 是一个基于 Go 1.26 的后端项目，核心技术栈包括：
+
+- Fiber：HTTP 路由与中间件
+- Ent：PostgreSQL schema 与 ORM
+- MongoDB：游戏数据、Webhook 等文档型数据存储
+- Redis：缓存、验证码状态、限流状态、会话辅助状态
+- Ory Kratos：浏览器身份体系与自助认证流程
+- Ory Hydra：OAuth2 / OIDC
+
+默认本地配置文件为 `haruki-suite-configs.yaml`。
+
+## 当前仓库结构
+
+当前仓库以源码为中心，不再保留部署包快照、迁移临时目录或运行期产物。
+
+主源码目录：
+
+- `main.go`
+- `api/`
+- `config/`
+- `ent/`
+- `internal/`
+- `utils/`
+- `.github/copilot-instructions.md`
+- `docs/`（当前主要用于架构与 Ory 说明）
+
+请不要在没有明确需求的情况下重新引入以下类型的内容：
+
+- 部署快照目录
+- 一次性迁移脚本目录
+- 本地构建产物
+- 调试缓存目录
+- 临时导出数据目录
+
+## 分层规则
+
+- `main.go` 只负责加载配置并进入启动流程。
+- `api/` 只负责注册路由，不承载业务逻辑。
+- `internal/bootstrap/` 负责启动装配、依赖初始化、配置校验。
+- `internal/modules/...` 放业务处理逻辑。
+- `internal/platform/...` 放跨模块复用但偏业务的平台能力。
+- `utils/...` 放基础设施、通用 helper、外部系统适配器。
+
+## Ory 相关工作准则
+
+### 1. 身份体系默认前提
+
+- 浏览器身份提供者只支持 `Kratos`
+- OAuth2 提供者只支持 `Hydra`
+- 浏览器受保护 API 的标准部署模式是 `Oathkeeper -> Backend`
+
+### 2. 不要重新引入旧浏览器认证体系
+
+当 `SessionHandler.UsesManagedBrowserAuth()` 成立时，旧浏览器认证入口应保持禁用：
+
+- `/api/user/login`
+- `/api/user/register`
+- `/api/user/reset-password/send`
+- `/api/user/reset-password`
+- `/api/user/:toolbox_user_id/change-password`
+
+这些入口在当前架构里应返回 `410 Gone` 或转为 Ory 驱动的实现，不要再把它们改回本地密码体系。
+
+### 3. Auth Proxy 约束
+
+如果启用了 `user_system.auth_proxy_enabled`：
+
+- 必须保留 trusted header 校验
+- 必须保留 `user_system.auth_proxy_session_header`
+- 涉及管理员二次确认、敏感操作复用校验等逻辑时，必须使用“代理会话级标识”，不能只用 `user_id` 或 `kratos_identity_id`
+
+当前实现对 `auth_proxy_session_header` 有启动期强校验，不能省略。
+
+### 4. Hydra Subject 规则
+
+Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 user ID”的策略：
+
+- 新逻辑优先使用 `users.kratos_identity_id`
+- 兼容逻辑仍允许旧 `users.id`
+
+如果改动：
+
+- `CurrentHydraSubject`
+- `CurrentHydraSubjects`
+- `HydraSubjectsForUser`
+- OAuth2 introspection subject 映射
+
+必须保证兼容过渡期行为不被破坏。
+
+### 5. SessionHandler 是 Ory 集成核心
+
+与 Kratos / Auth Proxy / 会话验证相关的改动，优先集中在：
+
+- `utils/api/session_handler.go`
+
+避免在各业务模块里复制一套会话解析、Kratos whoami 查询、header 信任逻辑。
+
+## 数据与模型规则
+
+- Ent schema 源码在 `ent/schema/...`
+- 生成产物在 `utils/database/postgresql/...`
+- 如果修改了 `ent/schema/...`，同步运行：
+  - `go generate ./ent`
+- 不要手改生成文件，除非任务明确要求
+
+## 日志规则
+
+- 优先使用项目 logger helper
+- 全局 logger 应遵循当前启动时设置的 log level 和 writer
+- 避免在包级提前固化旧日志配置
+
+## 测试规则
+
+优先跑最小必要验证：
+
+- 触达包测试，例如：
+  - `go test ./internal/modules/userauth ./utils/api`
+- 涉及 Ory 会话、OAuth2、Auth Proxy 的跨模块改动时：
+  - `go test ./...`
+- 涉及 Ent schema 时：
+  - `go generate ./ent`
+
+Ory 相关改动尤其建议关注：
+
+- `utils/api/session_handler*_test.go`
+- `utils/oauth2/*_test.go`
+- 对应业务模块的 route / managed identity 测试
+
+## 文档规则
+
+如果改动以下内容，应同步更新文档：
+
+- Ory 架构
+- 浏览器认证行为
+- OAuth2 行为
+- 受保护 API 接入方式
+- Auth Proxy header 约定
+
+当前 Ory 总体说明文档为：
+
+- `docs/ory-suite-usage.zh-CN.md`
+
+## 提交前检查清单
+
+提交前至少确认：
+
+- 代码放在正确层级
+- 没有把 Ory 逻辑分散到重复 helper
+- 没有重新引入旧本地浏览器认证流程
+- `auth_proxy_session_header` 相关行为仍然成立
+- Hydra subject 兼容逻辑未被破坏
+- 测试已覆盖触达变更
+- 若改动了 Ory 行为，文档已同步

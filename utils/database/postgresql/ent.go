@@ -7,18 +7,21 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthclient"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
+	"haruki-suite/utils/database/postgresql/riskevent"
+	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/systemlog"
+	"haruki-suite/utils/database/postgresql/ticket"
+	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
+	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	"haruki-suite/utils/database/postgresql/webhooksubscription"
 	"reflect"
 	"sync"
 
@@ -86,18 +89,21 @@ func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			authorizesocialplatforminfo.Table: authorizesocialplatforminfo.ValidColumn,
-			emailinfo.Table:                   emailinfo.ValidColumn,
 			friendlink.Table:                  friendlink.ValidColumn,
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
 			group.Table:                       group.ValidColumn,
 			grouplist.Table:                   grouplist.ValidColumn,
 			iosscriptcode.Table:               iosscriptcode.ValidColumn,
-			oauthauthorization.Table:          oauthauthorization.ValidColumn,
-			oauthclient.Table:                 oauthclient.ValidColumn,
-			oauthtoken.Table:                  oauthtoken.ValidColumn,
+			riskevent.Table:                   riskevent.ValidColumn,
+			riskrule.Table:                    riskrule.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,
+			systemlog.Table:                   systemlog.ValidColumn,
+			ticket.Table:                      ticket.ValidColumn,
+			ticketmessage.Table:               ticketmessage.ValidColumn,
 			uploadlog.Table:                   uploadlog.ValidColumn,
 			user.Table:                        user.ValidColumn,
+			webhookendpoint.Table:             webhookendpoint.ValidColumn,
+			webhooksubscription.Table:         webhooksubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
