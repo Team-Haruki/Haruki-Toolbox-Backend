@@ -23,6 +23,8 @@ const (
 	FieldUploadMethod = "upload_method"
 	// FieldSuccess holds the string denoting the success field in the database.
 	FieldSuccess = "success"
+	// FieldErrorMessage holds the string denoting the error_message field in the database.
+	FieldErrorMessage = "error_message"
 	// FieldUploadTime holds the string denoting the upload_time field in the database.
 	FieldUploadTime = "upload_time"
 	// Table holds the table name of the uploadlog in the database.
@@ -38,6 +40,7 @@ var Columns = []string{
 	FieldDataType,
 	FieldUploadMethod,
 	FieldSuccess,
+	FieldErrorMessage,
 	FieldUploadTime,
 }
 
@@ -98,6 +101,11 @@ func ByUploadMethod(opts ...sql.OrderTermOption) OrderOption {
 // BySuccess orders the results by the success field.
 func BySuccess(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSuccess, opts...).ToFunc()
+}
+
+// ByErrorMessage orders the results by the error_message field.
+func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
 }
 
 // ByUploadTime orders the results by the upload_time field.

@@ -35,6 +35,33 @@ var (
 	errUploadCNMysekaiDenied   = errors.New("upload cn mysekai denied")
 )
 
+func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResult) *string {
+	if result != nil {
+		parts := make([]string, 0, 2)
+		if result.Status != nil {
+			parts = append(parts, fmt.Sprintf("status=%d", *result.Status))
+		}
+		if result.ErrorMessage != nil {
+			trimmed := strings.TrimSpace(*result.ErrorMessage)
+			if trimmed != "" {
+				parts = append(parts, trimmed)
+			}
+		}
+		if len(parts) > 0 {
+			message := strings.Join(parts, " ")
+			return &message
+		}
+	}
+	if err == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(err.Error())
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
 func getSharedHTTPClient() *harukiHttp.Client {
 	proxy := strings.TrimSpace(harukiConfig.Cfg.Proxy)
 
@@ -155,8 +182,21 @@ func HandleUpload(
 		Logger:         sharedDataHandlerLogger,
 		WebhookEnabled: helper.GetWebhookEnabled(),
 	}
+	toolboxUserID := ""
+	if userID != nil {
+		toolboxUserID = *userID
+	}
+	auditWritten := false
+	writeUploadAudit := func(success bool, errorMessage *string) {
+		if auditWritten {
+			return
+		}
+		dispatchUploadAuditLog(helper, handler.Logger, server, *gameUserID, toolboxUserID, dataType, uploadMethod, success, errorMessage)
+		auditWritten = true
+	}
 	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), uploadMethod, userID)
 	if err != nil {
+		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
 		return nil, err
 	}
 	if userBanned != nil && *userBanned {
@@ -164,13 +204,17 @@ func HandleUpload(
 		if banReason != nil && *banReason != "" {
 			banMessage = "account owner is banned: " + *banReason
 		}
-		return nil, fmt.Errorf("%w: %s", errUploadOwnerBanned, banMessage)
+		err = fmt.Errorf("%w: %s", errUploadOwnerBanned, banMessage)
+		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
+		return nil, err
 	}
 	if err := validateGameAccountBelonging(belongs); err != nil {
+		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
 		return nil, err
 	}
 	allowPublicAPI := determinePublicAPIPermission(exists, dataType, settings)
 	if err := validateCNMysekaiAccess(dataType, server, allowCNMySekai); err != nil {
+		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
 		return nil, err
 	}
 	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID, settings)
@@ -181,11 +225,7 @@ func HandleUpload(
 			err = vErr
 		}
 	}
-	toolboxUserID := ""
-	if userID != nil {
-		toolboxUserID = *userID
-	}
-	dispatchUploadAuditLog(helper, handler.Logger, server, *gameUserID, toolboxUserID, dataType, uploadMethod, success)
+	writeUploadAudit(success, buildUploadAuditErrorMessage(err, result))
 	if err != nil {
 		return result, err
 	}
@@ -282,15 +322,16 @@ func dispatchUploadAuditLog(
 	dataType harukiUtils.UploadDataType,
 	uploadMethod harukiUtils.UploadMethod,
 	success bool,
+	errorMessage *string,
 ) {
 	select {
 	case uploadAuditSemaphore <- struct{}{}:
 		go func() {
 			defer func() { <-uploadAuditSemaphore }()
-			persistUploadAuditLog(helper, logger, server, gameUserID, toolboxUserID, dataType, uploadMethod, success)
+			persistUploadAuditLog(helper, logger, server, gameUserID, toolboxUserID, dataType, uploadMethod, success, errorMessage)
 		}()
 	default:
-		persistUploadAuditLog(helper, logger, server, gameUserID, toolboxUserID, dataType, uploadMethod, success)
+		persistUploadAuditLog(helper, logger, server, gameUserID, toolboxUserID, dataType, uploadMethod, success, errorMessage)
 	}
 }
 
@@ -303,6 +344,7 @@ func persistUploadAuditLog(
 	dataType harukiUtils.UploadDataType,
 	uploadMethod harukiUtils.UploadMethod,
 	success bool,
+	errorMessage *string,
 ) {
 	if helper == nil || helper.DBManager == nil || helper.DBManager.DB == nil {
 		if logger != nil {
@@ -314,15 +356,18 @@ func persistUploadAuditLog(
 	logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, logErr := helper.DBManager.DB.UploadLog.Create().
+	create := helper.DBManager.DB.UploadLog.Create().
 		SetServer(string(server)).
 		SetGameUserID(strconv.FormatInt(gameUserID, 10)).
 		SetToolboxUserID(toolboxUserID).
 		SetDataType(string(dataType)).
 		SetUploadMethod(string(uploadMethod)).
 		SetSuccess(success).
-		SetUploadTime(time.Now()).
-		Save(logCtx)
+		SetUploadTime(time.Now())
+	if errorMessage != nil {
+		create.SetErrorMessage(*errorMessage)
+	}
+	_, logErr := create.Save(logCtx)
 	if logErr != nil {
 		if logger != nil {
 			logger.Warnf("Failed to create upload log: %v", logErr)
@@ -355,6 +400,12 @@ func persistUploadAuditLog(
 			"gameUserId":   strconv.FormatInt(gameUserID, 10),
 			"dataType":     string(dataType),
 			"uploadMethod": string(uploadMethod),
+			"errorMessage": func() string {
+				if errorMessage == nil {
+					return ""
+				}
+				return *errorMessage
+			}(),
 		},
 	})
 	if systemLogErr != nil && logger != nil {

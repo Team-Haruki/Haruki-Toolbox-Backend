@@ -5,11 +5,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+var envPlaceholderPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
 
 type RestoreSuiteConfig struct {
 	EnableRegions  []string          `yaml:"enable_regions"`
@@ -228,7 +231,7 @@ func Load(configPath string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("open config file %q: %w", path, err)
 	}
-	expandedContent := os.ExpandEnv(string(content))
+	expandedContent := expandEnvPreservingUnknown(string(content))
 	cfg := Config{
 		Backend: BackendConfig{
 			AutoMigrate:     false,
@@ -312,6 +315,18 @@ func Load(configPath string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func expandEnvPreservingUnknown(content string) string {
+	return envPlaceholderPattern.ReplaceAllStringFunc(content, func(token string) string {
+		key := strings.TrimPrefix(token, "$")
+		key = strings.TrimPrefix(key, "{")
+		key = strings.TrimSuffix(key, "}")
+		if value, ok := os.LookupEnv(key); ok {
+			return value
+		}
+		return token
+	})
 }
 
 func applyEnvOverrides(cfg *Config) error {

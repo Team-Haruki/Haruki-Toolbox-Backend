@@ -70,6 +70,7 @@ func TestBuildSystemLogItems(t *testing.T) {
 
 func TestBuildUploadLogItems(t *testing.T) {
 	uploadTime := time.Date(2026, 3, 9, 10, 0, 0, 0, time.FixedZone("CST", 8*3600))
+	errorMessage := "upload cn mysekai denied"
 	rows := []*postgresql.UploadLog{
 		{
 			ID:            10,
@@ -78,7 +79,8 @@ func TestBuildUploadLogItems(t *testing.T) {
 			ToolboxUserID: "1001",
 			DataType:      "suite",
 			UploadMethod:  "manual",
-			Success:       true,
+			Success:       false,
+			ErrorMessage:  &errorMessage,
 			UploadTime:    uploadTime,
 		},
 	}
@@ -88,8 +90,11 @@ func TestBuildUploadLogItems(t *testing.T) {
 		t.Fatalf("len(items) = %d, want 1", len(items))
 	}
 	item := items[0]
-	if item.ID != 10 || item.Server != "jp" || item.GameUserID != "2001" || item.ToolboxUserID != "1001" || item.DataType != "suite" || item.UploadMethod != "manual" || !item.Success {
+	if item.ID != 10 || item.Server != "jp" || item.GameUserID != "2001" || item.ToolboxUserID != "1001" || item.DataType != "suite" || item.UploadMethod != "manual" || item.Success {
 		t.Fatalf("item fields mismatch: %+v", item)
+	}
+	if item.ErrorMessage == nil || *item.ErrorMessage != errorMessage {
+		t.Fatalf("item.ErrorMessage = %v, want %q", item.ErrorMessage, errorMessage)
 	}
 	if !item.UploadTime.Equal(uploadTime.UTC()) {
 		t.Fatalf("item.UploadTime = %s, want %s", item.UploadTime, uploadTime.UTC())

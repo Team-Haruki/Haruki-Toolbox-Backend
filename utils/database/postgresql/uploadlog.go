@@ -29,6 +29,8 @@ type UploadLog struct {
 	UploadMethod string `json:"upload_method,omitempty"`
 	// Success holds the value of the "success" field.
 	Success bool `json:"success,omitempty"`
+	// ErrorMessage holds the value of the "error_message" field.
+	ErrorMessage *string `json:"error_message,omitempty"`
 	// UploadTime holds the value of the "upload_time" field.
 	UploadTime   time.Time `json:"upload_time,omitempty"`
 	selectValues sql.SelectValues
@@ -43,7 +45,7 @@ func (*UploadLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case uploadlog.FieldID:
 			values[i] = new(sql.NullInt64)
-		case uploadlog.FieldServer, uploadlog.FieldGameUserID, uploadlog.FieldToolboxUserID, uploadlog.FieldDataType, uploadlog.FieldUploadMethod:
+		case uploadlog.FieldServer, uploadlog.FieldGameUserID, uploadlog.FieldToolboxUserID, uploadlog.FieldDataType, uploadlog.FieldUploadMethod, uploadlog.FieldErrorMessage:
 			values[i] = new(sql.NullString)
 		case uploadlog.FieldUploadTime:
 			values[i] = new(sql.NullTime)
@@ -104,6 +106,13 @@ func (_m *UploadLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Success = value.Bool
 			}
+		case uploadlog.FieldErrorMessage:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error_message", values[i])
+			} else if value.Valid {
+				_m.ErrorMessage = new(string)
+				*_m.ErrorMessage = value.String
+			}
 		case uploadlog.FieldUploadTime:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field upload_time", values[i])
@@ -163,6 +172,11 @@ func (_m *UploadLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("success=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Success))
+	builder.WriteString(", ")
+	if v := _m.ErrorMessage; v != nil {
+		builder.WriteString("error_message=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("upload_time=")
 	builder.WriteString(_m.UploadTime.Format(time.ANSIC))
