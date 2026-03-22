@@ -1,0 +1,337 @@
+name: ${COMPOSE_PROJECT_NAME:-haruki-toolbox}
+
+services:
+  mihomo:
+    image: metacubex/mihomo
+    container_name: haruki-mihomo
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    ports:
+      - "7890:7890"
+      - "9090:9090"
+    volumes:
+      - ${STACK_HOST_ROOT}/mihomo/${MIHOMO_PROFILE_NAME}.yaml:/root/.config/mihomo/config.yaml
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:9090" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    depends_on:
+      mihomo:
+        condition: service_healthy
+    networks:
+      - haruki-net
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+      KRATOS_DB_USER: ${KRATOS_DB_USER}
+      KRATOS_DB_PASSWORD: ${KRATOS_DB_PASSWORD}
+      HYDRA_DB_USER: ${HYDRA_DB_USER}
+      HYDRA_DB_PASSWORD: ${HYDRA_DB_PASSWORD}
+      HARUKI_DB_USER: ${HARUKI_DB_USER}
+      HARUKI_DB_PASSWORD: ${HARUKI_DB_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/18/docker
+      - ${STACK_HOST_ROOT}/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    depends_on:
+      mihomo:
+        condition: service_healthy
+    networks:
+      - haruki-net
+    command: redis-server --save 60 1 --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - ${REDIS_DATA_PATH}:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    depends_on:
+      mihomo:
+        condition: service_healthy
+    networks:
+      - haruki-net
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+    volumes:
+      - ${MONGO_DATA_PATH}:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--username", "${MONGO_ROOT_USERNAME}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kratos-migrate:
+    image: oryd/kratos:${ORY_VERSION}
+    networks:
+      - haruki-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mihomo:
+        condition: service_healthy
+    command: migrate sql -e --yes
+    environment:
+      DSN: postgres://${KRATOS_DB_USER}:${KRATOS_DB_PASSWORD}@postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ${STACK_HOST_ROOT}/kratos/kratos.yml:/etc/config/kratos/kratos.yml:ro
+      - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
+      - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
+
+  kratos:
+    image: oryd/kratos:${ORY_VERSION}
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+      mihomo:
+        condition: service_healthy
+    command: serve -c /etc/config/kratos/kratos.yml all --watch-courier
+    ports:
+      - "${KRATOS_PUBLIC_PORT}:4433"
+      - "${KRATOS_ADMIN_PORT}:4434"
+    environment:
+      DSN: postgres://${KRATOS_DB_USER}:${KRATOS_DB_PASSWORD}@postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+      LOG_LEVEL: info
+      SERVE_PUBLIC_BASE_URL: ${KRATOS_PUBLIC_BASE_URL}/
+      SERVE_ADMIN_BASE_URL: ${KRATOS_ADMIN_BASE_URL}/
+      SERVE_PUBLIC_CORS_ENABLED: "true"
+      SERVE_PUBLIC_CORS_ALLOWED_ORIGINS_0: ${FRONTEND_PUBLIC_URL}
+      SELFSERVICE_DEFAULT_BROWSER_RETURN_URL: ${FRONTEND_PUBLIC_URL}/
+      SELFSERVICE_ALLOWED_RETURN_URLS_0: ${FRONTEND_PUBLIC_URL}
+      SELFSERVICE_ALLOWED_RETURN_URLS_1: ${BACKEND_PUBLIC_BASE_URL}
+      SELFSERVICE_FLOWS_ERROR_UI_URL: ${FRONTEND_PUBLIC_URL}/user/error
+      SELFSERVICE_FLOWS_SETTINGS_UI_URL: ${FRONTEND_PUBLIC_URL}/user/settings
+      SELFSERVICE_FLOWS_RECOVERY_ENABLED: "true"
+      SELFSERVICE_FLOWS_RECOVERY_UI_URL: ${FRONTEND_PUBLIC_URL}/user/recovery
+      SELFSERVICE_FLOWS_RECOVERY_USE: code
+      SELFSERVICE_FLOWS_VERIFICATION_ENABLED: "true"
+      SELFSERVICE_FLOWS_VERIFICATION_UI_URL: ${FRONTEND_PUBLIC_URL}/user/verification
+      SELFSERVICE_FLOWS_VERIFICATION_USE: code
+      SELFSERVICE_METHODS_CODE_MAX_SUBMISSIONS: ${KRATOS_CODE_MAX_SUBMISSIONS:-3}
+      SELFSERVICE_FLOWS_VERIFICATION_AFTER_DEFAULT_BROWSER_RETURN_URL: ${FRONTEND_PUBLIC_URL}/
+      SELFSERVICE_FLOWS_LOGOUT_AFTER_DEFAULT_BROWSER_RETURN_URL: ${FRONTEND_PUBLIC_URL}/user/login
+      SELFSERVICE_FLOWS_LOGIN_UI_URL: ${FRONTEND_PUBLIC_URL}/user/login
+      SELFSERVICE_FLOWS_REGISTRATION_UI_URL: ${FRONTEND_PUBLIC_URL}/user/register
+      SELFSERVICE_METHODS_PASSKEY_ENABLED: "true"
+      SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_DISPLAY_NAME: ${KRATOS_PASSKEY_RP_DISPLAY_NAME:-Haruki Toolbox}
+      SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ID: ${KRATOS_PASSKEY_RP_ID:-toolbox.example.com}
+      SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ORIGINS_0: ${KRATOS_PASSKEY_RP_ORIGIN:-https://toolbox.example.com}
+      SELFSERVICE_METHODS_OIDC_ENABLED: "true"
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID: ${KRATOS_OIDC_GOOGLE_CLIENT_ID:-change-me-google-client-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_SECRET: ${KRATOS_OIDC_GOOGLE_CLIENT_SECRET:-change-me-google-client-secret}
+      SELFSERVICE_METHODS_TOTP_ENABLED: "true"
+      SELFSERVICE_METHODS_TOTP_CONFIG_ISSUER: ${KRATOS_MFA_TOTP_ISSUER:-Haruki Toolbox}
+      SELFSERVICE_METHODS_LOOKUP_SECRET_ENABLED: "true"
+      SELFSERVICE_METHODS_WEBAUTHN_ENABLED: "true"
+      SELFSERVICE_METHODS_WEBAUTHN_CONFIG_PASSWORDLESS: "false"
+      SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_DISPLAY_NAME: ${KRATOS_PASSKEY_RP_DISPLAY_NAME:-Haruki Toolbox}
+      SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ID: ${KRATOS_PASSKEY_RP_ID:-toolbox.example.com}
+      SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ORIGINS_0: ${KRATOS_PASSKEY_RP_ORIGIN:-https://toolbox.example.com}
+      SELFSERVICE_FLOWS_SETTINGS_REQUIRED_AAL: highest_available
+      SESSION_WHOAMI_REQUIRED_AAL: aal1
+      SECRETS_COOKIE_0: ${KRATOS_COOKIE_SECRET}
+      SECRETS_CIPHER_0: ${KRATOS_CIPHER_SECRET}
+      COURIER_SMTP_CONNECTION_URI: ${SMTP_CONNECTION_URI}
+      COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-no-reply@example.com}
+      COURIER_SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Haruki Toolbox}"
+      HTTP_PROXY: "http://haruki-mihomo:7890"
+      HTTPS_PROXY: "http://haruki-mihomo:7890"
+      NO_PROXY: "localhost,127.0.0.1,0.0.0.0,192.168.0.0/16,172.16.0.0/12,10.0.0.0/8,.sock,::1"
+    volumes:
+      - ${STACK_HOST_ROOT}/kratos/kratos.yml:/etc/config/kratos/kratos.yml:ro
+      - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
+      - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
+
+  hydra-migrate:
+    image: oryd/hydra:${ORY_VERSION}
+    networks:
+      - haruki-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mihomo:
+        condition: service_healthy
+    command: migrate sql up -e --yes -c /etc/config/hydra/hydra.yml
+    environment:
+      DSN: postgres://${HYDRA_DB_USER}:${HYDRA_DB_PASSWORD}@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ${STACK_HOST_ROOT}/hydra/hydra.yml:/etc/config/hydra/hydra.yml:ro
+
+  hydra:
+    image: oryd/hydra:${ORY_VERSION}
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+      mihomo:
+        condition: service_healthy
+    command: serve -c /etc/config/hydra/hydra.yml all
+    environment:
+      DSN: postgres://${HYDRA_DB_USER}:${HYDRA_DB_PASSWORD}@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      LOG_LEVEL: info
+      URLS_SELF_ISSUER: ${HYDRA_PUBLIC_BASE_URL}
+      URLS_LOGIN: ${FRONTEND_PUBLIC_URL}/oauth2/login
+      URLS_CONSENT: ${FRONTEND_PUBLIC_URL}/oauth2/consent
+      URLS_LOGOUT: ${FRONTEND_PUBLIC_URL}/logout
+      SECRETS_SYSTEM_0: ${HYDRA_SYSTEM_SECRET}
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: ${HYDRA_SUBJECT_SALT}
+    volumes:
+      - ${STACK_HOST_ROOT}/hydra/hydra.yml:/etc/config/hydra/hydra.yml:ro
+
+  backend:
+    image: ${BACKEND_IMAGE}
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      kratos:
+        condition: service_started
+      hydra:
+        condition: service_started
+      mihomo:
+        condition: service_healthy
+    environment:
+      HARUKI_CONFIG_PATH: /app/config/haruki-suite-configs.yaml
+      AUTH_PROVIDER: kratos
+      AUTH_PROXY_ENABLED: "true"
+      AUTH_PROXY_TRUSTED_VALUE: ${OATHKEEPER_SHARED_SECRET}
+      AUTH_PROXY_SESSION_HEADER: X-Auth-Proxy-Session-Id
+      HARUKI_DB_TYPE: postgres
+      HARUKI_DB_URL: postgresql://${HARUKI_DB_USER}:${HARUKI_DB_PASSWORD}@postgres:5432/toolbox?sslmode=disable
+      MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+      MONGODB_DB: ${MONGODB_DB}
+      MONGODB_SUITE_COLLECTION: ${MONGODB_SUITE_COLLECTION}
+      MONGODB_MYSEKAI_COLLECTION: ${MONGODB_MYSEKAI_COLLECTION}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      KRATOS_PUBLIC_URL: http://kratos:4433
+      KRATOS_ADMIN_URL: http://kratos:4434
+      HYDRA_PUBLIC_URL: http://hydra:4444
+      HYDRA_BROWSER_URL: ${BACKEND_PUBLIC_BASE_URL}
+      HYDRA_ADMIN_URL: http://hydra:4445
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: "16666"
+      BACKEND_AUTO_MIGRATE: "${BACKEND_AUTO_MIGRATE:-true}"
+      BACKEND_ENABLE_TRUST_PROXY: "true"
+      BACKEND_PROXY_HEADER: X-Forwarded-For
+      BACKEND_URL: ${BACKEND_PUBLIC_BASE_URL}
+      BACKEND_CDN_URL: ${ASSET_PUBLIC_BASE_URL}
+      AVATAR_SAVE_DIR: /app/avatars
+      AVATAR_URL: ${ASSET_PUBLIC_BASE_URL}
+      FRONTEND_URL: ${FRONTEND_PUBLIC_URL}
+      SMTP_CONNECTION_URI: ${SMTP_CONNECTION_URI}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-no-reply@example.com}
+      SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Haruki Toolbox}"
+      SOCIAL_PLATFORM_VERIFY_TOKEN: ${SOCIAL_PLATFORM_VERIFY_TOKEN}
+      PRIVATE_API_SECRET: ${PRIVATE_API_SECRET}
+      PRIVATE_API_USER_AGENT: ${PRIVATE_API_USER_AGENT}
+      WEBHOOK_JWT_SECRET: ${WEBHOOK_JWT_SECRET}
+      SEKAI_API_ENDPOINT: ${SEKAI_API_ENDPOINT}
+      SEKAI_API_TOKEN: ${SEKAI_API_TOKEN}
+      HARUKI_PROXY_USER_AGENT: ${HARUKI_PROXY_USER_AGENT}
+      HARUKI_PROXY_VERSION: ${HARUKI_PROXY_VERSION}
+      HARUKI_PROXY_SECRET: ${HARUKI_PROXY_SECRET}
+      HARUKI_PROXY_UNPACK_KEY: ${HARUKI_PROXY_UNPACK_KEY}
+      BACKEND_LOG_LEVEL: ${BACKEND_LOG_LEVEL}
+      BACKEND_MAIN_LOG_FILE: ${BACKEND_MAIN_LOG_FILE:-/app/logs/main.log}
+      BACKEND_ACCESS_LOG_PATH: ${BACKEND_ACCESS_LOG_PATH:-/app/logs/access.log}
+      WEBHOOK_ENABLED: ${WEBHOOK_ENABLED}
+    ports:
+      - "${BACKEND_PORT}:16666"
+    volumes:
+      - ${STACK_HOST_ROOT}/toolbox-backend/haruki-suite-configs.yaml:/app/config/haruki-suite-configs.yaml:ro
+      - ${STACK_HOST_ROOT}/toolbox-backend/data:/app/data:ro
+      - ${AVATAR_STORAGE_PATH}:/app/avatars
+      - ${STACK_HOST_ROOT}/toolbox-backend/logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:16666/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  oathkeeper:
+    image: oryd/oathkeeper:${ORY_VERSION}
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    depends_on:
+      kratos:
+        condition: service_started
+      backend:
+        condition: service_healthy
+      mihomo:
+        condition: service_healthy
+    command: serve proxy -c /etc/config/oathkeeper/oathkeeper.yml
+    ports:
+      - "${OATHKEEPER_PROXY_PORT}:4455"
+    environment:
+      LOG_LEVEL: info
+      SERVE_PROXY_CORS_ALLOWED_ORIGINS_0: ${FRONTEND_PUBLIC_URL}
+      MUTATORS_HEADER_CONFIG_HEADERS_X_AUTH_PROXY_SECRET: ${OATHKEEPER_SHARED_SECRET}
+    volumes:
+      - ${STACK_HOST_ROOT}/oathkeeper/oathkeeper.yml:/etc/config/oathkeeper/oathkeeper.yml:ro
+      - ${STACK_HOST_ROOT}/oathkeeper/access-rules.yml:/etc/config/oathkeeper/access-rules.yml:ro
+
+  kratos-admin:
+    image: dhiagharsallaoui/kratos-admin-ui:latest
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    depends_on:
+      kratos:
+        condition: service_started
+      hydra:
+        condition: service_started
+      mihomo:
+        condition: service_healthy
+    ports:
+      - "${KRATOS_ADMIN_UI_PORT}:3000"
+    environment:
+      KRATOS_ADMIN_URL: http://kratos:4434
+      KRATOS_PUBLIC_URL: http://kratos:4433
+      HYDRA_ADMIN_URL: http://hydra:4445
+      HYDRA_PUBLIC_URL: http://hydra:4444
+
+networks:
+  haruki-net:
+    driver: bridge
+

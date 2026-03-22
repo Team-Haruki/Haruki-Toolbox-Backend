@@ -169,7 +169,7 @@
 
 - id: haruki-protected-manual-upload
   match:
-    url: <http|https>://<[^/]+>/<api/manual/.*|api/user/.*>
+    url: <http|https>://<[^/]+>/api/manual/<.*>
     methods: [POST]
   upstream:
     url: http://backend:16666
