@@ -10,6 +10,7 @@ import (
 	adminSyslogModule "haruki-suite/internal/modules/adminsyslog"
 	adminTicketsModule "haruki-suite/internal/modules/admintickets"
 	adminUsersModule "haruki-suite/internal/modules/adminusers"
+	adminWebhookModule "haruki-suite/internal/modules/adminwebhook"
 	iosModule "haruki-suite/internal/modules/ios"
 	miscModule "haruki-suite/internal/modules/misc"
 	oauth2Module "haruki-suite/internal/modules/oauth2"
@@ -52,6 +53,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	adminSyslogModule.RegisterAdminSystemLogRoutes(apiHelper)
 	adminStatsModule.RegisterAdminStatisticsRoutes(apiHelper)
 	adminTicketsModule.RegisterAdminTicketRoutes(apiHelper)
+	adminWebhookModule.RegisterAdminWebhookRoutes(apiHelper)
 }
 
 func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

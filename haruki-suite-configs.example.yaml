@@ -37,8 +37,6 @@ mongodb:
   db: "collections"
   suite: "suite"
   mysekai: "mysekai"
-  webhook: "webhook"
-  webhook_user: "webhook_user"
   private_api_secret: "Bearer "
   private_api_user_agent: ""
 
@@ -49,6 +47,7 @@ redis:
 
 webhook:
   jwt_secret: ""
+  enabled: true
 
 oauth2:
   provider: "hydra" # hydra only

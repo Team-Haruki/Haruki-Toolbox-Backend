@@ -326,27 +326,6 @@ func (s *SessionHandler) UsesKratosProvider() bool {
 	return provider == sessionProviderKratos && s.hasKratosProviderConfigured()
 }
 
-func (s *SessionHandler) resolveUserIDByKratosIdentityID(ctx context.Context, identityID string) (string, error) {
-	if s.DBClient == nil {
-		return "", fmt.Errorf("%w: database client is nil", errUserStoreUnavailable)
-	}
-	identityID = strings.TrimSpace(identityID)
-	if identityID == "" {
-		return "", fmt.Errorf("%w: empty identity id", errKratosInvalidInput)
-	}
-	matchedUser, err := s.DBClient.User.Query().
-		Where(userSchema.KratosIdentityIDEQ(identityID)).
-		Select(userSchema.FieldID).
-		Only(ctx)
-	if err != nil {
-		if postgresql.IsNotFound(err) {
-			return "", fmt.Errorf("%w: identity is not linked", errKratosIdentityUnmapped)
-		}
-		return "", fmt.Errorf("%w: query kratos identity map: %v", errUserStoreUnavailable, err)
-	}
-	return strings.TrimSpace(matchedUser.ID), nil
-}
-
 func parseAuthProxyBooleanHeader(raw string) *bool {
 	value := strings.TrimSpace(raw)
 	if value == "" {
@@ -1043,14 +1022,6 @@ func respondSessionVerifyError(c fiber.Ctx, err error) error {
 	default:
 		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid token", nil)
 	}
-}
-
-func (s *SessionHandler) verifyKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (string, error) {
-	resolved, err := s.resolveKratosSession(ctx, sessionToken, cookieHeader)
-	if err != nil {
-		return "", err
-	}
-	return resolved.UserID, nil
 }
 
 func (s *SessionHandler) resolveKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (*resolvedKratosSession, error) {

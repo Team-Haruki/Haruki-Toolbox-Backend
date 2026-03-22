@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"haruki-suite/utils"
+	dbManager "haruki-suite/utils/database/postgresql"
 	harukiVersion "haruki-suite/version"
 	"net"
 	urlpkg "net/url"
@@ -38,8 +39,9 @@ func isPrivateOrLocalIP(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
 }
 
-func validateWebhookCallbackURL(rawURL string) (string, bool) {
-	parsed, err := urlpkg.Parse(strings.TrimSpace(rawURL))
+func ValidateWebhookCallbackURL(rawURL string) (string, bool) {
+	trimmedURL := strings.TrimSpace(rawURL)
+	parsed, err := urlpkg.Parse(trimmedURL)
 	if err != nil {
 		return "", false
 	}
@@ -66,7 +68,7 @@ func validateWebhookCallbackURL(rawURL string) (string, bool) {
 			}
 		}
 	}
-	return parsed.String(), true
+	return trimmedURL, true
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
@@ -77,7 +79,7 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	if bearer != "" {
 		headers["Authorization"] = "Bearer " + bearer
 	}
-	if validatedURL, ok := validateWebhookCallbackURL(url); ok {
+	if validatedURL, ok := ValidateWebhookCallbackURL(url); ok {
 		url = validatedURL
 	} else {
 		h.Logger.Warnf("Skipped webhook callback after URL validation failed: %s", url)
@@ -95,26 +97,40 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	}
 }
 
-func parseWebhookCallback(cb map[string]any) (string, string, bool) {
-	rawURL, ok := cb["callback_url"]
-	if !ok {
-		return "", "", false
-	}
-	url, ok := rawURL.(string)
-	if !ok || strings.TrimSpace(url) == "" {
-		return "", "", false
-	}
-	validatedURL, ok := validateWebhookCallbackURL(url)
-	if !ok {
-		return "", "", false
-	}
-	bearer, _ := cb["bearer"].(string)
-	if bearer == "" {
-		if legacy, ok := cb["Bearer"].(string); ok {
-			bearer = legacy
+func parseWebhookCallback(cb any) (string, string, bool) {
+	switch typed := cb.(type) {
+	case map[string]any:
+		rawURL, ok := typed["callback_url"]
+		if !ok {
+			return "", "", false
 		}
+		url, ok := rawURL.(string)
+		if !ok || strings.TrimSpace(url) == "" {
+			return "", "", false
+		}
+		validatedURL, ok := ValidateWebhookCallbackURL(url)
+		if !ok {
+			return "", "", false
+		}
+		bearer, _ := typed["bearer"].(string)
+		if bearer == "" {
+			if legacy, ok := typed["Bearer"].(string); ok {
+				bearer = legacy
+			}
+		}
+		return validatedURL, bearer, true
+	case dbManager.WebhookCallback:
+		if strings.TrimSpace(typed.CallbackURL) == "" {
+			return "", "", false
+		}
+		validatedURL, ok := ValidateWebhookCallbackURL(typed.CallbackURL)
+		if !ok {
+			return "", "", false
+		}
+		return validatedURL, strings.TrimSpace(typed.Bearer), true
+	default:
+		return "", "", false
 	}
-	return validatedURL, bearer, true
 }
 
 func (h *DataHandler) CallWebhook(
@@ -123,7 +139,10 @@ func (h *DataHandler) CallWebhook(
 	server utils.SupportedDataUploadServer,
 	dataType utils.UploadDataType,
 ) {
-	callbacks, err := h.DBManager.Mongo.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
+	if h == nil || !h.WebhookEnabled || h.DBManager == nil || h.DBManager.DB == nil {
+		return
+	}
+	callbacks, err := h.DBManager.DB.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
 	if err != nil || len(callbacks) == 0 {
 		return
 	}

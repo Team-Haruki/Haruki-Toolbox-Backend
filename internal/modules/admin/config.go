@@ -26,6 +26,7 @@ type runtimeConfigPayload struct {
 	HarukiProxySecret    *string     `json:"harukiProxySecret,omitempty"`
 	HarukiProxyUnpackKey *string     `json:"harukiProxyUnpackKey,omitempty"`
 	WebhookJWTSecret     *string     `json:"webhookJwtSecret,omitempty"`
+	WebhookEnabled       *bool       `json:"webhookEnabled,omitempty"`
 }
 
 type runtimeConfigResponse struct {
@@ -38,6 +39,7 @@ type runtimeConfigResponse struct {
 	HarukiProxySecretConfigured    bool   `json:"harukiProxySecretConfigured"`
 	HarukiProxyUnpackKeyConfigured bool   `json:"harukiProxyUnpackKeyConfigured"`
 	WebhookJWTSecretConfigured     bool   `json:"webhookJwtSecretConfigured"`
+	WebhookEnabled                 bool   `json:"webhookEnabled"`
 }
 
 func sanitizePublicAPIAllowedKeys(keys []string) ([]string, error) {
@@ -86,6 +88,7 @@ func buildRuntimeConfigResponse(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		HarukiProxySecretConfigured:    strings.TrimSpace(harukiProxySecret) != "",
 		HarukiProxyUnpackKeyConfigured: strings.TrimSpace(harukiProxyUnpackKey) != "",
 		WebhookJWTSecretConfigured:     strings.TrimSpace(webhookJWTSecret) != "",
+		WebhookEnabled:                 apiHelper.GetWebhookEnabled(),
 	}
 }
 
@@ -207,6 +210,9 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		if webhookJWTSecret != nil {
 			update.WebhookJWTSecret = webhookJWTSecret
 		}
+		if payload.WebhookEnabled != nil {
+			update.WebhookEnabled = payload.WebhookEnabled
+		}
 
 		if update.PublicAPIAllowedKeys != nil {
 			if err := clearPublicAccessCache(apiHelper, c); err != nil {
@@ -224,6 +230,7 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			"updatedPublicAPIKeys": payload.PublicAPIAllowedKeys != nil,
 			"updatedPrivateToken":  privateAPIToken != nil,
 			"updatedWebhookSecret": webhookJWTSecret != nil,
+			"updatedWebhookFlag":   payload.WebhookEnabled != nil,
 		})
 		return harukiAPIHelper.SuccessResponse(c, "runtime config updated", &resp)
 	}

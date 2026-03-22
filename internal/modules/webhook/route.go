@@ -3,7 +3,6 @@ package webhook
 import (
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
-	harukiMongo "haruki-suite/utils/database/mongo"
 	harukiLogger "haruki-suite/utils/logger"
 	"strings"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, manager *harukiMongo.MongoDBManager) fiber.Handler {
+func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if apiHelper == nil {
 			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
@@ -22,9 +21,9 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
 		}
 		ctx := c.Context()
-		jwtToken := c.Get("X-Haruki-Suite-Webhook-Token")
+		jwtToken := c.Get(TokenHeaderName)
 		if jwtToken == "" {
-			return harukiAPIHelper.ErrorUnauthorized(c, "Missing X-Haruki-Suite-Webhook-Token header")
+			return harukiAPIHelper.ErrorUnauthorized(c, "Missing "+TokenHeaderName+" header")
 		}
 		token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (any, error) {
 			if t.Method != jwt.SigningMethodHS256 {
@@ -44,11 +43,11 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		if !okID || !okCred {
 			return harukiAPIHelper.ErrorForbidden(c, "Invalid token payload")
 		}
-		if manager == nil {
-			harukiLogger.Errorf("Webhook manager is not initialized")
+		if apiHelper.DBManager == nil || apiHelper.DBManager.DB == nil {
+			harukiLogger.Errorf("Webhook PostgreSQL client is not initialized")
 			return harukiAPIHelper.ErrorInternal(c, "Database error")
 		}
-		user, err := manager.GetWebhookUser(ctx, _id, credential)
+		user, err := apiHelper.DBManager.DB.GetWebhookUser(ctx, _id, credential)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get webhook user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "Database error")
@@ -68,7 +67,7 @@ func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if !ok {
 			return nil
 		}
-		users, err := apiHelper.DBManager.Mongo.GetWebhookSubscribers(ctx, webhookID)
+		users, err := apiHelper.DBManager.DB.GetWebhookSubscribers(ctx, webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get subscribers for webhook %s: %v", webhookID, err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to get subscribers")
@@ -95,7 +94,7 @@ func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
-		err = apiHelper.DBManager.Mongo.AddWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
+		err = apiHelper.DBManager.DB.AddWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to add webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to register webhook push user")
@@ -122,7 +121,7 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
-		err = apiHelper.DBManager.Mongo.RemoveWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
+		err = apiHelper.DBManager.DB.RemoveWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to remove webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to unregister webhook push user")
@@ -132,7 +131,7 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 }
 
 func RegisterWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper, apiHelper.DBManager.Mongo))
+	api := apiHelper.Router.Group("/webhook", ValidateWebhookUser(apiHelper))
 
 	api.Get("/subscribers", handleGetSubscribers(apiHelper))
 	api.RouteChain("/:server/:data_type/:user_id").

@@ -17,10 +17,10 @@ func TestPasswordLengthPolicies(t *testing.T) {
 
 	t.Run("too long by bytes", func(t *testing.T) {
 		t.Parallel()
-		if !isPasswordTooLong(string(make([]byte, passwordMaxLengthBytes+1))) {
+		if !isPasswordTooLong(string(make([]byte, PasswordMaxLengthBytes+1))) {
 			t.Fatalf("expected password to be too long")
 		}
-		if isPasswordTooLong(string(make([]byte, passwordMaxLengthBytes))) {
+		if isPasswordTooLong(string(make([]byte, PasswordMaxLengthBytes))) {
 			t.Fatalf("expected password with max byte length to be allowed")
 		}
 	})

@@ -153,6 +153,7 @@ func HandleUpload(
 		SekaiAPIClient: helper.SekaiAPIClient,
 		HttpClient:     getSharedHTTPClient(),
 		Logger:         sharedDataHandlerLogger,
+		WebhookEnabled: helper.GetWebhookEnabled(),
 	}
 	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), uploadMethod, userID)
 	if err != nil {

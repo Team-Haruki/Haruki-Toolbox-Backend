@@ -92,6 +92,18 @@ ADD COLUMN IF NOT EXISTS kratos_identity_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS users_kratos_identity_id_unique_idx
 ON users (kratos_identity_id);
 `
+
+	checkWebhookEndpointsTableExistsSQL         = `SELECT to_regclass('public.webhook_endpoints')`
+	checkWebhookSubscriptionsTableExistsSQL     = `SELECT to_regclass('public.webhook_subscriptions')`
+	checkWebhookEndpointsEnabledColumnExistsSQL = `
+SELECT EXISTS (
+	SELECT 1
+	FROM information_schema.columns
+	WHERE table_schema = 'public'
+		AND table_name = 'webhook_endpoints'
+		AND column_name = 'enabled'
+);
+`
 )
 
 func openMainLogWriter(mainLogPath string) (io.Writer, func() error, error) {
@@ -212,16 +224,51 @@ func ensureUsersSchemaCompatibility(ctx context.Context, entClient *dbManager.Cl
 }
 
 func usersTableExists(ctx context.Context, entClient *dbManager.Client) (bool, error) {
+	return tableExists(ctx, entClient, checkUsersTableExistsSQL)
+}
+
+func tableExists(ctx context.Context, entClient *dbManager.Client, query string) (bool, error) {
 	sqlDB := entClient.SQLDB()
 	if sqlDB == nil {
 		return false, fmt.Errorf("underlying SQL DB is not available")
 	}
 
 	var regclassName stdsql.NullString
-	if err := sqlDB.QueryRowContext(ctx, checkUsersTableExistsSQL).Scan(&regclassName); err != nil {
-		return false, fmt.Errorf("check users table existence: %w", err)
+	if err := sqlDB.QueryRowContext(ctx, query).Scan(&regclassName); err != nil {
+		return false, err
 	}
 	return regclassName.Valid && strings.TrimSpace(regclassName.String) != "", nil
+}
+
+func validateTableExists(ctx context.Context, entClient *dbManager.Client, query, tableName string) error {
+	exists, err := tableExists(ctx, entClient, query)
+	if err != nil {
+		return fmt.Errorf("check %s table existence: %w", tableName, err)
+	}
+	if !exists {
+		return fmt.Errorf("%s table is missing; run schema migration or enable backend.auto_migrate", tableName)
+	}
+	return nil
+}
+
+func ensureWebhookSchemaCompatibility(ctx context.Context, entClient *dbManager.Client, autoMigrate bool) error {
+	if autoMigrate {
+		return nil
+	}
+	if err := validateTableExists(ctx, entClient, checkWebhookEndpointsTableExistsSQL, "webhook_endpoints"); err != nil {
+		return err
+	}
+	if err := validateTableExists(ctx, entClient, checkWebhookSubscriptionsTableExistsSQL, "webhook_subscriptions"); err != nil {
+		return err
+	}
+	columnExists, err := querySchemaExists(ctx, entClient, checkWebhookEndpointsEnabledColumnExistsSQL)
+	if err != nil {
+		return fmt.Errorf("check webhook_endpoints.enabled column: %w", err)
+	}
+	if !columnExists {
+		return fmt.Errorf("webhook_endpoints.enabled column is missing; run schema migration or enable backend.auto_migrate")
+	}
+	return nil
 }
 
 func ensureRedisReady(ctx context.Context, redisManager *harukiRedis.HarukiRedisManager) error {
@@ -315,8 +362,6 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.MongoDB.DB,
 		cfg.MongoDB.Suite,
 		cfg.MongoDB.Mysekai,
-		cfg.MongoDB.Webhook,
-		cfg.MongoDB.WebhookUser,
 	)
 	cancelMongoInit()
 	if err != nil {
@@ -371,6 +416,12 @@ func Run(cfg harukiConfig.Config) error {
 		return fmt.Errorf("ensure users schema compatibility: %w", err)
 	}
 	cancelUsersSchema()
+	webhookSchemaCtx, cancelWebhookSchema := startupContext()
+	if err := ensureWebhookSchemaCompatibility(webhookSchemaCtx, entClient, cfg.Backend.AutoMigrate); err != nil {
+		cancelWebhookSchema()
+		return fmt.Errorf("ensure webhook schema compatibility: %w", err)
+	}
+	cancelWebhookSchema()
 
 	smtpClient := harukiSMTP.NewSMTPClient(cfg.UserSystem.SMTP)
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, cfg.UserSystem.SessionSignToken)
@@ -476,6 +527,7 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.HarukiProxy.Secret,
 		cfg.HarukiProxy.UnpackKey,
 		cfg.Webhook.JWTSecret,
+		cfg.Webhook.Enabled,
 	)
 	harukiAPI.RegisterRoutes(apiHelper)
 	loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()

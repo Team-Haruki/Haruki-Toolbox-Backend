@@ -43,6 +43,7 @@ func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
 		"proxy-secret",
 		"proxy-unpack-key",
 		"webhook-secret",
+		true,
 	)
 
 	input[0] = "mutated"
@@ -74,6 +75,13 @@ func TestRuntimeConfigGettersAndSetters(t *testing.T) {
 	helper.SetWebhookJWTSecret("webhook-secret")
 	if helper.GetWebhookJWTSecret() != "webhook-secret" {
 		t.Fatalf("webhook secret mismatch")
+	}
+	if !helper.GetWebhookEnabled() {
+		t.Fatalf("webhook enabled should default to true")
+	}
+	helper.SetWebhookEnabled(false)
+	if helper.GetWebhookEnabled() {
+		t.Fatalf("webhook enabled flag not updated")
 	}
 }
 

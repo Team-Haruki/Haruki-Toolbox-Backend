@@ -150,7 +150,7 @@ func TestValidateWebhookCallbackURLRejectsResolvedPrivateIP(t *testing.T) {
 		webhookIPAddrLookup = originalLookup
 	}()
 
-	if _, ok := validateWebhookCallbackURL("https://example.com/callback"); ok {
+	if _, ok := ValidateWebhookCallbackURL("https://example.com/callback"); ok {
 		t.Fatalf("expected callback URL resolving to loopback IP to be rejected")
 	}
 }
@@ -164,8 +164,17 @@ func TestValidateWebhookCallbackURLAcceptsResolvedPublicIP(t *testing.T) {
 		webhookIPAddrLookup = originalLookup
 	}()
 
-	if got, ok := validateWebhookCallbackURL("https://example.com/callback"); !ok || got != "https://example.com/callback" {
-		t.Fatalf("validateWebhookCallbackURL returned (%q, %v), want (%q, true)", got, ok, "https://example.com/callback")
+	if got, ok := ValidateWebhookCallbackURL("https://example.com/callback"); !ok || got != "https://example.com/callback" {
+		t.Fatalf("ValidateWebhookCallbackURL returned (%q, %v), want (%q, true)", got, ok, "https://example.com/callback")
+	}
+}
+
+func TestValidateWebhookCallbackURLPreservesPathPlaceholders(t *testing.T) {
+	t.Parallel()
+
+	rawURL := "https://93.184.216.34/webhook/{server}/{data_type}/{user_id}"
+	if got, ok := ValidateWebhookCallbackURL(rawURL); !ok || got != rawURL {
+		t.Fatalf("ValidateWebhookCallbackURL returned (%q, %v), want (%q, true)", got, ok, rawURL)
 	}
 }
 
