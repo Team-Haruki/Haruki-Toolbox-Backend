@@ -1,0 +1,22 @@
+.DS_Store
+.codex-dev/
+.gocache/
+.git/
+.github/
+.idea/
+.vscode/
+HarukiToolboxBackend
+haruki-toolbox-backend
+db_export/
+dist/
+logs/
+test.json
+*.coverprofile
+*.out
+*.test
+
+# Sensitive configuration files
+haruki-suite-configs*.yaml
+!haruki-suite-configs.example.yaml
+*.env
+.env.*

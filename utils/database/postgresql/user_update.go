@@ -7,14 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -62,20 +60,6 @@ func (_u *UserUpdate) SetNillableEmail(v *string) *UserUpdate {
 	return _u
 }
 
-// SetPasswordHash sets the "password_hash" field.
-func (_u *UserUpdate) SetPasswordHash(v string) *UserUpdate {
-	_u.mutation.SetPasswordHash(v)
-	return _u
-}
-
-// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
-func (_u *UserUpdate) SetNillablePasswordHash(v *string) *UserUpdate {
-	if v != nil {
-		_u.SetPasswordHash(*v)
-	}
-	return _u
-}
-
 // SetAvatarPath sets the "avatar_path" field.
 func (_u *UserUpdate) SetAvatarPath(v string) *UserUpdate {
 	_u.mutation.SetAvatarPath(v)
@@ -106,6 +90,20 @@ func (_u *UserUpdate) SetAllowCnMysekai(v bool) *UserUpdate {
 func (_u *UserUpdate) SetNillableAllowCnMysekai(v *bool) *UserUpdate {
 	if v != nil {
 		_u.SetAllowCnMysekai(*v)
+	}
+	return _u
+}
+
+// SetRole sets the "role" field.
+func (_u *UserUpdate) SetRole(v user.Role) *UserUpdate {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRole(v *user.Role) *UserUpdate {
+	if v != nil {
+		_u.SetRole(*v)
 	}
 	return _u
 }
@@ -144,23 +142,44 @@ func (_u *UserUpdate) ClearBanReason() *UserUpdate {
 	return _u
 }
 
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_u *UserUpdate) SetEmailInfoID(id int) *UserUpdate {
-	_u.mutation.SetEmailInfoID(id)
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_u *UserUpdate) SetKratosIdentityID(v string) *UserUpdate {
+	_u.mutation.SetKratosIdentityID(v)
 	return _u
 }
 
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_u *UserUpdate) SetNillableEmailInfoID(id *int) *UserUpdate {
-	if id != nil {
-		_u = _u.SetEmailInfoID(*id)
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableKratosIdentityID(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetKratosIdentityID(*v)
 	}
 	return _u
 }
 
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdate) SetEmailInfo(v *EmailInfo) *UserUpdate {
-	return _u.SetEmailInfoID(v.ID)
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (_u *UserUpdate) ClearKratosIdentityID() *UserUpdate {
+	_u.mutation.ClearKratosIdentityID()
+	return _u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *UserUpdate) SetCreatedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableCreatedAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
+}
+
+// ClearCreatedAt clears the value of the "created_at" field.
+func (_u *UserUpdate) ClearCreatedAt() *UserUpdate {
+	_u.mutation.ClearCreatedAt()
+	return _u
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -231,45 +250,9 @@ func (_u *UserUpdate) SetIosScriptCode(v *IOSScriptCode) *UserUpdate {
 	return _u.SetIosScriptCodeID(v.ID)
 }
 
-// AddOauthAuthorizationIDs adds the "oauth_authorizations" edge to the OAuthAuthorization entity by IDs.
-func (_u *UserUpdate) AddOauthAuthorizationIDs(ids ...int) *UserUpdate {
-	_u.mutation.AddOauthAuthorizationIDs(ids...)
-	return _u
-}
-
-// AddOauthAuthorizations adds the "oauth_authorizations" edges to the OAuthAuthorization entity.
-func (_u *UserUpdate) AddOauthAuthorizations(v ...*OAuthAuthorization) *UserUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddOauthAuthorizationIDs(ids...)
-}
-
-// AddOauthTokenIDs adds the "oauth_tokens" edge to the OAuthToken entity by IDs.
-func (_u *UserUpdate) AddOauthTokenIDs(ids ...int) *UserUpdate {
-	_u.mutation.AddOauthTokenIDs(ids...)
-	return _u
-}
-
-// AddOauthTokens adds the "oauth_tokens" edges to the OAuthToken entity.
-func (_u *UserUpdate) AddOauthTokens(v ...*OAuthToken) *UserUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddOauthTokenIDs(ids...)
-}
-
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
-}
-
-// ClearEmailInfo clears the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdate) ClearEmailInfo() *UserUpdate {
-	_u.mutation.ClearEmailInfo()
-	return _u
 }
 
 // ClearSocialPlatformInfo clears the "social_platform_info" edge to the SocialPlatformInfo entity.
@@ -326,48 +309,6 @@ func (_u *UserUpdate) ClearIosScriptCode() *UserUpdate {
 	return _u
 }
 
-// ClearOauthAuthorizations clears all "oauth_authorizations" edges to the OAuthAuthorization entity.
-func (_u *UserUpdate) ClearOauthAuthorizations() *UserUpdate {
-	_u.mutation.ClearOauthAuthorizations()
-	return _u
-}
-
-// RemoveOauthAuthorizationIDs removes the "oauth_authorizations" edge to OAuthAuthorization entities by IDs.
-func (_u *UserUpdate) RemoveOauthAuthorizationIDs(ids ...int) *UserUpdate {
-	_u.mutation.RemoveOauthAuthorizationIDs(ids...)
-	return _u
-}
-
-// RemoveOauthAuthorizations removes "oauth_authorizations" edges to OAuthAuthorization entities.
-func (_u *UserUpdate) RemoveOauthAuthorizations(v ...*OAuthAuthorization) *UserUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveOauthAuthorizationIDs(ids...)
-}
-
-// ClearOauthTokens clears all "oauth_tokens" edges to the OAuthToken entity.
-func (_u *UserUpdate) ClearOauthTokens() *UserUpdate {
-	_u.mutation.ClearOauthTokens()
-	return _u
-}
-
-// RemoveOauthTokenIDs removes the "oauth_tokens" edge to OAuthToken entities by IDs.
-func (_u *UserUpdate) RemoveOauthTokenIDs(ids ...int) *UserUpdate {
-	_u.mutation.RemoveOauthTokenIDs(ids...)
-	return _u
-}
-
-// RemoveOauthTokens removes "oauth_tokens" edges to OAuthToken entities.
-func (_u *UserUpdate) RemoveOauthTokens(v ...*OAuthToken) *UserUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveOauthTokenIDs(ids...)
-}
-
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UserUpdate) Save(ctx context.Context) (int, error) {
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
@@ -395,7 +336,20 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *UserUpdate) check() error {
+	if v, ok := _u.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -410,9 +364,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.PasswordHash(); ok {
-		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.AvatarPath(); ok {
 		_spec.SetField(user.FieldAvatarPath, field.TypeString, value)
 	}
@@ -421,6 +372,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
@@ -431,34 +385,17 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
 	}
-	if _u.mutation.EmailInfoCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := _u.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
 	}
-	if nodes := _u.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if _u.mutation.KratosIdentityIDCleared() {
+		_spec.ClearField(user.FieldKratosIdentityID, field.TypeString)
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CreatedAtCleared() {
+		_spec.ClearField(user.FieldCreatedAt, field.TypeTime)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -608,96 +545,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.OauthAuthorizationsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedOauthAuthorizationsIDs(); len(nodes) > 0 && !_u.mutation.OauthAuthorizationsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.OauthAuthorizationsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.OauthTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedOauthTokensIDs(); len(nodes) > 0 && !_u.mutation.OauthTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.OauthTokensIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -746,20 +593,6 @@ func (_u *UserUpdateOne) SetNillableEmail(v *string) *UserUpdateOne {
 	return _u
 }
 
-// SetPasswordHash sets the "password_hash" field.
-func (_u *UserUpdateOne) SetPasswordHash(v string) *UserUpdateOne {
-	_u.mutation.SetPasswordHash(v)
-	return _u
-}
-
-// SetNillablePasswordHash sets the "password_hash" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillablePasswordHash(v *string) *UserUpdateOne {
-	if v != nil {
-		_u.SetPasswordHash(*v)
-	}
-	return _u
-}
-
 // SetAvatarPath sets the "avatar_path" field.
 func (_u *UserUpdateOne) SetAvatarPath(v string) *UserUpdateOne {
 	_u.mutation.SetAvatarPath(v)
@@ -790,6 +623,20 @@ func (_u *UserUpdateOne) SetAllowCnMysekai(v bool) *UserUpdateOne {
 func (_u *UserUpdateOne) SetNillableAllowCnMysekai(v *bool) *UserUpdateOne {
 	if v != nil {
 		_u.SetAllowCnMysekai(*v)
+	}
+	return _u
+}
+
+// SetRole sets the "role" field.
+func (_u *UserUpdateOne) SetRole(v user.Role) *UserUpdateOne {
+	_u.mutation.SetRole(v)
+	return _u
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRole(v *user.Role) *UserUpdateOne {
+	if v != nil {
+		_u.SetRole(*v)
 	}
 	return _u
 }
@@ -828,23 +675,44 @@ func (_u *UserUpdateOne) ClearBanReason() *UserUpdateOne {
 	return _u
 }
 
-// SetEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID.
-func (_u *UserUpdateOne) SetEmailInfoID(id int) *UserUpdateOne {
-	_u.mutation.SetEmailInfoID(id)
+// SetKratosIdentityID sets the "kratos_identity_id" field.
+func (_u *UserUpdateOne) SetKratosIdentityID(v string) *UserUpdateOne {
+	_u.mutation.SetKratosIdentityID(v)
 	return _u
 }
 
-// SetNillableEmailInfoID sets the "email_info" edge to the EmailInfo entity by ID if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableEmailInfoID(id *int) *UserUpdateOne {
-	if id != nil {
-		_u = _u.SetEmailInfoID(*id)
+// SetNillableKratosIdentityID sets the "kratos_identity_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableKratosIdentityID(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetKratosIdentityID(*v)
 	}
 	return _u
 }
 
-// SetEmailInfo sets the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdateOne) SetEmailInfo(v *EmailInfo) *UserUpdateOne {
-	return _u.SetEmailInfoID(v.ID)
+// ClearKratosIdentityID clears the value of the "kratos_identity_id" field.
+func (_u *UserUpdateOne) ClearKratosIdentityID() *UserUpdateOne {
+	_u.mutation.ClearKratosIdentityID()
+	return _u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (_u *UserUpdateOne) SetCreatedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetCreatedAt(v)
+	return _u
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableCreatedAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetCreatedAt(*v)
+	}
+	return _u
+}
+
+// ClearCreatedAt clears the value of the "created_at" field.
+func (_u *UserUpdateOne) ClearCreatedAt() *UserUpdateOne {
+	_u.mutation.ClearCreatedAt()
+	return _u
 }
 
 // SetSocialPlatformInfoID sets the "social_platform_info" edge to the SocialPlatformInfo entity by ID.
@@ -915,45 +783,9 @@ func (_u *UserUpdateOne) SetIosScriptCode(v *IOSScriptCode) *UserUpdateOne {
 	return _u.SetIosScriptCodeID(v.ID)
 }
 
-// AddOauthAuthorizationIDs adds the "oauth_authorizations" edge to the OAuthAuthorization entity by IDs.
-func (_u *UserUpdateOne) AddOauthAuthorizationIDs(ids ...int) *UserUpdateOne {
-	_u.mutation.AddOauthAuthorizationIDs(ids...)
-	return _u
-}
-
-// AddOauthAuthorizations adds the "oauth_authorizations" edges to the OAuthAuthorization entity.
-func (_u *UserUpdateOne) AddOauthAuthorizations(v ...*OAuthAuthorization) *UserUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddOauthAuthorizationIDs(ids...)
-}
-
-// AddOauthTokenIDs adds the "oauth_tokens" edge to the OAuthToken entity by IDs.
-func (_u *UserUpdateOne) AddOauthTokenIDs(ids ...int) *UserUpdateOne {
-	_u.mutation.AddOauthTokenIDs(ids...)
-	return _u
-}
-
-// AddOauthTokens adds the "oauth_tokens" edges to the OAuthToken entity.
-func (_u *UserUpdateOne) AddOauthTokens(v ...*OAuthToken) *UserUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddOauthTokenIDs(ids...)
-}
-
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
-}
-
-// ClearEmailInfo clears the "email_info" edge to the EmailInfo entity.
-func (_u *UserUpdateOne) ClearEmailInfo() *UserUpdateOne {
-	_u.mutation.ClearEmailInfo()
-	return _u
 }
 
 // ClearSocialPlatformInfo clears the "social_platform_info" edge to the SocialPlatformInfo entity.
@@ -1010,48 +842,6 @@ func (_u *UserUpdateOne) ClearIosScriptCode() *UserUpdateOne {
 	return _u
 }
 
-// ClearOauthAuthorizations clears all "oauth_authorizations" edges to the OAuthAuthorization entity.
-func (_u *UserUpdateOne) ClearOauthAuthorizations() *UserUpdateOne {
-	_u.mutation.ClearOauthAuthorizations()
-	return _u
-}
-
-// RemoveOauthAuthorizationIDs removes the "oauth_authorizations" edge to OAuthAuthorization entities by IDs.
-func (_u *UserUpdateOne) RemoveOauthAuthorizationIDs(ids ...int) *UserUpdateOne {
-	_u.mutation.RemoveOauthAuthorizationIDs(ids...)
-	return _u
-}
-
-// RemoveOauthAuthorizations removes "oauth_authorizations" edges to OAuthAuthorization entities.
-func (_u *UserUpdateOne) RemoveOauthAuthorizations(v ...*OAuthAuthorization) *UserUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveOauthAuthorizationIDs(ids...)
-}
-
-// ClearOauthTokens clears all "oauth_tokens" edges to the OAuthToken entity.
-func (_u *UserUpdateOne) ClearOauthTokens() *UserUpdateOne {
-	_u.mutation.ClearOauthTokens()
-	return _u
-}
-
-// RemoveOauthTokenIDs removes the "oauth_tokens" edge to OAuthToken entities by IDs.
-func (_u *UserUpdateOne) RemoveOauthTokenIDs(ids ...int) *UserUpdateOne {
-	_u.mutation.RemoveOauthTokenIDs(ids...)
-	return _u
-}
-
-// RemoveOauthTokens removes "oauth_tokens" edges to OAuthToken entities.
-func (_u *UserUpdateOne) RemoveOauthTokens(v ...*OAuthToken) *UserUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveOauthTokenIDs(ids...)
-}
-
 // Where appends a list predicates to the UserUpdate builder.
 func (_u *UserUpdateOne) Where(ps ...predicate.User) *UserUpdateOne {
 	_u.mutation.Where(ps...)
@@ -1092,7 +882,20 @@ func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *UserUpdateOne) check() error {
+	if v, ok := _u.mutation.Role(); ok {
+		if err := user.RoleValidator(v); err != nil {
+			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -1124,9 +927,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.PasswordHash(); ok {
-		_spec.SetField(user.FieldPasswordHash, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.AvatarPath(); ok {
 		_spec.SetField(user.FieldAvatarPath, field.TypeString, value)
 	}
@@ -1135,6 +935,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.Banned(); ok {
 		_spec.SetField(user.FieldBanned, field.TypeBool, value)
@@ -1145,34 +948,17 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if _u.mutation.BanReasonCleared() {
 		_spec.ClearField(user.FieldBanReason, field.TypeString)
 	}
-	if _u.mutation.EmailInfoCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := _u.mutation.KratosIdentityID(); ok {
+		_spec.SetField(user.FieldKratosIdentityID, field.TypeString, value)
 	}
-	if nodes := _u.mutation.EmailInfoIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   user.EmailInfoTable,
-			Columns: []string{user.EmailInfoColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(emailinfo.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if _u.mutation.KratosIdentityIDCleared() {
+		_spec.ClearField(user.FieldKratosIdentityID, field.TypeString)
+	}
+	if value, ok := _u.mutation.CreatedAt(); ok {
+		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.CreatedAtCleared() {
+		_spec.ClearField(user.FieldCreatedAt, field.TypeTime)
 	}
 	if _u.mutation.SocialPlatformInfoCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1315,96 +1101,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.OauthAuthorizationsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedOauthAuthorizationsIDs(); len(nodes) > 0 && !_u.mutation.OauthAuthorizationsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.OauthAuthorizationsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthAuthorizationsTable,
-			Columns: []string{user.OauthAuthorizationsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthauthorization.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.OauthTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedOauthTokensIDs(); len(nodes) > 0 && !_u.mutation.OauthTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.OauthTokensIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.OauthTokensTable,
-			Columns: []string{user.OauthTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(oauthtoken.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

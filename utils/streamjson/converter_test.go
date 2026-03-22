@@ -57,6 +57,40 @@ func TestConvertInvalidData(t *testing.T) {
 	}
 }
 
+func TestConvertMapNonStringKeyFails(t *testing.T) {
+	t.Parallel()
+
+	// {1:1} is invalid for JSON object conversion because key is not msgpack string.
+	msgpack := []byte{
+		0x81,
+		0x01,
+		0x01,
+	}
+	var out bytes.Buffer
+	if err := Convert(msgpack, &out); err == nil {
+		t.Fatalf("Convert should fail when map key is not string")
+	}
+}
+
+func TestConvertBinaryAndExtAsNull(t *testing.T) {
+	t.Parallel()
+
+	// [bin8("ab"), ext8(type=1,payload=2), fixext4(type=1,payload=4 bytes)]
+	msgpack := []byte{
+		0x93,
+		0xc4, 0x02, 'a', 'b',
+		0xc7, 0x02, 0x01, 0x10, 0x20,
+		0xd6, 0x01, 0xaa, 0xbb, 0xcc, 0xdd,
+	}
+	var out bytes.Buffer
+	if err := Convert(msgpack, &out); err != nil {
+		t.Fatalf("Convert returned error: %v", err)
+	}
+	if out.String() != `[null,null,null]` {
+		t.Fatalf("Convert output = %q, want %q", out.String(), `[null,null,null]`)
+	}
+}
+
 func TestWriteJSONStringEscapes(t *testing.T) {
 	t.Parallel()
 

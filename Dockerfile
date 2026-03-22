@@ -3,9 +3,11 @@ ARG VERSION=dev
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 WORKDIR /app
-COPY . .
 RUN apk add --no-cache build-base
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
 RUN go build \
     -trimpath \
     -ldflags="-s -w \

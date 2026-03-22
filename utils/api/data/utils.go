@@ -30,7 +30,7 @@ func RestoreCompactData(data bson.D) []bson.D {
 	if len(columns) == 0 {
 		return []bson.D{}
 	}
-	numEntries := calculateMinEntries(columns)
+	numEntries := calculateMaxEntries(columns)
 	return buildResultEntries(numEntries, columnLabels, columns)
 }
 
@@ -88,7 +88,11 @@ func processEnumColumn(enumRaw bson.D, key string, dataColumn []any) []any {
 			columnValues = append(columnValues, nil)
 			continue
 		}
-		index := convertToInt(v)
+		index, ok := convertToInt(v)
+		if !ok {
+			columnValues = append(columnValues, nil)
+			continue
+		}
 		if index >= 0 && index < len(enumSlice) {
 			columnValues = append(columnValues, enumSlice[index])
 		} else {
@@ -98,22 +102,22 @@ func processEnumColumn(enumRaw bson.D, key string, dataColumn []any) []any {
 	return columnValues
 }
 
-func convertToInt(v any) int {
+func convertToInt(v any) (int, bool) {
 	switch t := v.(type) {
 	case int:
-		return t
+		return t, true
 	case int32:
-		return int(t)
+		return int(t), true
 	case int64:
-		return int(t)
+		return int(t), true
 	case float64:
-		return int(t)
+		return int(t), true
 	default:
-		return 0
+		return 0, false
 	}
 }
 
-func calculateMinEntries(columns [][]any) int {
+func calculateMaxEntries(columns [][]any) int {
 	numEntries := len(columns[0])
 	for _, col := range columns {
 		if len(col) < numEntries {

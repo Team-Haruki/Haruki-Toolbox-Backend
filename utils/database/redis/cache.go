@@ -6,7 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -14,22 +19,60 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	publicAccessNamespace = "public_access"
+	emptyQueryHash        = "none"
+	cacheKeyFormat        = "%s:%s:query=%s"
+
+	redisIncrementWithTTLScript = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`
+
+	redisDeleteIfMatchScript = `
+local current = redis.call('GET', KEYS[1])
+if not current then
+  return 0
+end
+if current == ARGV[1] or current == ARGV[2] then
+  redis.call('DEL', KEYS[1])
+  return 1
+end
+return -1
+	`
+)
+
+func PublicAccessNamespace() string {
+	return publicAccessNamespace
+}
+
 type CachePath struct {
 	Namespace   string
 	Path        string
 	QueryString string
 }
 
+type CacheItem struct {
+	Key   string
+	Value any
+}
+
 func GetClearCachePaths(server string, dataType string, userID int64) []CachePath {
+	var pathBuilder strings.Builder
+	pathBuilder.Grow(len("/public/") + len(server) + len(dataType) + 24)
+	pathBuilder.WriteString("/public/")
+	pathBuilder.WriteString(server)
+	pathBuilder.WriteByte('/')
+	pathBuilder.WriteString(dataType)
+	pathBuilder.WriteByte('/')
+	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
 	return []CachePath{
 		{
-			Namespace: "public_access",
-			Path:      fmt.Sprintf("/public/%s/%s/%d", server, dataType, userID),
-		},
-		{
-			Namespace:   "public_access",
-			Path:        fmt.Sprintf("/public/%s/%s/%d", server, dataType, userID),
-			QueryString: "key=upload_time",
+			Namespace: publicAccessNamespace,
+			Path:      pathBuilder.String(),
 		},
 	}
 }
@@ -37,12 +80,49 @@ func GetClearCachePaths(server string, dataType string, userID int64) []CachePat
 func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
 	fullPath := c.Path()
 	queryString := c.RequestCtx().QueryArgs().String()
-	queryHash := "none"
-	if queryString != "" {
-		hash := md5.Sum([]byte(queryString))
-		queryHash = hex.EncodeToString(hash[:])
+	return buildCacheKey(namespace, fullPath, queryString)
+}
+
+func CacheKeyBuilderWithAllowedQuery(c fiber.Ctx, namespace string, allowedQueryKeys ...string) string {
+	fullPath := c.Path()
+	if len(allowedQueryKeys) == 0 {
+		return buildCacheKey(namespace, fullPath, "")
 	}
-	return fmt.Sprintf("%s:%s:query=%s", namespace, fullPath, queryHash)
+
+	keys := append([]string(nil), allowedQueryKeys...)
+	sort.Strings(keys)
+	values := url.Values{}
+	for _, key := range keys {
+		normalizedKey := strings.TrimSpace(key)
+		if normalizedKey == "" {
+			continue
+		}
+		normalizedValue := strings.TrimSpace(c.Query(normalizedKey))
+		if normalizedValue == "" {
+			continue
+		}
+		values.Set(normalizedKey, normalizedValue)
+	}
+	return buildCacheKey(namespace, fullPath, values.Encode())
+}
+
+func buildCacheKey(namespace, path, queryString string) string {
+	var sb strings.Builder
+	sb.Grow(len(namespace) + len(path) + 40) // pre-allocate: namespace + path + "query=" + hash
+	sb.WriteString(namespace)
+	sb.WriteByte(':')
+	sb.WriteString(path)
+	sb.WriteString(":query=")
+	sb.WriteString(getQueryHash(queryString))
+	return sb.String()
+}
+
+func getQueryHash(queryString string) string {
+	if queryString == "" {
+		return emptyQueryHash
+	}
+	hash := md5.Sum([]byte(queryString))
+	return hex.EncodeToString(hash[:])
 }
 
 func (r *HarukiRedisManager) SetCache(ctx context.Context, key string, value any, ttl time.Duration) error {
@@ -53,6 +133,41 @@ func (r *HarukiRedisManager) SetCache(ctx context.Context, key string, value any
 	}
 	if err := r.Redis.Set(ctx, key, data, ttl).Err(); err != nil {
 		harukiLogger.Errorf("Failed to set redis cache for key %s: %v", key, err)
+		return err
+	}
+	return nil
+}
+
+func (r *HarukiRedisManager) SetCachesAtomically(ctx context.Context, items []CacheItem, ttl time.Duration) error {
+	if len(items) == 0 {
+		return nil
+	}
+	if ttl <= 0 {
+		return fmt.Errorf("ttl must be positive")
+	}
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	payloads := make([][]byte, len(items))
+	for i, item := range items {
+		if item.Key == "" {
+			return fmt.Errorf("cache key at index %d is empty", i)
+		}
+		data, err := sonic.Marshal(item.Value)
+		if err != nil {
+			harukiLogger.Errorf("Failed to marshal cache value for key %s: %v", item.Key, err)
+			return err
+		}
+		payloads[i] = data
+	}
+
+	pipe := r.Redis.TxPipeline()
+	for i, item := range items {
+		pipe.Set(ctx, item.Key, payloads[i], ttl)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		harukiLogger.Errorf("Failed to set redis caches atomically: %v", err)
 		return err
 	}
 	return nil
@@ -82,16 +197,104 @@ func (r *HarukiRedisManager) DeleteCache(ctx context.Context, key string) error 
 	return nil
 }
 
+func (r *HarukiRedisManager) GetRawCache(ctx context.Context, key string) (string, bool, error) {
+	val, err := r.Redis.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", false, nil
+	}
+	if err != nil {
+		harukiLogger.Errorf("Failed to get raw redis cache for key %s: %v", key, err)
+		return "", false, err
+	}
+	return val, true, nil
+}
+
+func (r *HarukiRedisManager) DeleteCacheIfValueMatches(ctx context.Context, key, expected string) (bool, error) {
+	encodedExpected, err := sonic.Marshal(expected)
+	if err != nil {
+		harukiLogger.Errorf("Failed to marshal expected cache value for key %s: %v", key, err)
+		return false, err
+	}
+	result, err := r.Redis.Eval(ctx, redisDeleteIfMatchScript, []string{key}, expected, string(encodedExpected)).Int()
+	if err != nil {
+		harukiLogger.Errorf("Failed to compare-and-delete redis cache for key %s: %v", key, err)
+		return false, err
+	}
+	return result == 1, nil
+}
+
+func (r *HarukiRedisManager) IncrementWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	if ttl <= 0 {
+		return 0, fmt.Errorf("ttl must be positive")
+	}
+	result, err := r.Redis.Eval(ctx, redisIncrementWithTTLScript, []string{key}, ttl.Milliseconds()).Int64()
+	if err != nil {
+		harukiLogger.Errorf("Failed to increment redis key with ttl for key %s: %v", key, err)
+		return 0, err
+	}
+	return result, nil
+}
+
+func (r *HarukiRedisManager) ClearPublicGameDataCaches(ctx context.Context, server string, userID int64) error {
+	for _, dataType := range []string{string(harukiUtils.UploadDataTypeSuite), string(harukiUtils.UploadDataTypeMysekai)} {
+		if err := r.ClearCache(ctx, dataType, server, userID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *HarukiRedisManager) ClearNamespace(ctx context.Context, namespace string) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return fmt.Errorf("namespace is empty")
+	}
+
+	var cursor uint64
+	pattern := namespace + ":*"
+	for {
+		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("clear redis namespace scan failed: %w", err)
+		}
+		if len(keys) > 0 {
+			if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
+				return fmt.Errorf("clear redis namespace delete failed: %w", err)
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return nil
+}
+
 func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server string, userID int64) error {
 	paths := GetClearCachePaths(server, dataType, userID)
 	for _, path := range paths {
-		queryHash := "none"
-		if path.QueryString != "" {
-			sum := md5.Sum([]byte(path.QueryString))
-			queryHash = hex.EncodeToString(sum[:])
+		if path.Namespace == "" || path.Path == "" {
+			continue
 		}
-		if err := r.DeleteCache(ctx, fmt.Sprintf("%s:%s:query=%s", path.Namespace, path.Path, queryHash)); err != nil {
-			return errors.New(fmt.Sprintf("clear redis cache failed: %v", err))
+		pattern := fmt.Sprintf("%s:%s:query=*", path.Namespace, path.Path)
+		var cursor uint64
+		for {
+			keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
+			if err != nil {
+				return fmt.Errorf("clear redis cache scan failed: %w", err)
+			}
+			if len(keys) > 0 {
+				if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
+					return fmt.Errorf("clear redis cache delete failed: %w", err)
+				}
+			}
+			cursor = nextCursor
+			if cursor == 0 {
+				break
+			}
 		}
 	}
 	return nil

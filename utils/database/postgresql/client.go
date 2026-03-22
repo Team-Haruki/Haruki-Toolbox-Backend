@@ -12,18 +12,21 @@ import (
 	"haruki-suite/utils/database/postgresql/migrate"
 
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/emailinfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/oauthauthorization"
-	"haruki-suite/utils/database/postgresql/oauthclient"
-	"haruki-suite/utils/database/postgresql/oauthtoken"
+	"haruki-suite/utils/database/postgresql/riskevent"
+	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	"haruki-suite/utils/database/postgresql/systemlog"
+	"haruki-suite/utils/database/postgresql/ticket"
+	"haruki-suite/utils/database/postgresql/ticketmessage"
 	"haruki-suite/utils/database/postgresql/uploadlog"
 	"haruki-suite/utils/database/postgresql/user"
+	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	"haruki-suite/utils/database/postgresql/webhooksubscription"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -38,8 +41,6 @@ type Client struct {
 	Schema *migrate.Schema
 	// AuthorizeSocialPlatformInfo is the client for interacting with the AuthorizeSocialPlatformInfo builders.
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
-	// EmailInfo is the client for interacting with the EmailInfo builders.
-	EmailInfo *EmailInfoClient
 	// FriendLink is the client for interacting with the FriendLink builders.
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
@@ -50,18 +51,26 @@ type Client struct {
 	GroupList *GroupListClient
 	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
 	IOSScriptCode *IOSScriptCodeClient
-	// OAuthAuthorization is the client for interacting with the OAuthAuthorization builders.
-	OAuthAuthorization *OAuthAuthorizationClient
-	// OAuthClient is the client for interacting with the OAuthClient builders.
-	OAuthClient *OAuthClientClient
-	// OAuthToken is the client for interacting with the OAuthToken builders.
-	OAuthToken *OAuthTokenClient
+	// RiskEvent is the client for interacting with the RiskEvent builders.
+	RiskEvent *RiskEventClient
+	// RiskRule is the client for interacting with the RiskRule builders.
+	RiskRule *RiskRuleClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
+	// SystemLog is the client for interacting with the SystemLog builders.
+	SystemLog *SystemLogClient
+	// Ticket is the client for interacting with the Ticket builders.
+	Ticket *TicketClient
+	// TicketMessage is the client for interacting with the TicketMessage builders.
+	TicketMessage *TicketMessageClient
 	// UploadLog is the client for interacting with the UploadLog builders.
 	UploadLog *UploadLogClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// WebhookEndpoint is the client for interacting with the WebhookEndpoint builders.
+	WebhookEndpoint *WebhookEndpointClient
+	// WebhookSubscription is the client for interacting with the WebhookSubscription builders.
+	WebhookSubscription *WebhookSubscriptionClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -74,18 +83,21 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(c.config)
-	c.EmailInfo = NewEmailInfoClient(c.config)
 	c.FriendLink = NewFriendLinkClient(c.config)
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupList = NewGroupListClient(c.config)
 	c.IOSScriptCode = NewIOSScriptCodeClient(c.config)
-	c.OAuthAuthorization = NewOAuthAuthorizationClient(c.config)
-	c.OAuthClient = NewOAuthClientClient(c.config)
-	c.OAuthToken = NewOAuthTokenClient(c.config)
+	c.RiskEvent = NewRiskEventClient(c.config)
+	c.RiskRule = NewRiskRuleClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
+	c.SystemLog = NewSystemLogClient(c.config)
+	c.Ticket = NewTicketClient(c.config)
+	c.TicketMessage = NewTicketMessageClient(c.config)
 	c.UploadLog = NewUploadLogClient(c.config)
 	c.User = NewUserClient(c.config)
+	c.WebhookEndpoint = NewWebhookEndpointClient(c.config)
+	c.WebhookSubscription = NewWebhookSubscriptionClient(c.config)
 }
 
 type (
@@ -179,18 +191,21 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:                         ctx,
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
-		EmailInfo:                   NewEmailInfoClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
 		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
-		OAuthAuthorization:          NewOAuthAuthorizationClient(cfg),
-		OAuthClient:                 NewOAuthClientClient(cfg),
-		OAuthToken:                  NewOAuthTokenClient(cfg),
+		RiskEvent:                   NewRiskEventClient(cfg),
+		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		SystemLog:                   NewSystemLogClient(cfg),
+		Ticket:                      NewTicketClient(cfg),
+		TicketMessage:               NewTicketMessageClient(cfg),
 		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
+		WebhookEndpoint:             NewWebhookEndpointClient(cfg),
+		WebhookSubscription:         NewWebhookSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -211,18 +226,21 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:                         ctx,
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
-		EmailInfo:                   NewEmailInfoClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
 		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
-		OAuthAuthorization:          NewOAuthAuthorizationClient(cfg),
-		OAuthClient:                 NewOAuthClientClient(cfg),
-		OAuthToken:                  NewOAuthTokenClient(cfg),
+		RiskEvent:                   NewRiskEventClient(cfg),
+		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		SystemLog:                   NewSystemLogClient(cfg),
+		Ticket:                      NewTicketClient(cfg),
+		TicketMessage:               NewTicketMessageClient(cfg),
 		UploadLog:                   NewUploadLogClient(cfg),
 		User:                        NewUserClient(cfg),
+		WebhookEndpoint:             NewWebhookEndpointClient(cfg),
+		WebhookSubscription:         NewWebhookSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -252,9 +270,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.FriendLink, c.GameAccountBinding,
-		c.Group, c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
-		c.OAuthToken, c.SocialPlatformInfo, c.UploadLog, c.User,
+		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding, c.Group,
+		c.GroupList, c.IOSScriptCode, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
+		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
+		c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -264,9 +283,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuthorizeSocialPlatformInfo, c.EmailInfo, c.FriendLink, c.GameAccountBinding,
-		c.Group, c.GroupList, c.IOSScriptCode, c.OAuthAuthorization, c.OAuthClient,
-		c.OAuthToken, c.SocialPlatformInfo, c.UploadLog, c.User,
+		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding, c.Group,
+		c.GroupList, c.IOSScriptCode, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
+		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
+		c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -277,8 +297,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *AuthorizeSocialPlatformInfoMutation:
 		return c.AuthorizeSocialPlatformInfo.mutate(ctx, m)
-	case *EmailInfoMutation:
-		return c.EmailInfo.mutate(ctx, m)
 	case *FriendLinkMutation:
 		return c.FriendLink.mutate(ctx, m)
 	case *GameAccountBindingMutation:
@@ -289,18 +307,26 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GroupList.mutate(ctx, m)
 	case *IOSScriptCodeMutation:
 		return c.IOSScriptCode.mutate(ctx, m)
-	case *OAuthAuthorizationMutation:
-		return c.OAuthAuthorization.mutate(ctx, m)
-	case *OAuthClientMutation:
-		return c.OAuthClient.mutate(ctx, m)
-	case *OAuthTokenMutation:
-		return c.OAuthToken.mutate(ctx, m)
+	case *RiskEventMutation:
+		return c.RiskEvent.mutate(ctx, m)
+	case *RiskRuleMutation:
+		return c.RiskRule.mutate(ctx, m)
 	case *SocialPlatformInfoMutation:
 		return c.SocialPlatformInfo.mutate(ctx, m)
+	case *SystemLogMutation:
+		return c.SystemLog.mutate(ctx, m)
+	case *TicketMutation:
+		return c.Ticket.mutate(ctx, m)
+	case *TicketMessageMutation:
+		return c.TicketMessage.mutate(ctx, m)
 	case *UploadLogMutation:
 		return c.UploadLog.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
+	case *WebhookEndpointMutation:
+		return c.WebhookEndpoint.mutate(ctx, m)
+	case *WebhookSubscriptionMutation:
+		return c.WebhookSubscription.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown mutation type %T", m)
 	}
@@ -452,155 +478,6 @@ func (c *AuthorizeSocialPlatformInfoClient) mutate(ctx context.Context, m *Autho
 		return (&AuthorizeSocialPlatformInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown AuthorizeSocialPlatformInfo mutation op: %q", m.Op())
-	}
-}
-
-// EmailInfoClient is a client for the EmailInfo schema.
-type EmailInfoClient struct {
-	config
-}
-
-// NewEmailInfoClient returns a client for the EmailInfo from the given config.
-func NewEmailInfoClient(c config) *EmailInfoClient {
-	return &EmailInfoClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `emailinfo.Hooks(f(g(h())))`.
-func (c *EmailInfoClient) Use(hooks ...Hook) {
-	c.hooks.EmailInfo = append(c.hooks.EmailInfo, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `emailinfo.Intercept(f(g(h())))`.
-func (c *EmailInfoClient) Intercept(interceptors ...Interceptor) {
-	c.inters.EmailInfo = append(c.inters.EmailInfo, interceptors...)
-}
-
-// Create returns a builder for creating a EmailInfo entity.
-func (c *EmailInfoClient) Create() *EmailInfoCreate {
-	mutation := newEmailInfoMutation(c.config, OpCreate)
-	return &EmailInfoCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of EmailInfo entities.
-func (c *EmailInfoClient) CreateBulk(builders ...*EmailInfoCreate) *EmailInfoCreateBulk {
-	return &EmailInfoCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *EmailInfoClient) MapCreateBulk(slice any, setFunc func(*EmailInfoCreate, int)) *EmailInfoCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &EmailInfoCreateBulk{err: fmt.Errorf("calling to EmailInfoClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*EmailInfoCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &EmailInfoCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for EmailInfo.
-func (c *EmailInfoClient) Update() *EmailInfoUpdate {
-	mutation := newEmailInfoMutation(c.config, OpUpdate)
-	return &EmailInfoUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *EmailInfoClient) UpdateOne(_m *EmailInfo) *EmailInfoUpdateOne {
-	mutation := newEmailInfoMutation(c.config, OpUpdateOne, withEmailInfo(_m))
-	return &EmailInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *EmailInfoClient) UpdateOneID(id int) *EmailInfoUpdateOne {
-	mutation := newEmailInfoMutation(c.config, OpUpdateOne, withEmailInfoID(id))
-	return &EmailInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for EmailInfo.
-func (c *EmailInfoClient) Delete() *EmailInfoDelete {
-	mutation := newEmailInfoMutation(c.config, OpDelete)
-	return &EmailInfoDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *EmailInfoClient) DeleteOne(_m *EmailInfo) *EmailInfoDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *EmailInfoClient) DeleteOneID(id int) *EmailInfoDeleteOne {
-	builder := c.Delete().Where(emailinfo.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &EmailInfoDeleteOne{builder}
-}
-
-// Query returns a query builder for EmailInfo.
-func (c *EmailInfoClient) Query() *EmailInfoQuery {
-	return &EmailInfoQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeEmailInfo},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a EmailInfo entity by its id.
-func (c *EmailInfoClient) Get(ctx context.Context, id int) (*EmailInfo, error) {
-	return c.Query().Where(emailinfo.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *EmailInfoClient) GetX(ctx context.Context, id int) *EmailInfo {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryUser queries the user edge of a EmailInfo.
-func (c *EmailInfoClient) QueryUser(_m *EmailInfo) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(emailinfo.Table, emailinfo.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, true, emailinfo.UserTable, emailinfo.UserColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *EmailInfoClient) Hooks() []Hook {
-	return c.hooks.EmailInfo
-}
-
-// Interceptors returns the client interceptors.
-func (c *EmailInfoClient) Interceptors() []Interceptor {
-	return c.inters.EmailInfo
-}
-
-func (c *EmailInfoClient) mutate(ctx context.Context, m *EmailInfoMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&EmailInfoCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&EmailInfoUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&EmailInfoUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&EmailInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("postgresql: unknown EmailInfo mutation op: %q", m.Op())
 	}
 }
 
@@ -1333,107 +1210,107 @@ func (c *IOSScriptCodeClient) mutate(ctx context.Context, m *IOSScriptCodeMutati
 	}
 }
 
-// OAuthAuthorizationClient is a client for the OAuthAuthorization schema.
-type OAuthAuthorizationClient struct {
+// RiskEventClient is a client for the RiskEvent schema.
+type RiskEventClient struct {
 	config
 }
 
-// NewOAuthAuthorizationClient returns a client for the OAuthAuthorization from the given config.
-func NewOAuthAuthorizationClient(c config) *OAuthAuthorizationClient {
-	return &OAuthAuthorizationClient{config: c}
+// NewRiskEventClient returns a client for the RiskEvent from the given config.
+func NewRiskEventClient(c config) *RiskEventClient {
+	return &RiskEventClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `oauthauthorization.Hooks(f(g(h())))`.
-func (c *OAuthAuthorizationClient) Use(hooks ...Hook) {
-	c.hooks.OAuthAuthorization = append(c.hooks.OAuthAuthorization, hooks...)
+// A call to `Use(f, g, h)` equals to `riskevent.Hooks(f(g(h())))`.
+func (c *RiskEventClient) Use(hooks ...Hook) {
+	c.hooks.RiskEvent = append(c.hooks.RiskEvent, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `oauthauthorization.Intercept(f(g(h())))`.
-func (c *OAuthAuthorizationClient) Intercept(interceptors ...Interceptor) {
-	c.inters.OAuthAuthorization = append(c.inters.OAuthAuthorization, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `riskevent.Intercept(f(g(h())))`.
+func (c *RiskEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RiskEvent = append(c.inters.RiskEvent, interceptors...)
 }
 
-// Create returns a builder for creating a OAuthAuthorization entity.
-func (c *OAuthAuthorizationClient) Create() *OAuthAuthorizationCreate {
-	mutation := newOAuthAuthorizationMutation(c.config, OpCreate)
-	return &OAuthAuthorizationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a RiskEvent entity.
+func (c *RiskEventClient) Create() *RiskEventCreate {
+	mutation := newRiskEventMutation(c.config, OpCreate)
+	return &RiskEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of OAuthAuthorization entities.
-func (c *OAuthAuthorizationClient) CreateBulk(builders ...*OAuthAuthorizationCreate) *OAuthAuthorizationCreateBulk {
-	return &OAuthAuthorizationCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of RiskEvent entities.
+func (c *RiskEventClient) CreateBulk(builders ...*RiskEventCreate) *RiskEventCreateBulk {
+	return &RiskEventCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *OAuthAuthorizationClient) MapCreateBulk(slice any, setFunc func(*OAuthAuthorizationCreate, int)) *OAuthAuthorizationCreateBulk {
+func (c *RiskEventClient) MapCreateBulk(slice any, setFunc func(*RiskEventCreate, int)) *RiskEventCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &OAuthAuthorizationCreateBulk{err: fmt.Errorf("calling to OAuthAuthorizationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &RiskEventCreateBulk{err: fmt.Errorf("calling to RiskEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*OAuthAuthorizationCreate, rv.Len())
+	builders := make([]*RiskEventCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &OAuthAuthorizationCreateBulk{config: c.config, builders: builders}
+	return &RiskEventCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for OAuthAuthorization.
-func (c *OAuthAuthorizationClient) Update() *OAuthAuthorizationUpdate {
-	mutation := newOAuthAuthorizationMutation(c.config, OpUpdate)
-	return &OAuthAuthorizationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for RiskEvent.
+func (c *RiskEventClient) Update() *RiskEventUpdate {
+	mutation := newRiskEventMutation(c.config, OpUpdate)
+	return &RiskEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *OAuthAuthorizationClient) UpdateOne(_m *OAuthAuthorization) *OAuthAuthorizationUpdateOne {
-	mutation := newOAuthAuthorizationMutation(c.config, OpUpdateOne, withOAuthAuthorization(_m))
-	return &OAuthAuthorizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *RiskEventClient) UpdateOne(_m *RiskEvent) *RiskEventUpdateOne {
+	mutation := newRiskEventMutation(c.config, OpUpdateOne, withRiskEvent(_m))
+	return &RiskEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *OAuthAuthorizationClient) UpdateOneID(id int) *OAuthAuthorizationUpdateOne {
-	mutation := newOAuthAuthorizationMutation(c.config, OpUpdateOne, withOAuthAuthorizationID(id))
-	return &OAuthAuthorizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *RiskEventClient) UpdateOneID(id int) *RiskEventUpdateOne {
+	mutation := newRiskEventMutation(c.config, OpUpdateOne, withRiskEventID(id))
+	return &RiskEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for OAuthAuthorization.
-func (c *OAuthAuthorizationClient) Delete() *OAuthAuthorizationDelete {
-	mutation := newOAuthAuthorizationMutation(c.config, OpDelete)
-	return &OAuthAuthorizationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for RiskEvent.
+func (c *RiskEventClient) Delete() *RiskEventDelete {
+	mutation := newRiskEventMutation(c.config, OpDelete)
+	return &RiskEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *OAuthAuthorizationClient) DeleteOne(_m *OAuthAuthorization) *OAuthAuthorizationDeleteOne {
+func (c *RiskEventClient) DeleteOne(_m *RiskEvent) *RiskEventDeleteOne {
 	return c.DeleteOneID(_m.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *OAuthAuthorizationClient) DeleteOneID(id int) *OAuthAuthorizationDeleteOne {
-	builder := c.Delete().Where(oauthauthorization.ID(id))
+func (c *RiskEventClient) DeleteOneID(id int) *RiskEventDeleteOne {
+	builder := c.Delete().Where(riskevent.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &OAuthAuthorizationDeleteOne{builder}
+	return &RiskEventDeleteOne{builder}
 }
 
-// Query returns a query builder for OAuthAuthorization.
-func (c *OAuthAuthorizationClient) Query() *OAuthAuthorizationQuery {
-	return &OAuthAuthorizationQuery{
+// Query returns a query builder for RiskEvent.
+func (c *RiskEventClient) Query() *RiskEventQuery {
+	return &RiskEventQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeOAuthAuthorization},
+		ctx:    &QueryContext{Type: TypeRiskEvent},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a OAuthAuthorization entity by its id.
-func (c *OAuthAuthorizationClient) Get(ctx context.Context, id int) (*OAuthAuthorization, error) {
-	return c.Query().Where(oauthauthorization.ID(id)).Only(ctx)
+// Get returns a RiskEvent entity by its id.
+func (c *RiskEventClient) Get(ctx context.Context, id int) (*RiskEvent, error) {
+	return c.Query().Where(riskevent.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *OAuthAuthorizationClient) GetX(ctx context.Context, id int) *OAuthAuthorization {
+func (c *RiskEventClient) GetX(ctx context.Context, id int) *RiskEvent {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -1441,164 +1318,132 @@ func (c *OAuthAuthorizationClient) GetX(ctx context.Context, id int) *OAuthAutho
 	return obj
 }
 
-// QueryUser queries the user edge of a OAuthAuthorization.
-func (c *OAuthAuthorizationClient) QueryUser(_m *OAuthAuthorization) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(oauthauthorization.Table, oauthauthorization.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, oauthauthorization.UserTable, oauthauthorization.UserColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryClient queries the client edge of a OAuthAuthorization.
-func (c *OAuthAuthorizationClient) QueryClient(_m *OAuthAuthorization) *OAuthClientQuery {
-	query := (&OAuthClientClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(oauthauthorization.Table, oauthauthorization.FieldID, id),
-			sqlgraph.To(oauthclient.Table, oauthclient.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, oauthauthorization.ClientTable, oauthauthorization.ClientColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
-func (c *OAuthAuthorizationClient) Hooks() []Hook {
-	return c.hooks.OAuthAuthorization
+func (c *RiskEventClient) Hooks() []Hook {
+	return c.hooks.RiskEvent
 }
 
 // Interceptors returns the client interceptors.
-func (c *OAuthAuthorizationClient) Interceptors() []Interceptor {
-	return c.inters.OAuthAuthorization
+func (c *RiskEventClient) Interceptors() []Interceptor {
+	return c.inters.RiskEvent
 }
 
-func (c *OAuthAuthorizationClient) mutate(ctx context.Context, m *OAuthAuthorizationMutation) (Value, error) {
+func (c *RiskEventClient) mutate(ctx context.Context, m *RiskEventMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&OAuthAuthorizationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&RiskEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&OAuthAuthorizationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&RiskEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&OAuthAuthorizationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&RiskEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&OAuthAuthorizationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&RiskEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("postgresql: unknown OAuthAuthorization mutation op: %q", m.Op())
+		return nil, fmt.Errorf("postgresql: unknown RiskEvent mutation op: %q", m.Op())
 	}
 }
 
-// OAuthClientClient is a client for the OAuthClient schema.
-type OAuthClientClient struct {
+// RiskRuleClient is a client for the RiskRule schema.
+type RiskRuleClient struct {
 	config
 }
 
-// NewOAuthClientClient returns a client for the OAuthClient from the given config.
-func NewOAuthClientClient(c config) *OAuthClientClient {
-	return &OAuthClientClient{config: c}
+// NewRiskRuleClient returns a client for the RiskRule from the given config.
+func NewRiskRuleClient(c config) *RiskRuleClient {
+	return &RiskRuleClient{config: c}
 }
 
 // Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `oauthclient.Hooks(f(g(h())))`.
-func (c *OAuthClientClient) Use(hooks ...Hook) {
-	c.hooks.OAuthClient = append(c.hooks.OAuthClient, hooks...)
+// A call to `Use(f, g, h)` equals to `riskrule.Hooks(f(g(h())))`.
+func (c *RiskRuleClient) Use(hooks ...Hook) {
+	c.hooks.RiskRule = append(c.hooks.RiskRule, hooks...)
 }
 
 // Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `oauthclient.Intercept(f(g(h())))`.
-func (c *OAuthClientClient) Intercept(interceptors ...Interceptor) {
-	c.inters.OAuthClient = append(c.inters.OAuthClient, interceptors...)
+// A call to `Intercept(f, g, h)` equals to `riskrule.Intercept(f(g(h())))`.
+func (c *RiskRuleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RiskRule = append(c.inters.RiskRule, interceptors...)
 }
 
-// Create returns a builder for creating a OAuthClient entity.
-func (c *OAuthClientClient) Create() *OAuthClientCreate {
-	mutation := newOAuthClientMutation(c.config, OpCreate)
-	return &OAuthClientCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Create returns a builder for creating a RiskRule entity.
+func (c *RiskRuleClient) Create() *RiskRuleCreate {
+	mutation := newRiskRuleMutation(c.config, OpCreate)
+	return &RiskRuleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// CreateBulk returns a builder for creating a bulk of OAuthClient entities.
-func (c *OAuthClientClient) CreateBulk(builders ...*OAuthClientCreate) *OAuthClientCreateBulk {
-	return &OAuthClientCreateBulk{config: c.config, builders: builders}
+// CreateBulk returns a builder for creating a bulk of RiskRule entities.
+func (c *RiskRuleClient) CreateBulk(builders ...*RiskRuleCreate) *RiskRuleCreateBulk {
+	return &RiskRuleCreateBulk{config: c.config, builders: builders}
 }
 
 // MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
 // a builder and applies setFunc on it.
-func (c *OAuthClientClient) MapCreateBulk(slice any, setFunc func(*OAuthClientCreate, int)) *OAuthClientCreateBulk {
+func (c *RiskRuleClient) MapCreateBulk(slice any, setFunc func(*RiskRuleCreate, int)) *RiskRuleCreateBulk {
 	rv := reflect.ValueOf(slice)
 	if rv.Kind() != reflect.Slice {
-		return &OAuthClientCreateBulk{err: fmt.Errorf("calling to OAuthClientClient.MapCreateBulk with wrong type %T, need slice", slice)}
+		return &RiskRuleCreateBulk{err: fmt.Errorf("calling to RiskRuleClient.MapCreateBulk with wrong type %T, need slice", slice)}
 	}
-	builders := make([]*OAuthClientCreate, rv.Len())
+	builders := make([]*RiskRuleCreate, rv.Len())
 	for i := 0; i < rv.Len(); i++ {
 		builders[i] = c.Create()
 		setFunc(builders[i], i)
 	}
-	return &OAuthClientCreateBulk{config: c.config, builders: builders}
+	return &RiskRuleCreateBulk{config: c.config, builders: builders}
 }
 
-// Update returns an update builder for OAuthClient.
-func (c *OAuthClientClient) Update() *OAuthClientUpdate {
-	mutation := newOAuthClientMutation(c.config, OpUpdate)
-	return &OAuthClientUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Update returns an update builder for RiskRule.
+func (c *RiskRuleClient) Update() *RiskRuleUpdate {
+	mutation := newRiskRuleMutation(c.config, OpUpdate)
+	return &RiskRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOne returns an update builder for the given entity.
-func (c *OAuthClientClient) UpdateOne(_m *OAuthClient) *OAuthClientUpdateOne {
-	mutation := newOAuthClientMutation(c.config, OpUpdateOne, withOAuthClient(_m))
-	return &OAuthClientUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *RiskRuleClient) UpdateOne(_m *RiskRule) *RiskRuleUpdateOne {
+	mutation := newRiskRuleMutation(c.config, OpUpdateOne, withRiskRule(_m))
+	return &RiskRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *OAuthClientClient) UpdateOneID(id int) *OAuthClientUpdateOne {
-	mutation := newOAuthClientMutation(c.config, OpUpdateOne, withOAuthClientID(id))
-	return &OAuthClientUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+func (c *RiskRuleClient) UpdateOneID(id int) *RiskRuleUpdateOne {
+	mutation := newRiskRuleMutation(c.config, OpUpdateOne, withRiskRuleID(id))
+	return &RiskRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
-// Delete returns a delete builder for OAuthClient.
-func (c *OAuthClientClient) Delete() *OAuthClientDelete {
-	mutation := newOAuthClientMutation(c.config, OpDelete)
-	return &OAuthClientDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+// Delete returns a delete builder for RiskRule.
+func (c *RiskRuleClient) Delete() *RiskRuleDelete {
+	mutation := newRiskRuleMutation(c.config, OpDelete)
+	return &RiskRuleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
 // DeleteOne returns a builder for deleting the given entity.
-func (c *OAuthClientClient) DeleteOne(_m *OAuthClient) *OAuthClientDeleteOne {
+func (c *RiskRuleClient) DeleteOne(_m *RiskRule) *RiskRuleDeleteOne {
 	return c.DeleteOneID(_m.ID)
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *OAuthClientClient) DeleteOneID(id int) *OAuthClientDeleteOne {
-	builder := c.Delete().Where(oauthclient.ID(id))
+func (c *RiskRuleClient) DeleteOneID(id int) *RiskRuleDeleteOne {
+	builder := c.Delete().Where(riskrule.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
-	return &OAuthClientDeleteOne{builder}
+	return &RiskRuleDeleteOne{builder}
 }
 
-// Query returns a query builder for OAuthClient.
-func (c *OAuthClientClient) Query() *OAuthClientQuery {
-	return &OAuthClientQuery{
+// Query returns a query builder for RiskRule.
+func (c *RiskRuleClient) Query() *RiskRuleQuery {
+	return &RiskRuleQuery{
 		config: c.config,
-		ctx:    &QueryContext{Type: TypeOAuthClient},
+		ctx:    &QueryContext{Type: TypeRiskRule},
 		inters: c.Interceptors(),
 	}
 }
 
-// Get returns a OAuthClient entity by its id.
-func (c *OAuthClientClient) Get(ctx context.Context, id int) (*OAuthClient, error) {
-	return c.Query().Where(oauthclient.ID(id)).Only(ctx)
+// Get returns a RiskRule entity by its id.
+func (c *RiskRuleClient) Get(ctx context.Context, id int) (*RiskRule, error) {
+	return c.Query().Where(riskrule.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *OAuthClientClient) GetX(ctx context.Context, id int) *OAuthClient {
+func (c *RiskRuleClient) GetX(ctx context.Context, id int) *RiskRule {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -1606,225 +1451,28 @@ func (c *OAuthClientClient) GetX(ctx context.Context, id int) *OAuthClient {
 	return obj
 }
 
-// QueryAuthorizations queries the authorizations edge of a OAuthClient.
-func (c *OAuthClientClient) QueryAuthorizations(_m *OAuthClient) *OAuthAuthorizationQuery {
-	query := (&OAuthAuthorizationClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(oauthclient.Table, oauthclient.FieldID, id),
-			sqlgraph.To(oauthauthorization.Table, oauthauthorization.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, oauthclient.AuthorizationsTable, oauthclient.AuthorizationsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryTokens queries the tokens edge of a OAuthClient.
-func (c *OAuthClientClient) QueryTokens(_m *OAuthClient) *OAuthTokenQuery {
-	query := (&OAuthTokenClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(oauthclient.Table, oauthclient.FieldID, id),
-			sqlgraph.To(oauthtoken.Table, oauthtoken.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, oauthclient.TokensTable, oauthclient.TokensColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
-func (c *OAuthClientClient) Hooks() []Hook {
-	return c.hooks.OAuthClient
+func (c *RiskRuleClient) Hooks() []Hook {
+	return c.hooks.RiskRule
 }
 
 // Interceptors returns the client interceptors.
-func (c *OAuthClientClient) Interceptors() []Interceptor {
-	return c.inters.OAuthClient
+func (c *RiskRuleClient) Interceptors() []Interceptor {
+	return c.inters.RiskRule
 }
 
-func (c *OAuthClientClient) mutate(ctx context.Context, m *OAuthClientMutation) (Value, error) {
+func (c *RiskRuleClient) mutate(ctx context.Context, m *RiskRuleMutation) (Value, error) {
 	switch m.Op() {
 	case OpCreate:
-		return (&OAuthClientCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&RiskRuleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdate:
-		return (&OAuthClientUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&RiskRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpUpdateOne:
-		return (&OAuthClientUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+		return (&RiskRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
 	case OpDelete, OpDeleteOne:
-		return (&OAuthClientDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+		return (&RiskRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
-		return nil, fmt.Errorf("postgresql: unknown OAuthClient mutation op: %q", m.Op())
-	}
-}
-
-// OAuthTokenClient is a client for the OAuthToken schema.
-type OAuthTokenClient struct {
-	config
-}
-
-// NewOAuthTokenClient returns a client for the OAuthToken from the given config.
-func NewOAuthTokenClient(c config) *OAuthTokenClient {
-	return &OAuthTokenClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `oauthtoken.Hooks(f(g(h())))`.
-func (c *OAuthTokenClient) Use(hooks ...Hook) {
-	c.hooks.OAuthToken = append(c.hooks.OAuthToken, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `oauthtoken.Intercept(f(g(h())))`.
-func (c *OAuthTokenClient) Intercept(interceptors ...Interceptor) {
-	c.inters.OAuthToken = append(c.inters.OAuthToken, interceptors...)
-}
-
-// Create returns a builder for creating a OAuthToken entity.
-func (c *OAuthTokenClient) Create() *OAuthTokenCreate {
-	mutation := newOAuthTokenMutation(c.config, OpCreate)
-	return &OAuthTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of OAuthToken entities.
-func (c *OAuthTokenClient) CreateBulk(builders ...*OAuthTokenCreate) *OAuthTokenCreateBulk {
-	return &OAuthTokenCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *OAuthTokenClient) MapCreateBulk(slice any, setFunc func(*OAuthTokenCreate, int)) *OAuthTokenCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &OAuthTokenCreateBulk{err: fmt.Errorf("calling to OAuthTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*OAuthTokenCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &OAuthTokenCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for OAuthToken.
-func (c *OAuthTokenClient) Update() *OAuthTokenUpdate {
-	mutation := newOAuthTokenMutation(c.config, OpUpdate)
-	return &OAuthTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *OAuthTokenClient) UpdateOne(_m *OAuthToken) *OAuthTokenUpdateOne {
-	mutation := newOAuthTokenMutation(c.config, OpUpdateOne, withOAuthToken(_m))
-	return &OAuthTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *OAuthTokenClient) UpdateOneID(id int) *OAuthTokenUpdateOne {
-	mutation := newOAuthTokenMutation(c.config, OpUpdateOne, withOAuthTokenID(id))
-	return &OAuthTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for OAuthToken.
-func (c *OAuthTokenClient) Delete() *OAuthTokenDelete {
-	mutation := newOAuthTokenMutation(c.config, OpDelete)
-	return &OAuthTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *OAuthTokenClient) DeleteOne(_m *OAuthToken) *OAuthTokenDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *OAuthTokenClient) DeleteOneID(id int) *OAuthTokenDeleteOne {
-	builder := c.Delete().Where(oauthtoken.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &OAuthTokenDeleteOne{builder}
-}
-
-// Query returns a query builder for OAuthToken.
-func (c *OAuthTokenClient) Query() *OAuthTokenQuery {
-	return &OAuthTokenQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeOAuthToken},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a OAuthToken entity by its id.
-func (c *OAuthTokenClient) Get(ctx context.Context, id int) (*OAuthToken, error) {
-	return c.Query().Where(oauthtoken.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *OAuthTokenClient) GetX(ctx context.Context, id int) *OAuthToken {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryUser queries the user edge of a OAuthToken.
-func (c *OAuthTokenClient) QueryUser(_m *OAuthToken) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(oauthtoken.Table, oauthtoken.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, oauthtoken.UserTable, oauthtoken.UserColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryClient queries the client edge of a OAuthToken.
-func (c *OAuthTokenClient) QueryClient(_m *OAuthToken) *OAuthClientQuery {
-	query := (&OAuthClientClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(oauthtoken.Table, oauthtoken.FieldID, id),
-			sqlgraph.To(oauthclient.Table, oauthclient.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, oauthtoken.ClientTable, oauthtoken.ClientColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *OAuthTokenClient) Hooks() []Hook {
-	return c.hooks.OAuthToken
-}
-
-// Interceptors returns the client interceptors.
-func (c *OAuthTokenClient) Interceptors() []Interceptor {
-	return c.inters.OAuthToken
-}
-
-func (c *OAuthTokenClient) mutate(ctx context.Context, m *OAuthTokenMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&OAuthTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&OAuthTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&OAuthTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&OAuthTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("postgresql: unknown OAuthToken mutation op: %q", m.Op())
+		return nil, fmt.Errorf("postgresql: unknown RiskRule mutation op: %q", m.Op())
 	}
 }
 
@@ -1974,6 +1622,437 @@ func (c *SocialPlatformInfoClient) mutate(ctx context.Context, m *SocialPlatform
 		return (&SocialPlatformInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown SocialPlatformInfo mutation op: %q", m.Op())
+	}
+}
+
+// SystemLogClient is a client for the SystemLog schema.
+type SystemLogClient struct {
+	config
+}
+
+// NewSystemLogClient returns a client for the SystemLog from the given config.
+func NewSystemLogClient(c config) *SystemLogClient {
+	return &SystemLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `systemlog.Hooks(f(g(h())))`.
+func (c *SystemLogClient) Use(hooks ...Hook) {
+	c.hooks.SystemLog = append(c.hooks.SystemLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `systemlog.Intercept(f(g(h())))`.
+func (c *SystemLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SystemLog = append(c.inters.SystemLog, interceptors...)
+}
+
+// Create returns a builder for creating a SystemLog entity.
+func (c *SystemLogClient) Create() *SystemLogCreate {
+	mutation := newSystemLogMutation(c.config, OpCreate)
+	return &SystemLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SystemLog entities.
+func (c *SystemLogClient) CreateBulk(builders ...*SystemLogCreate) *SystemLogCreateBulk {
+	return &SystemLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SystemLogClient) MapCreateBulk(slice any, setFunc func(*SystemLogCreate, int)) *SystemLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SystemLogCreateBulk{err: fmt.Errorf("calling to SystemLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SystemLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SystemLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SystemLog.
+func (c *SystemLogClient) Update() *SystemLogUpdate {
+	mutation := newSystemLogMutation(c.config, OpUpdate)
+	return &SystemLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SystemLogClient) UpdateOne(_m *SystemLog) *SystemLogUpdateOne {
+	mutation := newSystemLogMutation(c.config, OpUpdateOne, withSystemLog(_m))
+	return &SystemLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SystemLogClient) UpdateOneID(id int) *SystemLogUpdateOne {
+	mutation := newSystemLogMutation(c.config, OpUpdateOne, withSystemLogID(id))
+	return &SystemLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SystemLog.
+func (c *SystemLogClient) Delete() *SystemLogDelete {
+	mutation := newSystemLogMutation(c.config, OpDelete)
+	return &SystemLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SystemLogClient) DeleteOne(_m *SystemLog) *SystemLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SystemLogClient) DeleteOneID(id int) *SystemLogDeleteOne {
+	builder := c.Delete().Where(systemlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SystemLogDeleteOne{builder}
+}
+
+// Query returns a query builder for SystemLog.
+func (c *SystemLogClient) Query() *SystemLogQuery {
+	return &SystemLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSystemLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SystemLog entity by its id.
+func (c *SystemLogClient) Get(ctx context.Context, id int) (*SystemLog, error) {
+	return c.Query().Where(systemlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SystemLogClient) GetX(ctx context.Context, id int) *SystemLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SystemLogClient) Hooks() []Hook {
+	return c.hooks.SystemLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *SystemLogClient) Interceptors() []Interceptor {
+	return c.inters.SystemLog
+}
+
+func (c *SystemLogClient) mutate(ctx context.Context, m *SystemLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SystemLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SystemLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SystemLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SystemLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown SystemLog mutation op: %q", m.Op())
+	}
+}
+
+// TicketClient is a client for the Ticket schema.
+type TicketClient struct {
+	config
+}
+
+// NewTicketClient returns a client for the Ticket from the given config.
+func NewTicketClient(c config) *TicketClient {
+	return &TicketClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ticket.Hooks(f(g(h())))`.
+func (c *TicketClient) Use(hooks ...Hook) {
+	c.hooks.Ticket = append(c.hooks.Ticket, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ticket.Intercept(f(g(h())))`.
+func (c *TicketClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Ticket = append(c.inters.Ticket, interceptors...)
+}
+
+// Create returns a builder for creating a Ticket entity.
+func (c *TicketClient) Create() *TicketCreate {
+	mutation := newTicketMutation(c.config, OpCreate)
+	return &TicketCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Ticket entities.
+func (c *TicketClient) CreateBulk(builders ...*TicketCreate) *TicketCreateBulk {
+	return &TicketCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TicketClient) MapCreateBulk(slice any, setFunc func(*TicketCreate, int)) *TicketCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TicketCreateBulk{err: fmt.Errorf("calling to TicketClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TicketCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TicketCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Ticket.
+func (c *TicketClient) Update() *TicketUpdate {
+	mutation := newTicketMutation(c.config, OpUpdate)
+	return &TicketUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TicketClient) UpdateOne(_m *Ticket) *TicketUpdateOne {
+	mutation := newTicketMutation(c.config, OpUpdateOne, withTicket(_m))
+	return &TicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TicketClient) UpdateOneID(id int) *TicketUpdateOne {
+	mutation := newTicketMutation(c.config, OpUpdateOne, withTicketID(id))
+	return &TicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Ticket.
+func (c *TicketClient) Delete() *TicketDelete {
+	mutation := newTicketMutation(c.config, OpDelete)
+	return &TicketDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TicketClient) DeleteOne(_m *Ticket) *TicketDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TicketClient) DeleteOneID(id int) *TicketDeleteOne {
+	builder := c.Delete().Where(ticket.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TicketDeleteOne{builder}
+}
+
+// Query returns a query builder for Ticket.
+func (c *TicketClient) Query() *TicketQuery {
+	return &TicketQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTicket},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Ticket entity by its id.
+func (c *TicketClient) Get(ctx context.Context, id int) (*Ticket, error) {
+	return c.Query().Where(ticket.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TicketClient) GetX(ctx context.Context, id int) *Ticket {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMessages queries the messages edge of a Ticket.
+func (c *TicketClient) QueryMessages(_m *Ticket) *TicketMessageQuery {
+	query := (&TicketMessageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticket.Table, ticket.FieldID, id),
+			sqlgraph.To(ticketmessage.Table, ticketmessage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ticket.MessagesTable, ticket.MessagesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TicketClient) Hooks() []Hook {
+	return c.hooks.Ticket
+}
+
+// Interceptors returns the client interceptors.
+func (c *TicketClient) Interceptors() []Interceptor {
+	return c.inters.Ticket
+}
+
+func (c *TicketClient) mutate(ctx context.Context, m *TicketMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TicketCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TicketUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TicketUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TicketDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown Ticket mutation op: %q", m.Op())
+	}
+}
+
+// TicketMessageClient is a client for the TicketMessage schema.
+type TicketMessageClient struct {
+	config
+}
+
+// NewTicketMessageClient returns a client for the TicketMessage from the given config.
+func NewTicketMessageClient(c config) *TicketMessageClient {
+	return &TicketMessageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ticketmessage.Hooks(f(g(h())))`.
+func (c *TicketMessageClient) Use(hooks ...Hook) {
+	c.hooks.TicketMessage = append(c.hooks.TicketMessage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ticketmessage.Intercept(f(g(h())))`.
+func (c *TicketMessageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TicketMessage = append(c.inters.TicketMessage, interceptors...)
+}
+
+// Create returns a builder for creating a TicketMessage entity.
+func (c *TicketMessageClient) Create() *TicketMessageCreate {
+	mutation := newTicketMessageMutation(c.config, OpCreate)
+	return &TicketMessageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TicketMessage entities.
+func (c *TicketMessageClient) CreateBulk(builders ...*TicketMessageCreate) *TicketMessageCreateBulk {
+	return &TicketMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TicketMessageClient) MapCreateBulk(slice any, setFunc func(*TicketMessageCreate, int)) *TicketMessageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TicketMessageCreateBulk{err: fmt.Errorf("calling to TicketMessageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TicketMessageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TicketMessageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TicketMessage.
+func (c *TicketMessageClient) Update() *TicketMessageUpdate {
+	mutation := newTicketMessageMutation(c.config, OpUpdate)
+	return &TicketMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TicketMessageClient) UpdateOne(_m *TicketMessage) *TicketMessageUpdateOne {
+	mutation := newTicketMessageMutation(c.config, OpUpdateOne, withTicketMessage(_m))
+	return &TicketMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TicketMessageClient) UpdateOneID(id int) *TicketMessageUpdateOne {
+	mutation := newTicketMessageMutation(c.config, OpUpdateOne, withTicketMessageID(id))
+	return &TicketMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TicketMessage.
+func (c *TicketMessageClient) Delete() *TicketMessageDelete {
+	mutation := newTicketMessageMutation(c.config, OpDelete)
+	return &TicketMessageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TicketMessageClient) DeleteOne(_m *TicketMessage) *TicketMessageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TicketMessageClient) DeleteOneID(id int) *TicketMessageDeleteOne {
+	builder := c.Delete().Where(ticketmessage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TicketMessageDeleteOne{builder}
+}
+
+// Query returns a query builder for TicketMessage.
+func (c *TicketMessageClient) Query() *TicketMessageQuery {
+	return &TicketMessageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTicketMessage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TicketMessage entity by its id.
+func (c *TicketMessageClient) Get(ctx context.Context, id int) (*TicketMessage, error) {
+	return c.Query().Where(ticketmessage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TicketMessageClient) GetX(ctx context.Context, id int) *TicketMessage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryTicket queries the ticket edge of a TicketMessage.
+func (c *TicketMessageClient) QueryTicket(_m *TicketMessage) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ticketmessage.Table, ticketmessage.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, ticketmessage.TicketTable, ticketmessage.TicketColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TicketMessageClient) Hooks() []Hook {
+	return c.hooks.TicketMessage
+}
+
+// Interceptors returns the client interceptors.
+func (c *TicketMessageClient) Interceptors() []Interceptor {
+	return c.inters.TicketMessage
+}
+
+func (c *TicketMessageClient) mutate(ctx context.Context, m *TicketMessageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TicketMessageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TicketMessageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TicketMessageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TicketMessageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown TicketMessage mutation op: %q", m.Op())
 	}
 }
 
@@ -2218,22 +2297,6 @@ func (c *UserClient) GetX(ctx context.Context, id string) *User {
 	return obj
 }
 
-// QueryEmailInfo queries the email_info edge of a User.
-func (c *UserClient) QueryEmailInfo(_m *User) *EmailInfoQuery {
-	query := (&EmailInfoClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, id),
-			sqlgraph.To(emailinfo.Table, emailinfo.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, user.EmailInfoTable, user.EmailInfoColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QuerySocialPlatformInfo queries the social_platform_info edge of a User.
 func (c *UserClient) QuerySocialPlatformInfo(_m *User) *SocialPlatformInfoQuery {
 	query := (&SocialPlatformInfoClient{config: c.config}).Query()
@@ -2298,38 +2361,6 @@ func (c *UserClient) QueryIosScriptCode(_m *User) *IOSScriptCodeQuery {
 	return query
 }
 
-// QueryOauthAuthorizations queries the oauth_authorizations edge of a User.
-func (c *UserClient) QueryOauthAuthorizations(_m *User) *OAuthAuthorizationQuery {
-	query := (&OAuthAuthorizationClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, id),
-			sqlgraph.To(oauthauthorization.Table, oauthauthorization.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, user.OauthAuthorizationsTable, user.OauthAuthorizationsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryOauthTokens queries the oauth_tokens edge of a User.
-func (c *UserClient) QueryOauthTokens(_m *User) *OAuthTokenQuery {
-	query := (&OAuthTokenClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, id),
-			sqlgraph.To(oauthtoken.Table, oauthtoken.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, user.OauthTokensTable, user.OauthTokensColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *UserClient) Hooks() []Hook {
 	return c.hooks.User
@@ -2355,16 +2386,315 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 	}
 }
 
+// WebhookEndpointClient is a client for the WebhookEndpoint schema.
+type WebhookEndpointClient struct {
+	config
+}
+
+// NewWebhookEndpointClient returns a client for the WebhookEndpoint from the given config.
+func NewWebhookEndpointClient(c config) *WebhookEndpointClient {
+	return &WebhookEndpointClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `webhookendpoint.Hooks(f(g(h())))`.
+func (c *WebhookEndpointClient) Use(hooks ...Hook) {
+	c.hooks.WebhookEndpoint = append(c.hooks.WebhookEndpoint, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `webhookendpoint.Intercept(f(g(h())))`.
+func (c *WebhookEndpointClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WebhookEndpoint = append(c.inters.WebhookEndpoint, interceptors...)
+}
+
+// Create returns a builder for creating a WebhookEndpoint entity.
+func (c *WebhookEndpointClient) Create() *WebhookEndpointCreate {
+	mutation := newWebhookEndpointMutation(c.config, OpCreate)
+	return &WebhookEndpointCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WebhookEndpoint entities.
+func (c *WebhookEndpointClient) CreateBulk(builders ...*WebhookEndpointCreate) *WebhookEndpointCreateBulk {
+	return &WebhookEndpointCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WebhookEndpointClient) MapCreateBulk(slice any, setFunc func(*WebhookEndpointCreate, int)) *WebhookEndpointCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WebhookEndpointCreateBulk{err: fmt.Errorf("calling to WebhookEndpointClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WebhookEndpointCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WebhookEndpointCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WebhookEndpoint.
+func (c *WebhookEndpointClient) Update() *WebhookEndpointUpdate {
+	mutation := newWebhookEndpointMutation(c.config, OpUpdate)
+	return &WebhookEndpointUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WebhookEndpointClient) UpdateOne(_m *WebhookEndpoint) *WebhookEndpointUpdateOne {
+	mutation := newWebhookEndpointMutation(c.config, OpUpdateOne, withWebhookEndpoint(_m))
+	return &WebhookEndpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WebhookEndpointClient) UpdateOneID(id string) *WebhookEndpointUpdateOne {
+	mutation := newWebhookEndpointMutation(c.config, OpUpdateOne, withWebhookEndpointID(id))
+	return &WebhookEndpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WebhookEndpoint.
+func (c *WebhookEndpointClient) Delete() *WebhookEndpointDelete {
+	mutation := newWebhookEndpointMutation(c.config, OpDelete)
+	return &WebhookEndpointDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WebhookEndpointClient) DeleteOne(_m *WebhookEndpoint) *WebhookEndpointDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WebhookEndpointClient) DeleteOneID(id string) *WebhookEndpointDeleteOne {
+	builder := c.Delete().Where(webhookendpoint.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WebhookEndpointDeleteOne{builder}
+}
+
+// Query returns a query builder for WebhookEndpoint.
+func (c *WebhookEndpointClient) Query() *WebhookEndpointQuery {
+	return &WebhookEndpointQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWebhookEndpoint},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WebhookEndpoint entity by its id.
+func (c *WebhookEndpointClient) Get(ctx context.Context, id string) (*WebhookEndpoint, error) {
+	return c.Query().Where(webhookendpoint.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WebhookEndpointClient) GetX(ctx context.Context, id string) *WebhookEndpoint {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySubscriptions queries the subscriptions edge of a WebhookEndpoint.
+func (c *WebhookEndpointClient) QuerySubscriptions(_m *WebhookEndpoint) *WebhookSubscriptionQuery {
+	query := (&WebhookSubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(webhookendpoint.Table, webhookendpoint.FieldID, id),
+			sqlgraph.To(webhooksubscription.Table, webhooksubscription.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, webhookendpoint.SubscriptionsTable, webhookendpoint.SubscriptionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *WebhookEndpointClient) Hooks() []Hook {
+	return c.hooks.WebhookEndpoint
+}
+
+// Interceptors returns the client interceptors.
+func (c *WebhookEndpointClient) Interceptors() []Interceptor {
+	return c.inters.WebhookEndpoint
+}
+
+func (c *WebhookEndpointClient) mutate(ctx context.Context, m *WebhookEndpointMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WebhookEndpointCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WebhookEndpointUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WebhookEndpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WebhookEndpointDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown WebhookEndpoint mutation op: %q", m.Op())
+	}
+}
+
+// WebhookSubscriptionClient is a client for the WebhookSubscription schema.
+type WebhookSubscriptionClient struct {
+	config
+}
+
+// NewWebhookSubscriptionClient returns a client for the WebhookSubscription from the given config.
+func NewWebhookSubscriptionClient(c config) *WebhookSubscriptionClient {
+	return &WebhookSubscriptionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `webhooksubscription.Hooks(f(g(h())))`.
+func (c *WebhookSubscriptionClient) Use(hooks ...Hook) {
+	c.hooks.WebhookSubscription = append(c.hooks.WebhookSubscription, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `webhooksubscription.Intercept(f(g(h())))`.
+func (c *WebhookSubscriptionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WebhookSubscription = append(c.inters.WebhookSubscription, interceptors...)
+}
+
+// Create returns a builder for creating a WebhookSubscription entity.
+func (c *WebhookSubscriptionClient) Create() *WebhookSubscriptionCreate {
+	mutation := newWebhookSubscriptionMutation(c.config, OpCreate)
+	return &WebhookSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WebhookSubscription entities.
+func (c *WebhookSubscriptionClient) CreateBulk(builders ...*WebhookSubscriptionCreate) *WebhookSubscriptionCreateBulk {
+	return &WebhookSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WebhookSubscriptionClient) MapCreateBulk(slice any, setFunc func(*WebhookSubscriptionCreate, int)) *WebhookSubscriptionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WebhookSubscriptionCreateBulk{err: fmt.Errorf("calling to WebhookSubscriptionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WebhookSubscriptionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WebhookSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WebhookSubscription.
+func (c *WebhookSubscriptionClient) Update() *WebhookSubscriptionUpdate {
+	mutation := newWebhookSubscriptionMutation(c.config, OpUpdate)
+	return &WebhookSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WebhookSubscriptionClient) UpdateOne(_m *WebhookSubscription) *WebhookSubscriptionUpdateOne {
+	mutation := newWebhookSubscriptionMutation(c.config, OpUpdateOne, withWebhookSubscription(_m))
+	return &WebhookSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WebhookSubscriptionClient) UpdateOneID(id int) *WebhookSubscriptionUpdateOne {
+	mutation := newWebhookSubscriptionMutation(c.config, OpUpdateOne, withWebhookSubscriptionID(id))
+	return &WebhookSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WebhookSubscription.
+func (c *WebhookSubscriptionClient) Delete() *WebhookSubscriptionDelete {
+	mutation := newWebhookSubscriptionMutation(c.config, OpDelete)
+	return &WebhookSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WebhookSubscriptionClient) DeleteOne(_m *WebhookSubscription) *WebhookSubscriptionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WebhookSubscriptionClient) DeleteOneID(id int) *WebhookSubscriptionDeleteOne {
+	builder := c.Delete().Where(webhooksubscription.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WebhookSubscriptionDeleteOne{builder}
+}
+
+// Query returns a query builder for WebhookSubscription.
+func (c *WebhookSubscriptionClient) Query() *WebhookSubscriptionQuery {
+	return &WebhookSubscriptionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWebhookSubscription},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WebhookSubscription entity by its id.
+func (c *WebhookSubscriptionClient) Get(ctx context.Context, id int) (*WebhookSubscription, error) {
+	return c.Query().Where(webhooksubscription.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WebhookSubscriptionClient) GetX(ctx context.Context, id int) *WebhookSubscription {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryEndpoint queries the endpoint edge of a WebhookSubscription.
+func (c *WebhookSubscriptionClient) QueryEndpoint(_m *WebhookSubscription) *WebhookEndpointQuery {
+	query := (&WebhookEndpointClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(webhooksubscription.Table, webhooksubscription.FieldID, id),
+			sqlgraph.To(webhookendpoint.Table, webhookendpoint.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, webhooksubscription.EndpointTable, webhooksubscription.EndpointColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *WebhookSubscriptionClient) Hooks() []Hook {
+	return c.hooks.WebhookSubscription
+}
+
+// Interceptors returns the client interceptors.
+func (c *WebhookSubscriptionClient) Interceptors() []Interceptor {
+	return c.inters.WebhookSubscription
+}
+
+func (c *WebhookSubscriptionClient) mutate(ctx context.Context, m *WebhookSubscriptionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WebhookSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WebhookSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WebhookSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WebhookSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown WebhookSubscription mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, FriendLink, GameAccountBinding, Group,
-		GroupList, IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken,
-		SocialPlatformInfo, UploadLog, User []ent.Hook
+		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding, Group, GroupList,
+		IOSScriptCode, RiskEvent, RiskRule, SocialPlatformInfo, SystemLog, Ticket,
+		TicketMessage, UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
 	}
 	inters struct {
-		AuthorizeSocialPlatformInfo, EmailInfo, FriendLink, GameAccountBinding, Group,
-		GroupList, IOSScriptCode, OAuthAuthorization, OAuthClient, OAuthToken,
-		SocialPlatformInfo, UploadLog, User []ent.Interceptor
+		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding, Group, GroupList,
+		IOSScriptCode, RiskEvent, RiskRule, SocialPlatformInfo, SystemLog, Ticket,
+		TicketMessage, UploadLog, User, WebhookEndpoint,
+		WebhookSubscription []ent.Interceptor
 	}
 )

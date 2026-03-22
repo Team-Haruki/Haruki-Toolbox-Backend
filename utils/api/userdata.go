@@ -5,19 +5,26 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils"
 	"haruki-suite/utils/database/postgresql"
+	"strings"
 )
 
 func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
-	emailInfo := buildEmailInfoFromUser(user)
+	return BuildUserDataFromDBUserWithEmailVerified(user, sessionToken, nil)
+}
+
+func BuildUserDataFromDBUserWithEmailVerified(user *postgresql.User, sessionToken *string, emailVerifiedOverride *bool) HarukiToolboxUserData {
+	emailInfo := buildEmailInfoFromUser(user, emailVerifiedOverride)
 	socialPlatformInfo := buildSocialPlatformInfoFromUser(user)
 	authorizeSocialPlatformInfo := buildAuthorizeSocialPlatformInfoFromUser(user)
 	gameAccountBindings := buildGameAccountBindingsFromUser(user)
 	avatarURL := buildAvatarURLFromUser(user)
 	iosUploadCode := buildIOSUploadCodeFromUser(user)
+	role := string(user.Role)
 
 	return HarukiToolboxUserData{
 		Name:                        &user.Name,
 		UserID:                      &user.ID,
+		Role:                        &role,
 		AvatarPath:                  &avatarURL,
 		AllowCNMysekai:              &user.AllowCnMysekai,
 		IOSUploadCode:               iosUploadCode,
@@ -36,17 +43,21 @@ func buildIOSUploadCodeFromUser(user *postgresql.User) *string {
 	return nil
 }
 
-func buildEmailInfoFromUser(user *postgresql.User) EmailInfo {
-	if user.Edges.EmailInfo != nil {
-		return EmailInfo{
-			Email:    user.Edges.EmailInfo.Email,
-			Verified: user.Edges.EmailInfo.Verified,
-		}
-	}
+func buildEmailInfoFromUser(user *postgresql.User, emailVerifiedOverride *bool) EmailInfo {
 	return EmailInfo{
 		Email:    user.Email,
-		Verified: false,
+		Verified: resolveUserEmailVerified(user, emailVerifiedOverride),
 	}
+}
+
+func resolveUserEmailVerified(user *postgresql.User, emailVerifiedOverride *bool) bool {
+	if emailVerifiedOverride != nil {
+		return *emailVerifiedOverride
+	}
+	if user == nil || strings.TrimSpace(user.Email) == "" {
+		return false
+	}
+	return true
 }
 
 func buildSocialPlatformInfoFromUser(user *postgresql.User) *SocialPlatformInfo {

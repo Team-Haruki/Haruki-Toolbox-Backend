@@ -1,0 +1,647 @@
+package usersocial
+
+import (
+	"crypto/subtle"
+	"fmt"
+	"haruki-suite/config"
+	userCoreModule "haruki-suite/internal/modules/usercore"
+	userEmailModule "haruki-suite/internal/modules/useremail"
+	platformAuthHeader "haruki-suite/internal/platform/authheader"
+	harukiAPIHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/database/postgresql"
+	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	userSchema "haruki-suite/utils/database/postgresql/user"
+	harukiRedis "haruki-suite/utils/database/redis"
+	harukiLogger "haruki-suite/utils/logger"
+	"time"
+
+	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
+	"strings"
+)
+
+type socialStatusTokenBinding struct {
+	Platform string `json:"platform"`
+	UserID   string `json:"userId"`
+}
+
+const (
+	socialPlatformVerifyTTL         = 5 * time.Minute
+	socialPlatformVerifyMaxAttempts = 5
+	qqMailSendRateLimitWindow       = 10 * time.Minute
+	qqMailSendUserLimit             = 10
+	qqMailSendTargetLimit           = 3
+
+	socialRateLimitScriptLimitedByNone   = int64(0)
+	socialRateLimitScriptLimitedByUser   = int64(1)
+	socialRateLimitScriptLimitedByTarget = int64(2)
+
+	socialRateLimitReserveScript = `
+local userCount = redis.call('INCR', KEYS[1])
+if userCount == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[3])
+end
+local targetCount = redis.call('INCR', KEYS[2])
+if targetCount == 1 then
+  redis.call('PEXPIRE', KEYS[2], ARGV[3])
+end
+if userCount > tonumber(ARGV[1]) then
+  return {1, userCount, targetCount}
+end
+if targetCount > tonumber(ARGV[2]) then
+  return {2, userCount, targetCount}
+end
+return {0, userCount, targetCount}
+`
+
+	socialRateLimitReleaseScript = `
+for i=1,#KEYS do
+  local current = redis.call('GET', KEYS[i])
+  if current then
+    local num = tonumber(current)
+    if num == nil or num <= 1 then
+      redis.call('DEL', KEYS[i])
+    else
+      redis.call('DECR', KEYS[i])
+    end
+  end
+end
+return 1
+`
+)
+
+func respondQQMailRateLimited(c fiber.Ctx, key string, message string, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+	retryAfter := int64(qqMailSendRateLimitWindow.Seconds())
+	if apiHelper != nil && apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil && apiHelper.DBManager.Redis.Redis != nil {
+		if ttl, err := apiHelper.DBManager.Redis.Redis.TTL(c.Context(), key).Result(); err == nil && ttl > 0 {
+			retryAfter = int64(ttl.Seconds())
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
+		}
+	}
+	c.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
+	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, fmt.Sprintf("%s (retry after %ds)", message, retryAfter), nil)
+}
+
+func checkQQMailSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, qq string) (limited bool, key string, message string, err error) {
+	userKey := harukiRedis.BuildQQMailSendRateLimitUserKey(userID)
+	targetKey := harukiRedis.BuildQQMailSendRateLimitTargetKey(qq)
+	values, err := apiHelper.DBManager.Redis.Redis.Eval(
+		c.Context(),
+		socialRateLimitReserveScript,
+		[]string{userKey, targetKey},
+		qqMailSendUserLimit,
+		qqMailSendTargetLimit,
+		qqMailSendRateLimitWindow.Milliseconds(),
+	).Int64Slice()
+	if err != nil {
+		harukiLogger.Errorf("Failed to reserve QQ mail send rate limit: %v", err)
+		return false, "", "", err
+	}
+	if len(values) != 3 {
+		return false, "", "", fmt.Errorf("unexpected QQ mail send rate limit script result length: %d", len(values))
+	}
+
+	switch values[0] {
+	case socialRateLimitScriptLimitedByUser:
+		return true, userKey, "too many QQ verification emails sent by this user", nil
+	case socialRateLimitScriptLimitedByTarget:
+		return true, targetKey, "too many QQ verification emails sent to this QQ number", nil
+	case socialRateLimitScriptLimitedByNone:
+		return false, "", "", nil
+	default:
+		return false, "", "", fmt.Errorf("unexpected QQ mail send rate limit limitedBy marker: %d", values[0])
+	}
+}
+
+func releaseQQMailSendRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, qq string) error {
+	userKey := harukiRedis.BuildQQMailSendRateLimitUserKey(userID)
+	targetKey := harukiRedis.BuildQQMailSendRateLimitTargetKey(qq)
+	_, err := apiHelper.DBManager.Redis.Redis.Eval(c.Context(), socialRateLimitReleaseScript, []string{userKey, targetKey}).Result()
+	return err
+}
+
+func getSocialPlatformVerifyAttemptCount(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) (int, error) {
+	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
+	var attemptCount int
+	found, err := apiHelper.DBManager.Redis.GetCache(c.Context(), attemptKey, &attemptCount)
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, nil
+	}
+	return attemptCount, nil
+}
+
+func incrementSocialPlatformVerifyAttempt(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) error {
+	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
+	_, err := apiHelper.DBManager.Redis.IncrementWithTTL(c.Context(), attemptKey, socialPlatformVerifyTTL)
+	return err
+}
+
+func clearSocialPlatformVerifyAttempt(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) {
+	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
+	if err := apiHelper.DBManager.Redis.DeleteCache(c.Context(), attemptKey); err != nil {
+		harukiLogger.Warnf("Failed to clear social platform verify attempt key: %v", err)
+	}
+}
+
+func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx := c.Context()
+		userID, err := userCoreModule.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
+		var req harukiAPIHelper.SendQQMailPayload
+		if err := c.Bind().Body(&req); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
+		}
+		req.QQ = strings.TrimSpace(req.QQ)
+		if req.QQ == "" {
+			return harukiAPIHelper.ErrorBadRequest(c, "qq is required")
+		}
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(
+				string(harukiAPIHelper.SocialPlatformQQ)),
+				socialplatforminfo.PlatformUserID(req.QQ)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if exists {
+			return harukiAPIHelper.ErrorBadRequest(c, "QQ binding already exists")
+		}
+		limited, limitKey, limitMessage, err := checkQQMailSendRateLimit(c, apiHelper, userID, req.QQ)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
+		}
+		if limited {
+			return respondQQMailRateLimited(c, limitKey, limitMessage, apiHelper)
+		}
+		email := fmt.Sprintf("%s@qq.com", req.QQ)
+		if err := userEmailModule.SendEmailHandler(c, email, req.ChallengeToken, apiHelper); err != nil {
+			if releaseErr := releaseQQMailSendRateLimitReservation(c, apiHelper, userID, req.QQ); releaseErr != nil {
+				harukiLogger.Warnf("Failed to release QQ mail send rate limit reservation for %s/%s: %v", userID, req.QQ, releaseErr)
+			}
+			return err
+		}
+		return nil
+	}
+}
+
+func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx := c.Context()
+		userID, err := userCoreModule.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.social_platform.qq.verify", result, userID, map[string]any{
+				"reason": reason,
+			})
+		}()
+
+		var req harukiAPIHelper.VerifyQQMailPayload
+		if err := c.Bind().Body(&req); err != nil {
+			reason = "invalid_payload"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
+		}
+		email := fmt.Sprintf("%s@qq.com", req.QQ)
+		ok, err := userEmailModule.VerifyEmailHandler(c, email, req.OneTimePassword, apiHelper)
+		if err != nil {
+			reason = "verify_email_otp_failed"
+			return err
+		}
+		if !ok {
+			reason = "verify_email_otp_failed"
+			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
+		}
+
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(
+				string(harukiAPIHelper.SocialPlatformQQ)),
+				socialplatforminfo.PlatformUserID(req.QQ)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			reason = "query_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if exists {
+			reason = "social_platform_conflict"
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
+		}
+		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.
+			Create().
+			SetPlatform("qq").
+			SetPlatformUserID(req.QQ).
+			SetVerified(true).
+			SetUserID(userID).
+			Save(ctx); err != nil {
+			if postgresql.IsConstraintError(err) {
+				reason = "social_platform_conflict"
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
+			}
+			harukiLogger.Errorf("Failed to create social platform info: %v", err)
+			reason = "create_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
+		}
+
+		ud := harukiAPIHelper.HarukiToolboxUserData{
+			SocialPlatformInfo: &harukiAPIHelper.SocialPlatformInfo{
+				Platform: string(harukiAPIHelper.SocialPlatformQQ),
+				UserID:   req.QQ,
+				Verified: true,
+			},
+		}
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
+		return harukiAPIHelper.SuccessResponse(c, "social platform verified", &ud)
+	}
+}
+
+func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx := c.Context()
+		userID, err := userCoreModule.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.social_platform.code.generate", result, userID, map[string]any{
+				"reason": reason,
+			})
+		}()
+
+		var req harukiAPIHelper.GenerateSocialPlatformCodePayload
+		if err := c.Bind().Body(&req); err != nil {
+			reason = "invalid_payload"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
+		}
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(string(req.Platform)),
+				socialplatforminfo.PlatformUserID(req.UserID)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			reason = "query_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if exists {
+			reason = "social_platform_conflict"
+			return harukiAPIHelper.ErrorBadRequest(c, "binding already exists")
+		}
+
+		if !isSupportedSocialPlatform(req.Platform) {
+			reason = "unsupported_platform"
+			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
+		}
+		code, err := userEmailModule.GenerateCode(false)
+		if err != nil {
+			harukiLogger.Errorf("Failed to generate code: %v", err)
+			reason = "generate_code_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
+		}
+		storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(req.Platform), req.UserID)
+		statusToken := uuid.NewString()
+		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
+		statusTokenOwnerKey := harukiRedis.BuildStatusTokenOwnerKey(statusToken)
+		statusTokenBindingKey := harukiRedis.BuildStatusTokenBindingKey(statusToken)
+		userIDKey := harukiRedis.BuildSocialPlatformUserIDKey(string(req.Platform), req.UserID)
+		statusTokenMappingKey := harukiRedis.BuildSocialPlatformStatusTokenKey(string(req.Platform), req.UserID)
+		if err := apiHelper.DBManager.Redis.SetCachesAtomically(ctx, []harukiRedis.CacheItem{
+			{Key: storageKey, Value: code},
+			{Key: statusTokenKey, Value: "false"},
+			{Key: statusTokenOwnerKey, Value: userID},
+			{Key: statusTokenBindingKey, Value: socialStatusTokenBinding{Platform: string(req.Platform), UserID: req.UserID}},
+			{Key: userIDKey, Value: userID},
+			{Key: statusTokenMappingKey, Value: statusToken},
+			{Key: harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(req.Platform), req.UserID), Value: 0},
+		}, socialPlatformVerifyTTL); err != nil {
+			harukiLogger.Errorf("Failed to save social verification state: %v", err)
+			reason = "save_verification_state_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to save verification state")
+		}
+
+		resp := harukiAPIHelper.GenerateSocialPlatformCodeResponse{
+			Status:          fiber.StatusOK,
+			Message:         "ok",
+			StatusToken:     statusToken,
+			OneTimePassword: code,
+		}
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
+		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, resp)
+	}
+}
+
+func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx := c.Context()
+		statusToken := c.Params("status_token")
+		userID, err := userCoreModule.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
+		statusTokenOwnerKey := harukiRedis.BuildStatusTokenOwnerKey(statusToken)
+		var ownerUserID string
+		found, err := apiHelper.DBManager.Redis.GetCache(ctx, statusTokenOwnerKey, &ownerUserID)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get status token owner cache: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to get status")
+		}
+		if !found || !statusTokenOwnedByUser(ownerUserID, userID) {
+			return harukiAPIHelper.ErrorBadRequest(c, "status token expired or not found")
+		}
+		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
+		statusTokenBindingKey := harukiRedis.BuildStatusTokenBindingKey(statusToken)
+		var binding socialStatusTokenBinding
+		found, err = apiHelper.DBManager.Redis.GetCache(ctx, statusTokenBindingKey, &binding)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get status token binding cache: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to get status")
+		}
+		if !found || strings.TrimSpace(binding.Platform) == "" || strings.TrimSpace(binding.UserID) == "" {
+			return harukiAPIHelper.ErrorBadRequest(c, "status token expired or not found")
+		}
+		var status string
+		found, err = apiHelper.DBManager.Redis.GetCache(ctx, statusTokenKey, &status)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to get status")
+		}
+		if !found {
+			return harukiAPIHelper.ErrorBadRequest(c, "status token expired or not found")
+		}
+		if status == "false" {
+			return harukiAPIHelper.ErrorBadRequest(c, "You have not verified yet")
+		}
+		if status == "true" {
+			info, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().Where(
+				socialplatforminfo.HasUserWith(userSchema.IDEQ(userID)),
+				socialplatforminfo.PlatformEQ(binding.Platform),
+				socialplatforminfo.PlatformUserIDEQ(binding.UserID),
+			).Only(ctx)
+			if err != nil {
+				if postgresql.IsNotFound(err) {
+					return harukiAPIHelper.ErrorNotFound(c, "verified social platform binding not found")
+				}
+				harukiLogger.Errorf("Failed to query social platform info: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "failed to get social platform info")
+			}
+			ud := harukiAPIHelper.HarukiToolboxUserData{
+				SocialPlatformInfo: &harukiAPIHelper.SocialPlatformInfo{
+					Platform: info.Platform,
+					UserID:   info.PlatformUserID,
+					Verified: info.Verified,
+				},
+			}
+			return harukiAPIHelper.SuccessResponse(c, "verification completed", &ud)
+		}
+		return harukiAPIHelper.ErrorInternal(c, "get status failed")
+	}
+}
+
+func statusTokenOwnedByUser(ownerUserID, currentUserID string) bool {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	currentUserID = strings.TrimSpace(currentUserID)
+	return ownerUserID != "" && currentUserID != "" && ownerUserID == currentUserID
+}
+
+func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx := c.Context()
+		userID, err := userCoreModule.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
+		}
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.social_platform.clear", result, userID, map[string]any{
+				"reason": reason,
+			})
+		}()
+
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.
+			Query().
+			Where(socialplatforminfo.HasUserWith(userSchema.IDEQ(userID))).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			reason = "query_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to query social platform info")
+		}
+		if !exists {
+			reason = "social_platform_not_found"
+			return harukiAPIHelper.ErrorBadRequest(c, "no social platform info found")
+		}
+
+		_, err = apiHelper.DBManager.DB.SocialPlatformInfo.
+			Delete().
+			Where(socialplatforminfo.HasUserWith(userSchema.IDEQ(userID))).
+			Exec(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to delete social platform info: %v", err)
+			reason = "clear_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to clear social platform info")
+		}
+
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
+		return harukiAPIHelper.SuccessResponse[string](c, "social platform info cleared successfully", nil)
+	}
+}
+
+func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		ctx := c.Context()
+		targetUserID := ""
+		result := harukiAPIHelper.SystemLogResultFailure
+		reason := "unknown"
+		defer func() {
+			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.social_platform.verify_bot", result, targetUserID, map[string]any{
+				"reason": reason,
+			})
+		}()
+
+		token, ok := extractBearerToken(c.Get("Authorization"))
+		if !ok {
+			reason = "missing_authorization"
+			return harukiAPIHelper.ErrorUnauthorized(c, "invalid authorization")
+		}
+		if subtle.ConstantTimeCompare([]byte(token), []byte(config.Cfg.UserSystem.SocialPlatformVerifyToken)) != 1 {
+			reason = "invalid_authorization"
+			return harukiAPIHelper.ErrorUnauthorized(c, "invalid authorization")
+		}
+
+		var req harukiAPIHelper.HarukiBotVerifySocialPlatformPayload
+		if err := c.Bind().Body(&req); err != nil {
+			reason = "invalid_payload"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
+		}
+		if !isSupportedSocialPlatform(req.Platform) {
+			reason = "unsupported_platform"
+			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
+		}
+		attemptCount, err := getSocialPlatformVerifyAttemptCount(c, apiHelper, req.Platform, req.UserID)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get social verify attempt count: %v", err)
+			reason = "get_attempt_count_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to get verification key")
+		}
+		if attemptCount >= socialPlatformVerifyMaxAttempts {
+			reason = "too_many_attempts"
+			return harukiAPIHelper.ErrorBadRequest(c, "too many verification attempts, please generate a new code")
+		}
+
+		storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(req.Platform), req.UserID)
+		var code string
+		found, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
+			reason = "get_verification_key_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to get verification key")
+		}
+		if !found {
+			reason = "verification_key_not_found"
+			return harukiAPIHelper.ErrorBadRequest(c, "verification key expired or not found")
+		}
+		if req.OneTimePassword != code {
+			if err := incrementSocialPlatformVerifyAttempt(c, apiHelper, req.Platform, req.UserID); err != nil {
+				harukiLogger.Errorf("Failed to increment social verify attempt count: %v", err)
+				reason = "increment_attempt_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to save verification state")
+			}
+			reason = "invalid_one_time_password"
+			return harukiAPIHelper.ErrorUnauthorized(c, "invalid one time password")
+		}
+
+		userIDKey := harukiRedis.BuildSocialPlatformUserIDKey(string(req.Platform), req.UserID)
+		var userID string
+		found, err = apiHelper.DBManager.Redis.GetCache(ctx, userIDKey, &userID)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
+			reason = "get_user_mapping_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to get userID")
+		}
+		if !found {
+			reason = "user_mapping_not_found"
+			return harukiAPIHelper.ErrorBadRequest(c, "userID mapping expired or not found")
+		}
+		targetUserID = userID
+		statusTokenMappingKey := harukiRedis.BuildSocialPlatformStatusTokenKey(string(req.Platform), req.UserID)
+		var statusToken string
+		found, err = apiHelper.DBManager.Redis.GetCache(ctx, statusTokenMappingKey, &statusToken)
+		if err != nil {
+			harukiLogger.Errorf("Failed to get redis cache: %v", err)
+			reason = "get_status_token_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to get status token")
+		}
+		if !found {
+			reason = "status_token_not_found"
+			return harukiAPIHelper.ErrorBadRequest(c, "status token mapping expired or not found")
+		}
+
+		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+			Where(socialplatforminfo.PlatformEQ(string(req.Platform)),
+				socialplatforminfo.PlatformUserID(req.UserID)).
+			Exist(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to query social platform info: %v", err)
+			reason = "query_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		}
+		if exists {
+			reason = "social_platform_conflict"
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "this social platform account is already bound", nil)
+		}
+
+		tx, err := apiHelper.DBManager.DB.Tx(ctx)
+		if err != nil {
+			harukiLogger.Errorf("Failed to start social platform verify transaction: %v", err)
+			reason = "start_transaction_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
+		}
+
+		if _, err := tx.SocialPlatformInfo.
+			Create().
+			SetPlatform(string(req.Platform)).
+			SetPlatformUserID(req.UserID).
+			SetVerified(true).
+			SetUserID(userID).
+			Save(ctx); err != nil {
+			_ = tx.Rollback()
+			if postgresql.IsConstraintError(err) {
+				reason = "social_platform_conflict"
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "this social platform account is already bound", nil)
+			}
+			harukiLogger.Errorf("Failed to create social platform info: %v", err)
+			reason = "create_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
+		}
+
+		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
+		if err := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "true", socialPlatformVerifyTTL); err != nil {
+			_ = tx.Rollback()
+			harukiLogger.Errorf("Failed to set redis cache: %v", err)
+			reason = "set_status_token_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to save status token")
+		}
+
+		if err := tx.Commit(); err != nil {
+			if resetErr := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "false", socialPlatformVerifyTTL); resetErr != nil {
+				harukiLogger.Warnf("Failed to restore social platform status token after commit failure: %v", resetErr)
+			}
+			harukiLogger.Errorf("Failed to commit social platform verify transaction: %v", err)
+			reason = "commit_transaction_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
+		}
+
+		if err := apiHelper.DBManager.Redis.DeleteCache(ctx, storageKey); err != nil {
+			harukiLogger.Warnf("Failed to clear social platform verification key: %v", err)
+		}
+		clearSocialPlatformVerifyAttempt(c, apiHelper, req.Platform, req.UserID)
+		result = harukiAPIHelper.SystemLogResultSuccess
+		reason = "ok"
+		return harukiAPIHelper.SuccessResponse[string](c, "social platform verified", nil)
+	}
+}
+
+func RegisterUserSocialRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	social := apiHelper.Router.Group("/api/user/:toolbox_user_id/social-platform")
+	requireVerifiedEmail := userCoreModule.RequireVerifiedEmail()
+
+	social.Post("/send-qq-mail", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), requireVerifiedEmail, handleSendQQMail(apiHelper))
+	social.Post("/verify-qq-mail", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), requireVerifiedEmail, handleVerifyQQMail(apiHelper))
+	social.Post("/generate-verification-code", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), requireVerifiedEmail, handleGenerateVerificationCode(apiHelper))
+	social.Get("/verification-status/:status_token", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleVerificationStatus(apiHelper))
+	social.Delete("/clear", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleClearSocialPlatform(apiHelper))
+
+	apiHelper.Router.Post("/api/verify-social-platform", handleVerifySocialPlatform(apiHelper))
+}
+
+func isSupportedSocialPlatform(platform harukiAPIHelper.SocialPlatform) bool {
+	switch platform {
+	case harukiAPIHelper.SocialPlatformQQ,
+		harukiAPIHelper.SocialPlatformQQBot,
+		harukiAPIHelper.SocialPlatformDiscord,
+		harukiAPIHelper.SocialPlatformTelegram:
+		return true
+	default:
+		return false
+	}
+}
+
+func extractBearerToken(authHeader string) (string, bool) {
+	return platformAuthHeader.ExtractBearerToken(authHeader)
+}
