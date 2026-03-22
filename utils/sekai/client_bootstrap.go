@@ -62,18 +62,6 @@ func isCookieAttributeName(name string) bool {
 	}
 }
 
-func cookiePairNames(pairs []string) []string {
-	names := make([]string, 0, len(pairs))
-	for _, pair := range pairs {
-		name, _, ok := strings.Cut(pair, "=")
-		if !ok {
-			continue
-		}
-		names = append(names, strings.TrimSpace(name))
-	}
-	return names
-}
-
 func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	if c.server != JP {
 		return nil
