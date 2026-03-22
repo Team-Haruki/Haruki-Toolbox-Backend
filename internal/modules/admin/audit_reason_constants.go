@@ -1,11 +1,6 @@
 package admin
 
 const (
-	adminAuditTargetIDAll   = "all"
-	adminAuditTargetIDBatch = "batch"
-)
-
-const (
 	adminFailureReasonInvalidRequestPayload                = "invalid_request_payload"
 	adminFailureReasonMissingUserSession                   = "missing_user_session"
 	adminFailureReasonTargetUserNotFound                   = "target_user_not_found"
@@ -153,12 +148,4 @@ const (
 	adminFailureReasonUpdateSocialPlatformFailed           = "update_social_platform_failed"
 	adminFailureReasonUpdateUserEmailFailed                = "update_user_email_failed"
 	adminFailureReasonUpdateUserFailed                     = "update_user_failed"
-)
-
-const (
-	adminBatchResultCodeUserNotFound          = "user_not_found"
-	adminBatchResultCodeOperationFailed       = "operation_failed"
-	adminBatchResultCodeDeleteBindingFailed   = "delete_binding_failed"
-	adminBatchResultCodeInvalidTargetUser     = "invalid_target_user"
-	adminBatchResultCodeReassignBindingFailed = "reassign_binding_failed"
 )

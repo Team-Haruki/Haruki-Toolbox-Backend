@@ -21,8 +21,6 @@ type MongoDBConfig struct {
 	DB                  string `yaml:"db"`
 	Suite               string `yaml:"suite"`
 	Mysekai             string `yaml:"mysekai"`
-	Webhook             string `yaml:"webhook"`
-	WebhookUser         string `yaml:"webhook_user"`
 	PrivateApiSecret    string `yaml:"private_api_secret"`
 	PrivateApiUserAgent string `yaml:"private_api_user_agent"`
 }
@@ -35,6 +33,7 @@ type RedisConfig struct {
 
 type WebhookConfig struct {
 	JWTSecret string `yaml:"jwt_secret"`
+	Enabled   bool   `yaml:"enabled"`
 }
 
 type ThirdPartyDataProviderConfig struct {
@@ -256,6 +255,9 @@ func Load(configPath string) (Config, error) {
 				TimeoutSeconds: 10,
 			},
 		},
+		Webhook: WebhookConfig{
+			Enabled: true,
+		},
 	}
 	if err := yaml.Unmarshal([]byte(expandedContent), &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config file %q: %w", path, err)
@@ -319,8 +321,6 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.MongoDB.DB, "MONGODB_DB")
 	overrideString(&cfg.MongoDB.Suite, "MONGODB_SUITE_COLLECTION")
 	overrideString(&cfg.MongoDB.Mysekai, "MONGODB_MYSEKAI_COLLECTION")
-	overrideString(&cfg.MongoDB.Webhook, "MONGODB_WEBHOOK_COLLECTION")
-	overrideString(&cfg.MongoDB.WebhookUser, "MONGODB_WEBHOOK_USER_COLLECTION")
 	overrideString(&cfg.MongoDB.PrivateApiSecret, "PRIVATE_API_SECRET")
 	overrideString(&cfg.MongoDB.PrivateApiUserAgent, "PRIVATE_API_USER_AGENT")
 
@@ -331,6 +331,9 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.Redis.Password, "REDIS_PASSWORD")
 
 	overrideString(&cfg.Webhook.JWTSecret, "WEBHOOK_JWT_SECRET")
+	if err := overrideBool(&cfg.Webhook.Enabled, "WEBHOOK_ENABLED"); err != nil {
+		return err
+	}
 
 	overrideString(&cfg.UserSystem.DBType, "HARUKI_DB_TYPE")
 	overrideString(&cfg.UserSystem.DBURL, "HARUKI_DB_URL")

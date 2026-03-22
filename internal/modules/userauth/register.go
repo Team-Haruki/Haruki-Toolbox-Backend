@@ -1,7 +1,6 @@
 package userauth
 
 import (
-	"context"
 	"crypto/rand"
 	"fmt"
 	userModule "haruki-suite/internal/modules/user"
@@ -9,7 +8,6 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/cloudflare"
 	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
 	"math/big"
@@ -197,28 +195,6 @@ func generateRegisterUID(now time.Time) (string, error) {
 		return "", fmt.Errorf("generate uid random number: %w", err)
 	}
 	return formatRegisterUID(tsSuffix, randNum.Int64()), nil
-}
-
-func cleanupRegisteredUserAfterSessionIssueFailure(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string) {
-	if strings.TrimSpace(userID) == "" {
-		return
-	}
-	if _, err := apiHelper.DBManager.DB.IOSScriptCode.Delete().
-		Where(iosscriptcode.UserIDEQ(userID)).
-		Exec(ctx); err != nil && !postgresql.IsNotFound(err) {
-		harukiLogger.Errorf("Failed to cleanup iOS script code for user %s: %v", userID, err)
-	}
-	if err := apiHelper.DBManager.DB.User.DeleteOneID(userID).Exec(ctx); err != nil && !postgresql.IsNotFound(err) {
-		harukiLogger.Errorf("Failed to cleanup user %s after session issue failure: %v", userID, err)
-	}
-}
-
-func queryRegisterEmailConflict(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string, createErr error) (bool, error) {
-	if !postgresql.IsConstraintError(createErr) {
-		return false, nil
-	}
-	normalizedEmail := platformIdentity.NormalizeEmail(email)
-	return apiHelper.DBManager.DB.User.Query().Where(userSchema.EmailEqualFold(normalizedEmail)).Exist(ctx)
 }
 
 func decideRegisterCreateUserFailure(createErr error, emailTaken bool) registerCreateUserFailureDecision {

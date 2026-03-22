@@ -10,11 +10,9 @@ import (
 )
 
 type MongoDBManager struct {
-	client                *mongo.Client
-	suiteCollection       *mongo.Collection
-	mysekaiCollection     *mongo.Collection
-	webhookCollection     *mongo.Collection
-	webhookUserCollection *mongo.Collection
+	client            *mongo.Client
+	suiteCollection   *mongo.Collection
+	mysekaiCollection *mongo.Collection
 }
 
 func (m *MongoDBManager) Ping(ctx context.Context) error {
@@ -33,7 +31,7 @@ func (m *MongoDBManager) Disconnect(ctx context.Context) error {
 
 func NewMongoDBManager(
 	ctx context.Context,
-	dbURL, db, suite, mysekai, webhookUser, webhookUserUser string,
+	dbURL, db, suite, mysekai string,
 ) (*MongoDBManager, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(dbURL))
 	if err != nil {
@@ -48,10 +46,8 @@ func NewMongoDBManager(
 	}
 
 	return &MongoDBManager{
-		client:                client,
-		suiteCollection:       client.Database(db).Collection(suite),
-		mysekaiCollection:     client.Database(db).Collection(mysekai),
-		webhookCollection:     client.Database(db).Collection(webhookUser),
-		webhookUserCollection: client.Database(db).Collection(webhookUserUser),
+		client:            client,
+		suiteCollection:   client.Database(db).Collection(suite),
+		mysekaiCollection: client.Database(db).Collection(mysekai),
 	}, nil
 }

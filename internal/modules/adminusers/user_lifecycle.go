@@ -9,14 +9,8 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
-)
-
-const (
-	adminLocalPasswordMirrorRetryAttempts = 3
-	adminLocalPasswordMirrorRetryInterval = 150 * time.Millisecond
 )
 
 func buildSoftDeleteBanReason(reason *string) string {

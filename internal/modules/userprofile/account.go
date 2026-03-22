@@ -329,10 +329,14 @@ func handleChangePasswordViaKratos(
 }
 
 func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	if apiHelper == nil || apiHelper.Router == nil || apiHelper.SessionHandler == nil {
+		return
+	}
+
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
 	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleUpdateProfile(apiHelper))
-	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesManagedBrowserAuth() {
+	if apiHelper.SessionHandler.UsesManagedBrowserAuth() {
 		r.Put("/change-password", userauth.LegacyAuthDisabledHandler())
 		return
 	}

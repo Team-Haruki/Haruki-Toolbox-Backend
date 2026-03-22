@@ -26,6 +26,7 @@ type RuntimeConfigUpdate struct {
 	HarukiProxySecret    *string
 	HarukiProxyUnpackKey *string
 	WebhookJWTSecret     *string
+	WebhookEnabled       *bool
 }
 
 type runtimeConfigSnapshot struct {
@@ -37,6 +38,7 @@ type runtimeConfigSnapshot struct {
 	HarukiProxySecret    string   `json:"harukiProxySecret"`
 	HarukiProxyUnpackKey string   `json:"harukiProxyUnpackKey"`
 	WebhookJWTSecret     string   `json:"webhookJwtSecret"`
+	WebhookEnabled       *bool    `json:"webhookEnabled,omitempty"`
 }
 
 type HarukiToolboxRouterHelpers struct {
@@ -53,6 +55,7 @@ type HarukiToolboxRouterHelpers struct {
 	HarukiProxySecret    string
 	HarukiProxyUnpackKey string
 	WebhookJWTSecret     string
+	WebhookEnabled       *bool
 	publicAPIKeysMu      sync.RWMutex
 	runtimeConfigMu      sync.RWMutex
 }
@@ -71,8 +74,10 @@ func NewHarukiToolboxRouterHelpers(
 	harukiProxySecret string,
 	HarukiProxyUnpackKey string,
 	webhookJWTSecret string,
+	webhookEnabled bool,
 ) *HarukiToolboxRouterHelpers {
 	copiedPublicAPIAllowedKeys := append([]string(nil), publicAPIAllowedKeys...)
+	webhookEnabledCopy := webhookEnabled
 
 	return &HarukiToolboxRouterHelpers{
 		Router:               router,
@@ -88,6 +93,7 @@ func NewHarukiToolboxRouterHelpers(
 		HarukiProxySecret:    harukiProxySecret,
 		HarukiProxyUnpackKey: HarukiProxyUnpackKey,
 		WebhookJWTSecret:     webhookJWTSecret,
+		WebhookEnabled:       &webhookEnabledCopy,
 	}
 }
 
@@ -105,6 +111,7 @@ func NewHarukiToolboxDBHelpers(
 	harukiProxySecret string,
 	HarukiProxyUnpackKey string,
 	webhookJWTSecret string,
+	webhookEnabled bool,
 ) *HarukiToolboxRouterHelpers {
 	return NewHarukiToolboxRouterHelpers(
 		router,
@@ -120,6 +127,7 @@ func NewHarukiToolboxDBHelpers(
 		harukiProxySecret,
 		HarukiProxyUnpackKey,
 		webhookJWTSecret,
+		webhookEnabled,
 	)
 }
 
@@ -136,6 +144,11 @@ func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() runtimeConfi
 
 	h.runtimeConfigMu.RLock()
 	defer h.runtimeConfigMu.RUnlock()
+	var webhookEnabled *bool
+	if h.WebhookEnabled != nil {
+		value := *h.WebhookEnabled
+		webhookEnabled = &value
+	}
 	return runtimeConfigSnapshot{
 		PublicAPIAllowedKeys: publicAPIAllowedKeys,
 		PrivateAPIToken:      h.PrivateAPIToken,
@@ -145,6 +158,7 @@ func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() runtimeConfi
 		HarukiProxySecret:    h.HarukiProxySecret,
 		HarukiProxyUnpackKey: h.HarukiProxyUnpackKey,
 		WebhookJWTSecret:     h.WebhookJWTSecret,
+		WebhookEnabled:       webhookEnabled,
 	}
 }
 
@@ -157,6 +171,12 @@ func (h *HarukiToolboxRouterHelpers) applyRuntimeConfigSnapshot(snapshot runtime
 	h.HarukiProxySecret = snapshot.HarukiProxySecret
 	h.HarukiProxyUnpackKey = snapshot.HarukiProxyUnpackKey
 	h.WebhookJWTSecret = snapshot.WebhookJWTSecret
+	if snapshot.WebhookEnabled == nil {
+		h.WebhookEnabled = nil
+	} else {
+		webhookEnabled := *snapshot.WebhookEnabled
+		h.WebhookEnabled = &webhookEnabled
+	}
 	h.runtimeConfigMu.Unlock()
 
 	h.publicAPIKeysMu.Lock()
@@ -235,6 +255,10 @@ func (h *HarukiToolboxRouterHelpers) UpdateRuntimeConfig(update RuntimeConfigUpd
 	if update.WebhookJWTSecret != nil {
 		snapshot.WebhookJWTSecret = *update.WebhookJWTSecret
 	}
+	if update.WebhookEnabled != nil {
+		webhookEnabled := *update.WebhookEnabled
+		snapshot.WebhookEnabled = &webhookEnabled
+	}
 
 	if h.DBManager != nil && h.DBManager.Redis != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), runtimeConfigStoreTimeout)
@@ -308,6 +332,23 @@ func (h *HarukiToolboxRouterHelpers) GetWebhookJWTSecret() string {
 
 func (h *HarukiToolboxRouterHelpers) SetWebhookJWTSecret(secret string) {
 	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{WebhookJWTSecret: &secret})
+}
+
+func (h *HarukiToolboxRouterHelpers) GetWebhookEnabled() bool {
+	if h == nil {
+		return true
+	}
+	h.syncRuntimeConfigFromStore()
+	h.runtimeConfigMu.RLock()
+	defer h.runtimeConfigMu.RUnlock()
+	if h.WebhookEnabled == nil {
+		return true
+	}
+	return *h.WebhookEnabled
+}
+
+func (h *HarukiToolboxRouterHelpers) SetWebhookEnabled(enabled bool) {
+	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{WebhookEnabled: &enabled})
 }
 
 func (h *HarukiToolboxRouterHelpers) RedisClient() *redis.Client {

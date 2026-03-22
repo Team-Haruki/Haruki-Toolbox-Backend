@@ -6,20 +6,14 @@ const (
 
 	PasswordTooShortMessage = "password must be at least 8 characters"
 	PasswordTooLongMessage  = "password is too long (max 72 bytes)"
-
-	passwordMinLengthChars = PasswordMinLengthChars
-	passwordMaxLengthBytes = PasswordMaxLengthBytes
-
-	passwordTooShortMessage = PasswordTooShortMessage
-	passwordTooLongMessage  = PasswordTooLongMessage
 )
 
 func isPasswordTooShort(password string) bool {
-	return len(password) < passwordMinLengthChars
+	return len(password) < PasswordMinLengthChars
 }
 
 func isPasswordTooLong(password string) bool {
-	return len([]byte(password)) > passwordMaxLengthBytes
+	return len([]byte(password)) > PasswordMaxLengthBytes
 }
 
 func IsPasswordTooShort(password string) bool {

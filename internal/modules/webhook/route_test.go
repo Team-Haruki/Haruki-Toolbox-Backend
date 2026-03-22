@@ -1,12 +1,17 @@
 package webhook
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"haruki-suite/utils/database"
+	"haruki-suite/utils/database/postgresql/enttest"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
+	_ "github.com/mattn/go-sqlite3"
 
 	harukiAPIHelper "haruki-suite/utils/api"
 )
@@ -16,7 +21,7 @@ func TestValidateWebhookUser(t *testing.T) {
 		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -35,7 +40,7 @@ func TestValidateWebhookUser(t *testing.T) {
 		helper.SetWebhookJWTSecret("test-secret")
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -54,7 +59,7 @@ func TestValidateWebhookUser(t *testing.T) {
 		helper.SetWebhookJWTSecret("test-secret")
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -74,7 +79,7 @@ func TestValidateWebhookUser(t *testing.T) {
 		helper.SetWebhookJWTSecret("test-secret")
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -98,7 +103,7 @@ func TestValidateWebhookUser(t *testing.T) {
 		helper.SetWebhookJWTSecret("test-secret")
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -128,7 +133,7 @@ func TestValidateWebhookUser(t *testing.T) {
 
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -153,12 +158,12 @@ func TestValidateWebhookUser(t *testing.T) {
 		}
 	})
 
-	t.Run("nil manager returns internal error after token validation", func(t *testing.T) {
+	t.Run("nil db client returns internal error after token validation", func(t *testing.T) {
 		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
 		helper.SetWebhookJWTSecret("test-secret")
 		app := fiber.New()
 		app.Get("/",
-			ValidateWebhookUser(helper, nil),
+			ValidateWebhookUser(helper),
 			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
 		)
 
@@ -175,6 +180,40 @@ func TestValidateWebhookUser(t *testing.T) {
 		}
 		if resp.StatusCode != fiber.StatusInternalServerError {
 			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+		}
+	})
+
+	t.Run("valid webhook token authenticates against postgresql", func(t *testing.T) {
+		helper := newWebhookRouteTestHelper(t)
+		helper.SetWebhookJWTSecret("test-secret")
+
+		if _, err := helper.DBManager.DB.WebhookEndpoint.Create().
+			SetID("507f1f77bcf86cd799439011").
+			SetCredential("cred-1").
+			SetCallbackURL("https://example.com/webhook").
+			Save(context.Background()); err != nil {
+			t.Fatalf("create webhook endpoint returned error: %v", err)
+		}
+
+		app := fiber.New()
+		app.Get("/",
+			ValidateWebhookUser(helper),
+			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
+		)
+
+		tokenStr := mustSignHS256Token(t, jwt.MapClaims{
+			"_id":        "507f1f77bcf86cd799439011",
+			"credential": "cred-1",
+		}, "test-secret")
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Haruki-Suite-Webhook-Token", tokenStr)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusNoContent {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
 		}
 	})
 }
@@ -235,4 +274,20 @@ func mustSignHS256Token(t *testing.T, claims jwt.MapClaims, secret string) strin
 		t.Fatalf("SignedString returned error: %v", err)
 	}
 	return tokenStr
+}
+
+func newWebhookRouteTestHelper(t *testing.T) *harukiAPIHelper.HarukiToolboxRouterHelpers {
+	t.Helper()
+
+	dsn := "file:webhook-route-test?mode=memory&cache=shared&_fk=1"
+	client := enttest.Open(t, "sqlite3", dsn)
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	return &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{
+			DB: client,
+		},
+	}
 }

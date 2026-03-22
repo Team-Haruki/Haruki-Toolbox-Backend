@@ -182,6 +182,62 @@ func TestEnsureUsersSchemaCompatibilityCreatesDDLWhenAutoMigrateEnabled(t *testi
 	}
 }
 
+func TestEnsureWebhookSchemaCompatibilityValidatesWithoutDDLWhenAutoMigrateDisabled(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+
+	rows := sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_endpoints")
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookEndpointsTableExistsSQL)).WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_subscriptions")
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookSubscriptionsTableExistsSQL)).WillReturnRows(rows)
+	expectSchemaExistsQuery(mock, checkWebhookEndpointsEnabledColumnExistsSQL, true)
+
+	if err := ensureWebhookSchemaCompatibility(context.Background(), client, false); err != nil {
+		t.Fatalf("ensureWebhookSchemaCompatibility returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestEnsureWebhookSchemaCompatibilityFailsWhenManualSchemaIsIncomplete(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+
+	rows := sqlmock.NewRows([]string{"to_regclass"}).AddRow(nil)
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookEndpointsTableExistsSQL)).WillReturnRows(rows)
+
+	err := ensureWebhookSchemaCompatibility(context.Background(), client, false)
+	if err == nil {
+		t.Fatalf("expected ensureWebhookSchemaCompatibility to fail for missing table")
+	}
+	if !strings.Contains(err.Error(), "webhook_endpoints table is missing") {
+		t.Fatalf("error = %v, want missing webhook_endpoints table", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestEnsureWebhookSchemaCompatibilityFailsWhenEnabledColumnMissing(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+
+	rows := sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_endpoints")
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookEndpointsTableExistsSQL)).WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_subscriptions")
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookSubscriptionsTableExistsSQL)).WillReturnRows(rows)
+	expectSchemaExistsQuery(mock, checkWebhookEndpointsEnabledColumnExistsSQL, false)
+
+	err := ensureWebhookSchemaCompatibility(context.Background(), client, false)
+	if err == nil {
+		t.Fatalf("expected ensureWebhookSchemaCompatibility to fail for missing enabled column")
+	}
+	if !strings.Contains(err.Error(), "webhook_endpoints.enabled column is missing") {
+		t.Fatalf("error = %v, want missing webhook_endpoints.enabled column", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func TestValidateOAuth2ProviderConfig(t *testing.T) {
 	t.Run("hydra requires public and admin urls", func(t *testing.T) {
 		cfg := harukiConfig.Config{}

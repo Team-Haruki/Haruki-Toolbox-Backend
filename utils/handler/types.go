@@ -12,4 +12,5 @@ type DataHandler struct {
 	SekaiAPIClient *sekaiapi.HarukiSekaiAPIClient
 	HttpClient     *harukiHttp.Client
 	Logger         *harukiLogger.Logger
+	WebhookEnabled bool
 }

@@ -125,10 +125,14 @@ func persistIOSUploadChunk(
 		}, nil
 	}
 
-	claimed, err := redisClient.SetNX(ctx, claimKey, "1", iosChunkUploadTTL).Result()
-	if err != nil {
+	setStatus, err := redisClient.SetArgs(ctx, claimKey, "1", goredis.SetArgs{
+		Mode: "NX",
+		TTL:  iosChunkUploadTTL,
+	}).Result()
+	if err != nil && err != goredis.Nil {
 		return iosUploadChunkPersistResult{}, err
 	}
+	claimed := err == nil && setStatus == "OK"
 	state := iosUploadChunkStateCompleteAlreadyClaimed
 	if claimed {
 		state = iosUploadChunkStateCompleteClaimed

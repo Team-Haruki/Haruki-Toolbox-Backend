@@ -392,8 +392,12 @@ func buildResetPasswordURL(frontendURL, resetSecret, email string) string {
 }
 
 func RegisterUserResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+	if apiHelper == nil || apiHelper.Router == nil {
+		return
+	}
+
 	a := apiHelper.Router.Group("/api/user")
-	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesManagedBrowserAuth() {
+	if apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesManagedBrowserAuth() {
 		disabled := userauth.LegacyAuthDisabledHandler()
 		a.Post("/reset-password/send", disabled)
 		a.Post("/reset-password", disabled)

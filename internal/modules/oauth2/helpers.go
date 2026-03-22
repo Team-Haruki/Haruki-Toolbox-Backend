@@ -14,17 +14,6 @@ func formValue(formValues url.Values, key string) string {
 	return strings.TrimSpace(formValues.Get(key))
 }
 
-func parseOAuthFormRequest(c fiber.Ctx) (url.Values, error) {
-	if !isFormURLEncodedContentType(c.Get("Content-Type")) {
-		return nil, oauthError(c, fiber.StatusBadRequest, "invalid_request", "Content-Type must be application/x-www-form-urlencoded")
-	}
-	formValues, err := parseOAuthFormBody(c.Body())
-	if err != nil {
-		return nil, oauthError(c, fiber.StatusBadRequest, "invalid_request", "invalid form body")
-	}
-	return formValues, nil
-}
-
 func isFormURLEncodedContentType(contentType string) bool {
 	mediaType, _, err := mime.ParseMediaType(strings.TrimSpace(contentType))
 	if err != nil {
@@ -153,18 +142,6 @@ func oauthError(c fiber.Ctx, status int, errorCode, description string) error {
 		"error":             errorCode,
 		"error_description": description,
 	})
-}
-
-func errorRedirect(c fiber.Ctx, redirectURI, state, errorCode, description string) error {
-	u := fmt.Sprintf("%s?error=%s&error_description=%s",
-		redirectURI,
-		url.QueryEscape(errorCode),
-		url.QueryEscape(description),
-	)
-	if state != "" {
-		u += "&state=" + url.QueryEscape(state)
-	}
-	return c.Redirect().To(u)
 }
 
 // buildRedirectURL constructs a redirect URI with the given query params and optional state.
