@@ -19,7 +19,7 @@ func mapPrivateGameAccountLookupError(err error) *fiber.Error {
 		return nil
 	}
 	if postgresql.IsNotFound(err) {
-		return fiber.NewError(fiber.StatusNotFound, "game account not found")
+		return fiber.NewError(fiber.StatusNotFound, "account binding not found")
 	}
 	return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account")
 }
@@ -40,7 +40,7 @@ func mapPrivateDataQueryError(err error) *fiber.Error {
 
 func mapPrivateBindingOwnerError(binding *postgresql.GameAccountBinding) *fiber.Error {
 	if binding == nil {
-		return fiber.NewError(fiber.StatusNotFound, "game account not found")
+		return fiber.NewError(fiber.StatusNotFound, "account binding not found")
 	}
 	if binding.Edges.User == nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account owner")
@@ -139,7 +139,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
 		}
 		if result == nil {
-			return harukiApiHelper.ErrorNotFound(c, "user data not found")
+			return harukiApiHelper.ErrorNotFound(c, "game data not found")
 		}
 		return processRequestKeys(c, result)
 	}

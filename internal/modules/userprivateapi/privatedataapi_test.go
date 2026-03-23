@@ -233,7 +233,7 @@ func TestMapPrivateGameAccountLookupError(t *testing.T) {
 		if got.Code != fiber.StatusNotFound {
 			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusNotFound)
 		}
-		if got.Message != "game account not found" {
+		if got.Message != "account binding not found" {
 			t.Fatalf("message = %q", got.Message)
 		}
 	})
@@ -293,7 +293,7 @@ func TestMapPrivateBindingOwnerError(t *testing.T) {
 		if got.Code != fiber.StatusNotFound {
 			t.Fatalf("status = %d, want %d", got.Code, fiber.StatusNotFound)
 		}
-		if got.Message != "game account not found" {
+		if got.Message != "account binding not found" {
 			t.Fatalf("message = %q", got.Message)
 		}
 	})
