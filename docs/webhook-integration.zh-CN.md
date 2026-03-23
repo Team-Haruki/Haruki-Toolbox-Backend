@@ -16,9 +16,9 @@
 
 Webhook token 用于访问以下受保护接口：
 
-- `GET /webhook/subscribers`
-- `PUT /webhook/:server/:data_type/:user_id`
-- `DELETE /webhook/:server/:data_type/:user_id`
+- `GET /api/webhook/subscribers`
+- `PUT /api/webhook/:server/:data_type/:user_id`
+- `DELETE /api/webhook/:server/:data_type/:user_id`
 
 请求时需要带上 header：
 
@@ -28,12 +28,12 @@ X-Haruki-Suite-Webhook-Token: <token>
 
 ## 3. 查询当前订阅者
 
-`GET /webhook/subscribers`
+`GET /api/webhook/subscribers`
 
 请求示例：
 
 ```http
-GET /webhook/subscribers HTTP/1.1
+GET /api/webhook/subscribers HTTP/1.1
 Host: toolbox-api-direct.haruki.seiunx.com
 X-Haruki-Suite-Webhook-Token: <token>
 ```
@@ -58,12 +58,12 @@ X-Haruki-Suite-Webhook-Token: <token>
 
 ## 4. 订阅某个用户的数据上传事件
 
-`PUT /webhook/:server/:data_type/:user_id`
+`PUT /api/webhook/:server/:data_type/:user_id`
 
 示例：
 
 ```http
-PUT /webhook/jp/suite/123456789 HTTP/1.1
+PUT /api/webhook/jp/suite/123456789 HTTP/1.1
 Host: toolbox-api-direct.haruki.seiunx.com
 X-Haruki-Suite-Webhook-Token: <token>
 ```
@@ -86,12 +86,12 @@ X-Haruki-Suite-Webhook-Token: <token>
 
 ## 5. 取消订阅
 
-`DELETE /webhook/:server/:data_type/:user_id`
+`DELETE /api/webhook/:server/:data_type/:user_id`
 
 示例：
 
 ```http
-DELETE /webhook/jp/suite/123456789 HTTP/1.1
+DELETE /api/webhook/jp/suite/123456789 HTTP/1.1
 Host: toolbox-api-direct.haruki.seiunx.com
 X-Haruki-Suite-Webhook-Token: <token>
 ```
@@ -149,13 +149,13 @@ Authorization: Bearer <bearer>
 示例：
 
 ```text
-https://example.com/webhook/{server}/{data_type}/{user_id}
+https://example.com/apiwebhook/{server}/{data_type}/{user_id}
 ```
 
 当用户 `123456789` 在 `jp` 区服上传 `suite` 数据时，实际请求地址会变成：
 
 ```text
-https://example.com/webhook/jp/suite/123456789
+https://example.com/apiwebhook/jp/suite/123456789
 ```
 
 ## 9. callbackUrl 限制
@@ -202,5 +202,5 @@ https://example.com/webhook/jp/suite/123456789
 
 ### 11.3 bearer 和 token 有什么区别
 
-- `token`: 用于调用 Haruki 的 `/webhook/...` 管理订阅接口
+- `token`: 用于调用 Haruki 的 `/api/webhook/...` 管理订阅接口
 - `bearer`: Haruki 在回调你的 `callbackUrl` 时，附带给你的 Authorization 凭证
