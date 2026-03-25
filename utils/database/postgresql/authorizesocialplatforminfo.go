@@ -27,6 +27,8 @@ type AuthorizeSocialPlatformInfo struct {
 	PlatformID int `json:"platform_id,omitempty"`
 	// Comment holds the value of the "comment" field.
 	Comment string `json:"comment,omitempty"`
+	// AllowFastVerification holds the value of the "allow_fast_verification" field.
+	AllowFastVerification bool `json:"allow_fast_verification,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AuthorizeSocialPlatformInfoQuery when eager-loading is set.
 	Edges        AuthorizeSocialPlatformInfoEdges `json:"edges"`
@@ -58,6 +60,8 @@ func (*AuthorizeSocialPlatformInfo) scanValues(columns []string) ([]any, error) 
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case authorizesocialplatforminfo.FieldAllowFastVerification:
+			values[i] = new(sql.NullBool)
 		case authorizesocialplatforminfo.FieldID, authorizesocialplatforminfo.FieldPlatformID:
 			values[i] = new(sql.NullInt64)
 		case authorizesocialplatforminfo.FieldUserID, authorizesocialplatforminfo.FieldPlatform, authorizesocialplatforminfo.FieldPlatformUserID, authorizesocialplatforminfo.FieldComment:
@@ -112,6 +116,12 @@ func (_m *AuthorizeSocialPlatformInfo) assignValues(columns []string, values []a
 				return fmt.Errorf("unexpected type %T for field comment", values[i])
 			} else if value.Valid {
 				_m.Comment = value.String
+			}
+		case authorizesocialplatforminfo.FieldAllowFastVerification:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_fast_verification", values[i])
+			} else if value.Valid {
+				_m.AllowFastVerification = value.Bool
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -168,6 +178,9 @@ func (_m *AuthorizeSocialPlatformInfo) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("comment=")
 	builder.WriteString(_m.Comment)
+	builder.WriteString(", ")
+	builder.WriteString("allow_fast_verification=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowFastVerification))
 	builder.WriteByte(')')
 	return builder.String()
 }

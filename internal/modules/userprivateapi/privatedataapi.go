@@ -7,6 +7,7 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
@@ -98,16 +99,12 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiApiHelper.ErrorBadRequest(c, "invalid user_id")
 		}
-
-		// Run gameAccountBinding query and authorization check concurrently
 		var (
 			mu                 sync.Mutex
 			gameAccountBinding *postgresql.GameAccountBinding
 			authorized         bool
 		)
-
 		g, gCtx := errgroup.WithContext(ctx)
-
 		g.Go(func() error {
 			binding, qErr := apiHelper.DBManager.DB.GameAccountBinding.Query().
 				Where(
@@ -124,7 +121,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			mu.Unlock()
 			return qErr
 		})
-
 		g.Go(func() error {
 			exists, qErr := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
 				Where(
@@ -137,9 +133,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			mu.Unlock()
 			return qErr
 		})
-
 		if waitErr := g.Wait(); waitErr != nil {
-			// Determine which query failed based on the result states
 			if gameAccountBinding == nil {
 				if lookupErr := mapPrivateGameAccountLookupError(waitErr); lookupErr != nil {
 					if lookupErr.Code == fiber.StatusNotFound {
@@ -164,9 +158,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 				return harukiApiHelper.ErrorInternal(c, ownerErr.Message)
 			}
 		}
-
-		// If the concurrent authorization query didn't match, fall back to checking
-		// the eagerly-loaded SocialPlatformInfo on the binding owner.
 		dbUser := gameAccountBinding.Edges.User
 		if !authorized {
 			if dbUser.Edges.SocialPlatformInfo != nil &&
@@ -178,7 +169,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if !authorized {
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
 		}
-
 		result, err := apiHelper.DBManager.Mongo.GetData(ctx, userID, string(server), dataType)
 		if lookupErr := mapPrivateDataQueryError(err); lookupErr != nil {
 			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
@@ -229,69 +219,105 @@ func processRequestKeys(c fiber.Ctx, result map[string]any) error {
 func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		region := c.Params("region")
-		gameUserID := c.Params("game_user_id")
 		platform := c.Query("platform")
 		platformUserID := c.Query("platform_user_id")
 		if platform == "" || platformUserID == "" {
 			return harukiApiHelper.ErrorBadRequest(c, "both platform and platform_user_id are required")
 		}
-
-		// Find the binding for the specified region and game user ID
-		binding, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
-			Where(
-				gameaccountbinding.ServerEQ(region),
-				gameaccountbinding.GameUserIDEQ(gameUserID),
-			).
-			WithUser(func(query *postgresql.UserQuery) {
-				query.WithSocialPlatformInfo()
-				query.WithGameAccountBindings()
-			}).
-			Only(ctx)
-		if lookupErr := mapPrivateGameAccountLookupError(err); lookupErr != nil {
-			if lookupErr.Code == fiber.StatusNotFound {
-				return harukiApiHelper.ErrorNotFound(c, lookupErr.Message)
+		var (
+			mu          sync.Mutex
+			authEntries []*postgresql.AuthorizeSocialPlatformInfo
+			directUser  *postgresql.User
+		)
+		g, gCtx := errgroup.WithContext(ctx)
+		g.Go(func() error {
+			entries, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
+				Where(
+					authorizesocialplatforminfo.PlatformEQ(platform),
+					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
+					authorizesocialplatforminfo.AllowFastVerificationEQ(true),
+				).
+				WithUser(func(query *postgresql.UserQuery) {
+					query.WithGameAccountBindings(func(bQuery *postgresql.GameAccountBindingQuery) {
+						bQuery.Where(gameaccountbinding.VerifiedEQ(true))
+					})
+				}).
+				All(gCtx)
+			if err != nil {
+				return err
 			}
-			harukiLogger.Errorf("Failed to query game account binding (region=%s,game_user_id=%s): %v", region, gameUserID, err)
-			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
-		}
-		if ownerErr := mapPrivateBindingOwnerError(binding); ownerErr != nil {
-			switch ownerErr.Code {
-			case fiber.StatusNotFound:
-				return harukiApiHelper.ErrorNotFound(c, ownerErr.Message)
-			case fiber.StatusForbidden:
-				return harukiApiHelper.ErrorForbidden(c, ownerErr.Message)
-			default:
-				harukiLogger.Errorf("Failed to query game account owner (region=%s,game_user_id=%s): %s", region, gameUserID, ownerErr.Message)
-				return harukiApiHelper.ErrorInternal(c, ownerErr.Message)
+			mu.Lock()
+			authEntries = entries
+			mu.Unlock()
+			return nil
+		})
+		g.Go(func() error {
+			directInfo, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
+				Where(
+					socialplatforminfo.PlatformEQ(platform),
+					socialplatforminfo.PlatformUserIDEQ(platformUserID),
+				).
+				WithUser(func(query *postgresql.UserQuery) {
+					query.WithGameAccountBindings(func(bQuery *postgresql.GameAccountBindingQuery) {
+						bQuery.Where(gameaccountbinding.VerifiedEQ(true))
+					})
+				}).
+				Only(gCtx)
+			if err == nil && directInfo != nil {
+				mu.Lock()
+				directUser = directInfo.Edges.User
+				mu.Unlock()
+			} else if !postgresql.IsNotFound(err) {
+				return err
 			}
+			return nil
+		})
+
+		if err := g.Wait(); err != nil {
+			harukiLogger.Errorf("Failed to query social platforms concurrently (platform=%s,platform_user_id=%s): %v", platform, platformUserID, err)
+			return harukiApiHelper.ErrorInternal(c, "failed to query social platforms")
 		}
 
-		// Verify the caller is authorized via SocialPlatformInfo or AuthorizeSocialPlatformInfo
-		dbUser := binding.Edges.User
-		authorized, authErr := isUserAuthorized(c, apiHelper, dbUser, platform, platformUserID)
-		if lookupErr := mapPrivateAuthorizationLookupError(authErr); lookupErr != nil {
-			harukiLogger.Errorf("Failed to verify private api authorization (platform=%s,platform_user_id=%s): %v", platform, platformUserID, authErr)
-			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
+		if len(authEntries) == 0 && directUser == nil {
+			return c.JSON([]any{})
 		}
-		if !authorized {
-			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
-		}
-
-		// Build response list from all bindings of this user
 		type bindingEntry struct {
 			Server     string `json:"server"`
 			GameUserID string `json:"gameUserId"`
-			Verified   bool   `json:"verified"`
 		}
-		bindings := dbUser.Edges.GameAccountBindings
-		result := make([]bindingEntry, 0, len(bindings))
-		for _, b := range bindings {
-			result = append(result, bindingEntry{
-				Server:     b.Server,
-				GameUserID: b.GameUserID,
-				Verified:   b.Verified,
-			})
+		type bindingKey struct {
+			Server     string
+			GameUserID string
+		}
+		seen := make(map[bindingKey]struct{})
+		var result []bindingEntry
+		processUserBindings := func(u *postgresql.User) {
+			if u == nil || u.Banned {
+				return
+			}
+			for _, b := range u.Edges.GameAccountBindings {
+				key := bindingKey{Server: b.Server, GameUserID: b.GameUserID}
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+				result = append(result, bindingEntry{
+					Server:     b.Server,
+					GameUserID: b.GameUserID,
+				})
+			}
+		}
+
+		if directUser != nil {
+			processUserBindings(directUser)
+		}
+
+		for _, entry := range authEntries {
+			processUserBindings(entry.Edges.User)
+		}
+
+		if result == nil {
+			result = []bindingEntry{}
 		}
 		return c.JSON(result)
 	}
@@ -301,5 +327,5 @@ func RegisterUserPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouter
 	privateAPI := apiHelper.Router.Group("/api/private", ValidateUserPermission(apiHelper))
 
 	privateAPI.Get("/game-data/:server/:data_type/:user_id", handleGetPrivateData(apiHelper))
-	privateAPI.Get("/game-binding/:region/:game_user_id", handleGetGameBindings(apiHelper))
+	privateAPI.Get("/game-binding", handleGetGameBindings(apiHelper))
 }

@@ -79,6 +79,11 @@ func Comment(v string) predicate.AuthorizeSocialPlatformInfo {
 	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldComment, v))
 }
 
+// AllowFastVerification applies equality check predicate on the "allow_fast_verification" field. It's identical to AllowFastVerificationEQ.
+func AllowFastVerification(v bool) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldAllowFastVerification, v))
+}
+
 // UserIDEQ applies the EQ predicate on the "user_id" field.
 func UserIDEQ(v string) predicate.AuthorizeSocialPlatformInfo {
 	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldUserID, v))
@@ -387,6 +392,16 @@ func CommentEqualFold(v string) predicate.AuthorizeSocialPlatformInfo {
 // CommentContainsFold applies the ContainsFold predicate on the "comment" field.
 func CommentContainsFold(v string) predicate.AuthorizeSocialPlatformInfo {
 	return predicate.AuthorizeSocialPlatformInfo(sql.FieldContainsFold(FieldComment, v))
+}
+
+// AllowFastVerificationEQ applies the EQ predicate on the "allow_fast_verification" field.
+func AllowFastVerificationEQ(v bool) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldEQ(FieldAllowFastVerification, v))
+}
+
+// AllowFastVerificationNEQ applies the NEQ predicate on the "allow_fast_verification" field.
+func AllowFastVerificationNEQ(v bool) predicate.AuthorizeSocialPlatformInfo {
+	return predicate.AuthorizeSocialPlatformInfo(sql.FieldNEQ(FieldAllowFastVerification, v))
 }
 
 // HasUser applies the HasEdge predicate on the "user" edge.

@@ -16,6 +16,7 @@ var (
 		{Name: "platform_user_id", Type: field.TypeString},
 		{Name: "platform_id", Type: field.TypeInt},
 		{Name: "comment", Type: field.TypeString, Nullable: true},
+		{Name: "allow_fast_verification", Type: field.TypeBool, Default: false},
 		{Name: "user_id", Type: field.TypeString},
 	}
 	// AuthorizeSocialPlatformInfosTable holds the schema information for the "authorize_social_platform_infos" table.
@@ -26,7 +27,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "authorize_social_platform_infos_users_authorized_social_platforms",
-				Columns:    []*schema.Column{AuthorizeSocialPlatformInfosColumns[5]},
+				Columns:    []*schema.Column{AuthorizeSocialPlatformInfosColumns[6]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -35,7 +36,7 @@ var (
 			{
 				Name:    "authorizesocialplatforminfo_user_id_platform_id",
 				Unique:  true,
-				Columns: []*schema.Column{AuthorizeSocialPlatformInfosColumns[5], AuthorizeSocialPlatformInfosColumns[3]},
+				Columns: []*schema.Column{AuthorizeSocialPlatformInfosColumns[6], AuthorizeSocialPlatformInfosColumns[3]},
 			},
 		},
 	}

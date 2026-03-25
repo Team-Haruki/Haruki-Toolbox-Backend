@@ -79,9 +79,10 @@ type UpdateProfilePayload struct {
 }
 
 type AuthorizeSocialPlatformPayload struct {
-	Platform string `json:"platform"`
-	UserID   string `json:"userId"`
-	Comment  string `json:"comment"`
+	Platform              string `json:"platform"`
+	UserID                string `json:"userId"`
+	Comment               string `json:"comment"`
+	AllowFastVerification bool   `json:"allowFastVerification"`
 }
 
 type GameAccountBindingPayload struct {
@@ -134,10 +135,11 @@ type HarukiBotVerifySocialPlatformPayload struct {
 }
 
 type AuthorizeSocialPlatformInfo struct {
-	PlatformID int    `json:"platformId"`
-	Platform   string `json:"platform"`
-	UserID     string `json:"userId"`
-	Comment    string `json:"comment"`
+	PlatformID            int    `json:"platformId"`
+	Platform              string `json:"platform"`
+	UserID                string `json:"userId"`
+	Comment               string `json:"comment"`
+	AllowFastVerification bool   `json:"allowFastVerification"`
 }
 
 type GameAccountBinding struct {

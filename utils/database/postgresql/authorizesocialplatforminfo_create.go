@@ -58,6 +58,20 @@ func (_c *AuthorizeSocialPlatformInfoCreate) SetNillableComment(v *string) *Auth
 	return _c
 }
 
+// SetAllowFastVerification sets the "allow_fast_verification" field.
+func (_c *AuthorizeSocialPlatformInfoCreate) SetAllowFastVerification(v bool) *AuthorizeSocialPlatformInfoCreate {
+	_c.mutation.SetAllowFastVerification(v)
+	return _c
+}
+
+// SetNillableAllowFastVerification sets the "allow_fast_verification" field if the given value is not nil.
+func (_c *AuthorizeSocialPlatformInfoCreate) SetNillableAllowFastVerification(v *bool) *AuthorizeSocialPlatformInfoCreate {
+	if v != nil {
+		_c.SetAllowFastVerification(*v)
+	}
+	return _c
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_c *AuthorizeSocialPlatformInfoCreate) SetUser(v *User) *AuthorizeSocialPlatformInfoCreate {
 	return _c.SetUserID(v.ID)
@@ -70,6 +84,7 @@ func (_c *AuthorizeSocialPlatformInfoCreate) Mutation() *AuthorizeSocialPlatform
 
 // Save creates the AuthorizeSocialPlatformInfo in the database.
 func (_c *AuthorizeSocialPlatformInfoCreate) Save(ctx context.Context) (*AuthorizeSocialPlatformInfo, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -95,6 +110,14 @@ func (_c *AuthorizeSocialPlatformInfoCreate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_c *AuthorizeSocialPlatformInfoCreate) defaults() {
+	if _, ok := _c.mutation.AllowFastVerification(); !ok {
+		v := authorizesocialplatforminfo.DefaultAllowFastVerification
+		_c.mutation.SetAllowFastVerification(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (_c *AuthorizeSocialPlatformInfoCreate) check() error {
 	if _, ok := _c.mutation.UserID(); !ok {
@@ -108,6 +131,9 @@ func (_c *AuthorizeSocialPlatformInfoCreate) check() error {
 	}
 	if _, ok := _c.mutation.PlatformID(); !ok {
 		return &ValidationError{Name: "platform_id", err: errors.New(`postgresql: missing required field "AuthorizeSocialPlatformInfo.platform_id"`)}
+	}
+	if _, ok := _c.mutation.AllowFastVerification(); !ok {
+		return &ValidationError{Name: "allow_fast_verification", err: errors.New(`postgresql: missing required field "AuthorizeSocialPlatformInfo.allow_fast_verification"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`postgresql: missing required edge "AuthorizeSocialPlatformInfo.user"`)}
@@ -154,6 +180,10 @@ func (_c *AuthorizeSocialPlatformInfoCreate) createSpec() (*AuthorizeSocialPlatf
 		_spec.SetField(authorizesocialplatforminfo.FieldComment, field.TypeString, value)
 		_node.Comment = value
 	}
+	if value, ok := _c.mutation.AllowFastVerification(); ok {
+		_spec.SetField(authorizesocialplatforminfo.FieldAllowFastVerification, field.TypeBool, value)
+		_node.AllowFastVerification = value
+	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -192,6 +222,7 @@ func (_c *AuthorizeSocialPlatformInfoCreateBulk) Save(ctx context.Context) ([]*A
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AuthorizeSocialPlatformInfoMutation)
 				if !ok {

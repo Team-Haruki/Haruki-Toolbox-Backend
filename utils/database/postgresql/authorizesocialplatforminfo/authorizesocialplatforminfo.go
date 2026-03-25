@@ -22,6 +22,8 @@ const (
 	FieldPlatformID = "platform_id"
 	// FieldComment holds the string denoting the comment field in the database.
 	FieldComment = "comment"
+	// FieldAllowFastVerification holds the string denoting the allow_fast_verification field in the database.
+	FieldAllowFastVerification = "allow_fast_verification"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// Table holds the table name of the authorizesocialplatforminfo in the database.
@@ -43,6 +45,7 @@ var Columns = []string{
 	FieldPlatformUserID,
 	FieldPlatformID,
 	FieldComment,
+	FieldAllowFastVerification,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -54,6 +57,11 @@ func ValidColumn(column string) bool {
 	}
 	return false
 }
+
+var (
+	// DefaultAllowFastVerification holds the default value on creation for the "allow_fast_verification" field.
+	DefaultAllowFastVerification bool
+)
 
 // OrderOption defines the ordering options for the AuthorizeSocialPlatformInfo queries.
 type OrderOption func(*sql.Selector)
@@ -86,6 +94,11 @@ func ByPlatformID(opts ...sql.OrderTermOption) OrderOption {
 // ByComment orders the results by the comment field.
 func ByComment(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldComment, opts...).ToFunc()
+}
+
+// ByAllowFastVerification orders the results by the allow_fast_verification field.
+func ByAllowFastVerification(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowFastVerification, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.
