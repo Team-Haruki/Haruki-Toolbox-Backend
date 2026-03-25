@@ -3,8 +3,8 @@ module haruki-suite
 go 1.26.0
 
 require (
-	entgo.io/ent v0.14.5
-	github.com/DATA-DOG/go-sqlmock v1.5.0
+	entgo.io/ent v0.14.6
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/bytedance/sonic v1.15.0
 	github.com/go-resty/resty/v2 v2.17.2
@@ -13,7 +13,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.8.0
 	github.com/iancoleman/orderedmap v0.3.0
-	github.com/klauspost/compress v1.18.4
+	github.com/klauspost/compress v1.18.5
 	github.com/lib/pq v1.12.0
 	github.com/mattn/go-sqlite3 v1.14.37
 	github.com/redis/go-redis/v9 v9.18.0
@@ -21,7 +21,7 @@ require (
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.49.0
-	golang.org/x/image v0.37.0
+	golang.org/x/image v0.38.0
 	golang.org/x/sync v0.20.0
 	gopkg.in/yaml.v3 v3.0.1
 )
