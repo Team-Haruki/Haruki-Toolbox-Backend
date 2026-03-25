@@ -181,25 +181,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 	}
 }
 
-func isUserAuthorized(c fiber.Ctx, apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers, dbUser *postgresql.User, platform, platformUserID string) (bool, error) {
-	if dbUser.Edges.SocialPlatformInfo != nil &&
-		dbUser.Edges.SocialPlatformInfo.Platform == platform &&
-		dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
-		return true, nil
-	}
-	exists, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
-		Where(
-			authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
-			authorizesocialplatforminfo.PlatformEQ(platform),
-			authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
-		).
-		Exist(c.Context())
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
-}
-
 func processRequestKeys(c fiber.Ctx, result map[string]any) error {
 	requestKey := c.Query("key")
 	if requestKey != "" {
