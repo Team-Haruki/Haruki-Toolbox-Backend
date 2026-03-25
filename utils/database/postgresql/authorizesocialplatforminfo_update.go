@@ -111,6 +111,20 @@ func (_u *AuthorizeSocialPlatformInfoUpdate) ClearComment() *AuthorizeSocialPlat
 	return _u
 }
 
+// SetAllowFastVerification sets the "allow_fast_verification" field.
+func (_u *AuthorizeSocialPlatformInfoUpdate) SetAllowFastVerification(v bool) *AuthorizeSocialPlatformInfoUpdate {
+	_u.mutation.SetAllowFastVerification(v)
+	return _u
+}
+
+// SetNillableAllowFastVerification sets the "allow_fast_verification" field if the given value is not nil.
+func (_u *AuthorizeSocialPlatformInfoUpdate) SetNillableAllowFastVerification(v *bool) *AuthorizeSocialPlatformInfoUpdate {
+	if v != nil {
+		_u.SetAllowFastVerification(*v)
+	}
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *AuthorizeSocialPlatformInfoUpdate) SetUser(v *User) *AuthorizeSocialPlatformInfoUpdate {
 	return _u.SetUserID(v.ID)
@@ -191,6 +205,9 @@ func (_u *AuthorizeSocialPlatformInfoUpdate) sqlSave(ctx context.Context) (_node
 	}
 	if _u.mutation.CommentCleared() {
 		_spec.ClearField(authorizesocialplatforminfo.FieldComment, field.TypeString)
+	}
+	if value, ok := _u.mutation.AllowFastVerification(); ok {
+		_spec.SetField(authorizesocialplatforminfo.FieldAllowFastVerification, field.TypeBool, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -324,6 +341,20 @@ func (_u *AuthorizeSocialPlatformInfoUpdateOne) ClearComment() *AuthorizeSocialP
 	return _u
 }
 
+// SetAllowFastVerification sets the "allow_fast_verification" field.
+func (_u *AuthorizeSocialPlatformInfoUpdateOne) SetAllowFastVerification(v bool) *AuthorizeSocialPlatformInfoUpdateOne {
+	_u.mutation.SetAllowFastVerification(v)
+	return _u
+}
+
+// SetNillableAllowFastVerification sets the "allow_fast_verification" field if the given value is not nil.
+func (_u *AuthorizeSocialPlatformInfoUpdateOne) SetNillableAllowFastVerification(v *bool) *AuthorizeSocialPlatformInfoUpdateOne {
+	if v != nil {
+		_u.SetAllowFastVerification(*v)
+	}
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *AuthorizeSocialPlatformInfoUpdateOne) SetUser(v *User) *AuthorizeSocialPlatformInfoUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -434,6 +465,9 @@ func (_u *AuthorizeSocialPlatformInfoUpdateOne) sqlSave(ctx context.Context) (_n
 	}
 	if _u.mutation.CommentCleared() {
 		_spec.ClearField(authorizesocialplatforminfo.FieldComment, field.TypeString)
+	}
+	if value, ok := _u.mutation.AllowFastVerification(); ok {
+		_spec.SetField(authorizesocialplatforminfo.FieldAllowFastVerification, field.TypeBool, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

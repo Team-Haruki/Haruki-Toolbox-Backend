@@ -18,6 +18,7 @@ func (AuthorizeSocialPlatformInfo) Fields() []ent.Field {
 		field.String("platform_user_id"),
 		field.Int("platform_id"),
 		field.String("comment").Optional(),
+		field.Bool("allow_fast_verification").Default(false),
 	}
 }
 

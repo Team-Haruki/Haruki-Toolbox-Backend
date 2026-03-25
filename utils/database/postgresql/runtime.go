@@ -4,6 +4,7 @@ package postgresql
 
 import (
 	"haruki-suite/ent/schema"
+	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/group"
@@ -26,6 +27,12 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	authorizesocialplatforminfoFields := schema.AuthorizeSocialPlatformInfo{}.Fields()
+	_ = authorizesocialplatforminfoFields
+	// authorizesocialplatforminfoDescAllowFastVerification is the schema descriptor for allow_fast_verification field.
+	authorizesocialplatforminfoDescAllowFastVerification := authorizesocialplatforminfoFields[5].Descriptor()
+	// authorizesocialplatforminfo.DefaultAllowFastVerification holds the default value on creation for the allow_fast_verification field.
+	authorizesocialplatforminfo.DefaultAllowFastVerification = authorizesocialplatforminfoDescAllowFastVerification.Default.(bool)
 	friendlinkFields := schema.FriendLink{}.Fields()
 	_ = friendlinkFields
 	// friendlinkDescName is the schema descriptor for name field.

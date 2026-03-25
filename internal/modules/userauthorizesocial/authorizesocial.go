@@ -86,6 +86,7 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			SetPlatform(payload.Platform).
 			SetPlatformUserID(payload.UserID).
 			SetComment(payload.Comment).
+			SetAllowFastVerification(payload.AllowFastVerification).
 			Save(ctx)
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
@@ -107,10 +108,11 @@ func handleAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				PlatformID: i.PlatformID,
-				Platform:   i.Platform,
-				UserID:     i.PlatformUserID,
-				Comment:    i.Comment,
+				PlatformID:            i.PlatformID,
+				Platform:              i.Platform,
+				UserID:                i.PlatformUserID,
+				Comment:               i.Comment,
+				AllowFastVerification: i.AllowFastVerification,
 			})
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -163,6 +165,7 @@ func handleCreateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			SetPlatform(payload.Platform).
 			SetPlatformUserID(payload.UserID).
 			SetPlatformID(newPlatformID).
+			SetAllowFastVerification(payload.AllowFastVerification).
 			SetNillableComment(func() *string {
 				if payload.Comment == "" {
 					return nil
@@ -190,10 +193,11 @@ func handleCreateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				PlatformID: i.PlatformID,
-				Platform:   i.Platform,
-				UserID:     i.PlatformUserID,
-				Comment:    i.Comment,
+				PlatformID:            i.PlatformID,
+				Platform:              i.Platform,
+				UserID:                i.PlatformUserID,
+				Comment:               i.Comment,
+				AllowFastVerification: i.AllowFastVerification,
 			})
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{
@@ -251,10 +255,11 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
 		for _, i := range infos {
 			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				PlatformID: i.PlatformID,
-				Platform:   i.Platform,
-				UserID:     i.PlatformUserID,
-				Comment:    i.Comment,
+				PlatformID:            i.PlatformID,
+				Platform:              i.Platform,
+				UserID:                i.PlatformUserID,
+				Comment:               i.Comment,
+				AllowFastVerification: i.AllowFastVerification,
 			})
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{

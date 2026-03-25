@@ -61,20 +61,21 @@ const (
 // AuthorizeSocialPlatformInfoMutation represents an operation that mutates the AuthorizeSocialPlatformInfo nodes in the graph.
 type AuthorizeSocialPlatformInfoMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int
-	platform         *string
-	platform_user_id *string
-	platform_id      *int
-	addplatform_id   *int
-	comment          *string
-	clearedFields    map[string]struct{}
-	user             *string
-	cleareduser      bool
-	done             bool
-	oldValue         func(context.Context) (*AuthorizeSocialPlatformInfo, error)
-	predicates       []predicate.AuthorizeSocialPlatformInfo
+	op                      Op
+	typ                     string
+	id                      *int
+	platform                *string
+	platform_user_id        *string
+	platform_id             *int
+	addplatform_id          *int
+	comment                 *string
+	allow_fast_verification *bool
+	clearedFields           map[string]struct{}
+	user                    *string
+	cleareduser             bool
+	done                    bool
+	oldValue                func(context.Context) (*AuthorizeSocialPlatformInfo, error)
+	predicates              []predicate.AuthorizeSocialPlatformInfo
 }
 
 var _ ent.Mutation = (*AuthorizeSocialPlatformInfoMutation)(nil)
@@ -388,6 +389,42 @@ func (m *AuthorizeSocialPlatformInfoMutation) ResetComment() {
 	delete(m.clearedFields, authorizesocialplatforminfo.FieldComment)
 }
 
+// SetAllowFastVerification sets the "allow_fast_verification" field.
+func (m *AuthorizeSocialPlatformInfoMutation) SetAllowFastVerification(b bool) {
+	m.allow_fast_verification = &b
+}
+
+// AllowFastVerification returns the value of the "allow_fast_verification" field in the mutation.
+func (m *AuthorizeSocialPlatformInfoMutation) AllowFastVerification() (r bool, exists bool) {
+	v := m.allow_fast_verification
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowFastVerification returns the old "allow_fast_verification" field's value of the AuthorizeSocialPlatformInfo entity.
+// If the AuthorizeSocialPlatformInfo object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuthorizeSocialPlatformInfoMutation) OldAllowFastVerification(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowFastVerification is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowFastVerification requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowFastVerification: %w", err)
+	}
+	return oldValue.AllowFastVerification, nil
+}
+
+// ResetAllowFastVerification resets all changes to the "allow_fast_verification" field.
+func (m *AuthorizeSocialPlatformInfoMutation) ResetAllowFastVerification() {
+	m.allow_fast_verification = nil
+}
+
 // ClearUser clears the "user" edge to the User entity.
 func (m *AuthorizeSocialPlatformInfoMutation) ClearUser() {
 	m.cleareduser = true
@@ -449,7 +486,7 @@ func (m *AuthorizeSocialPlatformInfoMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuthorizeSocialPlatformInfoMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.user != nil {
 		fields = append(fields, authorizesocialplatforminfo.FieldUserID)
 	}
@@ -464,6 +501,9 @@ func (m *AuthorizeSocialPlatformInfoMutation) Fields() []string {
 	}
 	if m.comment != nil {
 		fields = append(fields, authorizesocialplatforminfo.FieldComment)
+	}
+	if m.allow_fast_verification != nil {
+		fields = append(fields, authorizesocialplatforminfo.FieldAllowFastVerification)
 	}
 	return fields
 }
@@ -483,6 +523,8 @@ func (m *AuthorizeSocialPlatformInfoMutation) Field(name string) (ent.Value, boo
 		return m.PlatformID()
 	case authorizesocialplatforminfo.FieldComment:
 		return m.Comment()
+	case authorizesocialplatforminfo.FieldAllowFastVerification:
+		return m.AllowFastVerification()
 	}
 	return nil, false
 }
@@ -502,6 +544,8 @@ func (m *AuthorizeSocialPlatformInfoMutation) OldField(ctx context.Context, name
 		return m.OldPlatformID(ctx)
 	case authorizesocialplatforminfo.FieldComment:
 		return m.OldComment(ctx)
+	case authorizesocialplatforminfo.FieldAllowFastVerification:
+		return m.OldAllowFastVerification(ctx)
 	}
 	return nil, fmt.Errorf("unknown AuthorizeSocialPlatformInfo field %s", name)
 }
@@ -545,6 +589,13 @@ func (m *AuthorizeSocialPlatformInfoMutation) SetField(name string, value ent.Va
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetComment(v)
+		return nil
+	case authorizesocialplatforminfo.FieldAllowFastVerification:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowFastVerification(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AuthorizeSocialPlatformInfo field %s", name)
@@ -633,6 +684,9 @@ func (m *AuthorizeSocialPlatformInfoMutation) ResetField(name string) error {
 		return nil
 	case authorizesocialplatforminfo.FieldComment:
 		m.ResetComment()
+		return nil
+	case authorizesocialplatforminfo.FieldAllowFastVerification:
+		m.ResetAllowFastVerification()
 		return nil
 	}
 	return fmt.Errorf("unknown AuthorizeSocialPlatformInfo field %s", name)
