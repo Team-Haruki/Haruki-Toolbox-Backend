@@ -291,9 +291,12 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 		}
 		seen := make(map[bindingKey]struct{})
 		var result []bindingEntry
-		processUserBindings := func(u *postgresql.User) {
-			if u == nil || u.Banned {
-				return
+		processUserBindings := func(u *postgresql.User) error {
+			if u == nil {
+				return nil
+			}
+			if u.Banned {
+				return harukiApiHelper.ErrorForbidden(c, "forbidden: account owner is banned")
 			}
 			for _, b := range u.Edges.GameAccountBindings {
 				key := bindingKey{Server: b.Server, GameUserID: b.GameUserID}
@@ -306,14 +309,19 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 					GameUserID: b.GameUserID,
 				})
 			}
+			return nil
 		}
 
 		if directUser != nil {
-			processUserBindings(directUser)
+			if err := processUserBindings(directUser); err != nil {
+				return err
+			}
 		}
 
 		for _, entry := range authEntries {
-			processUserBindings(entry.Edges.User)
+			if err := processUserBindings(entry.Edges.User); err != nil {
+				return err
+			}
 		}
 
 		if result == nil {
