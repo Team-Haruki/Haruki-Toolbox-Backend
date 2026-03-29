@@ -1,6 +1,7 @@
 package oauth2
 
 const (
+	ScopeOfflineAccess = "offline_access"
 	ScopeUserRead      = "user:read"
 	ScopeBindingsRead  = "bindings:read"
 	ScopeGameDataRead  = "game-data:read"
@@ -8,6 +9,7 @@ const (
 )
 
 var AllScopes = map[string]string{
+	ScopeOfflineAccess: "Request refresh_token issuance for long-lived delegated access",
 	ScopeUserRead:      "Read your profile (name and avatar)",
 	ScopeBindingsRead:  "Read your bound game accounts",
 	ScopeGameDataRead:  "Read your uploaded game data",

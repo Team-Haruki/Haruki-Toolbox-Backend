@@ -67,6 +67,16 @@
 - `token_endpoint_auth_method = client_secret_basic`
 - `grant_types = ["authorization_code", "refresh_token"]`
 
+但要注意：
+
+- `grant_types` 包含 `refresh_token`
+  不等于
+- 每次授权都会自动下发 `refresh_token`
+
+如果你希望拿到 `refresh_token`，授权请求的 scope 还应包含：
+
+- `offline_access`
+
 ### 3.2 当前不建议按已支持来假设的能力
 
 以下场景这份服务端当前**不要默认当作已支持**：
@@ -136,6 +146,7 @@ flowchart LR
     "https://bot.example.com/oauth/callback/haruki"
   ],
   "scopes": [
+    "offline_access",
     "user:read",
     "bindings:read",
     "game-data:read"
@@ -187,7 +198,7 @@ https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/authorize
 ?response_type=code
 &client_id=telegram-bot-prod
 &redirect_uri=https%3A%2F%2Fbot.example.com%2Foauth%2Fcallback%2Fharuki
-&scope=user%3Aread%20bindings%3Aread%20game-data%3Aread
+&scope=offline_access%20user%3Aread%20bindings%3Aread%20game-data%3Aread
 &state=botbind_abc123xyz
 ```
 
