@@ -37,7 +37,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		ctx := c.Context()
 		server, dataType, userID, userIDStr, parseErr := parseParams(c)
 		if parseErr != nil {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, parseErr.Code, parseErr.Message, nil)
+			return harukiAPIHelper.ErrorNotFound(c, "not found")
 		}
 
 		record, err := fetchAccountBinding(ctx, apiHelper, server, userIDStr)
@@ -49,7 +49,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorNotFound(c, "account binding not found")
 		}
 		if !validatePublicAPIAccess(record, dataType) {
-			return harukiAPIHelper.ErrorForbidden(c, "you are not allowed to access this player data.")
+			return harukiAPIHelper.ErrorNotFound(c, "not found")
 		}
 
 		var resp any
@@ -72,7 +72,10 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		if err != nil {
 			if fErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fErr.Code, fErr.Message, nil)
+				if fErr.Code == fiber.StatusInternalServerError {
+					return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
+				}
+				return harukiAPIHelper.ErrorNotFound(c, "not found")
 			}
 			harukiLogger.Errorf("Failed to load public game data: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
