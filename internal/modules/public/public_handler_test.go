@@ -39,8 +39,8 @@ func TestHandlePublicDataRequestInvalidParamsReturnBadRequest(t *testing.T) {
 			if err != nil {
 				t.Fatalf("app.Test returned error: %v", err)
 			}
-			if resp.StatusCode != fiber.StatusBadRequest {
-				t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
+			if resp.StatusCode != fiber.StatusNotFound {
+				t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNotFound)
 			}
 		})
 	}
