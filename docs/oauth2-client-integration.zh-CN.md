@@ -337,6 +337,23 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token' \
 
 对于 confidential client，通常仍应带 client basic auth。
 
+### refresh token 为什么有时不会返回
+
+当前基于 Hydra 的行为里，如果你希望拿到 `refresh_token`，授权请求和最终同意授权的 `grantScope` 通常需要包含：
+
+- `offline_access`
+
+也就是说，如果你请求的 scope 只有：
+
+- `game-data:read`
+- `bindings:read`
+
+而没有：
+
+- `offline_access`
+
+那么即使 client 本身允许 `refresh_token` grant，也可能不会返回 `refresh_token`。
+
 ---
 
 ## 6. 撤销 token
@@ -399,6 +416,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 当前内置 scope 如下：
 
+- `offline_access`
 - `user:read`
 - `bindings:read`
 - `game-data:read`
@@ -406,6 +424,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 但当前最新版本对外明确可用、且文档已覆盖的主要是：
 
+- `offline_access`
 - `user:read`
 - `bindings:read`
 - `game-data:read`
@@ -442,6 +461,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
     "https://viewer.unipjsk.com/oauth2/callback/code"
   ],
   "scopes": [
+    "offline_access",
     "game-data:read"
   ]
 }

@@ -117,6 +117,7 @@ func TestSanitizeAdminOAuthClientRedirectURIs(t *testing.T) {
 
 func TestSanitizeAdminOAuthClientScopes(t *testing.T) {
 	scopes, err := sanitizeAdminOAuthClientScopes([]string{
+		harukiOAuth2.ScopeOfflineAccess,
 		harukiOAuth2.ScopeUserRead,
 		harukiOAuth2.ScopeGameDataRead,
 		harukiOAuth2.ScopeGameDataRead,
@@ -124,8 +125,8 @@ func TestSanitizeAdminOAuthClientScopes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sanitizeAdminOAuthClientScopes returned error: %v", err)
 	}
-	if len(scopes) != 2 {
-		t.Fatalf("len(scopes) = %d, want 2", len(scopes))
+	if len(scopes) != 3 {
+		t.Fatalf("len(scopes) = %d, want 3", len(scopes))
 	}
 
 	if _, err := sanitizeAdminOAuthClientScopes([]string{"admin:all"}); err == nil {
