@@ -6,6 +6,17 @@
 
 不展开旧版本历史，不展开过多内部实现，只讲客户端和前端实际该怎么对接。
 
+如果你的客户端属于以下类型：
+
+- Telegram Bot
+- 机器人后端
+- Web 后端
+- 任何需要安全保存 `client_secret` 的服务端客户端
+
+请额外阅读：
+
+- [`docs/oauth2-confidential-client-integration.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/oauth2-confidential-client-integration.zh-CN.md)
+
 ---
 
 ## 1. 实际接入地址
