@@ -144,7 +144,23 @@ func mergeUserEvents(oldData, newData map[string]any) []any {
 func shouldReplaceEvent(newEvent, oldEvent map[string]any) bool {
 	newPoint := getInt(newEvent, fieldEventPoint)
 	oldPoint := getInt(oldEvent, fieldEventPoint)
-	return newPoint >= oldPoint
+
+	// Higher eventPoint always wins
+	if newPoint > oldPoint {
+		return true
+	}
+	// Lower eventPoint never wins
+	if newPoint < oldPoint {
+		return false
+	}
+	// Equal eventPoint: prefer the one with rank field (post-event data is more complete)
+	_, newHasRank := newEvent[fieldEventRank]
+	_, oldHasRank := oldEvent[fieldEventRank]
+	if newHasRank && !oldHasRank {
+		return true
+	}
+	// If both have rank or neither has rank, keep existing (don't replace)
+	return false
 }
 
 type bloomKey struct {

@@ -9,6 +9,7 @@ const (
 	fieldUserGachas                 = "userGachas"
 	fieldEventID                    = "eventId"
 	fieldEventPoint                 = "eventPoint"
+	fieldEventRank                  = "rank"
 	fieldGameCharacterID            = "gameCharacterId"
 	fieldWorldBloomChapterPoint     = "worldBloomChapterPoint"
 	fieldGachaID                    = "gachaId"

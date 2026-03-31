@@ -304,3 +304,128 @@ func TestMergeUserGachasSupportsMongoDecodedDocumentTypes(t *testing.T) {
 		t.Fatalf("gachaId=2 gachaBehaviorId=20 lastSpinAt = %d, want 500", points["2:20"])
 	}
 }
+
+func TestMergeUserEventsPrefersNewDataWithRank(t *testing.T) {
+	// Old data has same eventPoint but no rank
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(1500000)},
+		},
+	}
+	// New data has same eventPoint but has rank data (post-event) - should replace
+	newData := map[string]any{
+		"userEvents": []any{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(1500000), "rank": int64(127177)},
+		},
+	}
+
+	merged := mergeUserEvents(oldData, newData)
+	if len(merged) != 1 {
+		t.Fatalf("mergeUserEvents() length = %d, want 1", len(merged))
+	}
+
+	ev, ok := merged[0].(map[string]any)
+	if !ok {
+		t.Fatalf("merged item has unexpected type %T", merged[0])
+	}
+
+	// Should have the new event with rank since eventPoints are equal
+	if _, hasRank := ev["rank"]; !hasRank {
+		t.Fatalf("merged event should have rank field")
+	}
+}
+
+func TestMergeUserEventsKeepsHigherPointWithoutRank(t *testing.T) {
+	// When neither has rank, prefer higher eventPoint
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(2000000)},
+		},
+	}
+	newData := map[string]any{
+		"userEvents": []any{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(1500000)},
+		},
+	}
+
+	merged := mergeUserEvents(oldData, newData)
+	if len(merged) != 1 {
+		t.Fatalf("mergeUserEvents() length = %d, want 1", len(merged))
+	}
+
+	ev, ok := merged[0].(map[string]any)
+	if !ok {
+		t.Fatalf("merged item has unexpected type %T", merged[0])
+	}
+
+	// Should keep the old event with higher point since neither has rank
+	if getInt(ev, "eventPoint") != 2000000 {
+		t.Fatalf("eventPoint = %d, want 2000000 (higher point)", getInt(ev, "eventPoint"))
+	}
+}
+
+func TestMergeUserEventsHigherPointWinsOverRank(t *testing.T) {
+	// Old data has rank but lower eventPoint
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(1000000), "rank": int64(200000)},
+		},
+	}
+	// New data has higher eventPoint but no rank yet (event still ongoing)
+	newData := map[string]any{
+		"userEvents": []any{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(1500000)},
+		},
+	}
+
+	merged := mergeUserEvents(oldData, newData)
+	if len(merged) != 1 {
+		t.Fatalf("mergeUserEvents() length = %d, want 1", len(merged))
+	}
+
+	ev, ok := merged[0].(map[string]any)
+	if !ok {
+		t.Fatalf("merged item has unexpected type %T", merged[0])
+	}
+
+	// Higher eventPoint should win, even if old had rank
+	if getInt(ev, "eventPoint") != 1500000 {
+		t.Fatalf("eventPoint = %d, want 1500000 (higher point wins)", getInt(ev, "eventPoint"))
+	}
+}
+
+func TestMergeUserEventsAddsNewEventIds(t *testing.T) {
+	// Old data has event 199
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(199), "eventPoint": int64(1000000)},
+		},
+	}
+	// New data has event 200 (new event that doesn't exist in old data)
+	newData := map[string]any{
+		"userEvents": []any{
+			map[string]any{"eventId": int64(200), "eventPoint": int64(50000)},
+		},
+	}
+
+	merged := mergeUserEvents(oldData, newData)
+	if len(merged) != 2 {
+		t.Fatalf("mergeUserEvents() length = %d, want 2", len(merged))
+	}
+
+	points := map[int64]int64{}
+	for _, item := range merged {
+		ev, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("merged item has unexpected type %T", item)
+		}
+		points[getInt(ev, "eventId")] = getInt(ev, "eventPoint")
+	}
+
+	if points[199] != 1000000 {
+		t.Fatalf("eventId=199 point = %d, want 1000000", points[199])
+	}
+	if points[200] != 50000 {
+		t.Fatalf("eventId=200 point = %d, want 50000", points[200])
+	}
+}
