@@ -498,7 +498,7 @@ func applySMTPConnectionURIFallback(cfg *Config) error {
 	if strings.TrimSpace(cfg.UserSystem.SMTP.SMTPAddr) == "" {
 		cfg.UserSystem.SMTP.SMTPAddr = host
 	}
-	if cfg.UserSystem.SMTP.SMTPPort <= 0 {
+	if _, hasExplicitSMTPPortEnv := firstEnvValue("SMTP_PORT"); !hasExplicitSMTPPortEnv {
 		cfg.UserSystem.SMTP.SMTPPort = port
 	}
 	if strings.TrimSpace(cfg.UserSystem.SMTP.SMTPMail) == "" {
