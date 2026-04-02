@@ -200,6 +200,25 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("smtp uri port overrides default config smtp_port when SMTP_PORT env is unset", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "cfg.yaml")
+		content := []byte("user_system:\n  smtp:\n    smtp_port: 25\n")
+		if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		t.Setenv("SMTP_CONNECTION_URI", "smtps://no-reply%40mail.example.com:test-pass@smtp.example.com:465")
+
+		cfg, err := Load(cfgPath)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		if cfg.UserSystem.SMTP.SMTPPort != 465 {
+			t.Fatalf("SMTPPort = %d, want %d", cfg.UserSystem.SMTP.SMTPPort, 465)
+		}
+	})
+
 	t.Run("fallback smtp mail from SMTP_FROM_ADDRESS when URI username is empty", func(t *testing.T) {
 		tmp := t.TempDir()
 		cfgPath := filepath.Join(tmp, "cfg.yaml")
