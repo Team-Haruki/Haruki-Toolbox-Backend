@@ -26,11 +26,19 @@ func toInt64(v any) (int64, bool) {
 	switch n := v.(type) {
 	case int:
 		return int64(n), true
+	case int8:
+		return int64(n), true
+	case int16:
+		return int64(n), true
 	case int32:
 		return int64(n), true
 	case int64:
 		return n, true
 	case uint:
+		return int64(n), true
+	case uint8:
+		return int64(n), true
+	case uint16:
 		return int64(n), true
 	case uint32:
 		return int64(n), true

@@ -69,6 +69,7 @@ func (m *MongoDBManager) fetchOldData(
 	projection := bson.M{
 		fieldUserEvents:      1,
 		fieldUserWorldBlooms: 1,
+		fieldUserGachas:      1,
 		fieldID:              0,
 	}
 
