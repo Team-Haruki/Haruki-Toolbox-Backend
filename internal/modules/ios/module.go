@@ -8,8 +8,10 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/user"
+	"math/rand/v2"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -145,6 +147,10 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 		c.Set("Content-Type", app.ContentType())
 		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", req.FileName()))
+		if mode == iosGen.UploadModeProxy {
+			delay := time.Duration(1000+rand.IntN(2001)) * time.Millisecond
+			time.Sleep(delay)
+		}
 		return c.SendString(content)
 	}
 }
