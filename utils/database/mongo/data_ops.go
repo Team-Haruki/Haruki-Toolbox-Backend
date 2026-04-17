@@ -298,9 +298,9 @@ func (m *MongoDBManager) GetData(
 	userID int64,
 	server string,
 	dataType utils.UploadDataType,
-) (bson.M, error) {
+) (bson.D, error) {
 	collection := m.getCollectionByDataType(dataType)
-	var result bson.M
+	var result bson.D
 
 	err := collection.FindOne(
 		ctx,

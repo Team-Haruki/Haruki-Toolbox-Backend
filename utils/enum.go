@@ -15,8 +15,12 @@ const (
 
 func ParseUploadDataType(s string) (UploadDataType, error) {
 	switch UploadDataType(s) {
-	case UploadDataTypeSuite, UploadDataTypeMysekai, UploadDataTypeMysekaiBirthdayParty:
-		return UploadDataType(s), nil
+	case UploadDataTypeSuite:
+		return UploadDataTypeSuite, nil
+	case UploadDataTypeMysekai:
+		return UploadDataTypeMysekai, nil
+	case UploadDataTypeMysekaiBirthdayParty:
+		return UploadDataTypeMysekaiBirthdayParty, nil
 	default:
 		return "", fmt.Errorf("invalid data_type: %s", s)
 	}
@@ -34,12 +38,16 @@ const (
 
 func ParseSupportedDataUploadServer(s string) (SupportedDataUploadServer, error) {
 	switch SupportedDataUploadServer(s) {
-	case SupportedDataUploadServerJP,
-		SupportedDataUploadServerEN,
-		SupportedDataUploadServerTW,
-		SupportedDataUploadServerKR,
-		SupportedDataUploadServerCN:
-		return SupportedDataUploadServer(s), nil
+	case SupportedDataUploadServerJP:
+		return SupportedDataUploadServerJP, nil
+	case SupportedDataUploadServerEN:
+		return SupportedDataUploadServerEN, nil
+	case SupportedDataUploadServerTW:
+		return SupportedDataUploadServerTW, nil
+	case SupportedDataUploadServerKR:
+		return SupportedDataUploadServerKR, nil
+	case SupportedDataUploadServerCN:
+		return SupportedDataUploadServerCN, nil
 	default:
 		return "", fmt.Errorf("invalid server: %s", s)
 	}
@@ -54,8 +62,10 @@ const (
 
 func ParseSupportedInheritUploadServer(s string) (SupportedInheritUploadServer, error) {
 	switch SupportedInheritUploadServer(s) {
-	case SupportedInheritUploadServerJP, SupportedInheritUploadServerEN:
-		return SupportedInheritUploadServer(s), nil
+	case SupportedInheritUploadServerJP:
+		return SupportedInheritUploadServerJP, nil
+	case SupportedInheritUploadServerEN:
+		return SupportedInheritUploadServerEN, nil
 	default:
 		return "", fmt.Errorf("invalid server: %s", s)
 	}
