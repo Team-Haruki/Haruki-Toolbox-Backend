@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/gofiber/fiber/v3"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -174,27 +175,36 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
 			return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
 		}
-		if result == nil {
+		if len(result) == 0 {
 			return harukiApiHelper.ErrorNotFound(c, "game data not found")
 		}
 		return processRequestKeys(c, result)
 	}
 }
 
-func processRequestKeys(c fiber.Ctx, result map[string]any) error {
+func processRequestKeys(c fiber.Ctx, result bson.D) error {
 	requestKey := c.Query("key")
 	if requestKey != "" {
 		keys := strings.Split(requestKey, ",")
 		if len(keys) == 1 {
-			return c.JSON(result[keys[0]])
+			return c.JSON(bsonDGet(result, keys[0]))
 		}
-		data := make(map[string]any)
+		filtered := make(bson.D, 0, len(keys))
 		for _, k := range keys {
-			data[k] = result[k]
+			filtered = append(filtered, bson.E{Key: k, Value: bsonDGet(result, k)})
 		}
-		return c.JSON(data)
+		return c.JSON(filtered)
 	}
 	return c.JSON(result)
+}
+
+func bsonDGet(d bson.D, key string) any {
+	for _, elem := range d {
+		if elem.Key == key {
+			return elem.Value
+		}
+	}
+	return nil
 }
 
 func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {

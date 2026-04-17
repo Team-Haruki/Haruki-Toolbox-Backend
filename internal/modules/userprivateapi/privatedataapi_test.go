@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestValidateUserPermission(t *testing.T) {
@@ -138,9 +139,9 @@ func TestValidateUserPermission(t *testing.T) {
 }
 
 func TestProcessRequestKeys(t *testing.T) {
-	base := map[string]any{
-		"a": float64(1),
-		"b": "two",
+	base := bson.D{
+		{Key: "a", Value: float64(1)},
+		{Key: "b", Value: "two"},
 	}
 
 	makeApp := func() *fiber.App {
