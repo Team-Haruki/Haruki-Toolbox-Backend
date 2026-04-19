@@ -42,22 +42,24 @@ type runtimeConfigSnapshot struct {
 }
 
 type HarukiToolboxRouterHelpers struct {
-	Router               fiber.Router
-	DBManager            *database.HarukiToolboxDBManager
-	SMTPClient           *smtp2.HarukiSMTPClient
-	SessionHandler       *SessionHandler
-	SekaiAPIClient       *sekaiapi.HarukiSekaiAPIClient
-	PublicAPIAllowedKeys []string
-	PrivateAPIToken      string
-	PrivateAPIUserAgent  string
-	HarukiProxyUserAgent string
-	HarukiProxyVersion   string
-	HarukiProxySecret    string
-	HarukiProxyUnpackKey string
-	WebhookJWTSecret     string
-	WebhookEnabled       *bool
-	publicAPIKeysMu      sync.RWMutex
-	runtimeConfigMu      sync.RWMutex
+	Router                 fiber.Router
+	DBManager              *database.HarukiToolboxDBManager
+	SMTPClient             *smtp2.HarukiSMTPClient
+	SessionHandler         *SessionHandler
+	SekaiAPIClient         *sekaiapi.HarukiSekaiAPIClient
+	PublicAPIAllowedKeys   []string
+	PrivateAPIToken        string
+	PrivateAPIUserAgent    string
+	HarukiProxyUserAgent   string
+	HarukiProxyVersion     string
+	HarukiProxySecret      string
+	HarukiProxyUnpackKey   string
+	WebhookJWTSecret       string
+	WebhookEnabled         *bool
+	BotRegistrationEnabled bool
+	BotCredentialSignToken string
+	publicAPIKeysMu        sync.RWMutex
+	runtimeConfigMu        sync.RWMutex
 }
 
 func NewHarukiToolboxRouterHelpers(

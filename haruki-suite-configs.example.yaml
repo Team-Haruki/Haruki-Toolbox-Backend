@@ -142,6 +142,11 @@ sekai_client:
     - "userCharacterProfileEpisodeStatuses"
 
 
+haruki_bot:
+  db_url: "postgresql://user:password@postgres:5432/haruki_bot?sslmode=disable"
+  enable_registration: false
+  credential_sign_token: "" # must match Haruki-Cloud's credential_sign_token
+
 others:
   public_api_allowed_keys:
     - "userDecks"

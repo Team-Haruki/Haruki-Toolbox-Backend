@@ -2,7 +2,7 @@ package upload
 
 import (
 	harukiConfig "haruki-suite/config"
-	harukiSchema "haruki-suite/ent/schema"
+	harukiSchema "haruki-suite/ent/toolbox/schema"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"testing"

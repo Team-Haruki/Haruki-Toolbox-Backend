@@ -11,6 +11,7 @@ import (
 	adminTicketsModule "haruki-suite/internal/modules/admintickets"
 	adminUsersModule "haruki-suite/internal/modules/adminusers"
 	adminWebhookModule "haruki-suite/internal/modules/adminwebhook"
+	harukiBotNeoModule "haruki-suite/internal/modules/harukibotneo"
 	iosModule "haruki-suite/internal/modules/ios"
 	miscModule "haruki-suite/internal/modules/misc"
 	oauth2Module "haruki-suite/internal/modules/oauth2"
@@ -36,6 +37,7 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	miscModule.RegisterMiscRoutes(apiHelper)
 	registerAdminRoutes(apiHelper)
 	registerUserRoutes(apiHelper)
+	harukiBotNeoModule.RegisterHarukiBotNeoRoutes(apiHelper)
 	webhookModule.RegisterWebhookRoutes(apiHelper)
 	publicModule.RegisterPublicRoutes(apiHelper)
 	uploadModule.RegisterUploadRoutes(apiHelper)
