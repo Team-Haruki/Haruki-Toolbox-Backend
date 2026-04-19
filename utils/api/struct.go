@@ -1,7 +1,7 @@
 package api
 
 import (
-	"haruki-suite/ent/schema"
+	"haruki-suite/ent/toolbox/schema"
 	"haruki-suite/utils"
 )
 

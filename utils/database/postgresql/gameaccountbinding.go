@@ -5,7 +5,7 @@ package postgresql
 import (
 	"encoding/json"
 	"fmt"
-	"haruki-suite/ent/schema"
+	"haruki-suite/ent/toolbox/schema"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
 	"strings"

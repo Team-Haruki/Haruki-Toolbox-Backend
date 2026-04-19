@@ -42,7 +42,30 @@ const (
 
 	KeyModulePublicAPI = "public-api"
 	KeyActionCache     = "cache"
+
+	KeyModuleBot      = "bot"
+	KeyActionRegister = "register"
 )
+
+func BuildBotVerifyCodeKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, hashNormalizedIdentifier(qq))
+}
+
+func BuildBotVerifyAttemptKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, hashNormalizedIdentifier(qq))
+}
+
+func BuildBotSendMailRateLimitIPKey(clientIP string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionIP, clientIP)
+}
+
+func BuildBotSendMailRateLimitTargetKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(qq))
+}
+
+func BuildBotRegisterRateLimitTargetKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, hashNormalizedIdentifier(qq))
+}
 
 func BuildEmailVerifyKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, hashNormalizedIdentifier(email))

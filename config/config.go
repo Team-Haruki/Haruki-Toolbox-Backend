@@ -125,6 +125,12 @@ type SMTPConfig struct {
 	TimeoutSeconds int    `yaml:"timeout_seconds"`
 }
 
+type HarukiBotConfig struct {
+	DBURL               string `yaml:"db_url"`
+	EnableRegistration  bool   `yaml:"enable_registration"`
+	CredentialSignToken string `yaml:"credential_sign_token"`
+}
+
 type HarukiProxyConfig struct {
 	UserAgent string `yaml:"user_agent"`
 	Version   string `yaml:"version"`
@@ -187,6 +193,7 @@ type Config struct {
 	HarukiProxy            HarukiProxyConfig            `yaml:"haruki_proxy"`
 	ThirdPartyDataProvider ThirdPartyDataProviderConfig `yaml:"third_party_data_provider"`
 	RestoreSuite           RestoreSuiteConfig           `yaml:"restore_suite"`
+	HarukiBot              HarukiBotConfig              `yaml:"haruki_bot"`
 }
 
 var Cfg Config
@@ -453,6 +460,12 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := overrideCSV(&cfg.Others.PublicAPIAllowedKeys, "PUBLIC_API_ALLOWED_KEYS"); err != nil {
 		return err
 	}
+
+	overrideString(&cfg.HarukiBot.DBURL, "HARUKI_BOT_DB_URL")
+	if err := overrideBool(&cfg.HarukiBot.EnableRegistration, "HARUKI_BOT_ENABLE_REGISTRATION"); err != nil {
+		return err
+	}
+	overrideString(&cfg.HarukiBot.CredentialSignToken, "HARUKI_BOT_CREDENTIAL_SIGN_TOKEN")
 
 	return nil
 }

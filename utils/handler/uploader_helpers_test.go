@@ -2,7 +2,7 @@ package handler
 
 import (
 	harukiConfig "haruki-suite/config"
-	"haruki-suite/ent/schema"
+	"haruki-suite/ent/toolbox/schema"
 	"haruki-suite/utils"
 	apiHelper "haruki-suite/utils/api"
 	"testing"

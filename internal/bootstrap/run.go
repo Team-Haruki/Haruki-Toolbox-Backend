@@ -12,6 +12,7 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	harukiDatabaseManager "haruki-suite/utils/database"
 	harukiMongo "haruki-suite/utils/database/mongo"
+	neopgManager "haruki-suite/utils/database/neopg"
 	dbManager "haruki-suite/utils/database/postgresql"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiHandler "haruki-suite/utils/handler"
@@ -513,6 +514,25 @@ func Run(cfg harukiConfig.Config) error {
 	}
 
 	dbMgr := harukiDatabaseManager.NewHarukiToolboxDBManager(entClient, redisClient, mongoManager)
+	if botDBURL := strings.TrimSpace(cfg.HarukiBot.DBURL); botDBURL != "" {
+		botClient, botErr := neopgManager.Open(cfg.UserSystem.DBType, botDBURL)
+		if botErr != nil {
+			return fmt.Errorf("init Bot PostgreSQL: %w", botErr)
+		}
+		defer func() {
+			_ = botClient.Close()
+		}()
+		if cfg.Backend.AutoMigrate {
+			botSchemaCtx, cancelBotSchema := startupContext()
+			if err := botClient.Schema.Create(botSchemaCtx); err != nil {
+				cancelBotSchema()
+				return fmt.Errorf("create bot schema resources: %w", err)
+			}
+			cancelBotSchema()
+			mainLogger.Infof("bot schema migration completed")
+		}
+		dbMgr.BotDB = botClient
+	}
 	apiHelper := harukiAPIHelper.NewHarukiToolboxRouterHelpers(
 		app,
 		dbMgr,
@@ -529,6 +549,8 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.Webhook.JWTSecret,
 		cfg.Webhook.Enabled,
 	)
+	apiHelper.BotRegistrationEnabled = cfg.HarukiBot.EnableRegistration
+	apiHelper.BotCredentialSignToken = cfg.HarukiBot.CredentialSignToken
 	harukiAPI.RegisterRoutes(apiHelper)
 	loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()
 	if len(failedRegions) > 0 {
