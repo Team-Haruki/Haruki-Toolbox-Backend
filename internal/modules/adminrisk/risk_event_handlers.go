@@ -123,7 +123,6 @@ func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return harukiAPIHelper.ErrorBadRequest(c, "event_id must be a positive integer")
 		}
 
-
 		var payload resolveRiskEventPayload
 		if len(c.Body()) > 0 {
 			if err := c.Bind().Body(&payload); err != nil {
