@@ -63,6 +63,19 @@
   mutators:
     - handler: noop
 
+- id: haruki-public-bot-neo-status
+  match:
+    url: <http|https>://<[^/]+>/api/haruki-bot-neo/status
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
 - id: haruki-public-game-data
   match:
     url: <http|https>://<[^/]+>/<public/.*|api/public/.*>
@@ -197,6 +210,19 @@
   match:
     url: <http|https>://<[^/]+>/api/admin/<.*>
     methods: [GET, POST, PUT, PATCH, DELETE]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-bot-neo
+  match:
+    url: <http|https>://<[^/]+>/api/haruki-bot-neo/<send-mail|register>
+    methods: [POST]
   upstream:
     url: http://backend:16666
   authenticators:
