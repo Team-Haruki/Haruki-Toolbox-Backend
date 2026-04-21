@@ -34,10 +34,12 @@
 
 ## 数据层规则
 
-- Ent schema 在 `ent/schema/...`
-- 生成结果在 `utils/database/postgresql/...`
-- 修改 schema 后运行 `go generate ./ent`
-- 不要随意手改生成文件
+项目使用两个独立的 Ent 数据库：
+
+- Toolbox（主库）：schema 在 `ent/toolbox/schema/`，生成到 `utils/database/postgresql/`，运行 `go generate ./ent/toolbox`
+- Bot（HarukiBot NEO）：schema 在 `ent/bot/schema/`，生成到 `utils/database/neopg/`，运行 `go generate ./ent/bot`
+
+Bot 数据库使用独立 DSN（`haruki_bot.db_url`）。不要随意手改生成文件。
 
 ## 测试与验证
 
@@ -53,3 +55,11 @@
 涉及 Ory 行为、认证流程、Auth Proxy header、OAuth2 流程变化时，同步更新：
 
 - `docs/ory-suite-usage.zh-CN.md`
+
+涉及 HarukiBot NEO 注册流程变化时，同步更新：
+
+- `docs/haruki-bot-neo-registration.zh-CN.md`
+
+新增或移除端点时，同步更新：
+
+- `external/oathkeeper/access-rules.yml`
