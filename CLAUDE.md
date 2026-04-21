@@ -25,11 +25,14 @@ go test ./...                                   # full suite (use for cross-modu
 
 ## Code Generation (Ent)
 
-After modifying any file in `ent/schema/`:
-```bash
-go generate ./ent
-```
-Generated output lands in `utils/database/postgresql/`. Do not hand-edit generated files.
+Ent schemas are split into two databases:
+
+| Database | Schemas | Generate command | Output |
+|----------|---------|-----------------|--------|
+| Toolbox (main) | `ent/toolbox/schema/` | `go generate ./ent/toolbox` | `utils/database/postgresql/` |
+| Bot (HarukiBot NEO) | `ent/bot/schema/` | `go generate ./ent/bot` | `utils/database/neopg/` |
+
+Do not hand-edit generated files. The bot database uses a separate DSN (`haruki_bot.db_url` in config).
 
 ## Architecture & Layering
 
@@ -60,8 +63,10 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 - `utils/database/` — Database manager interfaces
 - `utils/database/mongo/` — MongoDB client and operations
 - `utils/database/redis/` — Redis client
+- `utils/database/neopg/` — Bot database Ent client (generated)
 - `internal/modules/admincore/` — Shared admin logic
 - `internal/modules/usercore/` — Shared user logic
+- `internal/modules/harukibotneo/` — HarukiBot NEO registration (status, send-mail, register)
 
 Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` over building parallel helpers.
 
@@ -90,4 +95,6 @@ Examples:
 
 ## Documentation
 
-When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
+- When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
+- When changing HarukiBot NEO registration flow, update `docs/haruki-bot-neo-registration.zh-CN.md`.
+- Oathkeeper access rules live in `external/oathkeeper/access-rules.yml` — update when adding/removing public or protected endpoints.

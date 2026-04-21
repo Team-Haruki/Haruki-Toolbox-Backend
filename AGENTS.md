@@ -26,7 +26,8 @@ Haruki Toolbox Backend 是一个基于 Go 1.26 的后端项目，核心技术栈
 - `internal/`
 - `utils/`
 - `.github/copilot-instructions.md`
-- `docs/`（当前主要用于架构与 Ory 说明）
+- `docs/`（架构说明、Ory 文档、API 对接文档）
+- `external/oathkeeper/`（Oathkeeper access rules）
 
 请不要在没有明确需求的情况下重新引入以下类型的内容：
 
@@ -101,10 +102,14 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 
 ## 数据与模型规则
 
-- Ent schema 源码在 `ent/schema/...`
-- 生成产物在 `utils/database/postgresql/...`
-- 如果修改了 `ent/schema/...`，同步运行：
-  - `go generate ./ent`
+项目使用两个独立的 Ent 数据库：
+
+| 数据库 | Schema 目录 | 生成命令 | 生成产物 |
+|--------|------------|---------|---------|
+| Toolbox（主库） | `ent/toolbox/schema/` | `go generate ./ent/toolbox` | `utils/database/postgresql/` |
+| Bot（HarukiBot NEO） | `ent/bot/schema/` | `go generate ./ent/bot` | `utils/database/neopg/` |
+
+- Bot 数据库使用独立的 DSN（配置项 `haruki_bot.db_url`）
 - 不要手改生成文件，除非任务明确要求
 
 ## 日志规则
@@ -122,7 +127,8 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - 涉及 Ory 会话、OAuth2、Auth Proxy 的跨模块改动时：
   - `go test ./...`
 - 涉及 Ent schema 时：
-  - `go generate ./ent`
+  - Toolbox: `go generate ./ent/toolbox`
+  - Bot: `go generate ./ent/bot`
 
 Ory 相关改动尤其建议关注：
 
@@ -139,10 +145,14 @@ Ory 相关改动尤其建议关注：
 - OAuth2 行为
 - 受保护 API 接入方式
 - Auth Proxy header 约定
+- HarukiBot NEO 注册流程
+- 新增或移除公开/受保护端点
 
-当前 Ory 总体说明文档为：
+当前文档：
 
-- `docs/ory-suite-usage.zh-CN.md`
+- `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明
+- `docs/haruki-bot-neo-registration.zh-CN.md` — HarukiBot NEO 注册 API 对接
+- `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 
 ## 提交前检查清单
 
