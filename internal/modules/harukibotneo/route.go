@@ -139,18 +139,6 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		qqStr := strconv.FormatInt(payload.QQNumber, 10)
 		ctx := c.Context()
 
-		// Check if already registered
-		exists, err := apiHelper.DBManager.BotDB.User.Query().
-			Where(botUser.OwnerUserIDEQ(payload.QQNumber)).
-			Exist(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to check bot registration for QQ %d: %v", payload.QQNumber, err)
-			return harukiAPIHelper.ErrorInternal(c, "registration service unavailable")
-		}
-		if exists {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "bot already registered for this QQ", nil)
-		}
-
 		// Rate limit
 		clientIP := c.IP()
 		limited, limitKey, limitMsg, rlErr := checkSendMailRateLimit(c, apiHelper, clientIP, qqStr)
@@ -256,26 +244,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, "verification code not found or expired")
 		}
 
-		// Double-check not already registered
-		exists, err := apiHelper.DBManager.BotDB.User.Query().
-			Where(botUser.OwnerUserIDEQ(payload.QQNumber)).
-			Exist(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to check bot registration: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "registration service unavailable")
-		}
-		if exists {
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "bot already registered for this QQ", nil)
-		}
-
-		// Generate bot_id
-		botID, err := generateUniqueBotID(ctx, apiHelper.DBManager.BotDB)
-		if err != nil {
-			harukiLogger.Errorf("Failed to generate bot_id: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to generate bot ID")
-		}
-
-		// Generate credential
+		// Generate new credential
 		credentialRaw := make([]byte, credentialBytes)
 		if _, err := rand.Read(credentialRaw); err != nil {
 			harukiLogger.Errorf("Failed to generate credential: %v", err)
@@ -283,26 +252,59 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		}
 		credentialPlain := base64.URLEncoding.EncodeToString(credentialRaw)
 
-		// Hash credential
 		hashedCredential, err := bcrypt.GenerateFromPassword([]byte(credentialPlain), bcrypt.DefaultCost)
 		if err != nil {
 			harukiLogger.Errorf("Failed to hash credential: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to process credential")
 		}
 
-		// Save to DB
-		_, err = apiHelper.DBManager.BotDB.User.Create().
-			SetOwnerUserID(payload.QQNumber).
-			SetBotID(botID).
-			SetCredential(string(hashedCredential)).
-			Save(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to create bot registration: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to create registration")
+		// Check if already registered — update credential if so, otherwise create new
+		existing, err := apiHelper.DBManager.BotDB.User.Query().
+			Where(botUser.OwnerUserIDEQ(payload.QQNumber)).
+			Only(ctx)
+		if err != nil && !neopg.IsNotFound(err) {
+			harukiLogger.Errorf("Failed to check bot registration: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "registration service unavailable")
+		}
+
+		var botIDStr string
+		var statusCode int
+		var message string
+
+		if existing != nil {
+			// Update existing credential
+			_, err = existing.Update().
+				SetCredential(string(hashedCredential)).
+				Save(ctx)
+			if err != nil {
+				harukiLogger.Errorf("Failed to update bot credential: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "failed to update credential")
+			}
+			botIDStr = strconv.Itoa(existing.BotID)
+			statusCode = fiber.StatusOK
+			message = "credential reset successful"
+		} else {
+			// Generate bot_id for new registration
+			botID, err := generateUniqueBotID(ctx, apiHelper.DBManager.BotDB)
+			if err != nil {
+				harukiLogger.Errorf("Failed to generate bot_id: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "failed to generate bot ID")
+			}
+			_, err = apiHelper.DBManager.BotDB.User.Create().
+				SetOwnerUserID(payload.QQNumber).
+				SetBotID(botID).
+				SetCredential(string(hashedCredential)).
+				Save(ctx)
+			if err != nil {
+				harukiLogger.Errorf("Failed to create bot registration: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "failed to create registration")
+			}
+			botIDStr = strconv.Itoa(botID)
+			statusCode = fiber.StatusCreated
+			message = "registration successful"
 		}
 
 		// Sign credential as JWT
-		botIDStr := strconv.Itoa(botID)
 		credentialJWT, err := signCredentialJWT(apiHelper.BotCredentialSignToken, botIDStr, credentialPlain)
 		if err != nil {
 			harukiLogger.Errorf("Failed to sign credential JWT: %v", err)
@@ -317,7 +319,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			BotID:      botIDStr,
 			Credential: credentialJWT,
 		}
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusCreated, "registration successful", &result)
+		return harukiAPIHelper.UpdatedDataResponse(c, statusCode, message, &result)
 	}
 }
 
