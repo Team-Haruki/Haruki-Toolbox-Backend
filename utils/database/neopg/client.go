@@ -11,6 +11,7 @@ import (
 
 	"haruki-suite/utils/database/neopg/migrate"
 
+	"haruki-suite/utils/database/neopg/commandlog"
 	"haruki-suite/utils/database/neopg/commandmanifest"
 	"haruki-suite/utils/database/neopg/dailyrequests"
 	"haruki-suite/utils/database/neopg/hourlyrequests"
@@ -27,6 +28,8 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// CommandLog is the client for interacting with the CommandLog builders.
+	CommandLog *CommandLogClient
 	// CommandManifest is the client for interacting with the CommandManifest builders.
 	CommandManifest *CommandManifestClient
 	// DailyRequests is the client for interacting with the DailyRequests builders.
@@ -48,6 +51,7 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.CommandLog = NewCommandLogClient(c.config)
 	c.CommandManifest = NewCommandManifestClient(c.config)
 	c.DailyRequests = NewDailyRequestsClient(c.config)
 	c.HourlyRequests = NewHourlyRequestsClient(c.config)
@@ -145,6 +149,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:             ctx,
 		config:          cfg,
+		CommandLog:      NewCommandLogClient(cfg),
 		CommandManifest: NewCommandManifestClient(cfg),
 		DailyRequests:   NewDailyRequestsClient(cfg),
 		HourlyRequests:  NewHourlyRequestsClient(cfg),
@@ -169,6 +174,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:             ctx,
 		config:          cfg,
+		CommandLog:      NewCommandLogClient(cfg),
 		CommandManifest: NewCommandManifestClient(cfg),
 		DailyRequests:   NewDailyRequestsClient(cfg),
 		HourlyRequests:  NewHourlyRequestsClient(cfg),
@@ -180,7 +186,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		CommandManifest.
+//		CommandLog.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -202,26 +208,30 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.CommandManifest.Use(hooks...)
-	c.DailyRequests.Use(hooks...)
-	c.HourlyRequests.Use(hooks...)
-	c.RequestsRanking.Use(hooks...)
-	c.User.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.CommandLog, c.CommandManifest, c.DailyRequests, c.HourlyRequests,
+		c.RequestsRanking, c.User,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.CommandManifest.Intercept(interceptors...)
-	c.DailyRequests.Intercept(interceptors...)
-	c.HourlyRequests.Intercept(interceptors...)
-	c.RequestsRanking.Intercept(interceptors...)
-	c.User.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.CommandLog, c.CommandManifest, c.DailyRequests, c.HourlyRequests,
+		c.RequestsRanking, c.User,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *CommandLogMutation:
+		return c.CommandLog.mutate(ctx, m)
 	case *CommandManifestMutation:
 		return c.CommandManifest.mutate(ctx, m)
 	case *DailyRequestsMutation:
@@ -234,6 +244,139 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.User.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("neopg: unknown mutation type %T", m)
+	}
+}
+
+// CommandLogClient is a client for the CommandLog schema.
+type CommandLogClient struct {
+	config
+}
+
+// NewCommandLogClient returns a client for the CommandLog from the given config.
+func NewCommandLogClient(c config) *CommandLogClient {
+	return &CommandLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `commandlog.Hooks(f(g(h())))`.
+func (c *CommandLogClient) Use(hooks ...Hook) {
+	c.hooks.CommandLog = append(c.hooks.CommandLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `commandlog.Intercept(f(g(h())))`.
+func (c *CommandLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CommandLog = append(c.inters.CommandLog, interceptors...)
+}
+
+// Create returns a builder for creating a CommandLog entity.
+func (c *CommandLogClient) Create() *CommandLogCreate {
+	mutation := newCommandLogMutation(c.config, OpCreate)
+	return &CommandLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CommandLog entities.
+func (c *CommandLogClient) CreateBulk(builders ...*CommandLogCreate) *CommandLogCreateBulk {
+	return &CommandLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CommandLogClient) MapCreateBulk(slice any, setFunc func(*CommandLogCreate, int)) *CommandLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CommandLogCreateBulk{err: fmt.Errorf("calling to CommandLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CommandLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CommandLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CommandLog.
+func (c *CommandLogClient) Update() *CommandLogUpdate {
+	mutation := newCommandLogMutation(c.config, OpUpdate)
+	return &CommandLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CommandLogClient) UpdateOne(_m *CommandLog) *CommandLogUpdateOne {
+	mutation := newCommandLogMutation(c.config, OpUpdateOne, withCommandLog(_m))
+	return &CommandLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CommandLogClient) UpdateOneID(id int) *CommandLogUpdateOne {
+	mutation := newCommandLogMutation(c.config, OpUpdateOne, withCommandLogID(id))
+	return &CommandLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CommandLog.
+func (c *CommandLogClient) Delete() *CommandLogDelete {
+	mutation := newCommandLogMutation(c.config, OpDelete)
+	return &CommandLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CommandLogClient) DeleteOne(_m *CommandLog) *CommandLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CommandLogClient) DeleteOneID(id int) *CommandLogDeleteOne {
+	builder := c.Delete().Where(commandlog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CommandLogDeleteOne{builder}
+}
+
+// Query returns a query builder for CommandLog.
+func (c *CommandLogClient) Query() *CommandLogQuery {
+	return &CommandLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCommandLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CommandLog entity by its id.
+func (c *CommandLogClient) Get(ctx context.Context, id int) (*CommandLog, error) {
+	return c.Query().Where(commandlog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CommandLogClient) GetX(ctx context.Context, id int) *CommandLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CommandLogClient) Hooks() []Hook {
+	return c.hooks.CommandLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *CommandLogClient) Interceptors() []Interceptor {
+	return c.inters.CommandLog
+}
+
+func (c *CommandLogClient) mutate(ctx context.Context, m *CommandLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CommandLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CommandLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CommandLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CommandLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("neopg: unknown CommandLog mutation op: %q", m.Op())
 	}
 }
 
@@ -905,10 +1048,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		CommandManifest, DailyRequests, HourlyRequests, RequestsRanking, User []ent.Hook
+		CommandLog, CommandManifest, DailyRequests, HourlyRequests, RequestsRanking,
+		User []ent.Hook
 	}
 	inters struct {
-		CommandManifest, DailyRequests, HourlyRequests, RequestsRanking,
+		CommandLog, CommandManifest, DailyRequests, HourlyRequests, RequestsRanking,
 		User []ent.Interceptor
 	}
 )

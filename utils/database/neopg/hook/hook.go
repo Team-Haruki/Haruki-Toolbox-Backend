@@ -8,6 +8,18 @@ import (
 	"haruki-suite/utils/database/neopg"
 )
 
+// The CommandLogFunc type is an adapter to allow the use of ordinary
+// function as CommandLog mutator.
+type CommandLogFunc func(context.Context, *neopg.CommandLogMutation) (neopg.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommandLogFunc) Mutate(ctx context.Context, m neopg.Mutation) (neopg.Value, error) {
+	if mv, ok := m.(*neopg.CommandLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *neopg.CommandLogMutation", m)
+}
+
 // The CommandManifestFunc type is an adapter to allow the use of ordinary
 // function as CommandManifest mutator.
 type CommandManifestFunc func(context.Context, *neopg.CommandManifestMutation) (neopg.Value, error)

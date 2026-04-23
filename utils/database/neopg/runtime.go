@@ -4,16 +4,54 @@ package neopg
 
 import (
 	"haruki-suite/ent/bot/schema"
+	"haruki-suite/utils/database/neopg/commandlog"
 	"haruki-suite/utils/database/neopg/commandmanifest"
 	"haruki-suite/utils/database/neopg/dailyrequests"
 	"haruki-suite/utils/database/neopg/hourlyrequests"
 	"haruki-suite/utils/database/neopg/user"
+	"time"
 )
 
 // The init function reads all schema descriptors with runtime code
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	commandlogFields := schema.CommandLog{}.Fields()
+	_ = commandlogFields
+	// commandlogDescPlatform is the schema descriptor for platform field.
+	commandlogDescPlatform := commandlogFields[0].Descriptor()
+	// commandlog.DefaultPlatform holds the default value on creation for the platform field.
+	commandlog.DefaultPlatform = commandlogDescPlatform.Default.(string)
+	// commandlog.PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
+	commandlog.PlatformValidator = commandlogDescPlatform.Validators[0].(func(string) error)
+	// commandlogDescPid is the schema descriptor for pid field.
+	commandlogDescPid := commandlogFields[1].Descriptor()
+	// commandlog.DefaultPid holds the default value on creation for the pid field.
+	commandlog.DefaultPid = commandlogDescPid.Default.(string)
+	// commandlog.PidValidator is a validator for the "pid" field. It is called by the builders before save.
+	commandlog.PidValidator = commandlogDescPid.Validators[0].(func(string) error)
+	// commandlogDescGid is the schema descriptor for gid field.
+	commandlogDescGid := commandlogFields[2].Descriptor()
+	// commandlog.DefaultGid holds the default value on creation for the gid field.
+	commandlog.DefaultGid = commandlogDescGid.Default.(string)
+	// commandlog.GidValidator is a validator for the "gid" field. It is called by the builders before save.
+	commandlog.GidValidator = commandlogDescGid.Validators[0].(func(string) error)
+	// commandlogDescUID is the schema descriptor for uid field.
+	commandlogDescUID := commandlogFields[3].Descriptor()
+	// commandlog.DefaultUID holds the default value on creation for the uid field.
+	commandlog.DefaultUID = commandlogDescUID.Default.(string)
+	// commandlog.UIDValidator is a validator for the "uid" field. It is called by the builders before save.
+	commandlog.UIDValidator = commandlogDescUID.Validators[0].(func(string) error)
+	// commandlogDescCommand is the schema descriptor for command field.
+	commandlogDescCommand := commandlogFields[4].Descriptor()
+	// commandlog.DefaultCommand holds the default value on creation for the command field.
+	commandlog.DefaultCommand = commandlogDescCommand.Default.(string)
+	// commandlog.CommandValidator is a validator for the "command" field. It is called by the builders before save.
+	commandlog.CommandValidator = commandlogDescCommand.Validators[0].(func(string) error)
+	// commandlogDescCreatedAt is the schema descriptor for created_at field.
+	commandlogDescCreatedAt := commandlogFields[5].Descriptor()
+	// commandlog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	commandlog.DefaultCreatedAt = commandlogDescCreatedAt.Default.(func() time.Time)
 	commandmanifestFields := schema.CommandManifest{}.Fields()
 	_ = commandmanifestFields
 	// commandmanifestDescCommandPriority is the schema descriptor for command_priority field.
