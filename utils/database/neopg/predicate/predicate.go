@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// CommandLog is the predicate function for commandlog builders.
+type CommandLog func(*sql.Selector)
+
 // CommandManifest is the predicate function for commandmanifest builders.
 type CommandManifest func(*sql.Selector)
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"haruki-suite/utils/database/neopg/commandlog"
 	"haruki-suite/utils/database/neopg/commandmanifest"
 	"haruki-suite/utils/database/neopg/dailyrequests"
 	"haruki-suite/utils/database/neopg/hourlyrequests"
@@ -28,12 +29,609 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeCommandLog      = "CommandLog"
 	TypeCommandManifest = "CommandManifest"
 	TypeDailyRequests   = "DailyRequests"
 	TypeHourlyRequests  = "HourlyRequests"
 	TypeRequestsRanking = "RequestsRanking"
 	TypeUser            = "User"
 )
+
+// CommandLogMutation represents an operation that mutates the CommandLog nodes in the graph.
+type CommandLogMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	platform      *string
+	pid           *string
+	gid           *string
+	uid           *string
+	command       *string
+	created_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*CommandLog, error)
+	predicates    []predicate.CommandLog
+}
+
+var _ ent.Mutation = (*CommandLogMutation)(nil)
+
+// commandlogOption allows management of the mutation configuration using functional options.
+type commandlogOption func(*CommandLogMutation)
+
+// newCommandLogMutation creates new mutation for the CommandLog entity.
+func newCommandLogMutation(c config, op Op, opts ...commandlogOption) *CommandLogMutation {
+	m := &CommandLogMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCommandLog,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCommandLogID sets the ID field of the mutation.
+func withCommandLogID(id int) commandlogOption {
+	return func(m *CommandLogMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CommandLog
+		)
+		m.oldValue = func(ctx context.Context) (*CommandLog, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CommandLog.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCommandLog sets the old CommandLog of the mutation.
+func withCommandLog(node *CommandLog) commandlogOption {
+	return func(m *CommandLogMutation) {
+		m.oldValue = func(context.Context) (*CommandLog, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CommandLogMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CommandLogMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("neopg: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CommandLogMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CommandLogMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CommandLog.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetPlatform sets the "platform" field.
+func (m *CommandLogMutation) SetPlatform(s string) {
+	m.platform = &s
+}
+
+// Platform returns the value of the "platform" field in the mutation.
+func (m *CommandLogMutation) Platform() (r string, exists bool) {
+	v := m.platform
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlatform returns the old "platform" field's value of the CommandLog entity.
+// If the CommandLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandLogMutation) OldPlatform(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlatform is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlatform requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlatform: %w", err)
+	}
+	return oldValue.Platform, nil
+}
+
+// ResetPlatform resets all changes to the "platform" field.
+func (m *CommandLogMutation) ResetPlatform() {
+	m.platform = nil
+}
+
+// SetPid sets the "pid" field.
+func (m *CommandLogMutation) SetPid(s string) {
+	m.pid = &s
+}
+
+// Pid returns the value of the "pid" field in the mutation.
+func (m *CommandLogMutation) Pid() (r string, exists bool) {
+	v := m.pid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPid returns the old "pid" field's value of the CommandLog entity.
+// If the CommandLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandLogMutation) OldPid(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPid is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPid requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPid: %w", err)
+	}
+	return oldValue.Pid, nil
+}
+
+// ResetPid resets all changes to the "pid" field.
+func (m *CommandLogMutation) ResetPid() {
+	m.pid = nil
+}
+
+// SetGid sets the "gid" field.
+func (m *CommandLogMutation) SetGid(s string) {
+	m.gid = &s
+}
+
+// Gid returns the value of the "gid" field in the mutation.
+func (m *CommandLogMutation) Gid() (r string, exists bool) {
+	v := m.gid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGid returns the old "gid" field's value of the CommandLog entity.
+// If the CommandLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandLogMutation) OldGid(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGid is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGid requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGid: %w", err)
+	}
+	return oldValue.Gid, nil
+}
+
+// ResetGid resets all changes to the "gid" field.
+func (m *CommandLogMutation) ResetGid() {
+	m.gid = nil
+}
+
+// SetUID sets the "uid" field.
+func (m *CommandLogMutation) SetUID(s string) {
+	m.uid = &s
+}
+
+// UID returns the value of the "uid" field in the mutation.
+func (m *CommandLogMutation) UID() (r string, exists bool) {
+	v := m.uid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUID returns the old "uid" field's value of the CommandLog entity.
+// If the CommandLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandLogMutation) OldUID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUID: %w", err)
+	}
+	return oldValue.UID, nil
+}
+
+// ResetUID resets all changes to the "uid" field.
+func (m *CommandLogMutation) ResetUID() {
+	m.uid = nil
+}
+
+// SetCommand sets the "command" field.
+func (m *CommandLogMutation) SetCommand(s string) {
+	m.command = &s
+}
+
+// Command returns the value of the "command" field in the mutation.
+func (m *CommandLogMutation) Command() (r string, exists bool) {
+	v := m.command
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommand returns the old "command" field's value of the CommandLog entity.
+// If the CommandLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandLogMutation) OldCommand(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommand is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommand requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommand: %w", err)
+	}
+	return oldValue.Command, nil
+}
+
+// ResetCommand resets all changes to the "command" field.
+func (m *CommandLogMutation) ResetCommand() {
+	m.command = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CommandLogMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CommandLogMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CommandLog entity.
+// If the CommandLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommandLogMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CommandLogMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// Where appends a list predicates to the CommandLogMutation builder.
+func (m *CommandLogMutation) Where(ps ...predicate.CommandLog) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CommandLogMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CommandLogMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CommandLog, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CommandLogMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CommandLogMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CommandLog).
+func (m *CommandLogMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CommandLogMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.platform != nil {
+		fields = append(fields, commandlog.FieldPlatform)
+	}
+	if m.pid != nil {
+		fields = append(fields, commandlog.FieldPid)
+	}
+	if m.gid != nil {
+		fields = append(fields, commandlog.FieldGid)
+	}
+	if m.uid != nil {
+		fields = append(fields, commandlog.FieldUID)
+	}
+	if m.command != nil {
+		fields = append(fields, commandlog.FieldCommand)
+	}
+	if m.created_at != nil {
+		fields = append(fields, commandlog.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CommandLogMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case commandlog.FieldPlatform:
+		return m.Platform()
+	case commandlog.FieldPid:
+		return m.Pid()
+	case commandlog.FieldGid:
+		return m.Gid()
+	case commandlog.FieldUID:
+		return m.UID()
+	case commandlog.FieldCommand:
+		return m.Command()
+	case commandlog.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CommandLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case commandlog.FieldPlatform:
+		return m.OldPlatform(ctx)
+	case commandlog.FieldPid:
+		return m.OldPid(ctx)
+	case commandlog.FieldGid:
+		return m.OldGid(ctx)
+	case commandlog.FieldUID:
+		return m.OldUID(ctx)
+	case commandlog.FieldCommand:
+		return m.OldCommand(ctx)
+	case commandlog.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CommandLog field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CommandLogMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case commandlog.FieldPlatform:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlatform(v)
+		return nil
+	case commandlog.FieldPid:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPid(v)
+		return nil
+	case commandlog.FieldGid:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGid(v)
+		return nil
+	case commandlog.FieldUID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUID(v)
+		return nil
+	case commandlog.FieldCommand:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommand(v)
+		return nil
+	case commandlog.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CommandLog field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CommandLogMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CommandLogMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CommandLogMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CommandLog numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CommandLogMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CommandLogMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CommandLogMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CommandLog nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CommandLogMutation) ResetField(name string) error {
+	switch name {
+	case commandlog.FieldPlatform:
+		m.ResetPlatform()
+		return nil
+	case commandlog.FieldPid:
+		m.ResetPid()
+		return nil
+	case commandlog.FieldGid:
+		m.ResetGid()
+		return nil
+	case commandlog.FieldUID:
+		m.ResetUID()
+		return nil
+	case commandlog.FieldCommand:
+		m.ResetCommand()
+		return nil
+	case commandlog.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CommandLog field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CommandLogMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CommandLogMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CommandLogMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CommandLogMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CommandLogMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CommandLogMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CommandLogMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CommandLog unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CommandLogMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CommandLog edge %s", name)
+}
 
 // CommandManifestMutation represents an operation that mutates the CommandManifest nodes in the graph.
 type CommandManifestMutation struct {

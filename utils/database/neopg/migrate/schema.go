@@ -9,6 +9,54 @@ import (
 )
 
 var (
+	// CommandLogsColumns holds the columns for the "command_logs" table.
+	CommandLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "platform", Type: field.TypeString, Size: 32, Default: ""},
+		{Name: "pid", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "gid", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "uid", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "command", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// CommandLogsTable holds the schema information for the "command_logs" table.
+	CommandLogsTable = &schema.Table{
+		Name:       "command_logs",
+		Columns:    CommandLogsColumns,
+		PrimaryKey: []*schema.Column{CommandLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "commandlog_platform",
+				Unique:  false,
+				Columns: []*schema.Column{CommandLogsColumns[1]},
+			},
+			{
+				Name:    "commandlog_pid",
+				Unique:  false,
+				Columns: []*schema.Column{CommandLogsColumns[2]},
+			},
+			{
+				Name:    "commandlog_gid",
+				Unique:  false,
+				Columns: []*schema.Column{CommandLogsColumns[3]},
+			},
+			{
+				Name:    "commandlog_uid",
+				Unique:  false,
+				Columns: []*schema.Column{CommandLogsColumns[4]},
+			},
+			{
+				Name:    "commandlog_command",
+				Unique:  false,
+				Columns: []*schema.Column{CommandLogsColumns[5]},
+			},
+			{
+				Name:    "commandlog_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CommandLogsColumns[6]},
+			},
+		},
+	}
 	// CommandManifestsColumns holds the columns for the "command_manifests" table.
 	CommandManifestsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -93,6 +141,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		CommandLogsTable,
 		CommandManifestsTable,
 		DailyRequestsTable,
 		HourlyRequestsTable,
@@ -102,6 +151,9 @@ var (
 )
 
 func init() {
+	CommandLogsTable.Annotation = &entsql.Annotation{
+		Table: "command_logs",
+	}
 	CommandManifestsTable.Annotation = &entsql.Annotation{
 		Table: "command_manifests",
 	}

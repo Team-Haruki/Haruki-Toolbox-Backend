@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"haruki-suite/utils/database/neopg/commandlog"
 	"haruki-suite/utils/database/neopg/commandmanifest"
 	"haruki-suite/utils/database/neopg/dailyrequests"
 	"haruki-suite/utils/database/neopg/hourlyrequests"
@@ -77,6 +78,7 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			commandlog.Table:      commandlog.ValidColumn,
 			commandmanifest.Table: commandmanifest.ValidColumn,
 			dailyrequests.Table:   dailyrequests.ValidColumn,
 			hourlyrequests.Table:  hourlyrequests.ValidColumn,

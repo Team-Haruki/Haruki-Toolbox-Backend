@@ -12,6 +12,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// CommandLog is the client for interacting with the CommandLog builders.
+	CommandLog *CommandLogClient
 	// CommandManifest is the client for interacting with the CommandManifest builders.
 	CommandManifest *CommandManifestClient
 	// DailyRequests is the client for interacting with the DailyRequests builders.
@@ -153,6 +155,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.CommandLog = NewCommandLogClient(tx.config)
 	tx.CommandManifest = NewCommandManifestClient(tx.config)
 	tx.DailyRequests = NewDailyRequestsClient(tx.config)
 	tx.HourlyRequests = NewHourlyRequestsClient(tx.config)
@@ -167,7 +170,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: CommandManifest.QueryXXX(), the query will be executed
+// applies a query, for example: CommandLog.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.
