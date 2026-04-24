@@ -66,7 +66,7 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 - `utils/database/neopg/` — Bot database Ent client (generated)
 - `internal/modules/admincore/` — Shared admin logic
 - `internal/modules/usercore/` — Shared user logic
-- `internal/modules/harukibotneo/` — HarukiBot NEO registration (status, send-mail, register)
+- `internal/modules/harukibotneo/` — HarukiBot NEO registration and credential reset (status, send-mail, register/reset)
 
 Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` over building parallel helpers.
 
@@ -96,5 +96,7 @@ Examples:
 ## Documentation
 
 - When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
-- When changing HarukiBot NEO registration flow, update `docs/haruki-bot-neo-registration.zh-CN.md`.
+- When changing HarukiBot NEO registration/credential reset flow, update `docs/haruki-bot-neo-registration.zh-CN.md`.
+- When changing OAuth2 client integration, update `docs/oauth2-client-integration.zh-CN.md` or `docs/oauth2-confidential-client-integration.zh-CN.md`.
+- When changing webhook behavior, update `docs/webhook-integration.zh-CN.md`.
 - Oathkeeper access rules live in `external/oathkeeper/access-rules.yml` — update when adding/removing public or protected endpoints.
