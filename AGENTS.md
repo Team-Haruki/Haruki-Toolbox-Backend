@@ -145,13 +145,18 @@ Ory 相关改动尤其建议关注：
 - OAuth2 行为
 - 受保护 API 接入方式
 - Auth Proxy header 约定
-- HarukiBot NEO 注册流程
+- HarukiBot NEO 注册/凭据重置流程
+- OAuth2 客户端对接
+- Webhook 对接
 - 新增或移除公开/受保护端点
 
 当前文档：
 
 - `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明
-- `docs/haruki-bot-neo-registration.zh-CN.md` — HarukiBot NEO 注册 API 对接
+- `docs/haruki-bot-neo-registration.zh-CN.md` — HarukiBot NEO 注册与凭据重置 API 对接
+- `docs/oauth2-client-integration.zh-CN.md` — OAuth2 公开客户端对接
+- `docs/oauth2-confidential-client-integration.zh-CN.md` — OAuth2 机密客户端对接
+- `docs/webhook-integration.zh-CN.md` — Webhook 对接
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 
 ## 提交前检查清单
