@@ -3,6 +3,8 @@ package ios
 import (
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -45,5 +47,40 @@ func TestGetHostnamesSkipsEmptyAndDeduplicates(t *testing.T) {
 	}
 	if got[0] != "jp.example.com" || got[1] != "tw.example.com" {
 		t.Fatalf("hostnames = %#v, want [jp.example.com tw.example.com]", got)
+	}
+}
+
+func TestGenerateSuiteRulesMatchOptionalLoginQuery(t *testing.T) {
+	t.Parallel()
+
+	rules := generateRulesForDataType(
+		"jp.example.com",
+		"jp",
+		DataTypeSuite,
+		UploadModeProxy,
+		"code",
+		"https://toolbox.example",
+		1,
+		string(EndpointTypeDirect),
+	)
+	if len(rules.RewriteRules) != 1 {
+		t.Fatalf("len(rewrite rules) = %d, want 1", len(rules.RewriteRules))
+	}
+
+	rule := rules.RewriteRules[0]
+	re := regexp.MustCompile(rule.Pattern)
+	for _, url := range []string{
+		"https://jp.example.com/api/suite/user/123",
+		"https://jp.example.com/api/suite/user/123?isLogin=true",
+	} {
+		if !re.MatchString(url) {
+			t.Fatalf("suite pattern %q should match %q", rule.Pattern, url)
+		}
+	}
+	if re.MatchString("https://jp.example.com/api/suite/user/123?foo=bar") {
+		t.Fatalf("suite pattern %q should not match unsupported query", rule.Pattern)
+	}
+	if !strings.Contains(rule.Target, "/suite/user/$1$2 ") {
+		t.Fatalf("suite proxy target should preserve optional query capture, got %q", rule.Target)
 	}
 }

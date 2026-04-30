@@ -35,6 +35,12 @@ func TestRetrieverHelpers_Basic(t *testing.T) {
 	if got := suiteBasePath(1); got != "/suite/user/1" {
 		t.Fatalf("suiteBasePath = %q", got)
 	}
+	if got := suiteInitialPath(JP, 1); got != "/suite/user/1?isLogin=true" {
+		t.Fatalf("JP suiteInitialPath = %q", got)
+	}
+	if got := suiteInitialPath(EN, 1); got != "/suite/user/1" {
+		t.Fatalf("EN suiteInitialPath = %q", got)
+	}
 	if got := suiteFollowupPath(1); got != "/suite/user/1"+retrieverSuiteFollowupQuery {
 		t.Fatalf("suiteFollowupPath = %q", got)
 	}

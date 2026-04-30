@@ -13,6 +13,7 @@ import (
 var retrieverSleep = time.Sleep
 
 const (
+	retrieverSuiteLoginQuery    = "?isLogin=true"
 	retrieverSuiteFollowupQuery = "?isForceAllReload=false&name=user_colorful_pass,user_colorful_pass_v2,user_offline_event"
 	retrieverSystemPath         = "/system"
 	retrieverInformationPath    = "/information"
@@ -31,6 +32,14 @@ func userIDString(userID int64) string {
 
 func suiteBasePath(userID int64) string {
 	return fmt.Sprintf("/suite/user/%s", userIDString(userID))
+}
+
+func suiteInitialPath(server harukiUtils.SupportedInheritUploadServer, userID int64) string {
+	path := suiteBasePath(userID)
+	if server == JP {
+		return path + retrieverSuiteLoginQuery
+	}
+	return path
 }
 
 func suiteFollowupPath(userID int64) string {
