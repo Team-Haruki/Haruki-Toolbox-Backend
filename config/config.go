@@ -131,6 +131,15 @@ type HarukiBotConfig struct {
 	CredentialSignToken string `yaml:"credential_sign_token"`
 }
 
+type SubscriptionConfig struct {
+	CloudInternalBaseURL string `yaml:"cloud_internal_base_url"`
+	CloudInternalToken   string `yaml:"cloud_internal_token"`
+	HMESInternalBaseURL  string `yaml:"hmes_internal_base_url"`
+	HMESInternalToken    string `yaml:"hmes_internal_token"`
+	UserAgent            string `yaml:"user_agent"`
+	RequestTimeoutSecond int    `yaml:"request_timeout_seconds"`
+}
+
 type HarukiProxyConfig struct {
 	UserAgent string `yaml:"user_agent"`
 	Version   string `yaml:"version"`
@@ -194,6 +203,7 @@ type Config struct {
 	ThirdPartyDataProvider ThirdPartyDataProviderConfig `yaml:"third_party_data_provider"`
 	RestoreSuite           RestoreSuiteConfig           `yaml:"restore_suite"`
 	HarukiBot              HarukiBotConfig              `yaml:"haruki_bot"`
+	Subscription           SubscriptionConfig           `yaml:"subscription"`
 }
 
 var Cfg Config
@@ -268,6 +278,10 @@ func Load(configPath string) (Config, error) {
 		Webhook: WebhookConfig{
 			Enabled: true,
 		},
+		Subscription: SubscriptionConfig{
+			UserAgent:            "Haruki-Toolbox-Backend",
+			RequestTimeoutSecond: 5,
+		},
 	}
 	if err := yaml.Unmarshal([]byte(expandedContent), &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config file %q: %w", path, err)
@@ -319,6 +333,12 @@ func Load(configPath string) (Config, error) {
 	}
 	if cfg.OAuth2.HydraRequestTimeoutSecond <= 0 {
 		cfg.OAuth2.HydraRequestTimeoutSecond = 10
+	}
+	if strings.TrimSpace(cfg.Subscription.UserAgent) == "" {
+		cfg.Subscription.UserAgent = "Haruki-Toolbox-Backend"
+	}
+	if cfg.Subscription.RequestTimeoutSecond <= 0 {
+		cfg.Subscription.RequestTimeoutSecond = 5
 	}
 
 	return cfg, nil
@@ -466,6 +486,15 @@ func applyEnvOverrides(cfg *Config) error {
 		return err
 	}
 	overrideString(&cfg.HarukiBot.CredentialSignToken, "HARUKI_BOT_CREDENTIAL_SIGN_TOKEN")
+
+	overrideString(&cfg.Subscription.CloudInternalBaseURL, "HARUKI_CLOUD_INTERNAL_BASE_URL")
+	overrideString(&cfg.Subscription.CloudInternalToken, "HARUKI_CLOUD_INTERNAL_API_TOKEN")
+	overrideString(&cfg.Subscription.HMESInternalBaseURL, "HARUKI_HMES_INTERNAL_BASE_URL")
+	overrideString(&cfg.Subscription.HMESInternalToken, "HARUKI_HMES_INTERNAL_API_TOKEN")
+	overrideString(&cfg.Subscription.UserAgent, "HARUKI_SUBSCRIPTION_USER_AGENT")
+	if err := overrideInt(&cfg.Subscription.RequestTimeoutSecond, "HARUKI_SUBSCRIPTION_REQUEST_TIMEOUT_SECONDS"); err != nil {
+		return err
+	}
 
 	return nil
 }
