@@ -14,7 +14,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 	serverName := upperServerName(r.client.server)
 	r.logger.Infof("%s server retrieving suite...", serverName)
 
-	basePath := suiteBasePath(r.client.userID)
+	basePath := suiteInitialPath(r.client.server, r.client.userID)
 	suite, status, err := r.client.callAPI(ctx, basePath, httpMethodGet, nil, nil)
 	if err != nil {
 		r.logger.Errorf("Suite API call failed: %v", err)

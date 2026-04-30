@@ -70,27 +70,54 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 
 Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` over building parallel helpers.
 
-## Git Commit Format
+## Git Commits
 
-```
+All commit subjects must follow:
+
+```text
 [Type] Short description starting with capital letter
 ```
 
-| Type | Usage |
-|------|-------|
-| `[Feat]` | New feature or capability |
-| `[Fix]` | Bug fix |
-| `[Chore]` | Maintenance, refactoring, dependency updates, build changes |
-| `[Docs]` | Documentation changes only |
+Allowed types:
 
-Rules: description after type tag must start with a capital letter, keep it short and imperative, no trailing period.
+| Type      | Usage                                                 |
+|-----------|-------------------------------------------------------|
+| `[Feat]`  | New feature or capability                             |
+| `[Fix]`   | Bug fix                                               |
+| `[Chore]` | Maintenance, refactoring, dependency or build changes |
+| `[Docs]`  | Documentation-only changes                            |
 
-Examples:
+Rules:
+
+- Description starts with a capital letter.
+- Use imperative mood: `Add ...`, not `Added ...`.
+- No trailing period.
+- Keep the subject at or below roughly 70 characters.
+- **Agent attribution uses the standard Git `Co-authored-by:` trailer in
+  the commit body, not a free-form `Agent:` line.** This makes GitHub
+  render the co-author avatar on the commit page. The trailer must be on
+  its own line, separated from the subject by a blank line, in the form
+  `Co-authored-by: <Display Name> <email>`. Suggested values per agent:
+  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>`
+    (substitute the actual model, e.g. `Claude Sonnet 4.6`)
+  - Codex: `Co-authored-by: Codex <noreply@openai.com>`
+  - Copilot: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+
+Project examples:
+
+```text
+[Feat] Add sendBase64Image config support
+[Fix] Normalize Haruki Cloud user agent version
+[Chore] Move Rust modules to flat files
+[Docs] Document full obfuscated release builds
 ```
-[Feat] Add private API game binding query
-[Fix] Prevent fasthttp buffer reuse in upload audit log
-[Chore] Migrate GetData return type from bson.M to bson.D
-[Docs] Update ory-suite-usage with auth proxy header changes
+
+Agent-authored commit example:
+
+```text
+[Docs] Add agent commit guidelines
+
+Co-authored-by: Codex <noreply@openai.com>
 ```
 
 ## Documentation

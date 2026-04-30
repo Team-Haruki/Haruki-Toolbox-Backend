@@ -159,6 +159,56 @@ Ory 相关改动尤其建议关注：
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 
+## Git Commits
+
+All commit subjects must follow:
+
+```text
+[Type] Short description starting with capital letter
+```
+
+Allowed types:
+
+| Type      | Usage                                                 |
+|-----------|-------------------------------------------------------|
+| `[Feat]`  | New feature or capability                             |
+| `[Fix]`   | Bug fix                                               |
+| `[Chore]` | Maintenance, refactoring, dependency or build changes |
+| `[Docs]`  | Documentation-only changes                            |
+
+Rules:
+
+- Description starts with a capital letter.
+- Use imperative mood: `Add ...`, not `Added ...`.
+- No trailing period.
+- Keep the subject at or below roughly 70 characters.
+- **Agent attribution uses the standard Git `Co-authored-by:` trailer in
+  the commit body, not a free-form `Agent:` line.** This makes GitHub
+  render the co-author avatar on the commit page. The trailer must be on
+  its own line, separated from the subject by a blank line, in the form
+  `Co-authored-by: <Display Name> <email>`. Suggested values per agent:
+  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>`
+    (substitute the actual model, e.g. `Claude Sonnet 4.6`)
+  - Codex: `Co-authored-by: Codex <noreply@openai.com>`
+  - Copilot: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+
+Project examples:
+
+```text
+[Feat] Add sendBase64Image config support
+[Fix] Normalize Haruki Cloud user agent version
+[Chore] Move Rust modules to flat files
+[Docs] Document full obfuscated release builds
+```
+
+Agent-authored commit example:
+
+```text
+[Docs] Add agent commit guidelines
+
+Co-authored-by: Codex <noreply@openai.com>
+```
+
 ## 提交前检查清单
 
 提交前至少确认：

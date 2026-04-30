@@ -79,9 +79,9 @@ func generateRulesForDataType(host, region string, dt DataType, mode UploadMode,
 	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d&endpoint=%s", endpoint, uploadCode, chunkSizeMB, endpointType)
 	switch dt {
 	case DataTypeSuite:
-		pattern := fmt.Sprintf(`^https://%s/api/suite/user/(\d+)$`, escapedHost)
+		pattern := fmt.Sprintf(`^https://%s/api/suite/user/(\d+)(\?isLogin=true)?$`, escapedHost)
 		if mode == UploadModeProxy {
-			target := fmt.Sprintf("%s/ios/proxy/%s/suite/user/$1 307", endpoint, region)
+			target := fmt.Sprintf("%s/ios/proxy/%s/suite/user/$1$2 307", endpoint, region)
 			rs.RewriteRules = append(rs.RewriteRules, Rule{
 				Pattern:  pattern,
 				Target:   target,
