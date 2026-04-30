@@ -147,6 +147,14 @@ haruki_bot:
   enable_registration: false
   credential_sign_token: "" # must match Haruki-Cloud's credential_sign_token
 
+subscription:
+  cloud_internal_base_url: "http://haruki-cloud:6666"
+  cloud_internal_token: "" # Haruki-Cloud haruki_bot.internal_api_token
+  hmes_internal_base_url: "http://haruki-hmes:7910"
+  hmes_internal_token: ""
+  user_agent: "Haruki-Toolbox-Backend"
+  request_timeout_seconds: 5
+
 others:
   public_api_allowed_keys:
     - "userDecks"

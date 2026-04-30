@@ -39,6 +39,9 @@ func (h *DataHandler) HandleAndUpdateData(
 		h.Logger.Errorf("Failed to update mongo data: %v", err)
 		return nil, err
 	}
+	if dataType == utils.UploadDataTypeMysekaiBirthdayParty && expectedUserID != nil {
+		h.ProcessBirthdaySubscriptionAsync(*expectedUserID, server, data)
+	}
 	if dataType != utils.UploadDataTypeMysekaiBirthdayParty {
 		rawCopy := make([]byte, len(raw))
 		copy(rawCopy, raw)
