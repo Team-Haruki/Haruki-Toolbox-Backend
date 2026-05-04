@@ -132,8 +132,6 @@ type HarukiBotConfig struct {
 }
 
 type SubscriptionConfig struct {
-	CloudInternalBaseURL string `yaml:"cloud_internal_base_url"`
-	CloudInternalToken   string `yaml:"cloud_internal_token"`
 	HMESInternalBaseURL  string `yaml:"hmes_internal_base_url"`
 	HMESInternalToken    string `yaml:"hmes_internal_token"`
 	UserAgent            string `yaml:"user_agent"`
@@ -487,8 +485,6 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	overrideString(&cfg.HarukiBot.CredentialSignToken, "HARUKI_BOT_CREDENTIAL_SIGN_TOKEN")
 
-	overrideString(&cfg.Subscription.CloudInternalBaseURL, "HARUKI_CLOUD_INTERNAL_BASE_URL")
-	overrideString(&cfg.Subscription.CloudInternalToken, "HARUKI_CLOUD_INTERNAL_API_TOKEN")
 	overrideString(&cfg.Subscription.HMESInternalBaseURL, "HARUKI_HMES_INTERNAL_BASE_URL")
 	overrideString(&cfg.Subscription.HMESInternalToken, "HARUKI_HMES_INTERNAL_API_TOKEN")
 	overrideString(&cfg.Subscription.UserAgent, "HARUKI_SUBSCRIPTION_USER_AGENT")
