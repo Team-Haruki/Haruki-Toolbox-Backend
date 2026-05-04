@@ -45,6 +45,11 @@ const (
 
 	KeyModuleBot      = "bot"
 	KeyActionRegister = "register"
+
+	KeyModuleMysekaiBirthday = "mysekai-birthday"
+	KeyActionMonitor         = "monitor"
+	KeyActionSubscription    = "subscription"
+	KeyActionEvent           = "event"
 )
 
 func BuildBotVerifyCodeKey(qq string) string {
@@ -193,6 +198,29 @@ func BuildIOSUploadChunkClaimKey(uploadKey string) string {
 
 func BuildRuntimeConfigKey() string {
 	return buildKey(KeyPrefixHaruki, KeyModuleConfig, KeyActionRuntime)
+}
+
+func BuildMysekaiBirthdayMonitorKey(server, gameUserID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionMonitor, strings.TrimSpace(server), strings.TrimSpace(gameUserID))
+}
+
+func BuildMysekaiBirthdaySubscriptionKey(subscriptionID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionSubscription, strings.TrimSpace(subscriptionID))
+}
+
+func BuildMysekaiBirthdayEventKey(subscriptionID, subscriptionVersion, eventID string) string {
+	return buildKey(
+		KeyPrefixHaruki,
+		KeyModuleMysekaiBirthday,
+		KeyActionEvent,
+		strings.TrimSpace(subscriptionID),
+		strings.TrimSpace(subscriptionVersion),
+		strings.TrimSpace(eventID),
+	)
+}
+
+func BuildMysekaiBirthdaySubscriptionEventsPattern(subscriptionID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionEvent, strings.TrimSpace(subscriptionID), "*")
 }
 
 func buildKey(parts ...string) string {
