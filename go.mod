@@ -19,7 +19,7 @@ require (
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/shamaton/msgpack/v2 v2.4.0
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
-	go.mongodb.org/mongo-driver/v2 v2.5.1
+	go.mongodb.org/mongo-driver/v2 v2.6.0
 	golang.org/x/crypto v0.50.0
 	golang.org/x/image v0.39.0
 	golang.org/x/sync v0.20.0
