@@ -7,6 +7,7 @@ import (
 	"haruki-suite/config"
 	"haruki-suite/utils"
 	harukiRedis "haruki-suite/utils/database/redis"
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strconv"
@@ -64,6 +65,7 @@ func (h *DataHandler) processBirthdaySubscription(userID int64, server utils.Sup
 	cfg := config.Cfg.Subscription
 	redisManager := h.birthdayRedis()
 	if redisManager == nil {
+		h.Logger.Warnf("birthday subscription skipped: redis is unavailable server=%s uid=%d", server, userID)
 		return
 	}
 	timeout := time.Duration(cfg.RequestTimeoutSecond) * time.Second
@@ -79,15 +81,19 @@ func (h *DataHandler) processBirthdaySubscription(userID int64, server utils.Sup
 		return
 	}
 	if !found || monitor == nil || monitor.SubscriptionID == "" {
+		h.Logger.Debugf("birthday subscription skipped: monitor not found server=%s uid=%d", server, userID)
 		return
 	}
 	if monitor.ExpiresAt > 0 && time.Now().Unix() >= monitor.ExpiresAt {
 		_ = DeleteBirthdayMonitorMirror(ctx, redisManager, monitor.SubscriptionID, monitor.SubscriptionVersion)
+		h.Logger.Infof("birthday subscription expired and cleaned: server=%s uid=%d subscription=%s version=%s", server, userID, monitor.SubscriptionID, monitor.SubscriptionVersion)
 		return
 	}
 
+	h.Logger.Infof("birthday subscription monitor matched: server=%s uid=%d subscription=%s version=%s materials=%v notify_empty=%t", server, userID, monitor.SubscriptionID, monitor.SubscriptionVersion, monitor.MaterialIDs, monitor.NotifyEmpty)
 	filtered, matchedMaterialIDs, emptyResult := FilterBirthdayPartyPayload(data, monitor.MaterialIDs)
 	if emptyResult && !monitor.NotifyEmpty {
+		h.Logger.Infof("birthday subscription update skipped: empty result server=%s uid=%d subscription=%s version=%s", server, userID, monitor.SubscriptionID, monitor.SubscriptionVersion)
 		return
 	}
 	event, err := StoreBirthdayMonitorEvent(ctx, redisManager, monitor, BirthdayMonitorEvent{
@@ -102,6 +108,7 @@ func (h *DataHandler) processBirthdaySubscription(userID int64, server utils.Sup
 		h.Logger.Warnf("birthday subscription event store failed: server=%s uid=%d subscription=%s err=%v", server, userID, monitor.SubscriptionID, err)
 		return
 	}
+	h.Logger.Infof("birthday subscription event stored: event=%s subscription=%s version=%s empty_result=%t matched_material_ids=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, event.EmptyResult, event.MatchedMaterialIDs)
 	if err := h.notifyHMESBirthdayEvent(ctx, event); err != nil {
 		h.Logger.Warnf("birthday subscription HMES notify failed: event=%s subscription=%s err=%v", event.EventID, event.SubscriptionID, err)
 	}
@@ -297,6 +304,9 @@ func deleteBirthdayEventsBySubscription(ctx context.Context, redisClient *goredi
 func (h *DataHandler) notifyHMESBirthdayEvent(ctx context.Context, event *BirthdayMonitorEvent) error {
 	cfg := config.Cfg.Subscription
 	if event == nil || strings.TrimSpace(cfg.HMESInternalBaseURL) == "" {
+		if event != nil {
+			h.Logger.Warnf("birthday subscription HMES notify skipped: hmes_internal_base_url is not configured event=%s subscription=%s", event.EventID, event.SubscriptionID)
+		}
 		return nil
 	}
 	body, err := json.Marshal(hmesEventNotifyRequest{
@@ -317,6 +327,7 @@ func (h *DataHandler) notifyHMESBirthdayEvent(ctx context.Context, event *Birthd
 	if status < 200 || status >= 300 {
 		return fmt.Errorf("hmes returned status %d: %s", status, strings.TrimSpace(string(respBody)))
 	}
+	h.Logger.Infof("birthday subscription HMES notify sent: event=%s subscription=%s version=%s empty_result=%t", event.EventID, event.SubscriptionID, event.SubscriptionVersion, event.EmptyResult)
 	return nil
 }
 
@@ -491,9 +502,11 @@ func mapStringAny(value any) (map[string]any, bool) {
 	case map[any]any:
 		result := make(map[string]any, len(typed))
 		for key, value := range typed {
-			keyText, ok := key.(string)
-			if ok {
+			switch keyText := key.(type) {
+			case string:
 				result[keyText] = value
+			case []byte:
+				result[string(keyText)] = value
 			}
 		}
 		return result, len(result) > 0
@@ -507,6 +520,12 @@ func anySlice(value any) []any {
 	case []any:
 		return typed
 	case []map[string]any:
+		result := make([]any, 0, len(typed))
+		for _, item := range typed {
+			result = append(result, item)
+		}
+		return result
+	case []map[any]any:
 		result := make([]any, 0, len(typed))
 		for _, item := range typed {
 			result = append(result, item)
@@ -557,6 +576,8 @@ func stringFromAny(value any) string {
 	switch typed := value.(type) {
 	case string:
 		return strings.TrimSpace(typed)
+	case []byte:
+		return strings.TrimSpace(string(typed))
 	default:
 		return fmt.Sprint(value)
 	}
@@ -566,18 +587,52 @@ func intFromAny(value any) int {
 	switch typed := value.(type) {
 	case int:
 		return typed
+	case int8:
+		return int(typed)
+	case int16:
+		return int(typed)
 	case int32:
 		return int(typed)
 	case int64:
+		if typed > int64(math.MaxInt) || typed < int64(math.MinInt) {
+			return 0
+		}
+		return int(typed)
+	case uint:
+		if uint64(typed) > uint64(math.MaxInt) {
+			return 0
+		}
+		return int(typed)
+	case uint8:
+		return int(typed)
+	case uint16:
+		return int(typed)
+	case uint32:
+		if uint64(typed) > uint64(math.MaxInt) {
+			return 0
+		}
+		return int(typed)
+	case uint64:
+		if typed > uint64(math.MaxInt) {
+			return 0
+		}
+		return int(typed)
+	case float32:
 		return int(typed)
 	case float64:
 		return int(typed)
 	case json.Number:
 		if n, err := typed.Int64(); err == nil {
+			if n > int64(math.MaxInt) || n < int64(math.MinInt) {
+				return 0
+			}
 			return int(n)
 		}
 	case string:
 		n, _ := strconv.Atoi(strings.TrimSpace(typed))
+		return n
+	case []byte:
+		n, _ := strconv.Atoi(strings.TrimSpace(string(typed)))
 		return n
 	}
 	return 0
@@ -608,9 +663,25 @@ func floatFromAny(value any) float64 {
 	switch typed := value.(type) {
 	case int:
 		return float64(typed)
+	case int8:
+		return float64(typed)
+	case int16:
+		return float64(typed)
 	case int32:
 		return float64(typed)
 	case int64:
+		return float64(typed)
+	case uint:
+		return float64(typed)
+	case uint8:
+		return float64(typed)
+	case uint16:
+		return float64(typed)
+	case uint32:
+		return float64(typed)
+	case uint64:
+		return float64(typed)
+	case float32:
 		return float64(typed)
 	case float64:
 		return typed
@@ -619,6 +690,9 @@ func floatFromAny(value any) float64 {
 		return n
 	case string:
 		n, _ := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		return n
+	case []byte:
+		n, _ := strconv.ParseFloat(strings.TrimSpace(string(typed)), 64)
 		return n
 	}
 	return 0

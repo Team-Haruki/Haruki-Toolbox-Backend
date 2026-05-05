@@ -105,3 +105,48 @@ func TestFilterBirthdayPartyPayloadReportsEmptyResult(t *testing.T) {
 		t.Fatalf("expected filtered maps empty, got %+v", maps)
 	}
 }
+
+func TestFilterBirthdayPartyPayloadHandlesMsgpackNumericTypes(t *testing.T) {
+	data := map[string]any{
+		"updatedResources": map[string]any{
+			"userMysekaiHarvestMaps": []any{
+				map[any]any{
+					"mysekaiSiteId": uint16(17),
+					"userMysekaiSiteHarvestResourceDrops": []any{
+						map[any]any{
+							"resourceType": []byte("mysekai_material"),
+							"resourceId":   uint8(12),
+							"positionX":    int8(-2),
+							"positionZ":    int16(-27),
+						},
+					},
+					"userMysekaiSiteHarvestFixtures": []any{
+						map[any]any{"mysekaiSiteHarvestFixtureId": uint16(1001), "positionX": int8(-2), "positionZ": int16(-27)},
+					},
+				},
+			},
+		},
+	}
+
+	filtered, matched, empty := FilterBirthdayPartyPayload(data, []int{12, 5, 20})
+	if empty {
+		t.Fatalf("expected msgpack numeric drop to match")
+	}
+	if len(matched) != 1 || matched[0] != 12 {
+		t.Fatalf("matched ids = %+v, want [12]", matched)
+	}
+	updated := filtered["updatedResources"].(map[string]any)
+	maps := updated["userMysekaiHarvestMaps"].([]any)
+	if len(maps) != 1 {
+		t.Fatalf("expected 1 map, got %d", len(maps))
+	}
+	site := maps[0].(map[string]any)
+	drops := site["userMysekaiSiteHarvestResourceDrops"].([]any)
+	if len(drops) != 1 {
+		t.Fatalf("expected 1 drop, got %d", len(drops))
+	}
+	fixtures := site["userMysekaiSiteHarvestFixtures"].([]any)
+	if len(fixtures) != 1 {
+		t.Fatalf("expected 1 fixture, got %d", len(fixtures))
+	}
+}
