@@ -16,7 +16,7 @@ require (
 	github.com/klauspost/compress v1.18.6
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-sqlite3 v1.14.42
-	github.com/redis/go-redis/v9 v9.18.0
+	github.com/redis/go-redis/v9 v9.19.0
 	github.com/shamaton/msgpack/v2 v2.4.0
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
 	go.mongodb.org/mongo-driver/v2 v2.5.1
@@ -36,7 +36,6 @@ require (
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/go-openapi/inflect v0.21.5 // indirect
 	github.com/gofiber/schema v1.7.1 // indirect
 	github.com/gofiber/utils/v2 v2.0.4 // indirect
