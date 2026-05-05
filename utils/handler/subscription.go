@@ -350,8 +350,29 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 		drops := anySlice(siteMap["userMysekaiSiteHarvestResourceDrops"])
 		fixtures := anySlice(siteMap["userMysekaiSiteHarvestFixtures"])
 
+		fixtureIDsByPosition := make(map[string]map[int]struct{})
+		for _, rawFixture := range fixtures {
+			fixture, ok := mapStringAny(rawFixture)
+			if !ok {
+				continue
+			}
+			fixtureID := birthdayFixtureID(fixture)
+			if fixtureID <= 0 {
+				continue
+			}
+			posKey := birthdayPosKey(fixture)
+			if posKey == "" {
+				continue
+			}
+			if fixtureIDsByPosition[posKey] == nil {
+				fixtureIDsByPosition[posKey] = make(map[int]struct{})
+			}
+			fixtureIDsByPosition[posKey][fixtureID] = struct{}{}
+		}
+
 		keptDrops := make([]any, 0)
 		matchedPositions := make(map[string]struct{})
+		matchedFixtureIDs := make(map[int]struct{})
 		for _, rawDrop := range drops {
 			drop, ok := mapStringAny(rawDrop)
 			if !ok {
@@ -372,6 +393,12 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 			}
 			if key := birthdayPosKey(drop); key != "" {
 				matchedPositions[key] = struct{}{}
+				for fixtureID := range fixtureIDsByPosition[key] {
+					matchedFixtureIDs[fixtureID] = struct{}{}
+				}
+			}
+			if fixtureID := birthdayFixtureID(drop); fixtureID > 0 {
+				matchedFixtureIDs[fixtureID] = struct{}{}
 			}
 		}
 		if len(keptDrops) == 0 {
@@ -386,6 +413,12 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 			}
 			if _, ok := matchedPositions[birthdayPosKey(fixture)]; ok {
 				keptFixtures = append(keptFixtures, cloneMap(fixture))
+				continue
+			}
+			if fixtureID := birthdayFixtureID(fixture); fixtureID > 0 {
+				if _, ok := matchedFixtureIDs[fixtureID]; ok {
+					keptFixtures = append(keptFixtures, cloneMap(fixture))
+				}
 			}
 		}
 
@@ -570,6 +603,15 @@ func birthdayPosKey(item map[string]any) string {
 	x := floatFromAny(xRaw)
 	z := floatFromAny(zRaw)
 	return fmt.Sprintf("%.3f_%.3f", x, z)
+}
+
+func birthdayFixtureID(item map[string]any) int {
+	return intFromAny(firstPresent(
+		item,
+		"mysekaiSiteHarvestFixtureId",
+		"mysekaiSiteHarvestFixtureID",
+		"mysekai_site_harvest_fixture_id",
+	))
 }
 
 func stringFromAny(value any) string {
