@@ -16,7 +16,7 @@ RUN go build \
       -X 'haruki-suite/version.BuildDate=${BUILD_DATE}'" \
     -o haruki-toolbox-backend ./main.go
 
-FROM alpine:3.20
+FROM alpine:3.23
 
 ENV TZ=Asia/Shanghai
 ARG VERSION=dev
