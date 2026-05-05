@@ -48,6 +48,44 @@ func TestFilterBirthdayPartyPayloadKeepsMatchedDropsAndSamePositionFixtures(t *t
 	}
 }
 
+func TestFilterBirthdayPartyPayloadKeepsSameFixtureIDAsMatchedDrop(t *testing.T) {
+	data := map[string]any{
+		"updatedResources": map[string]any{
+			"userMysekaiHarvestMaps": []any{
+				map[string]any{
+					"mysekaiSiteId": 5,
+					"userMysekaiSiteHarvestResourceDrops": []any{
+						map[string]any{"resourceType": "mysekai_material", "resourceId": 12, "positionX": 1.0, "positionZ": 2.0},
+					},
+					"userMysekaiSiteHarvestFixtures": []any{
+						map[string]any{"mysekaiSiteHarvestFixtureId": 1001, "positionX": 1.0, "positionZ": 2.0},
+						map[string]any{"mysekaiSiteHarvestFixtureId": 1001, "positionX": 7.0, "positionZ": 8.0},
+						map[string]any{"mysekaiSiteHarvestFixtureId": 1002, "positionX": 9.0, "positionZ": 10.0},
+					},
+				},
+			},
+		},
+	}
+
+	filtered, _, empty := FilterBirthdayPartyPayload(data, []int{12})
+	if empty {
+		t.Fatalf("expected non-empty result")
+	}
+	updated := filtered["updatedResources"].(map[string]any)
+	maps := updated["userMysekaiHarvestMaps"].([]any)
+	site := maps[0].(map[string]any)
+	fixtures := site["userMysekaiSiteHarvestFixtures"].([]any)
+	if len(fixtures) != 2 {
+		t.Fatalf("expected same fixture id entries to be kept, got %+v", fixtures)
+	}
+	for _, rawFixture := range fixtures {
+		fixture := rawFixture.(map[string]any)
+		if fixture["mysekaiSiteHarvestFixtureId"] != 1001 {
+			t.Fatalf("unexpected fixture kept: %+v", fixture)
+		}
+	}
+}
+
 func TestFilterBirthdayPartyPayloadKeepsZeroPositionFixtures(t *testing.T) {
 	data := map[string]any{
 		"updatedResources": map[string]any{
