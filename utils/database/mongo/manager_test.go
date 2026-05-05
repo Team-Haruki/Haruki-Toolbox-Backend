@@ -155,6 +155,99 @@ func TestBuildFinalDataMergesAndKeepsOtherKeys(t *testing.T) {
 	}
 }
 
+func TestBuildSuiteBackfillDataOnlyMergesIncrementalFields(t *testing.T) {
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(1), "eventPoint": int64(100)},
+		},
+		"userWorldBlooms": bson.A{
+			map[string]any{"eventId": int64(3), "gameCharacterId": int64(5), "worldBloomChapterPoint": int64(50)},
+		},
+	}
+	newData := map[string]any{
+		"userEvents": []any{
+			map[string]any{"eventId": int64(2), "eventPoint": int64(10)},
+		},
+		"userWorldBlooms": []any{
+			map[string]any{"eventId": int64(3), "gameCharacterId": int64(5), "worldBloomChapterPoint": int64(80)},
+		},
+		"upload_time": int64(1776448218645),
+		"server":      "jp",
+	}
+
+	finalData := buildSuiteBackfillData(oldData, newData)
+
+	if _, ok := finalData["upload_time"]; ok {
+		t.Fatalf("buildSuiteBackfillData should not include upload_time")
+	}
+	if _, ok := finalData["server"]; ok {
+		t.Fatalf("buildSuiteBackfillData should not include server")
+	}
+	events := extractAnySlice(finalData["userEvents"])
+	if len(events) != 2 {
+		t.Fatalf("userEvents length = %d, want 2", len(events))
+	}
+	blooms := extractAnySlice(finalData["userWorldBlooms"])
+	if len(blooms) != 1 {
+		t.Fatalf("userWorldBlooms length = %d, want 1", len(blooms))
+	}
+	bloom, ok := blooms[0].(map[string]any)
+	if !ok {
+		t.Fatalf("bloom type = %T, want map[string]any", blooms[0])
+	}
+	if getInt(bloom, "worldBloomChapterPoint") != 80 {
+		t.Fatalf("worldBloomChapterPoint = %d, want 80", getInt(bloom, "worldBloomChapterPoint"))
+	}
+}
+
+func TestBuildSuiteBackfillDataSkipsEmptySnapshotFields(t *testing.T) {
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(1), "eventPoint": int64(100)},
+		},
+	}
+	newData := map[string]any{
+		"userEvents": []any{},
+	}
+
+	finalData := buildSuiteBackfillData(oldData, newData)
+
+	if _, ok := finalData["userEvents"]; ok {
+		t.Fatalf("buildSuiteBackfillData should skip empty snapshot fields")
+	}
+}
+
+func TestBuildSuiteBackfillDataSkipsNonImprovingSnapshotFields(t *testing.T) {
+	oldData := map[string]any{
+		"userEvents": bson.A{
+			map[string]any{"eventId": int64(1), "eventPoint": int64(100)},
+		},
+		"userWorldBlooms": bson.A{
+			map[string]any{"eventId": int64(3), "gameCharacterId": int64(5), "worldBloomChapterPoint": int64(50)},
+		},
+		"userGachas": bson.A{
+			map[string]any{"gachaId": int64(1), "gachaBehaviorId": int64(10), "lastSpinAt": int64(2000)},
+		},
+	}
+	newData := map[string]any{
+		"userEvents": []any{
+			map[string]any{"eventId": int64(1), "eventPoint": int64(90)},
+		},
+		"userWorldBlooms": []any{
+			map[string]any{"eventId": int64(3), "gameCharacterId": int64(5), "worldBloomChapterPoint": int64(40)},
+		},
+		"userGachas": []any{
+			map[string]any{"gachaId": int64(1), "gachaBehaviorId": int64(10), "lastSpinAt": int64(1000)},
+		},
+	}
+
+	finalData := buildSuiteBackfillData(oldData, newData)
+
+	if len(finalData) != 0 {
+		t.Fatalf("buildSuiteBackfillData should skip non-improving snapshot fields, got %v", finalData)
+	}
+}
+
 func TestMergeUserEventsSupportsMongoDecodedDocumentTypes(t *testing.T) {
 	oldData := map[string]any{
 		"userEvents": bson.A{
