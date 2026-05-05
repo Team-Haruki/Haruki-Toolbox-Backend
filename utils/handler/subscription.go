@@ -351,6 +351,7 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 		fixtures := anySlice(siteMap["userMysekaiSiteHarvestFixtures"])
 
 		fixtureIDsByPosition := make(map[string]map[int]struct{})
+		positionsByFixtureID := make(map[int]map[string]struct{})
 		for _, rawFixture := range fixtures {
 			fixture, ok := mapStringAny(rawFixture)
 			if !ok {
@@ -368,11 +369,15 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 				fixtureIDsByPosition[posKey] = make(map[int]struct{})
 			}
 			fixtureIDsByPosition[posKey][fixtureID] = struct{}{}
+			if positionsByFixtureID[fixtureID] == nil {
+				positionsByFixtureID[fixtureID] = make(map[string]struct{})
+			}
+			positionsByFixtureID[fixtureID][posKey] = struct{}{}
 		}
 
-		keptDrops := make([]any, 0)
 		matchedPositions := make(map[string]struct{})
 		matchedFixtureIDs := make(map[int]struct{})
+		siteMatched := false
 		for _, rawDrop := range drops {
 			drop, ok := mapStringAny(rawDrop)
 			if !ok {
@@ -386,7 +391,7 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 			if _, ok := targets[resourceID]; !ok {
 				continue
 			}
-			keptDrops = append(keptDrops, cloneMap(drop))
+			siteMatched = true
 			if _, ok := matchedSet[resourceID]; !ok {
 				matchedSet[resourceID] = struct{}{}
 				matchedIDs = append(matchedIDs, resourceID)
@@ -401,8 +406,45 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 				matchedFixtureIDs[fixtureID] = struct{}{}
 			}
 		}
-		if len(keptDrops) == 0 {
+		if !siteMatched {
 			continue
+		}
+
+		keptPositions := make(map[string]struct{}, len(matchedPositions))
+		for posKey := range matchedPositions {
+			keptPositions[posKey] = struct{}{}
+		}
+		for fixtureID := range matchedFixtureIDs {
+			for posKey := range positionsByFixtureID[fixtureID] {
+				keptPositions[posKey] = struct{}{}
+			}
+		}
+
+		keptDrops := make([]any, 0)
+		for _, rawDrop := range drops {
+			drop, ok := mapStringAny(rawDrop)
+			if !ok {
+				continue
+			}
+			keep := false
+			resourceType := normalizeBirthdayResourceType(stringFromAny(firstPresent(drop, "resourceType", "type")))
+			resourceID := intFromAny(firstPresent(drop, "resourceId", "id"))
+			if resourceType == "mysekai_material" {
+				_, keep = targets[resourceID]
+			}
+			if !keep {
+				if _, ok := keptPositions[birthdayPosKey(drop)]; ok {
+					keep = true
+				}
+			}
+			if !keep {
+				if fixtureID := birthdayFixtureID(drop); fixtureID > 0 {
+					_, keep = matchedFixtureIDs[fixtureID]
+				}
+			}
+			if keep {
+				keptDrops = append(keptDrops, cloneMap(drop))
+			}
 		}
 
 		keptFixtures := make([]any, 0)
@@ -411,7 +453,7 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 			if !ok {
 				continue
 			}
-			if _, ok := matchedPositions[birthdayPosKey(fixture)]; ok {
+			if _, ok := keptPositions[birthdayPosKey(fixture)]; ok {
 				keptFixtures = append(keptFixtures, cloneMap(fixture))
 				continue
 			}
@@ -611,6 +653,9 @@ func birthdayFixtureID(item map[string]any) int {
 		"mysekaiSiteHarvestFixtureId",
 		"mysekaiSiteHarvestFixtureID",
 		"mysekai_site_harvest_fixture_id",
+		"mysekaiFixtureId",
+		"mysekaiFixtureID",
+		"mysekai_fixture_id",
 	))
 }
 

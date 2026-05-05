@@ -56,6 +56,9 @@ func TestFilterBirthdayPartyPayloadKeepsSameFixtureIDAsMatchedDrop(t *testing.T)
 					"mysekaiSiteId": 5,
 					"userMysekaiSiteHarvestResourceDrops": []any{
 						map[string]any{"resourceType": "mysekai_material", "resourceId": 12, "positionX": 1.0, "positionZ": 2.0},
+						map[string]any{"resourceType": "mysekai_material", "resourceId": 1, "positionX": 7.0, "positionZ": 8.0},
+						map[string]any{"resourceType": "mysekai_item", "resourceId": 501, "positionX": 7.0, "positionZ": 8.0},
+						map[string]any{"resourceType": "mysekai_material", "resourceId": 1, "positionX": 9.0, "positionZ": 10.0},
 					},
 					"userMysekaiSiteHarvestFixtures": []any{
 						map[string]any{"mysekaiSiteHarvestFixtureId": 1001, "positionX": 1.0, "positionZ": 2.0},
@@ -83,6 +86,48 @@ func TestFilterBirthdayPartyPayloadKeepsSameFixtureIDAsMatchedDrop(t *testing.T)
 		if fixture["mysekaiSiteHarvestFixtureId"] != 1001 {
 			t.Fatalf("unexpected fixture kept: %+v", fixture)
 		}
+	}
+	drops := site["userMysekaiSiteHarvestResourceDrops"].([]any)
+	if len(drops) != 3 {
+		t.Fatalf("expected same fixture id drops to be kept, got %+v", drops)
+	}
+	for _, rawDrop := range drops {
+		drop := rawDrop.(map[string]any)
+		if drop["positionX"] == 9.0 {
+			t.Fatalf("unexpected drop kept from unrelated fixture id: %+v", drop)
+		}
+	}
+}
+
+func TestFilterBirthdayPartyPayloadKeepsMysekaiFixtureIDAlias(t *testing.T) {
+	data := map[string]any{
+		"updatedResources": map[string]any{
+			"userMysekaiHarvestMaps": []any{
+				map[string]any{
+					"mysekaiSiteId": 5,
+					"userMysekaiSiteHarvestResourceDrops": []any{
+						map[string]any{"resourceType": "mysekai_material", "resourceId": 12, "positionX": 1.0, "positionZ": 2.0},
+						map[string]any{"resourceType": "mysekai_material", "resourceId": 1, "positionX": 7.0, "positionZ": 8.0},
+					},
+					"userMysekaiSiteHarvestFixtures": []any{
+						map[string]any{"mysekaiFixtureId": 8017, "positionX": 1.0, "positionZ": 2.0},
+						map[string]any{"mysekaiFixtureId": 8017, "positionX": 7.0, "positionZ": 8.0},
+					},
+				},
+			},
+		},
+	}
+
+	filtered, _, empty := FilterBirthdayPartyPayload(data, []int{12})
+	if empty {
+		t.Fatalf("expected non-empty result")
+	}
+	updated := filtered["updatedResources"].(map[string]any)
+	maps := updated["userMysekaiHarvestMaps"].([]any)
+	site := maps[0].(map[string]any)
+	drops := site["userMysekaiSiteHarvestResourceDrops"].([]any)
+	if len(drops) != 2 {
+		t.Fatalf("expected alias fixture id drops to be kept, got %+v", drops)
 	}
 }
 
