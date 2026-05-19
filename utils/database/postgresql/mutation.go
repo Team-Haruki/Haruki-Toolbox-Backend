@@ -9474,6 +9474,7 @@ type UserMutation struct {
 	email                              *string
 	avatar_path                        *string
 	allow_cn_mysekai                   *bool
+	ticket_email_notifications_enabled *bool
 	role                               *user.Role
 	banned                             *bool
 	ban_reason                         *string
@@ -9754,6 +9755,42 @@ func (m *UserMutation) OldAllowCnMysekai(ctx context.Context) (v bool, err error
 // ResetAllowCnMysekai resets all changes to the "allow_cn_mysekai" field.
 func (m *UserMutation) ResetAllowCnMysekai() {
 	m.allow_cn_mysekai = nil
+}
+
+// SetTicketEmailNotificationsEnabled sets the "ticket_email_notifications_enabled" field.
+func (m *UserMutation) SetTicketEmailNotificationsEnabled(b bool) {
+	m.ticket_email_notifications_enabled = &b
+}
+
+// TicketEmailNotificationsEnabled returns the value of the "ticket_email_notifications_enabled" field in the mutation.
+func (m *UserMutation) TicketEmailNotificationsEnabled() (r bool, exists bool) {
+	v := m.ticket_email_notifications_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTicketEmailNotificationsEnabled returns the old "ticket_email_notifications_enabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldTicketEmailNotificationsEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTicketEmailNotificationsEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTicketEmailNotificationsEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTicketEmailNotificationsEnabled: %w", err)
+	}
+	return oldValue.TicketEmailNotificationsEnabled, nil
+}
+
+// ResetTicketEmailNotificationsEnabled resets all changes to the "ticket_email_notifications_enabled" field.
+func (m *UserMutation) ResetTicketEmailNotificationsEnabled() {
+	m.ticket_email_notifications_enabled = nil
 }
 
 // SetRole sets the "role" field.
@@ -10195,7 +10232,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -10207,6 +10244,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.allow_cn_mysekai != nil {
 		fields = append(fields, user.FieldAllowCnMysekai)
+	}
+	if m.ticket_email_notifications_enabled != nil {
+		fields = append(fields, user.FieldTicketEmailNotificationsEnabled)
 	}
 	if m.role != nil {
 		fields = append(fields, user.FieldRole)
@@ -10239,6 +10279,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.AvatarPath()
 	case user.FieldAllowCnMysekai:
 		return m.AllowCnMysekai()
+	case user.FieldTicketEmailNotificationsEnabled:
+		return m.TicketEmailNotificationsEnabled()
 	case user.FieldRole:
 		return m.Role()
 	case user.FieldBanned:
@@ -10266,6 +10308,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldAvatarPath(ctx)
 	case user.FieldAllowCnMysekai:
 		return m.OldAllowCnMysekai(ctx)
+	case user.FieldTicketEmailNotificationsEnabled:
+		return m.OldTicketEmailNotificationsEnabled(ctx)
 	case user.FieldRole:
 		return m.OldRole(ctx)
 	case user.FieldBanned:
@@ -10312,6 +10356,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAllowCnMysekai(v)
+		return nil
+	case user.FieldTicketEmailNotificationsEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTicketEmailNotificationsEnabled(v)
 		return nil
 	case user.FieldRole:
 		v, ok := value.(user.Role)
@@ -10435,6 +10486,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldAllowCnMysekai:
 		m.ResetAllowCnMysekai()
+		return nil
+	case user.FieldTicketEmailNotificationsEnabled:
+		m.ResetTicketEmailNotificationsEnabled()
 		return nil
 	case user.FieldRole:
 		m.ResetRole()

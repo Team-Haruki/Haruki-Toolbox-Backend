@@ -85,6 +85,11 @@ func AllowCnMysekai(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAllowCnMysekai, v))
 }
 
+// TicketEmailNotificationsEnabled applies equality check predicate on the "ticket_email_notifications_enabled" field. It's identical to TicketEmailNotificationsEnabledEQ.
+func TicketEmailNotificationsEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldTicketEmailNotificationsEnabled, v))
+}
+
 // Banned applies equality check predicate on the "banned" field. It's identical to BannedEQ.
 func Banned(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBanned, v))
@@ -318,6 +323,16 @@ func AllowCnMysekaiEQ(v bool) predicate.User {
 // AllowCnMysekaiNEQ applies the NEQ predicate on the "allow_cn_mysekai" field.
 func AllowCnMysekaiNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldAllowCnMysekai, v))
+}
+
+// TicketEmailNotificationsEnabledEQ applies the EQ predicate on the "ticket_email_notifications_enabled" field.
+func TicketEmailNotificationsEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldTicketEmailNotificationsEnabled, v))
+}
+
+// TicketEmailNotificationsEnabledNEQ applies the NEQ predicate on the "ticket_email_notifications_enabled" field.
+func TicketEmailNotificationsEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldTicketEmailNotificationsEnabled, v))
 }
 
 // RoleEQ applies the EQ predicate on the "role" field.

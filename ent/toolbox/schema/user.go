@@ -19,6 +19,7 @@ func (User) Fields() []ent.Field {
 		field.String("email").Unique(),
 		field.String("avatar_path").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
+		field.Bool("ticket_email_notifications_enabled").Default(false),
 		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),
 		field.Bool("banned").Default(false),
 		field.String("ban_reason").Optional().Nillable(),

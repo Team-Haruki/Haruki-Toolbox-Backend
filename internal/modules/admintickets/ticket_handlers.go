@@ -3,6 +3,7 @@ package admintickets
 import (
 	adminCoreModule "haruki-suite/internal/modules/admincore"
 	platformPagination "haruki-suite/internal/platform/pagination"
+	platformTicketNotifications "haruki-suite/internal/platform/ticketnotifications"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/ticket"
@@ -17,7 +18,12 @@ import (
 
 func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		filters, err := parseAdminTicketFilters(c)
+		actorUserID, _, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
+		filters, err := parseAdminTicketFilters(c, actorUserID)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid filters")
 		}
@@ -28,6 +34,9 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return harukiAPIHelper.ErrorInternal(c, "failed to count tickets")
 		}
 		rows, err := baseQuery.Clone().
+			WithMessages(func(q *postgresql.TicketMessageQuery) {
+				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
+			}).
 			Order(ticket.ByUpdatedAt(sql.OrderDesc()), ticket.ByID(sql.OrderDesc())).
 			Offset((filters.Page - 1) * filters.PageSize).
 			Limit(filters.PageSize).
@@ -37,17 +46,13 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 
 		totalPages := platformPagination.CalculateTotalPages(total, filters.PageSize)
-		creatorUserIDs := make([]string, 0, len(rows))
-		for _, row := range rows {
-			creatorUserIDs = append(creatorUserIDs, row.CreatorUserID)
-		}
-		creatorNameByUserID, err := loadAdminTicketCreatorNames(c, apiHelper, creatorUserIDs)
+		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketUserIDs(rows))
 		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket creators")
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}
 		items := make([]adminTicketListItem, 0, len(rows))
 		for _, row := range rows {
-			items = append(items, buildAdminTicketListItem(row, creatorNameByUserID))
+			items = append(items, buildAdminTicketListItem(row, userNameByUserID))
 		}
 		resp := adminTicketListResponse{
 			GeneratedAt: adminNowUTC(),
@@ -81,14 +86,15 @@ func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket detail")
 		}
 
-		creatorNameByUserID, err := loadAdminTicketCreatorNames(c, apiHelper, []string{row.CreatorUserID})
+		userIDs := append(collectAdminTicketUserIDs([]*postgresql.Ticket{row}), collectAdminTicketMessageSenderUserIDs(row.Edges.Messages)...)
+		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, userIDs)
 		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket creator")
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}
 
 		resp := adminTicketDetailResponse{
-			Ticket:   buildAdminTicketListItem(row, creatorNameByUserID),
-			Messages: buildAdminTicketMessageItems(row.Edges.Messages),
+			Ticket:   buildAdminTicketListItem(row, userNameByUserID),
+			Messages: buildAdminTicketMessageItems(row.Edges.Messages, userNameByUserID),
 		}
 		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
 	}
@@ -156,7 +162,16 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
 		}
 
-		items := buildAdminTicketMessageItems([]*postgresql.TicketMessage{savedMessage})
+		if !payload.Internal {
+			event := platformTicketNotifications.BuildEvent(row, actorUserID, message, apiHelper.SMTPClient)
+			event.Ticket.Status = ticket.StatusPendingUser
+			platformTicketNotifications.NotifyUserOfAdminReply(c.Context(), apiHelper.DBManager.DB, event)
+		}
+		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketMessageSenderUserIDs([]*postgresql.TicketMessage{savedMessage}))
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
+		}
+		items := buildAdminTicketMessageItems([]*postgresql.TicketMessage{savedMessage}, userNameByUserID)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionTicketMessageAppend, adminAuditTargetTypeTicket, row.TicketID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"internal": payload.Internal,
 		})
@@ -187,7 +202,12 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
 
-		update := row.Update().SetStatus(statusValue)
+		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
+		}
+
+		update := tx.Ticket.UpdateOneID(row.ID).SetStatus(statusValue)
 		if statusValue == ticket.StatusClosed {
 			if row.ClosedAt == nil {
 				update.SetClosedAt(adminNowUTC())
@@ -197,14 +217,34 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		}
 		updated, err := update.Save(c.Context())
 		if err != nil {
+			_ = tx.Rollback()
 			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
 		}
-
-		creatorNameByUserID, err := loadAdminTicketCreatorNames(c, apiHelper, []string{updated.CreatorUserID})
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket creator")
+		if row.Status != statusValue {
+			if err := appendAdminTicketSystemMessage(c.Context(), tx, row.ID, buildAdminTicketStatusEventMessage(row.Status, statusValue)); err != nil {
+				_ = tx.Rollback()
+				return harukiAPIHelper.ErrorInternal(c, "failed to append ticket system message")
+			}
 		}
-		resp := buildAdminTicketListItem(updated, creatorNameByUserID)
+		if err := tx.Commit(); err != nil {
+			_ = tx.Rollback()
+			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
+		}
+		updated, err = apiHelper.DBManager.DB.Ticket.Query().
+			Where(ticket.IDEQ(updated.ID)).
+			WithMessages(func(q *postgresql.TicketMessageQuery) {
+				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
+			}).
+			Only(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query updated ticket")
+		}
+
+		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketUserIDs([]*postgresql.Ticket{updated}))
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
+		}
+		resp := buildAdminTicketListItem(updated, userNameByUserID)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionTicketStatusUpdate, adminAuditTargetTypeTicket, updated.TicketID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"status": statusValue,
 		})
@@ -231,14 +271,15 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
 
-		update := row.Update()
 		assignee := ""
 		if payload.AssigneeAdminID != nil {
 			assignee = strings.TrimSpace(*payload.AssigneeAdminID)
 		}
-		if assignee == "" {
-			update.ClearAssigneeAdminID()
-		} else {
+		previousAssignee := ""
+		if row.AssigneeAdminID != nil {
+			previousAssignee = strings.TrimSpace(*row.AssigneeAdminID)
+		}
+		if assignee != "" {
 			assigneeUser, err := apiHelper.DBManager.DB.User.Query().
 				Where(userSchema.IDEQ(assignee)).
 				Select(userSchema.FieldRole, userSchema.FieldBanned).
@@ -256,17 +297,55 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			if assigneeUser.Banned {
 				return harukiAPIHelper.ErrorBadRequest(c, "assignee admin is banned")
 			}
+		}
+		assigneeNameByUserID := map[string]string{}
+		if previousAssignee != assignee {
+			assigneeNameByUserID, err = loadAdminTicketUserNames(c, apiHelper, []string{previousAssignee, assignee})
+			if err != nil {
+				return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
+			}
+		}
+
+		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
+		}
+
+		update := tx.Ticket.UpdateOneID(row.ID)
+		if assignee == "" {
+			update.ClearAssigneeAdminID()
+		} else {
 			update.SetAssigneeAdminID(assignee)
 		}
 		updated, err := update.Save(c.Context())
 		if err != nil {
+			_ = tx.Rollback()
 			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
 		}
-		creatorNameByUserID, err := loadAdminTicketCreatorNames(c, apiHelper, []string{updated.CreatorUserID})
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket creator")
+		if previousAssignee != assignee {
+			if err := appendAdminTicketSystemMessage(c.Context(), tx, row.ID, buildAdminTicketAssigneeEventMessage(previousAssignee, assignee, assigneeNameByUserID)); err != nil {
+				_ = tx.Rollback()
+				return harukiAPIHelper.ErrorInternal(c, "failed to append ticket system message")
+			}
 		}
-		resp := buildAdminTicketListItem(updated, creatorNameByUserID)
+		if err := tx.Commit(); err != nil {
+			_ = tx.Rollback()
+			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
+		}
+		updated, err = apiHelper.DBManager.DB.Ticket.Query().
+			Where(ticket.IDEQ(updated.ID)).
+			WithMessages(func(q *postgresql.TicketMessageQuery) {
+				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
+			}).
+			Only(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query updated ticket")
+		}
+		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketUserIDs([]*postgresql.Ticket{updated}))
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
+		}
+		resp := buildAdminTicketListItem(updated, userNameByUserID)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionTicketAssign, adminAuditTargetTypeTicket, updated.TicketID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"assigneeAdminID": assignee,
 		})

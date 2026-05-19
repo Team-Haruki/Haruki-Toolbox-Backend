@@ -22,6 +22,8 @@ const (
 	FieldAvatarPath = "avatar_path"
 	// FieldAllowCnMysekai holds the string denoting the allow_cn_mysekai field in the database.
 	FieldAllowCnMysekai = "allow_cn_mysekai"
+	// FieldTicketEmailNotificationsEnabled holds the string denoting the ticket_email_notifications_enabled field in the database.
+	FieldTicketEmailNotificationsEnabled = "ticket_email_notifications_enabled"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
 	// FieldBanned holds the string denoting the banned field in the database.
@@ -79,6 +81,7 @@ var Columns = []string{
 	FieldEmail,
 	FieldAvatarPath,
 	FieldAllowCnMysekai,
+	FieldTicketEmailNotificationsEnabled,
 	FieldRole,
 	FieldBanned,
 	FieldBanReason,
@@ -99,6 +102,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultAllowCnMysekai holds the default value on creation for the "allow_cn_mysekai" field.
 	DefaultAllowCnMysekai bool
+	// DefaultTicketEmailNotificationsEnabled holds the default value on creation for the "ticket_email_notifications_enabled" field.
+	DefaultTicketEmailNotificationsEnabled bool
 	// DefaultBanned holds the default value on creation for the "banned" field.
 	DefaultBanned bool
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
@@ -158,6 +163,11 @@ func ByAvatarPath(opts ...sql.OrderTermOption) OrderOption {
 // ByAllowCnMysekai orders the results by the allow_cn_mysekai field.
 func ByAllowCnMysekai(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAllowCnMysekai, opts...).ToFunc()
+}
+
+// ByTicketEmailNotificationsEnabled orders the results by the ticket_email_notifications_enabled field.
+func ByTicketEmailNotificationsEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTicketEmailNotificationsEnabled, opts...).ToFunc()
 }
 
 // ByRole orders the results by the role field.

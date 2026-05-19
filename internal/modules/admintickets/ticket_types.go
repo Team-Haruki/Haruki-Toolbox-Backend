@@ -6,13 +6,16 @@ import (
 )
 
 type adminTicketFilters struct {
-	Query           string
-	Status          ticket.Status
-	Priority        ticket.Priority
-	CreatorUserID   string
-	AssigneeAdminID string
-	Page            int
-	PageSize        int
+	Query             string
+	QuickFilter       adminTicketQuickFilter
+	Status            ticket.Status
+	Priority          ticket.Priority
+	PriorityValues    []ticket.Priority
+	CreatorUserID     string
+	AssigneeAdminID   string
+	RequireUnassigned bool
+	Page              int
+	PageSize          int
 }
 
 type adminTicketListResponse struct {
@@ -39,26 +42,32 @@ type adminAssignTicketPayload struct {
 }
 
 type adminTicketListItem struct {
-	TicketID        string     `json:"ticketId"`
-	CreatorUserID   string     `json:"creatorUserId"`
-	CreatorUserName string     `json:"creatorUserName,omitempty"`
-	Subject         string     `json:"subject"`
-	Category        string     `json:"category,omitempty"`
-	Priority        string     `json:"priority"`
-	Status          string     `json:"status"`
-	AssigneeAdminID string     `json:"assigneeAdminId,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
-	ClosedAt        *time.Time `json:"closedAt,omitempty"`
+	TicketID              string     `json:"ticketId"`
+	CreatorUserID         string     `json:"creatorUserId"`
+	CreatorUserName       string     `json:"creatorUserName,omitempty"`
+	Subject               string     `json:"subject"`
+	Category              string     `json:"category,omitempty"`
+	Priority              string     `json:"priority"`
+	Status                string     `json:"status"`
+	AssigneeAdminID       string     `json:"assigneeAdminId,omitempty"`
+	AssigneeAdminName     string     `json:"assigneeAdminName,omitempty"`
+	LastMessageSenderRole string     `json:"lastMessageSenderRole,omitempty"`
+	LastMessagePreview    string     `json:"lastMessagePreview,omitempty"`
+	LastMessageInternal   *bool      `json:"lastMessageInternal,omitempty"`
+	CreatedAt             time.Time  `json:"createdAt"`
+	UpdatedAt             time.Time  `json:"updatedAt"`
+	LastMessageAt         *time.Time `json:"lastMessageAt,omitempty"`
+	ClosedAt              *time.Time `json:"closedAt,omitempty"`
 }
 
 type adminTicketMessageItem struct {
-	ID           int       `json:"id"`
-	SenderUserID string    `json:"senderUserId,omitempty"`
-	SenderRole   string    `json:"senderRole"`
-	Message      string    `json:"message"`
-	Internal     bool      `json:"internal"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ID             int       `json:"id"`
+	SenderUserID   string    `json:"senderUserId,omitempty"`
+	SenderUserName string    `json:"senderUserName,omitempty"`
+	SenderRole     string    `json:"senderRole"`
+	Message        string    `json:"message"`
+	Internal       bool      `json:"internal"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 type adminTicketDetailResponse struct {

@@ -1,14 +1,28 @@
 package admintickets
 
 import (
+	"context"
+	"fmt"
 	platformPagination "haruki-suite/internal/platform/pagination"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/ticket"
+	"haruki-suite/utils/database/postgresql/ticketmessage"
 	userSchema "haruki-suite/utils/database/postgresql/user"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
+)
+
+type adminTicketQuickFilter string
+
+const (
+	adminTicketQuickFilterPendingAdmin adminTicketQuickFilter = "pending_admin"
+	adminTicketQuickFilterPendingUser  adminTicketQuickFilter = "pending_user"
+	adminTicketQuickFilterUnassigned   adminTicketQuickFilter = "unassigned"
+	adminTicketQuickFilterMine         adminTicketQuickFilter = "mine"
+	adminTicketQuickFilterHighOrUrgent adminTicketQuickFilter = "high_or_urgent"
 )
 
 func buildAdminTicketListItem(row *postgresql.Ticket, creatorNameByUserID map[string]string) adminTicketListItem {
@@ -29,22 +43,26 @@ func buildAdminTicketListItem(row *postgresql.Ticket, creatorNameByUserID map[st
 	}
 	if row.AssigneeAdminID != nil {
 		item.AssigneeAdminID = *row.AssigneeAdminID
+		if creatorNameByUserID != nil {
+			item.AssigneeAdminName = strings.TrimSpace(creatorNameByUserID[*row.AssigneeAdminID])
+		}
 	}
 	if row.ClosedAt != nil {
 		closed := row.ClosedAt.UTC()
 		item.ClosedAt = &closed
 	}
+	applyAdminTicketLatestMessageSummary(&item, row.Edges.Messages)
 	return item
 }
 
-func loadAdminTicketCreatorNames(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, creatorUserIDs []string) (map[string]string, error) {
-	if len(creatorUserIDs) == 0 {
+func loadAdminTicketUserNames(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userIDs []string) (map[string]string, error) {
+	if len(userIDs) == 0 {
 		return map[string]string{}, nil
 	}
 
-	seen := make(map[string]struct{}, len(creatorUserIDs))
-	uniqueIDs := make([]string, 0, len(creatorUserIDs))
-	for _, rawID := range creatorUserIDs {
+	seen := make(map[string]struct{}, len(userIDs))
+	uniqueIDs := make([]string, 0, len(userIDs))
+	for _, rawID := range userIDs {
 		userID := strings.TrimSpace(rawID)
 		if userID == "" {
 			continue
@@ -74,7 +92,107 @@ func loadAdminTicketCreatorNames(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 	return nameByUserID, nil
 }
 
-func buildAdminTicketMessageItems(rows []*postgresql.TicketMessage) []adminTicketMessageItem {
+func latestAdminTicketMessage(rows []*postgresql.TicketMessage) *postgresql.TicketMessage {
+	var latest *postgresql.TicketMessage
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		if latest == nil || row.CreatedAt.After(latest.CreatedAt) || (row.CreatedAt.Equal(latest.CreatedAt) && row.ID > latest.ID) {
+			latest = row
+		}
+	}
+	return latest
+}
+
+func normalizeAdminTicketMessagePreview(raw string) string {
+	trimmed := strings.TrimSpace(strings.Join(strings.Fields(raw), " "))
+	if trimmed == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(trimmed) <= maxAdminTicketPreviewLength {
+		return trimmed
+	}
+	runes := []rune(trimmed)
+	if maxAdminTicketPreviewLength <= 1 {
+		return string(runes[:maxAdminTicketPreviewLength])
+	}
+	return string(runes[:maxAdminTicketPreviewLength-1]) + "…"
+}
+
+func applyAdminTicketLatestMessageSummary(item *adminTicketListItem, rows []*postgresql.TicketMessage) {
+	if item == nil {
+		return
+	}
+	latest := latestAdminTicketMessage(rows)
+	if latest == nil {
+		return
+	}
+	item.LastMessageSenderRole = string(latest.SenderRole)
+	item.LastMessagePreview = normalizeAdminTicketMessagePreview(latest.Message)
+	internal := latest.Internal
+	item.LastMessageInternal = &internal
+	lastMessageAt := latest.CreatedAt.UTC()
+	item.LastMessageAt = &lastMessageAt
+}
+
+func appendAdminTicketSystemMessage(ctx context.Context, tx *postgresql.Tx, ticketID int, message string) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return nil
+	}
+	_, err := tx.TicketMessage.Create().
+		SetTicketID(ticketID).
+		SetSenderRole(ticketmessage.SenderRoleSystem).
+		SetInternal(true).
+		SetMessage(message).
+		Save(ctx)
+	return err
+}
+
+func buildAdminTicketStatusEventMessage(previous ticket.Status, next ticket.Status) string {
+	return fmt.Sprintf("Status changed: %s -> %s", formatAdminTicketStatusLabel(previous), formatAdminTicketStatusLabel(next))
+}
+
+func formatAdminTicketStatusLabel(status ticket.Status) string {
+	switch status {
+	case ticket.StatusOpen:
+		return "Open"
+	case ticket.StatusPendingAdmin:
+		return "Pending admin"
+	case ticket.StatusPendingUser:
+		return "Pending user"
+	case ticket.StatusResolved:
+		return "Resolved"
+	case ticket.StatusClosed:
+		return "Closed"
+	default:
+		statusValue := strings.TrimSpace(string(status))
+		if statusValue == "" {
+			return "Unknown"
+		}
+		return statusValue
+	}
+}
+
+func formatAdminTicketAssigneeLabel(assigneeAdminID string, nameByUserID map[string]string) string {
+	assigneeAdminID = strings.TrimSpace(assigneeAdminID)
+	if assigneeAdminID == "" {
+		return "Unassigned"
+	}
+	if nameByUserID != nil {
+		if name := strings.TrimSpace(nameByUserID[assigneeAdminID]); name != "" {
+			return fmt.Sprintf("%s (%s)", name, assigneeAdminID)
+		}
+	}
+	return assigneeAdminID
+}
+
+func buildAdminTicketAssigneeEventMessage(previous string, next string, nameByUserID map[string]string) string {
+	return fmt.Sprintf("Assignee changed: %s -> %s", formatAdminTicketAssigneeLabel(previous, nameByUserID), formatAdminTicketAssigneeLabel(next, nameByUserID))
+}
+
+func buildAdminTicketMessageItems(rows []*postgresql.TicketMessage, userNameByUserID map[string]string) []adminTicketMessageItem {
 	items := make([]adminTicketMessageItem, 0, len(rows))
 	for _, row := range rows {
 		item := adminTicketMessageItem{
@@ -86,6 +204,9 @@ func buildAdminTicketMessageItems(rows []*postgresql.TicketMessage) []adminTicke
 		}
 		if row.SenderUserID != nil {
 			item.SenderUserID = *row.SenderUserID
+			if userNameByUserID != nil {
+				item.SenderUserName = strings.TrimSpace(userNameByUserID[*row.SenderUserID])
+			}
 		}
 		items = append(items, item)
 	}
@@ -118,7 +239,57 @@ func parseAdminTicketPriority(raw string) (ticket.Priority, error) {
 	}
 }
 
-func parseAdminTicketFilters(c fiber.Ctx) (*adminTicketFilters, error) {
+func parseAdminTicketQuickFilter(raw string) (adminTicketQuickFilter, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	switch adminTicketQuickFilter(trimmed) {
+	case "", "all":
+		return "", nil
+	case adminTicketQuickFilterPendingAdmin, adminTicketQuickFilterPendingUser, adminTicketQuickFilterUnassigned, adminTicketQuickFilterMine, adminTicketQuickFilterHighOrUrgent:
+		return adminTicketQuickFilter(trimmed), nil
+	default:
+		return "", fiber.NewError(fiber.StatusBadRequest, "invalid quick_filter")
+	}
+}
+
+func applyAdminTicketQuickFilter(filters *adminTicketFilters, actorUserID string) error {
+	if filters == nil {
+		return nil
+	}
+
+	switch filters.QuickFilter {
+	case "":
+		return nil
+	case adminTicketQuickFilterPendingAdmin:
+		if filters.Status == "" {
+			filters.Status = ticket.StatusPendingAdmin
+		}
+	case adminTicketQuickFilterPendingUser:
+		if filters.Status == "" {
+			filters.Status = ticket.StatusPendingUser
+		}
+	case adminTicketQuickFilterUnassigned:
+		if filters.AssigneeAdminID == "" {
+			filters.RequireUnassigned = true
+		}
+	case adminTicketQuickFilterMine:
+		if filters.AssigneeAdminID != "" {
+			return nil
+		}
+		actorUserID = strings.TrimSpace(actorUserID)
+		if actorUserID == "" {
+			return fiber.NewError(fiber.StatusUnauthorized, "missing user session")
+		}
+		filters.AssigneeAdminID = actorUserID
+	case adminTicketQuickFilterHighOrUrgent:
+		if filters.Priority == "" {
+			filters.PriorityValues = []ticket.Priority{ticket.PriorityHigh, ticket.PriorityUrgent}
+		}
+	}
+
+	return nil
+}
+
+func parseAdminTicketFilters(c fiber.Ctx, actorUserID string) (*adminTicketFilters, error) {
 	status, err := parseAdminTicketStatus(c.Query("status"))
 	if err != nil {
 		return nil, err
@@ -127,19 +298,29 @@ func parseAdminTicketFilters(c fiber.Ctx) (*adminTicketFilters, error) {
 	if err != nil {
 		return nil, err
 	}
+	quickFilter, err := parseAdminTicketQuickFilter(c.Query("quick_filter"))
+	if err != nil {
+		return nil, err
+	}
 	page, pageSize, err := platformPagination.ParsePageAndPageSize(c, defaultAdminTicketPage, defaultAdminTicketPageSize, maxAdminTicketPageSize)
 	if err != nil {
 		return nil, err
 	}
-	return &adminTicketFilters{
-		Query:           strings.TrimSpace(c.Query("q")),
-		Status:          status,
-		Priority:        priority,
-		CreatorUserID:   strings.TrimSpace(c.Query("creator_user_id")),
-		AssigneeAdminID: strings.TrimSpace(c.Query("assignee_admin_id")),
-		Page:            page,
-		PageSize:        pageSize,
-	}, nil
+	filters := &adminTicketFilters{
+		Query:             strings.TrimSpace(c.Query("q")),
+		QuickFilter:       quickFilter,
+		Status:            status,
+		Priority:          priority,
+		CreatorUserID:     strings.TrimSpace(c.Query("creator_user_id")),
+		AssigneeAdminID:   strings.TrimSpace(c.Query("assignee_admin_id")),
+		RequireUnassigned: false,
+		Page:              page,
+		PageSize:          pageSize,
+	}
+	if err := applyAdminTicketQuickFilter(filters, actorUserID); err != nil {
+		return nil, err
+	}
+	return filters, nil
 }
 
 func applyAdminTicketFilters(query *postgresql.TicketQuery, filters *adminTicketFilters) *postgresql.TicketQuery {
@@ -155,14 +336,43 @@ func applyAdminTicketFilters(query *postgresql.TicketQuery, filters *adminTicket
 	}
 	if filters.Priority != "" {
 		q = q.Where(ticket.PriorityEQ(filters.Priority))
+	} else if len(filters.PriorityValues) > 0 {
+		q = q.Where(ticket.PriorityIn(filters.PriorityValues...))
 	}
 	if filters.CreatorUserID != "" {
 		q = q.Where(ticket.CreatorUserIDEQ(filters.CreatorUserID))
 	}
-	if filters.AssigneeAdminID != "" {
+	if filters.RequireUnassigned {
+		q = q.Where(ticket.AssigneeAdminIDIsNil())
+	} else if filters.AssigneeAdminID != "" {
 		q = q.Where(ticket.AssigneeAdminIDEQ(filters.AssigneeAdminID))
 	}
 	return q
+}
+
+func collectAdminTicketUserIDs(rows []*postgresql.Ticket) []string {
+	userIDs := make([]string, 0, len(rows)*2)
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		userIDs = append(userIDs, row.CreatorUserID)
+		if row.AssigneeAdminID != nil {
+			userIDs = append(userIDs, *row.AssigneeAdminID)
+		}
+	}
+	return userIDs
+}
+
+func collectAdminTicketMessageSenderUserIDs(rows []*postgresql.TicketMessage) []string {
+	userIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row == nil || row.SenderUserID == nil {
+			continue
+		}
+		userIDs = append(userIDs, *row.SenderUserID)
+	}
+	return userIDs
 }
 
 func queryAdminTicketByPublicID(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, publicTicketID string) (*postgresql.Ticket, error) {
