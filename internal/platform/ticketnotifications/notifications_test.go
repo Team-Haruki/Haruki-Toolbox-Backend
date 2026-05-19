@@ -100,11 +100,12 @@ func TestNotifyAdminsOfNewTicketSelectsEnabledAdminsOnly(t *testing.T) {
 	}
 }
 
-func TestNotifyAdminsOfUserReplyPrefersAssignedAdmin(t *testing.T) {
+func TestNotifyAdminsOfUserReplySelectsEnabledAdmins(t *testing.T) {
 	client := newTicketNotificationTestClient(t)
 	seedTicketNotificationUser(t, client, "creator", "creator@example.com", userSchema.RoleUser, false, false)
 	seedTicketNotificationUser(t, client, "assigned-admin", "assigned@example.com", userSchema.RoleAdmin, true, false)
 	seedTicketNotificationUser(t, client, "other-admin", "other@example.com", userSchema.RoleAdmin, true, false)
+	seedTicketNotificationUser(t, client, "admin-off", "off@example.com", userSchema.RoleAdmin, false, false)
 
 	sender := &recordingMailSender{}
 	NotifyAdminsOfUserReply(context.Background(), client, Event{
@@ -124,8 +125,8 @@ func TestNotifyAdminsOfUserReplyPrefersAssignedAdmin(t *testing.T) {
 	if len(sender.calls) != 1 {
 		t.Fatalf("mail calls = %d, want 1", len(sender.calls))
 	}
-	if got := strings.Join(sender.calls[0].to, ","); got != "assigned@example.com" {
-		t.Fatalf("recipients = %q, want assigned admin only", got)
+	if got := strings.Join(sender.calls[0].to, ","); got != "assigned@example.com,other@example.com" {
+		t.Fatalf("recipients = %q, want enabled admins only", got)
 	}
 }
 

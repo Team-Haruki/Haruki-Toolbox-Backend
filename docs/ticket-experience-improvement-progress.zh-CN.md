@@ -84,6 +84,8 @@
 
 - `GET /api/admin/me/ticket-notifications`
 - `PUT /api/admin/me/ticket-notifications`
+- `GET /api/admin/users/ticket-notification-recipients`
+- `PUT /api/admin/users/:target_user_id/ticket-notifications`
 
 涉及数据字段：
 
@@ -95,8 +97,9 @@
 
 - 新字段默认值为 `false`，避免升级后自动给现有管理员发邮件。
 - 管理员可以通过 `admin/me` 接口读取和更新自己的工单通知开关。
+- `super_admin` 可以读取当前管理员接收者列表，并为 `admin` / `super_admin` 用户统一开关工单邮件通知。
 - 管理员通知偏好已经接入工单邮件投递逻辑。
-- `external/oathkeeper/access-rules.yml` 已有 `/api/admin/<.*>` 通配规则，因此这次新增 `admin/me` 子路由不需要额外改规则。
+- `external/oathkeeper/access-rules.yml` 已有 `/api/admin/<.*>` 通配规则，因此这次新增 `admin/me` 与 `admin/users` 子路由不需要额外改规则。
 
 工单邮件通知投递新增内容：
 
@@ -105,7 +108,7 @@
 | 触发点 | 收件人 | 说明 |
 |--------|--------|------|
 | 用户创建新工单 | 已开启通知的 `admin` / `super_admin` | 排除被封禁管理员和普通用户 |
-| 用户追加公开回复 | 优先通知已开启通知的当前处理人；无可用处理人时通知所有已开启通知的管理员 | 排除回复发起者 |
+| 用户追加公开回复 | 已开启通知的 `admin` / `super_admin` | 排除回复发起者 |
 | 管理员追加公开回复 | 工单创建者 | 内部备注不会发给用户 |
 
 补充规则：
@@ -158,6 +161,7 @@
 - 管理员列表新增 `quick_filter` 选择器，对接后端“全部 / 待管理员处理 / 待用户回复 / 未分配 / 我的工单 / 高优先级”。
 - 管理员列表展示工单编号、处理人和最近动态摘要，最近动态会标注发送方以及内部备注。
 - 管理员列表工具栏新增“工单邮件通知”开关，对接 `GET /api/admin/me/ticket-notifications` 和 `PUT /api/admin/me/ticket-notifications`。
+- 管理员列表工具栏为 `super_admin` 新增“管理接收者”弹层，对接管理员通知接收者列表和目标管理员通知开关接口。
 - 前端新增中英文 i18n 文案，避免工单列表新增 UI 出现裸 key。
 
 前端用户工单体验新增内容：
