@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/iancoleman/orderedmap"
-	"github.com/shamaton/msgpack/v2"
+	"github.com/shamaton/msgpack/v3"
 )
 
 func TestOrderedMsgpackPreservesOrder(t *testing.T) {

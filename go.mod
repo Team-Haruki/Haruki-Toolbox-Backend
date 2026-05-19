@@ -17,7 +17,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/redis/go-redis/v9 v9.19.0
-	github.com/shamaton/msgpack/v2 v2.4.0
+	github.com/shamaton/msgpack/v3 v3.1.1
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
 	go.mongodb.org/mongo-driver/v2 v2.6.0
 	golang.org/x/crypto v0.51.0
