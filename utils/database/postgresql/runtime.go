@@ -291,8 +291,12 @@ func init() {
 	userDescAllowCnMysekai := userFields[4].Descriptor()
 	// user.DefaultAllowCnMysekai holds the default value on creation for the allow_cn_mysekai field.
 	user.DefaultAllowCnMysekai = userDescAllowCnMysekai.Default.(bool)
+	// userDescTicketEmailNotificationsEnabled is the schema descriptor for ticket_email_notifications_enabled field.
+	userDescTicketEmailNotificationsEnabled := userFields[5].Descriptor()
+	// user.DefaultTicketEmailNotificationsEnabled holds the default value on creation for the ticket_email_notifications_enabled field.
+	user.DefaultTicketEmailNotificationsEnabled = userDescTicketEmailNotificationsEnabled.Default.(bool)
 	// userDescBanned is the schema descriptor for banned field.
-	userDescBanned := userFields[6].Descriptor()
+	userDescBanned := userFields[7].Descriptor()
 	// user.DefaultBanned holds the default value on creation for the banned field.
 	user.DefaultBanned = userDescBanned.Default.(bool)
 	// userDescID is the schema descriptor for id field.

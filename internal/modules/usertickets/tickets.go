@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	platformPagination "haruki-suite/internal/platform/pagination"
+	platformTicketNotifications "haruki-suite/internal/platform/ticketnotifications"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/ticket"
@@ -273,6 +274,7 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		createdTicketID = ticketID
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
+		platformTicketNotifications.NotifyAdminsOfNewTicket(c.Context(), apiHelper.DBManager.DB, platformTicketNotifications.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient))
 		resp := createUserTicketResponse{TicketID: ticketID}
 		return harukiAPIHelper.SuccessResponse(c, "ticket created", &resp)
 	}
@@ -456,6 +458,9 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
 		}
 
+		event := platformTicketNotifications.BuildEvent(row, userID, message, apiHelper.SMTPClient)
+		event.Ticket.Status = ticket.StatusPendingAdmin
+		platformTicketNotifications.NotifyAdminsOfUserReply(c.Context(), apiHelper.DBManager.DB, event)
 		items := buildUserTicketMessageItems([]*postgresql.TicketMessage{createdMessage})
 		return harukiAPIHelper.SuccessResponse(c, "message added", &items[0])
 	}

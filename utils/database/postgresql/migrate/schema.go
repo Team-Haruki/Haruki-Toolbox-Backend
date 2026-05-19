@@ -419,6 +419,7 @@ var (
 		{Name: "email", Type: field.TypeString, Unique: true},
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
+		{Name: "ticket_email_notifications_enabled", Type: field.TypeBool, Default: false},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
 		{Name: "banned", Type: field.TypeBool, Default: false},
 		{Name: "ban_reason", Type: field.TypeString, Nullable: true},
@@ -434,12 +435,12 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[9]},
+				Columns: []*schema.Column{UsersColumns[10]},
 			},
 			{
 				Name:    "user_role_banned",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[5], UsersColumns[6]},
+				Columns: []*schema.Column{UsersColumns[6], UsersColumns[7]},
 			},
 		},
 	}

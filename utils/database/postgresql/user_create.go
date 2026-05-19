@@ -64,6 +64,20 @@ func (_c *UserCreate) SetNillableAllowCnMysekai(v *bool) *UserCreate {
 	return _c
 }
 
+// SetTicketEmailNotificationsEnabled sets the "ticket_email_notifications_enabled" field.
+func (_c *UserCreate) SetTicketEmailNotificationsEnabled(v bool) *UserCreate {
+	_c.mutation.SetTicketEmailNotificationsEnabled(v)
+	return _c
+}
+
+// SetNillableTicketEmailNotificationsEnabled sets the "ticket_email_notifications_enabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableTicketEmailNotificationsEnabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetTicketEmailNotificationsEnabled(*v)
+	}
+	return _c
+}
+
 // SetRole sets the "role" field.
 func (_c *UserCreate) SetRole(v user.Role) *UserCreate {
 	_c.mutation.SetRole(v)
@@ -247,6 +261,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultAllowCnMysekai
 		_c.mutation.SetAllowCnMysekai(v)
 	}
+	if _, ok := _c.mutation.TicketEmailNotificationsEnabled(); !ok {
+		v := user.DefaultTicketEmailNotificationsEnabled
+		_c.mutation.SetTicketEmailNotificationsEnabled(v)
+	}
 	if _, ok := _c.mutation.Role(); !ok {
 		v := user.DefaultRole
 		_c.mutation.SetRole(v)
@@ -267,6 +285,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
+	}
+	if _, ok := _c.mutation.TicketEmailNotificationsEnabled(); !ok {
+		return &ValidationError{Name: "ticket_email_notifications_enabled", err: errors.New(`postgresql: missing required field "User.ticket_email_notifications_enabled"`)}
 	}
 	if _, ok := _c.mutation.Role(); !ok {
 		return &ValidationError{Name: "role", err: errors.New(`postgresql: missing required field "User.role"`)}
@@ -334,6 +355,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
 		_node.AllowCnMysekai = value
+	}
+	if value, ok := _c.mutation.TicketEmailNotificationsEnabled(); ok {
+		_spec.SetField(user.FieldTicketEmailNotificationsEnabled, field.TypeBool, value)
+		_node.TicketEmailNotificationsEnabled = value
 	}
 	if value, ok := _c.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeEnum, value)

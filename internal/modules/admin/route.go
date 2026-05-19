@@ -24,5 +24,7 @@ func registerAdminConfigRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 func registerAdminSelfRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	me := adminGroup.Group("/me", adminCoreModule.RequireAdmin(apiHelper))
+	me.Get("/ticket-notifications", handleGetAdminTicketNotificationPreference(apiHelper))
+	me.Put("/ticket-notifications", handleUpdateAdminTicketNotificationPreference(apiHelper))
 	me.Post("/reauth", handleAdminReauth(apiHelper))
 }
