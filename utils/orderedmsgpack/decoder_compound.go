@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/iancoleman/orderedmap"
-	"github.com/shamaton/msgpack/v2"
+	"github.com/shamaton/msgpack/v3"
 )
 
 func decodeMap(r *bytes.Reader, n int) (*orderedmap.OrderedMap, error) {

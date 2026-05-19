@@ -1,6 +1,6 @@
 package orderedmsgpack
 
-import "github.com/shamaton/msgpack/v2/ext"
+import "github.com/shamaton/msgpack/v3/ext"
 
 const orderedMapExtCode = 100
 
