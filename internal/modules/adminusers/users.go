@@ -37,6 +37,7 @@ func handleListUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 				userSchema.FieldRole,
 				userSchema.FieldBanned,
 				userSchema.FieldAllowCnMysekai,
+				userSchema.FieldTicketEmailNotificationsEnabled,
 				userSchema.FieldBanReason,
 				userSchema.FieldCreatedAt,
 			).

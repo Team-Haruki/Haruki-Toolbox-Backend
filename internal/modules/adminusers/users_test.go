@@ -236,13 +236,14 @@ func TestBuildAdminUserListItems(t *testing.T) {
 	created := time.Date(2026, 3, 8, 9, 30, 0, 0, time.FixedZone("UTC+8", 8*3600))
 	rows := []*postgresql.User{
 		{
-			ID:             "1001",
-			Name:           "alice",
-			Email:          "alice@example.com",
-			Role:           "admin",
-			Banned:         false,
-			AllowCnMysekai: true,
-			CreatedAt:      &created,
+			ID:                              "1001",
+			Name:                            "alice",
+			Email:                           "alice@example.com",
+			Role:                            "admin",
+			Banned:                          false,
+			AllowCnMysekai:                  true,
+			TicketEmailNotificationsEnabled: true,
+			CreatedAt:                       &created,
 		},
 		{
 			ID:             "1002",
@@ -272,6 +273,9 @@ func TestBuildAdminUserListItems(t *testing.T) {
 	}
 	if !items[0].AllowCNMysekai {
 		t.Fatalf("items[0].AllowCNMysekai = false, want true")
+	}
+	if !items[0].TicketEmailNotificationsEnabled {
+		t.Fatalf("items[0].TicketEmailNotificationsEnabled = false, want true")
 	}
 	if items[1].AllowCNMysekai {
 		t.Fatalf("items[1].AllowCNMysekai = true, want false")

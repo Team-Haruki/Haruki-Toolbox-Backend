@@ -143,14 +143,15 @@ func buildAdminUserListItems(rows []*postgresql.User) []adminUserListItem {
 			createdAt = &createdAtUTC
 		}
 		items = append(items, adminUserListItem{
-			UserID:         row.ID,
-			Name:           row.Name,
-			Email:          row.Email,
-			Role:           adminCoreModule.NormalizeRole(string(row.Role)),
-			Banned:         row.Banned,
-			AllowCNMysekai: row.AllowCnMysekai,
-			BanReason:      row.BanReason,
-			CreatedAt:      createdAt,
+			UserID:                          row.ID,
+			Name:                            row.Name,
+			Email:                           row.Email,
+			Role:                            adminCoreModule.NormalizeRole(string(row.Role)),
+			Banned:                          row.Banned,
+			AllowCNMysekai:                  row.AllowCnMysekai,
+			TicketEmailNotificationsEnabled: row.TicketEmailNotificationsEnabled,
+			BanReason:                       row.BanReason,
+			CreatedAt:                       createdAt,
 		})
 	}
 	return items

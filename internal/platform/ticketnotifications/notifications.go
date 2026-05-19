@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"unicode/utf8"
+
+	sql "entgo.io/ent/dialect/sql"
 )
 
 const (
@@ -44,11 +46,11 @@ type Event struct {
 }
 
 func NotifyAdminsOfNewTicket(ctx context.Context, db *postgresql.Client, event Event) {
-	notifyAdmins(ctx, db, event, "新工单", false)
+	notifyAdmins(ctx, db, event, "新工单")
 }
 
 func NotifyAdminsOfUserReply(ctx context.Context, db *postgresql.Client, event Event) {
-	notifyAdmins(ctx, db, event, "用户回复", true)
+	notifyAdmins(ctx, db, event, "用户回复")
 }
 
 func NotifyUserOfAdminReply(ctx context.Context, db *postgresql.Client, event Event) {
@@ -79,16 +81,9 @@ func NotifyUserOfAdminReply(ctx context.Context, db *postgresql.Client, event Ev
 	sendTicketMail(event, []string{email}, "工单有新回复")
 }
 
-func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, action string, preferAssignee bool) {
+func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, action string) {
 	if db == nil || event.MailSender == nil {
 		return
-	}
-
-	if preferAssignee {
-		if recipients := queryPreferredAssigneeRecipients(ctx, db, event); len(recipients) > 0 {
-			sendTicketMail(event, recipients, action)
-			return
-		}
 	}
 
 	query := db.User.Query().
@@ -101,7 +96,10 @@ func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, actio
 		query = query.Where(userSchema.IDNEQ(actorUserID))
 	}
 
-	rows, err := query.Select(userSchema.FieldID, userSchema.FieldEmail).All(ctx)
+	rows, err := query.
+		Order(userSchema.ByID(sql.OrderAsc())).
+		Select(userSchema.FieldID, userSchema.FieldEmail).
+		All(ctx)
 	if err != nil {
 		harukiLogger.Warnf("Failed to query admin ticket notification recipients for ticket %s: %v", event.Ticket.PublicID, err)
 		return
@@ -112,30 +110,6 @@ func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, actio
 		return
 	}
 	sendTicketMail(event, recipients, action)
-}
-
-func queryPreferredAssigneeRecipients(ctx context.Context, db *postgresql.Client, event Event) []string {
-	assigneeAdminID := strings.TrimSpace(event.Ticket.AssigneeAdminID)
-	if assigneeAdminID == "" || sameUserID(assigneeAdminID, event.ActorUserID) {
-		return nil
-	}
-
-	row, err := db.User.Query().
-		Where(
-			userSchema.IDEQ(assigneeAdminID),
-			userSchema.TicketEmailNotificationsEnabledEQ(true),
-			userSchema.BannedEQ(false),
-			userSchema.RoleIn(userSchema.RoleAdmin, userSchema.RoleSuperAdmin),
-		).
-		Select(userSchema.FieldID, userSchema.FieldEmail).
-		Only(ctx)
-	if err != nil {
-		if !postgresql.IsNotFound(err) {
-			harukiLogger.Warnf("Failed to query assigned admin ticket notification recipient for ticket %s: %v", event.Ticket.PublicID, err)
-		}
-		return nil
-	}
-	return normalizeRecipientEmails([]*postgresql.User{row})
 }
 
 func normalizeRecipientEmails(rows []*postgresql.User) []string {

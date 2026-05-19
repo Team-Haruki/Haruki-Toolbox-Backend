@@ -18,14 +18,15 @@ type adminUserQueryFilters struct {
 }
 
 type adminUserListItem struct {
-	UserID         string     `json:"userId"`
-	Name           string     `json:"name"`
-	Email          string     `json:"email"`
-	Role           string     `json:"role"`
-	Banned         bool       `json:"banned"`
-	AllowCNMysekai bool       `json:"allowCNMysekai"`
-	BanReason      *string    `json:"banReason,omitempty"`
-	CreatedAt      *time.Time `json:"createdAt,omitempty"`
+	UserID                          string     `json:"userId"`
+	Name                            string     `json:"name"`
+	Email                           string     `json:"email"`
+	Role                            string     `json:"role"`
+	Banned                          bool       `json:"banned"`
+	AllowCNMysekai                  bool       `json:"allowCNMysekai"`
+	TicketEmailNotificationsEnabled bool       `json:"ticketEmailNotificationsEnabled"`
+	BanReason                       *string    `json:"banReason,omitempty"`
+	CreatedAt                       *time.Time `json:"createdAt,omitempty"`
 }
 
 type adminUserAppliedFilters struct {
@@ -220,6 +221,26 @@ type adminUserEmailResponse struct {
 type adminUpdateAllowCNMysekaiPayload struct {
 	AllowCNMysekai      *bool `json:"allowCNMysekai"`
 	AllowCNMysekaiSnake *bool `json:"allow_cn_mysekai"`
+}
+
+type adminTicketNotificationPreferencePayload struct {
+	TicketEmailNotificationsEnabled      *bool `json:"ticketEmailNotificationsEnabled"`
+	TicketEmailNotificationsEnabledSnake *bool `json:"ticket_email_notifications_enabled"`
+}
+
+type adminTicketNotificationRecipientItem struct {
+	UserID                          string `json:"userId"`
+	Name                            string `json:"name"`
+	Email                           string `json:"email"`
+	Role                            string `json:"role"`
+	Banned                          bool   `json:"banned"`
+	TicketEmailNotificationsEnabled bool   `json:"ticketEmailNotificationsEnabled"`
+}
+
+type adminTicketNotificationRecipientsResponse struct {
+	GeneratedAt time.Time                              `json:"generatedAt"`
+	Total       int                                    `json:"total"`
+	Items       []adminTicketNotificationRecipientItem `json:"items"`
 }
 
 type adminUserAllowCNMysekaiResponse struct {
