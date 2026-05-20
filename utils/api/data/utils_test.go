@@ -108,6 +108,63 @@ func TestGetValueFromResultMissingKey(t *testing.T) {
 	}
 }
 
+func TestBSONDToMapNormalizesNestedValues(t *testing.T) {
+	input := bson.D{
+		{Key: "userGamedata", Value: bson.D{{Key: "userId", Value: int64(123)}}},
+		{Key: "userCards", Value: []bson.D{
+			{{Key: "cardId", Value: int32(1)}},
+			{{Key: "cardId", Value: int32(2)}},
+		}},
+		{Key: "userHonors", Value: bson.A{bson.D{{Key: "honorId", Value: int32(10)}}}},
+	}
+
+	got := BSONDToMap(input)
+	userGamedata, ok := got["userGamedata"].(map[string]any)
+	if !ok {
+		t.Fatalf("userGamedata should normalize to map, got %T", got["userGamedata"])
+	}
+	if userGamedata["userId"] != int64(123) {
+		t.Fatalf("userId = %v, want 123", userGamedata["userId"])
+	}
+
+	userCards, ok := got["userCards"].([]any)
+	if !ok || len(userCards) != 2 {
+		t.Fatalf("userCards should normalize to []any length 2, got %#v", got["userCards"])
+	}
+	firstCard, ok := userCards[0].(map[string]any)
+	if !ok || firstCard["cardId"] != int32(1) {
+		t.Fatalf("first card = %#v, want cardId 1", userCards[0])
+	}
+
+	userHonors, ok := got["userHonors"].([]any)
+	if !ok || len(userHonors) != 1 {
+		t.Fatalf("userHonors should normalize to []any length 1, got %#v", got["userHonors"])
+	}
+	firstHonor, ok := userHonors[0].(map[string]any)
+	if !ok || firstHonor["honorId"] != int32(10) {
+		t.Fatalf("first honor = %#v, want honorId 10", userHonors[0])
+	}
+}
+
+func TestDeckRecommendKeySets(t *testing.T) {
+	suiteProjection := buildSuiteProjection(DeckRecommendSuiteKeys)
+	for _, key := range []string{"userCards", "userAreas", "userCharacters", "userHonors"} {
+		if suiteProjection[key] != 1 {
+			t.Fatalf("suite projection missing %s", key)
+		}
+	}
+	if suiteProjection["userGamedata.userId"] != 1 {
+		t.Fatalf("suite projection should include allowed userGamedata fields")
+	}
+
+	mysekaiProjection := buildMysekaiProjection(DeckRecommendMysekaiKeys)
+	for _, key := range DeckRecommendMysekaiKeys {
+		if mysekaiProjection[key] != 1 {
+			t.Fatalf("mysekai projection missing %s", key)
+		}
+	}
+}
+
 func valueFromD(d bson.D, key string) any {
 	for _, elem := range d {
 		if elem.Key == key {

@@ -193,6 +193,19 @@
   mutators:
     - handler: header
 
+- id: haruki-protected-user-game-recommend-data
+  match:
+    url: <http|https>://<[^/]+>/api/user/<[^/]+>/game-account/<[^/]+>/<[^/]+>/recommend-data
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
 - id: haruki-protected-user
   match:
     url: <http|https>://<[^/]+>/api/user/<.*>
