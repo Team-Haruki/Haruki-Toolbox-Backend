@@ -617,11 +617,43 @@ func isBindingOwnedByUser(binding *postgresql.GameAccountBinding, userID string)
 func RegisterUserGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account")
 
+	verifySession := apiHelper.SessionHandler.VerifySessionToken
+	requireSelf := userCoreModule.RequireSelfUserParam("toolbox_user_id")
+	checkNotBanned := userCoreModule.CheckUserNotBanned(apiHelper)
+
+	r.Get(
+		"/:server/:game_user_id/recommend-data",
+		verifySession,
+		requireSelf,
+		checkNotBanned,
+		handleGetDeckRecommendData(apiHelper),
+	)
+
 	r.RouteChain("/:server/:game_user_id").
-		Post(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleGenerateGameAccountVerificationCode(apiHelper)).
-		Put(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleCreateGameAccountBinding(apiHelper)).
-		Patch(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleUpdateGameAccountBinding(apiHelper)).
-		Delete(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleDeleteGameAccountBinding(apiHelper))
+		Post(
+			verifySession,
+			requireSelf,
+			checkNotBanned,
+			handleGenerateGameAccountVerificationCode(apiHelper),
+		).
+		Put(
+			verifySession,
+			requireSelf,
+			checkNotBanned,
+			handleCreateGameAccountBinding(apiHelper),
+		).
+		Patch(
+			verifySession,
+			requireSelf,
+			checkNotBanned,
+			handleUpdateGameAccountBinding(apiHelper),
+		).
+		Delete(
+			verifySession,
+			requireSelf,
+			checkNotBanned,
+			handleDeleteGameAccountBinding(apiHelper),
+		)
 }
 
 func isNumericGameUserID(gameUserID string) bool {

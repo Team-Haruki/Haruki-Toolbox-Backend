@@ -310,6 +310,13 @@ Hydra 在当前项目里负责：
 - 把可信用户信息写入 header
 - 再把请求转发给 backend
 
+当前 Toolbox 前端可通过以下登录用户接口读取自己已验证绑定账号的组卡推荐输入数据：
+
+- `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/recommend-data`
+- 查询参数 `mode=suite|mysekai`，默认 `suite`
+- 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证
+- `mode=mysekai` 会在 suite 基础数据上合并 MySekai 推荐所需字段，方便前端 wasm 直接作为 `user_data` 使用
+
 ### 9.2 会话级重认证支撑
 
 管理端某些操作不是只校验“当前是不是管理员”，还要校验“当前浏览器会话是否做过最近重认证”。

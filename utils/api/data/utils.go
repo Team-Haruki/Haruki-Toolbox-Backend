@@ -170,6 +170,53 @@ func GetValueFromResult(result bson.D, key string) any {
 	return bson.A{}
 }
 
+func BSONDToMap(d bson.D) map[string]any {
+	result := make(map[string]any, len(d))
+	for _, elem := range d {
+		result[elem.Key] = normalizeBSONValue(elem.Value)
+	}
+	return result
+}
+
+func normalizeBSONValue(value any) any {
+	switch v := value.(type) {
+	case bson.D:
+		return BSONDToMap(v)
+	case []bson.D:
+		items := make([]any, 0, len(v))
+		for _, item := range v {
+			items = append(items, BSONDToMap(item))
+		}
+		return items
+	case bson.A:
+		items := make([]any, 0, len(v))
+		for _, item := range v {
+			items = append(items, normalizeBSONValue(item))
+		}
+		return items
+	case []any:
+		items := make([]any, 0, len(v))
+		for _, item := range v {
+			items = append(items, normalizeBSONValue(item))
+		}
+		return items
+	case bson.M:
+		result := make(map[string]any, len(v))
+		for key, item := range v {
+			result[key] = normalizeBSONValue(item)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for key, item := range v {
+			result[key] = normalizeBSONValue(item)
+		}
+		return result
+	default:
+		return v
+	}
+}
+
 func bsonMToD(m bson.M) bson.D {
 	d := make(bson.D, 0, len(m))
 	for k, v := range m {
