@@ -193,10 +193,10 @@
   mutators:
     - handler: header
 
-- id: haruki-protected-user-game-recommend-data
+- id: haruki-protected-user
   match:
-    url: <http|https>://<[^/]+>/api/user/<[^/]+>/game-account/<[^/]+>/<[^/]+>/recommend-data
-    methods: [GET]
+    url: <http|https>://<[^/]+>/api/user/<.*>
+    methods: [GET, PUT, PATCH, DELETE]
   upstream:
     url: http://backend:16666
   authenticators:
@@ -206,10 +206,10 @@
   mutators:
     - handler: header
 
-- id: haruki-protected-user
+- id: haruki-protected-user-post
   match:
-    url: <http|https>://<[^/]+>/api/user/<.*>
-    methods: [GET, POST, PUT, PATCH, DELETE]
+    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
+    methods: [POST]
   upstream:
     url: http://backend:16666
   authenticators:
