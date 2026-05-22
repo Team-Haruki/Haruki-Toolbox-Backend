@@ -196,7 +196,20 @@
 - id: haruki-protected-user
   match:
     url: <http|https>://<[^/]+>/api/user/<.*>
-    methods: [GET, PUT, PATCH, DELETE]
+    methods: [PUT, PATCH, DELETE]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-user-get
+  match:
+    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
+    methods: [GET]
   upstream:
     url: http://backend:16666
   authenticators:
@@ -208,7 +221,7 @@
 
 - id: haruki-protected-user-post
   match:
-    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
+    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform(/[^/]+)?/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
     methods: [POST]
   upstream:
     url: http://backend:16666

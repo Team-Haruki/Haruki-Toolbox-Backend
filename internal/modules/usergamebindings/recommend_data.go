@@ -41,7 +41,7 @@ func parseDeckRecommendDataMode(raw string) (deckRecommendDataMode, *fiber.Error
 	}
 }
 
-func validateDeckRecommendDataBinding(binding *postgresql.GameAccountBinding, userID string) *fiber.Error {
+func validateVerifiedOwnedGameAccountBinding(binding *postgresql.GameAccountBinding, userID string) *fiber.Error {
 	if binding == nil {
 		return fiber.NewError(fiber.StatusNotFound, "binding not found")
 	}
@@ -90,8 +90,8 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			harukiLogger.Errorf("Failed to query deck recommend binding: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
 		}
-		if bindingErr := validateDeckRecommendDataBinding(binding, userID); bindingErr != nil {
-			return respondDeckRecommendDataError(c, bindingErr)
+		if bindingErr := validateVerifiedOwnedGameAccountBinding(binding, userID); bindingErr != nil {
+			return respondVerifiedGameAccountDataError(c, bindingErr)
 		}
 
 		userData, err := harukiAPIData.LoadDeckRecommendUserData(
@@ -102,7 +102,7 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			mode == deckRecommendDataModeMysekai,
 		)
 		if err != nil {
-			return respondDeckRecommendDataError(c, err)
+			return respondVerifiedGameAccountDataError(c, err)
 		}
 
 		resp := deckRecommendDataResponse{
@@ -115,7 +115,7 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	}
 }
 
-func respondDeckRecommendDataError(c fiber.Ctx, err error) error {
+func respondVerifiedGameAccountDataError(c fiber.Ctx, err error) error {
 	var fiberErr *fiber.Error
 	if errors.As(err, &fiberErr) {
 		switch fiberErr.Code {
@@ -133,5 +133,5 @@ func respondDeckRecommendDataError(c fiber.Ctx, err error) error {
 			return harukiAPIHelper.ErrorInternal(c, fiberErr.Message)
 		}
 	}
-	return harukiAPIHelper.ErrorInternal(c, "failed to get deck recommend data")
+	return harukiAPIHelper.ErrorInternal(c, "failed to get game account data")
 }

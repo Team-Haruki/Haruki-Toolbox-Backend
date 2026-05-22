@@ -49,28 +49,28 @@ func TestValidateDeckRecommendDataBinding(t *testing.T) {
 
 	ownedVerified := &postgresql.GameAccountBinding{Verified: true}
 	ownedVerified.Edges.User = &postgresql.User{ID: "u-1"}
-	if err := validateDeckRecommendDataBinding(ownedVerified, "u-1"); err != nil {
+	if err := validateVerifiedOwnedGameAccountBinding(ownedVerified, "u-1"); err != nil {
 		t.Fatalf("owned verified binding should be accepted: %v", err)
 	}
 
-	if err := validateDeckRecommendDataBinding(nil, "u-1"); err == nil || err.Code != fiber.StatusNotFound {
+	if err := validateVerifiedOwnedGameAccountBinding(nil, "u-1"); err == nil || err.Code != fiber.StatusNotFound {
 		t.Fatalf("nil binding should map to 404, got %#v", err)
 	}
 
 	orphan := &postgresql.GameAccountBinding{Verified: true}
-	if err := validateDeckRecommendDataBinding(orphan, "u-1"); err == nil || err.Code != fiber.StatusConflict {
+	if err := validateVerifiedOwnedGameAccountBinding(orphan, "u-1"); err == nil || err.Code != fiber.StatusConflict {
 		t.Fatalf("orphan binding should map to 409, got %#v", err)
 	}
 
 	ownedByOther := &postgresql.GameAccountBinding{Verified: true}
 	ownedByOther.Edges.User = &postgresql.User{ID: "u-2"}
-	if err := validateDeckRecommendDataBinding(ownedByOther, "u-1"); err == nil || err.Code != fiber.StatusForbidden {
+	if err := validateVerifiedOwnedGameAccountBinding(ownedByOther, "u-1"); err == nil || err.Code != fiber.StatusForbidden {
 		t.Fatalf("other user's binding should map to 403, got %#v", err)
 	}
 
 	unverified := &postgresql.GameAccountBinding{Verified: false}
 	unverified.Edges.User = &postgresql.User{ID: "u-1"}
-	if err := validateDeckRecommendDataBinding(unverified, "u-1"); err == nil || err.Code != fiber.StatusBadRequest {
+	if err := validateVerifiedOwnedGameAccountBinding(unverified, "u-1"); err == nil || err.Code != fiber.StatusBadRequest {
 		t.Fatalf("unverified binding should map to 400, got %#v", err)
 	}
 }

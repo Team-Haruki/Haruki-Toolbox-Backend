@@ -628,6 +628,13 @@ func RegisterUserGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolb
 		checkNotBanned,
 		handleGetDeckRecommendData(apiHelper),
 	)
+	r.Get(
+		"/:server/:game_user_id/:data_type",
+		verifySession,
+		requireSelf,
+		checkNotBanned,
+		handleGetOwnedGameAccountData(apiHelper),
+	)
 
 	r.RouteChain("/:server/:game_user_id").
 		Post(

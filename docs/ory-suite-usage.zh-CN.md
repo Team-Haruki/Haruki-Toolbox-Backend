@@ -310,11 +310,20 @@ Hydra 在当前项目里负责：
 - 把可信用户信息写入 header
 - 再把请求转发给 backend
 
-当前 Toolbox 前端可通过以下登录用户接口读取自己已验证绑定账号的组卡推荐输入数据：
+当前 Toolbox 前端可通过以下登录用户接口读取自己已验证绑定账号的数据：
+
+- `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/:data_type`
+- `:data_type` 允许 `suite`、`mysekai`、`profile`
+- `suite` 和 `mysekai` 复用 public API / OAuth2 game-data 的数据读取逻辑，并支持 `key` 查询参数
+- `profile` 通过 Haruki Sekai API 读取绑定账号 profile，并直接透传 JSON 响应体
+- 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证
+
+旧的 `GET /api/user/:toolbox_user_id/game-data/:server/:data_type/:user_id` 未正式接入前端，已由上述 `game-account` 入口替代。
+
+兼容期内项目仍保留组卡推荐输入数据接口：
 
 - `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/recommend-data`
 - 查询参数 `mode=suite|mysekai`，默认 `suite`
-- 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证
 - `mode=mysekai` 会在 suite 基础数据上合并 MySekai 推荐所需字段，方便前端 wasm 直接作为 `user_data` 使用
 
 ### 9.2 会话级重认证支撑
