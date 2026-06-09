@@ -2,18 +2,14 @@ package upload
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	harukiConfig "haruki-suite/config"
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	harukiDataHandler "haruki-suite/utils/handler"
 	harukiHttp "haruki-suite/utils/http"
 	harukiLogger "haruki-suite/utils/logger"
 	"haruki-suite/utils/sekai"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,16 +19,12 @@ import (
 )
 
 var (
-	userIDSuffixRegex          = regexp.MustCompile(`user/(\d+)`)
-	sharedHttpClient           *harukiHttp.Client
-	sharedHttpClientProxy      string
-	sharedHttpClientMu         sync.RWMutex
-	uploadSemaphore            = make(chan struct{}, 10)
-	uploadAuditSemaphore       = make(chan struct{}, 64)
-	sharedDataHandlerLogger    = harukiLogger.NewLoggerFromGlobal("SekaiDataHandler")
-	errUploadOwnershipMismatch = errors.New("upload game account ownership mismatch")
-	errUploadOwnerBanned       = errors.New("upload game account owner banned")
-	errUploadCNMysekaiDenied   = errors.New("upload cn mysekai denied")
+	sharedHttpClient        *harukiHttp.Client
+	sharedHttpClientProxy   string
+	sharedHttpClientMu      sync.RWMutex
+	uploadSemaphore         = make(chan struct{}, 10)
+	uploadAuditSemaphore    = make(chan struct{}, 64)
+	sharedDataHandlerLogger = harukiLogger.NewLoggerFromGlobal("SekaiDataHandler")
 )
 
 const (
@@ -44,33 +36,6 @@ const (
 	uploadStagePersist          = "persist"
 	uploadStageValidateResult   = "validate_result"
 )
-
-type uploadContext struct {
-	Server               harukiUtils.SupportedDataUploadServer
-	DataType             harukiUtils.UploadDataType
-	ExpectedGameUserID   int64
-	ToolboxUserID        string
-	UploadMethod         harukiUtils.UploadMethod
-	Settings             harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings
-	AllowPublicAPI       bool
-	ParsedGameUserID     *int64
-	ParsedGameUserIDType string
-	FailureStage         string
-}
-
-func (uc *uploadContext) expectedGameUserIDString() string {
-	if uc == nil {
-		return ""
-	}
-	return strconv.FormatInt(uc.ExpectedGameUserID, 10)
-}
-
-func (uc *uploadContext) parsedGameUserIDString() string {
-	if uc == nil || uc.ParsedGameUserID == nil {
-		return ""
-	}
-	return strconv.FormatInt(*uc.ParsedGameUserID, 10)
-}
 
 func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResult) *string {
 	if result != nil {
@@ -97,35 +62,6 @@ func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResul
 		return nil
 	}
 	return &trimmed
-}
-
-func buildUploadContext(
-	server harukiUtils.SupportedDataUploadServer,
-	dataType harukiUtils.UploadDataType,
-	gameUserID *int64,
-	userID *string,
-	uploadMethod harukiUtils.UploadMethod,
-) (*uploadContext, error) {
-	if gameUserID == nil {
-		return nil, fmt.Errorf("missing game user ID")
-	}
-	if _, err := harukiUtils.ParseSupportedDataUploadServer(string(server)); err != nil {
-		return nil, fmt.Errorf("invalid server in HandleUpload: %w", err)
-	}
-	if _, err := harukiUtils.ParseUploadDataType(string(dataType)); err != nil {
-		return nil, fmt.Errorf("invalid data_type in HandleUpload: %w", err)
-	}
-	toolboxUserID := ""
-	if userID != nil {
-		toolboxUserID = strings.TrimSpace(*userID)
-	}
-	return &uploadContext{
-		Server:             server,
-		DataType:           dataType,
-		ExpectedGameUserID: *gameUserID,
-		ToolboxUserID:      toolboxUserID,
-		UploadMethod:       uploadMethod,
-	}, nil
 }
 
 func newUploadDataHandler(helper *harukiAPIHelper.HarukiToolboxRouterHelpers) *harukiDataHandler.DataHandler {
@@ -158,77 +94,6 @@ func getSharedHTTPClient() *harukiHttp.Client {
 		sharedHttpClientProxy = proxy
 	}
 	return sharedHttpClient
-}
-
-func ExtractUploadTypeAndUserID(originalURL string) (harukiUtils.UploadDataType, int64) {
-	if strings.Contains(originalURL, string(harukiUtils.UploadDataTypeSuite)) {
-		match := userIDSuffixRegex.FindStringSubmatch(originalURL)
-		if len(match) < 2 {
-			return "", 0
-		}
-		userID, err := strconv.ParseInt(match[1], 10, 64)
-		if err != nil {
-			return "", 0
-		}
-		return harukiUtils.UploadDataTypeSuite, userID
-	} else if strings.Contains(originalURL, "birthday-party") && strings.Contains(originalURL, string(harukiUtils.UploadDataTypeMysekai)) {
-		match := userIDSuffixRegex.FindStringSubmatch(originalURL)
-		if len(match) < 2 {
-			return "", 0
-		}
-		userID, err := strconv.ParseInt(match[1], 10, 64)
-		if err != nil {
-			return "", 0
-		}
-		return harukiUtils.UploadDataTypeMysekaiBirthdayParty, userID
-	} else if strings.Contains(originalURL, string(harukiUtils.UploadDataTypeMysekai)) {
-		match := userIDSuffixRegex.FindStringSubmatch(originalURL)
-		if len(match) < 2 {
-			return "", 0
-		}
-		userID, err := strconv.ParseInt(match[1], 10, 64)
-		if err != nil {
-			return "", 0
-		}
-		return harukiUtils.UploadDataTypeMysekai, userID
-	}
-	return "", 0
-}
-
-func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server string, gameUserID string, uploadMethod harukiUtils.UploadMethod, userID *string) (bool, *bool, harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings, *bool, *bool, *string, error) {
-	var settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings
-	record, err := db.GameAccountBinding.
-		Query().
-		Where(
-			gameaccountbinding.ServerEQ(server),
-			gameaccountbinding.GameUserIDEQ(gameUserID),
-		).
-		WithUser().
-		Only(ctx)
-	if err != nil {
-		if postgresql.IsNotFound(err) {
-			return false, nil, settings, nil, nil, nil, nil
-		}
-		return false, nil, settings, nil, nil, nil, err
-	}
-	var belongs *bool
-	var allowCNMysekai *bool
-	var userBanned *bool
-	var banReason *string
-	if record.Edges.User != nil {
-		ownerID := strings.TrimSpace(record.Edges.User.ID)
-		a := record.Edges.User.AllowCnMysekai
-		allowCNMysekai = &a
-		banned := record.Edges.User.Banned
-		userBanned = &banned
-		banReason = record.Edges.User.BanReason
-		belongs = deriveUploadOwnership(ownerID, userID, uploadMethod)
-	}
-	settings = harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings{
-		Suite:   record.Suite,
-		Mysekai: record.Mysekai,
-	}
-	return true, belongs, settings, allowCNMysekai, userBanned, banReason, nil
 }
 
 func HandleUpload(
@@ -325,84 +190,6 @@ func HandleUpload(
 	}
 	handler.RunUploadFanout(data, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID, uploadCtx.Settings, uploadCtx.AllowPublicAPI)
 	return result, nil
-}
-
-func validateGameAccountBelonging(belongs *bool) error {
-	if belongs != nil && !*belongs {
-		return errUploadOwnershipMismatch
-	}
-	return nil
-}
-
-func determinePublicAPIPermission(exists bool, dataType harukiUtils.UploadDataType, settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings) bool {
-	if !exists {
-		return false
-	}
-	if dataType == harukiUtils.UploadDataTypeMysekai {
-		if settings.Mysekai != nil {
-			return settings.Mysekai.AllowPublicApi
-		}
-		return false
-	}
-	if settings.Suite != nil {
-		return settings.Suite.AllowPublicApi
-	}
-	return false
-}
-
-func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, allowCNMySekai *bool) error {
-	if server == harukiUtils.SupportedDataUploadServerCN &&
-		(dataType == harukiUtils.UploadDataTypeMysekai || dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty) {
-		if allowCNMySekai != nil && !*allowCNMySekai {
-			return errUploadCNMysekaiDenied
-		}
-	}
-	return nil
-}
-
-func deriveUploadOwnership(ownerUserID string, currentUserID *string, uploadMethod harukiUtils.UploadMethod) *bool {
-	ownerUserID = strings.TrimSpace(ownerUserID)
-	if ownerUserID == "" {
-		return nil
-	}
-	if currentUserID == nil {
-		if allowAnonymousBoundAccountUpload(uploadMethod) {
-			return nil
-		}
-		owned := false
-		return &owned
-	}
-	owned := strings.TrimSpace(*currentUserID) == ownerUserID
-	return &owned
-}
-
-func allowAnonymousBoundAccountUpload(uploadMethod harukiUtils.UploadMethod) bool {
-	switch uploadMethod {
-	case harukiUtils.UploadMethodIOSProxy, harukiUtils.UploadMethodInherit, harukiUtils.UploadMethodHarukiProxy:
-		return true
-	default:
-		return false
-	}
-}
-
-func mapUploadProcessingError(err error) *fiber.Error {
-	switch {
-	case errors.Is(err, errUploadOwnershipMismatch):
-		return fiber.NewError(fiber.StatusForbidden, "upload is not allowed for this bound account")
-	case errors.Is(err, errUploadOwnerBanned):
-		return fiber.NewError(fiber.StatusForbidden, "account owner is banned")
-	case errors.Is(err, errUploadCNMysekaiDenied):
-		return fiber.NewError(fiber.StatusForbidden, "cn mysekai upload is not allowed")
-	default:
-		return nil
-	}
-}
-
-func validateUploadResult(result *harukiUtils.HandleDataResult) error {
-	if result.Status != nil && *result.Status != 200 {
-		return errors.New("upload failed with status: " + strconv.Itoa(*result.Status))
-	}
-	return nil
 }
 
 func dispatchUploadAuditLog(
