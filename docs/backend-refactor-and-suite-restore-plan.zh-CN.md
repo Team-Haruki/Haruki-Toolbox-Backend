@@ -26,7 +26,8 @@
 - StructTool / Avro 已接入离线 compare 工具，支持 raw upload 样本解密解码验证。
 - 已从本地 Unity `DummyDll` 生成 `data/suite_user.avsc`，运行时 suite restore 结构来源已切到 StructTool/Avro schema。
 - 旧 `data/suite_structures.json` 已移除，`restore_suite.structures_file` 示例配置已指向 `./data/suite_user.avsc`。
-- compact restore 的重复展开算法已抽到 `utils/compactrestore`，`utils/api/data` 和 `utils/nuverse` 只保留各自 BSON / orderedmap 适配。
+- compact restore 的重复展开算法已抽到 `utils/compactrestore`，查询侧 `utils/api/data` 只保留 BSON 适配。
+- 未接入 runtime 的 `utils/nuverse` master restorer 已移除；本项目当前只保留 suite restorer。
 - Docker workflow PR path filter 已清理旧 Rust 路径并改为 Go 项目真实路径。
 - `internal/modules/usercore` 已增加组合 route guard helper，并替换等价的用户路由 guard 链。
 - `utils/orderedmsgpack` 已完成解码硬化，并移除内部自定义 `OrderedMap` msgpack ext；生产入口只保留标准 msgpack 解码。
@@ -38,13 +39,12 @@
 - `cmd/suite-rec-backfill/`
 - `registration-handoff.cn.md`
 - `suite_rec/`
-- 本文档当前作为工作记录维护，是否提交另行决定。
 
 当前下一步优先级：
 
-1. 对 StructTool/suite restore 增加更正式的 schema 生成说明和小型 golden fixture，避免依赖本地真实样本。
-2. 明确 `utils/nuverse` 作为离线/reference master restorer 的定位，后续再评估是否删除未接入 runtime 的 master 逻辑。
-3. 下一批大文件拆分优先从 `adminwebhook`、`harukibotneo`、`userprivateapi`、`adminusers` 中选择。
+1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
+2. 下一批大文件拆分优先从 `adminwebhook` 开始，再处理 `harukibotneo`、`userprivateapi`、`adminusers`。
+3. 若继续治理 suite restore，再评估是否引入统一 `RestoreSuite` 门面。
 
 ---
 
@@ -322,17 +322,16 @@ restore_suite:
 compact restore 展开算法已经抽到 `utils/compactrestore`：
 
 - `utils/api/data` 负责 BSON 适配，供 public/private/oauth2 查询路径恢复 Mongo 中的 `compact*` 字段。
-- `utils/nuverse` 负责 orderedmap 适配，保留离线 master restorer 的 enum / compact 行为。
 
-这两条路径不和 StructTool suite restore 冲突：
+这条查询侧兼容路径不和 StructTool suite restore 冲突：
 
 - StructTool suite restore 发生在上传预处理、Mongo 写入前。
 - API compact restore 发生在数据读取时，用于兼容 Mongo 中已有 compact 字段。
-- `utils/nuverse.NuverseMasterRestorer` 当前仍是离线/测试参考，不接入上传 runtime。
+- 本项目当前不再维护 Nuverse master-data restorer；如果未来确实需要 master data 恢复，应另开阶段重新评估。
 
-### 4.4 Nuverse compact/master restorer
+### 4.4 Nuverse compact/master restorer 已移除
 
-`utils/nuverse` 已经具备更完整的恢复能力：
+此前 `utils/nuverse` 保留过一套离线/reference master restorer，包含：
 
 - 读取结构定义
 - 处理 `_compact*` 前缀数据
@@ -340,7 +339,13 @@ compact restore 展开算法已经抽到 `utils/compactrestore`：
 - 恢复结构化数组数据
 - 对部分字段做 ID merge
 
-这套能力目前更像独立 restorer。后续如果要删除或替换它，应先确认 master data compact 场景和 API 查询 compact 恢复都不受影响。
+这套能力不是当前项目 runtime 需要的 suite restore，也没有接入上传链路或数据查询链路，因此已经移除。
+
+当前保留：
+
+- `utils/suiterestore`：执行 suite 字段数组到 dict 的恢复。
+- `utils/nuversestruct`：从 StructTool/Avro schema 生成 suite restore definitions。
+- `utils/compactrestore`：供 API 查询侧恢复 Mongo 中已有 compact 字段。
 
 ---
 
@@ -454,17 +459,17 @@ go run ./cmd/nuverse-restore-compare \
 - 不依赖本地 `7445104842642643749`。
 - 可以在 CI 中验证 StructTool adapter 基本行为。
 
-### 阶段 4：评估 `utils/nuverse` 的去留
+### 阶段 4：已移除 `utils/nuverse` master restorer
 
-`utils/nuverse` 当前没有接入上传 runtime，但仍有独立 tests 和 master compact 逻辑。
+`utils/nuverse` 没有接入上传 runtime，也不是当前项目需要的 suite restorer。
 
-可选方向：
+已采用：
 
-- 保留为离线/reference 包，并补 package comment。
-- 删除未使用的 master restorer，但保留 API 查询所需的 `utils/compactrestore`。
-- 如果未来 master data 也要恢复，另开阶段评估，不混入 suite upload restore。
+- 删除未使用的 master restorer。
+- 保留 API 查询所需的 `utils/compactrestore`。
+- 上传 runtime 继续走 `utils/nuversestruct` + `utils/suiterestore`。
 
-当前默认采用第一种：`utils/nuverse` 保留为离线/reference master restorer；上传 runtime 继续走 `utils/nuversestruct` + `utils/suiterestore`。
+如果未来 master data 也要恢复，应另开阶段评估，不混入 suite upload restore。
 
 ### 阶段 5：考虑统一 `RestoreSuite` 门面
 
@@ -567,7 +572,7 @@ go test ./config ./internal/bootstrap
 重构 suite restore 时：
 
 ```bash
-go test ./utils/suiterestore ./utils/nuverse ./utils/handler
+go test ./utils/suiterestore ./utils/nuversestruct ./utils/compactrestore ./utils/handler
 ```
 
 涉及上传和第三方同步时：
