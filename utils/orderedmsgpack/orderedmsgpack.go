@@ -1,9 +1,10 @@
 package orderedmsgpack
 
 import (
-	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 
 	"github.com/iancoleman/orderedmap"
@@ -40,25 +41,28 @@ func (d *OrderedMapDecoder) Code() int8 {
 
 func (d *OrderedMapDecoder) IsType(offset int, data *[]byte) bool {
 	code, offset := d.ReadSize1(offset, data)
-	if code == def.Ext8 {
-		_, offset = d.ReadSize1(offset, data)
-		t, _ := d.ReadSize1(offset, data)
-		return int8(t) == d.Code()
+	typeOffset, ok := extPayloadTypeOffset(code, offset, data)
+	if !ok {
+		return false
 	}
-	return false
+	t, _ := d.ReadSize1(typeOffset, data)
+	return int8(t) == d.Code()
 }
 
 func (d *OrderedMapDecoder) AsValue(offset int, k reflect.Kind, data *[]byte) (any, int, error) {
 	code, offset := d.ReadSize1(offset, data)
 
 	switch code {
-	case def.Ext8:
-		size, offset := d.ReadSize1(offset, data)
+	case def.Ext8, def.Ext16, def.Ext32:
+		size, offset, err := readExtSize(code, offset, d, data)
+		if err != nil {
+			return nil, 0, err
+		}
 		_, offset = d.ReadSize1(offset, data)
-		extData, offset := d.ReadSizeN(offset, int(size), data)
+		extData, offset := d.ReadSizeN(offset, size, data)
 
 		var iom internalOrderedMap
-		err := msgpack.Unmarshal(extData, &iom)
+		err = msgpack.Unmarshal(extData, &iom)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to unmarshal ordered map data: %w", err)
 		}
@@ -68,16 +72,45 @@ func (d *OrderedMapDecoder) AsValue(offset int, k reflect.Kind, data *[]byte) (a
 	return nil, 0, fmt.Errorf("should not reach this line!! code %x decoding %v", d.Code(), k)
 }
 
+func extPayloadTypeOffset(code byte, offset int, data *[]byte) (int, bool) {
+	switch code {
+	case def.Ext8:
+		return offset + def.Byte1, offset+def.Byte1 < len(*data)
+	case def.Ext16:
+		return offset + def.Byte2, offset+def.Byte2 < len(*data)
+	case def.Ext32:
+		return offset + def.Byte4, offset+def.Byte4 < len(*data)
+	default:
+		return 0, false
+	}
+}
+
+func readExtSize(code byte, offset int, r *OrderedMapDecoder, data *[]byte) (int, int, error) {
+	switch code {
+	case def.Ext8:
+		size, offset := r.ReadSize1(offset, data)
+		return int(size), offset, nil
+	case def.Ext16:
+		size, offset := r.ReadSize2(offset, data)
+		return int(binary.BigEndian.Uint16(size)), offset, nil
+	case def.Ext32:
+		size, offset := r.ReadSize4(offset, data)
+		return int(binary.BigEndian.Uint32(size)), offset, nil
+	default:
+		return 0, offset, fmt.Errorf("unsupported ordered map ext code: %x", code)
+	}
+}
+
 func (d *OrderedMapStreamDecoder) Code() int8 {
 	return orderedMapExtCode
 }
 
 func (d *OrderedMapStreamDecoder) IsType(code byte, innerType int8, _ int) bool {
-	return code == def.Ext8 && innerType == d.Code()
+	return (code == def.Ext8 || code == def.Ext16 || code == def.Ext32) && innerType == d.Code()
 }
 
 func (d *OrderedMapStreamDecoder) ToValue(code byte, data []byte, k reflect.Kind) (any, error) {
-	if code == def.Ext8 {
+	if code == def.Ext8 || code == def.Ext16 || code == def.Ext32 {
 		var iom internalOrderedMap
 		err := msgpack.Unmarshal(data, &iom)
 		if err != nil {
@@ -106,7 +139,11 @@ func (e *OrderedMapEncoder) CalcByteSize(value reflect.Value) (int, error) {
 		return 0, err
 	}
 
-	return def.Byte1 + def.Byte1 + def.Byte1 + len(data), nil
+	headerSize, err := orderedMapExtHeaderSize(len(data))
+	if err != nil {
+		return 0, err
+	}
+	return headerSize + len(data), nil
 }
 
 func (e *OrderedMapEncoder) WriteToBytes(value reflect.Value, offset int, bytes *[]byte) int {
@@ -114,8 +151,7 @@ func (e *OrderedMapEncoder) WriteToBytes(value reflect.Value, offset int, bytes 
 	v := newInternalMap(om)
 	data, _ := msgpack.Marshal(v)
 
-	offset = e.SetByte1Int(def.Ext8, offset, bytes)
-	offset = e.SetByte1Int(len(data), offset, bytes)
+	offset = writeOrderedMapExtHeaderToBytes(e, len(data), offset, bytes)
 	offset = e.SetByte1Int(int(e.Code()), offset, bytes)
 	offset = e.SetBytes(data, offset, bytes)
 	return offset
@@ -138,10 +174,7 @@ func (e *OrderedMapStreamEncoder) Write(w ext.StreamWriter, value reflect.Value)
 		return err
 	}
 
-	if err := w.WriteByte1Int(def.Ext8); err != nil {
-		return err
-	}
-	if err := w.WriteByte1Int(len(data)); err != nil {
+	if err := writeOrderedMapExtHeaderToStream(w, len(data)); err != nil {
 		return err
 	}
 	if err := w.WriteByte1Int(int(e.Code())); err != nil {
@@ -165,6 +198,56 @@ func RegisterOrderedMapExt() error {
 	return nil
 }
 
+func orderedMapExtHeaderSize(payloadLen int) (int, error) {
+	switch {
+	case payloadLen < 0:
+		return 0, fmt.Errorf("negative ordered map ext payload length: %d", payloadLen)
+	case payloadLen <= math.MaxUint8:
+		return def.Byte1 + def.Byte1 + def.Byte1, nil
+	case payloadLen <= math.MaxUint16:
+		return def.Byte1 + def.Byte2 + def.Byte1, nil
+	case uint64(payloadLen) <= math.MaxUint32:
+		return def.Byte1 + def.Byte4 + def.Byte1, nil
+	default:
+		return 0, fmt.Errorf("ordered map ext payload too large: %d", payloadLen)
+	}
+}
+
+func writeOrderedMapExtHeaderToBytes(e *OrderedMapEncoder, payloadLen int, offset int, bytes *[]byte) int {
+	switch {
+	case payloadLen <= math.MaxUint8:
+		offset = e.SetByte1Int(def.Ext8, offset, bytes)
+		offset = e.SetByte1Int(payloadLen, offset, bytes)
+	case payloadLen <= math.MaxUint16:
+		offset = e.SetByte1Int(def.Ext16, offset, bytes)
+		offset = e.SetByte2Int(payloadLen, offset, bytes)
+	default:
+		offset = e.SetByte1Int(def.Ext32, offset, bytes)
+		offset = e.SetByte4Int(payloadLen, offset, bytes)
+	}
+	return offset
+}
+
+func writeOrderedMapExtHeaderToStream(w ext.StreamWriter, payloadLen int) error {
+	switch {
+	case payloadLen <= math.MaxUint8:
+		if err := w.WriteByte1Int(def.Ext8); err != nil {
+			return err
+		}
+		return w.WriteByte1Int(payloadLen)
+	case payloadLen <= math.MaxUint16:
+		if err := w.WriteByte1Int(def.Ext16); err != nil {
+			return err
+		}
+		return w.WriteByte2Int(payloadLen)
+	default:
+		if err := w.WriteByte1Int(def.Ext32); err != nil {
+			return err
+		}
+		return w.WriteByte4Int(payloadLen)
+	}
+}
+
 func Marshal(v any) ([]byte, error) {
 	return msgpack.Marshal(v)
 }
@@ -182,16 +265,10 @@ func UnmarshalRead(r io.Reader, v any) error {
 }
 
 func MsgpackToOrderedMap(b []byte) (*orderedmap.OrderedMap, error) {
-	reader := bytes.NewReader(b)
-	val, err := decodeValue(reader)
+	om, err := decodeOrderedMapBytes(b)
 	if err != nil {
 		return nil, fmt.Errorf("decode msgpack: %w", err)
 	}
-	om, ok := val.(*orderedmap.OrderedMap)
-	if !ok {
-		return nil, fmt.Errorf("decoded value is %T, not *orderedmap.OrderedMap", val)
-	}
-	om.SetEscapeHTML(false)
 	return om, nil
 }
 
