@@ -96,6 +96,30 @@ func RequireVerifiedEmail() fiber.Handler {
 	}
 }
 
+func RequireAuthenticatedUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) []fiber.Handler {
+	return []fiber.Handler{
+		apiHelper.SessionHandler.VerifySessionToken,
+		CheckUserNotBanned(apiHelper),
+	}
+}
+
+func RequireAuthenticatedSelf(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, paramName string) []fiber.Handler {
+	return []fiber.Handler{
+		apiHelper.SessionHandler.VerifySessionToken,
+		RequireSelfUserParam(paramName),
+		CheckUserNotBanned(apiHelper),
+	}
+}
+
+func RequireAuthenticatedVerifiedSelf(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, paramName string) []fiber.Handler {
+	return []fiber.Handler{
+		apiHelper.SessionHandler.VerifySessionToken,
+		RequireSelfUserParam(paramName),
+		CheckUserNotBanned(apiHelper),
+		RequireVerifiedEmail(),
+	}
+}
+
 func WriteUserAuditLog(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, action string, result string, targetUserID string, metadata map[string]any) {
 	if strings.TrimSpace(targetUserID) == "" {
 		if localUserID, ok := c.Locals("userID").(string); ok {

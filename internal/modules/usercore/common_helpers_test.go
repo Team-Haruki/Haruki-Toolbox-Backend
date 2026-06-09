@@ -1,6 +1,7 @@
 package usercore
 
 import (
+	harukiAPIHelper "haruki-suite/utils/api"
 	"net/http/httptest"
 	"testing"
 
@@ -206,4 +207,47 @@ func TestRequireVerifiedEmail(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
 		}
 	})
+}
+
+func TestComposedUserGuards(t *testing.T) {
+	t.Parallel()
+
+	apiHelper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		SessionHandler: harukiAPIHelper.NewSessionHandler(nil, ""),
+	}
+
+	cases := []struct {
+		name     string
+		handlers []fiber.Handler
+		wantLen  int
+	}{
+		{
+			name:     "authenticated user",
+			handlers: RequireAuthenticatedUser(apiHelper),
+			wantLen:  2,
+		},
+		{
+			name:     "authenticated self",
+			handlers: RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"),
+			wantLen:  3,
+		},
+		{
+			name:     "authenticated verified self",
+			handlers: RequireAuthenticatedVerifiedSelf(apiHelper, "toolbox_user_id"),
+			wantLen:  4,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if len(tt.handlers) != tt.wantLen {
+				t.Fatalf("len = %d, want %d", len(tt.handlers), tt.wantLen)
+			}
+			for i, handler := range tt.handlers {
+				if handler == nil {
+					t.Fatalf("handler %d is nil", i)
+				}
+			}
+		})
+	}
 }
