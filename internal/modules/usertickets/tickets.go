@@ -1,8 +1,6 @@
 package usertickets
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	platformPagination "haruki-suite/internal/platform/pagination"
 	platformTicketNotifications "haruki-suite/internal/platform/ticketnotifications"
@@ -13,165 +11,10 @@ import (
 	"math"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
-
-const (
-	defaultUserTicketPage     = 1
-	defaultUserTicketPageSize = 20
-	maxUserTicketPageSize     = 100
-	maxUserTicketCategoryLen  = 64
-	maxUserTicketSubjectLen   = 200
-	maxUserTicketMessageLen   = 4000
-)
-
-type userTicketListItem struct {
-	TicketID        string     `json:"ticketId"`
-	Subject         string     `json:"subject"`
-	Category        string     `json:"category,omitempty"`
-	Priority        string     `json:"priority"`
-	Status          string     `json:"status"`
-	AssigneeAdminID string     `json:"assigneeAdminId,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
-	ClosedAt        *time.Time `json:"closedAt,omitempty"`
-}
-
-type userTicketListResponse struct {
-	GeneratedAt time.Time            `json:"generatedAt"`
-	Page        int                  `json:"page"`
-	PageSize    int                  `json:"pageSize"`
-	Total       int                  `json:"total"`
-	TotalPages  int                  `json:"totalPages"`
-	HasMore     bool                 `json:"hasMore"`
-	Items       []userTicketListItem `json:"items"`
-}
-
-type userTicketMessageItem struct {
-	ID         int       `json:"id"`
-	SenderRole string    `json:"senderRole"`
-	Message    string    `json:"message"`
-	CreatedAt  time.Time `json:"createdAt"`
-}
-
-type userTicketDetailResponse struct {
-	Ticket   userTicketListItem      `json:"ticket"`
-	Messages []userTicketMessageItem `json:"messages"`
-}
-
-type createUserTicketPayload struct {
-	Subject  string         `json:"subject"`
-	Category string         `json:"category,omitempty"`
-	Priority string         `json:"priority,omitempty"`
-	Message  string         `json:"message"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-}
-
-type createUserTicketResponse struct {
-	TicketID string `json:"ticketId"`
-}
-
-type appendUserTicketMessagePayload struct {
-	Message string `json:"message"`
-}
-
-func generateTicketPublicID() (string, error) {
-	b := make([]byte, 6)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "TK-" + time.Now().UTC().Format("20060102150405") + "-" + hex.EncodeToString(b), nil
-}
-
-func parseUserTicketPriority(raw string) (ticket.Priority, error) {
-	trimmed := strings.ToLower(strings.TrimSpace(raw))
-	if trimmed == "" {
-		return ticket.PriorityNormal, nil
-	}
-	switch ticket.Priority(trimmed) {
-	case ticket.PriorityLow, ticket.PriorityNormal, ticket.PriorityHigh, ticket.PriorityUrgent:
-		return ticket.Priority(trimmed), nil
-	default:
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid priority")
-	}
-}
-
-func parseUserTicketStatus(raw string) (ticket.Status, error) {
-	trimmed := strings.ToLower(strings.TrimSpace(raw))
-	if trimmed == "" {
-		return "", nil
-	}
-	switch ticket.Status(trimmed) {
-	case ticket.StatusOpen, ticket.StatusPendingAdmin, ticket.StatusPendingUser, ticket.StatusResolved, ticket.StatusClosed:
-		return ticket.Status(trimmed), nil
-	default:
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid status")
-	}
-}
-
-func normalizeUserTicketCategory(raw string) (string, error) {
-	category := strings.TrimSpace(raw)
-	if utf8.RuneCountInString(category) > maxUserTicketCategoryLen {
-		return "", fiber.NewError(fiber.StatusBadRequest, "category must be 0-64 characters")
-	}
-	return category, nil
-}
-
-func normalizeUserTicketSubject(raw string) (string, error) {
-	subject := strings.TrimSpace(raw)
-	subjectLength := utf8.RuneCountInString(subject)
-	if subjectLength == 0 || subjectLength > maxUserTicketSubjectLen {
-		return "", fiber.NewError(fiber.StatusBadRequest, "subject must be 1-200 characters")
-	}
-	return subject, nil
-}
-
-func normalizeUserTicketMessage(raw string) (string, error) {
-	message := strings.TrimSpace(raw)
-	messageLength := utf8.RuneCountInString(message)
-	if messageLength == 0 || messageLength > maxUserTicketMessageLen {
-		return "", fiber.NewError(fiber.StatusBadRequest, "message must be 1-4000 characters")
-	}
-	return message, nil
-}
-
-func buildUserTicketListItem(row *postgresql.Ticket) userTicketListItem {
-	item := userTicketListItem{
-		TicketID:  row.TicketID,
-		Subject:   row.Subject,
-		Priority:  string(row.Priority),
-		Status:    string(row.Status),
-		CreatedAt: row.CreatedAt.UTC(),
-		UpdatedAt: row.UpdatedAt.UTC(),
-	}
-	if row.Category != nil {
-		item.Category = *row.Category
-	}
-	if row.AssigneeAdminID != nil {
-		item.AssigneeAdminID = *row.AssigneeAdminID
-	}
-	if row.ClosedAt != nil {
-		closed := row.ClosedAt.UTC()
-		item.ClosedAt = &closed
-	}
-	return item
-}
-
-func buildUserTicketMessageItems(rows []*postgresql.TicketMessage) []userTicketMessageItem {
-	items := make([]userTicketMessageItem, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, userTicketMessageItem{
-			ID:         row.ID,
-			SenderRole: string(row.SenderRole),
-			Message:    row.Message,
-			CreatedAt:  row.CreatedAt.UTC(),
-		})
-	}
-	return items
-}
 
 func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -496,13 +339,6 @@ func handleCloseOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		resp := buildUserTicketListItem(updated)
 		return harukiAPIHelper.SuccessResponse(c, "ticket closed", &resp)
 	}
-}
-
-func respondUserTicketBadRequest(c fiber.Ctx, err error, fallback string) error {
-	if fiberErr, ok := err.(*fiber.Error); ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
-	}
-	return harukiAPIHelper.ErrorBadRequest(c, fallback)
 }
 
 func RegisterUserTicketRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
