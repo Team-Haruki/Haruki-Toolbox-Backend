@@ -8,6 +8,7 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"io"
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -51,12 +52,15 @@ func TestConvertToInt64Pointer(t *testing.T) {
 		in      any
 		wantNil bool
 		want    int64
+		wantErr string
 	}{
 		{name: "json number", in: json.Number("123"), want: 123},
 		{name: "string", in: "456", want: 456},
 		{name: "float64", in: float64(789), want: 789},
 		{name: "int64", in: int64(321), want: 321},
 		{name: "uint64", in: uint64(654), want: 654},
+		{name: "unsafe float64 user id", in: float64(9223372036854775000), wantNil: true, wantErr: "unsafe numeric userId"},
+		{name: "uint64 too large", in: uint64(1 << 63), wantNil: true, wantErr: "too large"},
 		{name: "negative string", in: "-1", wantNil: true},
 		{name: "unsupported", in: true, wantNil: true},
 	}
@@ -65,7 +69,16 @@ func TestConvertToInt64Pointer(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := convertToInt64Pointer(tc.in, logger)
+			got, err := convertToInt64Pointer(tc.in, logger)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("convertToInt64Pointer(%v) error = %v, want containing %q", tc.in, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("convertToInt64Pointer(%v) returned unexpected error: %v", tc.in, err)
+			}
 			if tc.wantNil {
 				if got != nil {
 					t.Fatalf("convertToInt64Pointer(%v) should be nil, got %d", tc.in, *got)

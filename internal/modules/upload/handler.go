@@ -35,6 +35,43 @@ var (
 	errUploadCNMysekaiDenied   = errors.New("upload cn mysekai denied")
 )
 
+const (
+	uploadStageBuildContext     = "build_context"
+	uploadStageAccountPolicy    = "account_policy"
+	uploadStageDecodePayload    = "decode_payload"
+	uploadStageValidateIdentity = "validate_payload_identity"
+	uploadStagePreprocess       = "preprocess"
+	uploadStagePersist          = "persist"
+	uploadStageValidateResult   = "validate_result"
+)
+
+type uploadContext struct {
+	Server               harukiUtils.SupportedDataUploadServer
+	DataType             harukiUtils.UploadDataType
+	ExpectedGameUserID   int64
+	ToolboxUserID        string
+	UploadMethod         harukiUtils.UploadMethod
+	Settings             harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings
+	AllowPublicAPI       bool
+	ParsedGameUserID     *int64
+	ParsedGameUserIDType string
+	FailureStage         string
+}
+
+func (uc *uploadContext) expectedGameUserIDString() string {
+	if uc == nil {
+		return ""
+	}
+	return strconv.FormatInt(uc.ExpectedGameUserID, 10)
+}
+
+func (uc *uploadContext) parsedGameUserIDString() string {
+	if uc == nil || uc.ParsedGameUserID == nil {
+		return ""
+	}
+	return strconv.FormatInt(*uc.ParsedGameUserID, 10)
+}
+
 func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResult) *string {
 	if result != nil {
 		parts := make([]string, 0, 2)
@@ -60,6 +97,45 @@ func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResul
 		return nil
 	}
 	return &trimmed
+}
+
+func buildUploadContext(
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	gameUserID *int64,
+	userID *string,
+	uploadMethod harukiUtils.UploadMethod,
+) (*uploadContext, error) {
+	if gameUserID == nil {
+		return nil, fmt.Errorf("missing game user ID")
+	}
+	if _, err := harukiUtils.ParseSupportedDataUploadServer(string(server)); err != nil {
+		return nil, fmt.Errorf("invalid server in HandleUpload: %w", err)
+	}
+	if _, err := harukiUtils.ParseUploadDataType(string(dataType)); err != nil {
+		return nil, fmt.Errorf("invalid data_type in HandleUpload: %w", err)
+	}
+	toolboxUserID := ""
+	if userID != nil {
+		toolboxUserID = strings.TrimSpace(*userID)
+	}
+	return &uploadContext{
+		Server:             server,
+		DataType:           dataType,
+		ExpectedGameUserID: *gameUserID,
+		ToolboxUserID:      toolboxUserID,
+		UploadMethod:       uploadMethod,
+	}, nil
+}
+
+func newUploadDataHandler(helper *harukiAPIHelper.HarukiToolboxRouterHelpers) *harukiDataHandler.DataHandler {
+	return &harukiDataHandler.DataHandler{
+		DBManager:      helper.DBManager,
+		SekaiAPIClient: helper.SekaiAPIClient,
+		HttpClient:     getSharedHTTPClient(),
+		Logger:         sharedDataHandlerLogger,
+		WebhookEnabled: helper.GetWebhookEnabled(),
+	}
 }
 
 func getSharedHTTPClient() *harukiHttp.Client {
@@ -169,69 +245,85 @@ func HandleUpload(
 	uploadSemaphore <- struct{}{}
 	defer func() { <-uploadSemaphore }()
 
-	if _, err := harukiUtils.ParseSupportedDataUploadServer(string(server)); err != nil {
-		return nil, fmt.Errorf("invalid server in HandleUpload: %w", err)
+	uploadCtx, err := buildUploadContext(server, dataType, gameUserID, userID, uploadMethod)
+	if err != nil {
+		return nil, err
 	}
-	if _, err := harukiUtils.ParseUploadDataType(string(dataType)); err != nil {
-		return nil, fmt.Errorf("invalid data_type in HandleUpload: %w", err)
-	}
-	handler := &harukiDataHandler.DataHandler{
-		DBManager:      helper.DBManager,
-		SekaiAPIClient: helper.SekaiAPIClient,
-		HttpClient:     getSharedHTTPClient(),
-		Logger:         sharedDataHandlerLogger,
-		WebhookEnabled: helper.GetWebhookEnabled(),
-	}
-	toolboxUserID := ""
-	if userID != nil {
-		toolboxUserID = *userID
-	}
+	handler := newUploadDataHandler(helper)
 	auditWritten := false
 	writeUploadAudit := func(success bool, errorMessage *string) {
 		if auditWritten {
 			return
 		}
-		dispatchUploadAuditLog(helper, handler.Logger, server, *gameUserID, toolboxUserID, dataType, uploadMethod, success, errorMessage)
+		dispatchUploadAuditLog(helper, handler.Logger, uploadCtx, success, errorMessage)
 		auditWritten = true
 	}
-	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(server), strconv.FormatInt(*gameUserID, 10), uploadMethod, userID)
-	if err != nil {
-		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
-		return nil, err
+	fail := func(stage string, result *harukiUtils.HandleDataResult, err error) (*harukiUtils.HandleDataResult, error) {
+		uploadCtx.FailureStage = stage
+		if err != nil && handler.Logger != nil {
+			handler.Logger.Warnf(
+				"Upload failed stage=%s method=%s server=%s dataType=%s expectedGameUserId=%s parsedGameUserId=%s parsedGameUserIdType=%s err=%v",
+				stage,
+				uploadCtx.UploadMethod,
+				uploadCtx.Server,
+				uploadCtx.DataType,
+				uploadCtx.expectedGameUserIDString(),
+				uploadCtx.parsedGameUserIDString(),
+				uploadCtx.ParsedGameUserIDType,
+				err,
+			)
+		}
+		writeUploadAudit(false, buildUploadAuditErrorMessage(err, result))
+		return result, err
 	}
+
+	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(uploadCtx.Server), uploadCtx.expectedGameUserIDString(), uploadCtx.UploadMethod, userID)
+	if err != nil {
+		return fail(uploadStageAccountPolicy, nil, err)
+	}
+	uploadCtx.Settings = settings
 	if userBanned != nil && *userBanned {
 		banMessage := "account owner is banned"
 		if banReason != nil && *banReason != "" {
 			banMessage = "account owner is banned: " + *banReason
 		}
 		err = fmt.Errorf("%w: %s", errUploadOwnerBanned, banMessage)
-		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
-		return nil, err
+		return fail(uploadStageAccountPolicy, nil, err)
 	}
 	if err := validateGameAccountBelonging(belongs); err != nil {
-		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
-		return nil, err
+		return fail(uploadStageAccountPolicy, nil, err)
 	}
-	allowPublicAPI := determinePublicAPIPermission(exists, dataType, settings)
-	if err := validateCNMysekaiAccess(dataType, server, allowCNMySekai); err != nil {
-		writeUploadAudit(false, buildUploadAuditErrorMessage(err, nil))
-		return nil, err
+	uploadCtx.AllowPublicAPI = determinePublicAPIPermission(exists, uploadCtx.DataType, uploadCtx.Settings)
+	if err := validateCNMysekaiAccess(uploadCtx.DataType, uploadCtx.Server, allowCNMySekai); err != nil {
+		return fail(uploadStageAccountPolicy, nil, err)
 	}
-	result, err := handler.HandleAndUpdateData(ctx, data, server, allowPublicAPI, dataType, gameUserID, settings)
-	success := err == nil
-	if err == nil {
-		if vErr := validateUploadResult(result); vErr != nil {
-			success = false
-			err = vErr
-		}
-	}
-	writeUploadAudit(success, buildUploadAuditErrorMessage(err, result))
+
+	unpackedMap, result, err := handler.DecodeUploadData(data, uploadCtx.Server)
 	if err != nil {
-		return result, err
+		return fail(uploadStageDecodePayload, result, err)
 	}
-	if err = helper.DBManager.Redis.ClearCache(ctx, string(dataType), string(server), *gameUserID); err != nil {
+	parsedUserID, err := handler.ExtractGameUserID(unpackedMap)
+	uploadCtx.ParsedGameUserID = parsedUserID.Value
+	uploadCtx.ParsedGameUserIDType = parsedUserID.RawType
+	if err != nil {
+		return fail(uploadStageValidateIdentity, nil, err)
+	}
+	processedData, err := handler.PreHandleData(unpackedMap, &uploadCtx.ExpectedGameUserID, uploadCtx.ParsedGameUserID, uploadCtx.Server, uploadCtx.DataType)
+	if err != nil {
+		return fail(uploadStagePreprocess, nil, err)
+	}
+	if err := handler.PersistUploadData(ctx, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID); err != nil {
+		return fail(uploadStagePersist, nil, err)
+	}
+	result = &harukiUtils.HandleDataResult{UserID: &uploadCtx.ExpectedGameUserID}
+	if err := validateUploadResult(result); err != nil {
+		return fail(uploadStageValidateResult, result, err)
+	}
+	writeUploadAudit(true, nil)
+	if err = helper.DBManager.Redis.ClearCache(ctx, string(uploadCtx.DataType), string(uploadCtx.Server), uploadCtx.ExpectedGameUserID); err != nil {
 		handler.Logger.Warnf("Failed to clear redis cache: %v", err)
 	}
+	handler.RunUploadFanout(data, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID, uploadCtx.Settings, uploadCtx.AllowPublicAPI)
 	return result, nil
 }
 
@@ -316,11 +408,7 @@ func validateUploadResult(result *harukiUtils.HandleDataResult) error {
 func dispatchUploadAuditLog(
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	logger *harukiLogger.Logger,
-	server harukiUtils.SupportedDataUploadServer,
-	gameUserID int64,
-	toolboxUserID string,
-	dataType harukiUtils.UploadDataType,
-	uploadMethod harukiUtils.UploadMethod,
+	uploadCtx *uploadContext,
 	success bool,
 	errorMessage *string,
 ) {
@@ -328,21 +416,17 @@ func dispatchUploadAuditLog(
 	case uploadAuditSemaphore <- struct{}{}:
 		go func() {
 			defer func() { <-uploadAuditSemaphore }()
-			persistUploadAuditLog(helper, logger, server, gameUserID, toolboxUserID, dataType, uploadMethod, success, errorMessage)
+			persistUploadAuditLog(helper, logger, uploadCtx, success, errorMessage)
 		}()
 	default:
-		persistUploadAuditLog(helper, logger, server, gameUserID, toolboxUserID, dataType, uploadMethod, success, errorMessage)
+		persistUploadAuditLog(helper, logger, uploadCtx, success, errorMessage)
 	}
 }
 
 func persistUploadAuditLog(
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	logger *harukiLogger.Logger,
-	server harukiUtils.SupportedDataUploadServer,
-	gameUserID int64,
-	toolboxUserID string,
-	dataType harukiUtils.UploadDataType,
-	uploadMethod harukiUtils.UploadMethod,
+	uploadCtx *uploadContext,
 	success bool,
 	errorMessage *string,
 ) {
@@ -357,11 +441,11 @@ func persistUploadAuditLog(
 	defer cancel()
 
 	create := helper.DBManager.DB.UploadLog.Create().
-		SetServer(string(server)).
-		SetGameUserID(strconv.FormatInt(gameUserID, 10)).
-		SetToolboxUserID(toolboxUserID).
-		SetDataType(string(dataType)).
-		SetUploadMethod(string(uploadMethod)).
+		SetServer(string(uploadCtx.Server)).
+		SetGameUserID(uploadCtx.expectedGameUserIDString()).
+		SetToolboxUserID(uploadCtx.ToolboxUserID).
+		SetDataType(string(uploadCtx.DataType)).
+		SetUploadMethod(string(uploadCtx.UploadMethod)).
 		SetSuccess(success).
 		SetUploadTime(time.Now())
 	if errorMessage != nil {
@@ -375,13 +459,13 @@ func persistUploadAuditLog(
 	}
 
 	targetType := "game_account"
-	targetID := fmt.Sprintf("%s:%d", server, gameUserID)
-	action := "user.upload." + strings.ToLower(string(uploadMethod))
+	targetID := fmt.Sprintf("%s:%d", uploadCtx.Server, uploadCtx.ExpectedGameUserID)
+	action := "user.upload." + strings.ToLower(string(uploadCtx.UploadMethod))
 	actorType := harukiAPIHelper.SystemLogActorTypeSystem
 	var actorUserID *string
-	if strings.TrimSpace(toolboxUserID) != "" {
+	if strings.TrimSpace(uploadCtx.ToolboxUserID) != "" {
 		actorType = harukiAPIHelper.SystemLogActorTypeUser
-		userIDCopy := toolboxUserID
+		userIDCopy := uploadCtx.ToolboxUserID
 		actorUserID = &userIDCopy
 	}
 
@@ -396,10 +480,14 @@ func persistUploadAuditLog(
 			false: harukiAPIHelper.SystemLogResultFailure,
 		}[success],
 		Metadata: map[string]any{
-			"server":       string(server),
-			"gameUserId":   strconv.FormatInt(gameUserID, 10),
-			"dataType":     string(dataType),
-			"uploadMethod": string(uploadMethod),
+			"server":               string(uploadCtx.Server),
+			"gameUserId":           uploadCtx.expectedGameUserIDString(),
+			"expectedGameUserId":   uploadCtx.expectedGameUserIDString(),
+			"parsedGameUserId":     uploadCtx.parsedGameUserIDString(),
+			"parsedGameUserIdType": uploadCtx.ParsedGameUserIDType,
+			"dataType":             string(uploadCtx.DataType),
+			"uploadMethod":         string(uploadCtx.UploadMethod),
+			"failureStage":         uploadCtx.FailureStage,
 			"errorMessage": func() string {
 				if errorMessage == nil {
 					return ""

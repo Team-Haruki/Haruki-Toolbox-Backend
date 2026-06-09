@@ -2,9 +2,18 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	harukiLogger "haruki-suite/utils/logger"
+	"math"
 	"strconv"
 )
+
+const maxSafeIntegerFloat64 = 1<<53 - 1
+
+type ParsedGameUserID struct {
+	Value   *int64
+	RawType string
+}
 
 func convertToStatusCode(status any, logger *harukiLogger.Logger) int {
 	switch v := status.(type) {
@@ -32,43 +41,65 @@ func convertToStatusCode(status any, logger *harukiLogger.Logger) int {
 	return 0
 }
 
-func extractUserIDFromGameData(unpackedMap map[string]any, logger *harukiLogger.Logger) *int64 {
+func extractUserIDFromGameData(unpackedMap map[string]any, logger *harukiLogger.Logger) (ParsedGameUserID, error) {
 	gameData, ok := unpackedMap["userGamedata"].(map[string]any)
 	if !ok {
-		return nil
+		return ParsedGameUserID{}, nil
 	}
 	userIDValue, ok := gameData["userId"]
 	if !ok {
-		return nil
+		return ParsedGameUserID{}, nil
 	}
-	return convertToInt64Pointer(userIDValue, logger)
+	value, err := convertToInt64Pointer(userIDValue, logger)
+	return ParsedGameUserID{Value: value, RawType: fmt.Sprintf("%T", userIDValue)}, err
 }
 
-func convertToInt64Pointer(value any, logger *harukiLogger.Logger) *int64 {
+func convertToInt64Pointer(value any, logger *harukiLogger.Logger) (*int64, error) {
 	switch v := value.(type) {
 	case json.Number:
 		if id64, err := v.Int64(); err == nil {
-			return &id64
+			if id64 < 0 {
+				return nil, nil
+			}
+			return &id64, nil
 		}
 		if u64, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
+			if u64 > math.MaxInt64 {
+				return nil, fmt.Errorf("userId too large for int64: %s", v.String())
+			}
 			tmp := int64(u64)
-			return &tmp
+			return &tmp, nil
 		}
 	case string:
 		if u64, err := strconv.ParseUint(v, 10, 64); err == nil {
+			if u64 > math.MaxInt64 {
+				return nil, fmt.Errorf("userId too large for int64: %s", v)
+			}
 			tmp := int64(u64)
-			return &tmp
+			return &tmp, nil
 		}
 	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || math.Trunc(v) != v {
+			return nil, nil
+		}
+		if v > maxSafeIntegerFloat64 {
+			return nil, fmt.Errorf("unsafe numeric userId: %.0f", v)
+		}
 		tmp := int64(v)
-		return &tmp
+		return &tmp, nil
 	case int64:
-		return &v
+		if v < 0 {
+			return nil, nil
+		}
+		return &v, nil
 	case uint64:
+		if v > math.MaxInt64 {
+			return nil, fmt.Errorf("userId too large for int64: %d", v)
+		}
 		tmp := int64(v)
-		return &tmp
+		return &tmp, nil
 	default:
 		logger.Debugf("userId raw type: %T, value: %v", v, v)
 	}
-	return nil
+	return nil, nil
 }

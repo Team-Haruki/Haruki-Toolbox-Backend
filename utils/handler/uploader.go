@@ -6,6 +6,7 @@ import (
 	harukiConfig "haruki-suite/config"
 	"haruki-suite/utils"
 	apiHelper "haruki-suite/utils/api"
+	harukiAPIData "haruki-suite/utils/api/data"
 	harukiLogger "haruki-suite/utils/logger"
 	"haruki-suite/utils/sekai"
 	"haruki-suite/utils/streamjson"
@@ -92,7 +93,7 @@ func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServ
 		r.RestoreFields(unpackedMap)
 	}
 
-	jsonBytes, err := sonic.Marshal(unpackedMap)
+	jsonBytes, err := sonic.Marshal(harukiAPIData.NormalizeProviderResponse(unpackedMap))
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal restored data to json: %w", err)
 	}
