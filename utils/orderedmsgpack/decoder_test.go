@@ -1,7 +1,7 @@
 package orderedmsgpack
 
 import (
-	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"strings"
@@ -11,65 +11,54 @@ import (
 	"github.com/shamaton/msgpack/v3"
 )
 
-func TestDecodeValue_NonStringMapKeyStringified(t *testing.T) {
-	// map with int key: {1: "x"}
-	r := bytes.NewReader([]byte{
-		msgpackFixMapMin | 0x01,
-		0x01,
-		msgpackFixStrMin | 0x01, 'x',
-	})
-	got, err := decodeValue(r)
-	if err != nil {
-		t.Fatalf("decodeValue returned error: %v", err)
-	}
-	m, ok := got.(*orderedmap.OrderedMap)
-	if !ok {
-		t.Fatalf("decodeValue type = %T, want *orderedmap.OrderedMap", got)
-	}
-	v, exists := m.Get("1")
-	if !exists || v != "x" {
-		t.Fatalf("decoded map value = %v (exists=%v), want x", v, exists)
-	}
-}
+func TestMsgpackToOrderedMapRawExtPayloadBytes(t *testing.T) {
+	data := appendMapHeader(nil, 1)
+	data = appendString(data, "ext")
+	data = append(data, msgpackExt8, 0x02, 0x01, 0xaa, 0xbb)
 
-func TestDecodeValue_ExtPayloadRawBytes(t *testing.T) {
-	// ext8 size=2 type=1 payload=0xaa,0xbb
-	r := bytes.NewReader([]byte{
-		msgpackExt8, 0x02, 0x01, 0xaa, 0xbb,
-	})
-	got, err := decodeValue(r)
+	got, err := MsgpackToOrderedMap(data)
 	if err != nil {
-		t.Fatalf("decodeValue returned error: %v", err)
+		t.Fatalf("MsgpackToOrderedMap returned error: %v", err)
 	}
-	b, ok := got.([]byte)
+	val, exists := got.Get("ext")
+	if !exists {
+		t.Fatalf("ext key missing")
+	}
+	b, ok := val.([]byte)
 	if !ok {
-		t.Fatalf("decodeValue type = %T, want []byte", got)
+		t.Fatalf("decoded ext type = %T, want []byte", val)
 	}
 	if len(b) != 2 || b[0] != 0xaa || b[1] != 0xbb {
 		t.Fatalf("decoded ext bytes = %x, want aabb", b)
 	}
 }
 
-func TestDecodeValue_UnsupportedType(t *testing.T) {
-	// 0xc1 is reserved / unsupported
-	r := bytes.NewReader([]byte{0xc1})
-	if _, err := decodeValue(r); err == nil {
-		t.Fatalf("decodeValue should fail for unsupported type byte")
-	}
-}
+func TestMsgpackToOrderedMapFloat32(t *testing.T) {
+	data := appendMapHeader(nil, 1)
+	data = appendString(data, "f")
+	data = append(data, msgpackFloat32, 0x3f, 0x80, 0x00, 0x00)
 
-func TestDecodeValue_Float32(t *testing.T) {
-	r := bytes.NewReader([]byte{msgpackFloat32, 0x3f, 0x80, 0x00, 0x00}) // 1.0
-	got, err := decodeValue(r)
+	got, err := MsgpackToOrderedMap(data)
 	if err != nil {
-		t.Fatalf("decodeValue returned error: %v", err)
+		t.Fatalf("MsgpackToOrderedMap returned error: %v", err)
 	}
-	f, ok := got.(float64)
+	val, _ := got.Get("f")
+	f, ok := val.(float64)
 	if !ok {
-		t.Fatalf("decodeValue type = %T, want float64", got)
+		t.Fatalf("decoded float32 type = %T, want float64", val)
 	}
 	if math.Abs(f-1.0) > 1e-9 {
 		t.Fatalf("decoded float32 = %v, want 1.0", f)
+	}
+}
+
+func TestMsgpackToOrderedMapUnsupportedType(t *testing.T) {
+	data := appendMapHeader(nil, 1)
+	data = appendString(data, "bad")
+	data = append(data, 0xc1)
+
+	if _, err := MsgpackToOrderedMap(data); err == nil {
+		t.Fatalf("MsgpackToOrderedMap should fail for unsupported type byte")
 	}
 }
 
@@ -153,6 +142,8 @@ func TestMsgpackToOrderedMapLargeFormats(t *testing.T) {
 }
 
 func TestOrderedMapExtLargePayloadRoundTrip(t *testing.T) {
+	// The custom OrderedMap ext is an internal round-trip format, not the
+	// default wire shape expected from game msgpack payloads.
 	if err := RegisterOrderedMapExt(); err != nil {
 		t.Fatalf("RegisterOrderedMapExt returned error: %v", err)
 	}
@@ -183,4 +174,182 @@ func TestOrderedMapExtLargePayloadRoundTrip(t *testing.T) {
 	if len(decoded.Keys()) != len(om.Keys()) {
 		t.Fatalf("standard decoded keys = %d, want %d", len(decoded.Keys()), len(om.Keys()))
 	}
+}
+
+func TestMsgpackToOrderedMapBinAndStringFormats(t *testing.T) {
+	data := appendMapHeader(nil, 6)
+	data = appendString(data, "bin8")
+	data = append(data, msgpackBin8, 0x02, 0xaa, 0xbb)
+	data = appendString(data, "bin16")
+	data = append(data, msgpackBin16, 0x00, 0x02, 0xcc, 0xdd)
+	data = appendString(data, "bin32")
+	data = append(data, msgpackBin32, 0x00, 0x00, 0x00, 0x02, 0xee, 0xff)
+	data = appendString(data, "str8")
+	data = append(data, msgpackStr8, 0x02, 'o', 'k')
+	data = appendString(data, "str16")
+	data = append(data, msgpackStr16, 0x00, 0x02, 'h', 'i')
+	data = appendString(data, "str32")
+	data = append(data, msgpackStr32, 0x00, 0x00, 0x00, 0x02, 'g', 'o')
+
+	om, err := MsgpackToOrderedMap(data)
+	if err != nil {
+		t.Fatalf("MsgpackToOrderedMap returned error: %v", err)
+	}
+	for _, key := range []string{"bin8", "bin16", "bin32"} {
+		if _, ok := valueOf(t, om, key).([]byte); !ok {
+			t.Fatalf("%s type = %T, want []byte", key, valueOf(t, om, key))
+		}
+	}
+	for _, key := range []string{"str8", "str16", "str32"} {
+		if _, ok := valueOf(t, om, key).(string); !ok {
+			t.Fatalf("%s type = %T, want string", key, valueOf(t, om, key))
+		}
+	}
+}
+
+func TestMsgpackToOrderedMapIntegerBoundaries(t *testing.T) {
+	data := appendMapHeader(nil, 7)
+	data = appendString(data, "fixpos")
+	data = append(data, 0x7f)
+	data = appendString(data, "fixneg")
+	data = append(data, 0xe0)
+	data = appendString(data, "uint8")
+	data = append(data, msgpackUint8, 0xff)
+	data = appendString(data, "uint16")
+	data = append(data, msgpackUint16, 0xff, 0xff)
+	data = appendString(data, "uint32")
+	data = append(data, msgpackUint32, 0xff, 0xff, 0xff, 0xff)
+	data = appendString(data, "uint64")
+	data = append(data, msgpackUint64, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff)
+	data = appendString(data, "int64")
+	data = append(data, msgpackInt64, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff)
+
+	om, err := MsgpackToOrderedMap(data)
+	if err != nil {
+		t.Fatalf("MsgpackToOrderedMap returned error: %v", err)
+	}
+	want := map[string]any{
+		"fixpos": int64(127),
+		"fixneg": int64(-32),
+		"uint8":  int64(255),
+		"uint16": int64(65535),
+		"uint32": int64(4294967295),
+		"uint64": uint64(math.MaxUint64),
+		"int64":  int64(-1),
+	}
+	for key, expected := range want {
+		if got := valueOf(t, om, key); got != expected {
+			t.Fatalf("%s = %v (%T), want %v (%T)", key, got, got, expected, expected)
+		}
+	}
+}
+
+func TestMsgpackToOrderedMapNestedMapArrayOrder(t *testing.T) {
+	data := appendMapHeader(nil, 3)
+	data = appendString(data, "first")
+	data = append(data, 0x01)
+	data = appendString(data, "nested")
+	data = appendMapHeader(data, 2)
+	data = appendString(data, "b")
+	data = append(data, 0x02)
+	data = appendString(data, "a")
+	data = appendArrayHeader(data, 2)
+	data = append(data, 0x03, 0x04)
+	data = appendString(data, "last")
+	data = append(data, 0x05)
+
+	om, err := MsgpackToOrderedMap(data)
+	if err != nil {
+		t.Fatalf("MsgpackToOrderedMap returned error: %v", err)
+	}
+	if got := om.Keys(); !equalStrings(got, []string{"first", "nested", "last"}) {
+		t.Fatalf("top-level keys = %v", got)
+	}
+	nested, ok := valueOf(t, om, "nested").(*orderedmap.OrderedMap)
+	if !ok {
+		t.Fatalf("nested type = %T, want *orderedmap.OrderedMap", valueOf(t, om, "nested"))
+	}
+	if got := nested.Keys(); !equalStrings(got, []string{"b", "a"}) {
+		t.Fatalf("nested keys = %v", got)
+	}
+}
+
+func TestMsgpackToOrderedMapRejectsTruncatedInputs(t *testing.T) {
+	cases := [][]byte{
+		{msgpackMap16, 0x00},
+		{msgpackFixMapMin | 0x01, msgpackFixStrMin | 0x03, 'a'},
+		{msgpackFixMapMin | 0x01, msgpackFixStrMin | 0x01, 'a', msgpackBin16, 0x00},
+		{msgpackFixMapMin | 0x01, msgpackFixStrMin | 0x01, 'a', msgpackExt8, 0x02, byte(orderedMapExtCode), 0x81},
+	}
+	for _, data := range cases {
+		if _, err := MsgpackToOrderedMap(data); err == nil {
+			t.Fatalf("MsgpackToOrderedMap should fail for truncated input %x", data)
+		}
+	}
+}
+
+func TestOrderedMapExtRejectsMalformedPayload(t *testing.T) {
+	payload, err := msgpack.Marshal(internalOrderedMap{
+		Keys: []string{"a", "b"},
+		Vals: []any{int64(1)},
+	})
+	if err != nil {
+		t.Fatalf("marshal malformed payload: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "ext8", data: appendExtPayload(msgpackExt8, payload)},
+		{name: "ext16", data: appendExtPayload(msgpackExt16, payload)},
+		{name: "ext32", data: appendExtPayload(msgpackExt32, payload)},
+		{name: "fixext", data: append([]byte{msgpackFixExt1, byte(orderedMapExtCode)}, payload[:1]...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := appendMapHeader(nil, 1)
+			data = appendString(data, "ext")
+			data = append(data, tc.data...)
+			if _, err := MsgpackToOrderedMap(data); err == nil {
+				t.Fatalf("MsgpackToOrderedMap should reject malformed ordered map ext")
+			}
+		})
+	}
+}
+
+func valueOf(t *testing.T, om *orderedmap.OrderedMap, key string) any {
+	t.Helper()
+	val, ok := om.Get(key)
+	if !ok {
+		t.Fatalf("%s key missing", key)
+	}
+	return val
+}
+
+func equalStrings(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func appendExtPayload(code byte, payload []byte) []byte {
+	data := make([]byte, 0, 6+len(payload))
+	switch code {
+	case msgpackExt8:
+		data = append(data, msgpackExt8, byte(len(payload)))
+	case msgpackExt16:
+		data = append(data, msgpackExt16, 0, 0)
+		binary.BigEndian.PutUint16(data[len(data)-2:], uint16(len(payload)))
+	case msgpackExt32:
+		data = append(data, msgpackExt32, 0, 0, 0, 0)
+		binary.BigEndian.PutUint32(data[len(data)-4:], uint32(len(payload)))
+	}
+	data = append(data, byte(orderedMapExtCode))
+	return append(data, payload...)
 }

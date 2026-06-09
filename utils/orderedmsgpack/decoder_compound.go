@@ -93,7 +93,10 @@ func decodeExtPayload(r *bytes.Reader, size int) (any, error) {
 		if err := msgpack.Unmarshal(data, &iom); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal ordered map ext data: %w", err)
 		}
-		om := iom.ToOrderedMap()
+		om, err := iom.ToOrderedMap()
+		if err != nil {
+			return nil, fmt.Errorf("invalid ordered map ext data: %w", err)
+		}
 		return &om, nil
 	}
 

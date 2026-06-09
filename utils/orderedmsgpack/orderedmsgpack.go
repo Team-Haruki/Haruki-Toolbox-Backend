@@ -13,13 +13,16 @@ import (
 	"github.com/shamaton/msgpack/v3/ext"
 )
 
-func (iom internalOrderedMap) ToOrderedMap() orderedmap.OrderedMap {
+func (iom internalOrderedMap) ToOrderedMap() (orderedmap.OrderedMap, error) {
 	om := orderedmap.New()
 	om.SetEscapeHTML(false)
+	if len(iom.Keys) != len(iom.Vals) {
+		return *om, fmt.Errorf("ordered map ext keys/vals length mismatch: keys=%d vals=%d", len(iom.Keys), len(iom.Vals))
+	}
 	for i, key := range iom.Keys {
 		om.Set(key, iom.Vals[i])
 	}
-	return *om
+	return *om, nil
 }
 
 func newInternalMap(om orderedmap.OrderedMap) internalOrderedMap {
@@ -67,7 +70,12 @@ func (d *OrderedMapDecoder) AsValue(offset int, k reflect.Kind, data *[]byte) (a
 			return nil, 0, fmt.Errorf("failed to unmarshal ordered map data: %w", err)
 		}
 
-		return iom.ToOrderedMap(), offset, nil
+		om, err := iom.ToOrderedMap()
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid ordered map ext payload: %w", err)
+		}
+
+		return om, offset, nil
 	}
 	return nil, 0, fmt.Errorf("should not reach this line!! code %x decoding %v", d.Code(), k)
 }
@@ -117,7 +125,12 @@ func (d *OrderedMapStreamDecoder) ToValue(code byte, data []byte, k reflect.Kind
 			return nil, fmt.Errorf("failed to unmarshal ordered map data: %w", err)
 		}
 
-		return iom.ToOrderedMap(), nil
+		om, err := iom.ToOrderedMap()
+		if err != nil {
+			return nil, fmt.Errorf("invalid ordered map ext payload: %w", err)
+		}
+
+		return om, nil
 	}
 	return nil, fmt.Errorf("should not reach this line!! code %x decoding %v", d.Code(), k)
 }
