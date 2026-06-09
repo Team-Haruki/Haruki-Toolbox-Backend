@@ -6,117 +6,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 var envPlaceholderPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
-
-func Load(configPath string) (Config, error) {
-	path := strings.TrimSpace(configPath)
-	if path == "" {
-		return Config{}, fmt.Errorf("config path is empty")
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, fmt.Errorf("open config file %q: %w", path, err)
-	}
-	expandedContent := expandEnvPreservingUnknown(string(content))
-	cfg := Config{
-		Backend: BackendConfig{
-			AutoMigrate:     false,
-			ShutdownTimeout: 10,
-		},
-		OAuth2: OAuth2Config{
-			Provider:                  "hydra",
-			HydraRequestTimeoutSecond: 10,
-		},
-		UserSystem: UserSystemConfig{
-			AuthProvider:                 "kratos",
-			AuthProxyTrustedHeader:       "X-Auth-Proxy-Secret",
-			AuthProxySubjectHeader:       "X-Kratos-Identity-Id",
-			AuthProxyNameHeader:          "X-User-Name",
-			AuthProxyEmailHeader:         "X-User-Email",
-			AuthProxyEmailVerifiedHeader: "X-User-Email-Verified",
-			AuthProxyUserIDHeader:        "X-User-Id",
-			KratosRequestTimeout:         10,
-			KratosSessionHeader:          "X-Session-Token",
-			KratosSessionCookie:          "ory_kratos_session",
-			KratosAutoLinkByEmail:        true,
-			KratosAutoProvisionUser:      true,
-			SMTP: SMTPConfig{
-				TimeoutSeconds: 10,
-			},
-		},
-		Webhook: WebhookConfig{
-			Enabled: true,
-		},
-		Subscription: SubscriptionConfig{
-			UserAgent:            "Haruki-Toolbox-Backend",
-			RequestTimeoutSecond: 5,
-		},
-	}
-	if err := yaml.Unmarshal([]byte(expandedContent), &cfg); err != nil {
-		return Config{}, fmt.Errorf("parse config file %q: %w", path, err)
-	}
-	if err := applyEnvOverrides(&cfg); err != nil {
-		return Config{}, err
-	}
-	if cfg.Backend.ShutdownTimeout <= 0 {
-		cfg.Backend.ShutdownTimeout = 10
-	}
-	if cfg.UserSystem.SMTP.TimeoutSeconds <= 0 {
-		cfg.UserSystem.SMTP.TimeoutSeconds = 10
-	}
-	switch strings.ToLower(strings.TrimSpace(cfg.UserSystem.AuthProvider)) {
-	case "", "kratos":
-		cfg.UserSystem.AuthProvider = "kratos"
-	default:
-		return Config{}, fmt.Errorf("invalid user_system.auth_provider %q", strings.TrimSpace(cfg.UserSystem.AuthProvider))
-	}
-	if cfg.UserSystem.KratosRequestTimeout <= 0 {
-		cfg.UserSystem.KratosRequestTimeout = 10
-	}
-	if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedHeader) == "" {
-		cfg.UserSystem.AuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
-	}
-	if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
-		cfg.UserSystem.AuthProxySubjectHeader = "X-Kratos-Identity-Id"
-	}
-	if strings.TrimSpace(cfg.UserSystem.AuthProxyNameHeader) == "" {
-		cfg.UserSystem.AuthProxyNameHeader = "X-User-Name"
-	}
-	if strings.TrimSpace(cfg.UserSystem.AuthProxyEmailHeader) == "" {
-		cfg.UserSystem.AuthProxyEmailHeader = "X-User-Email"
-	}
-	if strings.TrimSpace(cfg.UserSystem.AuthProxyEmailVerifiedHeader) == "" {
-		cfg.UserSystem.AuthProxyEmailVerifiedHeader = "X-User-Email-Verified"
-	}
-	if strings.TrimSpace(cfg.UserSystem.AuthProxyUserIDHeader) == "" {
-		cfg.UserSystem.AuthProxyUserIDHeader = "X-User-Id"
-	}
-	if strings.TrimSpace(cfg.UserSystem.KratosSessionHeader) == "" {
-		cfg.UserSystem.KratosSessionHeader = "X-Session-Token"
-	}
-	if strings.TrimSpace(cfg.UserSystem.KratosSessionCookie) == "" {
-		cfg.UserSystem.KratosSessionCookie = "ory_kratos_session"
-	}
-	if strings.TrimSpace(cfg.OAuth2.Provider) == "" {
-		cfg.OAuth2.Provider = "hydra"
-	}
-	if cfg.OAuth2.HydraRequestTimeoutSecond <= 0 {
-		cfg.OAuth2.HydraRequestTimeoutSecond = 10
-	}
-	if strings.TrimSpace(cfg.Subscription.UserAgent) == "" {
-		cfg.Subscription.UserAgent = "Haruki-Toolbox-Backend"
-	}
-	if cfg.Subscription.RequestTimeoutSecond <= 0 {
-		cfg.Subscription.RequestTimeoutSecond = 5
-	}
-
-	return cfg, nil
-}
 
 func expandEnvPreservingUnknown(content string) string {
 	return envPlaceholderPattern.ReplaceAllStringFunc(content, func(token string) string {
@@ -339,21 +231,4 @@ func firstEnvKey(keys ...string) string {
 		}
 	}
 	return ""
-}
-
-func LoadGlobal(configPath string) error {
-	cfg, err := Load(configPath)
-	if err != nil {
-		return err
-	}
-	Cfg = cfg
-	return nil
-}
-
-func LoadGlobalFromEnvOrDefault() (string, error) {
-	configPath := resolveConfigPathFromEnvOrDefault()
-	if err := LoadGlobal(configPath); err != nil {
-		return configPath, err
-	}
-	return configPath, nil
 }
