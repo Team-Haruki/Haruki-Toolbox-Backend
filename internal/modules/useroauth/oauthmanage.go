@@ -95,7 +95,7 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 }
 
 func RegisterUserOAuthAuthorizationRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/oauth2/authorizations")
-	r.Get("/", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleListOAuthAuthorizations(apiHelper))
-	r.Delete("/:client_id", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleRevokeOAuthAuthorization(apiHelper))
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/oauth2/authorizations", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"))...)
+	r.Get("/", handleListOAuthAuthorizations(apiHelper))
+	r.Delete("/:client_id", handleRevokeOAuthAuthorization(apiHelper))
 }

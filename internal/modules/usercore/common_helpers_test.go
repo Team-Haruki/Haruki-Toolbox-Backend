@@ -251,3 +251,24 @@ func TestComposedUserGuards(t *testing.T) {
 		})
 	}
 }
+
+func TestRouteHandlersAppendsRouteHandlers(t *testing.T) {
+	t.Parallel()
+
+	first := func(c fiber.Ctx) error { return c.Next() }
+	second := func(c fiber.Ctx) error { return c.Next() }
+	third := func(c fiber.Ctx) error { return c.Next() }
+
+	handlers := RouteHandlers([]fiber.Handler{first, second}, third)
+	if len(handlers) != 3 {
+		t.Fatalf("len = %d, want 3", len(handlers))
+	}
+	for i, handler := range handlers {
+		if handler == nil {
+			t.Fatalf("handler %d is nil", i)
+		}
+		if _, ok := handler.(fiber.Handler); !ok {
+			t.Fatalf("handler %d type = %T, want fiber.Handler", i, handler)
+		}
+	}
+}

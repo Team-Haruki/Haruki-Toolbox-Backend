@@ -335,10 +335,12 @@ func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
-	r.Put("/profile", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleUpdateProfile(apiHelper))
+	profileHandler, profileRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleUpdateProfile(apiHelper))
+	r.Put("/profile", profileHandler, profileRest...)
 	if apiHelper.SessionHandler.UsesManagedBrowserAuth() {
 		r.Put("/change-password", userauth.LegacyAuthDisabledHandler())
 		return
 	}
-	r.Put("/change-password", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleChangePassword(apiHelper))
+	passwordHandler, passwordRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleChangePassword(apiHelper))
+	r.Put("/change-password", passwordHandler, passwordRest...)
 }

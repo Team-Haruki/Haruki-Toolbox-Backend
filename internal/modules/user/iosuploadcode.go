@@ -81,5 +81,6 @@ func handleGenerateIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 func RegisterUserRoutes(helper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	api := helper.Router.Group("/api/user")
-	api.Post("/:toolbox_user_id/ios/generate-upload-code", helper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(helper), handleGenerateIOSUploadCode(helper))
+	uploadCodeHandler, uploadCodeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(helper, "toolbox_user_id"), handleGenerateIOSUploadCode(helper))
+	api.Post("/:toolbox_user_id/ios/generate-upload-code", uploadCodeHandler, uploadCodeRest...)
 }

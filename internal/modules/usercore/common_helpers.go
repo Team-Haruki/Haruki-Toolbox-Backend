@@ -120,6 +120,28 @@ func RequireAuthenticatedVerifiedSelf(apiHelper *harukiAPIHelper.HarukiToolboxRo
 	}
 }
 
+func RouteHandlers(guards []fiber.Handler, handlers ...fiber.Handler) []any {
+	routeHandlers := make([]any, 0, len(guards)+len(handlers))
+	for _, guard := range guards {
+		routeHandlers = append(routeHandlers, guard)
+	}
+	for _, handler := range handlers {
+		routeHandlers = append(routeHandlers, handler)
+	}
+	return routeHandlers
+}
+
+func splitRouteHandlers(routeHandlers []any) (any, []any) {
+	if len(routeHandlers) == 0 {
+		return func(c fiber.Ctx) error { return c.Next() }, nil
+	}
+	return routeHandlers[0], routeHandlers[1:]
+}
+
+func RouteHandlerParts(guards []fiber.Handler, handlers ...fiber.Handler) (any, []any) {
+	return splitRouteHandlers(RouteHandlers(guards, handlers...))
+}
+
 func WriteUserAuditLog(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, action string, result string, targetUserID string, metadata map[string]any) {
 	if strings.TrimSpace(targetUserID) == "" {
 		if localUserID, ok := c.Locals("userID").(string); ok {

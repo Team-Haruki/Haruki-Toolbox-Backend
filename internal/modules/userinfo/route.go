@@ -6,6 +6,9 @@ import (
 )
 
 func RegisterUserInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	apiHelper.Router.Get("/api/user/me", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.CheckUserNotBanned(apiHelper), handleGetMe(apiHelper))
-	apiHelper.Router.Get("/api/user/:toolbox_user_id/get-settings", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleGetSettings(apiHelper))
+	meHandler, meRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedUser(apiHelper), handleGetMe(apiHelper))
+	apiHelper.Router.Get("/api/user/me", meHandler, meRest...)
+
+	settingsHandler, settingsRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleGetSettings(apiHelper))
+	apiHelper.Router.Get("/api/user/:toolbox_user_id/get-settings", settingsHandler, settingsRest...)
 }

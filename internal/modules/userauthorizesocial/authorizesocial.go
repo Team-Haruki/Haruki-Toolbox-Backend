@@ -342,15 +342,26 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 
 func RegisterUserAuthorizeSocialRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	base := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform")
-	requireVerifiedEmail := userCoreModule.RequireVerifiedEmail()
+	verifiedSelf := func(handlers ...fiber.Handler) (any, []any) {
+		routeHandler, routeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedVerifiedSelf(apiHelper, "toolbox_user_id"), handlers...)
+		return routeHandler, routeRest
+	}
+	authenticatedSelf := func(handlers ...fiber.Handler) (any, []any) {
+		routeHandler, routeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handlers...)
+		return routeHandler, routeRest
+	}
 
-	base.Post("/", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), requireVerifiedEmail, verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatform(apiHelper))
+	createHandler, createRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatform(apiHelper))
+	base.Post("/", createHandler, createRest...)
 
 	r := base.Group("/:id")
+	createAtIDHandler, createAtIDRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatformAtID(apiHelper))
+	updateHandler, updateRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleUpdateAuthorizeSocialPlatform(apiHelper))
+	deleteHandler, deleteRest := authenticatedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
 	r.RouteChain("/").
-		Post(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), requireVerifiedEmail, verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatformAtID(apiHelper)).
-		Put(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), requireVerifiedEmail, verifyUserHasVerifiedSocialPlatform(apiHelper), handleUpdateAuthorizeSocialPlatform(apiHelper)).
-		Delete(apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
+		Post(createAtIDHandler, createAtIDRest...).
+		Put(updateHandler, updateRest...).
+		Delete(deleteHandler, deleteRest...)
 }
 
 func isSupportedSocialPlatform(platform harukiAPIHelper.SocialPlatform) bool {

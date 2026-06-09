@@ -359,6 +359,6 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 }
 
 func RegisterUserActivityLogRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/activity-logs")
-	r.Get("/", apiHelper.SessionHandler.VerifySessionToken, userCoreModule.RequireSelfUserParam("toolbox_user_id"), userCoreModule.CheckUserNotBanned(apiHelper), handleListOwnActivityLogs(apiHelper))
+	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/activity-logs", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"))...)
+	r.Get("/", handleListOwnActivityLogs(apiHelper))
 }
