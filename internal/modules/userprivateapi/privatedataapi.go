@@ -9,11 +9,14 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
+	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"golang.org/x/sync/errgroup"
@@ -171,6 +174,14 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if !authorized {
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
 		}
+		requestKey := c.Query("key")
+		cacheKey := harukiRedis.BuildGameDataCacheKey("private", string(server), string(dataType), userID, requestKey)
+		if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); cErr == nil && found {
+			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+			return c.SendString(cached)
+		} else if cErr != nil {
+			harukiLogger.Warnf("Failed to read private game data cache: %v", cErr)
+		}
 		result, err := apiHelper.DBManager.Mongo.GetData(ctx, userID, string(server), dataType)
 		if lookupErr := mapPrivateDataQueryError(err); lookupErr != nil {
 			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
@@ -179,24 +190,35 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if len(result) == 0 {
 			return harukiApiHelper.ErrorNotFound(c, "game data not found")
 		}
-		return processRequestKeys(c, result)
+		resp := buildPrivateDataResponse(requestKey, result)
+		if encoded, mErr := sonic.Marshal(resp); mErr == nil {
+			if cErr := apiHelper.DBManager.Redis.SetRawCache(ctx, cacheKey, string(encoded), 300*time.Second); cErr != nil {
+				harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
+			}
+		} else {
+			harukiLogger.Warnf("Failed to marshal private game data cache: %v", mErr)
+		}
+		return c.JSON(resp)
 	}
 }
 
 func processRequestKeys(c fiber.Ctx, result bson.D) error {
-	requestKey := c.Query("key")
+	return c.JSON(buildPrivateDataResponse(c.Query("key"), result))
+}
+
+func buildPrivateDataResponse(requestKey string, result bson.D) any {
 	if requestKey != "" {
 		keys := strings.Split(requestKey, ",")
 		if len(keys) == 1 {
-			return c.JSON(data.NormalizeProviderResponse(bsonDGet(result, keys[0])))
+			return data.NormalizeProviderResponse(bsonDGet(result, keys[0]))
 		}
 		filtered := make(bson.D, 0, len(keys))
 		for _, k := range keys {
 			filtered = append(filtered, bson.E{Key: k, Value: bsonDGet(result, k)})
 		}
-		return c.JSON(data.NormalizeProviderResponse(filtered))
+		return data.NormalizeProviderResponse(filtered)
 	}
-	return c.JSON(data.NormalizeProviderResponse(result))
+	return data.NormalizeProviderResponse(result)
 }
 
 func bsonDGet(d bson.D, key string) any {

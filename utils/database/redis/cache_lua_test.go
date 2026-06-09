@@ -136,17 +136,22 @@ func TestGetRawCache(t *testing.T) {
 	}
 }
 
-func TestClearCacheRemovesAllPublicQueryVariants(t *testing.T) {
+func TestClearCacheRemovesAllGameDataQueryVariants(t *testing.T) {
 	t.Parallel()
 
 	manager, _ := newTestRedisManager(t)
 	ctx := context.Background()
 
-	// Same path with different query hashes should all be invalidated.
+	// Same data address with different surfaces and query hashes should all be invalidated.
 	keys := []string{
+		BuildGameDataCacheKey("public", "jp", "suite", 123, ""),
+		BuildGameDataCacheKey("public", "jp", "suite", 123, "upload_time"),
+		BuildGameDataCacheKey("private", "jp", "suite", 123, "userProfile"),
+		BuildGameDataCacheKey("oauth2", "jp", "suite", 123, "userProfile,userGamedata"),
 		buildCacheKey(publicAccessNamespace, "/public/jp/suite/123", ""),
 		buildCacheKey(publicAccessNamespace, "/public/jp/suite/123", "key=upload_time"),
 		buildCacheKey(publicAccessNamespace, "/public/jp/suite/123", "key=userProfile"),
+		buildCacheKey(publicAccessNamespace, "/api/public/jp/suite/123", "key=userProfile"),
 	}
 	for _, key := range keys {
 		if err := manager.Redis.Set(ctx, key, "v", time.Minute).Err(); err != nil {
@@ -154,9 +159,16 @@ func TestClearCacheRemovesAllPublicQueryVariants(t *testing.T) {
 		}
 	}
 
-	untouchedKey := buildCacheKey(publicAccessNamespace, "/public/jp/suite/999", "key=userProfile")
-	if err := manager.Redis.Set(ctx, untouchedKey, "keep", time.Minute).Err(); err != nil {
-		t.Fatalf("seed untouched redis value error: %v", err)
+	untouchedKeys := []string{
+		BuildGameDataCacheKey("public", "jp", "suite", 999, "userProfile"),
+		BuildGameDataCacheKey("public", "en", "suite", 123, "userProfile"),
+		BuildGameDataCacheKey("public", "jp", "mysekai", 123, "userProfile"),
+		buildCacheKey(publicAccessNamespace, "/public/jp/suite/999", "key=userProfile"),
+	}
+	for _, key := range untouchedKeys {
+		if err := manager.Redis.Set(ctx, key, "keep", time.Minute).Err(); err != nil {
+			t.Fatalf("seed untouched redis value error: %v", err)
+		}
 	}
 
 	if err := manager.ClearCache(ctx, "suite", "jp", 123); err != nil {
@@ -173,12 +185,14 @@ func TestClearCacheRemovesAllPublicQueryVariants(t *testing.T) {
 		}
 	}
 
-	untouchedVal, err := manager.Redis.Get(ctx, untouchedKey).Result()
-	if err != nil {
-		t.Fatalf("redis get untouched key error: %v", err)
-	}
-	if untouchedVal != "keep" {
-		t.Fatalf("untouched key value = %q, want %q", untouchedVal, "keep")
+	for _, key := range untouchedKeys {
+		untouchedVal, err := manager.Redis.Get(ctx, key).Result()
+		if err != nil {
+			t.Fatalf("redis get untouched key error for %s: %v", key, err)
+		}
+		if untouchedVal != "keep" {
+			t.Fatalf("untouched key %s value = %q, want %q", key, untouchedVal, "keep")
+		}
 	}
 }
 

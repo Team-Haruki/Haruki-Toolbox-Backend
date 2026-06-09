@@ -54,19 +54,19 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		var resp any
-		if dataType != harukiUtils.UploadDataTypeMysekai {
-			cacheKey := harukiRedis.CacheKeyBuilderWithAllowedQuery(c, "public_access", "key")
-			if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); err == nil && found {
-				c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-				return c.SendString(cached)
-			}
+		requestKey := c.Query("key")
+		cacheKey := harukiRedis.BuildGameDataCacheKey("public", string(server), string(dataType), userID, requestKey)
+		if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); err == nil && found {
+			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+			return c.SendString(cached)
+		} else if err != nil {
+			harukiLogger.Warnf("Failed to read public game data cache: %v", err)
 		}
 		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
 		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
 		for _, k := range publicAPIAllowedKeys {
 			allowedKeySet[k] = struct{}{}
 		}
-		requestKey := c.Query("key")
 		if dataType == harukiUtils.UploadDataTypeSuite {
 			resp, err = data.HandleSuiteRequest(c, apiHelper, userID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
 		} else {
@@ -82,13 +82,12 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Errorf("Failed to load public game data: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
 		}
-		if dataType != harukiUtils.UploadDataTypeMysekai {
-			cacheKey := harukiRedis.CacheKeyBuilderWithAllowedQuery(c, "public_access", "key")
-			if encoded, mErr := sonic.Marshal(resp); mErr == nil {
-				_ = apiHelper.DBManager.Redis.SetRawCache(ctx, cacheKey, string(encoded), 300*time.Second)
-			} else {
-				harukiLogger.Warnf("Failed to marshal public game data cache: %v", mErr)
+		if encoded, mErr := sonic.Marshal(resp); mErr == nil {
+			if err := apiHelper.DBManager.Redis.SetRawCache(ctx, cacheKey, string(encoded), 300*time.Second); err != nil {
+				harukiLogger.Warnf("Failed to write public game data cache: %v", err)
 			}
+		} else {
+			harukiLogger.Warnf("Failed to marshal public game data cache: %v", mErr)
 		}
 		return c.JSON(resp)
 	}

@@ -21,6 +21,7 @@ import (
 
 const (
 	publicAccessNamespace = "public_access"
+	gameDataNamespace     = "game_data"
 	emptyQueryHash        = "none"
 	cacheKeyFormat        = "%s:%s:query=%s"
 
@@ -49,6 +50,10 @@ func PublicAccessNamespace() string {
 	return publicAccessNamespace
 }
 
+func GameDataNamespace() string {
+	return gameDataNamespace
+}
+
 type CachePath struct {
 	Namespace   string
 	Path        string
@@ -61,20 +66,30 @@ type CacheItem struct {
 }
 
 func GetClearCachePaths(server string, dataType string, userID int64) []CachePath {
+	publicPath := buildLegacyPublicCachePath("/public/", server, dataType, userID)
+	apiPublicPath := buildLegacyPublicCachePath("/api/public/", server, dataType, userID)
+	return []CachePath{
+		{
+			Namespace: publicAccessNamespace,
+			Path:      publicPath,
+		},
+		{
+			Namespace: publicAccessNamespace,
+			Path:      apiPublicPath,
+		},
+	}
+}
+
+func buildLegacyPublicCachePath(prefix string, server string, dataType string, userID int64) string {
 	var pathBuilder strings.Builder
-	pathBuilder.Grow(len("/public/") + len(server) + len(dataType) + 24)
-	pathBuilder.WriteString("/public/")
+	pathBuilder.Grow(len(prefix) + len(server) + len(dataType) + 24)
+	pathBuilder.WriteString(prefix)
 	pathBuilder.WriteString(server)
 	pathBuilder.WriteByte('/')
 	pathBuilder.WriteString(dataType)
 	pathBuilder.WriteByte('/')
 	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
-	return []CachePath{
-		{
-			Namespace: publicAccessNamespace,
-			Path:      pathBuilder.String(),
-		},
-	}
+	return pathBuilder.String()
 }
 
 func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
@@ -104,6 +119,25 @@ func CacheKeyBuilderWithAllowedQuery(c fiber.Ctx, namespace string, allowedQuery
 		values.Set(normalizedKey, normalizedValue)
 	}
 	return buildCacheKey(namespace, fullPath, values.Encode())
+}
+
+func BuildGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string) string {
+	trimmedKey := strings.TrimSpace(requestKey)
+	queryString := ""
+	if trimmedKey != "" {
+		queryString = "key=" + trimmedKey
+	}
+
+	var pathBuilder strings.Builder
+	pathBuilder.Grow(len(surface) + len(server) + len(dataType) + 32)
+	pathBuilder.WriteString(strings.TrimSpace(surface))
+	pathBuilder.WriteByte(':')
+	pathBuilder.WriteString(strings.TrimSpace(server))
+	pathBuilder.WriteByte(':')
+	pathBuilder.WriteString(strings.TrimSpace(dataType))
+	pathBuilder.WriteByte(':')
+	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
+	return buildCacheKey(gameDataNamespace, pathBuilder.String(), queryString)
 }
 
 func buildCacheKey(namespace, path, queryString string) string {
@@ -198,6 +232,9 @@ func (r *HarukiRedisManager) DeleteCache(ctx context.Context, key string) error 
 }
 
 func (r *HarukiRedisManager) GetRawCache(ctx context.Context, key string) (string, bool, error) {
+	if r == nil || r.Redis == nil {
+		return "", false, fmt.Errorf("redis client is nil")
+	}
 	val, err := r.Redis.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
 		return "", false, nil
@@ -210,6 +247,9 @@ func (r *HarukiRedisManager) GetRawCache(ctx context.Context, key string) (strin
 }
 
 func (r *HarukiRedisManager) SetRawCache(ctx context.Context, key string, value string, ttl time.Duration) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
 	if err := r.Redis.Set(ctx, key, value, ttl).Err(); err != nil {
 		harukiLogger.Errorf("Failed to set raw redis cache for key %s: %v", key, err)
 		return err
@@ -282,27 +322,43 @@ func (r *HarukiRedisManager) ClearNamespace(ctx context.Context, namespace strin
 }
 
 func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server string, userID int64) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	if err := r.clearCachePattern(ctx, fmt.Sprintf("%s:*:%s:%s:%d:query=*", gameDataNamespace, server, dataType, userID)); err != nil {
+		return err
+	}
 	paths := GetClearCachePaths(server, dataType, userID)
 	for _, path := range paths {
 		if path.Namespace == "" || path.Path == "" {
 			continue
 		}
 		pattern := fmt.Sprintf("%s:%s:query=*", path.Namespace, path.Path)
-		var cursor uint64
-		for {
-			keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
-			if err != nil {
-				return fmt.Errorf("clear redis cache scan failed: %w", err)
+		if err := r.clearCachePattern(ctx, pattern); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *HarukiRedisManager) clearCachePattern(ctx context.Context, pattern string) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("clear redis cache scan failed: %w", err)
+		}
+		if len(keys) > 0 {
+			if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
+				return fmt.Errorf("clear redis cache delete failed: %w", err)
 			}
-			if len(keys) > 0 {
-				if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
-					return fmt.Errorf("clear redis cache delete failed: %w", err)
-				}
-			}
-			cursor = nextCursor
-			if cursor == 0 {
-				break
-			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
 		}
 	}
 	return nil

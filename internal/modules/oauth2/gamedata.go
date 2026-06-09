@@ -8,10 +8,13 @@ import (
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
 	"haruki-suite/utils/database/postgresql/user"
+	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiOAuth2 "haruki-suite/utils/oauth2"
 	"strconv"
+	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -78,6 +81,14 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		requestKey := c.Query("key")
+		cacheKey := harukiRedis.BuildGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey)
+		if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); cErr == nil && found {
+			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+			return c.SendString(cached)
+		} else if cErr != nil {
+			harukiLogger.Warnf("Failed to read OAuth2 game data cache: %v", cErr)
+		}
+
 		var resp any
 		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
 		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
@@ -99,6 +110,13 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
 		}
 
+		if encoded, mErr := sonic.Marshal(resp); mErr == nil {
+			if cErr := apiHelper.DBManager.Redis.SetRawCache(ctx, cacheKey, string(encoded), 300*time.Second); cErr != nil {
+				harukiLogger.Warnf("Failed to write OAuth2 game data cache: %v", cErr)
+			}
+		} else {
+			harukiLogger.Warnf("Failed to marshal OAuth2 game data cache: %v", mErr)
+		}
 		return c.JSON(resp)
 	}
 }

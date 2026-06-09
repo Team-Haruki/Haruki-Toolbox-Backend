@@ -12,8 +12,8 @@ func TestGetClearCachePaths(t *testing.T) {
 	t.Parallel()
 
 	paths := GetClearCachePaths("jp", "suite", 123)
-	if len(paths) != 1 {
-		t.Fatalf("GetClearCachePaths len = %d, want 1", len(paths))
+	if len(paths) != 2 {
+		t.Fatalf("GetClearCachePaths len = %d, want 2", len(paths))
 	}
 	if paths[0].Namespace != publicAccessNamespace {
 		t.Fatalf("first namespace = %q, want %q", paths[0].Namespace, publicAccessNamespace)
@@ -23,6 +23,15 @@ func TestGetClearCachePaths(t *testing.T) {
 	}
 	if paths[0].QueryString != "" {
 		t.Fatalf("query string should be empty, got %q", paths[0].QueryString)
+	}
+	if paths[1].Namespace != publicAccessNamespace {
+		t.Fatalf("second namespace = %q, want %q", paths[1].Namespace, publicAccessNamespace)
+	}
+	if paths[1].Path != "/api/public/jp/suite/123" {
+		t.Fatalf("second path = %q, want %q", paths[1].Path, "/api/public/jp/suite/123")
+	}
+	if paths[1].QueryString != "" {
+		t.Fatalf("query string should be empty, got %q", paths[1].QueryString)
 	}
 }
 
@@ -114,5 +123,25 @@ func TestCacheKeyBuilderWithAllowedQueryDropsAllUnknownParams(t *testing.T) {
 	want := "public_access:/public/jp/suite/123:query=none"
 	if got != want {
 		t.Fatalf("CacheKeyBuilderWithAllowedQuery = %q, want %q", got, want)
+	}
+}
+
+func TestBuildGameDataCacheKey(t *testing.T) {
+	t.Parallel()
+
+	got := BuildGameDataCacheKey("public", "jp", "suite", 123, " upload_time ")
+	want := "game_data:public:jp:suite:123:query=b6715d065478a9abd37d540714b8b78d"
+	if got != want {
+		t.Fatalf("BuildGameDataCacheKey = %q, want %q", got, want)
+	}
+
+	if got := BuildGameDataCacheKey("private", "jp", "mysekai", 123, ""); got != "game_data:private:jp:mysekai:123:query=none" {
+		t.Fatalf("BuildGameDataCacheKey empty query = %q", got)
+	}
+
+	keyAC := BuildGameDataCacheKey("oauth2", "jp", "suite", 123, "a,c")
+	keyCA := BuildGameDataCacheKey("oauth2", "jp", "suite", 123, "c,a")
+	if keyAC == keyCA {
+		t.Fatalf("different key order should produce different cache keys, both = %q", keyAC)
 	}
 }
