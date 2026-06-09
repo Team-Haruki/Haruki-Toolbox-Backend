@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
+	"strconv"
 	"strings"
 	"time"
 
@@ -189,4 +191,19 @@ func deleteBirthdayEventsBySubscription(ctx context.Context, redisClient *goredi
 		}
 		cursor = nextCursor
 	}
+}
+
+func birthdayTTLUntil(expiresAt int64) time.Duration {
+	if expiresAt <= 0 {
+		return 0
+	}
+	ttl := time.Until(time.Unix(expiresAt, 0))
+	if ttl <= 0 {
+		return 0
+	}
+	return ttl + 10*time.Minute
+}
+
+func newBirthdayEventID() string {
+	return strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatUint(rand.Uint64(), 36)
 }
