@@ -1,0 +1,78 @@
+{
+  "type": "record",
+  "name": "SuiteUserData",
+  "fields": [
+    {
+      "name": "userCards",
+      "msgpack_key": 2,
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "UserCard",
+          "fields": [
+            {
+              "name": "level",
+              "msgpack_key": 1,
+              "type": "int"
+            },
+            {
+              "name": "cardId",
+              "msgpack_key": 0,
+              "type": "long"
+            },
+            {
+              "name": "episodes",
+              "msgpack_key": 2,
+              "type": [
+                "null",
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "record",
+                    "name": "UserCardEpisode",
+                    "fields": [
+                      {
+                        "name": "scenarioStatus",
+                        "msgpack_key": 1,
+                        "type": "string"
+                      },
+                      {
+                        "name": "cardEpisodeId",
+                        "msgpack_key": 0,
+                        "type": "long"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "userHonors",
+      "msgpack_key": 1,
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "UserHonor",
+          "fields": [
+            {
+              "name": "honorId",
+              "msgpack_key": 0,
+              "type": "long"
+            },
+            {
+              "name": "level",
+              "msgpack_key": 1,
+              "type": "int"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

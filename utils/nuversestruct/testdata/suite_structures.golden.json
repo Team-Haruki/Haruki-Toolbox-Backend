@@ -1,0 +1,17 @@
+{
+    "userCards": [
+        "cardId",
+        "level",
+        [
+            "episodes",
+            [
+                "cardEpisodeId",
+                "scenarioStatus"
+            ]
+        ]
+    ],
+    "userHonors": [
+        "honorId",
+        "level"
+    ]
+}
