@@ -8,15 +8,22 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'Dockerfile'
       - '.dockerignore'
       - '.github/workflows/docker.yml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
+      - 'Dockerfile'
+      - 'main.go'
       - 'go.mod'
       - 'go.sum'
-      - 'src/**'
+      - 'haruki-suite-configs.example.yaml'
+      - 'api/**'
       - 'cmd/**'
+      - 'config/**'
+      - 'data/**'
+      - 'ent/**'
+      - 'external/**'
+      - 'internal/**'
+      - 'utils/**'
+      - 'version/**'
   workflow_dispatch:
 
 permissions:
