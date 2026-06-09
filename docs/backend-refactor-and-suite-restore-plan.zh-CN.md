@@ -28,6 +28,7 @@
 - 旧 `data/suite_structures.json` 已移除，`restore_suite.structures_file` 示例配置已指向 `./data/suite_user.avsc`。
 - compact restore 的重复展开算法已抽到 `utils/compactrestore`，查询侧 `utils/api/data` 只保留 BSON 适配。
 - 未接入 runtime 的 `utils/nuverse` master restorer 已移除；本项目当前只保留 suite restorer。
+- suite restore 已增加统一 `RestoreSuite` 门面，上传 DB 预处理和第三方同步恢复路径都通过同一入口调用。
 - Docker workflow PR path filter 已清理旧 Rust 路径并改为 Go 项目真实路径。
 - `internal/modules/usercore` 已增加组合 route guard helper，并替换等价的用户路由 guard 链。
 - `utils/orderedmsgpack` 已完成解码硬化，并移除内部自定义 `OrderedMap` msgpack ext；生产入口只保留标准 msgpack 解码。
@@ -44,7 +45,6 @@
 
 1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
 2. 下一批大文件拆分优先从 `adminwebhook` 开始，再处理 `harukibotneo`、`userprivateapi`、`adminusers`。
-3. 若继续治理 suite restore，再评估是否引入统一 `RestoreSuite` 门面。
 
 ---
 
@@ -471,31 +471,38 @@ go run ./cmd/nuverse-restore-compare \
 
 如果未来 master data 也要恢复，应另开阶段评估，不混入 suite upload restore。
 
-### 阶段 5：考虑统一 `RestoreSuite` 门面
+### 阶段 5：已实现统一 `RestoreSuite` 门面
 
-为上传路径提供统一接口：
+上传路径当前通过统一入口恢复 suite 数据：
 
 ```go
 type SuiteRestoreReport struct {
-    Region string
-    Source string
+    Region         string
+    Source         string
+    Purpose        SuiteRestorePurpose
+    Enabled        bool
+    RestorerLoaded bool
     RestoredFields int
-    FailedFields []string
+    FailedFields   []string
 }
 
 func RestoreSuite(
     server utils.SupportedDataUploadServer,
     data map[string]any,
+    options SuiteRestoreOptions,
 ) (map[string]any, SuiteRestoreReport, error)
 ```
 
-内部当前应包裹 StructTool/Avro schema 生成的 `utils/suiterestore.Restorer`。
+内部包裹 StructTool/Avro schema 生成的 `utils/suiterestore.Restorer`，并保留两种 purpose：
 
-验收标准：
+- `SuiteRestorePurposeDatabase`：用于 Mongo 写入前预处理，先执行 `cleanSuite`，再按 `restore_suite.enable_regions` 决定是否恢复。
+- `SuiteRestorePurposeSync`：用于第三方同步 restored JSON+zstd payload，不执行 `cleanSuite`，也不受 `enable_regions` 控制；是否启用仍由各同步目标的 `restore_suite_*` 配置决定。
 
-- 上传路径只依赖统一接口
-- restore 失败时能选择保留原始数据或返回明确错误。
-- 日志包含 region、结构来源和失败字段
+当前策略：
+
+- 缺少 region schema/restorer 不让上传失败，只在 report 中记录 `RestorerLoaded=false`。
+- 字段级恢复异常保留原字段值，并记录到 `FailedFields`。
+- report 包含 region、结构来源、purpose、恢复字段数和失败字段，方便后续接日志或审计。
 
 ---
 
@@ -551,7 +558,6 @@ StructTool v2 不应作为运行时外部命令被调用。
 1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
 2. 明确但暂不提交本地未跟踪项：`7445104842642643749`、`8D6B...`、`cmd/suite-rec-backfill/`、`registration-handoff.cn.md`、`suite_rec/`。
 3. 下一批大文件拆分优先从 `adminwebhook` 开始，再处理 `harukibotneo`、`userprivateapi`、`adminusers`。
-4. 若继续治理 suite restore，再评估是否引入统一 `RestoreSuite` 门面。
 
 ---
 

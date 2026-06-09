@@ -7,11 +7,13 @@ import (
 	"testing"
 
 	harukiConfig "haruki-suite/config"
+	harukiUtils "haruki-suite/utils"
 )
 
 func resetSuiteRestorerStateForTest() {
 	suiteRestorerOnce = sync.Once{}
 	suiteRestorerMap = nil
+	suiteRestorerSourceMap = nil
 	suiteRestorerLoadFailures = nil
 }
 
@@ -138,5 +140,172 @@ func TestGetSuiteRestorerLoadStatusReturnsFailureMapCopy(t *testing.T) {
 	_, failuresAgain := GetSuiteRestorerLoadStatus()
 	if failuresAgain["en"] == "mutated" {
 		t.Fatalf("GetSuiteRestorerLoadStatus should return a copy of failures map")
+	}
+}
+
+func TestRestoreSuiteDatabasePurposeCleansAndRespectsEnabledRegions(t *testing.T) {
+	originalStructuresFile := harukiConfig.Cfg.RestoreSuite.StructuresFile
+	originalEnableRegions := harukiConfig.Cfg.RestoreSuite.EnableRegions
+	originalRemoveKeys := harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys
+	t.Cleanup(func() {
+		harukiConfig.Cfg.RestoreSuite.StructuresFile = originalStructuresFile
+		harukiConfig.Cfg.RestoreSuite.EnableRegions = originalEnableRegions
+		harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys = originalRemoveKeys
+		resetSuiteRestorerStateForTest()
+	})
+
+	resetSuiteRestorerStateForTest()
+
+	tmpDir := t.TempDir()
+	schemaPath := filepath.Join(tmpDir, "suite_user.avsc")
+	if err := os.WriteFile(schemaPath, testStructToolSuiteSchema(), 0600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	harukiConfig.Cfg.RestoreSuite.StructuresFile = map[string]string{"jp": schemaPath}
+	harukiConfig.Cfg.RestoreSuite.EnableRegions = []string{"jp"}
+	harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys = []string{"removeMe"}
+
+	data := map[string]any{
+		"removeMe":  []any{1},
+		"userCards": []any{[]any{int64(100), int64(30)}},
+	}
+	restored, report, err := RestoreSuite(
+		harukiUtils.SupportedDataUploadServerJP,
+		data,
+		SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase},
+	)
+	if err != nil {
+		t.Fatalf("RestoreSuite returned error: %v", err)
+	}
+	if !report.Enabled || !report.RestorerLoaded || report.Purpose != SuiteRestorePurposeDatabase {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	if report.Source != schemaPath {
+		t.Fatalf("Source = %q, want %q", report.Source, schemaPath)
+	}
+	if report.RestoredFields != 1 || len(report.FailedFields) != 0 {
+		t.Fatalf("restore report mismatch: %#v", report)
+	}
+	if len(restored["removeMe"].([]any)) != 0 {
+		t.Fatalf("database purpose should clean configured suite keys, got %#v", restored["removeMe"])
+	}
+	card := restored["userCards"].([]any)[0].(map[string]any)
+	if card["cardId"] != int64(100) || card["level"] != int64(30) {
+		t.Fatalf("unexpected restored card: %#v", card)
+	}
+}
+
+func TestRestoreSuiteDatabasePurposeSkipsDisabledRegion(t *testing.T) {
+	originalStructuresFile := harukiConfig.Cfg.RestoreSuite.StructuresFile
+	originalEnableRegions := harukiConfig.Cfg.RestoreSuite.EnableRegions
+	t.Cleanup(func() {
+		harukiConfig.Cfg.RestoreSuite.StructuresFile = originalStructuresFile
+		harukiConfig.Cfg.RestoreSuite.EnableRegions = originalEnableRegions
+		resetSuiteRestorerStateForTest()
+	})
+
+	resetSuiteRestorerStateForTest()
+
+	tmpDir := t.TempDir()
+	schemaPath := filepath.Join(tmpDir, "suite_user.avsc")
+	if err := os.WriteFile(schemaPath, testStructToolSuiteSchema(), 0600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	harukiConfig.Cfg.RestoreSuite.StructuresFile = map[string]string{"jp": schemaPath}
+	harukiConfig.Cfg.RestoreSuite.EnableRegions = []string{"en"}
+
+	data := map[string]any{"userCards": []any{[]any{int64(100), int64(30)}}}
+	restored, report, err := RestoreSuite(
+		harukiUtils.SupportedDataUploadServerJP,
+		data,
+		SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase},
+	)
+	if err != nil {
+		t.Fatalf("RestoreSuite returned error: %v", err)
+	}
+	if report.Enabled {
+		t.Fatalf("database restore should be disabled for jp, report=%#v", report)
+	}
+	if _, ok := restored["userCards"].([]any)[0].([]any); !ok {
+		t.Fatalf("disabled region should keep compact array, got %#v", restored["userCards"])
+	}
+}
+
+func TestRestoreSuiteSyncPurposeIgnoresEnabledRegionsAndDoesNotClean(t *testing.T) {
+	originalStructuresFile := harukiConfig.Cfg.RestoreSuite.StructuresFile
+	originalEnableRegions := harukiConfig.Cfg.RestoreSuite.EnableRegions
+	originalRemoveKeys := harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys
+	t.Cleanup(func() {
+		harukiConfig.Cfg.RestoreSuite.StructuresFile = originalStructuresFile
+		harukiConfig.Cfg.RestoreSuite.EnableRegions = originalEnableRegions
+		harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys = originalRemoveKeys
+		resetSuiteRestorerStateForTest()
+	})
+
+	resetSuiteRestorerStateForTest()
+
+	tmpDir := t.TempDir()
+	schemaPath := filepath.Join(tmpDir, "suite_user.avsc")
+	if err := os.WriteFile(schemaPath, testStructToolSuiteSchema(), 0600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+	harukiConfig.Cfg.RestoreSuite.StructuresFile = map[string]string{"jp": schemaPath}
+	harukiConfig.Cfg.RestoreSuite.EnableRegions = []string{"en"}
+	harukiConfig.Cfg.SekaiClient.SuiteRemoveKeys = []string{"removeMe"}
+
+	data := map[string]any{
+		"removeMe":  []any{1},
+		"userCards": []any{[]any{int64(100), int64(30)}},
+	}
+	restored, report, err := RestoreSuite(
+		harukiUtils.SupportedDataUploadServerJP,
+		data,
+		SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync},
+	)
+	if err != nil {
+		t.Fatalf("RestoreSuite returned error: %v", err)
+	}
+	if !report.Enabled || report.Purpose != SuiteRestorePurposeSync || report.RestoredFields != 1 {
+		t.Fatalf("unexpected sync report: %#v", report)
+	}
+	if len(restored["removeMe"].([]any)) != 1 {
+		t.Fatalf("sync purpose should not clean suite keys, got %#v", restored["removeMe"])
+	}
+	card := restored["userCards"].([]any)[0].(map[string]any)
+	if card["cardId"] != int64(100) || card["level"] != int64(30) {
+		t.Fatalf("unexpected restored card: %#v", card)
+	}
+}
+
+func TestRestoreSuiteMissingRestorerReportsWithoutError(t *testing.T) {
+	originalStructuresFile := harukiConfig.Cfg.RestoreSuite.StructuresFile
+	t.Cleanup(func() {
+		harukiConfig.Cfg.RestoreSuite.StructuresFile = originalStructuresFile
+		resetSuiteRestorerStateForTest()
+	})
+
+	resetSuiteRestorerStateForTest()
+
+	harukiConfig.Cfg.RestoreSuite.StructuresFile = map[string]string{}
+	data := map[string]any{"userCards": []any{[]any{int64(100), int64(30)}}}
+	restored, report, err := RestoreSuite(
+		harukiUtils.SupportedDataUploadServerJP,
+		data,
+		SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync},
+	)
+	if err != nil {
+		t.Fatalf("RestoreSuite returned error: %v", err)
+	}
+	if report.RestorerLoaded {
+		t.Fatalf("RestorerLoaded should be false, report=%#v", report)
+	}
+	if report.Region != "jp" || report.Purpose != SuiteRestorePurposeSync {
+		t.Fatalf("report identity mismatch: %#v", report)
+	}
+	if restored == nil || len(restored) != len(data) {
+		t.Fatalf("missing restorer should leave data unchanged, got %#v", restored)
+	}
+	if _, ok := restored["userCards"].([]any)[0].([]any); !ok {
+		t.Fatalf("missing restorer should keep compact array, got %#v", restored["userCards"])
 	}
 }

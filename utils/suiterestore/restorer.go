@@ -18,6 +18,12 @@ type Restorer struct {
 	fields map[string][]fieldDef
 }
 
+// RestoreReport describes one in-place suite restore run.
+type RestoreReport struct {
+	RestoredFields int
+	FailedFields   []string
+}
+
 // NewFromDefinitions creates a Restorer from StructTool-derived field definitions.
 func NewFromDefinitions(raw map[string][]any) (*Restorer, error) {
 	fields := make(map[string][]fieldDef, len(raw))
@@ -68,6 +74,15 @@ func parseFieldDefs(raw []any) ([]fieldDef, error) {
 // Fields that are already in dict format are left untouched.
 // Returns the same map for convenience.
 func (r *Restorer) RestoreFields(data map[string]any) map[string]any {
+	r.RestoreFieldsWithReport(data)
+	return data
+}
+
+// RestoreFieldsWithReport converts suite fields in-place and reports top-level
+// fields restored or failed. Unknown, missing, and already keyed fields are not
+// treated as failures.
+func (r *Restorer) RestoreFieldsWithReport(data map[string]any) (map[string]any, RestoreReport) {
+	report := RestoreReport{}
 	for field, defs := range r.fields {
 		v, ok := data[field]
 		if !ok {
@@ -77,28 +92,56 @@ func (r *Restorer) RestoreFields(data map[string]any) map[string]any {
 		if !ok {
 			continue
 		}
-		data[field] = restoreSlice(items, defs)
+		restored, changed, err := restoreFieldSafelyWithChanged(items, defs)
+		if err != nil {
+			report.FailedFields = append(report.FailedFields, field)
+			continue
+		}
+		data[field] = restored
+		if changed {
+			report.RestoredFields++
+		}
 	}
-	return data
+	return data, report
+}
+
+func restoreSliceChanged(items []any, defs []fieldDef) ([]any, bool) {
+	result := make([]any, 0, len(items))
+	changed := false
+	for _, item := range items {
+		switch v := item.(type) {
+		case []any:
+			result = append(result, arrayToDict(v, defs))
+			changed = true
+		case map[string]any:
+			if restoreNestedInDictChanged(v, defs) {
+				changed = true
+			}
+			result = append(result, v)
+		default:
+			result = append(result, item)
+		}
+	}
+	return result, changed
+}
+
+func restoreFieldSafelyWithChanged(items []any, defs []fieldDef) (restored []any, changed bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+			restored = nil
+			changed = false
+		}
+	}()
+	restored, changed = restoreSliceChanged(items, defs)
+	return restored, changed, nil
 }
 
 // restoreSlice converts each []any element into map[string]any using the
 // field definitions. Elements already in dict form are checked for nested
 // fields that might still need restoration.
 func restoreSlice(items []any, defs []fieldDef) []any {
-	result := make([]any, 0, len(items))
-	for _, item := range items {
-		switch v := item.(type) {
-		case []any:
-			result = append(result, arrayToDict(v, defs))
-		case map[string]any:
-			// Already a dict — but check nested fields
-			restoreNestedInDict(v, defs)
-			result = append(result, v)
-		default:
-			result = append(result, item)
-		}
-	}
+	result, _ := restoreSliceChanged(items, defs)
 	return result
 }
 
@@ -127,6 +170,11 @@ func arrayToDict(arr []any, defs []fieldDef) map[string]any {
 // restoreNestedInDict checks an already-dict element for nested array
 // fields that might still need restoration.
 func restoreNestedInDict(m map[string]any, defs []fieldDef) {
+	restoreNestedInDictChanged(m, defs)
+}
+
+func restoreNestedInDictChanged(m map[string]any, defs []fieldDef) bool {
+	changed := false
 	for _, def := range defs {
 		if def.Children == nil {
 			continue
@@ -136,7 +184,12 @@ func restoreNestedInDict(m map[string]any, defs []fieldDef) {
 			continue
 		}
 		if subItems, ok := v.([]any); ok {
-			m[def.Key] = restoreSlice(subItems, def.Children)
+			restored, nestedChanged := restoreSliceChanged(subItems, def.Children)
+			m[def.Key] = restored
+			if nestedChanged || len(subItems) > 0 {
+				changed = true
+			}
 		}
 	}
+	return changed
 }

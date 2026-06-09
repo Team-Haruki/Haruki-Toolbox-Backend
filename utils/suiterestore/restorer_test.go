@@ -242,6 +242,31 @@ func TestRestoreFields_UnknownFields_Untouched(t *testing.T) {
 	}
 }
 
+func TestRestoreFieldsWithReport(t *testing.T) {
+	r := createTestRestorer(t)
+	data := map[string]any{
+		"userActionSets": []any{[]any{1, "active"}},
+		"userHonors":     []any{map[string]any{"honorId": 100, "level": 5}},
+		"unknownField":   []any{1, 2, 3},
+	}
+
+	result, report := r.RestoreFieldsWithReport(data)
+	if report.RestoredFields != 1 {
+		t.Fatalf("RestoredFields = %d, want 1", report.RestoredFields)
+	}
+	if len(report.FailedFields) != 0 {
+		t.Fatalf("FailedFields = %#v, want empty", report.FailedFields)
+	}
+	set := result["userActionSets"].([]any)[0].(map[string]any)
+	if set["id"] != 1 || set["status"] != "active" {
+		t.Fatalf("unexpected restored set: %#v", set)
+	}
+	honor := result["userHonors"].([]any)[0].(map[string]any)
+	if honor["honorId"] != 100 || honor["level"] != 5 {
+		t.Fatalf("already dict field should be preserved, got %#v", honor)
+	}
+}
+
 func TestNewFromDefinitionsInvalidNestedDefinition(t *testing.T) {
 	_, err := NewFromDefinitions(map[string][]any{
 		"userCards": {[]any{"episodes"}},

@@ -32,12 +32,11 @@ func (h *DataHandler) PreHandleData(
 		if err := validateSuiteData(data); err != nil {
 			return nil, err
 		}
-		data = cleanSuite(data)
-		if shouldRestoreSuiteForDB(server) {
-			if r := getSuiteRestorer(server); r != nil {
-				data = r.RestoreFields(data)
-			}
+		restored, _, err := RestoreSuite(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase})
+		if err != nil {
+			return nil, err
 		}
+		data = restored
 	}
 	if dataType == utils.UploadDataTypeMysekaiBirthdayParty {
 		if err := validateBirthdayPartyData(data); err != nil {

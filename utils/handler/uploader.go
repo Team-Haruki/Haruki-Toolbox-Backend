@@ -89,11 +89,12 @@ func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServ
 		return nil, fmt.Errorf("unpacked data is not a map")
 	}
 
-	if r := getSuiteRestorer(server); r != nil {
-		r.RestoreFields(unpackedMap)
+	restored, _, err := RestoreSuite(server, unpackedMap, SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync})
+	if err != nil {
+		return nil, fmt.Errorf("failed to restore suite data: %w", err)
 	}
 
-	jsonBytes, err := sonic.Marshal(harukiAPIData.NormalizeProviderResponse(unpackedMap))
+	jsonBytes, err := sonic.Marshal(harukiAPIData.NormalizeProviderResponse(restored))
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal restored data to json: %w", err)
 	}
