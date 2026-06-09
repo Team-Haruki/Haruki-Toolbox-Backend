@@ -1,6 +1,7 @@
 package nuversestruct
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -108,6 +109,51 @@ func TestCompareSuiteRestoreWithBaselineSchemaReportsChanges(t *testing.T) {
 	}
 	if !containsString(report.AddedFields, "userCards[].episodes") {
 		t.Fatalf("expected generated nested field to be reported as added, got %#v", report.AddedFields)
+	}
+}
+
+func TestCompareSuiteRestoreReportGolden(t *testing.T) {
+	dir := t.TempDir()
+	baselinePath := filepath.Join(dir, "baseline.avsc")
+	schemaPath := filepath.Join(dir, "schema.avsc")
+	samplePath := filepath.Join(dir, "minimal_suite_sample.msgpack")
+
+	if err := os.WriteFile(baselinePath, readTestdata(t, "baseline_schema.avro.json"), 0o600); err != nil {
+		t.Fatalf("write baseline schema: %v", err)
+	}
+	if err := os.WriteFile(schemaPath, readTestdata(t, "suite_schema.avro.json"), 0o600); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	msgpackBytes, err := orderedmsgpack.Marshal(map[string]any{
+		"userCards": []any{
+			[]any{int64(100), int64(30), []any{[]any{int64(1), "read"}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal sample: %v", err)
+	}
+	if err := os.WriteFile(samplePath, msgpackBytes, 0o600); err != nil {
+		t.Fatalf("write sample msgpack: %v", err)
+	}
+
+	report, err := CompareSuiteRestore(CompareOptions{
+		SampleMsgpackPath:  samplePath,
+		BaselineSchemaPath: baselinePath,
+		SchemaPath:         schemaPath,
+	})
+	if err != nil {
+		t.Fatalf("CompareSuiteRestore returned error: %v", err)
+	}
+	report.BaselineSchemaPath = "testdata/baseline_schema.avro.json"
+	report.SchemaPath = "testdata/suite_schema.avro.json"
+	report.SampleMsgpackPath = "testdata/minimal_suite_sample.msgpack"
+	got, err := report.MarshalJSONDeterministic()
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	if golden := readTestdata(t, "compare_report.golden.json"); !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace(golden)) {
+		t.Fatalf("compare report differs from golden\n got: %s\nwant: %s", got, golden)
 	}
 }
 

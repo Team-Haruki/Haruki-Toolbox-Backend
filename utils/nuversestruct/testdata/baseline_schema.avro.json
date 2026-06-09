@@ -1,0 +1,29 @@
+{
+  "type": "record",
+  "name": "SuiteUserData",
+  "fields": [
+    {
+      "name": "userCards",
+      "msgpack_key": 2,
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "UserCard",
+          "fields": [
+            {
+              "name": "level",
+              "msgpack_key": 1,
+              "type": "int"
+            },
+            {
+              "name": "cardId",
+              "msgpack_key": 0,
+              "type": "long"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

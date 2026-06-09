@@ -1,0 +1,11 @@
+{
+  "baselineSchemaPath": "testdata/baseline_schema.avro.json",
+  "schemaPath": "testdata/suite_schema.avro.json",
+  "sampleMsgpackPath": "testdata/minimal_suite_sample.msgpack",
+  "comparedTopLevelFields": 1,
+  "fieldAdded": [
+    "userCards[].episodes"
+  ],
+  "generatedStructureCount": 2,
+  "baselineStructureCount": 1
+}

@@ -27,6 +27,9 @@
 - 已从本地 Unity `DummyDll` 生成 `data/suite_user.avsc`，运行时 suite restore 结构来源已切到 StructTool/Avro schema。
 - 旧 `data/suite_structures.json` 已移除，`restore_suite.structures_file` 示例配置已指向 `./data/suite_user.avsc`。
 - compact restore 的重复展开算法已抽到 `utils/compactrestore`，`utils/api/data` 和 `utils/nuverse` 只保留各自 BSON / orderedmap 适配。
+- Docker workflow PR path filter 已清理旧 Rust 路径并改为 Go 项目真实路径。
+- `internal/modules/usercore` 已增加组合 route guard helper，并替换等价的用户路由 guard 链。
+- `utils/orderedmsgpack` 已完成解码硬化，并移除内部自定义 `OrderedMap` msgpack ext；生产入口只保留标准 msgpack 解码。
 
 仍未纳入或清理的本地项：
 
@@ -39,10 +42,9 @@
 
 当前下一步优先级：
 
-1. 收口 compact restore 去重改动，保持 public/private/oauth2 查询行为不变。
-2. 清理 Docker workflow PR path filter 中的 Rust 残留路径。
-3. 继续做路由 guard 组合 helper 或选择下一批高风险大文件拆分。
-4. 对 StructTool/suite restore 增加更正式的 schema 生成说明和小型 golden fixture，避免依赖本地真实样本。
+1. 对 StructTool/suite restore 增加更正式的 schema 生成说明和小型 golden fixture，避免依赖本地真实样本。
+2. 明确 `utils/nuverse` 作为离线/reference master restorer 的定位，后续再评估是否删除未接入 runtime 的 master 逻辑。
+3. 下一批大文件拆分优先从 `adminwebhook`、`harukibotneo`、`userprivateapi`、`adminusers` 中选择。
 
 ---
 
@@ -190,7 +192,7 @@ users / webhook 的兼容 SQL 已移动到 `internal/bootstrap/schema_compat.go`
 
 每次只拆一个模块，先移动逻辑和补测试，不同时做行为调整。
 
-### 3.5 用户路由 guard 组合重复
+### 3.5 用户路由 guard 组合已收口
 
 多处重复出现：
 
@@ -200,13 +202,13 @@ userCoreModule.RequireSelfUserParam("toolbox_user_id"),
 userCoreModule.CheckUserNotBanned(apiHelper),
 ```
 
-建议在 `internal/modules/usercore` 增加组合 helper，例如：
+当前已在 `internal/modules/usercore` 增加组合 helper：
 
 - `RequireAuthenticatedUser(apiHelper)`
 - `RequireAuthenticatedSelf(apiHelper, "toolbox_user_id")`
 - `RequireAuthenticatedVerifiedSelf(apiHelper, "toolbox_user_id")`
 
-这样可以减少漏挂 guard 或顺序不一致的风险。
+等价的用户路由 guard 链已经替换；后续新增用户路由时应优先复用这些 helper，避免漏挂 guard 或顺序不一致。
 
 ### 3.6 配置文件已完成第一轮拆分
 
@@ -230,11 +232,11 @@ userCoreModule.CheckUserNotBanned(apiHelper),
 
 拆分时已保持 `config.Load` 和 `config.LoadGlobalFromEnvOrDefault` 行为不变。
 
-### 3.7 Workflow path filter 需要清理旧痕迹
+### 3.7 Workflow path filter 已清理旧痕迹
 
-Docker workflow 的 PR path filter 还包含 `Cargo.toml`、`Cargo.lock`、`src/**`。
+Docker workflow 的 PR path filter 曾包含 `Cargo.toml`、`Cargo.lock`、`src/**`。
 
-建议替换为 Go 项目真实路径：
+当前已经替换为 Go 项目真实路径：
 
 - `main.go`
 - `go.mod`
@@ -386,13 +388,47 @@ Haruki-Nuverse-StructTool v2 的核心能力是：
 
 ### 阶段 2：补正式 schema 生成说明
 
-目前 schema 生成依赖本地 `DummyDll` 和外部 exporter 临时操作。后续应补充一段可复现说明：
+schema 生成依赖本地 `DummyDll` 和外部 exporter，不把 Unity DLL 或真实 raw sample 放入仓库。
 
-- exporter 来源。
-- 需要的 `DummyDll` 目录。
-- root class，例如 `Sekai.SuiteUser`。
-- 生成 `data/suite_user.avsc` 的命令。
-- 生成后需要运行的 compare/test 命令。
+当前推荐流程：
+
+```bash
+# 1. 准备 exporter
+git clone --branch main https://github.com/middlered/unity-msgpack-schema-exporter.git /tmp/unity-msgpack-schema-exporter
+cd /tmp/unity-msgpack-schema-exporter
+dotnet build UnityMsgpackSchemaExporter.Cli/UnityMsgpackSchemaExporter.Cli.csproj
+
+# 之后回到 Haruki-Toolbox-Backend 项目根目录执行
+cd /path/to/Haruki-Toolbox-Backend
+
+# 2. 确认 root class；本地 DummyDll 路径不提交
+dotnet run --project /tmp/unity-msgpack-schema-exporter/UnityMsgpackSchemaExporter.Cli -- list SuiteUser --dll ~/Desktop/pjskida/tw/DummyDll
+
+# 3. 生成运行时 schema
+dotnet run --project /tmp/unity-msgpack-schema-exporter/UnityMsgpackSchemaExporter.Cli -- avro Sekai.SuiteUser --dll ~/Desktop/pjskida/tw/DummyDll > data/suite_user.avsc
+
+# 4. 确认后端 adapter 可消费该 schema
+go run ./cmd/nuverse-restore-compare -schema data/suite_user.avsc -generate-only
+go test ./utils/nuversestruct ./utils/suiterestore ./utils/handler
+```
+
+离线行为校验可以继续使用 StructTool v2：
+
+```bash
+git clone --branch v2 https://github.com/Team-Haruki/Haruki-Nuverse-StructTool.git /tmp/Haruki-Nuverse-StructTool-v2
+cd /tmp/Haruki-Nuverse-StructTool-v2
+go run . --schema /path/to/data/suite_user.avsc --class Sekai.SuiteUser --hex <compact-msgpack-hex>
+```
+
+真实 raw upload 样本只用于本地人工验证：
+
+```bash
+go run ./cmd/nuverse-restore-compare \
+  -schema data/suite_user.avsc \
+  -sample 7445104842642643749 \
+  -input-format raw-upload \
+  -server jp
+```
 
 验收标准：
 
@@ -402,11 +438,16 @@ Haruki-Nuverse-StructTool v2 的核心能力是：
 
 ### 阶段 3：补小型 golden fixture
 
-当前已经有 parser/generation 单元测试，但真实 raw upload 样本不应提交。后续可增加小型脱敏 fixture：
+当前已经有 parser/generation 单元测试、generated structures golden 和 compare report golden；真实 raw upload 样本不应提交。
 
 - 最小 Avro schema。
 - 最小 compact msgpack payload。
 - compare report golden。
+
+已完成：
+
+- 已有最小 Avro schema 与 generated structures golden。
+- 已补 compare report golden，确保离线 compare 输出在 CI 中可审阅。
 
 验收标准：
 
@@ -422,6 +463,8 @@ Haruki-Nuverse-StructTool v2 的核心能力是：
 - 保留为离线/reference 包，并补 package comment。
 - 删除未使用的 master restorer，但保留 API 查询所需的 `utils/compactrestore`。
 - 如果未来 master data 也要恢复，另开阶段评估，不混入 suite upload restore。
+
+当前默认采用第一种：`utils/nuverse` 保留为离线/reference master restorer；上传 runtime 继续走 `utils/nuversestruct` + `utils/suiterestore`。
 
 ### 阶段 5：考虑统一 `RestoreSuite` 门面
 
@@ -500,12 +543,10 @@ StructTool v2 不应作为运行时外部命令被调用。
 
 ## 8. 建议执行顺序
 
-1. 收口并提交 compact restore 去重：`utils/compactrestore`、`utils/api/data`、`utils/nuverse`。
-2. 清理 Docker workflow path filter 中的 Rust 残留路径，并补 Go 项目真实路径。
-3. 明确但暂不提交本地未跟踪项：`7445104842642643749`、`8D6B...`、`cmd/suite-rec-backfill/`、`registration-handoff.cn.md`、`suite_rec/`。
-4. 为 StructTool schema 生成补可复现说明，或新增小型脱敏 golden fixture。
-5. 评估 `internal/modules/usercore` guard 组合 helper，减少路由 guard 重复。
-6. 下一批大文件拆分优先从 `adminusers`、`adminwebhook`、`harukibotneo`、`userprivateapi` 中选择。
+1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
+2. 明确但暂不提交本地未跟踪项：`7445104842642643749`、`8D6B...`、`cmd/suite-rec-backfill/`、`registration-handoff.cn.md`、`suite_rec/`。
+3. 下一批大文件拆分优先从 `adminwebhook` 开始，再处理 `harukibotneo`、`userprivateapi`、`adminusers`。
+4. 若继续治理 suite restore，再评估是否引入统一 `RestoreSuite` 门面。
 
 ---
 
