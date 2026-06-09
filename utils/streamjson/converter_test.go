@@ -91,6 +91,29 @@ func TestConvertBinaryAndExtAsNull(t *testing.T) {
 	}
 }
 
+func TestConvertAddsUserIDStringForUserGamedata(t *testing.T) {
+	t.Parallel()
+
+	// {"userGamedata":{"userId":9223372036854775000,"rank":123}}
+	msgpack := []byte{
+		0x81,
+		0xac, 'u', 's', 'e', 'r', 'G', 'a', 'm', 'e', 'd', 'a', 't', 'a',
+		0x82,
+		0xa6, 'u', 's', 'e', 'r', 'I', 'd',
+		0xd3, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0xd8,
+		0xa4, 'r', 'a', 'n', 'k',
+		0x7b,
+	}
+	var out bytes.Buffer
+	if err := Convert(msgpack, &out); err != nil {
+		t.Fatalf("Convert returned error: %v", err)
+	}
+	want := `{"userGamedata":{"userId":9223372036854775000,"rank":123,"userIdString":"9223372036854775000"}}`
+	if out.String() != want {
+		t.Fatalf("Convert output = %q, want %q", out.String(), want)
+	}
+}
+
 func TestWriteJSONStringEscapes(t *testing.T) {
 	t.Parallel()
 

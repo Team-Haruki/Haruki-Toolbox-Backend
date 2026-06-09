@@ -4,12 +4,21 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 )
 
-func writeMap(r *bytes.Reader, w io.Writer, n int) error {
+const (
+	streamJSONFieldUserGamedata = "userGamedata"
+	streamJSONFieldUserID       = "userId"
+	streamJSONFieldUserIDString = "userIdString"
+)
+
+func writeMap(r *bytes.Reader, w io.Writer, n int, objectName string) error {
 	if _, err := w.Write([]byte{'{'}); err != nil {
 		return err
 	}
+	var userIDString string
+	var hasUserIDString bool
 	for i := range n {
 		if i > 0 {
 			if _, err := w.Write([]byte{','}); err != nil {
@@ -29,8 +38,44 @@ func writeMap(r *bytes.Reader, w io.Writer, n int) error {
 			return err
 		}
 
-		if err := writeValue(r, w); err != nil {
-			return fmt.Errorf("map value for key %q: %w", string(keyBytes), err)
+		key := string(keyBytes)
+		childObjectName := ""
+		if key == streamJSONFieldUserGamedata {
+			childObjectName = streamJSONFieldUserGamedata
+		}
+		if objectName == streamJSONFieldUserGamedata && key == streamJSONFieldUserID {
+			var value bytes.Buffer
+			if err := writeValueInObject(r, &value, childObjectName); err != nil {
+				return fmt.Errorf("map value for key %q: %w", key, err)
+			}
+			if _, err := w.Write(value.Bytes()); err != nil {
+				return err
+			}
+			if s, ok := jsonScalarAsString(value.String()); ok {
+				userIDString = s
+				hasUserIDString = true
+			}
+			continue
+		}
+
+		if err := writeValueInObject(r, w, childObjectName); err != nil {
+			return fmt.Errorf("map value for key %q: %w", key, err)
+		}
+	}
+	if hasUserIDString {
+		if n > 0 {
+			if _, err := w.Write([]byte{','}); err != nil {
+				return err
+			}
+		}
+		if err := writeJSONString(w, []byte(streamJSONFieldUserIDString)); err != nil {
+			return err
+		}
+		if _, err := w.Write([]byte{':'}); err != nil {
+			return err
+		}
+		if err := writeJSONString(w, []byte(userIDString)); err != nil {
+			return err
 		}
 	}
 	_, err := w.Write([]byte{'}'})
@@ -53,6 +98,20 @@ func writeArray(r *bytes.Reader, w io.Writer, n int) error {
 	}
 	_, err := w.Write([]byte{']'})
 	return err
+}
+
+func jsonScalarAsString(raw string) (string, bool) {
+	if raw == "" || raw == "null" {
+		return "", false
+	}
+	if raw[0] == '"' {
+		unquoted, err := strconv.Unquote(raw)
+		if err != nil || unquoted == "" {
+			return "", false
+		}
+		return unquoted, true
+	}
+	return raw, true
 }
 
 func readMsgpackString(r *bytes.Reader) ([]byte, error) {

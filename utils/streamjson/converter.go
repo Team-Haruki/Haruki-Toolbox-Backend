@@ -13,6 +13,10 @@ func Convert(msgpackData []byte, w io.Writer) error {
 }
 
 func writeValue(r *bytes.Reader, w io.Writer) error {
+	return writeValueInObject(r, w, "")
+}
+
+func writeValueInObject(r *bytes.Reader, w io.Writer, objectName string) error {
 	b, err := r.ReadByte()
 	if err != nil {
 		return fmt.Errorf("read type byte: %w", err)
@@ -28,7 +32,7 @@ func writeValue(r *bytes.Reader, w io.Writer) error {
 		return err
 	}
 
-	if err := writeFixedCollectionOrString(r, w, b); err != errNotFixedType {
+	if err := writeFixedCollectionOrString(r, w, b, objectName); err != errNotFixedType {
 		return err
 	}
 
@@ -212,14 +216,14 @@ func writeValue(r *bytes.Reader, w io.Writer) error {
 		if err != nil {
 			return err
 		}
-		return writeMap(r, w, int(n))
+		return writeMap(r, w, int(n), objectName)
 
 	case msgpackMap32:
 		n, err := readUint32(r)
 		if err != nil {
 			return err
 		}
-		return writeMap(r, w, int(n))
+		return writeMap(r, w, int(n), objectName)
 	}
 
 	return fmt.Errorf("unsupported msgpack type byte: 0x%02x", b)

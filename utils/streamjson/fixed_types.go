@@ -5,9 +5,9 @@ import (
 	"io"
 )
 
-func writeFixedCollectionOrString(r *bytes.Reader, w io.Writer, typeByte byte) error {
+func writeFixedCollectionOrString(r *bytes.Reader, w io.Writer, typeByte byte, objectName string) error {
 	if typeByte >= msgpackFixMapMin && typeByte <= msgpackFixMapMax {
-		return writeMap(r, w, int(typeByte&0x0f))
+		return writeMap(r, w, int(typeByte&0x0f), objectName)
 	}
 	if typeByte >= msgpackFixArrMin && typeByte <= msgpackFixArrMax {
 		return writeArray(r, w, int(typeByte&0x0f))
