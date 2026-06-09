@@ -40,10 +40,20 @@ func NewFromFile(path string) (*Restorer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read suite structure file: %w", err)
 	}
+	return NewFromBytes(data)
+}
+
+// NewFromBytes creates a Restorer from lightweight suite structure JSON bytes.
+func NewFromBytes(data []byte) (*Restorer, error) {
 	var raw map[string][]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse suite structure file: %w", err)
 	}
+	return NewFromDefinitions(raw)
+}
+
+// NewFromDefinitions creates a Restorer from already parsed field definitions.
+func NewFromDefinitions(raw map[string][]any) (*Restorer, error) {
 	fields := make(map[string][]fieldDef, len(raw))
 	for fieldName, defs := range raw {
 		parsed, err := parseFieldDefs(defs)

@@ -76,12 +76,10 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 		return nil, fmt.Errorf("load current structures: %w", err)
 	}
 
-	generatedRestorer, generatedPath, err := restorerFromDefinitions(generatedStructures)
+	generatedRestorer, err := suiterestore.NewFromDefinitions(generatedStructures)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load generated structures: %w", err)
 	}
-	defer os.Remove(generatedPath)
-
 	sampleBytes, err := decodeSampleMsgpack(options)
 	if err != nil {
 		return nil, err
@@ -217,33 +215,6 @@ func joinPath(parent string, child string) string {
 func (r *CompareReport) MarshalJSONDeterministic() ([]byte, error) {
 	normalizeReport(r)
 	return json.MarshalIndent(r, "", "  ")
-}
-
-func restorerFromDefinitions(definitions map[string][]any) (*suiterestore.Restorer, string, error) {
-	data, err := MarshalSuiteStructures(definitions)
-	if err != nil {
-		return nil, "", err
-	}
-	f, err := os.CreateTemp("", "nuverse-generated-suite-structures-*.json")
-	if err != nil {
-		return nil, "", fmt.Errorf("create generated structures temp file: %w", err)
-	}
-	path := f.Name()
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		_ = os.Remove(path)
-		return nil, "", fmt.Errorf("write generated structures temp file: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
-		return nil, "", fmt.Errorf("close generated structures temp file: %w", err)
-	}
-	restorer, err := suiterestore.NewFromFile(path)
-	if err != nil {
-		_ = os.Remove(path)
-		return nil, "", fmt.Errorf("load generated structures: %w", err)
-	}
-	return restorer, path, nil
 }
 
 func orderedMapToPlainMap(om *orderedmap.OrderedMap) map[string]any {

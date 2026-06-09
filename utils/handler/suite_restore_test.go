@@ -52,6 +52,53 @@ func TestGetSuiteRestorerLoadStatusTracksFailures(t *testing.T) {
 	}
 }
 
+func TestLoadSuiteRestorerSupportsStructToolSchema(t *testing.T) {
+	tmpDir := t.TempDir()
+	schemaPath := filepath.Join(tmpDir, "suite_user.avsc")
+	if err := os.WriteFile(schemaPath, []byte(`{
+	  "type": "record",
+	  "name": "SuiteUser",
+	  "namespace": "Sekai",
+	  "fields": [
+	    {
+	      "name": "userCards",
+	      "type": {
+	        "type": "array",
+	        "items": {
+	          "type": "record",
+	          "name": "UserCard",
+	          "namespace": "Sekai",
+	          "fields": [
+	            {"name": "cardId", "type": "long", "msgpack_key": 0},
+	            {"name": "level", "type": "int", "msgpack_key": 1}
+	          ]
+	        }
+	      },
+	      "msgpack_key": "userCards"
+	    }
+	  ]
+	}`), 0600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	restorer, err := loadSuiteRestorer(schemaPath)
+	if err != nil {
+		t.Fatalf("loadSuiteRestorer returned error: %v", err)
+	}
+
+	data := map[string]any{
+		"userCards": []any{[]any{int64(100), int64(30)}},
+	}
+	restored := restorer.RestoreFields(data)
+	card, ok := restored["userCards"].([]any)[0].(map[string]any)
+	if !ok {
+		t.Fatalf("userCards should be restored to map, got %#v", restored["userCards"])
+	}
+	if card["cardId"] != int64(100) || card["level"] != int64(30) {
+		t.Fatalf("unexpected restored card: %#v", card)
+	}
+}
+
 func TestGetSuiteRestorerLoadStatusReturnsFailureMapCopy(t *testing.T) {
 	originalStructuresFile := harukiConfig.Cfg.RestoreSuite.StructuresFile
 	t.Cleanup(func() {

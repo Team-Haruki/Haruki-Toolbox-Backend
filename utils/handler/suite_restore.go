@@ -4,7 +4,9 @@ import (
 	harukiConfig "haruki-suite/config"
 	"haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
+	"haruki-suite/utils/nuversestruct"
 	"haruki-suite/utils/suiterestore"
+	"os"
 	"sync"
 )
 
@@ -22,7 +24,7 @@ func initSuiteRestorers() {
 			if path == "" {
 				continue
 			}
-			r, err := suiterestore.NewFromFile(path)
+			r, err := loadSuiteRestorer(path)
 			if err != nil {
 				harukiLogger.Errorf("failed to load suite structure file for region %s (%s): %v", region, path, err)
 				suiteRestorerLoadFailures[region] = err.Error()
@@ -31,6 +33,17 @@ func initSuiteRestorers() {
 			suiteRestorerMap[region] = r
 		}
 	})
+}
+
+func loadSuiteRestorer(path string) (*suiterestore.Restorer, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if nuversestruct.IsStructToolSchema(data) {
+		return nuversestruct.NewRestorerFromBytes(data)
+	}
+	return suiterestore.NewFromBytes(data)
 }
 
 func getSuiteRestorer(server utils.SupportedDataUploadServer) *suiterestore.Restorer {
