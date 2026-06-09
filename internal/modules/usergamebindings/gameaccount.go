@@ -2,8 +2,6 @@ package usergamebindings
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	userEmailModule "haruki-suite/internal/modules/useremail"
 	"haruki-suite/utils"
@@ -15,28 +13,8 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
-)
-
-const (
-	gameAccountVerificationTTL         = 5 * time.Minute
-	gameAccountVerificationMaxAttempts = 5
-)
-
-var (
-	errGameAccountVerificationCodeMissing     = errors.New("verification code missing in user profile")
-	errGameAccountVerificationCodeMismatch    = errors.New("verification code mismatch")
-	errGameAccountVerificationCodeExpired     = errors.New("verification code expired or not found")
-	errGameAccountVerificationTooManyAttempts = errors.New("too many verification attempts, please generate a new code")
-	errGameAccountVerificationServiceUnstable = errors.New("verification service unavailable")
-	errGameAccountProfileRequestFailed        = errors.New("failed to request game account profile")
-	errGameAccountServerUnavailable           = errors.New("game server unavailable")
-	errGameAccountNotFound                    = errors.New("game account not found")
-	errGameAccountProfileEmpty                = errors.New("empty game account profile response")
-	errGameAccountProfileInvalid              = errors.New("invalid game account profile response")
 )
 
 func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -436,137 +414,6 @@ func classifyExistingBinding(existing *postgresql.GameAccountBinding, userID str
 		return existingBindingStateVerifiedBySelf
 	}
 	return existingBindingStateNone
-}
-
-func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) (string, error) {
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-	var attemptCount int
-	found, err := apiHelper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount)
-	if err != nil {
-		return "", errGameAccountVerificationServiceUnstable
-	}
-	if found && attemptCount >= gameAccountVerificationMaxAttempts {
-		return "", errGameAccountVerificationTooManyAttempts
-	}
-
-	storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
-	var code string
-	ok, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
-	if err != nil {
-		return "", errGameAccountVerificationServiceUnstable
-	}
-	if !ok {
-		return "", errGameAccountVerificationCodeExpired
-	}
-	return code, nil
-}
-
-func incrementGameAccountVerificationAttempt(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) error {
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-	_, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, gameAccountVerificationTTL)
-	return err
-}
-
-func consumeGameAccountVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr, expectedCode string) error {
-	storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
-	consumed, err := apiHelper.DBManager.Redis.DeleteCacheIfValueMatches(ctx, storageKey, expectedCode)
-	if err != nil {
-		return errGameAccountVerificationServiceUnstable
-	}
-	if !consumed {
-		return errGameAccountVerificationCodeExpired
-	}
-
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-	if err := apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey); err != nil {
-		harukiLogger.Warnf("Failed to clear game account verification attempt key: %v", err)
-	}
-	return nil
-}
-
-func shouldIncrementGameAccountVerificationAttempt(err error) bool {
-	return errors.Is(err, errGameAccountVerificationCodeMissing) || errors.Is(err, errGameAccountVerificationCodeMismatch)
-}
-
-func mapGameAccountVerificationCodeLookupError(err error) *fiber.Error {
-	if err == nil {
-		return nil
-	}
-	switch {
-	case errors.Is(err, errGameAccountVerificationTooManyAttempts):
-		return fiber.NewError(fiber.StatusBadRequest, "too many verification attempts, please generate a new code")
-	case errors.Is(err, errGameAccountVerificationCodeExpired):
-		return fiber.NewError(fiber.StatusBadRequest, "verification code expired or not found")
-	case errors.Is(err, errGameAccountVerificationServiceUnstable):
-		return fiber.NewError(fiber.StatusInternalServerError, "verification service unavailable")
-	default:
-		return fiber.NewError(fiber.StatusBadRequest, "verification code not found")
-	}
-}
-
-func mapGameAccountOwnershipVerificationError(err error) *fiber.Error {
-	if err == nil {
-		return nil
-	}
-	switch {
-	case errors.Is(err, errGameAccountVerificationCodeMissing):
-		return fiber.NewError(fiber.StatusBadRequest, "verification code missing in game profile")
-	case errors.Is(err, errGameAccountVerificationCodeMismatch):
-		return fiber.NewError(fiber.StatusBadRequest, "verification code does not match game profile")
-	case errors.Is(err, errGameAccountNotFound):
-		return fiber.NewError(fiber.StatusBadRequest, "game account not found")
-	case errors.Is(err, errGameAccountServerUnavailable):
-		return fiber.NewError(fiber.StatusBadGateway, "game server unavailable")
-	case errors.Is(err, errGameAccountProfileRequestFailed):
-		return fiber.NewError(fiber.StatusBadGateway, "failed to query game account profile")
-	case errors.Is(err, errGameAccountProfileEmpty):
-		return fiber.NewError(fiber.StatusBadGateway, "empty game account profile response")
-	case errors.Is(err, errGameAccountProfileInvalid):
-		return fiber.NewError(fiber.StatusBadGateway, "invalid game account profile response")
-	default:
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to verify game account ownership")
-	}
-}
-
-func verifyGameAccountOwnership(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
-	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
-	if err != nil {
-		return fmt.Errorf("%w: %v", errGameAccountProfileRequestFailed, err)
-	}
-	if resultInfo == nil {
-		return errGameAccountProfileRequestFailed
-	}
-	if !resultInfo.ServerAvailable {
-		return errGameAccountServerUnavailable
-	}
-	if !resultInfo.AccountExists {
-		return errGameAccountNotFound
-	}
-	if !resultInfo.Body || len(body) == 0 {
-		return errGameAccountProfileEmpty
-	}
-
-	var data map[string]any
-	if err := sonic.Unmarshal(body, &data); err != nil {
-		return fmt.Errorf("%w: %v", errGameAccountProfileInvalid, err)
-	}
-
-	if _, hasError := data["errorCode"]; hasError {
-		return errGameAccountNotFound
-	}
-	userProfile, ok := data["userProfile"].(map[string]any)
-	if !ok {
-		return errGameAccountProfileInvalid
-	}
-	word, ok := userProfile["word"].(string)
-	if !ok {
-		return errGameAccountVerificationCodeMissing
-	}
-	word = strings.TrimSpace(word)
-	if !strings.Contains(word, expectedCode) {
-		return errGameAccountVerificationCodeMismatch
-	}
-	return nil
 }
 
 func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) error {
