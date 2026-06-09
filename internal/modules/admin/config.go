@@ -96,7 +96,7 @@ func clearPublicAccessCache(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil {
 		return nil
 	}
-	return apiHelper.DBManager.Redis.ClearNamespace(c.Context(), harukiRedis.PublicAccessNamespace())
+	return apiHelper.DBManager.Redis.ClearNamespace(c.Context(), harukiRedis.GameDataNamespace())
 }
 
 func handleGetPublicAPIAllowedKeys(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {

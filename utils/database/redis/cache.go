@@ -8,22 +8,17 @@ import (
 	"fmt"
 	harukiUtils "haruki-suite/utils"
 	harukiLogger "haruki-suite/utils/logger"
-	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/gofiber/fiber/v3"
 	"github.com/redis/go-redis/v9"
 )
 
 const (
-	publicAccessNamespace = "public_access"
-	gameDataNamespace     = "game_data"
-	emptyQueryHash        = "none"
-	cacheKeyFormat        = "%s:%s:query=%s"
+	gameDataNamespace = "game_data"
+	emptyQueryHash    = "none"
 
 	redisIncrementWithTTLScript = `
 local count = redis.call('INCR', KEYS[1])
@@ -46,79 +41,13 @@ return -1
 	`
 )
 
-func PublicAccessNamespace() string {
-	return publicAccessNamespace
-}
-
 func GameDataNamespace() string {
 	return gameDataNamespace
-}
-
-type CachePath struct {
-	Namespace   string
-	Path        string
-	QueryString string
 }
 
 type CacheItem struct {
 	Key   string
 	Value any
-}
-
-func GetClearCachePaths(server string, dataType string, userID int64) []CachePath {
-	publicPath := buildLegacyPublicCachePath("/public/", server, dataType, userID)
-	apiPublicPath := buildLegacyPublicCachePath("/api/public/", server, dataType, userID)
-	return []CachePath{
-		{
-			Namespace: publicAccessNamespace,
-			Path:      publicPath,
-		},
-		{
-			Namespace: publicAccessNamespace,
-			Path:      apiPublicPath,
-		},
-	}
-}
-
-func buildLegacyPublicCachePath(prefix string, server string, dataType string, userID int64) string {
-	var pathBuilder strings.Builder
-	pathBuilder.Grow(len(prefix) + len(server) + len(dataType) + 24)
-	pathBuilder.WriteString(prefix)
-	pathBuilder.WriteString(server)
-	pathBuilder.WriteByte('/')
-	pathBuilder.WriteString(dataType)
-	pathBuilder.WriteByte('/')
-	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
-	return pathBuilder.String()
-}
-
-func CacheKeyBuilder(c fiber.Ctx, namespace string) string {
-	fullPath := c.Path()
-	queryString := c.RequestCtx().QueryArgs().String()
-	return buildCacheKey(namespace, fullPath, queryString)
-}
-
-func CacheKeyBuilderWithAllowedQuery(c fiber.Ctx, namespace string, allowedQueryKeys ...string) string {
-	fullPath := c.Path()
-	if len(allowedQueryKeys) == 0 {
-		return buildCacheKey(namespace, fullPath, "")
-	}
-
-	keys := append([]string(nil), allowedQueryKeys...)
-	sort.Strings(keys)
-	values := url.Values{}
-	for _, key := range keys {
-		normalizedKey := strings.TrimSpace(key)
-		if normalizedKey == "" {
-			continue
-		}
-		normalizedValue := strings.TrimSpace(c.Query(normalizedKey))
-		if normalizedValue == "" {
-			continue
-		}
-		values.Set(normalizedKey, normalizedValue)
-	}
-	return buildCacheKey(namespace, fullPath, values.Encode())
 }
 
 func BuildGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string) string {
@@ -327,16 +256,6 @@ func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server st
 	}
 	if err := r.clearCachePattern(ctx, fmt.Sprintf("%s:*:%s:%s:%d:query=*", gameDataNamespace, server, dataType, userID)); err != nil {
 		return err
-	}
-	paths := GetClearCachePaths(server, dataType, userID)
-	for _, path := range paths {
-		if path.Namespace == "" || path.Path == "" {
-			continue
-		}
-		pattern := fmt.Sprintf("%s:%s:query=*", path.Namespace, path.Path)
-		if err := r.clearCachePattern(ctx, pattern); err != nil {
-			return err
-		}
 	}
 	return nil
 }

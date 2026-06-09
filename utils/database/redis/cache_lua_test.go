@@ -148,10 +148,6 @@ func TestClearCacheRemovesAllGameDataQueryVariants(t *testing.T) {
 		BuildGameDataCacheKey("public", "jp", "suite", 123, "upload_time"),
 		BuildGameDataCacheKey("private", "jp", "suite", 123, "userProfile"),
 		BuildGameDataCacheKey("oauth2", "jp", "suite", 123, "userProfile,userGamedata"),
-		buildCacheKey(publicAccessNamespace, "/public/jp/suite/123", ""),
-		buildCacheKey(publicAccessNamespace, "/public/jp/suite/123", "key=upload_time"),
-		buildCacheKey(publicAccessNamespace, "/public/jp/suite/123", "key=userProfile"),
-		buildCacheKey(publicAccessNamespace, "/api/public/jp/suite/123", "key=userProfile"),
 	}
 	for _, key := range keys {
 		if err := manager.Redis.Set(ctx, key, "v", time.Minute).Err(); err != nil {
@@ -163,7 +159,6 @@ func TestClearCacheRemovesAllGameDataQueryVariants(t *testing.T) {
 		BuildGameDataCacheKey("public", "jp", "suite", 999, "userProfile"),
 		BuildGameDataCacheKey("public", "en", "suite", 123, "userProfile"),
 		BuildGameDataCacheKey("public", "jp", "mysekai", 123, "userProfile"),
-		buildCacheKey(publicAccessNamespace, "/public/jp/suite/999", "key=userProfile"),
 	}
 	for _, key := range untouchedKeys {
 		if err := manager.Redis.Set(ctx, key, "keep", time.Minute).Err(); err != nil {

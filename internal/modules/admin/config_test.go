@@ -205,7 +205,8 @@ func newAdminConfigRedisHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRout
 
 func TestHandleUpdatePublicAPIAllowedKeysClearsPublicCache(t *testing.T) {
 	helper, redisManager := newAdminConfigRedisHelper(t)
-	if err := redisManager.SetCache(t.Context(), "public_access:/public/jp/suite/1001:query=abc", map[string]any{"x": 1}, time.Minute); err != nil {
+	cacheKey := harukiRedis.BuildGameDataCacheKey("public", "jp", "suite", 1001, "key-a")
+	if err := redisManager.SetCache(t.Context(), cacheKey, map[string]any{"x": 1}, time.Minute); err != nil {
 		t.Fatalf("seed cache returned error: %v", err)
 	}
 
@@ -228,7 +229,7 @@ func TestHandleUpdatePublicAPIAllowedKeysClearsPublicCache(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 
-	exists, err := redisManager.Redis.Exists(t.Context(), "public_access:/public/jp/suite/1001:query=abc").Result()
+	exists, err := redisManager.Redis.Exists(t.Context(), cacheKey).Result()
 	if err != nil {
 		t.Fatalf("Exists returned error: %v", err)
 	}
