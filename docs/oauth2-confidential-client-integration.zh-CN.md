@@ -360,6 +360,8 @@ Authorization: Bearer <access_token>
 
 - 游戏数据接口还会检查 token 对应用户是否有该绑定
 - 也会检查绑定是否已经验证
+- `suite` 数据中的 `userGamedata.userId` 保持原有 number 字段，同时返回 `userGamedata.userIdString` 字符串镜像；JS / TS 客户端应优先读取字符串字段
+- 当响应暴露顶层 `_id` 时，会同时返回 `_idString`
 
 ---
 

@@ -209,6 +209,14 @@ func (r *HarukiRedisManager) GetRawCache(ctx context.Context, key string) (strin
 	return val, true, nil
 }
 
+func (r *HarukiRedisManager) SetRawCache(ctx context.Context, key string, value string, ttl time.Duration) error {
+	if err := r.Redis.Set(ctx, key, value, ttl).Err(); err != nil {
+		harukiLogger.Errorf("Failed to set raw redis cache for key %s: %v", key, err)
+		return err
+	}
+	return nil
+}
+
 func (r *HarukiRedisManager) DeleteCacheIfValueMatches(ctx context.Context, key, expected string) (bool, error) {
 	encodedExpected, err := sonic.Marshal(expected)
 	if err != nil {

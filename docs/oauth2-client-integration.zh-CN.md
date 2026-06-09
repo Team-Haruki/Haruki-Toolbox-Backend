@@ -410,6 +410,12 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 - 该 token 对应的用户是否拥有这个绑定
 - 绑定是否已经验证通过
 
+响应兼容说明：
+
+- `suite` 数据中的 `userGamedata.userId` 保持原有 number 字段
+- 同时返回 `userGamedata.userIdString` 作为字符串镜像，JS / TS 客户端应优先读取该字段以避免 64 位整数精度丢失
+- 当响应暴露顶层 `_id` 时，会同时返回 `_idString`
+
 ---
 
 ## 8. 当前可申请的 scope

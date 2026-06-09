@@ -317,6 +317,8 @@ Hydra 在当前项目里负责：
 - `suite` 和 `mysekai` 复用 public API / OAuth2 game-data 的数据读取逻辑，并支持 `key` 查询参数
 - `profile` 通过 Haruki Sekai API 读取绑定账号 profile，并直接透传 JSON 响应体
 - 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证
+- `suite` 数据会保留 `userGamedata.userId` number 字段，并额外返回 `userGamedata.userIdString` 字符串镜像；前端应优先使用字符串字段避免 64 位整数精度丢失
+- 当数据响应暴露顶层 `_id` 时，会同时返回 `_idString`
 
 旧的 `GET /api/user/:toolbox_user_id/game-data/:server/:data_type/:user_id` 未正式接入前端，已由上述 `game-account` 入口替代。
 

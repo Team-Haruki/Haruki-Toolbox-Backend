@@ -94,15 +94,15 @@ func HandleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 		if key == "userGamedata" {
 			for _, elem := range result {
 				if elem.Key == "userGamedata" {
-					return elem.Value, nil
+					return NormalizeProviderResponse(elem.Value), nil
 				}
 			}
-			return bson.D{}, nil
+			return NormalizeProviderResponse(bson.D{}), nil
 		}
-		return GetValueFromResult(result, key), nil
+		return NormalizeProviderResponse(GetValueFromResult(result, key)), nil
 	}
 
-	return buildSuiteResponse(result, keys), nil
+	return NormalizeProviderResponse(buildSuiteResponse(result, keys)), nil
 }
 
 func HandleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
@@ -123,5 +123,5 @@ func HandleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxR
 		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 
-	return result, nil
+	return NormalizeProviderResponse(result), nil
 }

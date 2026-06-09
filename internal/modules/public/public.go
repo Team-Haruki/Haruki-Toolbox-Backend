@@ -13,6 +13,7 @@ import (
 
 	"haruki-suite/utils/api/data"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -55,8 +56,9 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		var resp any
 		if dataType != harukiUtils.UploadDataTypeMysekai {
 			cacheKey := harukiRedis.CacheKeyBuilderWithAllowedQuery(c, "public_access", "key")
-			if found, err := apiHelper.DBManager.Redis.GetCache(ctx, cacheKey, &resp); err == nil && found {
-				return c.JSON(resp)
+			if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); err == nil && found {
+				c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+				return c.SendString(cached)
 			}
 		}
 		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
@@ -82,7 +84,11 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		if dataType != harukiUtils.UploadDataTypeMysekai {
 			cacheKey := harukiRedis.CacheKeyBuilderWithAllowedQuery(c, "public_access", "key")
-			_ = apiHelper.DBManager.Redis.SetCache(ctx, cacheKey, resp, 300*time.Second)
+			if encoded, mErr := sonic.Marshal(resp); mErr == nil {
+				_ = apiHelper.DBManager.Redis.SetRawCache(ctx, cacheKey, string(encoded), 300*time.Second)
+			} else {
+				harukiLogger.Warnf("Failed to marshal public game data cache: %v", mErr)
+			}
 		}
 		return c.JSON(resp)
 	}

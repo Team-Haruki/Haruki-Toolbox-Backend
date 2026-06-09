@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	harukiUtils "haruki-suite/utils"
 	harukiApiHelper "haruki-suite/utils/api"
+	"haruki-suite/utils/api/data"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
@@ -187,15 +188,15 @@ func processRequestKeys(c fiber.Ctx, result bson.D) error {
 	if requestKey != "" {
 		keys := strings.Split(requestKey, ",")
 		if len(keys) == 1 {
-			return c.JSON(bsonDGet(result, keys[0]))
+			return c.JSON(data.NormalizeProviderResponse(bsonDGet(result, keys[0])))
 		}
 		filtered := make(bson.D, 0, len(keys))
 		for _, k := range keys {
 			filtered = append(filtered, bson.E{Key: k, Value: bsonDGet(result, k)})
 		}
-		return c.JSON(filtered)
+		return c.JSON(data.NormalizeProviderResponse(filtered))
 	}
-	return c.JSON(result)
+	return c.JSON(data.NormalizeProviderResponse(result))
 }
 
 func bsonDGet(d bson.D, key string) any {

@@ -225,6 +225,28 @@ func TestSetCachesAtomically(t *testing.T) {
 	}
 }
 
+func TestRawCacheRoundTripPreservesJSONNumberBytes(t *testing.T) {
+	t.Parallel()
+
+	manager, _ := newTestRedisManager(t)
+	ctx := context.Background()
+
+	const payload = `{"userGamedata":{"userId":9223372036854775000,"userIdString":"9223372036854775000"}}`
+	if err := manager.SetRawCache(ctx, "raw:game-data", payload, time.Minute); err != nil {
+		t.Fatalf("SetRawCache error: %v", err)
+	}
+	got, found, err := manager.GetRawCache(ctx, "raw:game-data")
+	if err != nil {
+		t.Fatalf("GetRawCache error: %v", err)
+	}
+	if !found {
+		t.Fatalf("expected raw cache to be found")
+	}
+	if got != payload {
+		t.Fatalf("raw cache payload = %q, want %q", got, payload)
+	}
+}
+
 func TestSetCachesAtomicallyMarshalFailureDoesNotWrite(t *testing.T) {
 	t.Parallel()
 
