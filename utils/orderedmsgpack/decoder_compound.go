@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/iancoleman/orderedmap"
-	"github.com/shamaton/msgpack/v3"
 )
 
 func decodeMap(r *bytes.Reader, n int) (*orderedmap.OrderedMap, error) {
@@ -78,7 +77,7 @@ func decodeFixExt(r *bytes.Reader, size int) (any, error) {
 }
 
 func decodeExtPayload(r *bytes.Reader, size int) (any, error) {
-	typeByte, err := r.ReadByte()
+	_, err := r.ReadByte()
 	if err != nil {
 		return nil, fmt.Errorf("read ext type: %w", err)
 	}
@@ -86,18 +85,6 @@ func decodeExtPayload(r *bytes.Reader, size int) (any, error) {
 	data, err := readBytes(r, size)
 	if err != nil {
 		return nil, fmt.Errorf("read ext data: %w", err)
-	}
-
-	if int8(typeByte) == orderedMapExtCode {
-		var iom internalOrderedMap
-		if err := msgpack.Unmarshal(data, &iom); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal ordered map ext data: %w", err)
-		}
-		om, err := iom.ToOrderedMap()
-		if err != nil {
-			return nil, fmt.Errorf("invalid ordered map ext data: %w", err)
-		}
-		return &om, nil
 	}
 
 	return data, nil

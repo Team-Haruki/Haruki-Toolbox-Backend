@@ -8,22 +8,14 @@ import (
 )
 
 func TestOrderedMsgpackPreservesOrder(t *testing.T) {
-
-	err := RegisterOrderedMapExt()
-	if err != nil {
-		t.Fatalf("Failed to register extension: %v", err)
-	}
-
 	t.Run("Order A-B-C", func(t *testing.T) {
-		o := orderedmap.New()
-		o.Set("a", 1)
-		o.Set("b", 2)
-		o.Set("c", 3)
-
-		data, err := Marshal(o)
-		if err != nil {
-			t.Fatalf("Marshal failed: %v", err)
-		}
+		data := appendMapHeader(nil, 3)
+		data = appendString(data, "a")
+		data = append(data, 0x01)
+		data = appendString(data, "b")
+		data = append(data, 0x02)
+		data = appendString(data, "c")
+		data = append(data, 0x03)
 
 		loaded, err := MsgpackToOrderedMap(data)
 		if err != nil {
@@ -43,15 +35,13 @@ func TestOrderedMsgpackPreservesOrder(t *testing.T) {
 	})
 
 	t.Run("Order C-B-A", func(t *testing.T) {
-		o := orderedmap.New()
-		o.Set("c", 3)
-		o.Set("b", 2)
-		o.Set("a", 1)
-
-		data, err := Marshal(o)
-		if err != nil {
-			t.Fatalf("Marshal failed: %v", err)
-		}
+		data := appendMapHeader(nil, 3)
+		data = appendString(data, "c")
+		data = append(data, 0x03)
+		data = appendString(data, "b")
+		data = append(data, 0x02)
+		data = appendString(data, "a")
+		data = append(data, 0x01)
 
 		loaded, err := MsgpackToOrderedMap(data)
 		if err != nil {

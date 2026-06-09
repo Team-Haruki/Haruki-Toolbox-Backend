@@ -4,9 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"testing"
-
-	"github.com/iancoleman/orderedmap"
-	"github.com/shamaton/msgpack/v3"
 )
 
 func benchmarkOrderedMapData(b *testing.B, entries int, nested bool) []byte {
@@ -64,27 +61,6 @@ func BenchmarkMsgpackToOrderedMapLargeArray(b *testing.B) {
 	}
 	data = appendString(data, "label")
 	data = appendString(data, "large-array")
-	b.ReportAllocs()
-	b.SetBytes(int64(len(data)))
-	for i := 0; i < b.N; i++ {
-		if _, err := MsgpackToOrderedMap(data); err != nil {
-			b.Fatalf("MsgpackToOrderedMap: %v", err)
-		}
-	}
-}
-
-func BenchmarkMsgpackToOrderedMapExt(b *testing.B) {
-	if err := RegisterOrderedMapExt(); err != nil {
-		b.Fatalf("RegisterOrderedMapExt: %v", err)
-	}
-	om := orderedmap.New()
-	for i := range 128 {
-		om.Set(fmt.Sprintf("field_%04d", i), int64(i))
-	}
-	data, err := msgpack.Marshal(om)
-	if err != nil {
-		b.Fatalf("marshal ext benchmark data: %v", err)
-	}
 	b.ReportAllocs()
 	b.SetBytes(int64(len(data)))
 	for i := 0; i < b.N; i++ {

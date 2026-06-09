@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/iancoleman/orderedmap"
-	"github.com/shamaton/msgpack/v3"
 )
 
 const maxDecodeDepth = 512
@@ -269,7 +268,7 @@ func (d *byteDecoder) decodeString(n int) (string, error) {
 }
 
 func (d *byteDecoder) decodeExtPayload(size int) (any, error) {
-	typeByte, err := d.readByte()
+	_, err := d.readByte()
 	if err != nil {
 		return nil, fmt.Errorf("read ext type: %w", err)
 	}
@@ -278,17 +277,6 @@ func (d *byteDecoder) decodeExtPayload(size int) (any, error) {
 		return nil, fmt.Errorf("read ext data: %w", err)
 	}
 	payload := d.data[start:d.off]
-	if int8(typeByte) == orderedMapExtCode {
-		var iom internalOrderedMap
-		if err := msgpack.Unmarshal(payload, &iom); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal ordered map ext data: %w", err)
-		}
-		om, err := iom.ToOrderedMap()
-		if err != nil {
-			return nil, fmt.Errorf("invalid ordered map ext data: %w", err)
-		}
-		return &om, nil
-	}
 	out := make([]byte, len(payload))
 	copy(out, payload)
 	return out, nil
