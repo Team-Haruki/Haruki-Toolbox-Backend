@@ -47,7 +47,7 @@ func TestMarshalSuiteStructuresDeterministic(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatalf("marshaled structures should be deterministic")
 	}
-	if golden := readTestdata(t, "suite_structures.golden.json"); !bytes.Equal(first, golden) {
+	if golden := readTestdata(t, "generated_structures.golden.json"); !bytes.Equal(first, golden) {
 		t.Fatalf("generated structures differ from golden\n got: %s\nwant: %s", first, golden)
 	}
 

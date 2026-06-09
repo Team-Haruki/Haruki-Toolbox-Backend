@@ -14,7 +14,7 @@ import (
 
 func main() {
 	var samplePath string
-	var currentStructuresPath string
+	var baselineSchemaPath string
 	var configPath string
 	var schemaPath string
 	var inputFormat string
@@ -22,9 +22,9 @@ func main() {
 	var generateOnly bool
 
 	flag.StringVar(&samplePath, "sample", "", "path to local suite sample")
-	flag.StringVar(&currentStructuresPath, "current-structures", "data/suite_structures.json", "path to current suite structure json")
+	flag.StringVar(&baselineSchemaPath, "baseline-schema", "", "optional baseline StructTool/Avro schema for restore diff")
 	flag.StringVar(&configPath, "config", "", "path to haruki config; defaults to env/default config path")
-	flag.StringVar(&schemaPath, "schema", "", "path to StructTool/Avro schema json")
+	flag.StringVar(&schemaPath, "schema", "data/suite_user.avsc", "path to StructTool/Avro schema json")
 	flag.StringVar(&inputFormat, "input-format", nuversestruct.InputFormatMsgpack, "sample format: msgpack or raw-upload")
 	flag.StringVar(&serverRaw, "server", "", "server for raw-upload samples: jp, en, tw, kr, or cn")
 	flag.BoolVar(&generateOnly, "generate-only", false, "print generated suite structures instead of comparing a sample")
@@ -60,11 +60,11 @@ func main() {
 	}
 
 	report, err := nuversestruct.CompareSuiteRestore(nuversestruct.CompareOptions{
-		SampleMsgpackPath:     samplePath,
-		CurrentStructuresPath: currentStructuresPath,
-		SchemaPath:            schemaPath,
-		InputFormat:           inputFormat,
-		Server:                server,
+		SampleMsgpackPath:  samplePath,
+		BaselineSchemaPath: baselineSchemaPath,
+		SchemaPath:         schemaPath,
+		InputFormat:        inputFormat,
+		Server:             server,
 	})
 	if err != nil {
 		fatalf("%v", err)

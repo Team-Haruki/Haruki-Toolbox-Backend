@@ -100,6 +100,12 @@ haruki_proxy:
   secret: ""
   unpack_key: ""
 
+restore_suite:
+  enable_regions:
+    - "tw"
+  structures_file:
+    tw: "./data/suite_user.avsc"
+
 sekai_client:
   en_server_api_host: ""
   en_server_aes_key: ""

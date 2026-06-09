@@ -1,39 +1,28 @@
 package suiterestore
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
 
-const testFixture = `{
-  "userActionSets": ["id", "status"],
-  "userHonors": ["honorId", "level", "obtainedAt"],
-  "userStamps": ["stampId", "obtainedAt"],
-  "userCards": [
-    "cardId", "level", "exp", "totalExp", "skillLevel", "skillExp",
-    "totalSkillExp", "masterRank", "specialTrainingStatus", "defaultImage",
-    "duplicateCount", "createdAt",
-    ["episodes", ["cardEpisodeId", "scenarioStatus", "scenarioStatusReasons", "isNotSkipped"]]
-  ],
-  "userShops": ["shopId", ["userShopItems", ["shopItemId", "level", "status"]]],
-  "userVirtualShops": [
-    "virtualShopId",
-    ["userVirtualShopItems", ["virtualShopId", "virtualShopItemId", "status", "buyCount"]]
-  ]
-}`
-
 func createTestRestorer(t *testing.T) *Restorer {
 	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "suite_structures.json")
-	if err := os.WriteFile(path, []byte(testFixture), 0644); err != nil {
-		t.Fatalf("write test fixture: %v", err)
+	definitions := map[string][]any{
+		"userActionSets": {"id", "status"},
+		"userHonors":     {"honorId", "level", "obtainedAt"},
+		"userStamps":     {"stampId", "obtainedAt"},
+		"userCards": {
+			"cardId", "level", "exp", "totalExp", "skillLevel", "skillExp",
+			"totalSkillExp", "masterRank", "specialTrainingStatus", "defaultImage",
+			"duplicateCount", "createdAt",
+			[]any{"episodes", []any{"cardEpisodeId", "scenarioStatus", "scenarioStatusReasons", "isNotSkipped"}},
+		},
+		"userShops":        {"shopId", []any{"userShopItems", []any{"shopItemId", "level", "status"}}},
+		"userVirtualShops": {"virtualShopId", []any{"userVirtualShopItems", []any{"virtualShopId", "virtualShopItemId", "status", "buyCount"}}},
 	}
-	r, err := NewFromFile(path)
+	r, err := NewFromDefinitions(definitions)
 	if err != nil {
-		t.Fatalf("NewFromFile: %v", err)
+		t.Fatalf("NewFromDefinitions: %v", err)
 	}
 	return r
 }
@@ -253,19 +242,11 @@ func TestRestoreFields_UnknownFields_Untouched(t *testing.T) {
 	}
 }
 
-func TestNewFromFile_InvalidPath(t *testing.T) {
-	_, err := NewFromFile("/nonexistent/path.json")
+func TestNewFromDefinitionsInvalidNestedDefinition(t *testing.T) {
+	_, err := NewFromDefinitions(map[string][]any{
+		"userCards": {[]any{"episodes"}},
+	})
 	if err == nil {
-		t.Error("expected error for invalid path")
-	}
-}
-
-func TestNewFromFile_InvalidJSON(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "bad.json")
-	os.WriteFile(path, []byte("{invalid}"), 0644)
-	_, err := NewFromFile(path)
-	if err == nil {
-		t.Error("expected error for invalid JSON")
+		t.Error("expected error for invalid nested definition")
 	}
 }

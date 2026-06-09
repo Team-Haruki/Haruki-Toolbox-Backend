@@ -15,24 +15,25 @@ import (
 )
 
 type CompareOptions struct {
-	SampleMsgpackPath     string
-	CurrentStructuresPath string
-	SchemaPath            string
-	InputFormat           string
-	Server                harukiUtils.SupportedDataUploadServer
+	SampleMsgpackPath  string
+	BaselineSchemaPath string
+	SchemaPath         string
+	InputFormat        string
+	Server             harukiUtils.SupportedDataUploadServer
 }
 
 type CompareReport struct {
-	CurrentStructuresPath   string        `json:"currentStructuresPath"`
+	BaselineSchemaPath      string        `json:"baselineSchemaPath,omitempty"`
 	SchemaPath              string        `json:"schemaPath"`
 	SampleMsgpackPath       string        `json:"sampleMsgpackPath"`
 	ComparedTopLevelFields  int           `json:"comparedTopLevelFields"`
-	AddedFields             []string      `json:"fieldAdded"`
-	RemovedFields           []string      `json:"fieldRemoved"`
-	TypeChanged             []FieldChange `json:"fieldTypeChanged"`
-	RowCountChanged         []FieldChange `json:"rowCountChanged"`
-	RestoreFailed           []FieldError  `json:"fieldRestoreFailed"`
+	AddedFields             []string      `json:"fieldAdded,omitempty"`
+	RemovedFields           []string      `json:"fieldRemoved,omitempty"`
+	TypeChanged             []FieldChange `json:"fieldTypeChanged,omitempty"`
+	RowCountChanged         []FieldChange `json:"rowCountChanged,omitempty"`
+	RestoreFailed           []FieldError  `json:"fieldRestoreFailed,omitempty"`
 	GeneratedStructureCount int           `json:"generatedStructureCount"`
+	BaselineStructureCount  int           `json:"baselineStructureCount,omitempty"`
 }
 
 type FieldChange struct {
@@ -55,9 +56,6 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 	if options.SampleMsgpackPath == "" {
 		return nil, fmt.Errorf("sample msgpack path is required")
 	}
-	if options.CurrentStructuresPath == "" {
-		return nil, fmt.Errorf("current structures path is required")
-	}
 	if options.SchemaPath == "" {
 		return nil, fmt.Errorf("schema path is required")
 	}
@@ -69,11 +67,6 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 	generatedStructures, err := GenerateSuiteStructures(schemaBytes)
 	if err != nil {
 		return nil, fmt.Errorf("generate structures: %w", err)
-	}
-
-	currentRestorer, err := suiterestore.NewFromFile(options.CurrentStructuresPath)
-	if err != nil {
-		return nil, fmt.Errorf("load current structures: %w", err)
 	}
 
 	generatedRestorer, err := suiterestore.NewFromDefinitions(generatedStructures)
@@ -89,19 +82,43 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 		return nil, fmt.Errorf("decode sample msgpack: %w", err)
 	}
 
-	currentData := orderedMapToPlainMap(decoded)
 	generatedData := orderedMapToPlainMap(decoded)
-	currentRestorer.RestoreFields(currentData)
 	generatedRestorer.RestoreFields(generatedData)
 
 	report := &CompareReport{
-		CurrentStructuresPath:   options.CurrentStructuresPath,
 		SchemaPath:              options.SchemaPath,
 		SampleMsgpackPath:       options.SampleMsgpackPath,
 		GeneratedStructureCount: len(generatedStructures),
 	}
-	report.compare(currentData, generatedData)
+	report.ComparedTopLevelFields = len(generatedData)
+	if options.BaselineSchemaPath != "" {
+		baselineStructures, err := loadGeneratedStructures(options.BaselineSchemaPath)
+		if err != nil {
+			return nil, fmt.Errorf("load baseline schema: %w", err)
+		}
+		baselineRestorer, err := suiterestore.NewFromDefinitions(baselineStructures)
+		if err != nil {
+			return nil, fmt.Errorf("load baseline structures: %w", err)
+		}
+		baselineData := orderedMapToPlainMap(decoded)
+		baselineRestorer.RestoreFields(baselineData)
+		report.BaselineSchemaPath = options.BaselineSchemaPath
+		report.BaselineStructureCount = len(baselineStructures)
+		report.compare(baselineData, generatedData)
+	}
 	return report, nil
+}
+
+func loadGeneratedStructures(schemaPath string) (map[string][]any, error) {
+	schemaBytes, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return nil, fmt.Errorf("read schema: %w", err)
+	}
+	generatedStructures, err := GenerateSuiteStructures(schemaBytes)
+	if err != nil {
+		return nil, fmt.Errorf("generate structures: %w", err)
+	}
+	return generatedStructures, nil
 }
 
 func decodeSampleMsgpack(options CompareOptions) ([]byte, error) {

@@ -13,12 +13,74 @@ import (
 
 func TestCompareSuiteRestoreReportsShapeChanges(t *testing.T) {
 	dir := t.TempDir()
-	currentPath := filepath.Join(dir, "current.json")
 	schemaPath := filepath.Join(dir, "schema.json")
 	samplePath := filepath.Join(dir, "sample.msgpack")
 
-	if err := os.WriteFile(currentPath, []byte(`{"userCards":["cardId","level"]}`), 0o600); err != nil {
-		t.Fatalf("write current structures: %v", err)
+	if err := os.WriteFile(schemaPath, readTestdata(t, "suite_schema.avro.json"), 0o600); err != nil {
+		t.Fatalf("write schema: %v", err)
+	}
+
+	msgpackBytes, err := orderedmsgpack.Marshal(map[string]any{
+		"userCards": []any{
+			[]any{int64(100), int64(30), []any{[]any{int64(1), "read"}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal sample: %v", err)
+	}
+	if err := os.WriteFile(samplePath, msgpackBytes, 0o600); err != nil {
+		t.Fatalf("write sample msgpack: %v", err)
+	}
+
+	report, err := CompareSuiteRestore(CompareOptions{
+		SampleMsgpackPath: samplePath,
+		SchemaPath:        schemaPath,
+	})
+	if err != nil {
+		t.Fatalf("CompareSuiteRestore returned error: %v", err)
+	}
+	if report.GeneratedStructureCount != 2 {
+		t.Fatalf("generated structure count = %d, want 2", report.GeneratedStructureCount)
+	}
+	if report.ComparedTopLevelFields == 0 {
+		t.Fatalf("expected compared fields")
+	}
+	if len(report.AddedFields) != 0 || len(report.RemovedFields) != 0 || len(report.TypeChanged) != 0 {
+		t.Fatalf("single-schema compare should not report diffs: %#v", report)
+	}
+	if _, err := report.MarshalJSONDeterministic(); err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+}
+
+func TestCompareSuiteRestoreWithBaselineSchemaReportsChanges(t *testing.T) {
+	dir := t.TempDir()
+	baselinePath := filepath.Join(dir, "baseline.avsc")
+	schemaPath := filepath.Join(dir, "schema.avsc")
+	samplePath := filepath.Join(dir, "sample.msgpack")
+
+	if err := os.WriteFile(baselinePath, []byte(`{
+	  "type": "record",
+	  "name": "SuiteUser",
+	  "fields": [
+	    {
+	      "name": "userCards",
+	      "type": {
+	        "type": "array",
+	        "items": {
+	          "type": "record",
+	          "name": "UserCard",
+	          "fields": [
+	            {"name": "cardId", "type": "long", "msgpack_key": 0},
+	            {"name": "level", "type": "int", "msgpack_key": 1}
+	          ]
+	        }
+	      },
+	      "msgpack_key": "userCards"
+	    }
+	  ]
+	}`), 0o600); err != nil {
+		t.Fatalf("write baseline schema: %v", err)
 	}
 	if err := os.WriteFile(schemaPath, readTestdata(t, "suite_schema.avro.json"), 0o600); err != nil {
 		t.Fatalf("write schema: %v", err)
@@ -37,24 +99,15 @@ func TestCompareSuiteRestoreReportsShapeChanges(t *testing.T) {
 	}
 
 	report, err := CompareSuiteRestore(CompareOptions{
-		SampleMsgpackPath:     samplePath,
-		CurrentStructuresPath: currentPath,
-		SchemaPath:            schemaPath,
+		SampleMsgpackPath:  samplePath,
+		BaselineSchemaPath: baselinePath,
+		SchemaPath:         schemaPath,
 	})
 	if err != nil {
 		t.Fatalf("CompareSuiteRestore returned error: %v", err)
 	}
-	if report.GeneratedStructureCount != 2 {
-		t.Fatalf("generated structure count = %d, want 2", report.GeneratedStructureCount)
-	}
-	if report.ComparedTopLevelFields == 0 {
-		t.Fatalf("expected compared fields")
-	}
 	if !containsString(report.AddedFields, "userCards[].episodes") {
 		t.Fatalf("expected generated nested field to be reported as added, got %#v", report.AddedFields)
-	}
-	if _, err := report.MarshalJSONDeterministic(); err != nil {
-		t.Fatalf("marshal report: %v", err)
 	}
 }
 
@@ -67,13 +120,9 @@ func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
 	config.Cfg.SekaiClient.OtherServerAESIV = "0102030405060708090a0b0c0d0e0f10"
 
 	dir := t.TempDir()
-	currentPath := filepath.Join(dir, "current.json")
 	schemaPath := filepath.Join(dir, "schema.json")
 	samplePath := filepath.Join(dir, "sample.raw")
 
-	if err := os.WriteFile(currentPath, []byte(`{"userCards":["cardId","level"]}`), 0o600); err != nil {
-		t.Fatalf("write current structures: %v", err)
-	}
 	if err := os.WriteFile(schemaPath, readTestdata(t, "suite_schema.avro.json"), 0o600); err != nil {
 		t.Fatalf("write schema: %v", err)
 	}
@@ -100,11 +149,10 @@ func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
 	}
 
 	report, err := CompareSuiteRestore(CompareOptions{
-		SampleMsgpackPath:     samplePath,
-		CurrentStructuresPath: currentPath,
-		SchemaPath:            schemaPath,
-		InputFormat:           InputFormatRawUpload,
-		Server:                harukiUtils.SupportedDataUploadServerJP,
+		SampleMsgpackPath: samplePath,
+		SchemaPath:        schemaPath,
+		InputFormat:       InputFormatRawUpload,
+		Server:            harukiUtils.SupportedDataUploadServerJP,
 	})
 	if err != nil {
 		t.Fatalf("CompareSuiteRestore raw upload returned error: %v", err)

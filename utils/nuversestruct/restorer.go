@@ -22,6 +22,9 @@ func NewRestorerFromFile(path string) (*suiterestore.Restorer, error) {
 // NewRestorerFromBytes builds a suite restorer from StructTool/custom Avro
 // schema bytes.
 func NewRestorerFromBytes(schemaBytes []byte) (*suiterestore.Restorer, error) {
+	if !IsStructToolSchema(schemaBytes) {
+		return nil, fmt.Errorf("not a StructTool/custom Avro schema")
+	}
 	definitions, err := GenerateSuiteStructures(schemaBytes)
 	if err != nil {
 		return nil, fmt.Errorf("generate suite structures from StructTool schema: %w", err)

@@ -1,15 +1,9 @@
 // Package suiterestore converts suite user-data fields from compact array
 // format to keyed dict (map) format.
-//
-// Field definitions are loaded from an external JSON file so that new
-// field mappings can be added without recompilation. The JSON format
-// supports recursive nesting for sub-array fields.
 package suiterestore
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 )
 
 // fieldDef describes one position in an array-to-dict mapping.
@@ -24,35 +18,7 @@ type Restorer struct {
 	fields map[string][]fieldDef
 }
 
-// NewFromFile creates a Restorer by reading definitions from a JSON file.
-//
-// The JSON format is:
-//
-//	{
-//	  "userCards": ["cardId", "level", ..., ["episodes", ["cardEpisodeId", ...]]],
-//	  ...
-//	}
-//
-// A string element is a simple key. An array element [name, [...subkeys]]
-// indicates a nested sub-array field.
-func NewFromFile(path string) (*Restorer, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read suite structure file: %w", err)
-	}
-	return NewFromBytes(data)
-}
-
-// NewFromBytes creates a Restorer from lightweight suite structure JSON bytes.
-func NewFromBytes(data []byte) (*Restorer, error) {
-	var raw map[string][]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parse suite structure file: %w", err)
-	}
-	return NewFromDefinitions(raw)
-}
-
-// NewFromDefinitions creates a Restorer from already parsed field definitions.
+// NewFromDefinitions creates a Restorer from StructTool-derived field definitions.
 func NewFromDefinitions(raw map[string][]any) (*Restorer, error) {
 	fields := make(map[string][]fieldDef, len(raw))
 	for fieldName, defs := range raw {

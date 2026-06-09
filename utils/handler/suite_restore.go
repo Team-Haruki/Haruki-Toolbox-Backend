@@ -6,7 +6,6 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"haruki-suite/utils/nuversestruct"
 	"haruki-suite/utils/suiterestore"
-	"os"
 	"sync"
 )
 
@@ -36,14 +35,7 @@ func initSuiteRestorers() {
 }
 
 func loadSuiteRestorer(path string) (*suiterestore.Restorer, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if nuversestruct.IsStructToolSchema(data) {
-		return nuversestruct.NewRestorerFromBytes(data)
-	}
-	return suiterestore.NewFromBytes(data)
+	return nuversestruct.NewRestorerFromFile(path)
 }
 
 func getSuiteRestorer(server utils.SupportedDataUploadServer) *suiterestore.Restorer {

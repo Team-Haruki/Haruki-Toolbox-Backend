@@ -25,8 +25,8 @@ func TestGetSuiteRestorerLoadStatusTracksFailures(t *testing.T) {
 	resetSuiteRestorerStateForTest()
 
 	tmpDir := t.TempDir()
-	validPath := filepath.Join(tmpDir, "suite.json")
-	if err := os.WriteFile(validPath, []byte(`{"userGamedata":["id"]}`), 0600); err != nil {
+	validPath := filepath.Join(tmpDir, "suite_user.avsc")
+	if err := os.WriteFile(validPath, testStructToolSuiteSchema(), 0600); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
@@ -55,7 +55,30 @@ func TestGetSuiteRestorerLoadStatusTracksFailures(t *testing.T) {
 func TestLoadSuiteRestorerSupportsStructToolSchema(t *testing.T) {
 	tmpDir := t.TempDir()
 	schemaPath := filepath.Join(tmpDir, "suite_user.avsc")
-	if err := os.WriteFile(schemaPath, []byte(`{
+	if err := os.WriteFile(schemaPath, testStructToolSuiteSchema(), 0600); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	restorer, err := loadSuiteRestorer(schemaPath)
+	if err != nil {
+		t.Fatalf("loadSuiteRestorer returned error: %v", err)
+	}
+
+	data := map[string]any{
+		"userCards": []any{[]any{int64(100), int64(30)}},
+	}
+	restored := restorer.RestoreFields(data)
+	card, ok := restored["userCards"].([]any)[0].(map[string]any)
+	if !ok {
+		t.Fatalf("userCards should be restored to map, got %#v", restored["userCards"])
+	}
+	if card["cardId"] != int64(100) || card["level"] != int64(30) {
+		t.Fatalf("unexpected restored card: %#v", card)
+	}
+}
+
+func testStructToolSuiteSchema() []byte {
+	return []byte(`{
 	  "type": "record",
 	  "name": "SuiteUser",
 	  "namespace": "Sekai",
@@ -77,25 +100,18 @@ func TestLoadSuiteRestorerSupportsStructToolSchema(t *testing.T) {
 	      "msgpack_key": "userCards"
 	    }
 	  ]
-	}`), 0600); err != nil {
+	}`)
+}
+
+func TestLoadSuiteRestorerRejectsLegacyStructureJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	structurePath := filepath.Join(tmpDir, "legacy.json")
+	if err := os.WriteFile(structurePath, []byte(`{"userCards":["cardId","level"]}`), 0600); err != nil {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
-	restorer, err := loadSuiteRestorer(schemaPath)
-	if err != nil {
-		t.Fatalf("loadSuiteRestorer returned error: %v", err)
-	}
-
-	data := map[string]any{
-		"userCards": []any{[]any{int64(100), int64(30)}},
-	}
-	restored := restorer.RestoreFields(data)
-	card, ok := restored["userCards"].([]any)[0].(map[string]any)
-	if !ok {
-		t.Fatalf("userCards should be restored to map, got %#v", restored["userCards"])
-	}
-	if card["cardId"] != int64(100) || card["level"] != int64(30) {
-		t.Fatalf("unexpected restored card: %#v", card)
+	if _, err := loadSuiteRestorer(structurePath); err == nil {
+		t.Fatalf("loadSuiteRestorer should reject legacy suite structure JSON")
 	}
 }
 
