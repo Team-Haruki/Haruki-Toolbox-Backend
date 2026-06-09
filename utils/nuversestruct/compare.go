@@ -6,7 +6,9 @@ import (
 	"os"
 	"sort"
 
+	harukiUtils "haruki-suite/utils"
 	"haruki-suite/utils/orderedmsgpack"
+	"haruki-suite/utils/sekai"
 	"haruki-suite/utils/suiterestore"
 
 	"github.com/iancoleman/orderedmap"
@@ -16,6 +18,8 @@ type CompareOptions struct {
 	SampleMsgpackPath     string
 	CurrentStructuresPath string
 	SchemaPath            string
+	InputFormat           string
+	Server                harukiUtils.SupportedDataUploadServer
 }
 
 type CompareReport struct {
@@ -41,6 +45,11 @@ type FieldError struct {
 	Field string `json:"field"`
 	Error string `json:"error"`
 }
+
+const (
+	InputFormatMsgpack   = "msgpack"
+	InputFormatRawUpload = "raw-upload"
+)
 
 func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 	if options.SampleMsgpackPath == "" {
@@ -73,9 +82,9 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 	}
 	defer os.Remove(generatedPath)
 
-	sampleBytes, err := os.ReadFile(options.SampleMsgpackPath)
+	sampleBytes, err := decodeSampleMsgpack(options)
 	if err != nil {
-		return nil, fmt.Errorf("read sample msgpack: %w", err)
+		return nil, err
 	}
 	decoded, err := orderedmsgpack.MsgpackToOrderedMap(sampleBytes)
 	if err != nil {
@@ -95,6 +104,36 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 	}
 	report.compare(currentData, generatedData)
 	return report, nil
+}
+
+func decodeSampleMsgpack(options CompareOptions) ([]byte, error) {
+	sampleBytes, err := os.ReadFile(options.SampleMsgpackPath)
+	if err != nil {
+		return nil, fmt.Errorf("read sample: %w", err)
+	}
+
+	switch inputFormat := normalizeInputFormat(options.InputFormat); inputFormat {
+	case InputFormatMsgpack:
+		return sampleBytes, nil
+	case InputFormatRawUpload:
+		if options.Server == "" {
+			return nil, fmt.Errorf("server is required when input format is raw-upload")
+		}
+		msgpackBytes, err := sekai.DecryptToMsgpack(sampleBytes, options.Server)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt raw upload sample: %w", err)
+		}
+		return msgpackBytes, nil
+	default:
+		return nil, fmt.Errorf("unsupported input format: %s", inputFormat)
+	}
+}
+
+func normalizeInputFormat(inputFormat string) string {
+	if inputFormat == "" {
+		return InputFormatMsgpack
+	}
+	return inputFormat
 }
 
 func (r *CompareReport) compare(current map[string]any, generated map[string]any) {
