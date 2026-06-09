@@ -2,6 +2,7 @@ package data
 
 import (
 	"fmt"
+	"haruki-suite/utils/compactrestore"
 	harukiLogger "haruki-suite/utils/logger"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -12,7 +13,7 @@ var userGamedataAllowedFields = []string{"userId", "name", "deck", "exp", "total
 func RestoreCompactData(data bson.D) []bson.D {
 	var enumRaw bson.D
 	for _, elem := range data {
-		if elem.Key == "__ENUM__" {
+		if elem.Key == compactrestore.EnumKey {
 			switch m := elem.Value.(type) {
 			case bson.D:
 				enumRaw = m
@@ -26,32 +27,30 @@ func RestoreCompactData(data bson.D) []bson.D {
 			break
 		}
 	}
-	columnLabels, columns := extractColumnsAndLabels(data, enumRaw)
-	if len(columns) == 0 {
-		return []bson.D{}
-	}
-	numEntries := calculateMaxEntries(columns)
-	return buildResultEntries(numEntries, columnLabels, columns)
+	columns, enumColumns := extractColumnsAndLabels(data, enumRaw)
+	rows := compactrestore.RestoreColumns(columns, enumColumns, compactrestore.Options{
+		InvalidEnumValue:    compactrestore.NullInvalidEnumValue,
+		ParseFloatEnumIndex: true,
+	})
+	return buildResultEntries(rows)
 }
 
-func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]string, [][]any) {
-	var columnLabels []string
-	var columns [][]any
+func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]compactrestore.Column, map[string][]any) {
+	columns := make([]compactrestore.Column, 0, len(data))
+	enumColumns := make(map[string][]any)
 	for _, elem := range data {
-		if elem.Key == "__ENUM__" {
+		if elem.Key == compactrestore.EnumKey {
 			continue
 		}
-		columnLabels = append(columnLabels, elem.Key)
 		dataColumn := convertToInterfaceSlice(elem.Value)
 		if enumRaw != nil {
-			if enumColumn := processEnumColumn(enumRaw, elem.Key, dataColumn); enumColumn != nil {
-				columns = append(columns, enumColumn)
-				continue
+			if enumColumnRaw, ok := valueFromBSOND(enumRaw, elem.Key); ok {
+				enumColumns[elem.Key] = convertToInterfaceSlice(enumColumnRaw)
 			}
 		}
-		columns = append(columns, dataColumn)
+		columns = append(columns, compactrestore.Column{Key: elem.Key, Values: dataColumn})
 	}
-	return columnLabels, columns
+	return columns, enumColumns
 }
 
 func convertToInterfaceSlice(value any) []any {
@@ -65,82 +64,25 @@ func convertToInterfaceSlice(value any) []any {
 	}
 }
 
-func processEnumColumn(enumRaw bson.D, key string, dataColumn []any) []any {
-	var enumColumnRaw any
-	found := false
-	for _, elem := range enumRaw {
-		if elem.Key == key {
-			enumColumnRaw = elem.Value
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil
-	}
-	enumSlice := convertToInterfaceSlice(enumColumnRaw)
-	if enumSlice == nil {
-		return nil
-	}
-	columnValues := make([]any, 0, len(dataColumn))
-	for _, v := range dataColumn {
-		if v == nil {
-			columnValues = append(columnValues, nil)
-			continue
-		}
-		index, ok := convertToInt(v)
-		if !ok {
-			columnValues = append(columnValues, nil)
-			continue
-		}
-		if index >= 0 && index < len(enumSlice) {
-			columnValues = append(columnValues, enumSlice[index])
-		} else {
-			columnValues = append(columnValues, nil)
-		}
-	}
-	return columnValues
-}
-
-func convertToInt(v any) (int, bool) {
-	switch t := v.(type) {
-	case int:
-		return t, true
-	case int32:
-		return int(t), true
-	case int64:
-		return int(t), true
-	case float64:
-		return int(t), true
-	default:
-		return 0, false
-	}
-}
-
-func calculateMaxEntries(columns [][]any) int {
-	numEntries := len(columns[0])
-	for _, col := range columns {
-		if len(col) < numEntries {
-			numEntries = len(col)
-		}
-	}
-	return numEntries
-}
-
-func buildResultEntries(numEntries int, columnLabels []string, columns [][]any) []bson.D {
-	result := make([]bson.D, 0, numEntries)
-	for i := range numEntries {
-		entry := make(bson.D, 0, len(columnLabels))
-		for j, key := range columnLabels {
-			var val any
-			if i < len(columns[j]) {
-				val = columns[j][i]
-			}
-			entry = append(entry, bson.E{Key: key, Value: val})
+func buildResultEntries(rows []compactrestore.Row) []bson.D {
+	result := make([]bson.D, 0, len(rows))
+	for _, row := range rows {
+		entry := make(bson.D, 0, len(row))
+		for _, field := range row {
+			entry = append(entry, bson.E{Key: field.Key, Value: field.Value})
 		}
 		result = append(result, entry)
 	}
 	return result
+}
+
+func valueFromBSOND(d bson.D, key string) (any, bool) {
+	for _, elem := range d {
+		if elem.Key == key {
+			return elem.Value, true
+		}
+	}
+	return nil, false
 }
 
 func GetValueFromResult(result bson.D, key string) any {
