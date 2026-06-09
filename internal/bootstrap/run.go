@@ -2,8 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	harukiAPI "haruki-suite/api"
@@ -26,10 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/compress"
-	"github.com/gofiber/fiber/v3/middleware/logger"
 	_ "github.com/lib/pq"
 )
 
@@ -152,70 +147,13 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.AuthProxyUserIDHeader,
 	)
 	sessionHandler.ConfigureAuthProxySessionHeader(cfg.UserSystem.AuthProxySessionHeader)
-	app := fiber.New(fiber.Config{
-		BodyLimit:   100 * 1024 * 1024,
-		JSONEncoder: sonic.Marshal,
-		JSONDecoder: sonic.Unmarshal,
-		ProxyHeader: cfg.Backend.ProxyHeader,
-		TrustProxy:  cfg.Backend.EnableTrustProxy,
-		TrustProxyConfig: fiber.TrustProxyConfig{
-			Proxies: cfg.Backend.TrustProxies,
-		},
-	})
-
-	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
-	app.Use(func(c fiber.Ctx) error {
-		nonceBytes := make([]byte, 16)
-		if _, err := rand.Read(nonceBytes); err != nil {
-			return err
-		}
-		nonce := base64.StdEncoding.EncodeToString(nonceBytes)
-
-		var cspConnectSrc strings.Builder
-		cspConnectSrc.WriteString("'self'")
-		for _, src := range cfg.Backend.CSPConnectSrc {
-			cspConnectSrc.WriteString(" " + src)
-		}
-
-		c.Set("Content-Security-Policy",
-			"default-src 'self'; "+
-				"script-src 'self' https://challenges.cloudflare.com 'nonce-"+nonce+"'; "+
-				"frame-src https://challenges.cloudflare.com; "+
-				"style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' data: https:; "+
-				"connect-src "+cspConnectSrc.String()+"; "+
-				"object-src 'none'; "+
-				"base-uri 'self'; "+
-				"form-action 'self';",
-		)
-		c.Locals("cspNonce", nonce)
-		return c.Next()
-	})
-
-	if cfg.Backend.AccessLog != "" {
-		loggerConfig := logger.Config{
-			Format:     cfg.Backend.AccessLog,
-			TimeFormat: "2006-01-02 15:04:05",
-			TimeZone:   "Local",
-			CustomTags: map[string]logger.LogFunc{
-				"bytesSent": func(output logger.Buffer, c fiber.Ctx, data *logger.Data, extra string) (int, error) {
-					return output.WriteString(fmt.Sprintf("%d", len(c.Response().Body())))
-				},
-			},
-		}
-
-		if cfg.Backend.AccessLogPath != "" {
-			accessLogFile, err := os.OpenFile(cfg.Backend.AccessLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				return fmt.Errorf("open access log file: %w", err)
-			}
-			defer func() {
-				_ = accessLogFile.Close()
-			}()
-			loggerConfig.Stream = accessLogFile
-		}
-		app.Use(logger.New(loggerConfig))
+	app, closeAccessLogFile, err := newFiberApp(cfg)
+	if err != nil {
+		return err
 	}
+	defer func() {
+		_ = closeAccessLogFile()
+	}()
 
 	dbMgr := harukiDatabaseManager.NewHarukiToolboxDBManager(entClient, redisClient, mongoManager)
 	if botDBURL := strings.TrimSpace(cfg.HarukiBot.DBURL); botDBURL != "" {
