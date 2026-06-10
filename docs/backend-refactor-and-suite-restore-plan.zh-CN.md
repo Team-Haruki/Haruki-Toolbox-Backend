@@ -10,7 +10,7 @@
 
 ## 0. 当前进度快照
 
-更新时间：2026-06-09。
+更新时间：2026-06-10。
 
 本分支已经完成一轮按职责拆分和 suite restore 重置，当前重点已经从“大文件纯移动式拆分”转向“收口、去重和后续高风险模块治理”。
 
@@ -32,6 +32,10 @@
 - Docker workflow PR path filter 已清理旧 Rust 路径并改为 Go 项目真实路径。
 - `internal/modules/usercore` 已增加组合 route guard helper，并替换等价的用户路由 guard 链。
 - `utils/orderedmsgpack` 已完成解码硬化，并移除内部自定义 `OrderedMap` msgpack ext；生产入口只保留标准 msgpack 解码。
+- `internal/modules/adminwebhook` 已拆出类型、响应构造、settings、webhook CRUD、subscriber handlers。
+- `internal/modules/harukibotneo` 已拆出 route、types、constants、status/mail/register handlers、rate limit 和 credential helpers。
+- `internal/modules/userprivateapi` 已拆出 route、permission、error mapping、response builder、private data handler、game bindings handler。
+- `internal/modules/adminusers` 已完成 batch operation 拆分，并拆出 integration access cleanup、email、allow_cn、game binding handlers。
 
 仍未纳入或清理的本地项：
 
@@ -44,7 +48,8 @@
 当前下一步优先级：
 
 1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
-2. 下一批大文件拆分优先从 `adminwebhook` 开始，再处理 `harukibotneo`、`userprivateapi`、`adminusers`。
+2. 继续收束 `adminusers` 剩余较重文件，优先规划 `user_lifecycle.go`，再评估 `user_integrations_social.go` 是否需要进一步拆薄。
+3. 视实际发布节奏决定是否先推送/合并当前重构分支，避免纯重构提交长期堆积。
 
 ---
 
@@ -177,18 +182,21 @@ users / webhook 的兼容 SQL 已移动到 `internal/bootstrap/schema_compat.go`
 
 - `internal/modules/adminoauth/hydra_handlers.go`
 - `internal/modules/oauth2/hydra_routes.go`
+- `internal/modules/adminwebhook/handlers.go`
+- `internal/modules/harukibotneo/route.go`
 - `internal/modules/upload/handler.go`
 - `internal/modules/usergamebindings/gameaccount.go`
+- `internal/modules/userprivateapi/privatedataapi.go`
 - `internal/modules/usersocial/social.go`
 - `internal/modules/usertickets/tickets.go`
+- `internal/modules/adminusers/user_batch.go`
+- `internal/modules/adminusers/user_integrations.go`
 
 后续仍可按风险从高到低继续处理其它大文件：
 
-1. Admin users / integrations
-2. Admin webhook
-3. HarukiBot NEO
-4. User private API
-5. User password reset / social authorization
+1. Admin users lifecycle / integrations social
+2. User password reset / social authorization
+3. 其它后续新增的大文件
 
 每次只拆一个模块，先移动逻辑和补测试，不同时做行为调整。
 
@@ -557,7 +565,9 @@ StructTool v2 不应作为运行时外部命令被调用。
 
 1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
 2. 明确但暂不提交本地未跟踪项：`7445104842642643749`、`8D6B...`、`cmd/suite-rec-backfill/`、`registration-handoff.cn.md`、`suite_rec/`。
-3. 下一批大文件拆分优先从 `adminwebhook` 开始，再处理 `harukibotneo`、`userprivateapi`、`adminusers`。
+3. 继续规划 `adminusers/user_lifecycle.go` 纯移动式拆分；这部分涉及 soft delete、restore、reset password 和 Kratos/local password 兼容，实施前应单独列计划。
+4. 再评估 `adminusers/user_integrations_social.go` 是否需要拆出 social platform、authorized social、iOS upload code handlers。
+5. 当前重构分支提交较多，阶段性推送/开 PR 后再继续下一批会更便于 review。
 
 ---
 
