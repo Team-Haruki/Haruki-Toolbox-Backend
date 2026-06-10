@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	harukiLogger "haruki-suite/utils/logger"
 	"math"
@@ -9,6 +10,8 @@ import (
 )
 
 const maxSafeIntegerFloat64 = 1<<53 - 1
+
+var errUnsafeNumericUserID = errors.New("unsafe numeric userId")
 
 type ParsedGameUserID struct {
 	Value   *int64
@@ -42,6 +45,10 @@ func convertToStatusCode(status any, logger *harukiLogger.Logger) int {
 }
 
 func extractUserIDFromGameData(unpackedMap map[string]any, logger *harukiLogger.Logger) (ParsedGameUserID, error) {
+	return extractUserIDFromGameDataWithExpected(unpackedMap, nil, logger)
+}
+
+func extractUserIDFromGameDataWithExpected(unpackedMap map[string]any, expectedUserID *int64, logger *harukiLogger.Logger) (ParsedGameUserID, error) {
 	gameData, ok := unpackedMap["userGamedata"].(map[string]any)
 	if !ok {
 		return ParsedGameUserID{}, nil
@@ -51,6 +58,12 @@ func extractUserIDFromGameData(unpackedMap map[string]any, logger *harukiLogger.
 		return ParsedGameUserID{}, nil
 	}
 	value, err := convertToInt64Pointer(userIDValue, logger)
+	if err != nil {
+		if errors.Is(err, errUnsafeNumericUserID) && repairExpectedUserIDPrecision(gameData, userIDValue, expectedUserID) {
+			return ParsedGameUserID{Value: expectedUserID, RawType: fmt.Sprintf("%T", userIDValue)}, nil
+		}
+		return ParsedGameUserID{Value: value, RawType: fmt.Sprintf("%T", userIDValue)}, err
+	}
 	return ParsedGameUserID{Value: value, RawType: fmt.Sprintf("%T", userIDValue)}, err
 }
 
@@ -83,7 +96,7 @@ func convertToInt64Pointer(value any, logger *harukiLogger.Logger) (*int64, erro
 			return nil, nil
 		}
 		if v > maxSafeIntegerFloat64 {
-			return nil, fmt.Errorf("unsafe numeric userId: %.0f", v)
+			return nil, fmt.Errorf("%w: %.0f", errUnsafeNumericUserID, v)
 		}
 		tmp := int64(v)
 		return &tmp, nil
@@ -102,4 +115,23 @@ func convertToInt64Pointer(value any, logger *harukiLogger.Logger) (*int64, erro
 		logger.Debugf("userId raw type: %T, value: %v", v, v)
 	}
 	return nil, nil
+}
+
+func repairExpectedUserIDPrecision(gameData map[string]any, value any, expectedUserID *int64) bool {
+	if expectedUserID == nil || *expectedUserID < 0 {
+		return false
+	}
+	floatValue, ok := value.(float64)
+	if !ok {
+		return false
+	}
+	if math.IsNaN(floatValue) || math.IsInf(floatValue, 0) || floatValue < 0 || math.Trunc(floatValue) != floatValue {
+		return false
+	}
+	if float64(*expectedUserID) != floatValue {
+		return false
+	}
+	gameData["userId"] = *expectedUserID
+	gameData["userIdString"] = strconv.FormatInt(*expectedUserID, 10)
+	return true
 }

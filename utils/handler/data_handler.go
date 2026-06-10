@@ -21,7 +21,7 @@ func (h *DataHandler) HandleAndUpdateData(
 	if err != nil || result != nil {
 		return result, err
 	}
-	parsedUserID, err := extractUserIDFromGameData(unpackedMap, h.Logger)
+	parsedUserID, err := extractUserIDFromGameDataWithExpected(unpackedMap, expectedUserID, h.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +55,10 @@ func (h *DataHandler) DecodeUploadData(raw []byte, server utils.SupportedDataUpl
 
 func (h *DataHandler) ExtractGameUserID(data map[string]any) (ParsedGameUserID, error) {
 	return extractUserIDFromGameData(data, h.Logger)
+}
+
+func (h *DataHandler) ExtractGameUserIDForExpected(data map[string]any, expectedUserID *int64) (ParsedGameUserID, error) {
+	return extractUserIDFromGameDataWithExpected(data, expectedUserID, h.Logger)
 }
 
 func (h *DataHandler) PersistUploadData(ctx context.Context, data map[string]any, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, expectedUserID *int64) error {
