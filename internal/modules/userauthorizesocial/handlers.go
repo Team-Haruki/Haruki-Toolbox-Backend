@@ -1,92 +1,17 @@
 package userauthorizesocial
 
 import (
+	"strconv"
+
+	"entgo.io/ent/dialect/sql"
 	userCoreModule "haruki-suite/internal/modules/usercore"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	harukiLogger "haruki-suite/utils/logger"
-	"strconv"
 
-	"entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
-
-func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		toolboxUserID := c.Params("toolbox_user_id")
-		ctx := c.Context()
-		client := apiHelper.DBManager.DB.SocialPlatformInfo
-		info, err := client.Query().
-			Where(
-				socialplatforminfo.UserSocialPlatformInfoEQ(toolboxUserID),
-				socialplatforminfo.Verified(true),
-			).First(ctx)
-		if err != nil {
-			if postgresql.IsNotFound(err) {
-				return harukiAPIHelper.ErrorBadRequest(c, "user has no verified social platform info")
-			}
-			harukiLogger.Errorf("Failed to query verified social platform info: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to query social platform info")
-		}
-		if info == nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "user has no verified social platform info")
-		}
-		return c.Next()
-	}
-}
-
-func buildAuthorizedSocialPlatformUserData(
-	ctx fiber.Ctx,
-	client *postgresql.AuthorizeSocialPlatformInfoClient,
-	toolboxUserID string,
-) (*harukiAPIHelper.HarukiToolboxUserData, error) {
-	infos, err := client.Query().
-		Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
-		All(ctx.Context())
-	if err != nil {
-		return nil, err
-	}
-	resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
-	for _, i := range infos {
-		resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-			PlatformID:            i.PlatformID,
-			Platform:              i.Platform,
-			UserID:                i.PlatformUserID,
-			Comment:               i.Comment,
-			AllowFastVerification: i.AllowFastVerification,
-		})
-	}
-	ud := harukiAPIHelper.HarukiToolboxUserData{
-		AuthorizeSocialPlatformInfo: &resp,
-	}
-	return &ud, nil
-}
-
-func parseAuthorizeSocialPlatformID(c fiber.Ctx) (int, error) {
-	idParam := c.Params("id")
-	userAccountID64, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	userAccountID := int(userAccountID64)
-	if userAccountID <= 0 {
-		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid id parameter")
-	}
-	return userAccountID, nil
-}
-
-func parseAuthorizeSocialPlatformPayload(c fiber.Ctx) (harukiAPIHelper.AuthorizeSocialPlatformPayload, error) {
-	var payload harukiAPIHelper.AuthorizeSocialPlatformPayload
-	if err := c.Bind().Body(&payload); err != nil {
-		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, err
-	}
-	if !isSupportedSocialPlatform(harukiAPIHelper.SocialPlatform(payload.Platform)) {
-		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "unsupported platform")
-	}
-	return payload, nil
-}
 
 func handleUpdateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -337,41 +262,5 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
 		return harukiAPIHelper.SuccessResponse(c, "authorized social platform updated", &ud)
-	}
-}
-
-func RegisterUserAuthorizeSocialRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	base := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform")
-	verifiedSelf := func(handlers ...fiber.Handler) (any, []any) {
-		routeHandler, routeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedVerifiedSelf(apiHelper, "toolbox_user_id"), handlers...)
-		return routeHandler, routeRest
-	}
-	authenticatedSelf := func(handlers ...fiber.Handler) (any, []any) {
-		routeHandler, routeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handlers...)
-		return routeHandler, routeRest
-	}
-
-	createHandler, createRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatform(apiHelper))
-	base.Post("/", createHandler, createRest...)
-
-	r := base.Group("/:id")
-	createAtIDHandler, createAtIDRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatformAtID(apiHelper))
-	updateHandler, updateRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleUpdateAuthorizeSocialPlatform(apiHelper))
-	deleteHandler, deleteRest := authenticatedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
-	r.RouteChain("/").
-		Post(createAtIDHandler, createAtIDRest...).
-		Put(updateHandler, updateRest...).
-		Delete(deleteHandler, deleteRest...)
-}
-
-func isSupportedSocialPlatform(platform harukiAPIHelper.SocialPlatform) bool {
-	switch platform {
-	case harukiAPIHelper.SocialPlatformQQ,
-		harukiAPIHelper.SocialPlatformQQBot,
-		harukiAPIHelper.SocialPlatformDiscord,
-		harukiAPIHelper.SocialPlatformTelegram:
-		return true
-	default:
-		return false
 	}
 }
