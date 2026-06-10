@@ -5,55 +5,12 @@ import (
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/webhookendpoint"
-	"haruki-suite/utils/database/postgresql/webhooksubscription"
 	harukiHandler "haruki-suite/utils/handler"
 	"strings"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
-
-func handleGetAdminWebhookSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		resp := buildAdminWebhookSettingsResponse(apiHelper)
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionGetSettings, adminWebhookTargetType, adminWebhookSettingsTargetID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
-	}
-}
-
-func handleUpdateAdminWebhookSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		var payload adminWebhookSettingsPayload
-		if err := c.Bind().Body(&payload); err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdateSettings, adminWebhookTargetType, adminWebhookSettingsTargetID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonInvalidRequestPayload, nil))
-			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
-		}
-
-		update := harukiAPIHelper.RuntimeConfigUpdate{}
-		jwtSecret, err := sanitizeWebhookJWTSecret(payload.JWTSecret)
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdateSettings, adminWebhookTargetType, adminWebhookSettingsTargetID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonInvalidWebhookJWTSecret, nil))
-			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid jwtSecret")
-		}
-		if jwtSecret != nil {
-			update.WebhookJWTSecret = jwtSecret
-		}
-		if payload.Enabled != nil {
-			update.WebhookEnabled = payload.Enabled
-		}
-		if err := apiHelper.UpdateRuntimeConfig(update); err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdateSettings, adminWebhookTargetType, adminWebhookSettingsTargetID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonPersistRuntimeConfigFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to persist webhook settings")
-		}
-
-		resp := buildAdminWebhookSettingsResponse(apiHelper)
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdateSettings, adminWebhookTargetType, adminWebhookSettingsTargetID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"updatedEnabled":   payload.Enabled != nil,
-			"updatedJWTSecret": jwtSecret != nil,
-		})
-		return harukiAPIHelper.SuccessResponse(c, "webhook settings updated", &resp)
-	}
-}
 
 func handleListAdminWebhooks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -279,62 +236,5 @@ func handleDeleteAdminWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionDelete, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultSuccess, nil)
 		return harukiAPIHelper.SuccessResponse[string](c, "webhook deleted", nil)
-	}
-}
-
-func handleListAdminWebhookSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		webhookID, err := sanitizeWebhookID(c.Params("webhook_id"))
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonInvalidWebhookID, nil))
-			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid webhook_id")
-		}
-
-		exists, err := apiHelper.DBManager.DB.WebhookEndpoint.Query().
-			Where(webhookendpoint.IDEQ(webhookID)).
-			Exist(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonQueryWebhooksFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query webhook")
-		}
-		if !exists {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonWebhookNotFound, nil))
-			return harukiAPIHelper.ErrorNotFound(c, "webhook not found")
-		}
-
-		rows, err := apiHelper.DBManager.DB.WebhookSubscription.Query().
-			Where(webhooksubscription.WebhookIDEQ(webhookID)).
-			Order(webhooksubscription.ByCreatedAt(sql.OrderDesc()), webhooksubscription.ByID(sql.OrderAsc())).
-			All(c.Context())
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonQuerySubscribersFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to query webhook subscribers")
-		}
-
-		items := make([]adminWebhookSubscriberItem, 0, len(rows))
-		for _, row := range rows {
-			if row == nil {
-				continue
-			}
-			item := adminWebhookSubscriberItem{
-				UserID:   row.UserID,
-				Server:   row.Server,
-				DataType: row.DataType,
-			}
-			createdAt := row.CreatedAt.UTC()
-			item.CreatedAt = &createdAt
-			items = append(items, item)
-		}
-
-		resp := adminWebhookSubscribersResponse{
-			GeneratedAt: adminWebhookNowUTC(),
-			WebhookID:   webhookID,
-			Total:       len(items),
-			Items:       items,
-		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"total": resp.Total,
-		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
 	}
 }
