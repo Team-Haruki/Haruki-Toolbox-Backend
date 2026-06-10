@@ -35,7 +35,7 @@
 - `internal/modules/adminwebhook` 已拆出类型、响应构造、settings、webhook CRUD、subscriber handlers。
 - `internal/modules/harukibotneo` 已拆出 route、types、constants、status/mail/register handlers、rate limit 和 credential helpers。
 - `internal/modules/userprivateapi` 已拆出 route、permission、error mapping、response builder、private data handler、game bindings handler。
-- `internal/modules/adminusers` 已完成 batch operation 拆分，并拆出 integration access cleanup、email、allow_cn、game binding handlers。
+- `internal/modules/adminusers` 已完成 batch operation、integration access cleanup、email、allow_cn、game binding、lifecycle、social integration handlers 拆分。
 
 仍未纳入或清理的本地项：
 
@@ -48,8 +48,8 @@
 当前下一步优先级：
 
 1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
-2. 继续收束 `adminusers` 剩余较重文件，优先规划 `user_lifecycle.go`，再评估 `user_integrations_social.go` 是否需要进一步拆薄。
-3. 视实际发布节奏决定是否先推送/合并当前重构分支，避免纯重构提交长期堆积。
+2. 继续收束剩余较重业务模块，优先评估 `internal/modules/userauthorizesocial/authorizesocial.go`，再处理 password reset / admin session 等 Ory 或管理员敏感路径。
+3. 当前重构分支已阶段性推送，后续每批继续保持小提交，便于 review。
 
 ---
 
@@ -565,9 +565,9 @@ StructTool v2 不应作为运行时外部命令被调用。
 
 1. 继续审查 StructTool schema 生成结果；如果游戏版本更新，按文档流程重新生成 `data/suite_user.avsc` 并跑 compare/test。
 2. 明确但暂不提交本地未跟踪项：`7445104842642643749`、`8D6B...`、`cmd/suite-rec-backfill/`、`registration-handoff.cn.md`、`suite_rec/`。
-3. 继续规划 `adminusers/user_lifecycle.go` 纯移动式拆分；这部分涉及 soft delete、restore、reset password 和 Kratos/local password 兼容，实施前应单独列计划。
-4. 再评估 `adminusers/user_integrations_social.go` 是否需要拆出 social platform、authorized social、iOS upload code handlers。
-5. 当前重构分支提交较多，阶段性推送/开 PR 后再继续下一批会更便于 review。
+3. 继续规划 `internal/modules/userauthorizesocial/authorizesocial.go` 纯移动式拆分。
+4. 后续再评估 `internal/modules/userpasswordreset/resetpassword.go`、`internal/modules/admin/me_sessions.go` 等 Ory 或管理员敏感路径，单独列计划后实施。
+5. 每批重构继续按小提交推进，避免大型横向改动难以 review。
 
 ---
 
