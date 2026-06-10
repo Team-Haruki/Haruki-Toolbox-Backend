@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"errors"
 	"fmt"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -29,6 +30,8 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType)
 		result, err := retriever.Run(ctx)
 		if err != nil {
+			uploadServer := harukiUtils.SupportedDataUploadServer(server)
+			recordInheritRetrievalFailure(apiHelper, uploadServer, uploadType, result, err)
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to retrieve game data")
 		}
 		uploadServer := harukiUtils.SupportedDataUploadServer(server)
@@ -40,6 +43,38 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded data.", serverStr, result.UserID), nil)
 	}
+}
+
+func recordInheritRetrievalFailure(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server harukiUtils.SupportedDataUploadServer, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, err error) {
+	if result == nil || result.UserID <= 0 {
+		sharedDataHandlerLogger.Warnf("Skip inherit retrieval failure upload log because game user ID is unavailable: %v", err)
+		return
+	}
+	dataType := inheritRetrievalFailureDataType(uploadType, err)
+	uploadCtx := &uploadContext{
+		Server:             server,
+		DataType:           dataType,
+		ExpectedGameUserID: result.UserID,
+		UploadMethod:       harukiUtils.UploadMethodInherit,
+		FailureStage:       "retrieve_" + string(dataType),
+	}
+	dispatchUploadAuditLog(apiHelper, sharedDataHandlerLogger, uploadCtx, false, buildUploadAuditErrorMessage(err, nil))
+}
+
+func inheritRetrievalFailureDataType(uploadType harukiUtils.UploadDataType, err error) harukiUtils.UploadDataType {
+	var retrievalErr *harukiSekai.DataRetrievalError
+	if errors.As(err, &retrievalErr) {
+		switch retrievalErr.DataType {
+		case string(harukiUtils.UploadDataTypeMysekai):
+			return harukiUtils.UploadDataTypeMysekai
+		case string(harukiUtils.UploadDataTypeSuite):
+			return harukiUtils.UploadDataTypeSuite
+		}
+	}
+	if uploadType == harukiUtils.UploadDataTypeMysekai {
+		return harukiUtils.UploadDataTypeMysekai
+	}
+	return harukiUtils.UploadDataTypeSuite
 }
 
 func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {

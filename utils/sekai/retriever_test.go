@@ -1,10 +1,16 @@
 package sekai
 
 import (
+	"context"
+	"errors"
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewSekaiDataRetriever_InvalidServer(t *testing.T) {
@@ -140,4 +146,130 @@ func TestRetrieverHelpers_UnpackTypeError(t *testing.T) {
 	if _, err := unpackResponseToMap(encrypted, JP); err == nil {
 		t.Fatalf("unpackResponseToMap should fail for non-map payload")
 	}
+}
+
+func TestRetrieverRunReturnsErrorForRequiredSuiteFailure(t *testing.T) {
+	withTestSekaiCrypto(t)
+	withFastRetrieverSleeps(t)
+
+	userID := int64(164337024457871363)
+	server := newRetrieverTestServer(t, userID, http.StatusUpgradeRequired, statusCodeOK)
+	defer server.Close()
+
+	retriever := newTestRetriever(server.URL, userID)
+	result, err := retriever.Run(context.Background())
+	if err == nil {
+		t.Fatalf("Run should fail when required suite retrieval fails")
+	}
+	if result == nil || result.UserID != userID {
+		t.Fatalf("Run partial result userID = %#v, want %d", result, userID)
+	}
+	if result.Suite != nil {
+		t.Fatalf("Run partial result suite should be nil on suite retrieval failure")
+	}
+	var retrievalErr *DataRetrievalError
+	if !errors.As(err, &retrievalErr) || retrievalErr.DataType != string(harukiUtils.UploadDataTypeSuite) {
+		t.Fatalf("Run error = %v, want suite DataRetrievalError", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusUpgradeRequired {
+		t.Fatalf("Run error = %v, want APIError status %d", err, http.StatusUpgradeRequired)
+	}
+}
+
+func TestRetrieverRunIgnoresFinalHomeRefreshFailure(t *testing.T) {
+	withTestSekaiCrypto(t)
+	withFastRetrieverSleeps(t)
+
+	userID := int64(164337024457871363)
+	server := newRetrieverTestServer(t, userID, statusCodeOK, statusCodeForbidden)
+	defer server.Close()
+
+	retriever := newTestRetriever(server.URL, userID)
+	result, err := retriever.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run should ignore final home refresh failure, got %v", err)
+	}
+	if result == nil || result.UserID != userID || len(result.Suite) == 0 {
+		t.Fatalf("Run result = %#v, want userID and suite payload", result)
+	}
+}
+
+func withTestSekaiCrypto(t *testing.T) {
+	t.Helper()
+	originalCfg := harukiConfig.Cfg
+	t.Cleanup(func() {
+		harukiConfig.Cfg = originalCfg
+	})
+	harukiConfig.Cfg.SekaiClient.OtherServerAESKey = testAESKeyHex
+	harukiConfig.Cfg.SekaiClient.OtherServerAESIV = testAESIVHex
+	harukiConfig.Cfg.SekaiClient.ENServerAESKey = testAESKeyHex
+	harukiConfig.Cfg.SekaiClient.ENServerAESIV = testAESIVHex
+}
+
+func withFastRetrieverSleeps(t *testing.T) {
+	t.Helper()
+	originalClientSleep := clientSleep
+	originalRetrieverSleep := retrieverSleep
+	clientSleep = func(time.Duration) {}
+	retrieverSleep = func(time.Duration) {}
+	t.Cleanup(func() {
+		clientSleep = originalClientSleep
+		retrieverSleep = originalRetrieverSleep
+	})
+}
+
+func newTestRetriever(baseURL string, userID int64) *HarukiSekaiDataRetriever {
+	client := NewSekaiClientWithConfig(ClientConfig{
+		Server:          EN,
+		API:             baseURL + "/api",
+		VersionURL:      baseURL + "/version",
+		Inherit:         harukiUtils.InheritInformation{InheritID: "inherit-id", InheritPassword: "password"},
+		Headers:         map[string]string{},
+		InheritJWTToken: "secret",
+	})
+	return &HarukiSekaiDataRetriever{
+		client:     client,
+		uploadType: harukiUtils.UploadDataTypeSuite,
+		logger:     client.logger,
+	}
+}
+
+func newRetrieverTestServer(t *testing.T, userID int64, suiteStatus int, homeRefreshStatus int) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/version":
+			_, _ = w.Write([]byte(`{"appVersion":"1","appHash":"2","dataVersion":"3","assetVersion":"4"}`))
+		case strings.HasPrefix(r.URL.Path, "/api/inherit/user/") && r.URL.Query().Get("isExecuteInherit") == "False":
+			writePackedTestResponse(t, w, map[string]any{
+				"afterUserGamedata": map[string]any{"userId": userID},
+			})
+		case strings.HasPrefix(r.URL.Path, "/api/inherit/user/") && r.URL.Query().Get("isExecuteInherit") == "True":
+			writePackedTestResponse(t, w, map[string]any{"credential": "credential"})
+		case r.URL.Path == "/api/user/"+userIDString(userID)+"/auth":
+			writePackedTestResponse(t, w, map[string]any{"sessionToken": "session-token"})
+		case r.URL.Path == "/api/suite/user/"+userIDString(userID):
+			w.WriteHeader(suiteStatus)
+			if suiteStatus == statusCodeOK {
+				writePackedTestResponse(t, w, map[string]any{"userId": userID})
+			}
+		case r.URL.Path == "/api/user/"+userIDString(userID)+"/home/refresh":
+			w.WriteHeader(homeRefreshStatus)
+			if homeRefreshStatus == statusCodeOK {
+				writePackedTestResponse(t, w, map[string]any{"ok": true})
+			}
+		default:
+			writePackedTestResponse(t, w, map[string]any{"ok": true})
+		}
+	}))
+}
+
+func writePackedTestResponse(t *testing.T, w http.ResponseWriter, payload map[string]any) {
+	t.Helper()
+	packed, err := Pack(payload, harukiUtils.SupportedDataUploadServerEN)
+	if err != nil {
+		t.Fatalf("Pack test response failed: %v", err)
+	}
+	_, _ = w.Write(packed)
 }

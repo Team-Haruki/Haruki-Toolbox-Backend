@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -101,6 +103,76 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 			}
 			if syslog.Metadata["uploadMethod"] != string(harukiUtils.UploadMethodIOSProxy) {
 				t.Fatalf("system log uploadMethod = %v", syslog.Metadata["uploadMethod"])
+			}
+			return
+		}
+		if !postgresql.IsNotFound(queryErr) {
+			t.Fatalf("query upload log returned error: %v", queryErr)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for upload log to be written")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:inherit-retrieval-audit-test?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{
+			DB: client,
+		},
+	}
+	gameUserID := int64(164337024457871363)
+	err := harukiSekai.NewDataRetrievalError(
+		string(harukiUtils.UploadDataTypeSuite),
+		"api_call",
+		"failed to call suite API",
+		harukiSekai.NewAPIError("/suite/user/164337024457871363", "GET", 426, "non-200 response", nil),
+	)
+
+	recordInheritRetrievalFailure(
+		helper,
+		harukiUtils.SupportedDataUploadServerEN,
+		harukiUtils.UploadDataTypeSuite,
+		&harukiUtils.SekaiInheritDataRetrieverResponse{UserID: gameUserID},
+		err,
+	)
+
+	ctx := context.Background()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		row, queryErr := client.UploadLog.Query().
+			Where(
+				uploadlog.ServerEQ("en"),
+				uploadlog.GameUserIDEQ("164337024457871363"),
+				uploadlog.DataTypeEQ(string(harukiUtils.UploadDataTypeSuite)),
+				uploadlog.UploadMethodEQ(string(harukiUtils.UploadMethodInherit)),
+			).
+			Only(ctx)
+		if queryErr == nil {
+			if row.Success {
+				t.Fatalf("upload log success = true, want false")
+			}
+			if row.ErrorMessage == nil || !strings.Contains(*row.ErrorMessage, "status 426") {
+				t.Fatalf("upload log error_message = %v, want status 426 detail", row.ErrorMessage)
+			}
+			syslog, syslogErr := client.SystemLog.Query().
+				Where(
+					systemlog.ActionEQ("user.upload."+string(harukiUtils.UploadMethodInherit)),
+					systemlog.TargetIDEQ("en:164337024457871363"),
+					systemlog.ResultEQ(systemlog.ResultFailure),
+				).
+				Only(ctx)
+			if syslogErr != nil {
+				t.Fatalf("query system log returned error: %v", syslogErr)
+			}
+			if syslog.Metadata["failureStage"] != "retrieve_suite" {
+				t.Fatalf("system log failureStage = %v, want retrieve_suite", syslog.Metadata["failureStage"])
 			}
 			return
 		}

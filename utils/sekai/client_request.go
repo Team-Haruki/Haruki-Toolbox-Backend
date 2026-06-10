@@ -27,7 +27,7 @@ func (c *HarukiSekaiClient) callAPI(
 	status, respHeaders, respBody, err := c.httpClient.Request(ctx, method, url, headers, body)
 	if err != nil {
 		c.logger.Errorf("HTTP request failed for %s: %v", url, err)
-		return nil, 0, err
+		return nil, 0, NewAPIError(path, method, 0, "request failed", err)
 	}
 
 	if status == statusCodeOK {
@@ -36,7 +36,7 @@ func (c *HarukiSekaiClient) callAPI(
 	}
 
 	c.logger.Errorf("API returned non-200 status for %s: %d", url, status)
-	return respBody, status, fmt.Errorf("API error: %d", status)
+	return respBody, status, NewAPIError(path, method, status, "non-200 response", nil)
 }
 
 func mergedHeaders(base, custom map[string]string) map[string]string {

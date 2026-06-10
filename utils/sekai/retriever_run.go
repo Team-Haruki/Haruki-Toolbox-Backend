@@ -19,27 +19,30 @@ func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiI
 		return nil, NewDataRetrievalError("run", "client_error", r.client.errorMessage, nil)
 	}
 
+	result := &harukiUtils.SekaiInheritDataRetrieverResponse{
+		Server: string(r.client.server),
+		UserID: r.client.userID,
+	}
+
 	suite, suiteErr := r.RetrieveSuite(ctx)
 	if suiteErr != nil {
-		r.logger.Warnf("Suite retrieval failed: %v", suiteErr)
+		r.logger.Errorf("Suite retrieval failed: %v", suiteErr)
+		return result, suiteErr
 	}
+	result.Suite = suite
+
 	if err := r.RefreshHome(ctx, false, false); err != nil {
 		r.logger.Warnf("Final home refresh failed (non-critical): %v", err)
 	}
 
-	var mysekai []byte
-	var mysekaiErr error
 	if shouldRetrieveMysekai(r.uploadType) {
-		mysekai, mysekaiErr = r.RetrieveMysekai(ctx)
-		if mysekaiErr != nil && !IsMaintenanceError(mysekaiErr) {
-			r.logger.Warnf("MySekai retrieval failed: %v", mysekaiErr)
+		mysekai, mysekaiErr := r.RetrieveMysekai(ctx)
+		if mysekaiErr != nil {
+			r.logger.Errorf("MySekai retrieval failed: %v", mysekaiErr)
+			return result, mysekaiErr
 		}
+		result.Mysekai = mysekai
 	}
 
-	return &harukiUtils.SekaiInheritDataRetrieverResponse{
-		Server:  string(r.client.server),
-		UserID:  r.client.userID,
-		Suite:   suite,
-		Mysekai: mysekai,
-	}, nil
+	return result, nil
 }

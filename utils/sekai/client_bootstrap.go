@@ -10,6 +10,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var clientSleep = time.Sleep
+
 type appVersionPayload struct {
 	AppVersion   string `json:"appVersion"`
 	AppHash      string `json:"appHash"`
@@ -173,11 +175,11 @@ func (c *HarukiSekaiClient) Init(ctx context.Context) error {
 	if err := c.InheritAccount(ctx, true); err != nil {
 		return err
 	}
-	time.Sleep(1 * time.Second)
+	clientSleep(1 * time.Second)
 	if err := c.InheritAccount(ctx, false); err != nil {
 		return err
 	}
-	time.Sleep(2 * time.Second)
+	clientSleep(2 * time.Second)
 	if err := c.Login(ctx); err != nil {
 		return err
 	}
