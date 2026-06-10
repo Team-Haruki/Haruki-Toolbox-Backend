@@ -11,7 +11,7 @@ Haruki Toolbox Backend 是一个基于 Go 1.26 的后端项目，核心技术栈
 - Ory Kratos：浏览器身份体系与自助认证流程
 - Ory Hydra：OAuth2 / OIDC
 
-默认本地配置文件为 `haruki-suite-configs.yaml`。
+默认本地配置文件为 `haruki-toolbox-configs.yaml`。
 
 ## 当前仓库结构
 

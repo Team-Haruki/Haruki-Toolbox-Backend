@@ -12,10 +12,10 @@ It also utilizes Redis for efficient caching to speed up API responses.
 ## How to Use
 
 1. Go to release page to download `HarukiToolboxBackend`
-2. Download `haruki-suite-configs.example.yaml`, and rename it to `haruki-suite-configs.yaml`
+2. Download `haruki-toolbox-configs.example.yaml`, and rename it to `haruki-toolbox-configs.yaml`
 3. Make a new directory or use an exists directory
-4. Put `HarukiToolboxBackend` and `haruki-suite-configs.yaml` in the same directory
-5. Edit `haruki-suite-configs.yaml` and configure it
+4. Put `HarukiToolboxBackend` and `haruki-toolbox-configs.yaml` in the same directory
+5. Edit `haruki-toolbox-configs.yaml` and configure it
 6. Open Terminal, and `cd` to the directory
 7. Run `HarukiToolboxBackend`
 

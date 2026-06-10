@@ -228,7 +228,7 @@ services:
       mihomo:
         condition: service_healthy
     environment:
-      HARUKI_CONFIG_PATH: /app/config/haruki-suite-configs.yaml
+      HARUKI_CONFIG_PATH: /app/config/haruki-toolbox-configs.yaml
       AUTH_PROVIDER: kratos
       AUTH_PROXY_ENABLED: "true"
       AUTH_PROXY_TRUSTED_VALUE: ${OATHKEEPER_SHARED_SECRET}
@@ -280,7 +280,7 @@ services:
     ports:
       - "${BACKEND_PORT}:16666"
     volumes:
-      - ${STACK_HOST_ROOT}/toolbox-backend/haruki-suite-configs.yaml:/app/config/haruki-suite-configs.yaml:ro
+      - ${STACK_HOST_ROOT}/toolbox-backend/haruki-toolbox-configs.yaml:/app/config/haruki-toolbox-configs.yaml:ro
       - ${STACK_HOST_ROOT}/toolbox-backend/data:/app/data:ro
       - ${AVATAR_STORAGE_PATH}:/app/avatars
       - ${STACK_HOST_ROOT}/toolbox-backend/logs:/app/logs

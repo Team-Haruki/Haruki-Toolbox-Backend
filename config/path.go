@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const defaultConfigFilename = "haruki-suite-configs.yaml"
+const defaultConfigFilename = "haruki-toolbox-configs.yaml"
 
 func findConfigPath(filename string) string {
 	wd, err := os.Getwd()
