@@ -1,10 +1,8 @@
 package userprivateapi
 
 import (
-	"crypto/subtle"
 	harukiUtils "haruki-suite/utils"
 	harukiApiHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/api/data"
 	"haruki-suite/utils/database/postgresql"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
@@ -12,74 +10,13 @@ import (
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"golang.org/x/sync/errgroup"
 )
-
-func mapPrivateGameAccountLookupError(err error) *fiber.Error {
-	if err == nil {
-		return nil
-	}
-	if postgresql.IsNotFound(err) {
-		return fiber.NewError(fiber.StatusNotFound, "account binding not found")
-	}
-	return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account")
-}
-
-func mapPrivateAuthorizationLookupError(err error) *fiber.Error {
-	if err == nil {
-		return nil
-	}
-	return fiber.NewError(fiber.StatusInternalServerError, "failed to verify authorization")
-}
-
-func mapPrivateDataQueryError(err error) *fiber.Error {
-	if err == nil {
-		return nil
-	}
-	return fiber.NewError(fiber.StatusInternalServerError, "failed to query user data")
-}
-
-func mapPrivateBindingOwnerError(binding *postgresql.GameAccountBinding) *fiber.Error {
-	if binding == nil {
-		return fiber.NewError(fiber.StatusNotFound, "account binding not found")
-	}
-	if binding.Edges.User == nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account owner")
-	}
-	if binding.Edges.User.Banned {
-		return fiber.NewError(fiber.StatusForbidden, "forbidden: account owner is banned")
-	}
-	return nil
-}
-
-func ValidateUserPermission(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		if apiHelper == nil {
-			return harukiApiHelper.ErrorInternal(c, "private api is not configured")
-		}
-		expectedToken, requiredAgentKeyword := apiHelper.GetPrivateAPIAuth()
-		if strings.TrimSpace(expectedToken) == "" {
-			harukiLogger.Errorf("private api token is not configured")
-			return harukiApiHelper.ErrorInternal(c, "private api is not configured")
-		}
-		authorization := c.Get("Authorization")
-		userAgent := c.Get("User-Agent")
-		if subtle.ConstantTimeCompare([]byte(authorization), []byte(expectedToken)) != 1 {
-			return harukiApiHelper.ErrorUnauthorized(c, "unauthorized token")
-		}
-		if requiredAgentKeyword != "" && !harukiApiHelper.StringContains(userAgent, requiredAgentKeyword) {
-			return harukiApiHelper.ErrorUnauthorized(c, "unauthorized user agent")
-		}
-		return c.Next()
-	}
-}
 
 func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -200,34 +137,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		}
 		return c.JSON(resp)
 	}
-}
-
-func processRequestKeys(c fiber.Ctx, result bson.D) error {
-	return c.JSON(buildPrivateDataResponse(c.Query("key"), result))
-}
-
-func buildPrivateDataResponse(requestKey string, result bson.D) any {
-	if requestKey != "" {
-		keys := strings.Split(requestKey, ",")
-		if len(keys) == 1 {
-			return data.NormalizeProviderResponse(bsonDGet(result, keys[0]))
-		}
-		filtered := make(bson.D, 0, len(keys))
-		for _, k := range keys {
-			filtered = append(filtered, bson.E{Key: k, Value: bsonDGet(result, k)})
-		}
-		return data.NormalizeProviderResponse(filtered)
-	}
-	return data.NormalizeProviderResponse(result)
-}
-
-func bsonDGet(d bson.D, key string) any {
-	for _, elem := range d {
-		if elem.Key == key {
-			return elem.Value
-		}
-	}
-	return nil
 }
 
 func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
