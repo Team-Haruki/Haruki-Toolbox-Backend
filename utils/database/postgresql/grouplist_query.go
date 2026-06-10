@@ -5,9 +5,9 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/group"
-	"haruki-suite/utils/database/postgresql/grouplist"
-	"haruki-suite/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"math"
 
 	"entgo.io/ent"

@@ -4,8 +4,8 @@ package neopg
 
 import (
 	"context"
-	"haruki-suite/utils/database/neopg/commandmanifest"
-	"haruki-suite/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"

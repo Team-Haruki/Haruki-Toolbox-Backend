@@ -3,7 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"

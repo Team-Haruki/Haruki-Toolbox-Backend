@@ -2,12 +2,12 @@ package usersocial
 
 import (
 	"fmt"
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	userEmailModule "haruki-suite/internal/modules/useremail"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/socialplatforminfo"
-	harukiLogger "haruki-suite/utils/logger"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

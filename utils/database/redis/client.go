@@ -3,8 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
-	"haruki-suite/config"
-	harukiLogger "haruki-suite/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"time"
 
 	"github.com/redis/go-redis/v9"

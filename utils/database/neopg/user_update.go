@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/utils/database/neopg/predicate"
-	"haruki-suite/utils/database/neopg/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 	"time"
 
 	"entgo.io/ent/dialect/sql"

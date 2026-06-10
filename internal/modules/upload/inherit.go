@@ -2,9 +2,9 @@ package upload
 
 import (
 	"fmt"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiSekai "haruki-suite/utils/sekai"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 
 	"github.com/gofiber/fiber/v3"
 )

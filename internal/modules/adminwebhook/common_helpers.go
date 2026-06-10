@@ -3,9 +3,9 @@ package adminwebhook
 import (
 	"crypto/rand"
 	"encoding/hex"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"strconv"
 	"strings"
 	"time"

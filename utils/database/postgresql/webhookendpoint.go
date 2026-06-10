@@ -4,7 +4,7 @@ package postgresql
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/postgresql/webhookendpoint"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"strings"
 	"time"
 

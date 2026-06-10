@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/crypto/bcrypt"

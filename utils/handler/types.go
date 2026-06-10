@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"haruki-suite/utils/database"
-	harukiHttp "haruki-suite/utils/http"
-	harukiLogger "haruki-suite/utils/logger"
-	"haruki-suite/utils/sekaiapi"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
 )
 
 type DataHandler struct {

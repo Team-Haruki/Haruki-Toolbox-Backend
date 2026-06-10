@@ -3,10 +3,10 @@ package upload
 import (
 	"context"
 	"errors"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"strings"
 )
 

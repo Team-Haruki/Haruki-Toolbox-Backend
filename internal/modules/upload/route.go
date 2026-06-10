@@ -1,6 +1,6 @@
 package upload
 
-import apiHelper "haruki-suite/utils/api"
+import apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 func RegisterUploadRoutes(apiHelper *apiHelper.HarukiToolboxRouterHelpers) {
 	registerInheritRoutes(apiHelper)

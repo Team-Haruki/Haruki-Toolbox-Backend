@@ -1,14 +1,14 @@
 package usergamebindings
 
 import (
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	userEmailModule "haruki-suite/internal/modules/useremail"
-	"haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	harukiRedis "haruki-suite/utils/database/redis"
-	harukiLogger "haruki-suite/utils/logger"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

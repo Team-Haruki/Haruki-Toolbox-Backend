@@ -1,7 +1,7 @@
 package public
 
 import (
-	harukiUtils "haruki-suite/utils"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"net/http"
 	"net/http/httptest"
 	"testing"

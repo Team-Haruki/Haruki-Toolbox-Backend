@@ -1,9 +1,9 @@
 package adminrisk
 
 import (
-	platformPagination "haruki-suite/internal/platform/pagination"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/riskevent"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"slices"
 	"strings"
 	"time"

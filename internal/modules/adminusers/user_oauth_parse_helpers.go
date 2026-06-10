@@ -2,7 +2,7 @@ package adminusers
 
 import (
 	"encoding/json"
-	adminCoreModule "haruki-suite/internal/modules/admincore"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	"mime"
 	"net/url"
 	"strings"

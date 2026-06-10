@@ -1,7 +1,7 @@
 package adminstats
 
 import (
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"strings"
 	"testing"
 	"time"

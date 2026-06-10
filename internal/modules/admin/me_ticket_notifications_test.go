@@ -3,9 +3,9 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database"
-	"haruki-suite/utils/database/postgresql/enttest"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"net/http"
 	"net/http/httptest"
 	"testing"

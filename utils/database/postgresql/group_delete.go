@@ -4,8 +4,8 @@ package postgresql
 
 import (
 	"context"
-	"haruki-suite/utils/database/postgresql/group"
-	"haruki-suite/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"

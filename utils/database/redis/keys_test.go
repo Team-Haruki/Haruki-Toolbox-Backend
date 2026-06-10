@@ -1,7 +1,7 @@
 package redis
 
 import (
-	harukiConfig "haruki-suite/config"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
 )
 

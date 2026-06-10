@@ -3,8 +3,8 @@ package misc
 import (
 	"context"
 	"fmt"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiHandler "haruki-suite/utils/handler"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 	"time"
 
 	"github.com/gofiber/fiber/v3"

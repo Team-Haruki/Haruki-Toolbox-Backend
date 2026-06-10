@@ -2,9 +2,9 @@ package adminusers
 
 import (
 	"context"
-	oauth2Module "haruki-suite/internal/modules/oauth2"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiLogger "haruki-suite/utils/logger"
+	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
 	"strings"
 )

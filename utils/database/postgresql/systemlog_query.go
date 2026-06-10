@@ -5,8 +5,8 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/predicate"
-	"haruki-suite/utils/database/postgresql/systemlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"math"
 
 	"entgo.io/ent"

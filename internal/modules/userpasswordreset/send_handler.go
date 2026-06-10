@@ -1,12 +1,12 @@
 package userpasswordreset
 
 import (
-	userauth "haruki-suite/internal/modules/userauth"
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	platformIdentity "haruki-suite/internal/platform/identity"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/cloudflare"
-	harukiLogger "haruki-suite/utils/logger"
+	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )

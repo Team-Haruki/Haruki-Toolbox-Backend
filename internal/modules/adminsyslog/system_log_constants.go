@@ -1,6 +1,6 @@
 package adminsyslog
 
-import harukiAPIHelper "haruki-suite/utils/api"
+import harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 const (
 	defaultSystemLogPage       = 1

@@ -3,8 +3,8 @@ package sekaiapi
 import (
 	"encoding/json"
 	"fmt"
-	"haruki-suite/utils"
-	harukiLogger "haruki-suite/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/go-resty/resty/v2"
 )

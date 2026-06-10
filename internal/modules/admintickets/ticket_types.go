@@ -1,7 +1,7 @@
 package admintickets
 
 import (
-	"haruki-suite/utils/database/postgresql/ticket"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"time"
 )
 

@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"net/http"
 	"time"
 

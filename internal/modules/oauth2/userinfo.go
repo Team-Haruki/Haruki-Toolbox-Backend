@@ -2,13 +2,13 @@ package oauth2
 
 import (
 	"fmt"
-	"haruki-suite/config"
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	"haruki-suite/utils/database/postgresql/user"
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )

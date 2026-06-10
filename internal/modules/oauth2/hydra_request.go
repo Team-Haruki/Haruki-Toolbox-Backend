@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/bytedance/sonic"
 )

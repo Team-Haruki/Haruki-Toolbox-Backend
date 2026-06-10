@@ -3,7 +3,7 @@ package smtp
 import (
 	"crypto/tls"
 	"fmt"
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"net"
 	"net/smtp"
 	"strings"

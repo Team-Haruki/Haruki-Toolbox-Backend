@@ -3,9 +3,9 @@ package handler
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils"
-	apiHelper "haruki-suite/utils/api"
-	harukiSekai "haruki-suite/utils/sekai"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 )
 
 func (h *DataHandler) HandleAndUpdateData(

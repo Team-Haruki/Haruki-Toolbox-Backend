@@ -3,8 +3,8 @@ package sekai
 import (
 	"bytes"
 	"errors"
-	"haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"testing"
 )
 

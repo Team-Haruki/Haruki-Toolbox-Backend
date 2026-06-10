@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strings"
 
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	harukiAPIHelper "haruki-suite/utils/api"
-	userSchema "haruki-suite/utils/database/postgresql/user"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )

@@ -2,8 +2,8 @@ package userprivateapi
 
 import (
 	"encoding/json"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"net/http"
 	"net/http/httptest"
 	"testing"

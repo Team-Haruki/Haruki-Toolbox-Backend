@@ -5,7 +5,7 @@ package hook
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 // The AuthorizeSocialPlatformInfoFunc type is an adapter to allow the use of ordinary

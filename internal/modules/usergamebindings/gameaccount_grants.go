@@ -3,7 +3,7 @@ package usergamebindings
 import (
 	"time"
 
-	dbManager "haruki-suite/utils/database/postgresql"
+	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 type gameAccountDataGrantPayload struct {

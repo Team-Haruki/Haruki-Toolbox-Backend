@@ -1,7 +1,7 @@
 package oauth2
 
 import (
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
 	"time"
 )

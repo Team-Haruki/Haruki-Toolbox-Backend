@@ -2,8 +2,8 @@ package ios
 
 import (
 	"fmt"
-	harukiConfig "haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"strings"
 )
 

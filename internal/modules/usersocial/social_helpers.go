@@ -1,8 +1,8 @@
 package usersocial
 
 import (
-	platformAuthHeader "haruki-suite/internal/platform/authheader"
-	harukiAPIHelper "haruki-suite/utils/api"
+	platformAuthHeader "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/authheader"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"strings"
 )
 

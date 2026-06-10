@@ -2,7 +2,7 @@ package adminoauth
 
 import (
 	"encoding/json"
-	platformPagination "haruki-suite/internal/platform/pagination"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	"mime"
 	"net/url"
 	"strconv"

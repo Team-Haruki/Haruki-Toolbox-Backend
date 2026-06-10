@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"haruki-suite/utils/database"
-	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 
-	harukiAPIHelper "haruki-suite/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func newAuthorizeSocialTestHelper(t *testing.T) *harukiAPIHelper.HarukiToolboxRouterHelpers {

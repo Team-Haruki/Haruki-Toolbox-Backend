@@ -2,7 +2,7 @@ package upload
 
 import (
 	"context"
-	harukiUtils "haruki-suite/utils"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"

@@ -11,7 +11,7 @@ import (
 
 func main() {
 	if err := entc.Generate("./schema", &gen.Config{
-		Package: "haruki-suite/utils/database/postgresql",
+		Package: "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql",
 		Target:  "../../utils/database/postgresql",
 	}); err != nil {
 		log.Fatal("running ent codegen:", err)

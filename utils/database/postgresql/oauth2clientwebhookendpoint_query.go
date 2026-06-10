@@ -5,8 +5,8 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/oauth2clientwebhookendpoint"
-	"haruki-suite/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"math"
 
 	"entgo.io/ent"

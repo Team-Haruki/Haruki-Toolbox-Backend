@@ -5,8 +5,8 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/neopg/commandmanifest"
-	"haruki-suite/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"math"
 
 	"entgo.io/ent"

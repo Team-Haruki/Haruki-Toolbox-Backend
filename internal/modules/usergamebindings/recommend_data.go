@@ -2,12 +2,12 @@ package usergamebindings
 
 import (
 	"errors"
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiAPIData "haruki-suite/utils/api/data"
-	"haruki-suite/utils/database/postgresql"
-	harukiLogger "haruki-suite/utils/logger"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiAPIData "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
 	"strings"
 

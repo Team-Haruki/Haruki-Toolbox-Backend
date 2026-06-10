@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"haruki-suite/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"regexp"
 	"strconv"
 	"time"

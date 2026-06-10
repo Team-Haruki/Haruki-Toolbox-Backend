@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	harukiConfig "haruki-suite/config"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"os"
 	"strings"
 

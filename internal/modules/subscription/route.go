@@ -3,9 +3,9 @@ package subscription
 import (
 	"strings"
 
-	userPrivateAPI "haruki-suite/internal/modules/userprivateapi"
-	apiHelper "haruki-suite/utils/api"
-	dataHandler "haruki-suite/utils/handler"
+	userPrivateAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprivateapi"
+	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	dataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 
 	"github.com/gofiber/fiber/v3"
 )

@@ -2,8 +2,8 @@ package misc
 
 import (
 	"fmt"
-	"haruki-suite/config"
-	harukiAPIHelper "haruki-suite/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )

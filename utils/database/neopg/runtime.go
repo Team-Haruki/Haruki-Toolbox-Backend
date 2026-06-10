@@ -3,12 +3,12 @@
 package neopg
 
 import (
-	"haruki-suite/ent/bot/schema"
-	"haruki-suite/utils/database/neopg/commandlog"
-	"haruki-suite/utils/database/neopg/commandmanifest"
-	"haruki-suite/utils/database/neopg/dailyrequests"
-	"haruki-suite/utils/database/neopg/hourlyrequests"
-	"haruki-suite/utils/database/neopg/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/bot/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 	"time"
 )
 

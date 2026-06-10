@@ -3,13 +3,13 @@ package usergamebindings
 import (
 	"context"
 	"errors"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"testing"
 	"time"
 
-	"haruki-suite/utils/database/postgresql"
-	harukiRedis "haruki-suite/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	dbManager "haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/enttest"
+	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 
 	_ "github.com/mattn/go-sqlite3"
 )

@@ -2,9 +2,9 @@ package handler
 
 import (
 	"fmt"
-	harukiConfig "haruki-suite/config"
-	"haruki-suite/utils"
-	apiHelper "haruki-suite/utils/api"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"strconv"
 	"strings"
 )

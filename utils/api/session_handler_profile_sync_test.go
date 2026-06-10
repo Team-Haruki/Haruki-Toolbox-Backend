@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/enttest"
-	userSchema "haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"

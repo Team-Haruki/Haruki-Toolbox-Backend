@@ -1,10 +1,10 @@
 package upload
 
 import (
-	harukiConfig "haruki-suite/config"
-	harukiSchema "haruki-suite/ent/toolbox/schema"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"testing"
 )
 

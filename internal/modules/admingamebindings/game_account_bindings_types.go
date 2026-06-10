@@ -1,7 +1,7 @@
 package admingamebindings
 
 import (
-	"haruki-suite/ent/toolbox/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	"time"
 )
 

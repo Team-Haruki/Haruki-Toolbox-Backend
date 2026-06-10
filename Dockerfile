@@ -11,9 +11,9 @@ COPY . .
 RUN go build \
     -trimpath \
     -ldflags="-s -w \
-      -X 'haruki-suite/version.Version=${VERSION}' \
-      -X 'haruki-suite/version.Commit=${GIT_SHA}' \
-      -X 'haruki-suite/version.BuildDate=${BUILD_DATE}'" \
+      -X 'github.com/Team-Haruki/Haruki-Toolbox-Backend/version.Version=${VERSION}' \
+      -X 'github.com/Team-Haruki/Haruki-Toolbox-Backend/version.Commit=${GIT_SHA}' \
+      -X 'github.com/Team-Haruki/Haruki-Toolbox-Backend/version.BuildDate=${BUILD_DATE}'" \
     -o haruki-toolbox-backend ./main.go
 
 FROM alpine:3.23

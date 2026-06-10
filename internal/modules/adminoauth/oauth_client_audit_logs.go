@@ -1,9 +1,9 @@
 package adminoauth
 
 import (
-	platformPagination "haruki-suite/internal/platform/pagination"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/systemlog"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"strings"
 	"time"
 

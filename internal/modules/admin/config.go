@@ -1,9 +1,9 @@
 package admin
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiRedis "haruki-suite/utils/database/redis"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

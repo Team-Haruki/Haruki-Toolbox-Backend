@@ -3,8 +3,8 @@ package api
 import (
 	"errors"
 	"fmt"
-	platformAuthHeader "haruki-suite/internal/platform/authheader"
-	harukiLogger "haruki-suite/utils/logger"
+	platformAuthHeader "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/authheader"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

@@ -1,8 +1,8 @@
 package api
 
 import (
-	"haruki-suite/utils/database"
-	harukiRedis "haruki-suite/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"testing"
 
 	goredis "github.com/redis/go-redis/v9"

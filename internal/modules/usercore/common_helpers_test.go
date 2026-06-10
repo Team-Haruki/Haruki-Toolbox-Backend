@@ -1,7 +1,7 @@
 package usercore
 
 import (
-	harukiAPIHelper "haruki-suite/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"net/http/httptest"
 	"testing"
 

@@ -3,8 +3,8 @@ package sekai
 import (
 	"fmt"
 
-	"haruki-suite/config"
-	"haruki-suite/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"github.com/iancoleman/orderedmap"
 )

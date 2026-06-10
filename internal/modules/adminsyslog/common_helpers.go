@@ -1,9 +1,9 @@
 package adminsyslog
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	platformTime "haruki-suite/internal/platform/timeutil"
-	harukiAPIHelper "haruki-suite/utils/api"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"sort"
 	"time"
 

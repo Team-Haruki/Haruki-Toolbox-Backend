@@ -1,9 +1,9 @@
 package public
 
 import (
-	"haruki-suite/ent/toolbox/schema"
-	harukiUtils "haruki-suite/utils"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"testing"
 )
 

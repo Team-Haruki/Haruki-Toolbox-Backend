@@ -3,20 +3,20 @@ package userauth
 import (
 	"crypto/rand"
 	"fmt"
-	userModule "haruki-suite/internal/modules/user"
-	platformIdentity "haruki-suite/internal/platform/identity"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/cloudflare"
-	"haruki-suite/utils/database/postgresql"
-	harukiRedis "haruki-suite/utils/database/redis"
-	harukiLogger "haruki-suite/utils/logger"
+	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"math/big"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 
-	userSchema "haruki-suite/utils/database/postgresql/user"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 const (

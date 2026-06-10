@@ -1,6 +1,6 @@
 package misc
 
-import harukiAPIHelper "haruki-suite/utils/api"
+import harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 func RegisterMiscRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	registerFriendGroupsRoutes(apiHelper)

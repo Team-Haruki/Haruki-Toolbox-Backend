@@ -5,11 +5,11 @@ package enttest
 import (
 	"context"
 
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	// required by schema hooks.
-	_ "haruki-suite/utils/database/postgresql/runtime"
+	_ "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtime"
 
-	"haruki-suite/utils/database/postgresql/migrate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/migrate"
 
 	"entgo.io/ent/dialect/sql/schema"
 )

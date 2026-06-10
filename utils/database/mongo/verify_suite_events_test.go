@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"haruki-suite/utils/sekai"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 )
 
 func TestRealSuiteUserEvents(t *testing.T) {

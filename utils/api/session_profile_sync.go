@@ -2,10 +2,10 @@ package api
 
 import (
 	"context"
-	platformIdentity "haruki-suite/internal/platform/identity"
-	"haruki-suite/utils/database/postgresql"
-	userSchema "haruki-suite/utils/database/postgresql/user"
-	harukiLogger "haruki-suite/utils/logger"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 )
 

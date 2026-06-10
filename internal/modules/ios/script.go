@@ -2,10 +2,10 @@ package ios
 
 import (
 	"fmt"
-	harukiAPIHelper "haruki-suite/utils/api"
-	iosGen "haruki-suite/utils/api/ios"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"strconv"
 
 	"github.com/gofiber/fiber/v3"

@@ -1,7 +1,7 @@
 package adminrisk
 
 import (
-	platformTime "haruki-suite/internal/platform/timeutil"
+	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
 	"time"
 )
 

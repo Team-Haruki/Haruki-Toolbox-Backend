@@ -1,8 +1,8 @@
 package oauth2
 
 import (
-	"haruki-suite/config"
-	harukiAPIHelper "haruki-suite/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"io"
 	"net/http"
 	"net/http/httptest"

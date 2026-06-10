@@ -2,16 +2,16 @@ package public
 
 import (
 	"context"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	harukiRedis "haruki-suite/utils/database/redis"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
 	"time"
 
-	"haruki-suite/utils/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
 
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"

@@ -6,10 +6,10 @@ import (
 	"os"
 	"sort"
 
-	harukiUtils "haruki-suite/utils"
-	"haruki-suite/utils/orderedmsgpack"
-	"haruki-suite/utils/sekai"
-	"haruki-suite/utils/suiterestore"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
 
 	"github.com/iancoleman/orderedmap"
 )

@@ -1,12 +1,12 @@
 package userauth
 
 import (
-	platformIdentity "haruki-suite/internal/platform/identity"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/cloudflare"
-	"haruki-suite/utils/database/postgresql"
-	userSchema "haruki-suite/utils/database/postgresql/user"
-	harukiLogger "haruki-suite/utils/logger"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

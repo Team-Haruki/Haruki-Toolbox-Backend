@@ -1,7 +1,7 @@
 package api
 
 import (
-	"haruki-suite/utils/database/postgresql/systemlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"strings"
 	"unicode/utf8"
 )

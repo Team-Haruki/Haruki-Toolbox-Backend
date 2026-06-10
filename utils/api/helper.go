@@ -2,10 +2,10 @@ package api
 
 import (
 	"context"
-	"haruki-suite/utils/database"
-	harukiRedis "haruki-suite/utils/database/redis"
-	"haruki-suite/utils/sekaiapi"
-	smtp2 "haruki-suite/utils/smtp"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
+	smtp2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	"sync"
 	"time"
 

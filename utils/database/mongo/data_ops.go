@@ -3,8 +3,8 @@ package manager
 import (
 	"context"
 	"errors"
-	"haruki-suite/utils"
-	harukiLogger "haruki-suite/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Haruki Toolbox Backend — a Go 1.26 backend (module name: `haruki-suite`) for collecting user-submitted game suite/mysekai data and providing public APIs. Built on Fiber v3, Ent (PostgreSQL ORM), MongoDB, Redis, and the Ory identity stack (Kratos + Hydra + Oathkeeper).
+Haruki Toolbox Backend — a Go 1.26 backend (module name: `github.com/Team-Haruki/Haruki-Toolbox-Backend`) for collecting user-submitted game suite/mysekai data and providing public APIs. Built on Fiber v3, Ent (PostgreSQL ORM), MongoDB, Redis, and the Ory identity stack (Kratos + Hydra + Oathkeeper).
 
 Config file: `haruki-suite-configs.yaml` (YAML with `${ENV_VAR}` interpolation). See `haruki-suite-configs.example.yaml` for all available fields.
 

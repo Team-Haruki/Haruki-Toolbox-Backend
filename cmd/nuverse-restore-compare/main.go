@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
-	"haruki-suite/utils/nuversestruct"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
 
 	"gopkg.in/yaml.v3"
 )

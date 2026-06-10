@@ -2,7 +2,7 @@ package oauth2
 
 import (
 	"fmt"
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"net/url"
 	"path"
 	"strings"

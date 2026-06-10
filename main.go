@@ -1,10 +1,10 @@
 package main
 
 import (
-	harukiBootstrap "haruki-suite/internal/bootstrap"
+	harukiBootstrap "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/bootstrap"
 
-	harukiConfig "haruki-suite/config"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"os"
 )
 

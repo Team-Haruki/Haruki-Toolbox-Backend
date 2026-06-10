@@ -3,9 +3,9 @@ package sekai
 import (
 	"context"
 	"fmt"
-	harukiConfig "haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
-	harukiHttp "haruki-suite/utils/http"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
 	"maps"
 	urlParse "net/url"
 	"strings"

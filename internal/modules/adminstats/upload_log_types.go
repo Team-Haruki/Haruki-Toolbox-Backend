@@ -1,7 +1,7 @@
 package adminstats
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	"time"
 )
 

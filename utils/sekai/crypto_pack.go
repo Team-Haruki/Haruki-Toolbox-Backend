@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"fmt"
 
-	"haruki-suite/utils/orderedmsgpack"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
 
 	"github.com/vgorin/cryptogo/pad"
 )

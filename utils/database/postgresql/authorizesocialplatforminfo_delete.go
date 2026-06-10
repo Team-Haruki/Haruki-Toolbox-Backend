@@ -4,8 +4,8 @@ package postgresql
 
 import (
 	"context"
-	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
-	"haruki-suite/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"

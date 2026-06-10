@@ -1,7 +1,7 @@
 package userprivateapi
 
 import (
-	"haruki-suite/utils/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

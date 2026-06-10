@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 )
 
 func (h *DataHandler) notifyHMESBirthdayEvent(ctx context.Context, event *BirthdayMonitorEvent) error {

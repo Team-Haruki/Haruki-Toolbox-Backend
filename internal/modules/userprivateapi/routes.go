@@ -1,6 +1,6 @@
 package userprivateapi
 
-import harukiApiHelper "haruki-suite/utils/api"
+import harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 func RegisterUserPrivateAPIRoutes(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) {
 	privateAPI := apiHelper.Router.Group("/api/private", ValidateUserPermission(apiHelper))

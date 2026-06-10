@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	platformIdentity "haruki-suite/internal/platform/identity"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiRedis "haruki-suite/utils/database/redis"
-	harukiLogger "haruki-suite/utils/logger"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )

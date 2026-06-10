@@ -1,7 +1,7 @@
 package oauth2
 
 import (
-	harukiAPIHelper "haruki-suite/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func RegisterOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

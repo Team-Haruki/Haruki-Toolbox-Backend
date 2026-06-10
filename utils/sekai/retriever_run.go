@@ -2,7 +2,7 @@ package sekai
 
 import (
 	"context"
-	harukiUtils "haruki-suite/utils"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiInheritDataRetrieverResponse, error) {

@@ -2,7 +2,7 @@ package oauth2
 
 import (
 	"encoding/json"
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"io"
 	"net/http"
 	"net/http/httptest"

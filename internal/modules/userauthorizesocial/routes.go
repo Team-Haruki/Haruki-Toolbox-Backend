@@ -1,8 +1,8 @@
 package userauthorizesocial
 
 import (
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	harukiAPIHelper "haruki-suite/utils/api"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )

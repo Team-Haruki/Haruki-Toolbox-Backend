@@ -2,9 +2,9 @@ package useremail
 
 import (
 	"context"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database"
-	harukiRedis "haruki-suite/utils/database/redis"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"net/http"
 	"net/http/httptest"
 	"strings"

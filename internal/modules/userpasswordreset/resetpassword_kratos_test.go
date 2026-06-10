@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"haruki-suite/config"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database"
-	harukiRedis "haruki-suite/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"

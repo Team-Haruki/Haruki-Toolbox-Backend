@@ -3,7 +3,7 @@
 package ticketmessage
 
 import (
-	"haruki-suite/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"time"
 
 	"entgo.io/ent/dialect/sql"

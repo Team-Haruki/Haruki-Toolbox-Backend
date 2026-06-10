@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )

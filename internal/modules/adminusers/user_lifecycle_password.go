@@ -1,10 +1,10 @@
 package adminusers
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	userauth "haruki-suite/internal/modules/userauth"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

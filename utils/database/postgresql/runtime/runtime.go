@@ -2,7 +2,7 @@
 
 package runtime
 
-// The schema-stitching logic is generated in haruki-suite/utils/database/postgresql/runtime.go
+// The schema-stitching logic is generated in github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtime.go
 
 const (
 	Version = "v0.14.6"                                         // Version of ent codegen.

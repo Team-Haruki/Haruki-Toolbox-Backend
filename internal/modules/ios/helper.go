@@ -1,8 +1,8 @@
 package ios
 
 import (
-	harukiConfig "haruki-suite/config"
-	iosGen "haruki-suite/utils/api/ios"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
 	"regexp"
 )
 

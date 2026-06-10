@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/enttest"
-	"haruki-suite/utils/database/postgresql/systemlog"
-	"haruki-suite/utils/database/postgresql/uploadlog"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
 
 	_ "github.com/mattn/go-sqlite3"
 )

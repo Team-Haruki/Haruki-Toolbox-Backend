@@ -1,7 +1,7 @@
 package userprofile
 
 import (
-	harukiAPIHelper "haruki-suite/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"net/http"
 	"net/http/httptest"
 	"testing"

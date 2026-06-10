@@ -1,7 +1,7 @@
 package user
 
 import (
-	userCoreModule "haruki-suite/internal/modules/usercore"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	"net/http/httptest"
 	"testing"
 

@@ -3,7 +3,7 @@ package oauth2
 import (
 	"encoding/base64"
 	"errors"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"io"
 	"net/http/httptest"
 	"net/url"

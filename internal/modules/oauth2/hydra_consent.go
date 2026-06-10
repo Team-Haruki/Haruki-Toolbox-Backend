@@ -3,7 +3,7 @@ package oauth2
 import (
 	"context"
 	"fmt"
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"io"
 	"net/http"
 	"net/url"

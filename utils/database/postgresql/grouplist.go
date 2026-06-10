@@ -4,8 +4,8 @@ package postgresql
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/postgresql/group"
-	"haruki-suite/utils/database/postgresql/grouplist"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 	"strings"
 
 	"entgo.io/ent"

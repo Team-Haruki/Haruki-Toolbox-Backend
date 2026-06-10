@@ -1,7 +1,7 @@
 package adminusers
 
 import (
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
 )
 

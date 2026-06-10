@@ -1,8 +1,8 @@
 package admincore
 
 import (
-	harukiAPIHelper "haruki-suite/utils/api"
-	userSchema "haruki-suite/utils/database/postgresql/user"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"

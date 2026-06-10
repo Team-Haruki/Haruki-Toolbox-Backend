@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	harukiRedis "haruki-suite/utils/database/redis"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"time"
 )
 

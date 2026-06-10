@@ -1,8 +1,8 @@
 package adminusers
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	"haruki-suite/utils/database/postgresql"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"net/http"
 	"net/http/httptest"
 	"strings"

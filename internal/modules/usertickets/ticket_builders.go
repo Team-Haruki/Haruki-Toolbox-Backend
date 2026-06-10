@@ -3,7 +3,7 @@ package usertickets
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"time"
 )
 

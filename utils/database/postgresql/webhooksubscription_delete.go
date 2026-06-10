@@ -4,8 +4,8 @@ package postgresql
 
 import (
 	"context"
-	"haruki-suite/utils/database/postgresql/predicate"
-	"haruki-suite/utils/database/postgresql/webhooksubscription"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"

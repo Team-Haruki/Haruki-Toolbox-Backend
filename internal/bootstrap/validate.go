@@ -2,8 +2,8 @@ package bootstrap
 
 import (
 	"fmt"
-	harukiConfig "haruki-suite/config"
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"strings"
 )
 

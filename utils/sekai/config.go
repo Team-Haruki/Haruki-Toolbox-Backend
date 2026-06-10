@@ -2,10 +2,10 @@ package sekai
 
 import (
 	"fmt"
-	harukiConfig "haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
-	harukiHttp "haruki-suite/utils/http"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
 const (

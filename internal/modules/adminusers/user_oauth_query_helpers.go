@@ -2,7 +2,7 @@
 
 package adminusers
 
-import "haruki-suite/utils/database/postgresql"
+import "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 
 func applyLatestExpiresAtByClient(statsByClientID map[int]adminOAuthTokenStats, rows []*postgresql.OAuthToken) {
 	seenLatestByClientID := make(map[int]struct{}, len(statsByClientID))

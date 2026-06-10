@@ -4,7 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	harukiConfig "haruki-suite/config"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"strconv"
 	"strings"
 )

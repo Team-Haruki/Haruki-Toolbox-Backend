@@ -2,7 +2,7 @@ package userauth
 
 import (
 	"errors"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"io"
 	"math/big"
 	"strings"

@@ -2,9 +2,9 @@ package handler
 
 import (
 	"context"
-	"haruki-suite/config"
-	"haruki-suite/utils"
-	harukiRedis "haruki-suite/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"strconv"
 	"time"
 )

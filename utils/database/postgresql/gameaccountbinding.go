@@ -5,9 +5,9 @@ package postgresql
 import (
 	"encoding/json"
 	"fmt"
-	"haruki-suite/ent/toolbox/schema"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	"haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 
 	"entgo.io/ent"

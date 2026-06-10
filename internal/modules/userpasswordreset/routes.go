@@ -1,8 +1,8 @@
 package userpasswordreset
 
 import (
-	userauth "haruki-suite/internal/modules/userauth"
-	harukiAPIHelper "haruki-suite/utils/api"
+	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func RegisterUserResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

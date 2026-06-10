@@ -4,8 +4,8 @@ package postgresql
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
-	"haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 	"time"
 

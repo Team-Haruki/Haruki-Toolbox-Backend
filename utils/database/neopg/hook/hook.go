@@ -5,7 +5,7 @@ package hook
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/neopg"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 )
 
 // The CommandLogFunc type is an adapter to allow the use of ordinary

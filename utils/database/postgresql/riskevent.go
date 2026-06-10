@@ -5,7 +5,7 @@ package postgresql
 import (
 	"encoding/json"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/riskevent"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"strings"
 	"time"
 

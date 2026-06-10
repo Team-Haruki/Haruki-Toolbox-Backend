@@ -3,11 +3,11 @@ package ticketnotifications
 import (
 	"context"
 	"errors"
-	"haruki-suite/config"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/enttest"
-	"haruki-suite/utils/database/postgresql/ticket"
-	userSchema "haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 	"testing"
 

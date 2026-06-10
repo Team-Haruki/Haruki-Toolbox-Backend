@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiLogger "haruki-suite/utils/logger"
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 
 	"net/http"
 

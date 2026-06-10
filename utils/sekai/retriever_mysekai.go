@@ -3,7 +3,7 @@ package sekai
 import (
 	"context"
 	"fmt"
-	harukiUtils "haruki-suite/utils"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 func (r *HarukiSekaiDataRetriever) RetrieveMysekai(ctx context.Context) ([]byte, error) {

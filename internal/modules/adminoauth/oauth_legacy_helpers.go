@@ -4,7 +4,7 @@ package adminoauth
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"time"
 )
 

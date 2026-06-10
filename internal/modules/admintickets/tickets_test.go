@@ -1,9 +1,9 @@
 package admintickets
 
 import (
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/ticket"
-	"haruki-suite/utils/database/postgresql/ticketmessage"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	"net/http"
 	"net/http/httptest"
 	"strings"

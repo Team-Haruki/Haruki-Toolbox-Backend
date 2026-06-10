@@ -1,6 +1,6 @@
 package adminusers
 
-import adminCoreModule "haruki-suite/internal/modules/admincore"
+import adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 
 type systemLogListItem = adminCoreModule.SystemLogListItem
 

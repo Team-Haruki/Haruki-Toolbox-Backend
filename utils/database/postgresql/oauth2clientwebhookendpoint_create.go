@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/oauth2clientwebhookendpoint"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"

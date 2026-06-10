@@ -1,10 +1,10 @@
 package upload
 
 import (
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiLogger "haruki-suite/utils/logger"
-	"haruki-suite/utils/sekai"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 	"strconv"
 
 	"github.com/gofiber/fiber/v3"

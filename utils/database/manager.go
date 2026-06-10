@@ -1,10 +1,10 @@
 package database
 
 import (
-	mongoManager "haruki-suite/utils/database/mongo"
-	neopgManager "haruki-suite/utils/database/neopg"
-	dbManager "haruki-suite/utils/database/postgresql"
-	redisManager "haruki-suite/utils/database/redis"
+	mongoManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/mongo"
+	neopgManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
+	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	redisManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 )
 
 type HarukiToolboxDBManager struct {

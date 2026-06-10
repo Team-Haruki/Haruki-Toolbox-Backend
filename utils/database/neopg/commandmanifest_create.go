@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"

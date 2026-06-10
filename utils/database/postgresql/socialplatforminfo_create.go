@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/socialplatforminfo"
-	"haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"

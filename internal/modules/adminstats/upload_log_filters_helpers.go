@@ -1,12 +1,12 @@
 package adminstats
 
 import (
-	platformFiltering "haruki-suite/internal/platform/filtering"
-	platformPagination "haruki-suite/internal/platform/pagination"
-	platformTime "haruki-suite/internal/platform/timeutil"
-	harukiUtils "haruki-suite/utils"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/uploadlog"
+	platformFiltering "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/filtering"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
 	"slices"
 	"strconv"
 	"strings"

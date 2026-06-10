@@ -2,9 +2,9 @@ package upload
 
 import (
 	"fmt"
-	userCoreModule "haruki-suite/internal/modules/usercore"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"strconv"
 
 	"github.com/gofiber/fiber/v3"

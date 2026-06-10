@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/riskevent"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"

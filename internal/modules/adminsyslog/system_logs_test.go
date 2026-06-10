@@ -1,7 +1,7 @@
 package adminsyslog
 
 import (
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"net/http"
 	"net/http/httptest"
 	"testing"

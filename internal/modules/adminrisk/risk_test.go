@@ -1,8 +1,8 @@
 package adminrisk
 
 import (
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/riskevent"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"net/http"
 	"net/http/httptest"
 	"testing"

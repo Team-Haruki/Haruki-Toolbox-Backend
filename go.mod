@@ -1,4 +1,4 @@
-module haruki-suite
+module github.com/Team-Haruki/Haruki-Toolbox-Backend
 
 go 1.26.0
 

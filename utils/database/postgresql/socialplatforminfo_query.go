@@ -5,9 +5,9 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/predicate"
-	"haruki-suite/utils/database/postgresql/socialplatforminfo"
-	"haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"math"
 
 	"entgo.io/ent"

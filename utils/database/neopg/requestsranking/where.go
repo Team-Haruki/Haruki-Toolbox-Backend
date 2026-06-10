@@ -3,7 +3,7 @@
 package requestsranking
 
 import (
-	"haruki-suite/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 
 	"entgo.io/ent/dialect/sql"
 )

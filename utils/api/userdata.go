@@ -2,9 +2,9 @@ package api
 
 import (
 	"fmt"
-	"haruki-suite/config"
-	"haruki-suite/utils"
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"strings"
 )
 

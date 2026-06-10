@@ -1,6 +1,6 @@
 package ios
 
-import harukiAPIHelper "haruki-suite/utils/api"
+import harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 func RegisterIOSRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	for _, prefix := range []string{"/ios", "/api/ios"} {

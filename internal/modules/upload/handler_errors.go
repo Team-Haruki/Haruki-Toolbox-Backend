@@ -2,7 +2,7 @@ package upload
 
 import (
 	"errors"
-	harukiUtils "haruki-suite/utils"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"strconv"
 
 	"github.com/gofiber/fiber/v3"

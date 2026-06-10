@@ -6,9 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
-	"haruki-suite/utils/database/postgresql/predicate"
-	"haruki-suite/utils/database/postgresql/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"time"
 
 	"entgo.io/ent/dialect/sql"

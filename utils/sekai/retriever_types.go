@@ -2,9 +2,9 @@ package sekai
 
 import (
 	"fmt"
-	harukiConfig "haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
 type DataRetriever struct {

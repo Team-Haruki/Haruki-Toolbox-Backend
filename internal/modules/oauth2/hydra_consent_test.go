@@ -2,7 +2,7 @@ package oauth2
 
 import (
 	"context"
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"net/http"
 	"net/http/httptest"
 	"slices"

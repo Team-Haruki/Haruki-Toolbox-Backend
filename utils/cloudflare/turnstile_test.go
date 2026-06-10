@@ -2,7 +2,7 @@ package cloudflare
 
 import (
 	"errors"
-	"haruki-suite/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
 )
 

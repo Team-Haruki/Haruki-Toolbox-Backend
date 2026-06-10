@@ -1,6 +1,6 @@
 package admin
 
-import adminCoreModule "haruki-suite/internal/modules/admincore"
+import adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 
 const (
 	roleUser       = adminCoreModule.RoleUser

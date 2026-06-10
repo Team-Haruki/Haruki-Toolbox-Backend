@@ -1,9 +1,9 @@
 package adminoauth
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	oauth2Module "haruki-suite/internal/modules/oauth2"
-	harukiAPIHelper "haruki-suite/utils/api"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func RegisterAdminOAuthClientRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"haruki-suite/config"
-	harukiUtils "haruki-suite/utils"
-	"haruki-suite/utils/orderedmsgpack"
-	"haruki-suite/utils/sekai"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 )
 
 func TestCompareSuiteRestoreReportsShapeChanges(t *testing.T) {

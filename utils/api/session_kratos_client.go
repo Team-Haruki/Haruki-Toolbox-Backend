@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	platformIdentity "haruki-suite/internal/platform/identity"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"io"
 	"net/http"
 	"net/url"

@@ -3,7 +3,7 @@
 package dailyrequests
 
 import (
-	"haruki-suite/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"time"
 
 	"entgo.io/ent/dialect/sql"

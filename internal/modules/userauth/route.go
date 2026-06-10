@@ -1,6 +1,6 @@
 package userauth
 
-import harukiAPIHelper "haruki-suite/utils/api"
+import harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 func RegisterUserAuthRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesManagedBrowserAuth() {

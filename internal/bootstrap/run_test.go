@@ -2,9 +2,9 @@ package bootstrap
 
 import (
 	"context"
-	harukiConfig "haruki-suite/config"
-	dbManager "haruki-suite/utils/database/postgresql"
-	harukiRedis "haruki-suite/utils/database/redis"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"io"
 	"os"
 	"path/filepath"

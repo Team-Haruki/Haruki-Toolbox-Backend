@@ -5,8 +5,8 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"haruki-suite/utils/database/neopg/predicate"
-	"haruki-suite/utils/database/neopg/requestsranking"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 	"math"
 
 	"entgo.io/ent"

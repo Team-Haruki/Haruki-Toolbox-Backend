@@ -1,11 +1,11 @@
 package handler
 
 import (
-	harukiConfig "haruki-suite/config"
-	"haruki-suite/utils"
-	harukiLogger "haruki-suite/utils/logger"
-	"haruki-suite/utils/nuversestruct"
-	"haruki-suite/utils/suiterestore"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
 	"sync"
 )
 

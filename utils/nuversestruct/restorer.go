@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"haruki-suite/utils/suiterestore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
 )
 
 // NewRestorerFromFile builds a suite restorer from a StructTool/custom Avro

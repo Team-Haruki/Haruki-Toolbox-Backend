@@ -2,8 +2,8 @@ package data
 
 import (
 	"fmt"
-	"haruki-suite/utils/compactrestore"
-	harukiLogger "haruki-suite/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/compactrestore"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )

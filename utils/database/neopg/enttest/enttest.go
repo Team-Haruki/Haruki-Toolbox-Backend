@@ -5,11 +5,11 @@ package enttest
 import (
 	"context"
 
-	"haruki-suite/utils/database/neopg"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 	// required by schema hooks.
-	_ "haruki-suite/utils/database/neopg/runtime"
+	_ "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/runtime"
 
-	"haruki-suite/utils/database/neopg/migrate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/migrate"
 
 	"entgo.io/ent/dialect/sql/schema"
 )

@@ -1,8 +1,8 @@
 package adminwebhook
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	harukiAPIHelper "haruki-suite/utils/api"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func RegisterAdminWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	oauth2Module "haruki-suite/internal/modules/oauth2"
-	platformPagination "haruki-suite/internal/platform/pagination"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )

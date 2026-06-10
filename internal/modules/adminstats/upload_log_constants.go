@@ -1,6 +1,6 @@
 package adminstats
 
-import harukiUtils "haruki-suite/utils"
+import harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 const (
 	defaultUploadLogPage     = 1

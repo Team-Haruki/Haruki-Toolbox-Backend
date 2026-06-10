@@ -2,12 +2,12 @@ package ios
 
 import (
 	"fmt"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
-	iosGen "haruki-suite/utils/api/ios"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/iosscriptcode"
-	"haruki-suite/utils/database/postgresql/user"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"math/rand/v2"
 	"strconv"
 	"strings"

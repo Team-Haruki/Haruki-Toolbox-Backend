@@ -3,7 +3,7 @@ package sekai
 import (
 	"fmt"
 
-	"haruki-suite/utils/orderedmsgpack"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
 
 	"github.com/iancoleman/orderedmap"
 	"github.com/shamaton/msgpack/v3"

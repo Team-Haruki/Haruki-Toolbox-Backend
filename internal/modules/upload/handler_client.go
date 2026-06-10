@@ -1,11 +1,11 @@
 package upload
 
 import (
-	harukiConfig "haruki-suite/config"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiDataHandler "haruki-suite/utils/handler"
-	harukiHttp "haruki-suite/utils/http"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
+	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 	"sync"
 	"time"

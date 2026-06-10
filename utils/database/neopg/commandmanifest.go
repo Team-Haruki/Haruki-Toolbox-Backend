@@ -5,7 +5,7 @@ package neopg
 import (
 	"encoding/json"
 	"fmt"
-	"haruki-suite/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 	"strings"
 
 	"entgo.io/ent"

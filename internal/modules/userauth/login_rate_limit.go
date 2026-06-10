@@ -2,9 +2,9 @@ package userauth
 
 import (
 	"fmt"
-	platformIdentity "haruki-suite/internal/platform/identity"
-	harukiAPIHelper "haruki-suite/utils/api"
-	harukiRedis "haruki-suite/utils/database/redis"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"time"
 
 	"github.com/gofiber/fiber/v3"

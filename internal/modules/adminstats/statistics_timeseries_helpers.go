@@ -3,7 +3,7 @@ package adminstats
 import (
 	"time"
 
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 func truncateStatisticsTimeByBucket(t time.Time, bucket string) time.Time {

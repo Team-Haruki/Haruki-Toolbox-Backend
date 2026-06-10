@@ -1,8 +1,8 @@
 package api
 
 import (
-	"haruki-suite/ent/toolbox/schema"
-	"haruki-suite/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 type HarukiToolboxGameAccountPrivacySettings struct {

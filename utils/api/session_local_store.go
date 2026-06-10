@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	harukiLogger "haruki-suite/utils/logger"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/redis/go-redis/v9"
 )

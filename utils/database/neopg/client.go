@@ -9,14 +9,14 @@ import (
 	"log"
 	"reflect"
 
-	"haruki-suite/utils/database/neopg/migrate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/migrate"
 
-	"haruki-suite/utils/database/neopg/commandlog"
-	"haruki-suite/utils/database/neopg/commandmanifest"
-	"haruki-suite/utils/database/neopg/dailyrequests"
-	"haruki-suite/utils/database/neopg/hourlyrequests"
-	"haruki-suite/utils/database/neopg/requestsranking"
-	"haruki-suite/utils/database/neopg/user"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"

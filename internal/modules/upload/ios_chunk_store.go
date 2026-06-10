@@ -3,8 +3,8 @@ package upload
 import (
 	"context"
 	"fmt"
-	harukiUtils "haruki-suite/utils"
-	harukiRedis "haruki-suite/utils/database/redis"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"strconv"
 	"sync"
 	"time"

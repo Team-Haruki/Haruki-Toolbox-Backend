@@ -3,7 +3,7 @@ package usergamebindings
 import (
 	"testing"
 
-	"haruki-suite/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 
 	"github.com/gofiber/fiber/v3"
 )

@@ -3,8 +3,8 @@ package upload
 import (
 	"context"
 	"fmt"
-	harukiUtils "haruki-suite/utils"
-	harukiAPIHelper "haruki-suite/utils/api"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 var uploadSemaphore = make(chan struct{}, 10)

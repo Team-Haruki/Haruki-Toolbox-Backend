@@ -1,11 +1,11 @@
 package adminwebhook
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	harukiAPIHelper "haruki-suite/utils/api"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/webhookendpoint"
-	harukiHandler "haruki-suite/utils/handler"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
+	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 	"strings"
 
 	sql "entgo.io/ent/dialect/sql"

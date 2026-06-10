@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	platformIdentity "haruki-suite/internal/platform/identity"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"strconv"
 	"strings"
 

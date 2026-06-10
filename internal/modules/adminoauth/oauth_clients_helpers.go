@@ -1,9 +1,9 @@
 package adminoauth
 
 import (
-	adminCoreModule "haruki-suite/internal/modules/admincore"
-	platformPagination "haruki-suite/internal/platform/pagination"
-	harukiOAuth2 "haruki-suite/utils/oauth2"
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"net/url"
 	"strings"
 	"time"

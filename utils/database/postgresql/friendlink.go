@@ -5,7 +5,7 @@ package postgresql
 import (
 	"encoding/json"
 	"fmt"
-	"haruki-suite/utils/database/postgresql/friendlink"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"strings"
 
 	"entgo.io/ent"

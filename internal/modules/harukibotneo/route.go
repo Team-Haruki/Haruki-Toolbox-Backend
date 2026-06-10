@@ -1,6 +1,6 @@
 package harukibotneo
 
-import harukiAPIHelper "haruki-suite/utils/api"
+import harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 func RegisterHarukiBotNeoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	botAPI := apiHelper.Router.Group("/api/haruki-bot-neo")

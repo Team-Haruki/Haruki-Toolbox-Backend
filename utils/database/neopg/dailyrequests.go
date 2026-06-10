@@ -4,7 +4,7 @@ package neopg
 
 import (
 	"fmt"
-	"haruki-suite/utils/database/neopg/dailyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 	"strings"
 	"time"
 
