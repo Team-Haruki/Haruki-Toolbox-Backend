@@ -634,6 +634,52 @@ func HasGameAccountBindingsWith(preds ...predicate.GameAccountBinding) predicate
 	})
 }
 
+// HasGameAccountDataGrantsOwned applies the HasEdge predicate on the "game_account_data_grants_owned" edge.
+func HasGameAccountDataGrantsOwned() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, GameAccountDataGrantsOwnedTable, GameAccountDataGrantsOwnedColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasGameAccountDataGrantsOwnedWith applies the HasEdge predicate on the "game_account_data_grants_owned" edge with a given conditions (other predicates).
+func HasGameAccountDataGrantsOwnedWith(preds ...predicate.GameAccountDataGrant) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newGameAccountDataGrantsOwnedStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasGameAccountDataGrantsReceived applies the HasEdge predicate on the "game_account_data_grants_received" edge.
+func HasGameAccountDataGrantsReceived() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, GameAccountDataGrantsReceivedTable, GameAccountDataGrantsReceivedColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasGameAccountDataGrantsReceivedWith applies the HasEdge predicate on the "game_account_data_grants_received" edge with a given conditions (other predicates).
+func HasGameAccountDataGrantsReceivedWith(preds ...predicate.GameAccountDataGrant) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newGameAccountDataGrantsReceivedStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // HasIosScriptCode applies the HasEdge predicate on the "ios_script_code" edge.
 func HasIosScriptCode() predicate.User {
 	return predicate.User(func(s *sql.Selector) {

@@ -30,6 +30,10 @@ const (
 	adminAuditActionOAuthClientRestore            = "admin.oauth_client.restore"
 	adminAuditActionOAuthClientAuditLogsQuery     = "admin.oauth_client.audit_logs.query"
 	adminAuditActionOAuthClientAuditSummaryQuery  = "admin.oauth_client.audit_summary.query"
+	adminAuditActionOAuthClientWebhookList        = "admin.oauth_client.webhook.list"
+	adminAuditActionOAuthClientWebhookCreate      = "admin.oauth_client.webhook.create"
+	adminAuditActionOAuthClientWebhookUpdate      = "admin.oauth_client.webhook.update"
+	adminAuditActionOAuthClientWebhookDelete      = "admin.oauth_client.webhook.delete"
 )
 
 const (
@@ -52,8 +56,10 @@ const (
 	adminFailureReasonDeleteClientFailed              = "delete_client_failed"
 	adminFailureReasonDeleteTokensFailed              = "delete_tokens_failed"
 	adminFailureReasonGenerateClientSecretFailed      = "generate_client_secret_failed"
+	adminFailureReasonGenerateWebhookIDFailed         = "generate_webhook_id_failed"
 	adminFailureReasonInvalidHours                    = "invalid_hours"
 	adminFailureReasonInvalidIncludeInactive          = "invalid_include_inactive"
+	adminFailureReasonInvalidCallbackURL              = "invalid_callback_url"
 	adminFailureReasonInvalidQueryFilters             = "invalid_query_filters"
 	adminFailureReasonInvalidRequestPayload           = "invalid_request_payload"
 	adminFailureReasonMissingClientID                 = "missing_client_id"
@@ -68,6 +74,7 @@ const (
 	adminFailureReasonQueryTokenStatsFailed           = "query_token_stats_failed"
 	adminFailureReasonQueryTokenTrendsFailed          = "query_token_trends_failed"
 	adminFailureReasonQueryUsageStatsFailed           = "query_usage_stats_failed"
+	adminFailureReasonQueryWebhooksFailed             = "query_webhooks_failed"
 	adminFailureReasonRestoreClientFailed             = "restore_client_failed"
 	adminFailureReasonRevokeAuthorizationsFailed      = "revoke_authorizations_failed"
 	adminFailureReasonRevokeTokensFailed              = "revoke_tokens_failed"
@@ -75,6 +82,11 @@ const (
 	adminFailureReasonTargetUserNotFound              = "target_user_not_found"
 	adminFailureReasonUpdateClientFailed              = "update_client_failed"
 	adminFailureReasonUpdateClientSecretFailed        = "update_client_secret_failed"
+	adminFailureReasonUpdateWebhookFailed             = "update_webhook_failed"
+	adminFailureReasonWebhookConflict                 = "webhook_conflict"
+	adminFailureReasonWebhookNotFound                 = "webhook_not_found"
+	adminFailureReasonCreateWebhookFailed             = "create_webhook_failed"
+	adminFailureReasonDeleteWebhookFailed             = "delete_webhook_failed"
 )
 
 func resolveUploadLogTimeRange(fromRaw, toRaw string, now time.Time) (time.Time, time.Time, error) {

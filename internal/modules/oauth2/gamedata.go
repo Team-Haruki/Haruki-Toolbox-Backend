@@ -5,9 +5,6 @@ import (
 	harukiUtils "haruki-suite/utils"
 	harukiAPIHelper "haruki-suite/utils/api"
 	"haruki-suite/utils/api/data"
-	"haruki-suite/utils/database/postgresql"
-	"haruki-suite/utils/database/postgresql/gameaccountbinding"
-	"haruki-suite/utils/database/postgresql/user"
 	harukiRedis "haruki-suite/utils/database/redis"
 	harukiLogger "haruki-suite/utils/logger"
 	harukiOAuth2 "haruki-suite/utils/oauth2"
@@ -17,16 +14,6 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 )
-
-func mapOwnedBindingLookupError(err error) *fiber.Error {
-	if err == nil {
-		return nil
-	}
-	if postgresql.IsNotFound(err) {
-		return fiber.NewError(fiber.StatusNotFound, "game account binding not found or not owned by you")
-	}
-	return fiber.NewError(fiber.StatusInternalServerError, "failed to query game account binding")
-}
 
 func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -56,28 +43,13 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid game user_id, it must be integer")
 		}
 
-		binding, err := apiHelper.DBManager.DB.GameAccountBinding.
-			Query().
-			Where(
-				gameaccountbinding.ServerEQ(string(server)),
-				gameaccountbinding.GameUserIDEQ(gameUserIDStr),
-				gameaccountbinding.HasUserWith(user.IDEQ(authUserID)),
-			).
-			Only(ctx)
-
-		if lookupErr := mapOwnedBindingLookupError(err); lookupErr != nil {
-			if lookupErr.Code == fiber.StatusNotFound {
-				return harukiAPIHelper.ErrorNotFound(c, lookupErr.Message)
-			}
-			harukiLogger.Errorf("Failed to query oauth2 game account binding: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, lookupErr.Message)
+		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), gameUserIDStr, string(dataType), time.Now().UTC())
+		if err != nil {
+			harukiLogger.Errorf("Failed to verify oauth2 game account data access: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to query game account binding")
 		}
-		if binding == nil {
+		if access == nil || !access.Allowed {
 			return harukiAPIHelper.ErrorNotFound(c, "game account binding not found or not owned by you")
-		}
-
-		if !binding.Verified {
-			return harukiAPIHelper.ErrorForbidden(c, "game account binding is not verified")
 		}
 
 		requestKey := c.Query("key")

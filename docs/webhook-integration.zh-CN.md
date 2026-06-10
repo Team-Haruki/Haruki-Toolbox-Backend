@@ -2,6 +2,8 @@
 
 本文档只面向实际接入 Haruki Toolbox Webhook 的使用方，说明你在已经拿到有效 token 后，如何维护订阅关系，以及收到回调时会发生什么。
 
+本接口是 public API 配套的 Webhook 通知能力。OAuth2 客户端的数据更新通知使用独立的 OAuth2 client webhook 配置，不复用本文档里的 token 订阅接口。
+
 ## 1. 接入前提
 
 开始接入前，你需要从服务端管理员处拿到：

@@ -316,7 +316,7 @@ Hydra 在当前项目里负责：
 - `:data_type` 允许 `suite`、`mysekai`、`profile`
 - `suite` 和 `mysekai` 复用 public API / OAuth2 game-data 的数据读取逻辑，并支持 `key` 查询参数
 - `profile` 通过 Haruki Sekai API 读取绑定账号 profile，并直接透传 JSON 响应体
-- 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证
+- 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证；`suite` / `mysekai` 也允许通过有效的游戏账号数据授权读取
 - `suite` 数据会保留 `userGamedata.userId` number 字段，并额外返回 `userGamedata.userIdString` 字符串镜像；前端应优先使用字符串字段避免 64 位整数精度丢失
 - 当数据响应暴露顶层 `_id` 时，会同时返回 `_idString`
 
@@ -327,6 +327,8 @@ Hydra 在当前项目里负责：
 - `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/recommend-data`
 - 查询参数 `mode=suite|mysekai`，默认 `suite`
 - `mode=mysekai` 会在 suite 基础数据上合并 MySekai 推荐所需字段，方便前端 wasm 直接作为 `user_data` 使用
+
+游戏账号数据授权接口见 [`docs/game-account-data-grants.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/game-account-data-grants.zh-CN.md)。
 
 ### 9.2 会话级重认证支撑
 

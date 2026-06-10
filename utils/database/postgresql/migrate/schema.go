@@ -86,6 +86,65 @@ var (
 			},
 		},
 	}
+	// GameAccountDataGrantsColumns holds the columns for the "game_account_data_grants" table.
+	GameAccountDataGrantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "server", Type: field.TypeString},
+		{Name: "game_user_id", Type: field.TypeString},
+		{Name: "data_type", Type: field.TypeString},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "owner_user_id", Type: field.TypeString},
+		{Name: "grantee_user_id", Type: field.TypeString},
+	}
+	// GameAccountDataGrantsTable holds the schema information for the "game_account_data_grants" table.
+	GameAccountDataGrantsTable = &schema.Table{
+		Name:       "game_account_data_grants",
+		Columns:    GameAccountDataGrantsColumns,
+		PrimaryKey: []*schema.Column{GameAccountDataGrantsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "game_account_data_grants_users_game_account_data_grants_owned",
+				Columns:    []*schema.Column{GameAccountDataGrantsColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "game_account_data_grants_users_game_account_data_grants_received",
+				Columns:    []*schema.Column{GameAccountDataGrantsColumns[8]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "gameaccountdatagrant_owner_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[7]},
+			},
+			{
+				Name:    "gameaccountdatagrant_grantee_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[8]},
+			},
+			{
+				Name:    "gameaccountdatagrant_server_game_user_id_data_type",
+				Unique:  false,
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[1], GameAccountDataGrantsColumns[2], GameAccountDataGrantsColumns[3]},
+			},
+			{
+				Name:    "gameaccountdatagrant_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[4]},
+			},
+			{
+				Name:    "gameaccountdatagrant_owner_user_id_grantee_user_id_server_game_user_id_data_type",
+				Unique:  true,
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[7], GameAccountDataGrantsColumns[8], GameAccountDataGrantsColumns[1], GameAccountDataGrantsColumns[2], GameAccountDataGrantsColumns[3]},
+			},
+		},
+	}
 	// GroupsColumns holds the columns for the "groups" table.
 	GroupsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -138,6 +197,34 @@ var (
 				Columns:    []*schema.Column{IosScriptCodesColumns[2]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Cascade,
+			},
+		},
+	}
+	// Oauth2ClientWebhookEndpointsColumns holds the columns for the "oauth2_client_webhook_endpoints" table.
+	Oauth2ClientWebhookEndpointsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "client_id", Type: field.TypeString},
+		{Name: "callback_url", Type: field.TypeString},
+		{Name: "bearer", Type: field.TypeString, Nullable: true},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// Oauth2ClientWebhookEndpointsTable holds the schema information for the "oauth2_client_webhook_endpoints" table.
+	Oauth2ClientWebhookEndpointsTable = &schema.Table{
+		Name:       "oauth2_client_webhook_endpoints",
+		Columns:    Oauth2ClientWebhookEndpointsColumns,
+		PrimaryKey: []*schema.Column{Oauth2ClientWebhookEndpointsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "oauth2clientwebhookendpoint_client_id",
+				Unique:  false,
+				Columns: []*schema.Column{Oauth2ClientWebhookEndpointsColumns[1]},
+			},
+			{
+				Name:    "oauth2clientwebhookendpoint_client_id_callback_url",
+				Unique:  true,
+				Columns: []*schema.Column{Oauth2ClientWebhookEndpointsColumns[1], Oauth2ClientWebhookEndpointsColumns[2]},
 			},
 		},
 	}
@@ -511,9 +598,11 @@ var (
 		AuthorizeSocialPlatformInfosTable,
 		FriendLinksTable,
 		GameAccountBindingsTable,
+		GameAccountDataGrantsTable,
 		GroupsTable,
 		GroupListsTable,
 		IosScriptCodesTable,
+		Oauth2ClientWebhookEndpointsTable,
 		RiskEventsTable,
 		RiskRulesTable,
 		SocialPlatformInfosTable,
@@ -533,8 +622,16 @@ func init() {
 	GameAccountBindingsTable.Annotation = &entsql.Annotation{
 		Table: "game_account_bindings",
 	}
+	GameAccountDataGrantsTable.ForeignKeys[0].RefTable = UsersTable
+	GameAccountDataGrantsTable.ForeignKeys[1].RefTable = UsersTable
+	GameAccountDataGrantsTable.Annotation = &entsql.Annotation{
+		Table: "game_account_data_grants",
+	}
 	GroupListsTable.ForeignKeys[0].RefTable = GroupsTable
 	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
+	Oauth2ClientWebhookEndpointsTable.Annotation = &entsql.Annotation{
+		Table: "oauth2_client_webhook_endpoints",
+	}
 	RiskEventsTable.Annotation = &entsql.Annotation{
 		Table: "risk_events",
 	}

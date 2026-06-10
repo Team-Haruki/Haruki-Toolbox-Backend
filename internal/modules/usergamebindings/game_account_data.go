@@ -8,6 +8,7 @@ import (
 	harukiLogger "haruki-suite/utils/logger"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -65,13 +66,16 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorBadRequest(c, parseErr.Message)
 		}
 
-		binding, err := queryExistingBinding(ctx, apiHelper, string(server), gameUserIDStr)
+		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), gameUserIDStr, string(dataType), time.Now().UTC())
 		if err != nil {
-			harukiLogger.Errorf("Failed to query owned game account data binding: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
+			harukiLogger.Errorf("Failed to verify game account data access: %v", err)
+			return harukiAPIHelper.ErrorInternal(c, "failed to verify game account data access")
 		}
-		if bindingErr := validateVerifiedOwnedGameAccountBinding(binding, authUserID); bindingErr != nil {
-			return respondVerifiedGameAccountDataError(c, bindingErr)
+		if access == nil || !access.Allowed {
+			if access == nil || access.OwnerUserID == "" {
+				return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+			}
+			return harukiAPIHelper.ErrorForbidden(c, "not authorized to access this binding")
 		}
 
 		switch dataType {
@@ -88,6 +92,9 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			}
 			return c.JSON(resp)
 		case ownedGameAccountDataTypeProfile:
+			if access.ViaGrant {
+				return harukiAPIHelper.ErrorForbidden(c, "profile access cannot be granted")
+			}
 			return sendOwnedGameAccountProfile(c, apiHelper, gameUserIDStr, server)
 		default:
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")

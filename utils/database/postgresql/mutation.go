@@ -10,9 +10,11 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	"haruki-suite/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/riskevent"
 	"haruki-suite/utils/database/postgresql/riskrule"
@@ -43,9 +45,11 @@ const (
 	TypeAuthorizeSocialPlatformInfo = "AuthorizeSocialPlatformInfo"
 	TypeFriendLink                  = "FriendLink"
 	TypeGameAccountBinding          = "GameAccountBinding"
+	TypeGameAccountDataGrant        = "GameAccountDataGrant"
 	TypeGroup                       = "Group"
 	TypeGroupList                   = "GroupList"
 	TypeIOSScriptCode               = "IOSScriptCode"
+	TypeOAuth2ClientWebhookEndpoint = "OAuth2ClientWebhookEndpoint"
 	TypeRiskEvent                   = "RiskEvent"
 	TypeRiskRule                    = "RiskRule"
 	TypeSocialPlatformInfo          = "SocialPlatformInfo"
@@ -2003,6 +2007,836 @@ func (m *GameAccountBindingMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown GameAccountBinding edge %s", name)
 }
 
+// GameAccountDataGrantMutation represents an operation that mutates the GameAccountDataGrant nodes in the graph.
+type GameAccountDataGrantMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *int
+	server         *string
+	game_user_id   *string
+	data_type      *string
+	expires_at     *time.Time
+	created_at     *time.Time
+	updated_at     *time.Time
+	clearedFields  map[string]struct{}
+	owner          *string
+	clearedowner   bool
+	grantee        *string
+	clearedgrantee bool
+	done           bool
+	oldValue       func(context.Context) (*GameAccountDataGrant, error)
+	predicates     []predicate.GameAccountDataGrant
+}
+
+var _ ent.Mutation = (*GameAccountDataGrantMutation)(nil)
+
+// gameaccountdatagrantOption allows management of the mutation configuration using functional options.
+type gameaccountdatagrantOption func(*GameAccountDataGrantMutation)
+
+// newGameAccountDataGrantMutation creates new mutation for the GameAccountDataGrant entity.
+func newGameAccountDataGrantMutation(c config, op Op, opts ...gameaccountdatagrantOption) *GameAccountDataGrantMutation {
+	m := &GameAccountDataGrantMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeGameAccountDataGrant,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withGameAccountDataGrantID sets the ID field of the mutation.
+func withGameAccountDataGrantID(id int) gameaccountdatagrantOption {
+	return func(m *GameAccountDataGrantMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *GameAccountDataGrant
+		)
+		m.oldValue = func(ctx context.Context) (*GameAccountDataGrant, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().GameAccountDataGrant.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withGameAccountDataGrant sets the old GameAccountDataGrant of the mutation.
+func withGameAccountDataGrant(node *GameAccountDataGrant) gameaccountdatagrantOption {
+	return func(m *GameAccountDataGrantMutation) {
+		m.oldValue = func(context.Context) (*GameAccountDataGrant, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m GameAccountDataGrantMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m GameAccountDataGrantMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *GameAccountDataGrantMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *GameAccountDataGrantMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().GameAccountDataGrant.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetOwnerUserID sets the "owner_user_id" field.
+func (m *GameAccountDataGrantMutation) SetOwnerUserID(s string) {
+	m.owner = &s
+}
+
+// OwnerUserID returns the value of the "owner_user_id" field in the mutation.
+func (m *GameAccountDataGrantMutation) OwnerUserID() (r string, exists bool) {
+	v := m.owner
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerUserID returns the old "owner_user_id" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldOwnerUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerUserID: %w", err)
+	}
+	return oldValue.OwnerUserID, nil
+}
+
+// ResetOwnerUserID resets all changes to the "owner_user_id" field.
+func (m *GameAccountDataGrantMutation) ResetOwnerUserID() {
+	m.owner = nil
+}
+
+// SetGranteeUserID sets the "grantee_user_id" field.
+func (m *GameAccountDataGrantMutation) SetGranteeUserID(s string) {
+	m.grantee = &s
+}
+
+// GranteeUserID returns the value of the "grantee_user_id" field in the mutation.
+func (m *GameAccountDataGrantMutation) GranteeUserID() (r string, exists bool) {
+	v := m.grantee
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGranteeUserID returns the old "grantee_user_id" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldGranteeUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGranteeUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGranteeUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGranteeUserID: %w", err)
+	}
+	return oldValue.GranteeUserID, nil
+}
+
+// ResetGranteeUserID resets all changes to the "grantee_user_id" field.
+func (m *GameAccountDataGrantMutation) ResetGranteeUserID() {
+	m.grantee = nil
+}
+
+// SetServer sets the "server" field.
+func (m *GameAccountDataGrantMutation) SetServer(s string) {
+	m.server = &s
+}
+
+// Server returns the value of the "server" field in the mutation.
+func (m *GameAccountDataGrantMutation) Server() (r string, exists bool) {
+	v := m.server
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServer returns the old "server" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldServer(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServer: %w", err)
+	}
+	return oldValue.Server, nil
+}
+
+// ResetServer resets all changes to the "server" field.
+func (m *GameAccountDataGrantMutation) ResetServer() {
+	m.server = nil
+}
+
+// SetGameUserID sets the "game_user_id" field.
+func (m *GameAccountDataGrantMutation) SetGameUserID(s string) {
+	m.game_user_id = &s
+}
+
+// GameUserID returns the value of the "game_user_id" field in the mutation.
+func (m *GameAccountDataGrantMutation) GameUserID() (r string, exists bool) {
+	v := m.game_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGameUserID returns the old "game_user_id" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldGameUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGameUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGameUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGameUserID: %w", err)
+	}
+	return oldValue.GameUserID, nil
+}
+
+// ResetGameUserID resets all changes to the "game_user_id" field.
+func (m *GameAccountDataGrantMutation) ResetGameUserID() {
+	m.game_user_id = nil
+}
+
+// SetDataType sets the "data_type" field.
+func (m *GameAccountDataGrantMutation) SetDataType(s string) {
+	m.data_type = &s
+}
+
+// DataType returns the value of the "data_type" field in the mutation.
+func (m *GameAccountDataGrantMutation) DataType() (r string, exists bool) {
+	v := m.data_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDataType returns the old "data_type" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldDataType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDataType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDataType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDataType: %w", err)
+	}
+	return oldValue.DataType, nil
+}
+
+// ResetDataType resets all changes to the "data_type" field.
+func (m *GameAccountDataGrantMutation) ResetDataType() {
+	m.data_type = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *GameAccountDataGrantMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *GameAccountDataGrantMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *GameAccountDataGrantMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *GameAccountDataGrantMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *GameAccountDataGrantMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *GameAccountDataGrantMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *GameAccountDataGrantMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *GameAccountDataGrantMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *GameAccountDataGrantMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetOwnerID sets the "owner" edge to the User entity by id.
+func (m *GameAccountDataGrantMutation) SetOwnerID(id string) {
+	m.owner = &id
+}
+
+// ClearOwner clears the "owner" edge to the User entity.
+func (m *GameAccountDataGrantMutation) ClearOwner() {
+	m.clearedowner = true
+	m.clearedFields[gameaccountdatagrant.FieldOwnerUserID] = struct{}{}
+}
+
+// OwnerCleared reports if the "owner" edge to the User entity was cleared.
+func (m *GameAccountDataGrantMutation) OwnerCleared() bool {
+	return m.clearedowner
+}
+
+// OwnerID returns the "owner" edge ID in the mutation.
+func (m *GameAccountDataGrantMutation) OwnerID() (id string, exists bool) {
+	if m.owner != nil {
+		return *m.owner, true
+	}
+	return
+}
+
+// OwnerIDs returns the "owner" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// OwnerID instead. It exists only for internal usage by the builders.
+func (m *GameAccountDataGrantMutation) OwnerIDs() (ids []string) {
+	if id := m.owner; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetOwner resets all changes to the "owner" edge.
+func (m *GameAccountDataGrantMutation) ResetOwner() {
+	m.owner = nil
+	m.clearedowner = false
+}
+
+// SetGranteeID sets the "grantee" edge to the User entity by id.
+func (m *GameAccountDataGrantMutation) SetGranteeID(id string) {
+	m.grantee = &id
+}
+
+// ClearGrantee clears the "grantee" edge to the User entity.
+func (m *GameAccountDataGrantMutation) ClearGrantee() {
+	m.clearedgrantee = true
+	m.clearedFields[gameaccountdatagrant.FieldGranteeUserID] = struct{}{}
+}
+
+// GranteeCleared reports if the "grantee" edge to the User entity was cleared.
+func (m *GameAccountDataGrantMutation) GranteeCleared() bool {
+	return m.clearedgrantee
+}
+
+// GranteeID returns the "grantee" edge ID in the mutation.
+func (m *GameAccountDataGrantMutation) GranteeID() (id string, exists bool) {
+	if m.grantee != nil {
+		return *m.grantee, true
+	}
+	return
+}
+
+// GranteeIDs returns the "grantee" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GranteeID instead. It exists only for internal usage by the builders.
+func (m *GameAccountDataGrantMutation) GranteeIDs() (ids []string) {
+	if id := m.grantee; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGrantee resets all changes to the "grantee" edge.
+func (m *GameAccountDataGrantMutation) ResetGrantee() {
+	m.grantee = nil
+	m.clearedgrantee = false
+}
+
+// Where appends a list predicates to the GameAccountDataGrantMutation builder.
+func (m *GameAccountDataGrantMutation) Where(ps ...predicate.GameAccountDataGrant) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the GameAccountDataGrantMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *GameAccountDataGrantMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.GameAccountDataGrant, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *GameAccountDataGrantMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *GameAccountDataGrantMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (GameAccountDataGrant).
+func (m *GameAccountDataGrantMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *GameAccountDataGrantMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.owner != nil {
+		fields = append(fields, gameaccountdatagrant.FieldOwnerUserID)
+	}
+	if m.grantee != nil {
+		fields = append(fields, gameaccountdatagrant.FieldGranteeUserID)
+	}
+	if m.server != nil {
+		fields = append(fields, gameaccountdatagrant.FieldServer)
+	}
+	if m.game_user_id != nil {
+		fields = append(fields, gameaccountdatagrant.FieldGameUserID)
+	}
+	if m.data_type != nil {
+		fields = append(fields, gameaccountdatagrant.FieldDataType)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, gameaccountdatagrant.FieldExpiresAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, gameaccountdatagrant.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, gameaccountdatagrant.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *GameAccountDataGrantMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case gameaccountdatagrant.FieldOwnerUserID:
+		return m.OwnerUserID()
+	case gameaccountdatagrant.FieldGranteeUserID:
+		return m.GranteeUserID()
+	case gameaccountdatagrant.FieldServer:
+		return m.Server()
+	case gameaccountdatagrant.FieldGameUserID:
+		return m.GameUserID()
+	case gameaccountdatagrant.FieldDataType:
+		return m.DataType()
+	case gameaccountdatagrant.FieldExpiresAt:
+		return m.ExpiresAt()
+	case gameaccountdatagrant.FieldCreatedAt:
+		return m.CreatedAt()
+	case gameaccountdatagrant.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *GameAccountDataGrantMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case gameaccountdatagrant.FieldOwnerUserID:
+		return m.OldOwnerUserID(ctx)
+	case gameaccountdatagrant.FieldGranteeUserID:
+		return m.OldGranteeUserID(ctx)
+	case gameaccountdatagrant.FieldServer:
+		return m.OldServer(ctx)
+	case gameaccountdatagrant.FieldGameUserID:
+		return m.OldGameUserID(ctx)
+	case gameaccountdatagrant.FieldDataType:
+		return m.OldDataType(ctx)
+	case gameaccountdatagrant.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case gameaccountdatagrant.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case gameaccountdatagrant.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown GameAccountDataGrant field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GameAccountDataGrantMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case gameaccountdatagrant.FieldOwnerUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerUserID(v)
+		return nil
+	case gameaccountdatagrant.FieldGranteeUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGranteeUserID(v)
+		return nil
+	case gameaccountdatagrant.FieldServer:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServer(v)
+		return nil
+	case gameaccountdatagrant.FieldGameUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGameUserID(v)
+		return nil
+	case gameaccountdatagrant.FieldDataType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDataType(v)
+		return nil
+	case gameaccountdatagrant.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case gameaccountdatagrant.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case gameaccountdatagrant.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown GameAccountDataGrant field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *GameAccountDataGrantMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *GameAccountDataGrantMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *GameAccountDataGrantMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown GameAccountDataGrant numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *GameAccountDataGrantMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *GameAccountDataGrantMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *GameAccountDataGrantMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown GameAccountDataGrant nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *GameAccountDataGrantMutation) ResetField(name string) error {
+	switch name {
+	case gameaccountdatagrant.FieldOwnerUserID:
+		m.ResetOwnerUserID()
+		return nil
+	case gameaccountdatagrant.FieldGranteeUserID:
+		m.ResetGranteeUserID()
+		return nil
+	case gameaccountdatagrant.FieldServer:
+		m.ResetServer()
+		return nil
+	case gameaccountdatagrant.FieldGameUserID:
+		m.ResetGameUserID()
+		return nil
+	case gameaccountdatagrant.FieldDataType:
+		m.ResetDataType()
+		return nil
+	case gameaccountdatagrant.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case gameaccountdatagrant.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case gameaccountdatagrant.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown GameAccountDataGrant field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *GameAccountDataGrantMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.owner != nil {
+		edges = append(edges, gameaccountdatagrant.EdgeOwner)
+	}
+	if m.grantee != nil {
+		edges = append(edges, gameaccountdatagrant.EdgeGrantee)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *GameAccountDataGrantMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case gameaccountdatagrant.EdgeOwner:
+		if id := m.owner; id != nil {
+			return []ent.Value{*id}
+		}
+	case gameaccountdatagrant.EdgeGrantee:
+		if id := m.grantee; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *GameAccountDataGrantMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *GameAccountDataGrantMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *GameAccountDataGrantMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedowner {
+		edges = append(edges, gameaccountdatagrant.EdgeOwner)
+	}
+	if m.clearedgrantee {
+		edges = append(edges, gameaccountdatagrant.EdgeGrantee)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *GameAccountDataGrantMutation) EdgeCleared(name string) bool {
+	switch name {
+	case gameaccountdatagrant.EdgeOwner:
+		return m.clearedowner
+	case gameaccountdatagrant.EdgeGrantee:
+		return m.clearedgrantee
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *GameAccountDataGrantMutation) ClearEdge(name string) error {
+	switch name {
+	case gameaccountdatagrant.EdgeOwner:
+		m.ClearOwner()
+		return nil
+	case gameaccountdatagrant.EdgeGrantee:
+		m.ClearGrantee()
+		return nil
+	}
+	return fmt.Errorf("unknown GameAccountDataGrant unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *GameAccountDataGrantMutation) ResetEdge(name string) error {
+	switch name {
+	case gameaccountdatagrant.EdgeOwner:
+		m.ResetOwner()
+		return nil
+	case gameaccountdatagrant.EdgeGrantee:
+		m.ResetGrantee()
+		return nil
+	}
+	return fmt.Errorf("unknown GameAccountDataGrant edge %s", name)
+}
+
 // GroupMutation represents an operation that mutates the Group nodes in the graph.
 type GroupMutation struct {
 	config
@@ -3516,6 +4350,630 @@ func (m *IOSScriptCodeMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown IOSScriptCode edge %s", name)
+}
+
+// OAuth2ClientWebhookEndpointMutation represents an operation that mutates the OAuth2ClientWebhookEndpoint nodes in the graph.
+type OAuth2ClientWebhookEndpointMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *string
+	client_id     *string
+	callback_url  *string
+	bearer        *string
+	enabled       *bool
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*OAuth2ClientWebhookEndpoint, error)
+	predicates    []predicate.OAuth2ClientWebhookEndpoint
+}
+
+var _ ent.Mutation = (*OAuth2ClientWebhookEndpointMutation)(nil)
+
+// oauth2clientwebhookendpointOption allows management of the mutation configuration using functional options.
+type oauth2clientwebhookendpointOption func(*OAuth2ClientWebhookEndpointMutation)
+
+// newOAuth2ClientWebhookEndpointMutation creates new mutation for the OAuth2ClientWebhookEndpoint entity.
+func newOAuth2ClientWebhookEndpointMutation(c config, op Op, opts ...oauth2clientwebhookendpointOption) *OAuth2ClientWebhookEndpointMutation {
+	m := &OAuth2ClientWebhookEndpointMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeOAuth2ClientWebhookEndpoint,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withOAuth2ClientWebhookEndpointID sets the ID field of the mutation.
+func withOAuth2ClientWebhookEndpointID(id string) oauth2clientwebhookendpointOption {
+	return func(m *OAuth2ClientWebhookEndpointMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *OAuth2ClientWebhookEndpoint
+		)
+		m.oldValue = func(ctx context.Context) (*OAuth2ClientWebhookEndpoint, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().OAuth2ClientWebhookEndpoint.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withOAuth2ClientWebhookEndpoint sets the old OAuth2ClientWebhookEndpoint of the mutation.
+func withOAuth2ClientWebhookEndpoint(node *OAuth2ClientWebhookEndpoint) oauth2clientwebhookendpointOption {
+	return func(m *OAuth2ClientWebhookEndpointMutation) {
+		m.oldValue = func(context.Context) (*OAuth2ClientWebhookEndpoint, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m OAuth2ClientWebhookEndpointMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m OAuth2ClientWebhookEndpointMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of OAuth2ClientWebhookEndpoint entities.
+func (m *OAuth2ClientWebhookEndpointMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *OAuth2ClientWebhookEndpointMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().OAuth2ClientWebhookEndpoint.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetClientID sets the "client_id" field.
+func (m *OAuth2ClientWebhookEndpointMutation) SetClientID(s string) {
+	m.client_id = &s
+}
+
+// ClientID returns the value of the "client_id" field in the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) ClientID() (r string, exists bool) {
+	v := m.client_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientID returns the old "client_id" field's value of the OAuth2ClientWebhookEndpoint entity.
+// If the OAuth2ClientWebhookEndpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OAuth2ClientWebhookEndpointMutation) OldClientID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientID: %w", err)
+	}
+	return oldValue.ClientID, nil
+}
+
+// ResetClientID resets all changes to the "client_id" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetClientID() {
+	m.client_id = nil
+}
+
+// SetCallbackURL sets the "callback_url" field.
+func (m *OAuth2ClientWebhookEndpointMutation) SetCallbackURL(s string) {
+	m.callback_url = &s
+}
+
+// CallbackURL returns the value of the "callback_url" field in the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) CallbackURL() (r string, exists bool) {
+	v := m.callback_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCallbackURL returns the old "callback_url" field's value of the OAuth2ClientWebhookEndpoint entity.
+// If the OAuth2ClientWebhookEndpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OAuth2ClientWebhookEndpointMutation) OldCallbackURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCallbackURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCallbackURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCallbackURL: %w", err)
+	}
+	return oldValue.CallbackURL, nil
+}
+
+// ResetCallbackURL resets all changes to the "callback_url" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetCallbackURL() {
+	m.callback_url = nil
+}
+
+// SetBearer sets the "bearer" field.
+func (m *OAuth2ClientWebhookEndpointMutation) SetBearer(s string) {
+	m.bearer = &s
+}
+
+// Bearer returns the value of the "bearer" field in the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) Bearer() (r string, exists bool) {
+	v := m.bearer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBearer returns the old "bearer" field's value of the OAuth2ClientWebhookEndpoint entity.
+// If the OAuth2ClientWebhookEndpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OAuth2ClientWebhookEndpointMutation) OldBearer(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBearer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBearer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBearer: %w", err)
+	}
+	return oldValue.Bearer, nil
+}
+
+// ClearBearer clears the value of the "bearer" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ClearBearer() {
+	m.bearer = nil
+	m.clearedFields[oauth2clientwebhookendpoint.FieldBearer] = struct{}{}
+}
+
+// BearerCleared returns if the "bearer" field was cleared in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) BearerCleared() bool {
+	_, ok := m.clearedFields[oauth2clientwebhookendpoint.FieldBearer]
+	return ok
+}
+
+// ResetBearer resets all changes to the "bearer" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetBearer() {
+	m.bearer = nil
+	delete(m.clearedFields, oauth2clientwebhookendpoint.FieldBearer)
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *OAuth2ClientWebhookEndpointMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the OAuth2ClientWebhookEndpoint entity.
+// If the OAuth2ClientWebhookEndpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OAuth2ClientWebhookEndpointMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *OAuth2ClientWebhookEndpointMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the OAuth2ClientWebhookEndpoint entity.
+// If the OAuth2ClientWebhookEndpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OAuth2ClientWebhookEndpointMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *OAuth2ClientWebhookEndpointMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the OAuth2ClientWebhookEndpoint entity.
+// If the OAuth2ClientWebhookEndpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OAuth2ClientWebhookEndpointMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the OAuth2ClientWebhookEndpointMutation builder.
+func (m *OAuth2ClientWebhookEndpointMutation) Where(ps ...predicate.OAuth2ClientWebhookEndpoint) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the OAuth2ClientWebhookEndpointMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *OAuth2ClientWebhookEndpointMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.OAuth2ClientWebhookEndpoint, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *OAuth2ClientWebhookEndpointMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *OAuth2ClientWebhookEndpointMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (OAuth2ClientWebhookEndpoint).
+func (m *OAuth2ClientWebhookEndpointMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *OAuth2ClientWebhookEndpointMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.client_id != nil {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldClientID)
+	}
+	if m.callback_url != nil {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldCallbackURL)
+	}
+	if m.bearer != nil {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldBearer)
+	}
+	if m.enabled != nil {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldEnabled)
+	}
+	if m.created_at != nil {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *OAuth2ClientWebhookEndpointMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case oauth2clientwebhookendpoint.FieldClientID:
+		return m.ClientID()
+	case oauth2clientwebhookendpoint.FieldCallbackURL:
+		return m.CallbackURL()
+	case oauth2clientwebhookendpoint.FieldBearer:
+		return m.Bearer()
+	case oauth2clientwebhookendpoint.FieldEnabled:
+		return m.Enabled()
+	case oauth2clientwebhookendpoint.FieldCreatedAt:
+		return m.CreatedAt()
+	case oauth2clientwebhookendpoint.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *OAuth2ClientWebhookEndpointMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case oauth2clientwebhookendpoint.FieldClientID:
+		return m.OldClientID(ctx)
+	case oauth2clientwebhookendpoint.FieldCallbackURL:
+		return m.OldCallbackURL(ctx)
+	case oauth2clientwebhookendpoint.FieldBearer:
+		return m.OldBearer(ctx)
+	case oauth2clientwebhookendpoint.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case oauth2clientwebhookendpoint.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case oauth2clientwebhookendpoint.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown OAuth2ClientWebhookEndpoint field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *OAuth2ClientWebhookEndpointMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case oauth2clientwebhookendpoint.FieldClientID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientID(v)
+		return nil
+	case oauth2clientwebhookendpoint.FieldCallbackURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCallbackURL(v)
+		return nil
+	case oauth2clientwebhookendpoint.FieldBearer:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBearer(v)
+		return nil
+	case oauth2clientwebhookendpoint.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case oauth2clientwebhookendpoint.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case oauth2clientwebhookendpoint.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown OAuth2ClientWebhookEndpoint field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *OAuth2ClientWebhookEndpointMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *OAuth2ClientWebhookEndpointMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown OAuth2ClientWebhookEndpoint numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(oauth2clientwebhookendpoint.FieldBearer) {
+		fields = append(fields, oauth2clientwebhookendpoint.FieldBearer)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *OAuth2ClientWebhookEndpointMutation) ClearField(name string) error {
+	switch name {
+	case oauth2clientwebhookendpoint.FieldBearer:
+		m.ClearBearer()
+		return nil
+	}
+	return fmt.Errorf("unknown OAuth2ClientWebhookEndpoint nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetField(name string) error {
+	switch name {
+	case oauth2clientwebhookendpoint.FieldClientID:
+		m.ResetClientID()
+		return nil
+	case oauth2clientwebhookendpoint.FieldCallbackURL:
+		m.ResetCallbackURL()
+		return nil
+	case oauth2clientwebhookendpoint.FieldBearer:
+		m.ResetBearer()
+		return nil
+	case oauth2clientwebhookendpoint.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case oauth2clientwebhookendpoint.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case oauth2clientwebhookendpoint.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown OAuth2ClientWebhookEndpoint field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *OAuth2ClientWebhookEndpointMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *OAuth2ClientWebhookEndpointMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown OAuth2ClientWebhookEndpoint unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *OAuth2ClientWebhookEndpointMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown OAuth2ClientWebhookEndpoint edge %s", name)
 }
 
 // RiskEventMutation represents an operation that mutates the RiskEvent nodes in the graph.
@@ -9467,33 +10925,39 @@ func (m *UploadLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                                 Op
-	typ                                string
-	id                                 *string
-	name                               *string
-	email                              *string
-	avatar_path                        *string
-	allow_cn_mysekai                   *bool
-	ticket_email_notifications_enabled *bool
-	role                               *user.Role
-	banned                             *bool
-	ban_reason                         *string
-	kratos_identity_id                 *string
-	created_at                         *time.Time
-	clearedFields                      map[string]struct{}
-	social_platform_info               *int
-	clearedsocial_platform_info        bool
-	authorized_social_platforms        map[int]struct{}
-	removedauthorized_social_platforms map[int]struct{}
-	clearedauthorized_social_platforms bool
-	game_account_bindings              map[int]struct{}
-	removedgame_account_bindings       map[int]struct{}
-	clearedgame_account_bindings       bool
-	ios_script_code                    *int
-	clearedios_script_code             bool
-	done                               bool
-	oldValue                           func(context.Context) (*User, error)
-	predicates                         []predicate.User
+	op                                       Op
+	typ                                      string
+	id                                       *string
+	name                                     *string
+	email                                    *string
+	avatar_path                              *string
+	allow_cn_mysekai                         *bool
+	ticket_email_notifications_enabled       *bool
+	role                                     *user.Role
+	banned                                   *bool
+	ban_reason                               *string
+	kratos_identity_id                       *string
+	created_at                               *time.Time
+	clearedFields                            map[string]struct{}
+	social_platform_info                     *int
+	clearedsocial_platform_info              bool
+	authorized_social_platforms              map[int]struct{}
+	removedauthorized_social_platforms       map[int]struct{}
+	clearedauthorized_social_platforms       bool
+	game_account_bindings                    map[int]struct{}
+	removedgame_account_bindings             map[int]struct{}
+	clearedgame_account_bindings             bool
+	game_account_data_grants_owned           map[int]struct{}
+	removedgame_account_data_grants_owned    map[int]struct{}
+	clearedgame_account_data_grants_owned    bool
+	game_account_data_grants_received        map[int]struct{}
+	removedgame_account_data_grants_received map[int]struct{}
+	clearedgame_account_data_grants_received bool
+	ios_script_code                          *int
+	clearedios_script_code                   bool
+	done                                     bool
+	oldValue                                 func(context.Context) (*User, error)
+	predicates                               []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -10159,6 +11623,114 @@ func (m *UserMutation) ResetGameAccountBindings() {
 	m.removedgame_account_bindings = nil
 }
 
+// AddGameAccountDataGrantsOwnedIDs adds the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity by ids.
+func (m *UserMutation) AddGameAccountDataGrantsOwnedIDs(ids ...int) {
+	if m.game_account_data_grants_owned == nil {
+		m.game_account_data_grants_owned = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.game_account_data_grants_owned[ids[i]] = struct{}{}
+	}
+}
+
+// ClearGameAccountDataGrantsOwned clears the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity.
+func (m *UserMutation) ClearGameAccountDataGrantsOwned() {
+	m.clearedgame_account_data_grants_owned = true
+}
+
+// GameAccountDataGrantsOwnedCleared reports if the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity was cleared.
+func (m *UserMutation) GameAccountDataGrantsOwnedCleared() bool {
+	return m.clearedgame_account_data_grants_owned
+}
+
+// RemoveGameAccountDataGrantsOwnedIDs removes the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity by IDs.
+func (m *UserMutation) RemoveGameAccountDataGrantsOwnedIDs(ids ...int) {
+	if m.removedgame_account_data_grants_owned == nil {
+		m.removedgame_account_data_grants_owned = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.game_account_data_grants_owned, ids[i])
+		m.removedgame_account_data_grants_owned[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedGameAccountDataGrantsOwned returns the removed IDs of the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity.
+func (m *UserMutation) RemovedGameAccountDataGrantsOwnedIDs() (ids []int) {
+	for id := range m.removedgame_account_data_grants_owned {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// GameAccountDataGrantsOwnedIDs returns the "game_account_data_grants_owned" edge IDs in the mutation.
+func (m *UserMutation) GameAccountDataGrantsOwnedIDs() (ids []int) {
+	for id := range m.game_account_data_grants_owned {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetGameAccountDataGrantsOwned resets all changes to the "game_account_data_grants_owned" edge.
+func (m *UserMutation) ResetGameAccountDataGrantsOwned() {
+	m.game_account_data_grants_owned = nil
+	m.clearedgame_account_data_grants_owned = false
+	m.removedgame_account_data_grants_owned = nil
+}
+
+// AddGameAccountDataGrantsReceivedIDs adds the "game_account_data_grants_received" edge to the GameAccountDataGrant entity by ids.
+func (m *UserMutation) AddGameAccountDataGrantsReceivedIDs(ids ...int) {
+	if m.game_account_data_grants_received == nil {
+		m.game_account_data_grants_received = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.game_account_data_grants_received[ids[i]] = struct{}{}
+	}
+}
+
+// ClearGameAccountDataGrantsReceived clears the "game_account_data_grants_received" edge to the GameAccountDataGrant entity.
+func (m *UserMutation) ClearGameAccountDataGrantsReceived() {
+	m.clearedgame_account_data_grants_received = true
+}
+
+// GameAccountDataGrantsReceivedCleared reports if the "game_account_data_grants_received" edge to the GameAccountDataGrant entity was cleared.
+func (m *UserMutation) GameAccountDataGrantsReceivedCleared() bool {
+	return m.clearedgame_account_data_grants_received
+}
+
+// RemoveGameAccountDataGrantsReceivedIDs removes the "game_account_data_grants_received" edge to the GameAccountDataGrant entity by IDs.
+func (m *UserMutation) RemoveGameAccountDataGrantsReceivedIDs(ids ...int) {
+	if m.removedgame_account_data_grants_received == nil {
+		m.removedgame_account_data_grants_received = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.game_account_data_grants_received, ids[i])
+		m.removedgame_account_data_grants_received[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedGameAccountDataGrantsReceived returns the removed IDs of the "game_account_data_grants_received" edge to the GameAccountDataGrant entity.
+func (m *UserMutation) RemovedGameAccountDataGrantsReceivedIDs() (ids []int) {
+	for id := range m.removedgame_account_data_grants_received {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// GameAccountDataGrantsReceivedIDs returns the "game_account_data_grants_received" edge IDs in the mutation.
+func (m *UserMutation) GameAccountDataGrantsReceivedIDs() (ids []int) {
+	for id := range m.game_account_data_grants_received {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetGameAccountDataGrantsReceived resets all changes to the "game_account_data_grants_received" edge.
+func (m *UserMutation) ResetGameAccountDataGrantsReceived() {
+	m.game_account_data_grants_received = nil
+	m.clearedgame_account_data_grants_received = false
+	m.removedgame_account_data_grants_received = nil
+}
+
 // SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by id.
 func (m *UserMutation) SetIosScriptCodeID(id int) {
 	m.ios_script_code = &id
@@ -10511,7 +12083,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 6)
 	if m.social_platform_info != nil {
 		edges = append(edges, user.EdgeSocialPlatformInfo)
 	}
@@ -10520,6 +12092,12 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.game_account_bindings != nil {
 		edges = append(edges, user.EdgeGameAccountBindings)
+	}
+	if m.game_account_data_grants_owned != nil {
+		edges = append(edges, user.EdgeGameAccountDataGrantsOwned)
+	}
+	if m.game_account_data_grants_received != nil {
+		edges = append(edges, user.EdgeGameAccountDataGrantsReceived)
 	}
 	if m.ios_script_code != nil {
 		edges = append(edges, user.EdgeIosScriptCode)
@@ -10547,6 +12125,18 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeGameAccountDataGrantsOwned:
+		ids := make([]ent.Value, 0, len(m.game_account_data_grants_owned))
+		for id := range m.game_account_data_grants_owned {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeGameAccountDataGrantsReceived:
+		ids := make([]ent.Value, 0, len(m.game_account_data_grants_received))
+		for id := range m.game_account_data_grants_received {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeIosScriptCode:
 		if id := m.ios_script_code; id != nil {
 			return []ent.Value{*id}
@@ -10557,12 +12147,18 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 6)
 	if m.removedauthorized_social_platforms != nil {
 		edges = append(edges, user.EdgeAuthorizedSocialPlatforms)
 	}
 	if m.removedgame_account_bindings != nil {
 		edges = append(edges, user.EdgeGameAccountBindings)
+	}
+	if m.removedgame_account_data_grants_owned != nil {
+		edges = append(edges, user.EdgeGameAccountDataGrantsOwned)
+	}
+	if m.removedgame_account_data_grants_received != nil {
+		edges = append(edges, user.EdgeGameAccountDataGrantsReceived)
 	}
 	return edges
 }
@@ -10583,13 +12179,25 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeGameAccountDataGrantsOwned:
+		ids := make([]ent.Value, 0, len(m.removedgame_account_data_grants_owned))
+		for id := range m.removedgame_account_data_grants_owned {
+			ids = append(ids, id)
+		}
+		return ids
+	case user.EdgeGameAccountDataGrantsReceived:
+		ids := make([]ent.Value, 0, len(m.removedgame_account_data_grants_received))
+		for id := range m.removedgame_account_data_grants_received {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 6)
 	if m.clearedsocial_platform_info {
 		edges = append(edges, user.EdgeSocialPlatformInfo)
 	}
@@ -10598,6 +12206,12 @@ func (m *UserMutation) ClearedEdges() []string {
 	}
 	if m.clearedgame_account_bindings {
 		edges = append(edges, user.EdgeGameAccountBindings)
+	}
+	if m.clearedgame_account_data_grants_owned {
+		edges = append(edges, user.EdgeGameAccountDataGrantsOwned)
+	}
+	if m.clearedgame_account_data_grants_received {
+		edges = append(edges, user.EdgeGameAccountDataGrantsReceived)
 	}
 	if m.clearedios_script_code {
 		edges = append(edges, user.EdgeIosScriptCode)
@@ -10615,6 +12229,10 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedauthorized_social_platforms
 	case user.EdgeGameAccountBindings:
 		return m.clearedgame_account_bindings
+	case user.EdgeGameAccountDataGrantsOwned:
+		return m.clearedgame_account_data_grants_owned
+	case user.EdgeGameAccountDataGrantsReceived:
+		return m.clearedgame_account_data_grants_received
 	case user.EdgeIosScriptCode:
 		return m.clearedios_script_code
 	}
@@ -10647,6 +12265,12 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeGameAccountBindings:
 		m.ResetGameAccountBindings()
+		return nil
+	case user.EdgeGameAccountDataGrantsOwned:
+		m.ResetGameAccountDataGrantsOwned()
+		return nil
+	case user.EdgeGameAccountDataGrantsReceived:
+		m.ResetGameAccountDataGrantsReceived()
 		return nil
 	case user.EdgeIosScriptCode:
 		m.ResetIosScriptCode()

@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"fmt"
+	oauth2Module "haruki-suite/internal/modules/oauth2"
 	"haruki-suite/utils"
 	dbManager "haruki-suite/utils/database/postgresql"
+	harukiOAuth2 "haruki-suite/utils/oauth2"
 	harukiVersion "haruki-suite/version"
 	"net"
 	urlpkg "net/url"
@@ -128,9 +130,45 @@ func parseWebhookCallback(cb any) (string, string, bool) {
 			return "", "", false
 		}
 		return validatedURL, strings.TrimSpace(typed.Bearer), true
+	case dbManager.OAuth2ClientWebhookCallback:
+		if strings.TrimSpace(typed.CallbackURL) == "" {
+			return "", "", false
+		}
+		validatedURL, ok := ValidateWebhookCallbackURL(typed.CallbackURL)
+		if !ok {
+			return "", "", false
+		}
+		return validatedURL, strings.TrimSpace(typed.Bearer), true
 	default:
 		return "", "", false
 	}
+}
+
+func oauth2WebhookAuthorizedClientIDs(sessions []oauth2Module.HydraConsentSession) []string {
+	clientIDs := make([]string, 0, len(sessions))
+	seen := make(map[string]struct{}, len(sessions))
+	for _, session := range sessions {
+		if !harukiOAuth2.HasScope(session.GrantScope, harukiOAuth2.ScopeGameDataRead) {
+			continue
+		}
+		clientID := strings.TrimSpace(session.ConsentRequest.Client.ClientID)
+		if clientID == "" {
+			continue
+		}
+		if _, ok := seen[clientID]; ok {
+			continue
+		}
+		seen[clientID] = struct{}{}
+		clientIDs = append(clientIDs, clientID)
+	}
+	return clientIDs
+}
+
+func applyWebhookPlaceholders(rawURL string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) string {
+	url := strings.ReplaceAll(rawURL, "{user_id}", fmt.Sprint(userID))
+	url = strings.ReplaceAll(url, "{server}", string(server))
+	url = strings.ReplaceAll(url, "{data_type}", string(dataType))
+	return url
 }
 
 func (h *DataHandler) CallWebhook(
@@ -153,9 +191,7 @@ func (h *DataHandler) CallWebhook(
 			h.Logger.Warnf("Skip invalid webhook callback payload: %v", cb)
 			continue
 		}
-		url = strings.ReplaceAll(url, "{user_id}", fmt.Sprint(userID))
-		url = strings.ReplaceAll(url, "{server}", string(server))
-		url = strings.ReplaceAll(url, "{data_type}", string(dataType))
+		url = applyWebhookPlaceholders(url, userID, server, dataType)
 		wg.Add(1)
 		go func(u, b string) {
 			defer wg.Done()
@@ -169,4 +205,74 @@ func (h *DataHandler) CallWebhookAsync(userID int64, server utils.SupportedDataU
 	ctx, cancel := context.WithTimeout(context.Background(), webhookCallbackTimeout)
 	defer cancel()
 	h.CallWebhook(ctx, userID, server, dataType)
+}
+
+func (h *DataHandler) CallOAuth2Webhook(
+	ctx context.Context,
+	userID int64,
+	server utils.SupportedDataUploadServer,
+	dataType utils.UploadDataType,
+) {
+	if h == nil || !h.WebhookEnabled || h.DBManager == nil || h.DBManager.DB == nil {
+		return
+	}
+	if !oauth2Module.HydraOAuthManagementEnabled() {
+		return
+	}
+
+	owner, err := h.DBManager.DB.GetOAuth2WebhookOwnerForGameAccount(ctx, userID, string(server))
+	if err != nil {
+		if !dbManager.IsNotFound(err) {
+			h.Logger.Warnf("Failed to query OAuth2 webhook owner: server=%s userID=%d err=%v", server, userID, err)
+		}
+		return
+	}
+	if owner == nil || owner.UserID == "" || owner.Banned {
+		return
+	}
+
+	subjects := oauth2Module.HydraSubjectsForUser(owner.UserID, owner.KratosIdentityID)
+	if len(subjects) == 0 {
+		return
+	}
+	sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(ctx, subjects)
+	if err != nil {
+		h.Logger.Warnf("Failed to query OAuth2 consent sessions for webhook: owner=%s err=%v", owner.UserID, err)
+		return
+	}
+	clientIDs := oauth2WebhookAuthorizedClientIDs(sessions)
+	if len(clientIDs) == 0 {
+		return
+	}
+
+	callbacks, err := h.DBManager.DB.GetOAuth2ClientWebhookCallbacks(ctx, clientIDs)
+	if err != nil {
+		h.Logger.Warnf("Failed to query OAuth2 webhook callbacks: owner=%s err=%v", owner.UserID, err)
+		return
+	}
+	if len(callbacks) == 0 {
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, cb := range callbacks {
+		url, bearer, ok := parseWebhookCallback(cb)
+		if !ok {
+			h.Logger.Warnf("Skip invalid OAuth2 webhook callback payload: %v", cb)
+			continue
+		}
+		url = applyWebhookPlaceholders(url, userID, server, dataType)
+		wg.Add(1)
+		go func(u, b string) {
+			defer wg.Done()
+			h.CallbackWebhookAPI(ctx, u, b)
+		}(url, bearer)
+	}
+	wg.Wait()
+}
+
+func (h *DataHandler) CallOAuth2WebhookAsync(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
+	ctx, cancel := context.WithTimeout(context.Background(), webhookCallbackTimeout)
+	defer cancel()
+	h.CallOAuth2Webhook(ctx, userID, server, dataType)
 }

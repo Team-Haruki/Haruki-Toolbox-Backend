@@ -40,6 +40,10 @@ const (
 	EdgeAuthorizedSocialPlatforms = "authorized_social_platforms"
 	// EdgeGameAccountBindings holds the string denoting the game_account_bindings edge name in mutations.
 	EdgeGameAccountBindings = "game_account_bindings"
+	// EdgeGameAccountDataGrantsOwned holds the string denoting the game_account_data_grants_owned edge name in mutations.
+	EdgeGameAccountDataGrantsOwned = "game_account_data_grants_owned"
+	// EdgeGameAccountDataGrantsReceived holds the string denoting the game_account_data_grants_received edge name in mutations.
+	EdgeGameAccountDataGrantsReceived = "game_account_data_grants_received"
 	// EdgeIosScriptCode holds the string denoting the ios_script_code edge name in mutations.
 	EdgeIosScriptCode = "ios_script_code"
 	// Table holds the table name of the user in the database.
@@ -65,6 +69,20 @@ const (
 	GameAccountBindingsInverseTable = "game_account_bindings"
 	// GameAccountBindingsColumn is the table column denoting the game_account_bindings relation/edge.
 	GameAccountBindingsColumn = "user_game_account_bindings"
+	// GameAccountDataGrantsOwnedTable is the table that holds the game_account_data_grants_owned relation/edge.
+	GameAccountDataGrantsOwnedTable = "game_account_data_grants"
+	// GameAccountDataGrantsOwnedInverseTable is the table name for the GameAccountDataGrant entity.
+	// It exists in this package in order to avoid circular dependency with the "gameaccountdatagrant" package.
+	GameAccountDataGrantsOwnedInverseTable = "game_account_data_grants"
+	// GameAccountDataGrantsOwnedColumn is the table column denoting the game_account_data_grants_owned relation/edge.
+	GameAccountDataGrantsOwnedColumn = "owner_user_id"
+	// GameAccountDataGrantsReceivedTable is the table that holds the game_account_data_grants_received relation/edge.
+	GameAccountDataGrantsReceivedTable = "game_account_data_grants"
+	// GameAccountDataGrantsReceivedInverseTable is the table name for the GameAccountDataGrant entity.
+	// It exists in this package in order to avoid circular dependency with the "gameaccountdatagrant" package.
+	GameAccountDataGrantsReceivedInverseTable = "game_account_data_grants"
+	// GameAccountDataGrantsReceivedColumn is the table column denoting the game_account_data_grants_received relation/edge.
+	GameAccountDataGrantsReceivedColumn = "grantee_user_id"
 	// IosScriptCodeTable is the table that holds the ios_script_code relation/edge.
 	IosScriptCodeTable = "ios_script_codes"
 	// IosScriptCodeInverseTable is the table name for the IOSScriptCode entity.
@@ -230,6 +248,34 @@ func ByGameAccountBindings(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOpti
 	}
 }
 
+// ByGameAccountDataGrantsOwnedCount orders the results by game_account_data_grants_owned count.
+func ByGameAccountDataGrantsOwnedCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newGameAccountDataGrantsOwnedStep(), opts...)
+	}
+}
+
+// ByGameAccountDataGrantsOwned orders the results by game_account_data_grants_owned terms.
+func ByGameAccountDataGrantsOwned(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newGameAccountDataGrantsOwnedStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByGameAccountDataGrantsReceivedCount orders the results by game_account_data_grants_received count.
+func ByGameAccountDataGrantsReceivedCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newGameAccountDataGrantsReceivedStep(), opts...)
+	}
+}
+
+// ByGameAccountDataGrantsReceived orders the results by game_account_data_grants_received terms.
+func ByGameAccountDataGrantsReceived(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newGameAccountDataGrantsReceivedStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByIosScriptCodeField orders the results by ios_script_code field.
 func ByIosScriptCodeField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -255,6 +301,20 @@ func newGameAccountBindingsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(GameAccountBindingsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, GameAccountBindingsTable, GameAccountBindingsColumn),
+	)
+}
+func newGameAccountDataGrantsOwnedStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(GameAccountDataGrantsOwnedInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, GameAccountDataGrantsOwnedTable, GameAccountDataGrantsOwnedColumn),
+	)
+}
+func newGameAccountDataGrantsReceivedStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(GameAccountDataGrantsReceivedInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, GameAccountDataGrantsReceivedTable, GameAccountDataGrantsReceivedColumn),
 	)
 }
 func newIosScriptCodeStep() *sqlgraph.Step {

@@ -14,9 +14,11 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	"haruki-suite/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"haruki-suite/utils/database/postgresql/riskevent"
 	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -45,12 +47,16 @@ type Client struct {
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
 	GameAccountBinding *GameAccountBindingClient
+	// GameAccountDataGrant is the client for interacting with the GameAccountDataGrant builders.
+	GameAccountDataGrant *GameAccountDataGrantClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// GroupList is the client for interacting with the GroupList builders.
 	GroupList *GroupListClient
 	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
 	IOSScriptCode *IOSScriptCodeClient
+	// OAuth2ClientWebhookEndpoint is the client for interacting with the OAuth2ClientWebhookEndpoint builders.
+	OAuth2ClientWebhookEndpoint *OAuth2ClientWebhookEndpointClient
 	// RiskEvent is the client for interacting with the RiskEvent builders.
 	RiskEvent *RiskEventClient
 	// RiskRule is the client for interacting with the RiskRule builders.
@@ -85,9 +91,11 @@ func (c *Client) init() {
 	c.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(c.config)
 	c.FriendLink = NewFriendLinkClient(c.config)
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
+	c.GameAccountDataGrant = NewGameAccountDataGrantClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.GroupList = NewGroupListClient(c.config)
 	c.IOSScriptCode = NewIOSScriptCodeClient(c.config)
+	c.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(c.config)
 	c.RiskEvent = NewRiskEventClient(c.config)
 	c.RiskRule = NewRiskRuleClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
@@ -193,9 +201,11 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
+		GameAccountDataGrant:        NewGameAccountDataGrantClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
 		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
+		OAuth2ClientWebhookEndpoint: NewOAuth2ClientWebhookEndpointClient(cfg),
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
@@ -228,9 +238,11 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
+		GameAccountDataGrant:        NewGameAccountDataGrantClient(cfg),
 		Group:                       NewGroupClient(cfg),
 		GroupList:                   NewGroupListClient(cfg),
 		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
+		OAuth2ClientWebhookEndpoint: NewOAuth2ClientWebhookEndpointClient(cfg),
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
@@ -270,8 +282,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding, c.Group,
-		c.GroupList, c.IOSScriptCode, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
+		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding,
+		c.GameAccountDataGrant, c.Group, c.GroupList, c.IOSScriptCode,
+		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
 		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
 		c.WebhookSubscription,
 	} {
@@ -283,8 +296,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding, c.Group,
-		c.GroupList, c.IOSScriptCode, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
+		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding,
+		c.GameAccountDataGrant, c.Group, c.GroupList, c.IOSScriptCode,
+		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
 		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
 		c.WebhookSubscription,
 	} {
@@ -301,12 +315,16 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.FriendLink.mutate(ctx, m)
 	case *GameAccountBindingMutation:
 		return c.GameAccountBinding.mutate(ctx, m)
+	case *GameAccountDataGrantMutation:
+		return c.GameAccountDataGrant.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
 	case *GroupListMutation:
 		return c.GroupList.mutate(ctx, m)
 	case *IOSScriptCodeMutation:
 		return c.IOSScriptCode.mutate(ctx, m)
+	case *OAuth2ClientWebhookEndpointMutation:
+		return c.OAuth2ClientWebhookEndpoint.mutate(ctx, m)
 	case *RiskEventMutation:
 		return c.RiskEvent.mutate(ctx, m)
 	case *RiskRuleMutation:
@@ -763,6 +781,171 @@ func (c *GameAccountBindingClient) mutate(ctx context.Context, m *GameAccountBin
 	}
 }
 
+// GameAccountDataGrantClient is a client for the GameAccountDataGrant schema.
+type GameAccountDataGrantClient struct {
+	config
+}
+
+// NewGameAccountDataGrantClient returns a client for the GameAccountDataGrant from the given config.
+func NewGameAccountDataGrantClient(c config) *GameAccountDataGrantClient {
+	return &GameAccountDataGrantClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `gameaccountdatagrant.Hooks(f(g(h())))`.
+func (c *GameAccountDataGrantClient) Use(hooks ...Hook) {
+	c.hooks.GameAccountDataGrant = append(c.hooks.GameAccountDataGrant, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `gameaccountdatagrant.Intercept(f(g(h())))`.
+func (c *GameAccountDataGrantClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GameAccountDataGrant = append(c.inters.GameAccountDataGrant, interceptors...)
+}
+
+// Create returns a builder for creating a GameAccountDataGrant entity.
+func (c *GameAccountDataGrantClient) Create() *GameAccountDataGrantCreate {
+	mutation := newGameAccountDataGrantMutation(c.config, OpCreate)
+	return &GameAccountDataGrantCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GameAccountDataGrant entities.
+func (c *GameAccountDataGrantClient) CreateBulk(builders ...*GameAccountDataGrantCreate) *GameAccountDataGrantCreateBulk {
+	return &GameAccountDataGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GameAccountDataGrantClient) MapCreateBulk(slice any, setFunc func(*GameAccountDataGrantCreate, int)) *GameAccountDataGrantCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GameAccountDataGrantCreateBulk{err: fmt.Errorf("calling to GameAccountDataGrantClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GameAccountDataGrantCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GameAccountDataGrantCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GameAccountDataGrant.
+func (c *GameAccountDataGrantClient) Update() *GameAccountDataGrantUpdate {
+	mutation := newGameAccountDataGrantMutation(c.config, OpUpdate)
+	return &GameAccountDataGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GameAccountDataGrantClient) UpdateOne(_m *GameAccountDataGrant) *GameAccountDataGrantUpdateOne {
+	mutation := newGameAccountDataGrantMutation(c.config, OpUpdateOne, withGameAccountDataGrant(_m))
+	return &GameAccountDataGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GameAccountDataGrantClient) UpdateOneID(id int) *GameAccountDataGrantUpdateOne {
+	mutation := newGameAccountDataGrantMutation(c.config, OpUpdateOne, withGameAccountDataGrantID(id))
+	return &GameAccountDataGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GameAccountDataGrant.
+func (c *GameAccountDataGrantClient) Delete() *GameAccountDataGrantDelete {
+	mutation := newGameAccountDataGrantMutation(c.config, OpDelete)
+	return &GameAccountDataGrantDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GameAccountDataGrantClient) DeleteOne(_m *GameAccountDataGrant) *GameAccountDataGrantDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GameAccountDataGrantClient) DeleteOneID(id int) *GameAccountDataGrantDeleteOne {
+	builder := c.Delete().Where(gameaccountdatagrant.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GameAccountDataGrantDeleteOne{builder}
+}
+
+// Query returns a query builder for GameAccountDataGrant.
+func (c *GameAccountDataGrantClient) Query() *GameAccountDataGrantQuery {
+	return &GameAccountDataGrantQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGameAccountDataGrant},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GameAccountDataGrant entity by its id.
+func (c *GameAccountDataGrantClient) Get(ctx context.Context, id int) (*GameAccountDataGrant, error) {
+	return c.Query().Where(gameaccountdatagrant.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GameAccountDataGrantClient) GetX(ctx context.Context, id int) *GameAccountDataGrant {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryOwner queries the owner edge of a GameAccountDataGrant.
+func (c *GameAccountDataGrantClient) QueryOwner(_m *GameAccountDataGrant) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(gameaccountdatagrant.Table, gameaccountdatagrant.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, gameaccountdatagrant.OwnerTable, gameaccountdatagrant.OwnerColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGrantee queries the grantee edge of a GameAccountDataGrant.
+func (c *GameAccountDataGrantClient) QueryGrantee(_m *GameAccountDataGrant) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(gameaccountdatagrant.Table, gameaccountdatagrant.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, gameaccountdatagrant.GranteeTable, gameaccountdatagrant.GranteeColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *GameAccountDataGrantClient) Hooks() []Hook {
+	return c.hooks.GameAccountDataGrant
+}
+
+// Interceptors returns the client interceptors.
+func (c *GameAccountDataGrantClient) Interceptors() []Interceptor {
+	return c.inters.GameAccountDataGrant
+}
+
+func (c *GameAccountDataGrantClient) mutate(ctx context.Context, m *GameAccountDataGrantMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GameAccountDataGrantCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GameAccountDataGrantUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GameAccountDataGrantUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GameAccountDataGrantDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown GameAccountDataGrant mutation op: %q", m.Op())
+	}
+}
+
 // GroupClient is a client for the Group schema.
 type GroupClient struct {
 	config
@@ -1207,6 +1390,139 @@ func (c *IOSScriptCodeClient) mutate(ctx context.Context, m *IOSScriptCodeMutati
 		return (&IOSScriptCodeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown IOSScriptCode mutation op: %q", m.Op())
+	}
+}
+
+// OAuth2ClientWebhookEndpointClient is a client for the OAuth2ClientWebhookEndpoint schema.
+type OAuth2ClientWebhookEndpointClient struct {
+	config
+}
+
+// NewOAuth2ClientWebhookEndpointClient returns a client for the OAuth2ClientWebhookEndpoint from the given config.
+func NewOAuth2ClientWebhookEndpointClient(c config) *OAuth2ClientWebhookEndpointClient {
+	return &OAuth2ClientWebhookEndpointClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `oauth2clientwebhookendpoint.Hooks(f(g(h())))`.
+func (c *OAuth2ClientWebhookEndpointClient) Use(hooks ...Hook) {
+	c.hooks.OAuth2ClientWebhookEndpoint = append(c.hooks.OAuth2ClientWebhookEndpoint, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `oauth2clientwebhookendpoint.Intercept(f(g(h())))`.
+func (c *OAuth2ClientWebhookEndpointClient) Intercept(interceptors ...Interceptor) {
+	c.inters.OAuth2ClientWebhookEndpoint = append(c.inters.OAuth2ClientWebhookEndpoint, interceptors...)
+}
+
+// Create returns a builder for creating a OAuth2ClientWebhookEndpoint entity.
+func (c *OAuth2ClientWebhookEndpointClient) Create() *OAuth2ClientWebhookEndpointCreate {
+	mutation := newOAuth2ClientWebhookEndpointMutation(c.config, OpCreate)
+	return &OAuth2ClientWebhookEndpointCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of OAuth2ClientWebhookEndpoint entities.
+func (c *OAuth2ClientWebhookEndpointClient) CreateBulk(builders ...*OAuth2ClientWebhookEndpointCreate) *OAuth2ClientWebhookEndpointCreateBulk {
+	return &OAuth2ClientWebhookEndpointCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *OAuth2ClientWebhookEndpointClient) MapCreateBulk(slice any, setFunc func(*OAuth2ClientWebhookEndpointCreate, int)) *OAuth2ClientWebhookEndpointCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &OAuth2ClientWebhookEndpointCreateBulk{err: fmt.Errorf("calling to OAuth2ClientWebhookEndpointClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*OAuth2ClientWebhookEndpointCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &OAuth2ClientWebhookEndpointCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for OAuth2ClientWebhookEndpoint.
+func (c *OAuth2ClientWebhookEndpointClient) Update() *OAuth2ClientWebhookEndpointUpdate {
+	mutation := newOAuth2ClientWebhookEndpointMutation(c.config, OpUpdate)
+	return &OAuth2ClientWebhookEndpointUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *OAuth2ClientWebhookEndpointClient) UpdateOne(_m *OAuth2ClientWebhookEndpoint) *OAuth2ClientWebhookEndpointUpdateOne {
+	mutation := newOAuth2ClientWebhookEndpointMutation(c.config, OpUpdateOne, withOAuth2ClientWebhookEndpoint(_m))
+	return &OAuth2ClientWebhookEndpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *OAuth2ClientWebhookEndpointClient) UpdateOneID(id string) *OAuth2ClientWebhookEndpointUpdateOne {
+	mutation := newOAuth2ClientWebhookEndpointMutation(c.config, OpUpdateOne, withOAuth2ClientWebhookEndpointID(id))
+	return &OAuth2ClientWebhookEndpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for OAuth2ClientWebhookEndpoint.
+func (c *OAuth2ClientWebhookEndpointClient) Delete() *OAuth2ClientWebhookEndpointDelete {
+	mutation := newOAuth2ClientWebhookEndpointMutation(c.config, OpDelete)
+	return &OAuth2ClientWebhookEndpointDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *OAuth2ClientWebhookEndpointClient) DeleteOne(_m *OAuth2ClientWebhookEndpoint) *OAuth2ClientWebhookEndpointDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *OAuth2ClientWebhookEndpointClient) DeleteOneID(id string) *OAuth2ClientWebhookEndpointDeleteOne {
+	builder := c.Delete().Where(oauth2clientwebhookendpoint.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &OAuth2ClientWebhookEndpointDeleteOne{builder}
+}
+
+// Query returns a query builder for OAuth2ClientWebhookEndpoint.
+func (c *OAuth2ClientWebhookEndpointClient) Query() *OAuth2ClientWebhookEndpointQuery {
+	return &OAuth2ClientWebhookEndpointQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeOAuth2ClientWebhookEndpoint},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a OAuth2ClientWebhookEndpoint entity by its id.
+func (c *OAuth2ClientWebhookEndpointClient) Get(ctx context.Context, id string) (*OAuth2ClientWebhookEndpoint, error) {
+	return c.Query().Where(oauth2clientwebhookendpoint.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *OAuth2ClientWebhookEndpointClient) GetX(ctx context.Context, id string) *OAuth2ClientWebhookEndpoint {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *OAuth2ClientWebhookEndpointClient) Hooks() []Hook {
+	return c.hooks.OAuth2ClientWebhookEndpoint
+}
+
+// Interceptors returns the client interceptors.
+func (c *OAuth2ClientWebhookEndpointClient) Interceptors() []Interceptor {
+	return c.inters.OAuth2ClientWebhookEndpoint
+}
+
+func (c *OAuth2ClientWebhookEndpointClient) mutate(ctx context.Context, m *OAuth2ClientWebhookEndpointMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&OAuth2ClientWebhookEndpointCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&OAuth2ClientWebhookEndpointUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&OAuth2ClientWebhookEndpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&OAuth2ClientWebhookEndpointDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown OAuth2ClientWebhookEndpoint mutation op: %q", m.Op())
 	}
 }
 
@@ -2345,6 +2661,38 @@ func (c *UserClient) QueryGameAccountBindings(_m *User) *GameAccountBindingQuery
 	return query
 }
 
+// QueryGameAccountDataGrantsOwned queries the game_account_data_grants_owned edge of a User.
+func (c *UserClient) QueryGameAccountDataGrantsOwned(_m *User) *GameAccountDataGrantQuery {
+	query := (&GameAccountDataGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(gameaccountdatagrant.Table, gameaccountdatagrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.GameAccountDataGrantsOwnedTable, user.GameAccountDataGrantsOwnedColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGameAccountDataGrantsReceived queries the game_account_data_grants_received edge of a User.
+func (c *UserClient) QueryGameAccountDataGrantsReceived(_m *User) *GameAccountDataGrantQuery {
+	query := (&GameAccountDataGrantClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(gameaccountdatagrant.Table, gameaccountdatagrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.GameAccountDataGrantsReceivedTable, user.GameAccountDataGrantsReceivedColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryIosScriptCode queries the ios_script_code edge of a User.
 func (c *UserClient) QueryIosScriptCode(_m *User) *IOSScriptCodeQuery {
 	query := (&IOSScriptCodeClient{config: c.config}).Query()
@@ -2687,14 +3035,17 @@ func (c *WebhookSubscriptionClient) mutate(ctx context.Context, m *WebhookSubscr
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding, Group, GroupList,
-		IOSScriptCode, RiskEvent, RiskRule, SocialPlatformInfo, SystemLog, Ticket,
-		TicketMessage, UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
+		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding,
+		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
+		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo,
+		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
+		WebhookSubscription []ent.Hook
 	}
 	inters struct {
-		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding, Group, GroupList,
-		IOSScriptCode, RiskEvent, RiskRule, SocialPlatformInfo, SystemLog, Ticket,
-		TicketMessage, UploadLog, User, WebhookEndpoint,
+		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding,
+		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
+		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo,
+		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
 		WebhookSubscription []ent.Interceptor
 	}
 )

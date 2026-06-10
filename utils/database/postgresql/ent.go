@@ -9,9 +9,11 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	"haruki-suite/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"haruki-suite/utils/database/postgresql/riskevent"
 	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -91,9 +93,11 @@ func checkColumn(t, c string) error {
 			authorizesocialplatforminfo.Table: authorizesocialplatforminfo.ValidColumn,
 			friendlink.Table:                  friendlink.ValidColumn,
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
+			gameaccountdatagrant.Table:        gameaccountdatagrant.ValidColumn,
 			group.Table:                       group.ValidColumn,
 			grouplist.Table:                   grouplist.ValidColumn,
 			iosscriptcode.Table:               iosscriptcode.ValidColumn,
+			oauth2clientwebhookendpoint.Table: oauth2clientwebhookendpoint.ValidColumn,
 			riskevent.Table:                   riskevent.ValidColumn,
 			riskrule.Table:                    riskrule.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,

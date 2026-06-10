@@ -118,3 +118,71 @@ func TestWebhookEndpointAndSubscriptionRoundTrip(t *testing.T) {
 		t.Fatalf("expected webhook record to be deleted")
 	}
 }
+
+func TestOAuth2ClientWebhookEndpointRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	client := enttest.Open(t, "sqlite3", "file:oauth2-webhook-ops-test?mode=memory&cache=shared&_fk=1")
+	defer func() {
+		_ = client.Close()
+	}()
+
+	if _, err := client.User.Create().
+		SetID("u1").
+		SetName("User One").
+		SetEmail("u1@example.com").
+		Save(context.Background()); err != nil {
+		t.Fatalf("create user returned error: %v", err)
+	}
+	if _, err := client.GameAccountBinding.Create().
+		SetServer("jp").
+		SetGameUserID("123").
+		SetVerified(true).
+		SetUserID("u1").
+		Save(context.Background()); err != nil {
+		t.Fatalf("create binding returned error: %v", err)
+	}
+
+	bearer := "oauth-token"
+	if _, err := client.OAuth2ClientWebhookEndpoint.Create().
+		SetID("wh-1").
+		SetClientID("client-a").
+		SetCallbackURL("https://example.com/oauth-webhook/{user_id}").
+		SetBearer(bearer).
+		Save(context.Background()); err != nil {
+		t.Fatalf("create oauth2 webhook returned error: %v", err)
+	}
+	if _, err := client.OAuth2ClientWebhookEndpoint.Create().
+		SetID("wh-2").
+		SetClientID("client-b").
+		SetCallbackURL("https://example.com/disabled").
+		SetEnabled(false).
+		Save(context.Background()); err != nil {
+		t.Fatalf("create disabled oauth2 webhook returned error: %v", err)
+	}
+
+	owner, err := client.GetOAuth2WebhookOwnerForGameAccount(context.Background(), 123, "jp")
+	if err != nil {
+		t.Fatalf("GetOAuth2WebhookOwnerForGameAccount returned error: %v", err)
+	}
+	if owner == nil || owner.UserID != "u1" || owner.Banned {
+		t.Fatalf("unexpected owner: %+v", owner)
+	}
+
+	callbacks, err := client.GetOAuth2ClientWebhookCallbacks(context.Background(), []string{"client-a", "client-a", "client-b"})
+	if err != nil {
+		t.Fatalf("GetOAuth2ClientWebhookCallbacks returned error: %v", err)
+	}
+	if len(callbacks) != 1 {
+		t.Fatalf("len(callbacks) = %d, want 1", len(callbacks))
+	}
+	if callbacks[0].ClientID != "client-a" {
+		t.Fatalf("client id = %q, want client-a", callbacks[0].ClientID)
+	}
+	if callbacks[0].CallbackURL != "https://example.com/oauth-webhook/{user_id}" {
+		t.Fatalf("callback url = %q", callbacks[0].CallbackURL)
+	}
+	if callbacks[0].Bearer != "oauth-token" {
+		t.Fatalf("bearer = %q, want oauth-token", callbacks[0].Bearer)
+	}
+}

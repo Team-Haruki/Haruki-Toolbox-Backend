@@ -122,6 +122,13 @@ func Run(cfg harukiConfig.Config) error {
 		return fmt.Errorf("ensure webhook schema compatibility: %w", err)
 	}
 	cancelWebhookSchema()
+	grantsCleanupCtx, cancelGrantsCleanup := startupContext()
+	if deleted, err := entClient.CleanupExpiredGameAccountDataGrants(grantsCleanupCtx, time.Now().UTC()); err != nil {
+		mainLogger.Warnf("failed to cleanup expired game account data grants: %v", err)
+	} else if deleted > 0 {
+		mainLogger.Infof("cleaned up %d expired game account data grant(s)", deleted)
+	}
+	cancelGrantsCleanup()
 
 	smtpClient := harukiSMTP.NewSMTPClient(cfg.UserSystem.SMTP)
 	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, cfg.UserSystem.SessionSignToken)

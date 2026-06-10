@@ -7,9 +7,11 @@ import (
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/friendlink"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/group"
 	"haruki-suite/utils/database/postgresql/grouplist"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
+	"haruki-suite/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"haruki-suite/utils/database/postgresql/riskevent"
 	"haruki-suite/utils/database/postgresql/riskrule"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -57,6 +59,38 @@ func init() {
 	gameaccountbindingDescVerified := gameaccountbindingFields[2].Descriptor()
 	// gameaccountbinding.DefaultVerified holds the default value on creation for the verified field.
 	gameaccountbinding.DefaultVerified = gameaccountbindingDescVerified.Default.(bool)
+	gameaccountdatagrantFields := schema.GameAccountDataGrant{}.Fields()
+	_ = gameaccountdatagrantFields
+	// gameaccountdatagrantDescOwnerUserID is the schema descriptor for owner_user_id field.
+	gameaccountdatagrantDescOwnerUserID := gameaccountdatagrantFields[0].Descriptor()
+	// gameaccountdatagrant.OwnerUserIDValidator is a validator for the "owner_user_id" field. It is called by the builders before save.
+	gameaccountdatagrant.OwnerUserIDValidator = gameaccountdatagrantDescOwnerUserID.Validators[0].(func(string) error)
+	// gameaccountdatagrantDescGranteeUserID is the schema descriptor for grantee_user_id field.
+	gameaccountdatagrantDescGranteeUserID := gameaccountdatagrantFields[1].Descriptor()
+	// gameaccountdatagrant.GranteeUserIDValidator is a validator for the "grantee_user_id" field. It is called by the builders before save.
+	gameaccountdatagrant.GranteeUserIDValidator = gameaccountdatagrantDescGranteeUserID.Validators[0].(func(string) error)
+	// gameaccountdatagrantDescServer is the schema descriptor for server field.
+	gameaccountdatagrantDescServer := gameaccountdatagrantFields[2].Descriptor()
+	// gameaccountdatagrant.ServerValidator is a validator for the "server" field. It is called by the builders before save.
+	gameaccountdatagrant.ServerValidator = gameaccountdatagrantDescServer.Validators[0].(func(string) error)
+	// gameaccountdatagrantDescGameUserID is the schema descriptor for game_user_id field.
+	gameaccountdatagrantDescGameUserID := gameaccountdatagrantFields[3].Descriptor()
+	// gameaccountdatagrant.GameUserIDValidator is a validator for the "game_user_id" field. It is called by the builders before save.
+	gameaccountdatagrant.GameUserIDValidator = gameaccountdatagrantDescGameUserID.Validators[0].(func(string) error)
+	// gameaccountdatagrantDescDataType is the schema descriptor for data_type field.
+	gameaccountdatagrantDescDataType := gameaccountdatagrantFields[4].Descriptor()
+	// gameaccountdatagrant.DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
+	gameaccountdatagrant.DataTypeValidator = gameaccountdatagrantDescDataType.Validators[0].(func(string) error)
+	// gameaccountdatagrantDescCreatedAt is the schema descriptor for created_at field.
+	gameaccountdatagrantDescCreatedAt := gameaccountdatagrantFields[6].Descriptor()
+	// gameaccountdatagrant.DefaultCreatedAt holds the default value on creation for the created_at field.
+	gameaccountdatagrant.DefaultCreatedAt = gameaccountdatagrantDescCreatedAt.Default.(func() time.Time)
+	// gameaccountdatagrantDescUpdatedAt is the schema descriptor for updated_at field.
+	gameaccountdatagrantDescUpdatedAt := gameaccountdatagrantFields[7].Descriptor()
+	// gameaccountdatagrant.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	gameaccountdatagrant.DefaultUpdatedAt = gameaccountdatagrantDescUpdatedAt.Default.(func() time.Time)
+	// gameaccountdatagrant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	gameaccountdatagrant.UpdateDefaultUpdatedAt = gameaccountdatagrantDescUpdatedAt.UpdateDefault.(func() time.Time)
 	groupFields := schema.Group{}.Fields()
 	_ = groupFields
 	// groupDescGroup is the schema descriptor for group field.
@@ -91,6 +125,34 @@ func init() {
 	iosscriptcodeDescUploadCode := iosscriptcodeFields[1].Descriptor()
 	// iosscriptcode.UploadCodeValidator is a validator for the "upload_code" field. It is called by the builders before save.
 	iosscriptcode.UploadCodeValidator = iosscriptcodeDescUploadCode.Validators[0].(func(string) error)
+	oauth2clientwebhookendpointFields := schema.OAuth2ClientWebhookEndpoint{}.Fields()
+	_ = oauth2clientwebhookendpointFields
+	// oauth2clientwebhookendpointDescClientID is the schema descriptor for client_id field.
+	oauth2clientwebhookendpointDescClientID := oauth2clientwebhookendpointFields[1].Descriptor()
+	// oauth2clientwebhookendpoint.ClientIDValidator is a validator for the "client_id" field. It is called by the builders before save.
+	oauth2clientwebhookendpoint.ClientIDValidator = oauth2clientwebhookendpointDescClientID.Validators[0].(func(string) error)
+	// oauth2clientwebhookendpointDescCallbackURL is the schema descriptor for callback_url field.
+	oauth2clientwebhookendpointDescCallbackURL := oauth2clientwebhookendpointFields[2].Descriptor()
+	// oauth2clientwebhookendpoint.CallbackURLValidator is a validator for the "callback_url" field. It is called by the builders before save.
+	oauth2clientwebhookendpoint.CallbackURLValidator = oauth2clientwebhookendpointDescCallbackURL.Validators[0].(func(string) error)
+	// oauth2clientwebhookendpointDescEnabled is the schema descriptor for enabled field.
+	oauth2clientwebhookendpointDescEnabled := oauth2clientwebhookendpointFields[4].Descriptor()
+	// oauth2clientwebhookendpoint.DefaultEnabled holds the default value on creation for the enabled field.
+	oauth2clientwebhookendpoint.DefaultEnabled = oauth2clientwebhookendpointDescEnabled.Default.(bool)
+	// oauth2clientwebhookendpointDescCreatedAt is the schema descriptor for created_at field.
+	oauth2clientwebhookendpointDescCreatedAt := oauth2clientwebhookendpointFields[5].Descriptor()
+	// oauth2clientwebhookendpoint.DefaultCreatedAt holds the default value on creation for the created_at field.
+	oauth2clientwebhookendpoint.DefaultCreatedAt = oauth2clientwebhookendpointDescCreatedAt.Default.(func() time.Time)
+	// oauth2clientwebhookendpointDescUpdatedAt is the schema descriptor for updated_at field.
+	oauth2clientwebhookendpointDescUpdatedAt := oauth2clientwebhookendpointFields[6].Descriptor()
+	// oauth2clientwebhookendpoint.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	oauth2clientwebhookendpoint.DefaultUpdatedAt = oauth2clientwebhookendpointDescUpdatedAt.Default.(func() time.Time)
+	// oauth2clientwebhookendpoint.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	oauth2clientwebhookendpoint.UpdateDefaultUpdatedAt = oauth2clientwebhookendpointDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// oauth2clientwebhookendpointDescID is the schema descriptor for id field.
+	oauth2clientwebhookendpointDescID := oauth2clientwebhookendpointFields[0].Descriptor()
+	// oauth2clientwebhookendpoint.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	oauth2clientwebhookendpoint.IDValidator = oauth2clientwebhookendpointDescID.Validators[0].(func(string) error)
 	riskeventFields := schema.RiskEvent{}.Fields()
 	_ = riskeventFields
 	// riskeventDescEventTime is the schema descriptor for event_time field.

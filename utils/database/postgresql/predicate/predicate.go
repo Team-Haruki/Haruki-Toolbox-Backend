@@ -15,6 +15,9 @@ type FriendLink func(*sql.Selector)
 // GameAccountBinding is the predicate function for gameaccountbinding builders.
 type GameAccountBinding func(*sql.Selector)
 
+// GameAccountDataGrant is the predicate function for gameaccountdatagrant builders.
+type GameAccountDataGrant func(*sql.Selector)
+
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
@@ -23,6 +26,9 @@ type GroupList func(*sql.Selector)
 
 // IOSScriptCode is the predicate function for iosscriptcode builders.
 type IOSScriptCode func(*sql.Selector)
+
+// OAuth2ClientWebhookEndpoint is the predicate function for oauth2clientwebhookendpoint builders.
+type OAuth2ClientWebhookEndpoint func(*sql.Selector)
 
 // RiskEvent is the predicate function for riskevent builders.
 type RiskEvent func(*sql.Selector)

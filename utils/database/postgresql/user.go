@@ -53,11 +53,15 @@ type UserEdges struct {
 	AuthorizedSocialPlatforms []*AuthorizeSocialPlatformInfo `json:"authorized_social_platforms,omitempty"`
 	// GameAccountBindings holds the value of the game_account_bindings edge.
 	GameAccountBindings []*GameAccountBinding `json:"game_account_bindings,omitempty"`
+	// GameAccountDataGrantsOwned holds the value of the game_account_data_grants_owned edge.
+	GameAccountDataGrantsOwned []*GameAccountDataGrant `json:"game_account_data_grants_owned,omitempty"`
+	// GameAccountDataGrantsReceived holds the value of the game_account_data_grants_received edge.
+	GameAccountDataGrantsReceived []*GameAccountDataGrant `json:"game_account_data_grants_received,omitempty"`
 	// IosScriptCode holds the value of the ios_script_code edge.
 	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [6]bool
 }
 
 // SocialPlatformInfoOrErr returns the SocialPlatformInfo value or an error if the edge
@@ -89,12 +93,30 @@ func (e UserEdges) GameAccountBindingsOrErr() ([]*GameAccountBinding, error) {
 	return nil, &NotLoadedError{edge: "game_account_bindings"}
 }
 
+// GameAccountDataGrantsOwnedOrErr returns the GameAccountDataGrantsOwned value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) GameAccountDataGrantsOwnedOrErr() ([]*GameAccountDataGrant, error) {
+	if e.loadedTypes[3] {
+		return e.GameAccountDataGrantsOwned, nil
+	}
+	return nil, &NotLoadedError{edge: "game_account_data_grants_owned"}
+}
+
+// GameAccountDataGrantsReceivedOrErr returns the GameAccountDataGrantsReceived value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) GameAccountDataGrantsReceivedOrErr() ([]*GameAccountDataGrant, error) {
+	if e.loadedTypes[4] {
+		return e.GameAccountDataGrantsReceived, nil
+	}
+	return nil, &NotLoadedError{edge: "game_account_data_grants_received"}
+}
+
 // IosScriptCodeOrErr returns the IosScriptCode value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 	if e.IosScriptCode != nil {
 		return e.IosScriptCode, nil
-	} else if e.loadedTypes[3] {
+	} else if e.loadedTypes[5] {
 		return nil, &NotFoundError{label: iosscriptcode.Label}
 	}
 	return nil, &NotLoadedError{edge: "ios_script_code"}
@@ -222,6 +244,16 @@ func (_m *User) QueryAuthorizedSocialPlatforms() *AuthorizeSocialPlatformInfoQue
 // QueryGameAccountBindings queries the "game_account_bindings" edge of the User entity.
 func (_m *User) QueryGameAccountBindings() *GameAccountBindingQuery {
 	return NewUserClient(_m.config).QueryGameAccountBindings(_m)
+}
+
+// QueryGameAccountDataGrantsOwned queries the "game_account_data_grants_owned" edge of the User entity.
+func (_m *User) QueryGameAccountDataGrantsOwned() *GameAccountDataGrantQuery {
+	return NewUserClient(_m.config).QueryGameAccountDataGrantsOwned(_m)
+}
+
+// QueryGameAccountDataGrantsReceived queries the "game_account_data_grants_received" edge of the User entity.
+func (_m *User) QueryGameAccountDataGrantsReceived() *GameAccountDataGrantQuery {
+	return NewUserClient(_m.config).QueryGameAccountDataGrantsReceived(_m)
 }
 
 // QueryIosScriptCode queries the "ios_script_code" edge of the User entity.

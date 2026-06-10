@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
 	"haruki-suite/utils/database/postgresql/user"
@@ -201,6 +202,36 @@ func (_c *UserCreate) AddGameAccountBindings(v ...*GameAccountBinding) *UserCrea
 		ids[i] = v[i].ID
 	}
 	return _c.AddGameAccountBindingIDs(ids...)
+}
+
+// AddGameAccountDataGrantsOwnedIDs adds the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity by IDs.
+func (_c *UserCreate) AddGameAccountDataGrantsOwnedIDs(ids ...int) *UserCreate {
+	_c.mutation.AddGameAccountDataGrantsOwnedIDs(ids...)
+	return _c
+}
+
+// AddGameAccountDataGrantsOwned adds the "game_account_data_grants_owned" edges to the GameAccountDataGrant entity.
+func (_c *UserCreate) AddGameAccountDataGrantsOwned(v ...*GameAccountDataGrant) *UserCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddGameAccountDataGrantsOwnedIDs(ids...)
+}
+
+// AddGameAccountDataGrantsReceivedIDs adds the "game_account_data_grants_received" edge to the GameAccountDataGrant entity by IDs.
+func (_c *UserCreate) AddGameAccountDataGrantsReceivedIDs(ids ...int) *UserCreate {
+	_c.mutation.AddGameAccountDataGrantsReceivedIDs(ids...)
+	return _c
+}
+
+// AddGameAccountDataGrantsReceived adds the "game_account_data_grants_received" edges to the GameAccountDataGrant entity.
+func (_c *UserCreate) AddGameAccountDataGrantsReceived(v ...*GameAccountDataGrant) *UserCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddGameAccountDataGrantsReceivedIDs(ids...)
 }
 
 // SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
@@ -421,6 +452,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.GameAccountDataGrantsOwnedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.GameAccountDataGrantsReceivedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

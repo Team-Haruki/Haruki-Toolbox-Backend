@@ -36,6 +36,8 @@ func (User) Edges() []ent.Edge {
 		edge.To("authorized_social_platforms", AuthorizeSocialPlatformInfo.Type).
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("game_account_bindings", GameAccountBinding.Type),
+		edge.To("game_account_data_grants_owned", GameAccountDataGrant.Type),
+		edge.To("game_account_data_grants_received", GameAccountDataGrant.Type),
 		edge.To("ios_script_code", IOSScriptCode.Type).
 			Unique().
 			Annotations(entsql.OnDelete(entsql.Cascade)),

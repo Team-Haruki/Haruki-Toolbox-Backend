@@ -44,6 +44,18 @@ func (f GameAccountBindingFunc) Mutate(ctx context.Context, m postgresql.Mutatio
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.GameAccountBindingMutation", m)
 }
 
+// The GameAccountDataGrantFunc type is an adapter to allow the use of ordinary
+// function as GameAccountDataGrant mutator.
+type GameAccountDataGrantFunc func(context.Context, *postgresql.GameAccountDataGrantMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f GameAccountDataGrantFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.GameAccountDataGrantMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.GameAccountDataGrantMutation", m)
+}
+
 // The GroupFunc type is an adapter to allow the use of ordinary
 // function as Group mutator.
 type GroupFunc func(context.Context, *postgresql.GroupMutation) (postgresql.Value, error)
@@ -78,6 +90,18 @@ func (f IOSScriptCodeFunc) Mutate(ctx context.Context, m postgresql.Mutation) (p
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.IOSScriptCodeMutation", m)
+}
+
+// The OAuth2ClientWebhookEndpointFunc type is an adapter to allow the use of ordinary
+// function as OAuth2ClientWebhookEndpoint mutator.
+type OAuth2ClientWebhookEndpointFunc func(context.Context, *postgresql.OAuth2ClientWebhookEndpointMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f OAuth2ClientWebhookEndpointFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.OAuth2ClientWebhookEndpointMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.OAuth2ClientWebhookEndpointMutation", m)
 }
 
 // The RiskEventFunc type is an adapter to allow the use of ordinary

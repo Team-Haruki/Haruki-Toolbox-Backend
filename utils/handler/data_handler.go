@@ -88,6 +88,7 @@ func (h *DataHandler) RunUploadFanout(raw []byte, data map[string]any, server ut
 	if isPublicAPI {
 		go h.CallWebhookAsync(*expectedUserID, server, dataType)
 	}
+	go h.CallOAuth2WebhookAsync(*expectedUserID, server, dataType)
 }
 
 func (h *DataHandler) checkForHTTPError(unpackedMap map[string]any) *utils.HandleDataResult {

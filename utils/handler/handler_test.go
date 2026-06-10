@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	harukiConfig "haruki-suite/config"
+	oauth2Module "haruki-suite/internal/modules/oauth2"
 	harukiUtils "haruki-suite/utils"
+	dbManager "haruki-suite/utils/database/postgresql"
 	harukiLogger "haruki-suite/utils/logger"
 	"io"
 	"net"
@@ -196,6 +198,65 @@ func TestParseWebhookCallback(t *testing.T) {
 				t.Fatalf("parseWebhookCallback bearer = %q, want %q", gotBearer, tc.wantBearer)
 			}
 		})
+	}
+}
+
+func TestParseWebhookCallbackSupportsOAuth2ClientWebhook(t *testing.T) {
+	t.Parallel()
+
+	gotURL, gotBearer, gotOK := parseWebhookCallback(dbManager.OAuth2ClientWebhookCallback{
+		ClientID:    "client-a",
+		CallbackURL: "https://93.184.216.34/oauth/{server}/{data_type}/{user_id}",
+		Bearer:      "oauth-bearer",
+	})
+	if !gotOK {
+		t.Fatalf("parseWebhookCallback returned ok=false")
+	}
+	if gotURL != "https://93.184.216.34/oauth/{server}/{data_type}/{user_id}" {
+		t.Fatalf("url = %q", gotURL)
+	}
+	if gotBearer != "oauth-bearer" {
+		t.Fatalf("bearer = %q, want oauth-bearer", gotBearer)
+	}
+}
+
+func TestOAuth2WebhookAuthorizedClientIDsDeduplicatesGameDataScope(t *testing.T) {
+	t.Parallel()
+
+	got := oauth2WebhookAuthorizedClientIDs([]oauth2Module.HydraConsentSession{
+		{
+			GrantScope: []string{"user:read"},
+			ConsentRequest: oauth2Module.HydraConsentRequest{
+				Client: oauth2Module.HydraConsentClient{ClientID: "client-without-data"},
+			},
+		},
+		{
+			GrantScope: []string{"game-data:read"},
+			ConsentRequest: oauth2Module.HydraConsentRequest{
+				Client: oauth2Module.HydraConsentClient{ClientID: "client-a"},
+			},
+		},
+		{
+			GrantScope: []string{"bindings:read", "game-data:read"},
+			ConsentRequest: oauth2Module.HydraConsentRequest{
+				Client: oauth2Module.HydraConsentClient{ClientID: "client-a"},
+			},
+		},
+		{
+			GrantScope: []string{"game-data:read"},
+			ConsentRequest: oauth2Module.HydraConsentRequest{
+				Client: oauth2Module.HydraConsentClient{ClientID: "client-b"},
+			},
+		},
+	})
+	want := []string{"client-a", "client-b"}
+	if len(got) != len(want) {
+		t.Fatalf("len(got) = %d, want %d: %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
 	}
 }
 

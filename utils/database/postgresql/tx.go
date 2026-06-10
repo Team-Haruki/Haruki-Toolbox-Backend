@@ -18,12 +18,16 @@ type Tx struct {
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
 	GameAccountBinding *GameAccountBindingClient
+	// GameAccountDataGrant is the client for interacting with the GameAccountDataGrant builders.
+	GameAccountDataGrant *GameAccountDataGrantClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// GroupList is the client for interacting with the GroupList builders.
 	GroupList *GroupListClient
 	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
 	IOSScriptCode *IOSScriptCodeClient
+	// OAuth2ClientWebhookEndpoint is the client for interacting with the OAuth2ClientWebhookEndpoint builders.
+	OAuth2ClientWebhookEndpoint *OAuth2ClientWebhookEndpointClient
 	// RiskEvent is the client for interacting with the RiskEvent builders.
 	RiskEvent *RiskEventClient
 	// RiskRule is the client for interacting with the RiskRule builders.
@@ -178,9 +182,11 @@ func (tx *Tx) init() {
 	tx.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(tx.config)
 	tx.FriendLink = NewFriendLinkClient(tx.config)
 	tx.GameAccountBinding = NewGameAccountBindingClient(tx.config)
+	tx.GameAccountDataGrant = NewGameAccountDataGrantClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupList = NewGroupListClient(tx.config)
 	tx.IOSScriptCode = NewIOSScriptCodeClient(tx.config)
+	tx.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(tx.config)
 	tx.RiskEvent = NewRiskEventClient(tx.config)
 	tx.RiskRule = NewRiskRuleClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)

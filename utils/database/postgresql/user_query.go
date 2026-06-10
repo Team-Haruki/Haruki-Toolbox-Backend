@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -23,14 +24,16 @@ import (
 // UserQuery is the builder for querying User entities.
 type UserQuery struct {
 	config
-	ctx                           *QueryContext
-	order                         []user.OrderOption
-	inters                        []Interceptor
-	predicates                    []predicate.User
-	withSocialPlatformInfo        *SocialPlatformInfoQuery
-	withAuthorizedSocialPlatforms *AuthorizeSocialPlatformInfoQuery
-	withGameAccountBindings       *GameAccountBindingQuery
-	withIosScriptCode             *IOSScriptCodeQuery
+	ctx                               *QueryContext
+	order                             []user.OrderOption
+	inters                            []Interceptor
+	predicates                        []predicate.User
+	withSocialPlatformInfo            *SocialPlatformInfoQuery
+	withAuthorizedSocialPlatforms     *AuthorizeSocialPlatformInfoQuery
+	withGameAccountBindings           *GameAccountBindingQuery
+	withGameAccountDataGrantsOwned    *GameAccountDataGrantQuery
+	withGameAccountDataGrantsReceived *GameAccountDataGrantQuery
+	withIosScriptCode                 *IOSScriptCodeQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -126,6 +129,50 @@ func (_q *UserQuery) QueryGameAccountBindings() *GameAccountBindingQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(gameaccountbinding.Table, gameaccountbinding.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.GameAccountBindingsTable, user.GameAccountBindingsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryGameAccountDataGrantsOwned chains the current query on the "game_account_data_grants_owned" edge.
+func (_q *UserQuery) QueryGameAccountDataGrantsOwned() *GameAccountDataGrantQuery {
+	query := (&GameAccountDataGrantClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(gameaccountdatagrant.Table, gameaccountdatagrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.GameAccountDataGrantsOwnedTable, user.GameAccountDataGrantsOwnedColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryGameAccountDataGrantsReceived chains the current query on the "game_account_data_grants_received" edge.
+func (_q *UserQuery) QueryGameAccountDataGrantsReceived() *GameAccountDataGrantQuery {
+	query := (&GameAccountDataGrantClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(gameaccountdatagrant.Table, gameaccountdatagrant.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.GameAccountDataGrantsReceivedTable, user.GameAccountDataGrantsReceivedColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -342,15 +389,17 @@ func (_q *UserQuery) Clone() *UserQuery {
 		return nil
 	}
 	return &UserQuery{
-		config:                        _q.config,
-		ctx:                           _q.ctx.Clone(),
-		order:                         append([]user.OrderOption{}, _q.order...),
-		inters:                        append([]Interceptor{}, _q.inters...),
-		predicates:                    append([]predicate.User{}, _q.predicates...),
-		withSocialPlatformInfo:        _q.withSocialPlatformInfo.Clone(),
-		withAuthorizedSocialPlatforms: _q.withAuthorizedSocialPlatforms.Clone(),
-		withGameAccountBindings:       _q.withGameAccountBindings.Clone(),
-		withIosScriptCode:             _q.withIosScriptCode.Clone(),
+		config:                            _q.config,
+		ctx:                               _q.ctx.Clone(),
+		order:                             append([]user.OrderOption{}, _q.order...),
+		inters:                            append([]Interceptor{}, _q.inters...),
+		predicates:                        append([]predicate.User{}, _q.predicates...),
+		withSocialPlatformInfo:            _q.withSocialPlatformInfo.Clone(),
+		withAuthorizedSocialPlatforms:     _q.withAuthorizedSocialPlatforms.Clone(),
+		withGameAccountBindings:           _q.withGameAccountBindings.Clone(),
+		withGameAccountDataGrantsOwned:    _q.withGameAccountDataGrantsOwned.Clone(),
+		withGameAccountDataGrantsReceived: _q.withGameAccountDataGrantsReceived.Clone(),
+		withIosScriptCode:                 _q.withIosScriptCode.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -387,6 +436,28 @@ func (_q *UserQuery) WithGameAccountBindings(opts ...func(*GameAccountBindingQue
 		opt(query)
 	}
 	_q.withGameAccountBindings = query
+	return _q
+}
+
+// WithGameAccountDataGrantsOwned tells the query-builder to eager-load the nodes that are connected to
+// the "game_account_data_grants_owned" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithGameAccountDataGrantsOwned(opts ...func(*GameAccountDataGrantQuery)) *UserQuery {
+	query := (&GameAccountDataGrantClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withGameAccountDataGrantsOwned = query
+	return _q
+}
+
+// WithGameAccountDataGrantsReceived tells the query-builder to eager-load the nodes that are connected to
+// the "game_account_data_grants_received" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithGameAccountDataGrantsReceived(opts ...func(*GameAccountDataGrantQuery)) *UserQuery {
+	query := (&GameAccountDataGrantClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withGameAccountDataGrantsReceived = query
 	return _q
 }
 
@@ -479,10 +550,12 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [6]bool{
 			_q.withSocialPlatformInfo != nil,
 			_q.withAuthorizedSocialPlatforms != nil,
 			_q.withGameAccountBindings != nil,
+			_q.withGameAccountDataGrantsOwned != nil,
+			_q.withGameAccountDataGrantsReceived != nil,
 			_q.withIosScriptCode != nil,
 		}
 	)
@@ -524,6 +597,24 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			func(n *User) { n.Edges.GameAccountBindings = []*GameAccountBinding{} },
 			func(n *User, e *GameAccountBinding) {
 				n.Edges.GameAccountBindings = append(n.Edges.GameAccountBindings, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withGameAccountDataGrantsOwned; query != nil {
+		if err := _q.loadGameAccountDataGrantsOwned(ctx, query, nodes,
+			func(n *User) { n.Edges.GameAccountDataGrantsOwned = []*GameAccountDataGrant{} },
+			func(n *User, e *GameAccountDataGrant) {
+				n.Edges.GameAccountDataGrantsOwned = append(n.Edges.GameAccountDataGrantsOwned, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withGameAccountDataGrantsReceived; query != nil {
+		if err := _q.loadGameAccountDataGrantsReceived(ctx, query, nodes,
+			func(n *User) { n.Edges.GameAccountDataGrantsReceived = []*GameAccountDataGrant{} },
+			func(n *User, e *GameAccountDataGrant) {
+				n.Edges.GameAccountDataGrantsReceived = append(n.Edges.GameAccountDataGrantsReceived, e)
 			}); err != nil {
 			return nil, err
 		}
@@ -620,6 +711,66 @@ func (_q *UserQuery) loadGameAccountBindings(ctx context.Context, query *GameAcc
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_game_account_bindings" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadGameAccountDataGrantsOwned(ctx context.Context, query *GameAccountDataGrantQuery, nodes []*User, init func(*User), assign func(*User, *GameAccountDataGrant)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(gameaccountdatagrant.FieldOwnerUserID)
+	}
+	query.Where(predicate.GameAccountDataGrant(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.GameAccountDataGrantsOwnedColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.OwnerUserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "owner_user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadGameAccountDataGrantsReceived(ctx context.Context, query *GameAccountDataGrantQuery, nodes []*User, init func(*User), assign func(*User, *GameAccountDataGrant)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(gameaccountdatagrant.FieldGranteeUserID)
+	}
+	query.Where(predicate.GameAccountDataGrant(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.GameAccountDataGrantsReceivedColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.GranteeUserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "grantee_user_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

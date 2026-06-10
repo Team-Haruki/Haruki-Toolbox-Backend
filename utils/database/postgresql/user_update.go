@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"haruki-suite/utils/database/postgresql/authorizesocialplatforminfo"
 	"haruki-suite/utils/database/postgresql/gameaccountbinding"
+	"haruki-suite/utils/database/postgresql/gameaccountdatagrant"
 	"haruki-suite/utils/database/postgresql/iosscriptcode"
 	"haruki-suite/utils/database/postgresql/predicate"
 	"haruki-suite/utils/database/postgresql/socialplatforminfo"
@@ -245,6 +246,36 @@ func (_u *UserUpdate) AddGameAccountBindings(v ...*GameAccountBinding) *UserUpda
 	return _u.AddGameAccountBindingIDs(ids...)
 }
 
+// AddGameAccountDataGrantsOwnedIDs adds the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity by IDs.
+func (_u *UserUpdate) AddGameAccountDataGrantsOwnedIDs(ids ...int) *UserUpdate {
+	_u.mutation.AddGameAccountDataGrantsOwnedIDs(ids...)
+	return _u
+}
+
+// AddGameAccountDataGrantsOwned adds the "game_account_data_grants_owned" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdate) AddGameAccountDataGrantsOwned(v ...*GameAccountDataGrant) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGameAccountDataGrantsOwnedIDs(ids...)
+}
+
+// AddGameAccountDataGrantsReceivedIDs adds the "game_account_data_grants_received" edge to the GameAccountDataGrant entity by IDs.
+func (_u *UserUpdate) AddGameAccountDataGrantsReceivedIDs(ids ...int) *UserUpdate {
+	_u.mutation.AddGameAccountDataGrantsReceivedIDs(ids...)
+	return _u
+}
+
+// AddGameAccountDataGrantsReceived adds the "game_account_data_grants_received" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdate) AddGameAccountDataGrantsReceived(v ...*GameAccountDataGrant) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGameAccountDataGrantsReceivedIDs(ids...)
+}
+
 // SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
 func (_u *UserUpdate) SetIosScriptCodeID(id int) *UserUpdate {
 	_u.mutation.SetIosScriptCodeID(id)
@@ -315,6 +346,48 @@ func (_u *UserUpdate) RemoveGameAccountBindings(v ...*GameAccountBinding) *UserU
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGameAccountBindingIDs(ids...)
+}
+
+// ClearGameAccountDataGrantsOwned clears all "game_account_data_grants_owned" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdate) ClearGameAccountDataGrantsOwned() *UserUpdate {
+	_u.mutation.ClearGameAccountDataGrantsOwned()
+	return _u
+}
+
+// RemoveGameAccountDataGrantsOwnedIDs removes the "game_account_data_grants_owned" edge to GameAccountDataGrant entities by IDs.
+func (_u *UserUpdate) RemoveGameAccountDataGrantsOwnedIDs(ids ...int) *UserUpdate {
+	_u.mutation.RemoveGameAccountDataGrantsOwnedIDs(ids...)
+	return _u
+}
+
+// RemoveGameAccountDataGrantsOwned removes "game_account_data_grants_owned" edges to GameAccountDataGrant entities.
+func (_u *UserUpdate) RemoveGameAccountDataGrantsOwned(v ...*GameAccountDataGrant) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGameAccountDataGrantsOwnedIDs(ids...)
+}
+
+// ClearGameAccountDataGrantsReceived clears all "game_account_data_grants_received" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdate) ClearGameAccountDataGrantsReceived() *UserUpdate {
+	_u.mutation.ClearGameAccountDataGrantsReceived()
+	return _u
+}
+
+// RemoveGameAccountDataGrantsReceivedIDs removes the "game_account_data_grants_received" edge to GameAccountDataGrant entities by IDs.
+func (_u *UserUpdate) RemoveGameAccountDataGrantsReceivedIDs(ids ...int) *UserUpdate {
+	_u.mutation.RemoveGameAccountDataGrantsReceivedIDs(ids...)
+	return _u
+}
+
+// RemoveGameAccountDataGrantsReceived removes "game_account_data_grants_received" edges to GameAccountDataGrant entities.
+func (_u *UserUpdate) RemoveGameAccountDataGrantsReceived(v ...*GameAccountDataGrant) *UserUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGameAccountDataGrantsReceivedIDs(ids...)
 }
 
 // ClearIosScriptCode clears the "ios_script_code" edge to the IOSScriptCode entity.
@@ -526,6 +599,96 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GameAccountDataGrantsOwnedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGameAccountDataGrantsOwnedIDs(); len(nodes) > 0 && !_u.mutation.GameAccountDataGrantsOwnedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GameAccountDataGrantsOwnedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GameAccountDataGrantsReceivedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGameAccountDataGrantsReceivedIDs(); len(nodes) > 0 && !_u.mutation.GameAccountDataGrantsReceivedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GameAccountDataGrantsReceivedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -795,6 +958,36 @@ func (_u *UserUpdateOne) AddGameAccountBindings(v ...*GameAccountBinding) *UserU
 	return _u.AddGameAccountBindingIDs(ids...)
 }
 
+// AddGameAccountDataGrantsOwnedIDs adds the "game_account_data_grants_owned" edge to the GameAccountDataGrant entity by IDs.
+func (_u *UserUpdateOne) AddGameAccountDataGrantsOwnedIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.AddGameAccountDataGrantsOwnedIDs(ids...)
+	return _u
+}
+
+// AddGameAccountDataGrantsOwned adds the "game_account_data_grants_owned" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdateOne) AddGameAccountDataGrantsOwned(v ...*GameAccountDataGrant) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGameAccountDataGrantsOwnedIDs(ids...)
+}
+
+// AddGameAccountDataGrantsReceivedIDs adds the "game_account_data_grants_received" edge to the GameAccountDataGrant entity by IDs.
+func (_u *UserUpdateOne) AddGameAccountDataGrantsReceivedIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.AddGameAccountDataGrantsReceivedIDs(ids...)
+	return _u
+}
+
+// AddGameAccountDataGrantsReceived adds the "game_account_data_grants_received" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdateOne) AddGameAccountDataGrantsReceived(v ...*GameAccountDataGrant) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddGameAccountDataGrantsReceivedIDs(ids...)
+}
+
 // SetIosScriptCodeID sets the "ios_script_code" edge to the IOSScriptCode entity by ID.
 func (_u *UserUpdateOne) SetIosScriptCodeID(id int) *UserUpdateOne {
 	_u.mutation.SetIosScriptCodeID(id)
@@ -865,6 +1058,48 @@ func (_u *UserUpdateOne) RemoveGameAccountBindings(v ...*GameAccountBinding) *Us
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveGameAccountBindingIDs(ids...)
+}
+
+// ClearGameAccountDataGrantsOwned clears all "game_account_data_grants_owned" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdateOne) ClearGameAccountDataGrantsOwned() *UserUpdateOne {
+	_u.mutation.ClearGameAccountDataGrantsOwned()
+	return _u
+}
+
+// RemoveGameAccountDataGrantsOwnedIDs removes the "game_account_data_grants_owned" edge to GameAccountDataGrant entities by IDs.
+func (_u *UserUpdateOne) RemoveGameAccountDataGrantsOwnedIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.RemoveGameAccountDataGrantsOwnedIDs(ids...)
+	return _u
+}
+
+// RemoveGameAccountDataGrantsOwned removes "game_account_data_grants_owned" edges to GameAccountDataGrant entities.
+func (_u *UserUpdateOne) RemoveGameAccountDataGrantsOwned(v ...*GameAccountDataGrant) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGameAccountDataGrantsOwnedIDs(ids...)
+}
+
+// ClearGameAccountDataGrantsReceived clears all "game_account_data_grants_received" edges to the GameAccountDataGrant entity.
+func (_u *UserUpdateOne) ClearGameAccountDataGrantsReceived() *UserUpdateOne {
+	_u.mutation.ClearGameAccountDataGrantsReceived()
+	return _u
+}
+
+// RemoveGameAccountDataGrantsReceivedIDs removes the "game_account_data_grants_received" edge to GameAccountDataGrant entities by IDs.
+func (_u *UserUpdateOne) RemoveGameAccountDataGrantsReceivedIDs(ids ...int) *UserUpdateOne {
+	_u.mutation.RemoveGameAccountDataGrantsReceivedIDs(ids...)
+	return _u
+}
+
+// RemoveGameAccountDataGrantsReceived removes "game_account_data_grants_received" edges to GameAccountDataGrant entities.
+func (_u *UserUpdateOne) RemoveGameAccountDataGrantsReceived(v ...*GameAccountDataGrant) *UserUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveGameAccountDataGrantsReceivedIDs(ids...)
 }
 
 // ClearIosScriptCode clears the "ios_script_code" edge to the IOSScriptCode entity.
@@ -1106,6 +1341,96 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GameAccountDataGrantsOwnedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGameAccountDataGrantsOwnedIDs(); len(nodes) > 0 && !_u.mutation.GameAccountDataGrantsOwnedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GameAccountDataGrantsOwnedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsOwnedTable,
+			Columns: []string{user.GameAccountDataGrantsOwnedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GameAccountDataGrantsReceivedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedGameAccountDataGrantsReceivedIDs(); len(nodes) > 0 && !_u.mutation.GameAccountDataGrantsReceivedCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GameAccountDataGrantsReceivedIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.GameAccountDataGrantsReceivedTable,
+			Columns: []string{user.GameAccountDataGrantsReceivedColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(gameaccountdatagrant.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
