@@ -95,6 +95,51 @@ func TestConvertToInt64Pointer(t *testing.T) {
 	}
 }
 
+func TestExtractUserIDWithExpectedRepairsUnsafeRoundedFloat(t *testing.T) {
+	t.Parallel()
+
+	logger := testLogger()
+	expected := int64(9223372036854775000)
+	data := map[string]any{
+		"userGamedata": map[string]any{
+			"userId": float64(expected),
+		},
+	}
+
+	parsed, err := extractUserIDFromGameDataWithExpected(data, &expected, logger)
+	if err != nil {
+		t.Fatalf("extractUserIDFromGameDataWithExpected returned error: %v", err)
+	}
+	if parsed.Value == nil || *parsed.Value != expected {
+		t.Fatalf("parsed userId = %v, want %d", parsed.Value, expected)
+	}
+	gameData := data["userGamedata"].(map[string]any)
+	if got, ok := gameData["userId"].(int64); !ok || got != expected {
+		t.Fatalf("repaired userId = %T %[1]v, want int64 %d", gameData["userId"], expected)
+	}
+	if got := gameData["userIdString"]; got != "9223372036854775000" {
+		t.Fatalf("userIdString = %v", got)
+	}
+}
+
+func TestExtractUserIDWithExpectedRejectsMismatchedUnsafeFloat(t *testing.T) {
+	t.Parallel()
+
+	logger := testLogger()
+	expected := int64(9223372036854775000)
+	mismatchedExpected := expected - 1_000_000
+	data := map[string]any{
+		"userGamedata": map[string]any{
+			"userId": float64(expected),
+		},
+	}
+
+	_, err := extractUserIDFromGameDataWithExpected(data, &mismatchedExpected, logger)
+	if err == nil || !strings.Contains(err.Error(), "unsafe numeric userId") {
+		t.Fatalf("error = %v, want unsafe numeric userId", err)
+	}
+}
+
 func TestParseWebhookCallback(t *testing.T) {
 	t.Parallel()
 

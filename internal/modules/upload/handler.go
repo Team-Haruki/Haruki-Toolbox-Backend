@@ -302,7 +302,7 @@ func HandleUpload(
 	if err != nil {
 		return fail(uploadStageDecodePayload, result, err)
 	}
-	parsedUserID, err := handler.ExtractGameUserID(unpackedMap)
+	parsedUserID, err := handler.ExtractGameUserIDForExpected(unpackedMap, &uploadCtx.ExpectedGameUserID)
 	uploadCtx.ParsedGameUserID = parsedUserID.Value
 	uploadCtx.ParsedGameUserIDType = parsedUserID.RawType
 	if err != nil {
