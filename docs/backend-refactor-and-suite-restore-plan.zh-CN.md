@@ -24,6 +24,7 @@
 - Birthday subscription、User game account binding、User social、Upload、User ticket handlers 已完成纯移动式拆分。
 - public/private/oauth2 数据查询已经增加更积极的 Redis 响应缓存，并迁移 `public_access` 到统一 `game_data` namespace。
 - StructTool / Avro 已接入离线 compare 工具，支持 raw upload 样本解密解码验证。
+- 已补加密 dummy raw-upload fixture 和 compare golden，CI 可验证 raw-upload 解密、msgpack decode、StructTool restore compare 链路。
 - 已从本地 Unity `DummyDll` 生成 `data/suite_user.avsc`，运行时 suite restore 结构来源已切到 StructTool/Avro schema。
 - 旧 `data/suite_structures.json` 已移除，`restore_suite.structures_file` 示例配置已指向 `./data/suite_user.avsc`。
 - compact restore 的重复展开算法已抽到 `utils/compactrestore`，查询侧 `utils/api/data` 只保留 BSON 适配。
@@ -452,7 +453,7 @@ go run ./cmd/nuverse-restore-compare \
 
 ### 阶段 3：补小型 golden fixture
 
-当前已经有 parser/generation 单元测试、generated structures golden 和 compare report golden；真实 raw upload 样本不应提交。
+当前已经有 parser/generation 单元测试、generated structures golden、compare report golden，以及使用 dummy sharedAes key/iv 加密的 raw-upload compare golden；真实 raw upload 样本不应提交。
 
 - 最小 Avro schema。
 - 最小 compact msgpack payload。
@@ -462,6 +463,7 @@ go run ./cmd/nuverse-restore-compare \
 
 - 已有最小 Avro schema 与 generated structures golden。
 - 已补 compare report golden，确保离线 compare 输出在 CI 中可审阅。
+- 已补加密 dummy raw-upload fixture，确保 CI 覆盖 raw upload 解密解码路径。
 
 验收标准：
 

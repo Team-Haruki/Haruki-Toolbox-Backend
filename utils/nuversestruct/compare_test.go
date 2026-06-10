@@ -2,8 +2,10 @@ package nuversestruct
 
 import (
 	"bytes"
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"haruki-suite/config"
@@ -205,6 +207,44 @@ func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
 	}
 	if report.GeneratedStructureCount != 2 {
 		t.Fatalf("generated structure count = %d, want 2", report.GeneratedStructureCount)
+	}
+}
+
+func TestCompareSuiteRestoreRawUploadFixtureGolden(t *testing.T) {
+	originalCfg := config.Cfg
+	t.Cleanup(func() {
+		config.Cfg = originalCfg
+	})
+	config.Cfg.SekaiClient.OtherServerAESKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	config.Cfg.SekaiClient.OtherServerAESIV = "0102030405060708090a0b0c0d0e0f10"
+
+	dir := t.TempDir()
+	samplePath := filepath.Join(dir, "minimal_suite_sample.raw")
+	rawUpload, err := hex.DecodeString(strings.TrimSpace(string(readTestdata(t, "minimal_suite_sample.raw_upload.hex"))))
+	if err != nil {
+		t.Fatalf("decode raw upload hex fixture: %v", err)
+	}
+	if err := os.WriteFile(samplePath, rawUpload, 0o600); err != nil {
+		t.Fatalf("write raw upload sample: %v", err)
+	}
+
+	report, err := CompareSuiteRestore(CompareOptions{
+		SampleMsgpackPath:  samplePath,
+		BaselineSchemaPath: "testdata/baseline_schema.avro.json",
+		SchemaPath:         "testdata/suite_schema.avro.json",
+		InputFormat:        InputFormatRawUpload,
+		Server:             harukiUtils.SupportedDataUploadServerJP,
+	})
+	if err != nil {
+		t.Fatalf("CompareSuiteRestore raw upload fixture returned error: %v", err)
+	}
+	report.SampleMsgpackPath = "testdata/minimal_suite_sample.raw_upload.hex"
+	got, err := report.MarshalJSONDeterministic()
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	if golden := readTestdata(t, "raw_upload_compare_report.golden.json"); !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace(golden)) {
+		t.Fatalf("raw upload compare report differs from golden\n got: %s\nwant: %s", got, golden)
 	}
 }
 
