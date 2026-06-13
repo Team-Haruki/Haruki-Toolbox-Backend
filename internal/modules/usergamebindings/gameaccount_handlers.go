@@ -10,6 +10,7 @@ import (
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -65,11 +66,13 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		gameUserIDStr := c.Params("game_user_id")
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
+		previousOwnerUserID := ""
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.game_account_binding.create", result, userID, map[string]any{
-				"reason":     reason,
-				"server":     serverStr,
-				"gameUserID": gameUserIDStr,
+				"reason":              reason,
+				"server":              serverStr,
+				"gameUserID":          gameUserIDStr,
+				"previousOwnerUserID": previousOwnerUserID,
 			})
 		}()
 		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
@@ -92,9 +95,6 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
 		switch classifyExistingBinding(existing, userID) {
-		case existingBindingStateOwnedByOther:
-			reason = "binding_owned_by_other_user"
-			return harukiAPIHelper.ErrorBadRequest(c, "this account is already bound by another user")
 		case existingBindingStateVerifiedBySelf:
 			bindings, err := getUserBindings(ctx, apiHelper, userID)
 			if err != nil {
@@ -155,12 +155,17 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 		}
 
-		if err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req); err != nil {
+		saveResult, err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req)
+		if err != nil {
 			harukiLogger.Errorf("Failed to save game account binding: %v", err)
 			reason = "save_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")
 		}
 		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
+		if saveResult != nil && saveResult.Transferred {
+			previousOwnerUserID = saveResult.PreviousOwnerUserID
+			notifyPreviousGameAccountBindingOwner(apiHelper, saveResult, serverStr, gameUserIDStr, time.Now())
+		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)
 		if err != nil {
@@ -172,7 +177,11 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			GameAccountBindings: &bindings,
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
-		reason = "ok"
+		if saveResult != nil && saveResult.Transferred {
+			reason = "transferred"
+		} else {
+			reason = "ok"
+		}
 		return harukiAPIHelper.SuccessResponse(c, "verification succeeded", &ud)
 	}
 }

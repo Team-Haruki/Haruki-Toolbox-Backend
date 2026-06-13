@@ -328,3 +328,52 @@ const ResetPasswordTemplate = `<!DOCTYPE html>
 
 </html>
 `
+
+const GameAccountBindingTransferTemplate = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>游戏账号绑定变更通知</title>
+</head>
+<body style="margin:0;padding:0;background:#f6f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#202124;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7fb;padding:24px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6e8ef;">
+                    <tr>
+                        <td style="padding:28px 32px 16px 32px;">
+                            <h1 style="margin:0;font-size:22px;line-height:1.4;color:#111827;">游戏账号绑定已变更</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 32px 24px 32px;font-size:15px;line-height:1.8;color:#374151;">
+                            <p style="margin:0 0 16px 0;">您曾绑定在 Haruki工具箱 的游戏账号已通过游戏内归属权验证转移至另一个工具箱账号。</p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;">
+                                <tr>
+                                    <td style="padding:10px 14px;color:#6b7280;width:120px;">服务器</td>
+                                    <td style="padding:10px 14px;color:#111827;">{{SERVER}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px 14px;color:#6b7280;">游戏账号 ID</td>
+                                    <td style="padding:10px 14px;color:#111827;">{{GAME_USER_ID}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px 14px;color:#6b7280;">变更时间</td>
+                                    <td style="padding:10px 14px;color:#111827;">{{TRANSFER_TIME}}</td>
+                                </tr>
+                            </table>
+                            <p style="margin:16px 0 0 0;">如果这不是您预期的操作，请尽快检查游戏账号安全状态，并通过工单联系管理员。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:18px 32px;background:#f3f4f6;font-size:13px;color:#6b7280;">
+                            此邮件由 Haruki工具箱 自动发送，请勿直接回复。
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+`

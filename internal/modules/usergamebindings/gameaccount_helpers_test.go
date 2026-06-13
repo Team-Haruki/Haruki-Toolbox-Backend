@@ -3,8 +3,14 @@ package usergamebindings
 import (
 	"context"
 	"errors"
+	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +19,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
+	_ "github.com/mattn/go-sqlite3"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -88,6 +95,131 @@ func TestClassifyExistingBinding(t *testing.T) {
 	verifiedBySelf.Edges.User = &postgresql.User{ID: "u-1"}
 	if got := classifyExistingBinding(verifiedBySelf, "u-1"); got != existingBindingStateVerifiedBySelf {
 		t.Fatalf("classify verified-by-self = %v, want %v", got, existingBindingStateVerifiedBySelf)
+	}
+}
+
+func TestSaveGameAccountBindingTransfersOwnerAndClearsOldGrants(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:game-account-binding-transfer-test?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	ctx := context.Background()
+
+	for _, seed := range []struct {
+		id    string
+		email string
+	}{
+		{id: "old-owner", email: "old-owner@example.com"},
+		{id: "new-owner", email: "new-owner@example.com"},
+		{id: "grantee", email: "grantee@example.com"},
+	} {
+		if _, err := client.User.Create().
+			SetID(seed.id).
+			SetName(seed.id).
+			SetEmail(seed.email).
+			Save(ctx); err != nil {
+			t.Fatalf("create user %s returned error: %v", seed.id, err)
+		}
+	}
+	binding, err := client.GameAccountBinding.Create().
+		SetServer("jp").
+		SetGameUserID("123456").
+		SetVerified(true).
+		SetSuite(&harukiSchema.SuiteDataPrivacySettings{AllowPublicApi: true}).
+		SetMysekai(&harukiSchema.MysekaiDataPrivacySettings{AllowPublicApi: true}).
+		SetUserID("old-owner").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("create binding returned error: %v", err)
+	}
+	if _, err := client.GameAccountDataGrant.Create().
+		SetOwnerUserID("old-owner").
+		SetGranteeUserID("grantee").
+		SetServer("jp").
+		SetGameUserID("123456").
+		SetDataType("suite").
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		Save(ctx); err != nil {
+		t.Fatalf("create grant returned error: %v", err)
+	}
+	existing, err := client.GameAccountBinding.Query().
+		Where(gameaccountbinding.IDEQ(binding.ID)).
+		WithUser().
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("query binding returned error: %v", err)
+	}
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{DB: client},
+	}
+
+	saveResult, err := saveGameAccountBinding(ctx, helper, existing, "jp", "123456", "new-owner", harukiAPIHelper.CreateGameAccountBindingPayload{
+		Suite:   &harukiSchema.SuiteDataPrivacySettings{AllowPublicApi: false},
+		MySekai: &harukiSchema.MysekaiDataPrivacySettings{AllowPublicApi: false},
+	})
+	if err != nil {
+		t.Fatalf("saveGameAccountBinding returned error: %v", err)
+	}
+	if saveResult == nil || !saveResult.Transferred || saveResult.PreviousOwnerUserID != "old-owner" || saveResult.PreviousOwnerEmail != "old-owner@example.com" {
+		t.Fatalf("save result = %+v, want transfer from old owner", saveResult)
+	}
+	updated, err := client.GameAccountBinding.Query().
+		Where(gameaccountbinding.IDEQ(binding.ID)).
+		WithUser().
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("query updated binding returned error: %v", err)
+	}
+	if updated.Edges.User == nil || updated.Edges.User.ID != "new-owner" {
+		t.Fatalf("updated owner = %+v, want new-owner", updated.Edges.User)
+	}
+	grantCount, err := client.GameAccountDataGrant.Query().
+		Where(
+			gameaccountdatagrant.OwnerUserIDEQ("old-owner"),
+			gameaccountdatagrant.ServerEQ("jp"),
+			gameaccountdatagrant.GameUserIDEQ("123456"),
+		).
+		Count(ctx)
+	if err != nil {
+		t.Fatalf("count grants returned error: %v", err)
+	}
+	if grantCount != 0 {
+		t.Fatalf("old owner grants = %d, want 0", grantCount)
+	}
+}
+
+func TestNotifyPreviousGameAccountBindingOwnerBestEffort(t *testing.T) {
+	var sentTo string
+	var sentBody string
+	originalSend := sendGameAccountBindingTransferMail
+	sendGameAccountBindingTransferMail = func(_ *harukiAPIHelper.HarukiToolboxRouterHelpers, email, body string) error {
+		sentTo = email
+		sentBody = body
+		return errors.New("smtp down")
+	}
+	t.Cleanup(func() {
+		sendGameAccountBindingTransferMail = originalSend
+	})
+
+	notifyPreviousGameAccountBindingOwner(
+		&harukiAPIHelper.HarukiToolboxRouterHelpers{SMTPClient: &smtp.HarukiSMTPClient{}},
+		&gameAccountBindingSaveResult{
+			Transferred:         true,
+			PreviousOwnerUserID: "old-owner",
+			PreviousOwnerEmail:  "old-owner@example.com",
+		},
+		"jp",
+		"123456",
+		time.Date(2026, time.June, 14, 8, 0, 0, 0, time.UTC),
+	)
+	if sentTo != "old-owner@example.com" {
+		t.Fatalf("sentTo = %q, want old-owner@example.com", sentTo)
+	}
+	if !strings.Contains(sentBody, "123456") || !strings.Contains(sentBody, "JP") {
+		t.Fatalf("sent body missing server/game user id: %s", sentBody)
+	}
+	if strings.Contains(sentBody, "new-owner") || strings.Contains(sentBody, "new-owner@example.com") {
+		t.Fatalf("sent body should not contain new owner identity: %s", sentBody)
 	}
 }
 

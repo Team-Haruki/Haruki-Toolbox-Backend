@@ -2,15 +2,19 @@ package usergamebindings
 
 import (
 	"context"
+	"html"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 )
 
 func clearGameAccountPublicCaches(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) {
@@ -67,28 +71,103 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return existing, nil
 }
 
-func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) error {
-	var err error
-	if existing != nil {
-		update := existing.Update().
-			SetVerified(true).
-			SetSuite(req.Suite).
-			SetMysekai(req.MySekai)
-		if bindingOwnerMissing(existing) {
-			update.SetUserID(userID)
-		}
-		_, err = update.Save(ctx)
-	} else {
+type gameAccountBindingSaveResult struct {
+	Transferred         bool
+	PreviousOwnerUserID string
+	PreviousOwnerEmail  string
+}
 
-		_, err = apiHelper.DBManager.DB.GameAccountBinding.
-			Create().
-			SetServer(serverStr).
-			SetGameUserID(gameUserIDStr).
+var sendGameAccountBindingTransferMail = func(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, body string) error {
+	return apiHelper.SMTPClient.Send([]string{email}, "游戏账号绑定变更通知 | Haruki工具箱", body, "Haruki工具箱 | 星云科技")
+}
+
+func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) (*gameAccountBindingSaveResult, error) {
+	result := &gameAccountBindingSaveResult{}
+	if existing != nil {
+		previousOwnerID := bindingOwnerID(existing)
+		if previousOwnerID != "" && previousOwnerID != strings.TrimSpace(userID) {
+			result.Transferred = true
+			result.PreviousOwnerUserID = previousOwnerID
+			if existing.Edges.User != nil {
+				result.PreviousOwnerEmail = strings.TrimSpace(existing.Edges.User.Email)
+			}
+		}
+
+		tx, err := apiHelper.DBManager.DB.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		update := tx.GameAccountBinding.UpdateOneID(existing.ID).
 			SetVerified(true).
 			SetSuite(req.Suite).
 			SetMysekai(req.MySekai).
-			SetUserID(userID).
-			Save(ctx)
+			SetUserID(userID)
+		if _, err = update.Save(ctx); err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		if result.Transferred {
+			if _, err = tx.GameAccountDataGrant.Delete().
+				Where(
+					gameaccountdatagrant.OwnerUserIDEQ(result.PreviousOwnerUserID),
+					gameaccountdatagrant.ServerEQ(serverStr),
+					gameaccountdatagrant.GameUserIDEQ(gameUserIDStr),
+				).
+				Exec(ctx); err != nil {
+				_ = tx.Rollback()
+				return nil, err
+			}
+		}
+		if err = tx.Commit(); err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		return result, nil
 	}
-	return err
+
+	_, err := apiHelper.DBManager.DB.GameAccountBinding.
+		Create().
+		SetServer(serverStr).
+		SetGameUserID(gameUserIDStr).
+		SetVerified(true).
+		SetSuite(req.Suite).
+		SetMysekai(req.MySekai).
+		SetUserID(userID).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func notifyPreviousGameAccountBindingOwner(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, transfer *gameAccountBindingSaveResult, serverStr, gameUserIDStr string, transferTime time.Time) {
+	if transfer == nil || !transfer.Transferred {
+		return
+	}
+	email := strings.TrimSpace(transfer.PreviousOwnerEmail)
+	if email == "" {
+		harukiLogger.Warnf("Skip game account binding transfer notification because previous owner email is empty: userID=%s server=%s gameUserID=%s", transfer.PreviousOwnerUserID, serverStr, gameUserIDStr)
+		return
+	}
+	if apiHelper == nil || apiHelper.SMTPClient == nil {
+		harukiLogger.Warnf("Skip game account binding transfer notification because SMTP client is unavailable: userID=%s server=%s gameUserID=%s", transfer.PreviousOwnerUserID, serverStr, gameUserIDStr)
+		return
+	}
+	body := buildGameAccountBindingTransferMailBody(serverStr, gameUserIDStr, transferTime)
+	if err := sendGameAccountBindingTransferMail(apiHelper, email, body); err != nil {
+		harukiLogger.Warnf("Failed to send game account binding transfer notification to previous owner %s: %v", transfer.PreviousOwnerUserID, err)
+	}
+}
+
+func buildGameAccountBindingTransferMailBody(serverStr, gameUserIDStr string, transferTime time.Time) string {
+	body := smtp.GameAccountBindingTransferTemplate
+	replacements := map[string]string{
+		"{{SERVER}}":        html.EscapeString(strings.ToUpper(strings.TrimSpace(serverStr))),
+		"{{GAME_USER_ID}}":  html.EscapeString(strings.TrimSpace(gameUserIDStr)),
+		"{{TRANSFER_TIME}}": html.EscapeString(transferTime.UTC().Format(time.RFC3339)),
+	}
+	for old, newValue := range replacements {
+		body = strings.ReplaceAll(body, old, newValue)
+	}
+	return body
 }
