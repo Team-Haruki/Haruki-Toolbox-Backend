@@ -1,8 +1,8 @@
 package oauth2
 
 import (
-	"github.com/gofiber/fiber/v3"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/gofiber/fiber/v3"
 	"slices"
 )
 
