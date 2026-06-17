@@ -63,6 +63,20 @@
   mutators:
     - handler: noop
 
+- id: haruki-public-tracker-web-v2-prefixed
+  match:
+    url: <http|https>://<[^/]+>/event-tracker/api/v2/web/events/<.*>
+    methods: [GET]
+  upstream:
+    url: http://haruki-toolbox-event-tracker:8777
+    strip_path: /event-tracker
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
 - id: haruki-public-bot-neo-status
   match:
     url: <http|https>://<[^/]+>/api/haruki-bot-neo/status
