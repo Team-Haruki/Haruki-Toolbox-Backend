@@ -63,9 +63,51 @@
   mutators:
     - handler: noop
 
+- id: haruki-protected-tracker-ws-ticket-prefixed
+  match:
+    url: <http|https>://<[^/]+>/event-tracker/ws-ticket
+    methods: [GET]
+  upstream:
+    url: http://haruki-toolbox-event-tracker:8777
+    strip_path: /event-tracker
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-tracker-ws-prefixed
+  match:
+    url: <http|https>://<[^/]+>/event-tracker/ws
+    methods: [GET]
+  upstream:
+    url: http://haruki-toolbox-event-tracker:8777
+    strip_path: /event-tracker
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-tracker-web-v2-private-prefixed
+  match:
+    url: <http|https>://<[^/]+>/event-tracker/api/v2/web/events/<.*>/private/<.*>
+    methods: [GET]
+  upstream:
+    url: http://haruki-toolbox-event-tracker:8777
+    strip_path: /event-tracker
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
 - id: haruki-public-tracker-web-v2-prefixed
   match:
-    url: <http|https>://<[^/]+>/event-tracker/api/v2/web/events/<.*>
+    url: <http|https>://<[^/]+>/event-tracker/api/v2/web/events/<[^/]+>/<[^/]+>/leaderboards/<total/(overview|replay/overview|details/rank/[^/]+|details/user/[^/]+|users/search)|world-bloom/[^/]+/(overview|replay/overview|details/rank/[^/]+|details/user/[^/]+|users/search)>
     methods: [GET]
   upstream:
     url: http://haruki-toolbox-event-tracker:8777
