@@ -167,12 +167,6 @@ func arrayToDict(arr []any, defs []fieldDef) map[string]any {
 	return dict
 }
 
-// restoreNestedInDict checks an already-dict element for nested array
-// fields that might still need restoration.
-func restoreNestedInDict(m map[string]any, defs []fieldDef) {
-	restoreNestedInDictChanged(m, defs)
-}
-
 func restoreNestedInDictChanged(m map[string]any, defs []fieldDef) bool {
 	changed := false
 	for _, def := range defs {
