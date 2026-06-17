@@ -26,7 +26,7 @@ const VerificationCodeTemplate = `<!DOCTYPE html>
                                             <tr valign="middle">
                                                 <!-- Logo -->
                                                 <td style="padding-right:12px; vertical-align:middle;">
-                                                    <img src="https://haruki.seiunx.com/haruki.ico" alt="Logo"
+                                                    <img src="https://images.haruki.seiunx.com/haruki.ico" alt="Logo"
                                                         height="32"
                                                         style="display:block; border:0; outline:none; text-decoration:none; width:auto;">
                                                 </td>
@@ -90,7 +90,7 @@ const VerificationCodeTemplate = `<!DOCTYPE html>
                                         <table width="100%" cellpadding="0" cellspacing="0">
                                             <tr>
                                                 <td style="width: 20px; vertical-align: top; padding-top: 2px;">
-                                                    <img src="https://haruki.seiunx.com/triangle-alert.png" alt="Alert"
+                                                    <img src="https://images.haruki.seiunx.com/triangle-alert.png" alt="Alert"
                                                         width="20" height="20"
                                                         style="display:block; border:0; outline:none; text-decoration:none;">
                                                 </td>
@@ -173,7 +173,7 @@ const ResetPasswordTemplate = `<!DOCTYPE html>
                                             style="border-collapse:collapse;">
                                             <tr valign="middle">
                                                 <td style="padding-right:12px; vertical-align:middle;">
-                                                    <img src="https://haruki.seiunx.com/haruki.ico" alt="Logo"
+                                                    <img src="https://images.haruki.seiunx.com/haruki.ico" alt="Logo"
                                                         height="32"
                                                         style="display:block; border:0; outline:none; text-decoration:none; width:auto;">
                                                 </td>
@@ -284,7 +284,7 @@ const ResetPasswordTemplate = `<!DOCTYPE html>
                                         <table width="100%" cellpadding="0" cellspacing="0">
                                             <tr>
                                                 <td style="width: 20px; vertical-align: top; padding-top: 2px;">
-                                                    <img src="https://haruki.seiunx.com/triangle-alert.png" alt="Alert"
+                                                    <img src="https://images.haruki.seiunx.com/triangle-alert.png" alt="Alert"
                                                         width="20" height="20"
                                                         style="display:block; border:0; outline:none; text-decoration:none;">
                                                 </td>
