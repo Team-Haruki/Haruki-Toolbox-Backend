@@ -16,7 +16,7 @@ require (
 	github.com/klauspost/compress v1.18.6
 	github.com/lib/pq v1.12.3
 	github.com/mattn/go-sqlite3 v1.14.44
-	github.com/redis/go-redis/v9 v9.20.0
+	github.com/redis/go-redis/v9 v9.20.1
 	github.com/shamaton/msgpack/v3 v3.1.2
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
 	go.mongodb.org/mongo-driver/v2 v2.6.0
