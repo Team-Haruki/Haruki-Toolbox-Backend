@@ -1,6 +1,8 @@
 package usergamebindings
 
 import (
+	"errors"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -109,6 +111,11 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "already_verified"
 			harukiLogger.Infof("[GameAccountBinding] existing verified binding found, short-circuiting")
 			return harukiAPIHelper.SuccessResponse(c, "account already verified", &ud)
+		case existingBindingStateOwnedByOther:
+			if bindingOwnerBanned(existing) {
+				reason = "binding_owner_banned"
+				return harukiAPIHelper.ErrorForbidden(c, "this account is bound by a banned user")
+			}
 		}
 		harukiLogger.Infof("[GameAccountBinding] existing binding check passed, proceeding to verification code check")
 
@@ -157,6 +164,10 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 		saveResult, err := saveGameAccountBinding(ctx, apiHelper, existing, serverStr, gameUserIDStr, userID, req)
 		if err != nil {
+			if errors.Is(err, errGameAccountBindingOwnerBanned) {
+				reason = "binding_owner_banned"
+				return harukiAPIHelper.ErrorForbidden(c, "this account is bound by a banned user")
+			}
 			harukiLogger.Errorf("Failed to save game account binding: %v", err)
 			reason = "save_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to save binding")

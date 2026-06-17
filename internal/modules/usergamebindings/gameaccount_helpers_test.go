@@ -65,6 +65,14 @@ func TestBindingOwnerHelpers(t *testing.T) {
 	if bindingOwnerMissing(bindingOwned) {
 		t.Fatalf("bindingOwnerMissing(owned) should be false")
 	}
+	if bindingOwnerBanned(bindingOwned) {
+		t.Fatalf("bindingOwnerBanned should return false for active owner")
+	}
+	bannedOwnerBinding := &postgresql.GameAccountBinding{}
+	bannedOwnerBinding.Edges.User = &postgresql.User{ID: "u-3", Banned: true}
+	if !bindingOwnerBanned(bannedOwnerBinding) {
+		t.Fatalf("bindingOwnerBanned should return true for banned owner")
+	}
 
 	if !isBindingOwnedByUser(bindingOwned, "u-1") {
 		t.Fatalf("isBindingOwnedByUser should return true for same user")
@@ -185,6 +193,97 @@ func TestSaveGameAccountBindingTransfersOwnerAndClearsOldGrants(t *testing.T) {
 	}
 	if grantCount != 0 {
 		t.Fatalf("old owner grants = %d, want 0", grantCount)
+	}
+}
+
+func TestSaveGameAccountBindingRejectsTransferFromBannedOwner(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:game-account-binding-banned-owner-transfer-test?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	ctx := context.Background()
+
+	for _, seed := range []struct {
+		id     string
+		email  string
+		banned bool
+	}{
+		{id: "old-owner", email: "old-owner@example.com", banned: true},
+		{id: "new-owner", email: "new-owner@example.com"},
+		{id: "grantee", email: "grantee@example.com"},
+	} {
+		create := client.User.Create().
+			SetID(seed.id).
+			SetName(seed.id).
+			SetEmail(seed.email)
+		if seed.banned {
+			create.SetBanned(true)
+		}
+		if _, err := create.Save(ctx); err != nil {
+			t.Fatalf("create user %s returned error: %v", seed.id, err)
+		}
+	}
+	binding, err := client.GameAccountBinding.Create().
+		SetServer("jp").
+		SetGameUserID("123456").
+		SetVerified(true).
+		SetSuite(&harukiSchema.SuiteDataPrivacySettings{AllowPublicApi: true}).
+		SetMysekai(&harukiSchema.MysekaiDataPrivacySettings{AllowPublicApi: true}).
+		SetUserID("old-owner").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("create binding returned error: %v", err)
+	}
+	if _, err := client.GameAccountDataGrant.Create().
+		SetOwnerUserID("old-owner").
+		SetGranteeUserID("grantee").
+		SetServer("jp").
+		SetGameUserID("123456").
+		SetDataType("suite").
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		Save(ctx); err != nil {
+		t.Fatalf("create grant returned error: %v", err)
+	}
+	existing, err := client.GameAccountBinding.Query().
+		Where(gameaccountbinding.IDEQ(binding.ID)).
+		WithUser().
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("query binding returned error: %v", err)
+	}
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{DB: client},
+	}
+
+	_, err = saveGameAccountBinding(ctx, helper, existing, "jp", "123456", "new-owner", harukiAPIHelper.CreateGameAccountBindingPayload{
+		Suite:   &harukiSchema.SuiteDataPrivacySettings{AllowPublicApi: false},
+		MySekai: &harukiSchema.MysekaiDataPrivacySettings{AllowPublicApi: false},
+	})
+	if !errors.Is(err, errGameAccountBindingOwnerBanned) {
+		t.Fatalf("saveGameAccountBinding error = %v, want errGameAccountBindingOwnerBanned", err)
+	}
+	updated, err := client.GameAccountBinding.Query().
+		Where(gameaccountbinding.IDEQ(binding.ID)).
+		WithUser().
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("query updated binding returned error: %v", err)
+	}
+	if updated.Edges.User == nil || updated.Edges.User.ID != "old-owner" {
+		t.Fatalf("updated owner = %+v, want old-owner", updated.Edges.User)
+	}
+	grantCount, err := client.GameAccountDataGrant.Query().
+		Where(
+			gameaccountdatagrant.OwnerUserIDEQ("old-owner"),
+			gameaccountdatagrant.ServerEQ("jp"),
+			gameaccountdatagrant.GameUserIDEQ("123456"),
+		).
+		Count(ctx)
+	if err != nil {
+		t.Fatalf("count grants returned error: %v", err)
+	}
+	if grantCount != 1 {
+		t.Fatalf("old owner grants = %d, want 1", grantCount)
 	}
 }
 

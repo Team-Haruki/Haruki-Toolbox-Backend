@@ -39,6 +39,10 @@ func bindingOwnerMissing(binding *postgresql.GameAccountBinding) bool {
 	return bindingOwnerID(binding) == ""
 }
 
+func bindingOwnerBanned(binding *postgresql.GameAccountBinding) bool {
+	return binding != nil && binding.Edges.User != nil && binding.Edges.User.Banned
+}
+
 func isBindingOwnedByUser(binding *postgresql.GameAccountBinding, userID string) bool {
 	ownerID := bindingOwnerID(binding)
 	if ownerID == "" {

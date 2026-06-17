@@ -2,6 +2,7 @@ package usergamebindings
 
 import (
 	"context"
+	"errors"
 	"html"
 	"strconv"
 	"strings"
@@ -77,6 +78,8 @@ type gameAccountBindingSaveResult struct {
 	PreviousOwnerEmail  string
 }
 
+var errGameAccountBindingOwnerBanned = errors.New("game account binding owner is banned")
+
 var sendGameAccountBindingTransferMail = func(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, body string) error {
 	return apiHelper.SMTPClient.Send([]string{email}, "游戏账号绑定变更通知 | Haruki工具箱", body, "Haruki工具箱 | 星云科技")
 }
@@ -86,6 +89,9 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 	if existing != nil {
 		previousOwnerID := bindingOwnerID(existing)
 		if previousOwnerID != "" && previousOwnerID != strings.TrimSpace(userID) {
+			if bindingOwnerBanned(existing) {
+				return nil, errGameAccountBindingOwnerBanned
+			}
 			result.Transferred = true
 			result.PreviousOwnerUserID = previousOwnerID
 			if existing.Edges.User != nil {
