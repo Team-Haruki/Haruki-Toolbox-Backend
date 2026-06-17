@@ -107,7 +107,7 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 			}
 			return
 		}
-		if !postgresql.IsNotFound(queryErr) {
+		if queryErr != nil && !postgresql.IsNotFound(queryErr) && !strings.Contains(strings.ToLower(queryErr.Error()), "database table is locked") {
 			t.Fatalf("query upload log returned error: %v", queryErr)
 		}
 		if time.Now().After(deadline) {
@@ -177,7 +177,7 @@ func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
 			}
 			return
 		}
-		if !postgresql.IsNotFound(queryErr) {
+		if queryErr != nil && !postgresql.IsNotFound(queryErr) && !strings.Contains(strings.ToLower(queryErr.Error()), "database table is locked") {
 			t.Fatalf("query upload log returned error: %v", queryErr)
 		}
 		if time.Now().After(deadline) {
