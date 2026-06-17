@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -29,6 +30,11 @@ type GameAccountDataGrantRecord struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
+
+var (
+	ErrGameAccountDataGrantOwnerNotFound   = errors.New("game account data grant owner user not found")
+	ErrGameAccountDataGrantGranteeNotFound = errors.New("game account data grant grantee user not found")
+)
 
 func IsGrantableGameAccountDataType(dataType string) bool {
 	switch strings.ToLower(strings.TrimSpace(dataType)) {
@@ -58,6 +64,20 @@ func normalizeGameAccountDataGrantIdentity(ownerUserID, granteeUserID, server, g
 		return "", "", "", "", "", fmt.Errorf("data type is not grantable")
 	}
 	return ownerUserID, granteeUserID, server, gameUserID, dataType, nil
+}
+
+func (c *Client) canonicalGameAccountDataGrantUserID(ctx context.Context, userID string, missingErr error) (string, error) {
+	row, err := c.User.Query().
+		Where(userSchema.IDEQ(userID)).
+		Select(userSchema.FieldID).
+		Only(ctx)
+	if err != nil {
+		if IsNotFound(err) {
+			return "", missingErr
+		}
+		return "", err
+	}
+	return row.ID, nil
 }
 
 func buildGameAccountDataGrantRecord(row *GameAccountDataGrant) GameAccountDataGrantRecord {
@@ -148,6 +168,14 @@ func (c *Client) UpsertGameAccountDataGrant(ctx context.Context, ownerUserID, gr
 		return nil, fmt.Errorf("postgresql client is nil")
 	}
 	ownerUserID, granteeUserID, server, gameUserID, dataType, err := normalizeGameAccountDataGrantIdentity(ownerUserID, granteeUserID, server, gameUserID, dataType)
+	if err != nil {
+		return nil, err
+	}
+	ownerUserID, err = c.canonicalGameAccountDataGrantUserID(ctx, ownerUserID, ErrGameAccountDataGrantOwnerNotFound)
+	if err != nil {
+		return nil, err
+	}
+	granteeUserID, err = c.canonicalGameAccountDataGrantUserID(ctx, granteeUserID, ErrGameAccountDataGrantGranteeNotFound)
 	if err != nil {
 		return nil, err
 	}

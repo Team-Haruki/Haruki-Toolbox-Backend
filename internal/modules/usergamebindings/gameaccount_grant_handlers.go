@@ -1,6 +1,7 @@
 package usergamebindings
 
 import (
+	"errors"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -138,6 +139,12 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 
 		row, err := apiHelper.DBManager.DB.UpsertGameAccountDataGrant(c.Context(), ownerUserID, granteeUserID, string(server), gameUserID, dataType, expiresAt)
 		if err != nil {
+			if errors.Is(err, postgresql.ErrGameAccountDataGrantOwnerNotFound) {
+				return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
+			}
+			if errors.Is(err, postgresql.ErrGameAccountDataGrantGranteeNotFound) {
+				return harukiAPIHelper.ErrorNotFound(c, "grantee user not found")
+			}
 			harukiLogger.Errorf("Failed to upsert game account data grant: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save game account data grant")
 		}

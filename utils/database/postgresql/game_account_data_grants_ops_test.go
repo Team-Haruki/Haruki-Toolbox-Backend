@@ -2,6 +2,7 @@ package postgresql_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -57,6 +58,12 @@ func TestGameAccountDataGrantAccessAndCleanup(t *testing.T) {
 
 	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "owner", "grantee", "jp", "123", "suite", now.Add(time.Hour)); err != nil {
 		t.Fatalf("UpsertGameAccountDataGrant returned error: %v", err)
+	}
+	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "owner", "missing-grantee", "jp", "123", "suite", now.Add(time.Hour)); !errors.Is(err, dbManager.ErrGameAccountDataGrantGranteeNotFound) {
+		t.Fatalf("missing grantee error = %v, want ErrGameAccountDataGrantGranteeNotFound", err)
+	}
+	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "missing-owner", "grantee", "jp", "123", "suite", now.Add(time.Hour)); !errors.Is(err, dbManager.ErrGameAccountDataGrantOwnerNotFound) {
+		t.Fatalf("missing owner error = %v, want ErrGameAccountDataGrantOwnerNotFound", err)
 	}
 	granteeAccess, err := client.CanAccessGameAccountData(context.Background(), "grantee", "jp", "123", "suite", now)
 	if err != nil {
