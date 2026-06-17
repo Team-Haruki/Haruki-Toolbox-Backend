@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ import (
 func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 	t.Parallel()
 
-	client := enttest.Open(t, "sqlite3", "file:upload-audit-test?mode=memory&cache=shared&_fk=1")
+	client := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "upload-audit-test"))
 	t.Cleanup(func() {
 		_ = client.Close()
 	})
@@ -117,7 +118,7 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 }
 
 func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:inherit-retrieval-audit-test?mode=memory&cache=shared&_fk=1")
+	client := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "inherit-retrieval-audit-test"))
 	t.Cleanup(func() {
 		_ = client.Close()
 	})
@@ -184,4 +185,9 @@ func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+func uniqueUploadAuditSQLiteDSN(t *testing.T, name string) string {
+	t.Helper()
+	return fmt.Sprintf("file:%s-%s?mode=memory&cache=shared&_fk=1", name, strings.ReplaceAll(t.Name(), "/", "-"))
 }
