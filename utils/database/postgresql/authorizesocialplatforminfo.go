@@ -4,12 +4,12 @@ package postgresql
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 // AuthorizeSocialPlatformInfo is the model entity for the AuthorizeSocialPlatformInfo schema.

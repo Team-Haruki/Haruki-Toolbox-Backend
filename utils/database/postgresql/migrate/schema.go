@@ -334,6 +334,62 @@ var (
 			},
 		},
 	}
+	// SponsorsColumns holds the columns for the "sponsors" table.
+	SponsorsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 128},
+		{Name: "afdian_user_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "out_trade_no", Type: field.TypeString, Unique: true, Nullable: true, Size: 128},
+		{Name: "name", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "avatar", Type: field.TypeString, Nullable: true, Size: 500},
+		{Name: "plan_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "plan_name", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "plan_rank", Type: field.TypeInt, Default: 0},
+		{Name: "plan_pay_months", Type: field.TypeInt, Nullable: true},
+		{Name: "message", Type: field.TypeString, Nullable: true, Size: 1000},
+		{Name: "source", Type: field.TypeEnum, Enums: []string{"afdian", "manual", "legacy", "imported"}, Default: "afdian"},
+		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "afdian_sync_disabled", Type: field.TypeBool, Default: false},
+		{Name: "paid_at", Type: field.TypeTime, Nullable: true},
+		{Name: "plan_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "support_count", Type: field.TypeInt, Default: 1},
+		{Name: "total_amount", Type: field.TypeString, Nullable: true, Size: 32},
+		{Name: "raw", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// SponsorsTable holds the schema information for the "sponsors" table.
+	SponsorsTable = &schema.Table{
+		Name:       "sponsors",
+		Columns:    SponsorsColumns,
+		PrimaryKey: []*schema.Column{SponsorsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sponsor_afdian_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorsColumns[1]},
+			},
+			{
+				Name:    "sponsor_out_trade_no",
+				Unique:  true,
+				Columns: []*schema.Column{SponsorsColumns[2]},
+			},
+			{
+				Name:    "sponsor_source_is_active",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorsColumns[10], SponsorsColumns[11]},
+			},
+			{
+				Name:    "sponsor_plan_rank_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorsColumns[7], SponsorsColumns[18]},
+			},
+			{
+				Name:    "sponsor_plan_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorsColumns[14]},
+			},
+		},
+	}
 	// SystemLogsColumns holds the columns for the "system_logs" table.
 	SystemLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -606,6 +662,7 @@ var (
 		RiskEventsTable,
 		RiskRulesTable,
 		SocialPlatformInfosTable,
+		SponsorsTable,
 		SystemLogsTable,
 		TicketsTable,
 		TicketMessagesTable,
@@ -639,6 +696,9 @@ func init() {
 		Table: "risk_rules",
 	}
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
+	SponsorsTable.Annotation = &entsql.Annotation{
+		Table: "sponsors",
+	}
 	SystemLogsTable.Annotation = &entsql.Annotation{
 		Table: "system_logs",
 	}

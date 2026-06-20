@@ -4,12 +4,12 @@ package postgresql
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 // IOSScriptCode is the model entity for the IOSScriptCode schema.

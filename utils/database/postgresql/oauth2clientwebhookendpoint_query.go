@@ -5,14 +5,14 @@ package postgresql
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 )
 
 // OAuth2ClientWebhookEndpointQuery is the builder for querying OAuth2ClientWebhookEndpoint entities.

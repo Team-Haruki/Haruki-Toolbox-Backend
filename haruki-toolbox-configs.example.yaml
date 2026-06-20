@@ -49,6 +49,12 @@ webhook:
   jwt_secret: ""
   enabled: true
 
+afdian:
+  user_id: ""
+  api_token: ""
+  api_base_url: "https://afdian.com/api/open"
+  request_timeout_seconds: 10
+
 oauth2:
   provider: "hydra" # hydra only
   hydra_public_url: "http://hydra-public:4444" # backend internal call target

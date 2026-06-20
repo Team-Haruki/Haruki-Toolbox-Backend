@@ -6,13 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 )
 
 // OAuth2ClientWebhookEndpointUpdate is the builder for updating OAuth2ClientWebhookEndpoint entities.

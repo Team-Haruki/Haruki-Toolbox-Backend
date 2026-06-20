@@ -6,14 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 // GameAccountBindingUpdate is the builder for updating GameAccountBinding entities.

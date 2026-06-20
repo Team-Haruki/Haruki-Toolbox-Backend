@@ -5,13 +5,13 @@ package postgresql
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 // GameAccountBinding is the model entity for the GameAccountBinding schema.

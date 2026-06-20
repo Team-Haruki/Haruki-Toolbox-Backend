@@ -5,6 +5,7 @@ package hook
 import (
 	"context"
 	"fmt"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
@@ -138,6 +139,18 @@ func (f SocialPlatformInfoFunc) Mutate(ctx context.Context, m postgresql.Mutatio
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SocialPlatformInfoMutation", m)
+}
+
+// The SponsorFunc type is an adapter to allow the use of ordinary
+// function as Sponsor mutator.
+type SponsorFunc func(context.Context, *postgresql.SponsorMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SponsorFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.SponsorMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SponsorMutation", m)
 }
 
 // The SystemLogFunc type is an adapter to allow the use of ordinary

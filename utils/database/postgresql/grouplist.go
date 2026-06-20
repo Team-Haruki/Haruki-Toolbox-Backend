@@ -4,12 +4,12 @@ package postgresql
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 )
 
 // GroupList is the model entity for the GroupList schema.

@@ -9,9 +9,8 @@ import (
 	// required by schema hooks.
 	_ "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtime"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/migrate"
-
 	"entgo.io/ent/dialect/sql/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/migrate"
 )
 
 type (

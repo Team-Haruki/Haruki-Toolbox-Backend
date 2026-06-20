@@ -25,6 +25,13 @@ type WebhookConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 }
 
+type AfdianConfig struct {
+	UserID               string `yaml:"user_id"`
+	APIToken             string `yaml:"api_token"`
+	APIBaseURL           string `yaml:"api_base_url"`
+	RequestTimeoutSecond int    `yaml:"request_timeout_seconds"`
+}
+
 type ThirdPartyDataProviderConfig struct {
 	Endpoint8823            string `yaml:"endpoint_8823"`
 	Secret8823              string `yaml:"secret_8823"`
@@ -177,6 +184,7 @@ type Config struct {
 	MongoDB                MongoDBConfig                `yaml:"mongodb"`
 	Redis                  RedisConfig                  `yaml:"redis"`
 	Webhook                WebhookConfig                `yaml:"webhook"`
+	Afdian                 AfdianConfig                 `yaml:"afdian"`
 	Backend                BackendConfig                `yaml:"backend"`
 	UserSystem             UserSystemConfig             `yaml:"user_system"`
 	OAuth2                 OAuth2Config                 `yaml:"oauth2"`

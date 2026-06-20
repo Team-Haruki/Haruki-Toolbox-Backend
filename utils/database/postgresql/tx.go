@@ -34,6 +34,8 @@ type Tx struct {
 	RiskRule *RiskRuleClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
+	// Sponsor is the client for interacting with the Sponsor builders.
+	Sponsor *SponsorClient
 	// SystemLog is the client for interacting with the SystemLog builders.
 	SystemLog *SystemLogClient
 	// Ticket is the client for interacting with the Ticket builders.
@@ -190,6 +192,7 @@ func (tx *Tx) init() {
 	tx.RiskEvent = NewRiskEventClient(tx.config)
 	tx.RiskRule = NewRiskRuleClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)
+	tx.Sponsor = NewSponsorClient(tx.config)
 	tx.SystemLog = NewSystemLogClient(tx.config)
 	tx.Ticket = NewTicketClient(tx.config)
 	tx.TicketMessage = NewTicketMessageClient(tx.config)

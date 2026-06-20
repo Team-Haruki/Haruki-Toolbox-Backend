@@ -63,6 +63,32 @@
   mutators:
     - handler: noop
 
+- id: haruki-public-afdian-sponsor-list
+  match:
+    url: <http|https>://<[^/]+>/api/sponsor/afdian
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-afdian-sponsor-callback
+  match:
+    url: <http|https>://<[^/]+>/api/sponsor/afdian/callback
+    methods: [POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
 - id: haruki-protected-tracker-ws-ticket-prefixed
   match:
     url: <http|https>://<[^/]+>/event-tracker/ws-ticket
