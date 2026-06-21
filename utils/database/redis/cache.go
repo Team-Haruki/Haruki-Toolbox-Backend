@@ -221,6 +221,16 @@ func (r *HarukiRedisManager) ClearPublicGameDataCaches(ctx context.Context, serv
 	return nil
 }
 
+func (r *HarukiRedisManager) ClearUploadedGameDataCaches(ctx context.Context, dataType, server string, userID int64) error {
+	if err := r.ClearCache(ctx, dataType, server, userID); err != nil {
+		return err
+	}
+	if dataType == string(harukiUtils.UploadDataTypeMysekaiBirthdayParty) {
+		return r.ClearCache(ctx, string(harukiUtils.UploadDataTypeMysekai), server, userID)
+	}
+	return nil
+}
+
 func (r *HarukiRedisManager) ClearNamespace(ctx context.Context, namespace string) error {
 	if r == nil || r.Redis == nil {
 		return fmt.Errorf("redis client is nil")

@@ -108,7 +108,7 @@ func HandleUpload(
 		return fail(uploadStageValidateResult, result, err)
 	}
 	writeUploadAudit(true, nil)
-	if err = helper.DBManager.Redis.ClearCache(ctx, string(uploadCtx.DataType), string(uploadCtx.Server), uploadCtx.ExpectedGameUserID); err != nil {
+	if err = helper.DBManager.Redis.ClearUploadedGameDataCaches(ctx, string(uploadCtx.DataType), string(uploadCtx.Server), uploadCtx.ExpectedGameUserID); err != nil {
 		handler.Logger.Warnf("Failed to clear redis cache: %v", err)
 	}
 	handler.RunUploadFanout(data, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID, uploadCtx.Settings, uploadCtx.AllowPublicAPI)

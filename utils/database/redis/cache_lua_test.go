@@ -191,6 +191,45 @@ func TestClearCacheRemovesAllGameDataQueryVariants(t *testing.T) {
 	}
 }
 
+func TestClearUploadedGameDataCachesClearsMysekaiForBirthdayParty(t *testing.T) {
+	t.Parallel()
+
+	manager, _ := newTestRedisManager(t)
+	ctx := context.Background()
+
+	birthdayKey := BuildGameDataCacheKey("private", "jp", "mysekai_birthday_party", 123, "userMysekaiHarvestMaps")
+	mysekaiKey := BuildGameDataCacheKey("public", "jp", "mysekai", 123, "updatedResources")
+	suiteKey := BuildGameDataCacheKey("public", "jp", "suite", 123, "userProfile")
+
+	for _, key := range []string{birthdayKey, mysekaiKey, suiteKey} {
+		if err := manager.Redis.Set(ctx, key, "v", time.Minute).Err(); err != nil {
+			t.Fatalf("seed redis value error: %v", err)
+		}
+	}
+
+	if err := manager.ClearUploadedGameDataCaches(ctx, "mysekai_birthday_party", "jp", 123); err != nil {
+		t.Fatalf("ClearUploadedGameDataCaches returned error: %v", err)
+	}
+
+	for _, key := range []string{birthdayKey, mysekaiKey} {
+		exists, err := manager.Redis.Exists(ctx, key).Result()
+		if err != nil {
+			t.Fatalf("redis exists check error for %s: %v", key, err)
+		}
+		if exists != 0 {
+			t.Fatalf("expected key %s to be removed", key)
+		}
+	}
+
+	untouchedVal, err := manager.Redis.Get(ctx, suiteKey).Result()
+	if err != nil {
+		t.Fatalf("redis get untouched suite key error: %v", err)
+	}
+	if untouchedVal != "v" {
+		t.Fatalf("suite key value = %q, want %q", untouchedVal, "v")
+	}
+}
+
 func TestSetCachesAtomically(t *testing.T) {
 	t.Parallel()
 
