@@ -43,6 +43,13 @@ func applyEnvOverrides(cfg *Config) error {
 		return err
 	}
 
+	overrideString(&cfg.Afdian.UserID, "AFDIAN_USER_ID")
+	overrideString(&cfg.Afdian.APIToken, "AFDIAN_API_TOKEN", "AFDIAN_API_KEY")
+	overrideString(&cfg.Afdian.APIBaseURL, "AFDIAN_API_BASE_URL")
+	if err := overrideInt(&cfg.Afdian.RequestTimeoutSecond, "AFDIAN_REQUEST_TIMEOUT_SECONDS"); err != nil {
+		return err
+	}
+
 	overrideString(&cfg.UserSystem.DBType, "HARUKI_DB_TYPE")
 	overrideString(&cfg.UserSystem.DBURL, "HARUKI_DB_URL")
 	overrideString(&cfg.UserSystem.CloudflareSecret, "CLOUDFLARE_SECRET")

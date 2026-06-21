@@ -5,12 +5,12 @@ package postgresql
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 )
 
 // RiskEvent is the model entity for the RiskEvent schema.

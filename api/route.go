@@ -6,6 +6,7 @@ import (
 	adminGameBindingsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admingamebindings"
 	adminOAuthModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminoauth"
 	adminRiskModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminrisk"
+	adminSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminsponsor"
 	adminStatsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminstats"
 	adminSyslogModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminsyslog"
 	adminTicketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admintickets"
@@ -16,6 +17,7 @@ import (
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	publicModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/public"
+	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	subscriptionModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/subscription"
 	uploadModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/upload"
 	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
@@ -36,6 +38,7 @@ import (
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	miscModule.RegisterMiscRoutes(apiHelper)
+	sponsorModule.RegisterSponsorRoutes(apiHelper)
 	registerAdminRoutes(apiHelper)
 	registerUserRoutes(apiHelper)
 	harukiBotNeoModule.RegisterHarukiBotNeoRoutes(apiHelper)
@@ -54,6 +57,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 	adminGameBindingsModule.RegisterAdminGlobalGameAccountBindingRoutes(apiHelper)
 	adminOAuthModule.RegisterAdminOAuthClientRoutes(apiHelper)
 	adminRiskModule.RegisterAdminRiskRoutes(apiHelper)
+	adminSponsorModule.RegisterAdminSponsorRoutes(apiHelper)
 	adminSyslogModule.RegisterAdminSystemLogRoutes(apiHelper)
 	adminStatsModule.RegisterAdminStatisticsRoutes(apiHelper)
 	adminTicketsModule.RegisterAdminTicketRoutes(apiHelper)

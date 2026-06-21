@@ -35,6 +35,10 @@ func defaultConfig() Config {
 		Webhook: WebhookConfig{
 			Enabled: true,
 		},
+		Afdian: AfdianConfig{
+			APIBaseURL:           "https://afdian.com/api/open",
+			RequestTimeoutSecond: 10,
+		},
 		Subscription: SubscriptionConfig{
 			UserAgent:            "Haruki-Toolbox-Backend",
 			RequestTimeoutSecond: 5,
@@ -93,6 +97,12 @@ func normalizeConfigDefaults(cfg *Config) error {
 	}
 	if cfg.Subscription.RequestTimeoutSecond <= 0 {
 		cfg.Subscription.RequestTimeoutSecond = 5
+	}
+	if strings.TrimSpace(cfg.Afdian.APIBaseURL) == "" {
+		cfg.Afdian.APIBaseURL = "https://afdian.com/api/open"
+	}
+	if cfg.Afdian.RequestTimeoutSecond <= 0 {
+		cfg.Afdian.RequestTimeoutSecond = 10
 	}
 
 	return nil

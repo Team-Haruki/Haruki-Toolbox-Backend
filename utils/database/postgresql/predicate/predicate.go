@@ -39,6 +39,9 @@ type RiskRule func(*sql.Selector)
 // SocialPlatformInfo is the predicate function for socialplatforminfo builders.
 type SocialPlatformInfo func(*sql.Selector)
 
+// Sponsor is the predicate function for sponsor builders.
+type Sponsor func(*sql.Selector)
+
 // SystemLog is the predicate function for systemlog builders.
 type SystemLog func(*sql.Selector)
 

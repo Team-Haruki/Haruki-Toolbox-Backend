@@ -6,6 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
+
+	"entgo.io/ent"
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
@@ -17,6 +23,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -24,12 +31,6 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
-	"reflect"
-	"sync"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -101,6 +102,7 @@ func checkColumn(t, c string) error {
 			riskevent.Table:                   riskevent.ValidColumn,
 			riskrule.Table:                    riskrule.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,
+			sponsor.Table:                     sponsor.ValidColumn,
 			systemlog.Table:                   systemlog.ValidColumn,
 			ticket.Table:                      ticket.ValidColumn,
 			ticketmessage.Table:               ticketmessage.ValidColumn,

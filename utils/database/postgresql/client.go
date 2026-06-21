@@ -11,6 +11,10 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/migrate"
 
+	"entgo.io/ent"
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
@@ -22,6 +26,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -29,11 +34,6 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect"
-	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // Client is the client that holds all ent builders.
@@ -63,6 +63,8 @@ type Client struct {
 	RiskRule *RiskRuleClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
+	// Sponsor is the client for interacting with the Sponsor builders.
+	Sponsor *SponsorClient
 	// SystemLog is the client for interacting with the SystemLog builders.
 	SystemLog *SystemLogClient
 	// Ticket is the client for interacting with the Ticket builders.
@@ -99,6 +101,7 @@ func (c *Client) init() {
 	c.RiskEvent = NewRiskEventClient(c.config)
 	c.RiskRule = NewRiskRuleClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
+	c.Sponsor = NewSponsorClient(c.config)
 	c.SystemLog = NewSystemLogClient(c.config)
 	c.Ticket = NewTicketClient(c.config)
 	c.TicketMessage = NewTicketMessageClient(c.config)
@@ -209,6 +212,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		Sponsor:                     NewSponsorClient(cfg),
 		SystemLog:                   NewSystemLogClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
 		TicketMessage:               NewTicketMessageClient(cfg),
@@ -246,6 +250,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
+		Sponsor:                     NewSponsorClient(cfg),
 		SystemLog:                   NewSystemLogClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
 		TicketMessage:               NewTicketMessageClient(cfg),
@@ -285,8 +290,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding,
 		c.GameAccountDataGrant, c.Group, c.GroupList, c.IOSScriptCode,
 		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
-		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
-		c.WebhookSubscription,
+		c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User,
+		c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -299,8 +304,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding,
 		c.GameAccountDataGrant, c.Group, c.GroupList, c.IOSScriptCode,
 		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
-		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
-		c.WebhookSubscription,
+		c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User,
+		c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -331,6 +336,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.RiskRule.mutate(ctx, m)
 	case *SocialPlatformInfoMutation:
 		return c.SocialPlatformInfo.mutate(ctx, m)
+	case *SponsorMutation:
+		return c.Sponsor.mutate(ctx, m)
 	case *SystemLogMutation:
 		return c.SystemLog.mutate(ctx, m)
 	case *TicketMutation:
@@ -1941,6 +1948,139 @@ func (c *SocialPlatformInfoClient) mutate(ctx context.Context, m *SocialPlatform
 	}
 }
 
+// SponsorClient is a client for the Sponsor schema.
+type SponsorClient struct {
+	config
+}
+
+// NewSponsorClient returns a client for the Sponsor from the given config.
+func NewSponsorClient(c config) *SponsorClient {
+	return &SponsorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sponsor.Hooks(f(g(h())))`.
+func (c *SponsorClient) Use(hooks ...Hook) {
+	c.hooks.Sponsor = append(c.hooks.Sponsor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sponsor.Intercept(f(g(h())))`.
+func (c *SponsorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Sponsor = append(c.inters.Sponsor, interceptors...)
+}
+
+// Create returns a builder for creating a Sponsor entity.
+func (c *SponsorClient) Create() *SponsorCreate {
+	mutation := newSponsorMutation(c.config, OpCreate)
+	return &SponsorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Sponsor entities.
+func (c *SponsorClient) CreateBulk(builders ...*SponsorCreate) *SponsorCreateBulk {
+	return &SponsorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SponsorClient) MapCreateBulk(slice any, setFunc func(*SponsorCreate, int)) *SponsorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SponsorCreateBulk{err: fmt.Errorf("calling to SponsorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SponsorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SponsorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Sponsor.
+func (c *SponsorClient) Update() *SponsorUpdate {
+	mutation := newSponsorMutation(c.config, OpUpdate)
+	return &SponsorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SponsorClient) UpdateOne(_m *Sponsor) *SponsorUpdateOne {
+	mutation := newSponsorMutation(c.config, OpUpdateOne, withSponsor(_m))
+	return &SponsorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SponsorClient) UpdateOneID(id string) *SponsorUpdateOne {
+	mutation := newSponsorMutation(c.config, OpUpdateOne, withSponsorID(id))
+	return &SponsorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Sponsor.
+func (c *SponsorClient) Delete() *SponsorDelete {
+	mutation := newSponsorMutation(c.config, OpDelete)
+	return &SponsorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SponsorClient) DeleteOne(_m *Sponsor) *SponsorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SponsorClient) DeleteOneID(id string) *SponsorDeleteOne {
+	builder := c.Delete().Where(sponsor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SponsorDeleteOne{builder}
+}
+
+// Query returns a query builder for Sponsor.
+func (c *SponsorClient) Query() *SponsorQuery {
+	return &SponsorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSponsor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Sponsor entity by its id.
+func (c *SponsorClient) Get(ctx context.Context, id string) (*Sponsor, error) {
+	return c.Query().Where(sponsor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SponsorClient) GetX(ctx context.Context, id string) *Sponsor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SponsorClient) Hooks() []Hook {
+	return c.hooks.Sponsor
+}
+
+// Interceptors returns the client interceptors.
+func (c *SponsorClient) Interceptors() []Interceptor {
+	return c.inters.Sponsor
+}
+
+func (c *SponsorClient) mutate(ctx context.Context, m *SponsorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SponsorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SponsorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SponsorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SponsorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown Sponsor mutation op: %q", m.Op())
+	}
+}
+
 // SystemLogClient is a client for the SystemLog schema.
 type SystemLogClient struct {
 	config
@@ -3037,14 +3177,14 @@ type (
 	hooks struct {
 		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
-		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo,
+		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
 		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
 		WebhookSubscription []ent.Hook
 	}
 	inters struct {
 		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
-		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo,
+		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
 		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
 		WebhookSubscription []ent.Interceptor
 	}
