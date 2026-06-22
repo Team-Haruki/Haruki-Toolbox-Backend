@@ -82,6 +82,11 @@ backend:
   shutdown_timeout_seconds: 10
   log_level: "INFO"
   main_log_file: "main.log"
+  # NOTE: this whole config file is env-interpolated (${VAR}) before YAML parsing.
+  # The Fiber access-log tags below (${time}, ${status}, ${latency}, ${method},
+  # ${path}) are preserved as-is UNLESS an environment variable of the same name
+  # is set, in which case it would be substituted and corrupt the log format.
+  # Do not set lowercase env vars that collide with these tag names.
   access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"
   access_log_path: "access.log"
   enable_trust_proxy: true

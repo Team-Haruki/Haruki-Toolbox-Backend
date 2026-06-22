@@ -28,6 +28,8 @@ Webhook token 用于访问以下受保护接口：
 X-Haruki-Suite-Webhook-Token: <token>
 ```
 
+> **token 的有效期与吊销**：webhook token 本身不带过期时间（无 `exp`），其有效性由服务端在每次请求时对绑定的 `_id` + credential 做数据库校验决定。因此**吊销方式是轮换 credential**——一旦 credential 变更或删除，旧 token 立即失效。请妥善保管 token；如需作废，更新对应的 credential 即可。
+
 ## 3. 查询当前订阅者
 
 `GET /api/webhook/subscribers`
