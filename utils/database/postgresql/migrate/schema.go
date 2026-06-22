@@ -75,7 +75,7 @@ var (
 				Symbol:     "game_account_bindings_users_game_account_bindings",
 				Columns:    []*schema.Column{GameAccountBindingsColumns[6]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
@@ -108,13 +108,13 @@ var (
 				Symbol:     "game_account_data_grants_users_game_account_data_grants_owned",
 				Columns:    []*schema.Column{GameAccountDataGrantsColumns[7]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "game_account_data_grants_users_game_account_data_grants_received",
 				Columns:    []*schema.Column{GameAccountDataGrantsColumns[8]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 		Indexes: []*schema.Index{
