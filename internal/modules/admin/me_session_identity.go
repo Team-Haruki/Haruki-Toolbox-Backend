@@ -76,7 +76,7 @@ func resolveCurrentAuthProxySessionMarker(c fiber.Ctx, apiHelper *harukiAPIHelpe
 	if trustedHeader == "" || trustedValue == "" {
 		return "", nil
 	}
-	if strings.TrimSpace(c.Get(trustedHeader)) != trustedValue {
+	if !apiHelper.SessionHandler.AuthProxyTrustedValueMatches(c.Get(trustedHeader)) {
 		return "", nil
 	}
 

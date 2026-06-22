@@ -98,7 +98,7 @@ func extractEmailFromTraitValue(value any) string {
 	return ""
 }
 
-func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID string, email string) (string, error) {
+func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID string, email string, emailVerified bool) (string, error) {
 	if s.KratosIdentityResolver != nil {
 		return s.KratosIdentityResolver(ctx, identityID, email)
 	}
@@ -124,6 +124,15 @@ func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID s
 
 	if email == "" {
 		return "", fmt.Errorf("%w: identity email is empty", errKratosIdentityUnmapped)
+	}
+
+	// Linking or provisioning by email is authorization-relevant: a Kratos identity
+	// bearing an arbitrary unverified email must not bind to (or create) a toolbox
+	// account, or an attacker who registers an unverified-email identity could take
+	// over a victim's existing account that shares the address. Identity-ID matches
+	// above are already-linked accounts and are unaffected.
+	if !emailVerified {
+		return "", fmt.Errorf("%w: kratos email is not verified", errKratosIdentityUnmapped)
 	}
 
 	targetUser, err := s.DBClient.User.Query().

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"strconv"
@@ -9,6 +10,18 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+// AuthProxyTrustedValueMatches reports whether the provided trusted-header value
+// matches the configured auth-proxy secret, using a constant-time comparison.
+// This secret is the sole gate on trusted-header identity forging, so the check
+// must not leak timing information about how many leading bytes matched.
+func (s *SessionHandler) AuthProxyTrustedValueMatches(provided string) bool {
+	expected := strings.TrimSpace(s.AuthProxyTrustedValue)
+	if expected == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(provided)), []byte(expected)) == 1
+}
 
 func parseAuthProxyBooleanHeader(raw string) *bool {
 	value := strings.TrimSpace(raw)
@@ -26,7 +39,7 @@ func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx
 	if !s.UsesAuthProxy() {
 		return "", "", nil, nil, false, nil
 	}
-	if strings.TrimSpace(c.Get(s.AuthProxyTrustedHeader)) != strings.TrimSpace(s.AuthProxyTrustedValue) {
+	if !s.AuthProxyTrustedValueMatches(c.Get(s.AuthProxyTrustedHeader)) {
 		return "", "", nil, nil, false, nil
 	}
 
@@ -43,7 +56,7 @@ func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx
 		if identityID == "" {
 			return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
 		}
-		resolvedUserID, err := s.resolveKratosIdentity(ctx, identityID, email)
+		resolvedUserID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
 		if err != nil {
 			return "", "", displayNamePtr, emailVerified, true, err
 		}

@@ -102,7 +102,8 @@ func (s *SessionHandler) ResetKratosPasswordByRecoveryCode(ctx context.Context, 
 		return "", "", fmt.Errorf("%w: empty identity id", errKratosIdentityUnmapped)
 	}
 	email := platformIdentity.NormalizeEmail(extractKratosIdentityEmail(whoami.Identity))
-	userID, err := s.resolveKratosIdentity(ctx, identityID, email)
+	emailVerified := extractKratosIdentityEmailVerification(whoami.Identity)
+	userID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
 	if err != nil {
 		return "", "", err
 	}
@@ -141,7 +142,7 @@ func (s *SessionHandler) resolveKratosSession(ctx context.Context, sessionToken 
 	}
 	email := platformIdentity.NormalizeEmail(extractKratosIdentityEmail(whoami.Identity))
 	emailVerified := extractKratosIdentityEmailVerification(whoami.Identity)
-	userID, err := s.resolveKratosIdentity(ctx, identityID, email)
+	userID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
 	if err != nil {
 		return nil, err
 	}
