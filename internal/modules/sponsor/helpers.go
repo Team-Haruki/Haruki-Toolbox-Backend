@@ -420,6 +420,10 @@ func parseAfdianSponsorItem(item map[string]any, now time.Time) (parsedAfdianSpo
 }
 
 func UpsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, incrementCount bool) (*postgresql.Sponsor, error) {
+	return upsertParsedSponsor(ctx, db, item, incrementCount, true)
+}
+
+func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, incrementCount bool, allowRetry bool) (*postgresql.Sponsor, error) {
 	existing, err := db.Sponsor.Query().Where(sponsorSchema.IDEQ(item.ID)).Only(ctx)
 	if err != nil && postgresql.IsNotFound(err) && item.OutTradeNo != "" {
 		existing, err = db.Sponsor.Query().Where(sponsorSchema.OutTradeNoEQ(item.OutTradeNo)).Only(ctx)
@@ -438,14 +442,26 @@ func UpsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 			SetSupportCount(maxInt(item.SupportCount, 1)).
 			SetRaw(item.Raw)
 		setSponsorCreateFields(create, item)
-		return create.Save(ctx)
+		saved, createErr := create.Save(ctx)
+		if createErr != nil && allowRetry && postgresql.IsConstraintError(createErr) {
+			// A concurrent sync/webhook created the same record between our lookup
+			// and insert; re-resolve and fall through to the update path.
+			return upsertParsedSponsor(ctx, db, item, incrementCount, false)
+		}
+		return saved, createErr
+	}
+
+	// An admin can pin a sponsor with afdian_sync_disabled so neither the periodic
+	// sync nor webhooks overwrite it. Leave the record completely untouched.
+	if existing.AfdianSyncDisabled {
+		return existing, nil
 	}
 
 	update := existing.Update().
 		SetIsActive(item.IsActive).
 		SetPlanRank(item.PlanRank).
 		SetRaw(item.Raw)
-	setSponsorUpdateFields(update, item, existing.AfdianSyncDisabled)
+	setSponsorUpdateFields(update, item)
 	if incrementCount && item.OutTradeNo != "" && item.OutTradeNo != stringPtrValue(existing.OutTradeNo) {
 		update.SetSupportCount(existing.SupportCount + 1)
 	} else if item.SupportCount > 0 {
@@ -468,16 +484,13 @@ func setSponsorCreateFields(create *postgresql.SponsorCreate, item parsedAfdianS
 	create.SetNillableTotalAmount(stringPointerOrNil(trimLimit(item.TotalAmount, 32)))
 }
 
-func setSponsorUpdateFields(update *postgresql.SponsorUpdateOne, item parsedAfdianSponsor, keepManualProfile bool) {
+func setSponsorUpdateFields(update *postgresql.SponsorUpdateOne, item parsedAfdianSponsor) {
 	update.SetNillableAfdianUserID(stringPointerOrNil(trimLimit(item.AfdianUserID, 128)))
 	update.SetNillableOutTradeNo(stringPointerOrNil(trimLimit(item.OutTradeNo, 128)))
 	update.SetNillablePaidAt(item.PaidAt)
 	update.SetNillablePlanExpiresAt(item.PlanExpiresAt)
 	update.SetNillableTotalAmount(stringPointerOrNil(trimLimit(item.TotalAmount, 32)))
 	update.SetNillablePlanPayMonths(item.PlanPayMonths)
-	if keepManualProfile {
-		return
-	}
 	update.SetSource(sponsorSchema.Source(item.Source))
 	update.SetNillableName(stringPointerOrNil(trimLimit(item.Name, 128)))
 	update.SetNillableAvatar(stringPointerOrNil(trimLimit(item.Avatar, 500)))

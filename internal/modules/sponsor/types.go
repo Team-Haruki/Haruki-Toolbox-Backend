@@ -9,14 +9,14 @@ type SponsorItem struct {
 	Plan               *SponsorPlan `json:"plan,omitempty"`
 	PlanID             string       `json:"planId,omitempty"`
 	PlanName           string       `json:"planName"`
-	PlanPrice          *float64     `json:"planPrice,omitempty"`
-	PlanRank           int          `json:"planRank,omitempty"`
+	PlanPrice          *float64     `json:"-"`
+	PlanRank           int          `json:"-"`
 	PlanPayMonths      *int         `json:"planPayMonths,omitempty"`
 	Message            string       `json:"message,omitempty"`
 	Source             string       `json:"source"`
 	IsActive           bool         `json:"isActive"`
 	AfdianSyncDisabled bool         `json:"afdianSyncDisabled,omitempty"`
-	TotalAmount        *float64     `json:"totalAmount,omitempty"`
+	TotalAmount        *float64     `json:"-"`
 	Month              *int         `json:"month,omitempty"`
 	PaidAt             *time.Time   `json:"paidAt,omitempty"`
 	PlanExpiresAt      *time.Time   `json:"planExpiresAt,omitempty"`
@@ -27,7 +27,7 @@ type SponsorPlan struct {
 	ID        string     `json:"id,omitempty"`
 	Name      string     `json:"name"`
 	Title     string     `json:"title"`
-	Rank      int        `json:"rank,omitempty"`
+	Rank      int        `json:"-"`
 	PayMonth  *int       `json:"payMonth,omitempty"`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 }

@@ -2,6 +2,7 @@ package sponsor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -131,6 +132,100 @@ func TestUpsertParsedSponsorIncrementsSupportCountForNewOrders(t *testing.T) {
 	}
 	if row.OutTradeNo == nil || *row.OutTradeNo != "order-2" {
 		t.Fatalf("out trade no = %#v, want latest order", row.OutTradeNo)
+	}
+}
+
+func TestUpsertParsedSponsorSkipsSyncDisabledRecords(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", uniqueSponsorSQLiteDSN(t))
+	defer client.Close()
+
+	now := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	order, ok := parseAfdianOrder(map[string]any{
+		"out_trade_no": "order-1",
+		"user_id":      "pinned-user",
+		"plan_id":      "monthly-plan",
+		"month":        float64(1),
+		"total_amount": "5.00",
+		"status":       float64(2),
+		"create_time":  float64(now.Unix()),
+	}, now)
+	if !ok {
+		t.Fatalf("expected order to parse")
+	}
+	created, err := UpsertParsedSponsor(ctx, client, order, true)
+	if err != nil {
+		t.Fatalf("upsert order: %v", err)
+	}
+
+	// Admin pins the record and rewrites the display name.
+	if _, err := created.Update().SetAfdianSyncDisabled(true).SetName("管理员手动名").SetIsActive(false).Save(ctx); err != nil {
+		t.Fatalf("pin sponsor: %v", err)
+	}
+
+	// A later sync/webhook for the same user must not touch the pinned record.
+	order.Name = "爱发电同步名"
+	order.IsActive = true
+	row, err := UpsertParsedSponsor(ctx, client, order, true)
+	if err != nil {
+		t.Fatalf("re-upsert pinned order: %v", err)
+	}
+	if row.Name == nil || *row.Name != "管理员手动名" {
+		t.Fatalf("name = %#v, want manual name preserved", row.Name)
+	}
+	if row.IsActive {
+		t.Fatalf("is_active = true, want manual value preserved")
+	}
+	if row.SupportCount != 1 {
+		t.Fatalf("support count = %d, want 1 (no increment for pinned record)", row.SupportCount)
+	}
+}
+
+func TestSponsorPageResponseHidesPaymentAmount(t *testing.T) {
+	now := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	amount := "30.00"
+	row := &postgresql.Sponsor{
+		ID:           "amount-leak",
+		Name:         stringPointerOrNil("赞助者"),
+		PlanName:     stringPointerOrNil("月度赞助"),
+		Source:       sponsorSchema.SourceAfdian,
+		IsActive:     true,
+		PlanRank:     3000,
+		TotalAmount:  &amount,
+		SupportCount: 1,
+	}
+
+	resp := BuildSponsorPageResponse([]*postgresql.Sponsor{row}, now)
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+
+	var decoded struct {
+		Supporters []map[string]json.RawMessage `json:"supporters"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if len(decoded.Supporters) != 1 {
+		t.Fatalf("supporters = %d, want 1", len(decoded.Supporters))
+	}
+	for _, key := range []string{"totalAmount", "planPrice", "planRank", "rank"} {
+		if _, ok := decoded.Supporters[0][key]; ok {
+			t.Fatalf("public supporter leaks payment field %q: %s", key, encoded)
+		}
+	}
+
+	var plan struct {
+		Rank *int `json:"rank"`
+	}
+	if raw, ok := decoded.Supporters[0]["plan"]; ok {
+		if err := json.Unmarshal(raw, &plan); err != nil {
+			t.Fatalf("unmarshal plan: %v", err)
+		}
+		if plan.Rank != nil {
+			t.Fatalf("nested plan still exposes rank: %s", encoded)
+		}
 	}
 }
 
