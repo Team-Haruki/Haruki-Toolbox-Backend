@@ -1,6 +1,7 @@
 package usergamebindings
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,8 +19,8 @@ var (
 	errGameAccountProfileInvalid       = errors.New("invalid game account profile response")
 )
 
-func verifyGameAccountOwnership(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
-	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, serverStr)
+func verifyGameAccountOwnership(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
+	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(ctx, gameUserIDStr, serverStr)
 	if err != nil {
 		return fmt.Errorf("%w: %v", errGameAccountProfileRequestFailed, err)
 	}

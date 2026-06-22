@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"regexp"
@@ -128,7 +129,9 @@ func (h *DataHandler) validateOtherServerImagePath(
 }
 
 func (h *DataHandler) verifyGameAccountExists(uid string, server utils.SupportedDataUploadServer) error {
-	resultInfo, _, err := h.SekaiAPIClient.GetUserProfile(uid, string(server))
+	// This runs deep in the synchronous upload-preprocess chain which carries no
+	// context; the Sekai API client's request timeout bounds the call.
+	resultInfo, _, err := h.SekaiAPIClient.GetUserProfile(context.Background(), uid, string(server))
 	if resultInfo == nil {
 		if err != nil {
 			return err

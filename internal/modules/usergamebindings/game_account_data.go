@@ -112,7 +112,7 @@ func sendOwnedGameAccountProfile(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 		return harukiAPIHelper.ErrorInternal(c, "profile service unavailable")
 	}
 
-	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(gameUserIDStr, string(server))
+	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(c.Context(), gameUserIDStr, string(server))
 	if err != nil {
 		if resultInfo != nil {
 			if !resultInfo.ServerAvailable {

@@ -1,13 +1,18 @@
 package sekaiapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/go-resty/resty/v2"
 )
+
+const sekaiAPIRequestTimeout = 15 * time.Second
 
 type HarukiSekaiAPIClient struct {
 	httpClient             *resty.Client
@@ -23,19 +28,20 @@ type HarukiSekaiAPIResult struct {
 
 func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient {
 	return &HarukiSekaiAPIClient{
-		httpClient:             resty.New(),
+		httpClient:             resty.New().SetTimeout(sekaiAPIRequestTimeout),
 		harukiSekaiAPIEndpoint: apiEndpoint,
 		harukiSekaiAPIToken:    apiToken,
 	}
 }
 
-func (c *HarukiSekaiAPIClient) GetUserProfile(userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, error) {
+func (c *HarukiSekaiAPIClient) GetUserProfile(ctx context.Context, userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, error) {
 	_, err := utils.ParseSupportedDataUploadServer(serverStr)
 	if err != nil {
 		return nil, nil, err
 	}
 	url := fmt.Sprintf("%s/api/%s/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
 	resp, err := c.httpClient.R().
+		SetContext(ctx).
 		SetHeader("X-Haruki-Sekai-Token", c.harukiSekaiAPIToken).
 		SetHeader("Accept", "application/json").
 		Get(url)

@@ -132,7 +132,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] verification code found, proceeding to Sekai API verification")
 
-		if err := verifyGameAccountOwnership(apiHelper, gameUserIDStr, serverStr, code); err != nil {
+		if err := verifyGameAccountOwnership(ctx, apiHelper, gameUserIDStr, serverStr, code); err != nil {
 			if shouldIncrementGameAccountVerificationAttempt(err) {
 				if attemptErr := incrementGameAccountVerificationAttempt(ctx, apiHelper, userID, serverStr, gameUserIDStr); attemptErr != nil {
 					harukiLogger.Errorf("Failed to increment game account verification attempt: %v", attemptErr)
