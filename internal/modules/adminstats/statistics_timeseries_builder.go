@@ -8,8 +8,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func buildStatisticsTimeseries(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string) (*statisticsTimeseriesResponse, error) {
-	points := initializeTimeseriesPoints(from, to, bucket)
+func buildStatisticsTimeseries(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket, tz string, loc *time.Location) (*statisticsTimeseriesResponse, error) {
+	points := initializeTimeseriesPoints(from, to, bucket, loc)
 
 	db := apiHelper.DBManager.DB
 	var (
@@ -18,20 +18,20 @@ func buildStatisticsTimeseries(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 		err                error
 	)
 	if sqlDB := db.SQLDB(); sqlDB != nil {
-		registrationCounts, err = queryRegistrationCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket)
+		registrationCounts, err = queryRegistrationCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket, tz)
 		if err != nil {
 			return nil, err
 		}
-		uploadCounts, err = queryUploadCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket)
+		uploadCounts, err = queryUploadCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket, tz)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		registrationCounts, err = queryRegistrationCountsFallback(ctx, apiHelper, from, to, bucket)
+		registrationCounts, err = queryRegistrationCountsFallback(ctx, apiHelper, from, to, bucket, loc)
 		if err != nil {
 			return nil, err
 		}
-		uploadCounts, err = queryUploadCountsFallback(ctx, apiHelper, from, to, bucket)
+		uploadCounts, err = queryUploadCountsFallback(ctx, apiHelper, from, to, bucket, loc)
 		if err != nil {
 			return nil, err
 		}
@@ -54,6 +54,7 @@ func buildStatisticsTimeseries(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 		From:        from.UTC(),
 		To:          to.UTC(),
 		Bucket:      bucket,
+		Timezone:    tz,
 		Points:      points,
 	}
 	return resp, nil

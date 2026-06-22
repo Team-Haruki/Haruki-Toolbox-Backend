@@ -59,6 +59,7 @@ type statisticsTimeseriesResponse struct {
 	From        time.Time                   `json:"from"`
 	To          time.Time                   `json:"to"`
 	Bucket      string                      `json:"bucket"`
+	Timezone    string                      `json:"timezone"`
 	Points      []statisticsTimeseriesPoint `json:"points"`
 }
 

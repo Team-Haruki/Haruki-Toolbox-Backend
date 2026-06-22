@@ -6,6 +6,10 @@ const (
 )
 
 const (
-	timeseriesBucketHour = "hour"
-	timeseriesBucketDay  = "day"
+	timeseriesBucketHour  = "hour"
+	timeseriesBucketDay   = "day"
+	timeseriesBucketWeek  = "week"
+	timeseriesBucketMonth = "month"
 )
+
+const defaultStatisticsTimezone = "UTC"
