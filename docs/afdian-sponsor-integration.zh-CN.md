@@ -65,3 +65,23 @@ https://<域名>/api/sponsor/afdian/callback/<webhook_secret>
 | `/api/admin/sponsors/sync/afdian` | POST | 超级管理员 | 手动触发一次 API 同步 |
 
 Oathkeeper 公开规则见 `external/oathkeeper/access-rules.yml` 中的 `haruki-public-afdian-sponsor-*`。
+
+## 5. 部署 checklist
+
+最小可用配置：填 `AFDIAN_USER_ID` + `AFDIAN_API_TOKEN` + `AFDIAN_WEBHOOK_SECRET`，在爱发电后台用带密钥的 Webhook URL，部署好 Oathkeeper 规则，开 AutoMigrate 建表即可。逐项：
+
+1. **配置项**：按第 1 节填好 `afdian` 段 / 环境变量。注意 `api_base_url` 要和账号区域一致——国内 `https://afdian.com/api/open`，国际 `afdian.net`/`ifdian.net`（`.env.example` 默认写的是 `.net`，别和账号对不上）。
+
+2. **爱发电后台 Webhook URL（最易踩）**：若设了 `webhook_secret`，后台 Webhook URL 必须把密钥拼进路径：
+   ```
+   https://<公网域名>/api/sponsor/afdian/callback/<webhook_secret>
+   ```
+   缺密钥的请求会被「密钥不符」拒绝（仍回 `{"ec":200}` 避免重试，但不入库）。域名指向你的 Oathkeeper 公网入口。
+
+3. **fail-closed 行为**：`webhook_secret` 与 API 凭据（`user_id`+`api_token`）**两者都为空时，回调拒绝一切、不落库**。至少配一个，建议两个都配（URL 密钥 + API 反查双保险）。回调另有 60 次/分/IP 限流。
+
+4. **数据库迁移**：新增 `sponsors` 表（`Sponsor` ent schema）。开 `AutoMigrate` 时首次启动自动建表；关了则需手动建表后再启动。
+
+5. **Oathkeeper 规则**：随后端一起部署更新后的 `external/oathkeeper/access-rules.yml`（含 `/api/misc/sponsors`、`/api/sponsor/afdian`、`/api/sponsor/afdian/callback[/<secret>]` 三条公开规则），否则赞助墙与回调路由不到。
+
+6. **行为提醒**：公开响应不含付费金额（仅等级/名字/留言）；管理端 `afdian_sync_disabled` 开启后该条完全不被同步/webhook 覆盖（便于钉住手动编辑）。
