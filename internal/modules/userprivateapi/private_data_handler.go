@@ -9,12 +9,10 @@ import (
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
-	"golang.org/x/sync/errgroup"
 )
 
 func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -40,52 +38,29 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiApiHelper.ErrorBadRequest(c, "invalid user_id")
 		}
-		var (
-			mu                 sync.Mutex
-			gameAccountBinding *postgresql.GameAccountBinding
-			authorized         bool
-		)
-		g, gCtx := errgroup.WithContext(ctx)
-		g.Go(func() error {
-			binding, qErr := apiHelper.DBManager.DB.GameAccountBinding.Query().
-				Where(
-					gameaccountbinding.ServerEQ(string(server)),
-					gameaccountbinding.GameUserIDEQ(userIDStr),
-					gameaccountbinding.VerifiedEQ(true),
-				).
-				WithUser(func(query *postgresql.UserQuery) {
-					query.WithSocialPlatformInfo()
-				}).
-				Only(gCtx)
-			mu.Lock()
-			gameAccountBinding = binding
-			mu.Unlock()
-			return qErr
-		})
-		g.Go(func() error {
-			exists, qErr := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
-				Where(
-					authorizesocialplatforminfo.PlatformEQ(platform),
-					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
-				).
-				Exist(gCtx)
-			mu.Lock()
-			authorized = exists
-			mu.Unlock()
-			return qErr
-		})
-		if waitErr := g.Wait(); waitErr != nil {
-			if gameAccountBinding == nil {
-				if lookupErr := mapPrivateGameAccountLookupError(waitErr); lookupErr != nil {
-					if lookupErr.Code == fiber.StatusNotFound {
-						return harukiApiHelper.ErrorNotFound(c, lookupErr.Message)
-					}
-					harukiLogger.Errorf("Failed to query game account binding (server=%s,user_id=%s): %v", server, userIDStr, waitErr)
-					return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
+		// Resolve the data owner from the verified binding first; the authorization
+		// check below must be scoped to that owner, so the two queries cannot run
+		// concurrently.
+		gameAccountBinding, bindingErr := apiHelper.DBManager.DB.GameAccountBinding.Query().
+			Where(
+				gameaccountbinding.ServerEQ(string(server)),
+				gameaccountbinding.GameUserIDEQ(userIDStr),
+				gameaccountbinding.VerifiedEQ(true),
+			).
+			WithUser(func(query *postgresql.UserQuery) {
+				query.WithSocialPlatformInfo()
+			}).
+			Only(ctx)
+		if bindingErr != nil {
+			if lookupErr := mapPrivateGameAccountLookupError(bindingErr); lookupErr != nil {
+				if lookupErr.Code == fiber.StatusNotFound {
+					return harukiApiHelper.ErrorNotFound(c, lookupErr.Message)
 				}
+				harukiLogger.Errorf("Failed to query game account binding (server=%s,user_id=%s): %v", server, userIDStr, bindingErr)
+				return harukiApiHelper.ErrorInternal(c, lookupErr.Message)
 			}
-			harukiLogger.Errorf("Failed to verify private api authorization (platform=%s,platform_user_id=%s): %v", platform, platformUserID, waitErr)
-			return harukiApiHelper.ErrorInternal(c, "failed to verify authorization")
+			harukiLogger.Errorf("Failed to query game account binding (server=%s,user_id=%s): %v", server, userIDStr, bindingErr)
+			return harukiApiHelper.ErrorInternal(c, "failed to query game account binding")
 		}
 
 		if ownerErr := mapPrivateBindingOwnerError(gameAccountBinding); ownerErr != nil {
@@ -100,12 +75,28 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			}
 		}
 		dbUser := gameAccountBinding.Edges.User
+
+		// The requester is authorized if either: they are the owner's own bound
+		// social account, or the owner granted fast-verification to this platform
+		// account. Both must be scoped to the resolved owner (dbUser.ID); querying
+		// the authorize table without the owner constraint is a cross-user IDOR.
+		authorized := dbUser.Edges.SocialPlatformInfo != nil &&
+			dbUser.Edges.SocialPlatformInfo.Platform == platform &&
+			dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID
 		if !authorized {
-			if dbUser.Edges.SocialPlatformInfo != nil &&
-				dbUser.Edges.SocialPlatformInfo.Platform == platform &&
-				dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID {
-				authorized = true
+			exists, authErr := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
+				Where(
+					authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
+					authorizesocialplatforminfo.PlatformEQ(platform),
+					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
+					authorizesocialplatforminfo.AllowFastVerificationEQ(true),
+				).
+				Exist(ctx)
+			if authErr != nil {
+				harukiLogger.Errorf("Failed to verify private api authorization (platform=%s,platform_user_id=%s): %v", platform, platformUserID, authErr)
+				return harukiApiHelper.ErrorInternal(c, "failed to verify authorization")
 			}
+			authorized = exists
 		}
 		if !authorized {
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
