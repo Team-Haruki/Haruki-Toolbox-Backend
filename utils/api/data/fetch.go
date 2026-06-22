@@ -111,6 +111,13 @@ func HandleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxR
 	var keys []string
 	if requestKey != "" {
 		keys = strings.Split(requestKey, ",")
+		for _, key := range keys {
+			// Reject keys Mongo would treat as a dotted projection path or operator,
+			// so a caller cannot probe nested document structure.
+			if strings.TrimSpace(key) == "" || strings.ContainsAny(key, ".$") {
+				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
+			}
+		}
 	}
 
 	projection := buildMysekaiProjection(keys)

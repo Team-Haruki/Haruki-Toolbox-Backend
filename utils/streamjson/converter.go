@@ -5,9 +5,17 @@ import (
 	"fmt"
 	"io"
 	"math"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
 )
 
 func Convert(msgpackData []byte, w io.Writer) error {
+	// Self-defend against deeply-nested input: the recursive writer below has no
+	// internal depth limit, so validate structure/depth up front regardless of
+	// whether the caller already did.
+	if err := orderedmsgpack.ValidateMaxDepth(msgpackData, orderedmsgpack.DefaultMaxUploadDepth); err != nil {
+		return fmt.Errorf("streamjson: %w", err)
+	}
 	r := bytes.NewReader(msgpackData)
 	return writeValue(r, w)
 }

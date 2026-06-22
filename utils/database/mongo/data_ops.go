@@ -3,6 +3,9 @@ package manager
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -11,6 +14,30 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// validateNoMongoOperatorKeys rejects attacker-controlled field names that Mongo
+// would interpret as a dotted field path or an operator ($...). Upload payloads
+// are decrypted with the public game client key, so their keys are untrusted.
+func validateNoMongoOperatorKeys(value any) error {
+	switch v := value.(type) {
+	case map[string]any:
+		for k, val := range v {
+			if strings.HasPrefix(k, "$") || strings.Contains(k, ".") {
+				return fmt.Errorf("invalid field name %q", k)
+			}
+			if err := validateNoMongoOperatorKeys(val); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if err := validateNoMongoOperatorKeys(item); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (m *MongoDBManager) UpdateData(
 	ctx context.Context,
 	server string,
@@ -18,6 +45,10 @@ func (m *MongoDBManager) UpdateData(
 	data map[string]any,
 	dataType utils.UploadDataType,
 ) (*mongo.UpdateResult, error) {
+	if err := validateNoMongoOperatorKeys(data); err != nil {
+		harukiLogger.Warnf("Rejected upload with invalid field name for user %d: %v", userID, err)
+		return nil, err
+	}
 	collection := m.getCollectionByDataType(dataType)
 	var updateDoc bson.M
 
