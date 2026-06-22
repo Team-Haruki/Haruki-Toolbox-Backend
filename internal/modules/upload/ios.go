@@ -273,7 +273,7 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	for _, prefix := range []string{"/ios", "/api/ios"} {
 		api := apiHelper.Router.Group(prefix)
 
-		api.Post("/script/:upload_code/upload", handleIOSScriptUploadWithValidation(apiHelper, logger))
+		api.Post("/script/:upload_code/upload", proxyGuard, handleIOSScriptUploadWithValidation(apiHelper, logger))
 		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, logger))
 		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, logger))
 		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, logger))

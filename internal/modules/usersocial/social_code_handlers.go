@@ -35,24 +35,13 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
-		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
-			Where(socialplatforminfo.PlatformEQ(string(req.Platform)),
-				socialplatforminfo.PlatformUserID(req.UserID)).
-			Exist(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to query social platform info: %v", err)
-			reason = "query_social_platform_failed"
-			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
-		}
-		if exists {
-			reason = "social_platform_conflict"
-			return harukiAPIHelper.ErrorBadRequest(c, "binding already exists")
-		}
-
 		if !isSupportedSocialPlatform(req.Platform) {
 			reason = "unsupported_platform"
 			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
 		}
+		// Do not probe cross-account binding existence here: it let an authenticated
+		// user enumerate whether any (platform, user_id) is already bound. Uniqueness
+		// is enforced by the unique index and surfaced as a conflict at verify/commit.
 		code, err := userEmailModule.GenerateCode(false)
 		if err != nil {
 			harukiLogger.Errorf("Failed to generate code: %v", err)

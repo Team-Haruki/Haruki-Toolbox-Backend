@@ -47,7 +47,9 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 				harukiLogger.Errorf("Failed to query account binding: %v", err)
 				return harukiAPIHelper.ErrorInternal(c, "failed to query account binding")
 			}
-			return harukiAPIHelper.ErrorNotFound(c, "account binding not found")
+			// Identical body to the not-accessible case below so a caller cannot
+			// distinguish "no such binding" from "binding exists but not public".
+			return harukiAPIHelper.ErrorNotFound(c, "not found")
 		}
 		if !validatePublicAPIAccess(record, dataType) {
 			return harukiAPIHelper.ErrorNotFound(c, "not found")

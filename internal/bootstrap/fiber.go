@@ -24,6 +24,11 @@ func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 		TrustProxyConfig: fiber.TrustProxyConfig{
 			Proxies: cfg.Backend.TrustProxies,
 		},
+		// Validate the resolved client IP. Without this, a forwarded-header IP is
+		// returned verbatim, letting a client spoof c.IP() (used for rate-limit
+		// keys, audit logs, and upstream X-Forwarded-For). Deployments must also
+		// keep trusted_proxies scoped to the actual edge proxy, not broad ranges.
+		EnableIPValidation: true,
 	})
 
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
