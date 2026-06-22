@@ -23,6 +23,7 @@ const (
 	adminAuditActionUserBatchRole       = "admin.user.batch.role.update"
 	adminAuditActionUserBatchAllowCN    = "admin.user.batch.allow_cn_mysekai.update"
 	adminAuditActionUserActivityQuery   = "admin.user.activity.query"
+	adminAuditActionUserDetailQuery     = "admin.user.detail.query"
 	adminAuditActionUserOAuthList       = "admin.user.oauth.list"
 	adminAuditActionUserOAuthRevoke     = "admin.user.oauth.revoke"
 

@@ -101,6 +101,12 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.ErrorBadRequest(c, "target_user_id is required")
 		}
 
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserDetailQuery, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		dbUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
 			WithSocialPlatformInfo().
@@ -113,6 +119,17 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				return harukiAPIHelper.ErrorNotFound(c, "user not found")
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query user detail")
+		}
+
+		// The detail response includes the iOS upload code (a session-less bearer
+		// credential) and PII, so enforce the admin role hierarchy like the sibling
+		// activity endpoint — a plain admin must not read a super_admin's detail.
+		if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, dbUser.ID, string(dbUser.Role)); err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserDetailQuery, adminAuditTargetTypeUser, dbUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPermissionDenied, map[string]any{
+				"actorRole":  actorRole,
+				"targetRole": adminCoreModule.NormalizeRole(string(dbUser.Role)),
+			}))
+			return adminCoreModule.RespondFiberOrForbidden(c, err, "insufficient permissions")
 		}
 
 		activitySummary, err := queryAdminUserDetailActivitySummary(c, apiHelper, targetUserID, adminNow())
