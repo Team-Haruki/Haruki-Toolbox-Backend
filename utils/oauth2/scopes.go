@@ -16,27 +16,6 @@ var AllScopes = map[string]string{
 	ScopeGameDataWrite: "Upload game data on your behalf",
 }
 
-func ValidateScopes(requested []string, clientAllowed []string) ([]string, bool) {
-	allowedSet := make(map[string]struct{}, len(clientAllowed))
-	for _, s := range clientAllowed {
-		allowedSet[s] = struct{}{}
-	}
-	var validated []string
-	for _, s := range requested {
-		if _, ok := AllScopes[s]; !ok {
-			return nil, false
-		}
-		if _, ok := allowedSet[s]; !ok {
-			return nil, false
-		}
-		validated = append(validated, s)
-	}
-	if len(validated) == 0 {
-		return nil, false
-	}
-	return validated, true
-}
-
 func HasScope(scopes []string, required string) bool {
 	for _, s := range scopes {
 		if s == required {

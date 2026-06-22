@@ -1,16 +1,12 @@
 package userauth
 
 import (
-	"crypto/rand"
-	"fmt"
 	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"math/big"
 	"strings"
 	"time"
 
@@ -24,39 +20,18 @@ const (
 	registerAuditTargetTypeUser = "user"
 	registerAuditActorRoleUser  = "user"
 
-	registerReasonInvalidPayload                    = "invalid_payload"
-	registerReasonInvalidChallenge                  = "invalid_challenge"
-	registerReasonChallengeServiceUnavailable       = "challenge_service_unavailable"
-	registerReasonInvalidEmailOTP                   = "invalid_email_otp"
-	registerReasonEmailUnavailable                  = "email_unavailable"
-	registerReasonPasswordTooShort                  = "password_too_short"
-	registerReasonPasswordTooLong                   = "password_too_long"
-	registerReasonPasswordHashFailed                = "password_hash_failed"
-	registerReasonGenerateUIDFailed                 = "generate_uid_failed"
-	registerReasonStartTransactionFailed            = "start_transaction_failed"
-	registerReasonCreateUserFailed                  = "create_user_failed"
-	registerReasonGenerateUploadCode                = "generate_upload_code_failed"
-	registerReasonCreateIOSCodeFailed               = "create_ios_code_failed"
-	registerReasonCommitTransactionFailed           = "commit_transaction_failed"
-	registerReasonIssueSessionFailed                = "issue_session_failed"
-	registerReasonOK                                = "ok"
-	registerUIDGenerateMaxAttempts                  = 3
-	registerUIDTimestampSuffixModulo                = 10000
-	registerUIDRandomRangeExclusive           int64 = 1000000
-	registerUIDFormat                               = "%04d%06d"
-	registerOTPAttemptLimit                         = 5
-	registerOTPAttemptTTL                           = 5 * time.Minute
+	registerReasonInvalidPayload              = "invalid_payload"
+	registerReasonInvalidChallenge            = "invalid_challenge"
+	registerReasonChallengeServiceUnavailable = "challenge_service_unavailable"
+	registerReasonInvalidEmailOTP             = "invalid_email_otp"
+	registerReasonEmailUnavailable            = "email_unavailable"
+	registerReasonPasswordTooShort            = "password_too_short"
+	registerReasonPasswordTooLong             = "password_too_long"
+	registerReasonCreateUserFailed            = "create_user_failed"
+	registerReasonOK                          = "ok"
+	registerOTPAttemptLimit                   = 5
+	registerOTPAttemptTTL                     = 5 * time.Minute
 )
-
-type registerCreateUserFailureDecision int
-
-const (
-	registerCreateUserFailureDecisionFail registerCreateUserFailureDecision = iota
-	registerCreateUserFailureDecisionRetryUID
-	registerCreateUserFailureDecisionEmailConflict
-)
-
-var registerRandInt = rand.Int
 
 func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -182,29 +157,6 @@ func checkEmailAvailability(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 		return harukiAPIHelper.ErrorBadRequest(c, "email already in use")
 	}
 	return nil
-}
-
-func formatRegisterUID(tsSuffix int64, randNum int64) string {
-	return fmt.Sprintf(registerUIDFormat, tsSuffix, randNum)
-}
-
-func generateRegisterUID(now time.Time) (string, error) {
-	tsSuffix := now.UnixMicro() % registerUIDTimestampSuffixModulo
-	randNum, err := registerRandInt(rand.Reader, big.NewInt(registerUIDRandomRangeExclusive))
-	if err != nil {
-		return "", fmt.Errorf("generate uid random number: %w", err)
-	}
-	return formatRegisterUID(tsSuffix, randNum.Int64()), nil
-}
-
-func decideRegisterCreateUserFailure(createErr error, emailTaken bool) registerCreateUserFailureDecision {
-	if !postgresql.IsConstraintError(createErr) {
-		return registerCreateUserFailureDecisionFail
-	}
-	if emailTaken {
-		return registerCreateUserFailureDecisionEmailConflict
-	}
-	return registerCreateUserFailureDecisionRetryUID
 }
 
 func handleRegisterViaKratos(

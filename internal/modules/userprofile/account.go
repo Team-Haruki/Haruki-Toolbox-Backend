@@ -202,12 +202,10 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
 		sessionClearFailed := false
-		localMirrorFailed := false
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.password.change", result, userID, map[string]any{
 				"reason":             reason,
 				"sessionClearFailed": sessionClearFailed,
-				"localMirrorFailed":  localMirrorFailed,
 			})
 		}()
 
@@ -228,7 +226,7 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to verify user", nil)
 		}
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
-			return handleChangePasswordViaKratos(c, apiHelper, u, payload, &result, &reason, &sessionClearFailed, &localMirrorFailed)
+			return handleChangePasswordViaKratos(c, apiHelper, u, payload, &result, &reason, &sessionClearFailed)
 		}
 		reason = "managed_identity_required"
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
@@ -243,7 +241,6 @@ func handleChangePasswordViaKratos(
 	result *string,
 	reason *string,
 	sessionClearFailed *bool,
-	localMirrorFailed *bool,
 ) error {
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	if user == nil {
@@ -297,8 +294,6 @@ func handleChangePasswordViaKratos(
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
 	}
 
-	_ = localMirrorFailed
-
 	if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, kratosIdentityID); err != nil {
 		harukiLogger.Warnf("Failed to revoke Kratos sessions for user %s: %v", user.ID, err)
 		*sessionClearFailed = true
@@ -308,16 +303,6 @@ func handleChangePasswordViaKratos(
 		*sessionClearFailed = true
 	}
 
-	if *localMirrorFailed && *sessionClearFailed {
-		*result = harukiAPIHelper.SystemLogResultSuccess
-		*reason = "ok_local_mirror_and_session_clear_failed"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated, but failed to sync local mirror and clear some sessions", nil)
-	}
-	if *localMirrorFailed {
-		*result = harukiAPIHelper.SystemLogResultSuccess
-		*reason = "ok_local_mirror_failed"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated, but local mirror sync failed", nil)
-	}
 	if *sessionClearFailed {
 		*result = harukiAPIHelper.SystemLogResultSuccess
 		*reason = "ok_session_clear_failed"

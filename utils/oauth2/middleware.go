@@ -92,25 +92,6 @@ func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handle
 	}
 }
 
-func VerifySessionOrOAuth2Token(sessionVerify fiber.Handler, db *postgresql.Client, requiredScope string) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		auth := strings.TrimSpace(c.Get("Authorization"))
-		if auth == "" {
-			return sessionVerify(c)
-		}
-		if _, ok := platformAuthHeader.ExtractBearerToken(auth); !ok {
-			return sessionVerify(c)
-		}
-
-		result, authFailure := authenticateOAuth2BearerToken(c, db, requiredScope)
-		if authFailure != nil {
-			return respondOAuth2BearerError(c, authFailure)
-		}
-		applyOAuth2BearerAuthLocals(c, result)
-		return c.Next()
-	}
-}
-
 func respondOAuth2BearerError(c fiber.Ctx, failure *oauth2BearerAuthFailure) error {
 	if failure == nil {
 		return nil

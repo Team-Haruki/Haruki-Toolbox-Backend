@@ -19,12 +19,10 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
 		sessionClearFailed := false
-		localMirrorFailed := false
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.reset_password.apply", result, targetUserID, map[string]any{
 				"reason":             reason,
 				"sessionClearFailed": sessionClearFailed,
-				"localMirrorFailed":  localMirrorFailed,
 			})
 		}()
 
@@ -56,7 +54,7 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return respondResetPasswordRateLimited(c, limitKey, limitMessage, apiHelper)
 		}
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
-			return handleResetPasswordViaKratos(c, apiHelper, payload, &targetUserID, &result, &reason, &sessionClearFailed, &localMirrorFailed)
+			return handleResetPasswordViaKratos(c, apiHelper, payload, &targetUserID, &result, &reason, &sessionClearFailed)
 		}
 		reason = "managed_identity_required"
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
@@ -71,7 +69,6 @@ func handleResetPasswordViaKratos(
 	result *string,
 	reason *string,
 	sessionClearFailed *bool,
-	localMirrorFailed *bool,
 ) error {
 	recoveryCode := strings.TrimSpace(payload.OneTimeSecret)
 	if recoveryCode == "" {
@@ -103,8 +100,6 @@ func handleResetPasswordViaKratos(
 	}
 	*targetUserID = userID
 
-	_ = localMirrorFailed
-
 	if strings.TrimSpace(identityID) != "" {
 		if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, identityID); err != nil {
 			harukiLogger.Warnf("Failed to revoke Kratos sessions for user %s: %v", userID, err)
@@ -116,16 +111,6 @@ func handleResetPasswordViaKratos(
 		*sessionClearFailed = true
 	}
 
-	if *localMirrorFailed && *sessionClearFailed {
-		*result = harukiAPIHelper.SystemLogResultSuccess
-		*reason = "ok_local_mirror_and_session_clear_failed"
-		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully, but local mirror sync failed and some sessions could not be cleared", nil)
-	}
-	if *localMirrorFailed {
-		*result = harukiAPIHelper.SystemLogResultSuccess
-		*reason = "ok_local_mirror_failed"
-		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully, but local mirror sync failed", nil)
-	}
 	if *sessionClearFailed {
 		*result = harukiAPIHelper.SystemLogResultSuccess
 		*reason = "ok_session_clear_failed"
