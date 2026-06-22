@@ -51,3 +51,19 @@ func validateOAuth2ProviderConfig(cfg harukiConfig.Config) error {
 	}
 	return fmt.Errorf("oauth2.provider=%q is unsupported; only hydra is supported", strings.TrimSpace(cfg.OAuth2.Provider))
 }
+
+func validateBackendConfig(cfg harukiConfig.Config) error {
+	if cfg.Backend.SSL {
+		if strings.TrimSpace(cfg.Backend.SSLCert) == "" || strings.TrimSpace(cfg.Backend.SSLKey) == "" {
+			return fmt.Errorf("backend.ssl_cert and backend.ssl_key are required when backend.ssl=true")
+		}
+	}
+	return nil
+}
+
+func validateBotRegistrationConfig(cfg harukiConfig.Config) error {
+	if cfg.HarukiBot.EnableRegistration && strings.TrimSpace(cfg.HarukiBot.CredentialSignToken) == "" {
+		return fmt.Errorf("haruki_bot.credential_sign_token is required when haruki_bot.enable_registration=true")
+	}
+	return nil
+}

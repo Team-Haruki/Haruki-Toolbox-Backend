@@ -2,6 +2,7 @@ package userauthorizesocial
 
 import (
 	"strconv"
+	"strings"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
@@ -28,6 +29,10 @@ func parseAuthorizeSocialPlatformPayload(c fiber.Ctx) (harukiAPIHelper.Authorize
 	}
 	if !isSupportedSocialPlatform(harukiAPIHelper.SocialPlatform(payload.Platform)) {
 		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "unsupported platform")
+	}
+	payload.UserID = strings.TrimSpace(payload.UserID)
+	if payload.UserID == "" {
+		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "userId is required")
 	}
 	return payload, nil
 }

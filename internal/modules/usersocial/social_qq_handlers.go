@@ -78,6 +78,11 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
+		req.QQ = strings.TrimSpace(req.QQ)
+		if req.QQ == "" {
+			reason = "invalid_payload"
+			return harukiAPIHelper.ErrorBadRequest(c, "qq is required")
+		}
 		email := fmt.Sprintf("%s@qq.com", req.QQ)
 		ok, err := userEmailModule.VerifyEmailHandler(c, email, req.OneTimePassword, apiHelper)
 		if err != nil {

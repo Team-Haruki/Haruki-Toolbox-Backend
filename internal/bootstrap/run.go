@@ -37,6 +37,12 @@ func Run(cfg harukiConfig.Config) error {
 	if err := validateUserSystemConfig(cfg); err != nil {
 		return err
 	}
+	if err := validateBackendConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateBotRegistrationConfig(cfg); err != nil {
+		return err
+	}
 
 	loggerWriter, closeMainLogFile, err := openMainLogWriter(cfg.Backend.MainLogFile)
 	if err != nil {

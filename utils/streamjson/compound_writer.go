@@ -151,6 +151,9 @@ func readMsgpackString(r *bytes.Reader) ([]byte, error) {
 		}
 	}
 
+	if n < 0 || n > r.Len() {
+		return nil, fmt.Errorf("string length %d exceeds remaining bytes %d", n, r.Len())
+	}
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return nil, err
@@ -159,6 +162,9 @@ func readMsgpackString(r *bytes.Reader) ([]byte, error) {
 }
 
 func writeString(r *bytes.Reader, w io.Writer, n int) error {
+	if n < 0 || n > r.Len() {
+		return fmt.Errorf("string length %d exceeds remaining bytes %d", n, r.Len())
+	}
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return err
