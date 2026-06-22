@@ -67,7 +67,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			reason = "verification_key_not_found"
 			return harukiAPIHelper.ErrorBadRequest(c, "verification key expired or not found")
 		}
-		if req.OneTimePassword != code {
+		if subtle.ConstantTimeCompare([]byte(req.OneTimePassword), []byte(code)) != 1 {
 			if err := incrementSocialPlatformVerifyAttempt(c, apiHelper, req.Platform, req.UserID); err != nil {
 				harukiLogger.Errorf("Failed to increment social verify attempt count: %v", err)
 				reason = "increment_attempt_failed"

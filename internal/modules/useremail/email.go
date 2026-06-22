@@ -2,6 +2,7 @@ package useremail
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"fmt"
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -21,6 +22,15 @@ const (
 
 	emailSendIPLimit     = 20
 	emailSendTargetLimit = 3
+
+	// OTP verification throttles. The per-code counter is the primary brute-force
+	// defense (atomic, so concurrency cannot defeat it) and its window matches the
+	// code TTL so it resets each code cycle; the per-IP counter is defense-in-depth
+	// across codes/emails.
+	otpVerifyPerCodeWindow = 5 * time.Minute
+	otpVerifyPerCodeLimit  = 5
+	otpVerifyIPWindow      = 10 * time.Minute
+	otpVerifyPerIPLimit    = 50
 
 	emailRateLimitScriptLimitedByNone   = int64(0)
 	emailRateLimitScriptLimitedByIP     = int64(1)
@@ -194,19 +204,31 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	if email == "" {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "email is required")
 	}
-	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
-	var attemptCount int
-	found, err := helper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount)
+	// Per-IP throttle (defense-in-depth, atomic).
+	ipAttempts, err := helper.DBManager.Redis.IncrementWithTTL(ctx, harukiRedis.BuildOTPVerifyAttemptIPKey(c.IP()), otpVerifyIPWindow)
 	if err != nil {
-		harukiLogger.Errorf("Failed to get OTP attempt count: %v", err)
+		harukiLogger.Errorf("Failed to update OTP verify IP counter: %v", err)
 		return false, harukiAPIHelper.ErrorInternal(c, "Verification service unavailable")
 	}
-	if found && attemptCount >= 5 {
+	if ipAttempts > otpVerifyPerIPLimit {
+		return false, harukiAPIHelper.ErrorBadRequest(c, "Too many verification attempts. Please try again later.")
+	}
+
+	// Per-code attempt cap. Increment atomically BEFORE comparing so concurrent
+	// guesses cannot all read a stale count and bypass the cap (the previous
+	// GetCache-then-SetCache was a non-atomic read-modify-write).
+	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
+	attemptCount, err := helper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, otpVerifyPerCodeWindow)
+	if err != nil {
+		harukiLogger.Errorf("Failed to update OTP attempt count: %v", err)
+		return false, harukiAPIHelper.ErrorInternal(c, "Verification service unavailable")
+	}
+	if attemptCount > otpVerifyPerCodeLimit {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "Too many verification attempts. Please request a new code.")
 	}
 	redisKey := harukiRedis.BuildEmailVerifyKey(email)
 	var code string
-	found, err = helper.DBManager.Redis.GetCache(ctx, redisKey, &code)
+	found, err := helper.DBManager.Redis.GetCache(ctx, redisKey, &code)
 	if err != nil {
 		harukiLogger.Errorf("Failed to get redis cache: %v", err)
 		return false, harukiAPIHelper.ErrorInternal(c, "Verification service unavailable")
@@ -214,12 +236,7 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	if !found {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "verification code expired or not found")
 	}
-	if oneTimePassword != code {
-		newCount := attemptCount + 1
-		if err := helper.DBManager.Redis.SetCache(ctx, attemptKey, newCount, 5*time.Minute); err != nil {
-			harukiLogger.Errorf("Failed to update OTP attempt count: %v", err)
-			return false, harukiAPIHelper.ErrorInternal(c, "Verification service unavailable")
-		}
+	if subtle.ConstantTimeCompare([]byte(oneTimePassword), []byte(code)) != 1 {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "invalid verification code")
 	}
 	consumed, err := helper.DBManager.Redis.DeleteCacheIfValueMatches(ctx, redisKey, code)
