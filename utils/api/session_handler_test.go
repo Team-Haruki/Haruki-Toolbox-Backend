@@ -99,6 +99,14 @@ func TestClearUserSessionsWithNilRedisClient(t *testing.T) {
 func TestVerifySessionTokenUsesTrustedAuthProxyHeaders(t *testing.T) {
 	handler := NewSessionHandler(nil, "")
 	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Name", "X-User-Email", "X-User-Email-Verified", "X-User-Id")
+	// Identity is resolved from the Oathkeeper-vouched X-Kratos-Identity-Id; the
+	// X-User-Id header is only accepted when it matches the resolved user.
+	handler.KratosIdentityResolver = func(ctx context.Context, identityID string, email string) (string, error) {
+		if identityID != "kratos-proxy-1" {
+			t.Fatalf("identityID = %q, want %q", identityID, "kratos-proxy-1")
+		}
+		return "u-proxy", nil
+	}
 
 	app := fiber.New()
 	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
@@ -145,6 +153,33 @@ func TestVerifySessionTokenUsesTrustedAuthProxyHeaders(t *testing.T) {
 	}
 }
 
+func TestVerifySessionTokenRejectsForgedAuthProxyUserIDHeader(t *testing.T) {
+	// A client-forged X-User-Id (Oathkeeper does not vouch for it) that disagrees
+	// with the identity-resolved user must be rejected, not trusted.
+	handler := NewSessionHandler(nil, "")
+	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Name", "X-User-Email", "X-User-Email-Verified", "X-User-Id")
+	handler.KratosIdentityResolver = func(ctx context.Context, identityID string, email string) (string, error) {
+		return "u-proxy", nil
+	}
+
+	app := fiber.New()
+	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{"userID": c.Locals("userID")})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/user/victim-admin/profile", nil)
+	req.Header.Set("X-Auth-Proxy-Secret", "proxy-secret")
+	req.Header.Set("X-Kratos-Identity-Id", "kratos-proxy-1")
+	req.Header.Set("X-User-Id", "victim-admin") // forged: resolves to u-proxy, not victim-admin
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d (forged X-User-Id must be rejected)", resp.StatusCode, fiber.StatusUnauthorized)
+	}
+}
+
 func TestVerifySessionTokenRequiresTrustedAuthProxyWhenEnabled(t *testing.T) {
 	handler := NewSessionHandler(nil, "")
 	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Name", "X-User-Email", "X-User-Email-Verified", "X-User-Id")
@@ -174,6 +209,9 @@ func TestVerifySessionTokenRequiresTrustedAuthProxyWhenEnabled(t *testing.T) {
 func TestVerifySessionTokenAuthProxyIgnoresInvalidEmailVerifiedHeader(t *testing.T) {
 	handler := NewSessionHandler(nil, "")
 	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Name", "X-User-Email", "X-User-Email-Verified", "X-User-Id")
+	handler.KratosIdentityResolver = func(ctx context.Context, identityID string, email string) (string, error) {
+		return "u-proxy", nil
+	}
 
 	app := fiber.New()
 	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {

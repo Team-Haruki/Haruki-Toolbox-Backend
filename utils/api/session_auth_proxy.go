@@ -51,19 +51,23 @@ func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx
 	}
 	email := platformIdentity.NormalizeEmail(c.Get(s.AuthProxyEmailHeader))
 	emailVerified := parseAuthProxyBooleanHeader(c.Get(s.AuthProxyEmailVerifiedHeader))
-	userID := strings.TrimSpace(c.Get(s.AuthProxyUserIDHeader))
-	if userID == "" {
-		if identityID == "" {
-			return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
-		}
-		resolvedUserID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
-		if err != nil {
-			return "", "", displayNamePtr, emailVerified, true, err
-		}
-		userID = resolvedUserID
-	}
+
+	// Identity MUST be derived from the Oathkeeper-vouched subject header, never
+	// from a client-supplied user-id header. Oathkeeper's header mutator injects
+	// X-Kratos-Identity-Id but does not set or strip X-User-Id, so a client could
+	// otherwise forge X-User-Id and impersonate any user once the (proxy-injected)
+	// secret check passes.
 	if identityID == "" {
-		return "", "", displayNamePtr, emailVerified, true, nil
+		return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
+	}
+	userID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
+	if err != nil {
+		return "", "", displayNamePtr, emailVerified, true, err
+	}
+	// If a (non-vouched) X-User-Id is present, it must agree with the identity
+	// resolution; a mismatch is a tampering attempt and is rejected.
+	if claimed := strings.TrimSpace(c.Get(s.AuthProxyUserIDHeader)); claimed != "" && claimed != userID {
+		return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: auth proxy user id header mismatch", errSessionUnauthorized)
 	}
 	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr)
 	return userID, identityID, displayNamePtr, emailVerified, true, nil

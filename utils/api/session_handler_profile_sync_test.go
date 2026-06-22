@@ -43,6 +43,10 @@ func TestVerifySessionTokenAuthProxySyncsResolvedUserProfile(t *testing.T) {
 	handler := NewSessionHandler(newSessionTestRedisClient(t), "")
 	handler.DBClient = db
 	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Name", "X-User-Email", "X-User-Email-Verified", "X-User-Id")
+	// Identity resolves from the vouched X-Kratos-Identity-Id to the local user.
+	handler.KratosIdentityResolver = func(ctx context.Context, identityID string, email string) (string, error) {
+		return "u-proxy", nil
+	}
 
 	app := fiber.New()
 	app.Get("/api/user/:toolbox_user_id/profile", handler.VerifySessionToken, func(c fiber.Ctx) error {

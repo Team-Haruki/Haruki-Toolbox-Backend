@@ -69,3 +69,11 @@ mutators:
         X-User-Name: "{{ print .Extra.identity.traits.name }}"
         X-User-Email: "{{ print .Extra.identity.traits.email }}"
         X-User-Email-Verified: "{{ if gt (len .Extra.identity.verifiable_addresses) 0 }}{{ (index .Extra.identity.verifiable_addresses 0).verified }}{{ else }}false{{ end }}"
+        # Bind the proxy session marker to the real Kratos session id (extra_from
+        # is "@this", so .Extra.id is the whoami session id) so the backend's admin
+        # reauth is keyed to a proxy-vouched session, not a client-supplied value.
+        X-Auth-Proxy-Session-Id: "{{ print .Extra.id }}"
+        # Overwrite/clear any client-supplied X-User-Id. The backend never trusts
+        # it as authoritative (identity comes from X-Kratos-Identity-Id), but
+        # clearing it here is defense-in-depth.
+        X-User-Id: ""
