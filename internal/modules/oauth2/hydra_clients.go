@@ -136,7 +136,40 @@ func SetHydraOAuthClientActive(ctx context.Context, clientID string, active bool
 	}
 	input := hydraOAuthClientToUpsertInput(current)
 	input.Active = active
-	return UpdateHydraOAuthClient(ctx, clientID, input)
+	updated, err := UpdateHydraOAuthClient(ctx, clientID, input)
+	if err != nil {
+		return nil, err
+	}
+	// Disabling a client must actually revoke access: delete its issued tokens and
+	// consent sessions so existing/refreshed tokens stop working immediately,
+	// rather than only flipping the metadata flag.
+	if !active {
+		if err := revokeHydraOAuthClientGrants(ctx, clientID); err != nil {
+			return nil, fmt.Errorf("client deactivated but token revocation failed: %w", err)
+		}
+	}
+	return updated, nil
+}
+
+// revokeHydraOAuthClientGrants deletes all access/refresh tokens and consent
+// sessions Hydra holds for the given client.
+func revokeHydraOAuthClientGrants(ctx context.Context, clientID string) error {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		return nil
+	}
+	tokenQuery := url.Values{}
+	tokenQuery.Set("client_id", clientID)
+	if _, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/tokens", tokenQuery, nil); err != nil {
+		return fmt.Errorf("delete client tokens: %w", err)
+	}
+	consentQuery := url.Values{}
+	consentQuery.Set("client", clientID)
+	consentQuery.Set("all", "true")
+	if _, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", consentQuery, nil); err != nil {
+		return fmt.Errorf("delete client consent sessions: %w", err)
+	}
+	return nil
 }
 
 func RotateHydraOAuthClientSecret(ctx context.Context, clientID string, newSecret string) (*HydraOAuthClient, error) {

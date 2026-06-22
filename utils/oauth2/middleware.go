@@ -27,10 +27,17 @@ type hydraIntrospectionResponse struct {
 	Username string `json:"username"`
 	ClientID string `json:"client_id"`
 	Scope    string `json:"scope"`
+	TokenUse string `json:"token_use"`
 	Exp      int64  `json:"exp"`
 	Nbf      int64  `json:"nbf"`
 	Iat      int64  `json:"iat"`
 }
+
+// OAuth2ClientActiveChecker, when set, is consulted during bearer-token
+// authentication to reject tokens issued to a client that has since been
+// disabled (so disabling a client revokes its access even before its tokens
+// expire). It is wired by the oauth2 module at startup to avoid an import cycle.
+var OAuth2ClientActiveChecker func(ctx context.Context, clientID string) (bool, error)
 
 type hydraIntrospectionError struct {
 	Status  int
@@ -131,6 +138,11 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 	if !introspection.Active {
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "invalid or expired token"}
 	}
+	// Pin the token type: only access tokens may authenticate API calls (reject a
+	// refresh token presented as a bearer token).
+	if introspection.TokenUse != "" && introspection.TokenUse != "access_token" {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "invalid token type"}
+	}
 
 	subject := strings.TrimSpace(introspection.Subject)
 	if subject == "" {
@@ -157,6 +169,18 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 			return nil, &oauth2BearerAuthFailure{Status: fErr.Code, Message: fErr.Message}
 		}
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 subject validation unavailable"}
+	}
+
+	// Reject tokens issued to a client that has since been disabled.
+	if OAuth2ClientActiveChecker != nil && strings.TrimSpace(introspection.ClientID) != "" {
+		active, err := OAuth2ClientActiveChecker(c.Context(), strings.TrimSpace(introspection.ClientID))
+		if err != nil {
+			harukiLogger.Errorf("OAuth2 client active check failed: %v", err)
+			return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 client validation unavailable"}
+		}
+		if !active {
+			return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "client disabled"}
+		}
 	}
 
 	scopes := parseHydraScopeList(introspection.Scope)
@@ -234,6 +258,7 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 
 	form := url.Values{}
 	form.Set("token", token)
+	form.Set("token_type_hint", "access_token")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewBufferString(form.Encode()))
 	if err != nil {
