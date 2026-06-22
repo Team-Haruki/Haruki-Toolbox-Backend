@@ -38,6 +38,8 @@ func defaultConfig() Config {
 		Afdian: AfdianConfig{
 			APIBaseURL:           "https://afdian.com/api/open",
 			RequestTimeoutSecond: 10,
+			SyncEnabled:          true,
+			SyncIntervalSeconds:  300,
 		},
 		Subscription: SubscriptionConfig{
 			UserAgent:            "Haruki-Toolbox-Backend",
@@ -103,6 +105,12 @@ func normalizeConfigDefaults(cfg *Config) error {
 	}
 	if cfg.Afdian.RequestTimeoutSecond <= 0 {
 		cfg.Afdian.RequestTimeoutSecond = 10
+	}
+	if cfg.Afdian.SyncIntervalSeconds <= 0 {
+		cfg.Afdian.SyncIntervalSeconds = 300
+	}
+	if cfg.Afdian.SyncIntervalSeconds < 60 {
+		cfg.Afdian.SyncIntervalSeconds = 60
 	}
 
 	return nil

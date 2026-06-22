@@ -78,7 +78,7 @@
 
 - id: haruki-public-afdian-sponsor-callback
   match:
-    url: <http|https>://<[^/]+>/api/sponsor/afdian/callback
+    url: <http|https>://<[^/]+>/api/sponsor/afdian/callback<(/[^/]+)?>
     methods: [POST]
   upstream:
     url: http://backend:16666

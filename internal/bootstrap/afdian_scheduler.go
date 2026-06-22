@@ -11,19 +11,28 @@ import (
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
-const afdianSponsorSyncInterval = 5 * time.Minute
+const defaultAfdianSponsorSyncInterval = 5 * time.Minute
 
 func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, cfg harukiConfig.AfdianConfig, logger *harukiLogger.Logger) {
+	if !cfg.SyncEnabled {
+		logger.Infof("afdian sponsor sync scheduler disabled: sync_enabled is false")
+		return
+	}
 	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
 		logger.Infof("afdian sponsor sync scheduler disabled: afdian user_id or api token is not configured")
 		return
 	}
 
-	logger.Infof("afdian sponsor sync scheduler enabled with interval %s", afdianSponsorSyncInterval)
+	interval := defaultAfdianSponsorSyncInterval
+	if cfg.SyncIntervalSeconds > 0 {
+		interval = time.Duration(cfg.SyncIntervalSeconds) * time.Second
+	}
+
+	logger.Infof("afdian sponsor sync scheduler enabled with interval %s", interval)
 	go func() {
 		runAfdianSponsorSync(ctx, db, cfg, logger)
 
-		ticker := time.NewTicker(afdianSponsorSyncInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {

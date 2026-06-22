@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -507,15 +508,119 @@ func ParseAfdianWebhookPayload(payload map[string]any, now time.Time) (parsedAfd
 	return parseAfdianOrder(order, now)
 }
 
-func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg config.AfdianConfig, now time.Time) (AfdianSyncResult, error) {
-	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
-		return AfdianSyncResult{}, fmt.Errorf("afdian user_id or api token is not configured")
-	}
-	client := &http.Client{Timeout: time.Duration(maxInt(cfg.RequestTimeoutSecond, 10)) * time.Second}
+// ErrAfdianNotConfigured signals that the Afdian API credentials required to
+// reach the open API (e.g. to verify a webhook order) are missing.
+var ErrAfdianNotConfigured = errors.New("afdian user_id or api token is not configured")
+
+func afdianHTTPClient(cfg config.AfdianConfig) *http.Client {
+	return &http.Client{Timeout: time.Duration(maxInt(cfg.RequestTimeoutSecond, 10)) * time.Second}
+}
+
+func afdianBaseURL(cfg config.AfdianConfig) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.APIBaseURL), "/")
 	if baseURL == "" {
 		baseURL = "https://afdian.com/api/open"
 	}
+	return baseURL
+}
+
+// VerifyAfdianOrder re-queries the Afdian open API for the given out_trade_no and
+// returns the authoritative, parsed order. Webhook payloads carry no signature, so
+// callers must use this to confirm an order is real before trusting it. Returns
+// ErrAfdianNotConfigured when API credentials are missing, or found=false when the
+// order does not exist on Afdian's side (likely forged).
+func VerifyAfdianOrder(ctx context.Context, cfg config.AfdianConfig, outTradeNo string, now time.Time) (parsedAfdianSponsor, bool, error) {
+	outTradeNo = strings.TrimSpace(outTradeNo)
+	if outTradeNo == "" {
+		return parsedAfdianSponsor{}, false, nil
+	}
+	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+		return parsedAfdianSponsor{}, false, ErrAfdianNotConfigured
+	}
+
+	order, found, err := queryAfdianOrderByTradeNo(ctx, afdianHTTPClient(cfg), afdianBaseURL(cfg), cfg, outTradeNo)
+	if err != nil || !found {
+		return parsedAfdianSponsor{}, false, err
+	}
+	parsed, ok := parseAfdianOrder(order, now)
+	if !ok {
+		return parsedAfdianSponsor{}, false, nil
+	}
+	return parsed, true, nil
+}
+
+func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL string, cfg config.AfdianConfig, outTradeNo string) (map[string]any, bool, error) {
+	paramsBytes, err := json.Marshal(map[string]any{"out_trade_no": outTradeNo})
+	if err != nil {
+		return nil, false, err
+	}
+	params := string(paramsBytes)
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	body := map[string]any{
+		"user_id": cfg.UserID,
+		"params":  params,
+		"ts":      ts,
+		"sign":    afdianSign(cfg.APIToken, params, ts, cfg.UserID),
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, false, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/query-order", bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if err != nil {
+		return nil, false, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, false, fmt.Errorf("afdian api returned status %d", resp.StatusCode)
+	}
+
+	var payload map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(respBody))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return nil, false, err
+	}
+	if ec := readInt(payload, "ec"); ec != 0 && ec != 200 {
+		return nil, false, fmt.Errorf("afdian api returned ec %d", ec)
+	}
+	data := readMap(payload, "data")
+	if data == nil {
+		return nil, false, nil
+	}
+	listRaw, ok := data["list"].([]any)
+	if !ok {
+		return nil, false, nil
+	}
+	for _, raw := range listRaw {
+		order, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if readString(order, "out_trade_no", "outTradeNo") == outTradeNo {
+			return order, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg config.AfdianConfig, now time.Time) (AfdianSyncResult, error) {
+	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+		return AfdianSyncResult{}, ErrAfdianNotConfigured
+	}
+	client := afdianHTTPClient(cfg)
+	baseURL := afdianBaseURL(cfg)
 
 	result := AfdianSyncResult{}
 	for page := 1; page <= 100; page++ {

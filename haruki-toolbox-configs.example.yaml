@@ -54,6 +54,14 @@ afdian:
   api_token: ""
   api_base_url: "https://afdian.com/api/open"
   request_timeout_seconds: 10
+  # Secret path segment appended to the webhook callback URL, e.g.
+  # https://host/api/sponsor/afdian/callback/<webhook_secret>
+  # Leave empty to disable the URL-secret gate (API verification still applies).
+  webhook_secret: ""
+  # Toggle the periodic background sync that pulls sponsors from the Afdian API.
+  sync_enabled: true
+  # Interval between background sync runs, in seconds (minimum 60).
+  sync_interval_seconds: 300
 
 oauth2:
   provider: "hydra" # hydra only

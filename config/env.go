@@ -46,7 +46,14 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.Afdian.UserID, "AFDIAN_USER_ID")
 	overrideString(&cfg.Afdian.APIToken, "AFDIAN_API_TOKEN", "AFDIAN_API_KEY")
 	overrideString(&cfg.Afdian.APIBaseURL, "AFDIAN_API_BASE_URL")
+	overrideString(&cfg.Afdian.WebhookSecret, "AFDIAN_WEBHOOK_SECRET")
 	if err := overrideInt(&cfg.Afdian.RequestTimeoutSecond, "AFDIAN_REQUEST_TIMEOUT_SECONDS"); err != nil {
+		return err
+	}
+	if err := overrideBool(&cfg.Afdian.SyncEnabled, "AFDIAN_SYNC_ENABLED"); err != nil {
+		return err
+	}
+	if err := overrideInt(&cfg.Afdian.SyncIntervalSeconds, "AFDIAN_SYNC_INTERVAL_SECONDS"); err != nil {
 		return err
 	}
 

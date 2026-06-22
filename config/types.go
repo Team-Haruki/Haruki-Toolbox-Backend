@@ -30,6 +30,9 @@ type AfdianConfig struct {
 	APIToken             string `yaml:"api_token"`
 	APIBaseURL           string `yaml:"api_base_url"`
 	RequestTimeoutSecond int    `yaml:"request_timeout_seconds"`
+	WebhookSecret        string `yaml:"webhook_secret"`
+	SyncEnabled          bool   `yaml:"sync_enabled"`
+	SyncIntervalSeconds  int    `yaml:"sync_interval_seconds"`
 }
 
 type ThirdPartyDataProviderConfig struct {

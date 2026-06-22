@@ -40,6 +40,13 @@ logs/
 test.json
 dist/
 
+# Local-only data dumps / scratch artifacts (not part of the repo)
+suite_rec/
+registration-handoff.cn.md
+
+# Local one-off backfill command (kept locally, not pushed)
+cmd/suite-rec-backfill/
+
 
 
 # OS generated files
