@@ -54,7 +54,20 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 - **Do not** re-introduce legacy local browser login/register/password-reset flows. Those endpoints should stay `410 Gone` or delegate to Ory.
 - When `auth_proxy_enabled` is true: trusted header validation and `auth_proxy_session_header` must be preserved. Sensitive admin ops must use proxy-session-level identity, not just `user_id` or `kratos_identity_id`.
 - Hydra subject strategy: prefer `kratos_identity_id`, fallback to local `users.id`. Do not break backward compatibility of `CurrentHydraSubject`, `CurrentHydraSubjects`, `HydraSubjectsForUser`, or introspection subject mapping.
-- Session/auth logic is centralized in `utils/api/session_handler.go` — do not duplicate session parsing or Kratos whoami calls in business modules.
+- Session/auth logic lives in the `utils/api/session_*.go` family (`session_handler.go` holds `SessionHandler` + config; resolution is split into `session_verify.go`, `session_auth_proxy.go`, `session_kratos_*.go`) — do not duplicate session parsing or Kratos whoami calls in business modules.
+
+## Security Invariants
+
+These encode hard-won rules from prior security audits. Do **not** regress them.
+
+- **Auth-proxy identity is derived from the vouched subject header, never from a client header.** In auth-proxy mode resolve the user ONLY from `X-Kratos-Identity-Id` (Oathkeeper-injected) via `resolveKratosIdentity`. Never trust a client-supplied `X-User-Id` as authoritative — if present it must equal the resolved user or the request is rejected. The backend must be unreachable except through Oathkeeper (never publish its port on a public interface; internal-only/Tailscale binding is fine). The trusted secret is the entire identity-forging boundary: compare it with `crypto/subtle.ConstantTimeCompare`; bootstrap refuses to start on the placeholder or a value < 16 chars; the oathkeeper mutator must inject every trusted header (incl. the session id) and clear `X-User-Id`.
+- **Constant-time comparison for all secrets.** Compare every shared secret, token, OTP, and verification code with `crypto/subtle.ConstantTimeCompare`, never `==`/`!=`.
+- **Object-level authorization (no IDOR).** Scope every per-user object read/write to the authenticated self or the owner resolved from the data, never to a body/param id. Admin **reads and** mutations on a target user must pass `admincore.EnsureAdminCanManageTargetUser` (role hierarchy) — reads too (detail, role, activity, system logs). Oathkeeper-bypassing token-gated endpoints (`/api/private/*`, harukiproxy, social verify, `/internal/*`) self-authorize per request and are the highest-value surfaces.
+- **Untrusted upload parsing.** Upload payloads are decrypted with the *public* Project Sekai client key, so decoded content is attacker-controlled: validate nesting depth before decoding (`orderedmsgpack.ValidateMaxDepth`), reject Mongo field names containing `.` or `$`, and bound allocations by remaining input length. A Go stack overflow is fatal — never rely on `recover()`.
+- **Atomic rate limits / counters.** Implement attempt counters and rate limits with atomic `IncrementWithTTL`, never GetCache-then-SetCache (a race defeats the cap). Trust `c.IP()` only with `EnableIPValidation` on and `trusted_proxies` scoped to the real edge proxy.
+- **SSRF.** Outbound requests to user-supplied URLs (webhook callbacks) must re-resolve and reject private/link-local IPs at *dial* time and pin the validated IP, not only validate DNS up front (rebinding).
+- **OAuth2 bearer.** Pin token type to `access_token` on introspection, reject tokens of disabled clients, and revoke a client's tokens/consent when disabling it (don't just flip metadata).
+- **Public responses / enumeration.** Don't expose payment amounts, PII, or credentials on public endpoints, and don't let error messages or timing distinguish "not found" from "not permitted".
 
 ## Key Utility Packages
 
@@ -64,9 +77,11 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 - `utils/database/mongo/` — MongoDB client and operations
 - `utils/database/redis/` — Redis client
 - `utils/database/neopg/` — Bot database Ent client (generated)
-- `internal/modules/admincore/` — Shared admin logic
+- `internal/modules/admincore/` — Shared admin logic (incl. `EnsureAdminCanManageTargetUser` role-hierarchy guard, `CurrentAdminActor`)
 - `internal/modules/usercore/` — Shared user logic
 - `internal/modules/harukibotneo/` — HarukiBot NEO registration and credential reset (status, send-mail, register/reset)
+- `internal/modules/sponsor/` + `adminsponsor/` — Afdian sponsor wall (public read + signed/verified webhook) and admin management
+- `utils/orderedmsgpack/`, `utils/streamjson/` — bounded msgpack decoders for untrusted upload data (depth/length validated)
 
 Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` over building parallel helpers.
 
@@ -76,7 +91,8 @@ Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` ov
 - When changing HarukiBot NEO registration/credential reset flow, update `docs/haruki-bot-neo-registration.zh-CN.md`.
 - When changing OAuth2 client integration, update `docs/oauth2-client-integration.zh-CN.md` or `docs/oauth2-confidential-client-integration.zh-CN.md`.
 - When changing webhook behavior, update `docs/webhook-integration.zh-CN.md`.
-- Oathkeeper access rules live in `external/oathkeeper/access-rules.yml` — update when adding/removing public or protected endpoints.
+- When changing Afdian sponsor webhook/sync behavior, update `docs/afdian-sponsor-integration.zh-CN.md`.
+- Oathkeeper access rules live in `external/oathkeeper/access-rules.yml` — update when adding/removing public or protected endpoints. The backend's auth-proxy header conventions also live in `external/oathkeeper/oathkeeper.yml` (header mutator).
 
 ## Git commits
 
@@ -102,7 +118,7 @@ Rules:
 - No trailing period.
 - Keep the subject at or below roughly 70 characters.
 - **Agent attribution uses the standard Git `Co-authored-by:` trailer in the commit body, not a free-form `Agent:` line.** This makes GitHub render the co-author avatar on the commit page. The trailer must be on its own line, separated from the subject by a blank line, in the form `Co-authored-by: <Display Name> <email>`. Suggested values per agent:
-  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>` (substitute the actual model, e.g. `Claude Sonnet 4.6`, `Claude Haiku 4.5`)
+  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>` (substitute the actual model, e.g. `Claude Sonnet 4.6`, `Claude Haiku 4.5`)
   - Codex: `Co-authored-by: Codex <noreply@openai.com>`
   - Copilot: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 

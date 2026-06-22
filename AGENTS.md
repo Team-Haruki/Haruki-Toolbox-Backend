@@ -94,11 +94,25 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 
 ### 5. SessionHandler 是 Ory 集成核心
 
-与 Kratos / Auth Proxy / 会话验证相关的改动，优先集中在：
+与 Kratos / Auth Proxy / 会话验证相关的改动，优先集中在 `utils/api/session_*.go` 这一族文件：
 
-- `utils/api/session_handler.go`
+- `session_handler.go`（`SessionHandler` 类型与配置）
+- `session_verify.go`、`session_auth_proxy.go`、`session_kratos_*.go`（会话解析与身份解析）
 
 避免在各业务模块里复制一套会话解析、Kratos whoami 查询、header 信任逻辑。
+
+## 安全不变量
+
+以下规则源自历次安全审计，**不得回退**：
+
+- **Auth Proxy 身份只信 Oathkeeper 注入的 subject 头，不信客户端头。** auth-proxy 模式下身份必须经 `resolveKratosIdentity` 从 `X-Kratos-Identity-Id` 解析；**绝不**把客户端自带的 `X-User-Id` 当权威——若存在必须等于解析结果，否则拒绝。后端**只能**经 Oathkeeper 访问（不要把后端端口发布到公网，绑内网/Tailscale 接口可以）。信任密钥是整个身份伪造边界：用 `crypto/subtle.ConstantTimeCompare` 比较；启动时拒绝占位值或 <16 字符；oathkeeper mutator 必须注入全部信任头（含会话 id）并清除 `X-User-Id`。
+- **所有密钥常量时间比较。** 共享密钥、token、OTP、验证码一律 `crypto/subtle.ConstantTimeCompare`，禁用 `==`/`!=`。
+- **对象级鉴权（防 IDOR）。** 每个 per-user 对象的读写都要 scope 到已认证本人或由数据解析出的属主，绝不信 body/param 里的 id。管理员对目标用户的**读取和**写入都必须过 `admincore.EnsureAdminCanManageTargetUser`（角色层级）——读取也要（detail/role/activity/system-logs）。绕过 Oathkeeper 的 token 网关端点（`/api/private/*`、harukiproxy、社交验证、`/internal/*`）每请求自鉴权，是最高价值攻击面。
+- **不可信上传解析。** 上传体用**公开**的 Project Sekai 客户端密钥解密，解出的内容即攻击者可控：解码前校验嵌套深度（`orderedmsgpack.ValidateMaxDepth`），拒绝含 `.`/`$` 的 Mongo 字段名，按剩余长度封顶分配。Go 栈溢出是 fatal，`recover()` 救不了。
+- **限流/计数原子化。** attempt 计数与限流用原子 `IncrementWithTTL`，禁用 GetCache 后 SetCache（竞态会绕过上限）。`c.IP()` 只在 `EnableIPValidation` 开启且 `trusted_proxies` 收窄到真实边缘代理时才可信。
+- **SSRF。** 对用户提供 URL 的出站请求（webhook 回调）必须在 **dial 时**重新解析并拒绝私网/链路本地 IP、pin 已校验 IP，而不只是事前校验 DNS（防 rebinding）。
+- **OAuth2 bearer。** introspection 固定 `access_token` 类型，拒绝已禁用 client 的 token，禁用 client 时要真正吊销其 token/consent（不只改 metadata）。
+- **公开响应/枚举。** 公开端点不暴露付费金额、PII、凭据；错误信息或时序不得区分「不存在」与「无权限」。
 
 ## 数据与模型规则
 
@@ -157,7 +171,9 @@ Ory 相关改动尤其建议关注：
 - `docs/oauth2-client-integration.zh-CN.md` — OAuth2 公开客户端对接
 - `docs/oauth2-confidential-client-integration.zh-CN.md` — OAuth2 机密客户端对接
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
+- `docs/afdian-sponsor-integration.zh-CN.md` — 爱发电赞助 webhook/同步对接
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
+- `external/oathkeeper/oathkeeper.yml` — Oathkeeper auth-proxy header mutator 约定
 
 ## 提交前检查清单
 
@@ -168,6 +184,7 @@ Ory 相关改动尤其建议关注：
 - 没有重新引入旧本地浏览器认证流程
 - `auth_proxy_session_header` 相关行为仍然成立
 - Hydra subject 兼容逻辑未被破坏
+- 未回退「安全不变量」（鉴权 scope、常量时间比较、不可信上传校验、原子限流、SSRF、客户端头信任等）
 - 测试已覆盖触达变更
 - 若改动了 Ory 行为，文档已同步
 
@@ -195,7 +212,7 @@ Rules:
 - No trailing period.
 - Keep the subject at or below roughly 70 characters.
 - **Agent attribution uses the standard Git `Co-authored-by:` trailer in the commit body, not a free-form `Agent:` line.** This makes GitHub render the co-author avatar on the commit page. The trailer must be on its own line, separated from the subject by a blank line, in the form `Co-authored-by: <Display Name> <email>`. Suggested values per agent:
-  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>` (substitute the actual model, e.g. `Claude Sonnet 4.6`, `Claude Haiku 4.5`)
+  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>` (substitute the actual model, e.g. `Claude Sonnet 4.6`, `Claude Haiku 4.5`)
   - Codex: `Co-authored-by: Codex <noreply@openai.com>`
   - Copilot: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 
