@@ -10,9 +10,15 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
+)
+
+const (
+	afdianCallbackRateLimitWindow = time.Minute
+	afdianCallbackRateLimitMax    = 60
 )
 
 func RegisterSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
@@ -42,6 +48,16 @@ func handleGetSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		cfg := config.Cfg.Afdian
+
+		// Per-IP rate limit: the callback is public and triggers an outbound
+		// Afdian API verification, so bound abuse/amplification per source.
+		if apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil {
+			if count, err := apiHelper.DBManager.Redis.IncrementWithTTL(c.Context(), harukiRedis.BuildAfdianCallbackRateLimitIPKey(c.IP()), afdianCallbackRateLimitWindow); err == nil && count > afdianCallbackRateLimitMax {
+				harukiLogger.Warnf("Afdian webhook rate limited for IP %s", c.IP())
+				return afdianAck(c)
+			}
+		}
+
 		secret := strings.TrimSpace(cfg.WebhookSecret)
 		apiConfigured := strings.TrimSpace(cfg.UserID) != "" && strings.TrimSpace(cfg.APIToken) != ""
 

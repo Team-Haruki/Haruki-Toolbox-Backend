@@ -146,6 +146,10 @@ func BuildOTPVerifyAttemptIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionAttempt, KeyDimensionIP, clientIP)
 }
 
+func BuildAfdianCallbackRateLimitIPKey(clientIP string) string {
+	return buildKey(KeyPrefixHaruki, "sponsor", "afdian", "callback", KeyDimensionIP, clientIP)
+}
+
 func BuildEmailVerifySendRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, KeyDimensionIP, clientIP)
 }

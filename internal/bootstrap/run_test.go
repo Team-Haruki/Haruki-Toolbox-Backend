@@ -272,7 +272,7 @@ func TestValidateUserSystemConfig(t *testing.T) {
 		cfg.UserSystem.KratosAdminURL = "https://kratos-admin.example.com"
 		cfg.UserSystem.AuthProxyEnabled = true
 		cfg.UserSystem.AuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
-		cfg.UserSystem.AuthProxyTrustedValue = "shared-secret"
+		cfg.UserSystem.AuthProxyTrustedValue = "a-sufficiently-long-shared-secret"
 		cfg.UserSystem.AuthProxySubjectHeader = "X-Kratos-Identity-Id"
 		if err := validateUserSystemConfig(cfg); err == nil {
 			t.Fatalf("expected missing auth proxy session header to fail")

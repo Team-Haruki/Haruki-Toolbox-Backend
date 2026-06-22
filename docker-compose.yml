@@ -281,8 +281,13 @@ services:
       HARUKI_BOT_DB_URL: ${HARUKI_BOT_DB_URL}
       HARUKI_BOT_ENABLE_REGISTRATION: ${HARUKI_BOT_ENABLE_REGISTRATION:-false}
       HARUKI_BOT_CREDENTIAL_SIGN_TOKEN: ${HARUKI_BOT_CREDENTIAL_SIGN_TOKEN}
-    ports:
-      - "${BACKEND_PORT}:16666"
+    # SECURITY: do NOT publish the backend port to the host. The backend trusts
+    # Oathkeeper-injected identity headers gated only by a shared secret, so it
+    # must be reachable ONLY by Oathkeeper over the internal network. Publishing
+    # it would let anyone reaching the host forge identity headers and impersonate
+    # any user/admin. Oathkeeper is the public entry point.
+    expose:
+      - "16666"
     volumes:
       - ${STACK_HOST_ROOT}/toolbox-backend/haruki-toolbox-configs.yaml:/app/config/haruki-toolbox-configs.yaml:ro
       - ${STACK_HOST_ROOT}/toolbox-backend/data:/app/data:ro
