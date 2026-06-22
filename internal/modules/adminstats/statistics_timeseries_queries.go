@@ -19,19 +19,34 @@ type statisticsUploadBucketCount struct {
 	Failure int
 }
 
-func buildStatisticsBucketExpressionSQL(bucket, columnName string) (string, error) {
+// buildStatisticsBucketExpressionSQL builds a bucket-start expression aligned to
+// the given timezone. The column (a timestamptz) is converted to local wall time,
+// truncated to the bucket unit, then re-anchored to an absolute instant via the
+// second AT TIME ZONE so EXTRACT(EPOCH ...) matches truncateStatisticsTimeByBucket.
+// tzPlaceholder is a bound-parameter placeholder (e.g. "$3") to avoid injecting
+// the timezone string into the query text.
+func buildStatisticsBucketExpressionSQL(bucket, columnName, tzPlaceholder string) (string, error) {
+	var unit string
 	switch bucket {
 	case timeseriesBucketHour:
-		return fmt.Sprintf("date_trunc('hour', %s AT TIME ZONE 'UTC')", columnName), nil
+		unit = "hour"
 	case timeseriesBucketDay:
-		return fmt.Sprintf("date_trunc('day', %s AT TIME ZONE 'UTC')", columnName), nil
+		unit = "day"
+	case timeseriesBucketWeek:
+		unit = "week"
+	case timeseriesBucketMonth:
+		unit = "month"
 	default:
 		return "", fmt.Errorf("invalid bucket")
 	}
+	return fmt.Sprintf(
+		"date_trunc('%s', %s AT TIME ZONE %s) AT TIME ZONE %s",
+		unit, columnName, tzPlaceholder, tzPlaceholder,
+	), nil
 }
 
-func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket string) (map[int64]int, error) {
-	bucketExpr, err := buildStatisticsBucketExpressionSQL(bucket, userSchema.FieldCreatedAt)
+func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz string) (map[int64]int, error) {
+	bucketExpr, err := buildStatisticsBucketExpressionSQL(bucket, userSchema.FieldCreatedAt, "$3")
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +58,7 @@ func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, f
 		userSchema.FieldCreatedAt,
 		userSchema.FieldCreatedAt,
 	)
-	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC())
+	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), tz)
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +81,8 @@ func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, f
 	return counts, nil
 }
 
-func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket string) (map[int64]statisticsUploadBucketCount, error) {
-	bucketExpr, err := buildStatisticsBucketExpressionSQL(bucket, uploadlog.FieldUploadTime)
+func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz string) (map[int64]statisticsUploadBucketCount, error) {
+	bucketExpr, err := buildStatisticsBucketExpressionSQL(bucket, uploadlog.FieldUploadTime, "$3")
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +94,7 @@ func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, t
 		uploadlog.FieldUploadTime,
 		uploadlog.FieldUploadTime,
 	)
-	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC())
+	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), tz)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +126,7 @@ func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, t
 	return counts, nil
 }
 
-func queryRegistrationCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string) (map[int64]int, error) {
+func queryRegistrationCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string, loc *time.Location) (map[int64]int, error) {
 	rows, err := apiHelper.DBManager.DB.User.Query().
 		Where(
 			userSchema.CreatedAtNotNil(),
@@ -128,13 +143,13 @@ func queryRegistrationCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.H
 		if row == nil || row.CreatedAt == nil {
 			continue
 		}
-		key := truncateStatisticsTimeByBucket(row.CreatedAt.UTC(), bucket).Unix()
+		key := truncateStatisticsTimeByBucket(*row.CreatedAt, bucket, loc).Unix()
 		counts[key]++
 	}
 	return counts, nil
 }
 
-func queryUploadCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string) (map[int64]statisticsUploadBucketCount, error) {
+func queryUploadCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string, loc *time.Location) (map[int64]statisticsUploadBucketCount, error) {
 	rows, err := apiHelper.DBManager.DB.UploadLog.Query().
 		Where(
 			uploadlog.UploadTimeGTE(from),
@@ -148,7 +163,7 @@ func queryUploadCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 
 	counts := make(map[int64]statisticsUploadBucketCount)
 	for _, row := range rows {
-		key := truncateStatisticsTimeByBucket(row.UploadTime, bucket).Unix()
+		key := truncateStatisticsTimeByBucket(row.UploadTime, bucket, loc).Unix()
 		current := counts[key]
 		current.Total++
 		if row.Success {

@@ -3,6 +3,7 @@ package adminstats
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -34,9 +35,25 @@ func parseStatisticsTimeseriesBucket(raw string) (string, error) {
 		return timeseriesBucketHour, nil
 	}
 	switch trimmed {
-	case timeseriesBucketHour, timeseriesBucketDay:
+	case timeseriesBucketHour, timeseriesBucketDay, timeseriesBucketWeek, timeseriesBucketMonth:
 		return trimmed, nil
 	default:
-		return "", fiber.NewError(fiber.StatusBadRequest, "bucket must be one of: hour, day")
+		return "", fiber.NewError(fiber.StatusBadRequest, "bucket must be one of: hour, day, week, month")
 	}
+}
+
+// parseStatisticsTimezone resolves the IANA timezone used to align timeseries
+// buckets to local calendar boundaries. An empty value defaults to UTC, keeping
+// the previous behaviour for callers that do not provide a timezone.
+func parseStatisticsTimezone(raw string) (string, *time.Location, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return defaultStatisticsTimezone, time.UTC, nil
+	}
+
+	loc, err := time.LoadLocation(trimmed)
+	if err != nil {
+		return "", nil, fiber.NewError(fiber.StatusBadRequest, "invalid timezone")
+	}
+	return trimmed, loc, nil
 }

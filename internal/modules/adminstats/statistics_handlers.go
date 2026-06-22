@@ -34,7 +34,12 @@ func handleGetStatisticsTimeseries(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return respondFiberOrBadRequest(c, err, "invalid bucket")
 		}
 
-		resp, err := buildStatisticsTimeseries(c, apiHelper, from, to, bucket)
+		tz, loc, err := parseStatisticsTimezone(c.Query("tz"))
+		if err != nil {
+			return respondFiberOrBadRequest(c, err, "invalid timezone")
+		}
+
+		resp, err := buildStatisticsTimeseries(c, apiHelper, from, to, bucket, tz, loc)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to build statistics timeseries")
 		}

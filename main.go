@@ -1,6 +1,11 @@
 package main
 
 import (
+	// Embed the IANA timezone database so time.LoadLocation works regardless of
+	// whether the host/container ships system zoneinfo (used by admin statistics
+	// timeseries bucketing).
+	_ "time/tzdata"
+
 	harukiBootstrap "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/bootstrap"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"

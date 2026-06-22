@@ -103,23 +103,80 @@ func TestParseStatisticsTimeseriesBucket(t *testing.T) {
 		t.Fatalf("value = %q, want %q", value, timeseriesBucketHour)
 	}
 
-	value, err = parseStatisticsTimeseriesBucket("day")
-	if err != nil {
-		t.Fatalf("parseStatisticsTimeseriesBucket returned error: %v", err)
-	}
-	if value != timeseriesBucketDay {
-		t.Fatalf("value = %q, want %q", value, timeseriesBucketDay)
+	for raw, want := range map[string]string{
+		"day":   timeseriesBucketDay,
+		"week":  timeseriesBucketWeek,
+		"month": timeseriesBucketMonth,
+	} {
+		value, err = parseStatisticsTimeseriesBucket(raw)
+		if err != nil {
+			t.Fatalf("parseStatisticsTimeseriesBucket(%q) returned error: %v", raw, err)
+		}
+		if value != want {
+			t.Fatalf("value = %q, want %q", value, want)
+		}
 	}
 
-	if _, err := parseStatisticsTimeseriesBucket("week"); err == nil {
+	if _, err := parseStatisticsTimeseriesBucket("year"); err == nil {
 		t.Fatalf("expected invalid bucket to fail")
+	}
+}
+
+func TestParseStatisticsTimezone(t *testing.T) {
+	tz, loc, err := parseStatisticsTimezone("")
+	if err != nil {
+		t.Fatalf("parseStatisticsTimezone(\"\") returned error: %v", err)
+	}
+	if tz != defaultStatisticsTimezone || loc != time.UTC {
+		t.Fatalf("default timezone = %q/%v, want %q/UTC", tz, loc, defaultStatisticsTimezone)
+	}
+
+	tz, loc, err = parseStatisticsTimezone("Asia/Shanghai")
+	if err != nil {
+		t.Fatalf("parseStatisticsTimezone returned error: %v", err)
+	}
+	if tz != "Asia/Shanghai" || loc.String() != "Asia/Shanghai" {
+		t.Fatalf("timezone = %q/%v, want Asia/Shanghai", tz, loc)
+	}
+
+	if _, _, err := parseStatisticsTimezone("Not/AZone"); err == nil {
+		t.Fatalf("expected invalid timezone to fail")
+	}
+}
+
+func TestTruncateStatisticsTimeByBucketTimezone(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatalf("LoadLocation: %v", err)
+	}
+	// 2026-06-22T01:00:00Z is 2026-06-22T09:00:00 +08:00, so the local day bucket
+	// starts at 2026-06-22T00:00:00+08:00 == 2026-06-21T16:00:00Z.
+	at := time.Date(2026, 6, 22, 1, 0, 0, 0, time.UTC)
+	got := truncateStatisticsTimeByBucket(at, timeseriesBucketDay, loc)
+	wantUnix := time.Date(2026, 6, 22, 0, 0, 0, 0, loc).Unix()
+	if got.Unix() != wantUnix {
+		t.Fatalf("day bucket unix = %d, want %d", got.Unix(), wantUnix)
+	}
+	if got.Unix() != time.Date(2026, 6, 21, 16, 0, 0, 0, time.UTC).Unix() {
+		t.Fatalf("local-midnight instant mismatch: %v", got.UTC())
+	}
+
+	// Weeks start on Monday. 2026-06-22 is a Monday in Shanghai.
+	week := truncateStatisticsTimeByBucket(at, timeseriesBucketWeek, loc)
+	if week.Weekday() != time.Monday || week.Day() != 22 {
+		t.Fatalf("week bucket = %v, want Monday 2026-06-22", week)
+	}
+
+	month := truncateStatisticsTimeByBucket(at, timeseriesBucketMonth, loc)
+	if month.Day() != 1 || month.Month() != time.June {
+		t.Fatalf("month bucket = %v, want 2026-06-01", month)
 	}
 }
 
 func TestAccumulateRegistrationTimeseriesFromUsers(t *testing.T) {
 	from := time.Date(2026, 3, 8, 10, 0, 0, 0, time.UTC)
 	to := from.Add(2 * time.Hour)
-	points := initializeTimeseriesPoints(from, to, timeseriesBucketHour)
+	points := initializeTimeseriesPoints(from, to, timeseriesBucketHour, time.UTC)
 	pointByTime := make(map[time.Time]*statisticsTimeseriesPoint, len(points))
 	for i := range points {
 		pointByTime[points[i].Time] = &points[i]
@@ -133,7 +190,7 @@ func TestAccumulateRegistrationTimeseriesFromUsers(t *testing.T) {
 		{CreatedAt: nil}, // historical users with null created_at should be ignored.
 	}
 
-	accumulateRegistrationTimeseriesFromUsers(rows, pointByTime, timeseriesBucketHour)
+	accumulateRegistrationTimeseriesFromUsers(rows, pointByTime, timeseriesBucketHour, time.UTC)
 
 	if pointByTime[from].Registrations != 1 {
 		t.Fatalf("first bucket registrations = %d, want 1", pointByTime[from].Registrations)
@@ -151,15 +208,19 @@ func TestAccumulateRegistrationTimeseriesFromUsers(t *testing.T) {
 func TestBuildStatisticsBucketExpressionSQL(t *testing.T) {
 	t.Parallel()
 
-	hourExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketHour, "created_at")
+	hourExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketHour, "created_at", "$3")
 	if err != nil {
 		t.Fatalf("buildStatisticsBucketExpressionSQL(hour) returned error: %v", err)
 	}
 	if !strings.Contains(hourExpr, "date_trunc('hour'") {
 		t.Fatalf("hour expression = %q, expected hour date_trunc", hourExpr)
 	}
+	// The timezone must be bound as a parameter and re-anchored, not inlined.
+	if !strings.Contains(hourExpr, "AT TIME ZONE $3) AT TIME ZONE $3") {
+		t.Fatalf("hour expression = %q, expected re-anchored tz placeholder", hourExpr)
+	}
 
-	dayExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketDay, "upload_time")
+	dayExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketDay, "upload_time", "$3")
 	if err != nil {
 		t.Fatalf("buildStatisticsBucketExpressionSQL(day) returned error: %v", err)
 	}
@@ -167,7 +228,15 @@ func TestBuildStatisticsBucketExpressionSQL(t *testing.T) {
 		t.Fatalf("day expression = %q, expected day date_trunc", dayExpr)
 	}
 
-	if _, err := buildStatisticsBucketExpressionSQL("minute", "created_at"); err == nil {
+	weekExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketWeek, "upload_time", "$3")
+	if err != nil {
+		t.Fatalf("buildStatisticsBucketExpressionSQL(week) returned error: %v", err)
+	}
+	if !strings.Contains(weekExpr, "date_trunc('week'") {
+		t.Fatalf("week expression = %q, expected week date_trunc", weekExpr)
+	}
+
+	if _, err := buildStatisticsBucketExpressionSQL("minute", "created_at", "$3"); err == nil {
 		t.Fatalf("expected invalid bucket to fail")
 	}
 }
