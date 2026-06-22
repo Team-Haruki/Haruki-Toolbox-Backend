@@ -35,6 +35,12 @@ func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
 		}
 		*dst = om
 	default:
+		// shamaton's decoder recurses per nesting level with no depth limit, so a
+		// deeply nested payload would trigger an unrecoverable stack overflow.
+		// Pre-validate structure/depth before handing untrusted bytes to it.
+		if err := orderedmsgpack.ValidateMaxDepth(unpadded, orderedmsgpack.DefaultMaxUploadDepth); err != nil {
+			return fmt.Errorf("msgpack validation (len=%d, target=%T): %w", len(unpadded), out, err)
+		}
 		if err := msgpack.Unmarshal(unpadded, out); err != nil {
 			preview := unpadded
 			if len(preview) > 200 {

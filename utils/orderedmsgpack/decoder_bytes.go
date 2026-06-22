@@ -248,6 +248,12 @@ func (d *byteDecoder) decodeMapKey(depth int) (string, error) {
 }
 
 func (d *byteDecoder) decodeArray(n int, depth int) ([]any, error) {
+	// Each element consumes at least one byte, so an array claiming more elements
+	// than there are remaining bytes is malformed; reject before allocating to
+	// avoid an unbounded make() driven by an attacker-controlled length header.
+	if n < 0 || n > len(d.data)-d.off {
+		return nil, fmt.Errorf("array length %d exceeds remaining bytes %d", n, len(d.data)-d.off)
+	}
 	arr := make([]any, n)
 	for i := range n {
 		val, err := d.decodeValue(depth)
