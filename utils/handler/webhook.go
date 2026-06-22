@@ -8,7 +8,9 @@ import (
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
+	"io"
 	"net"
+	stdhttp "net/http"
 	urlpkg "net/url"
 	"strings"
 	"sync"
@@ -18,6 +20,79 @@ import (
 const webhookCallbackTimeout = 10 * time.Second
 
 var webhookIPAddrLookup = net.DefaultResolver.LookupIPAddr
+
+// webhookSafeDialContext resolves the target host at connection time and dials
+// only public IPs, defeating DNS-rebinding: validating the URL's DNS up front is
+// not enough because the request re-resolves at dial time. The connection is
+// pinned to an IP that was just re-checked here.
+func webhookSafeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if isPrivateOrLocalIP(ip) {
+			return nil, fmt.Errorf("blocked private webhook address %s", ip)
+		}
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, addr)
+	}
+	addrs, err := webhookIPAddrLookup(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return nil, fmt.Errorf("resolve webhook host %q: %w", host, err)
+	}
+	for _, a := range addrs {
+		if isPrivateOrLocalIP(a.IP) {
+			return nil, fmt.Errorf("blocked private webhook address %s", a.IP)
+		}
+	}
+	var dialer net.Dialer
+	var lastErr error
+	for _, a := range addrs {
+		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(a.IP.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no dialable address for webhook host %q", host)
+	}
+	return nil, lastErr
+}
+
+// webhookCallbackHTTPClient is dedicated to user-supplied webhook callback URLs:
+// SSRF-guarded dialer, no redirects, no internal proxy.
+var webhookCallbackHTTPClient = &stdhttp.Client{
+	Timeout: webhookCallbackTimeout,
+	CheckRedirect: func(*stdhttp.Request, []*stdhttp.Request) error {
+		return stdhttp.ErrUseLastResponse
+	},
+	Transport: &stdhttp.Transport{
+		Proxy:                 nil,
+		DialContext:           webhookSafeDialContext,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: webhookCallbackTimeout,
+		MaxIdleConns:          16,
+	},
+}
+
+func doWebhookCallback(ctx context.Context, url string, headers map[string]string) (int, error) {
+	req, err := stdhttp.NewRequestWithContext(ctx, stdhttp.MethodPost, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := webhookCallbackHTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(body io.ReadCloser) { _ = body.Close() }(resp.Body)
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
+	return resp.StatusCode, nil
+}
 
 func isHTTPSuccessStatus(statusCode int) bool {
 	return statusCode >= 200 && statusCode < 300
@@ -87,7 +162,7 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 		h.Logger.Warnf("Skipped webhook callback after URL validation failed: %s", url)
 		return
 	}
-	statusCode, _, _, err := h.HttpClient.RequestNoRedirect(ctx, "POST", url, headers, nil)
+	statusCode, err := doWebhookCallback(ctx, url, headers)
 	if err != nil {
 		h.Logger.Errorf("WebHook API call failed: %v", err)
 		return
