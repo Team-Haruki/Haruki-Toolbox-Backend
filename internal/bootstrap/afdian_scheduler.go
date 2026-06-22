@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
@@ -13,14 +14,18 @@ import (
 
 const defaultAfdianSponsorSyncInterval = 5 * time.Minute
 
-func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, cfg harukiConfig.AfdianConfig, logger *harukiLogger.Logger) {
+// startAfdianSponsorSyncScheduler launches the background sync and returns a
+// function that blocks until the goroutine has fully exited. Callers must cancel
+// ctx and then invoke the returned wait before closing the Ent client, otherwise
+// an in-flight sync can use the client after it is closed.
+func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, cfg harukiConfig.AfdianConfig, logger *harukiLogger.Logger) func() {
 	if !cfg.SyncEnabled {
 		logger.Infof("afdian sponsor sync scheduler disabled: sync_enabled is false")
-		return
+		return func() {}
 	}
 	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
 		logger.Infof("afdian sponsor sync scheduler disabled: afdian user_id or api token is not configured")
-		return
+		return func() {}
 	}
 
 	interval := defaultAfdianSponsorSyncInterval
@@ -29,7 +34,10 @@ func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, 
 	}
 
 	logger.Infof("afdian sponsor sync scheduler enabled with interval %s", interval)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		runAfdianSponsorSync(ctx, db, cfg, logger)
 
 		ticker := time.NewTicker(interval)
@@ -44,6 +52,7 @@ func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, 
 			}
 		}
 	}()
+	return wg.Wait
 }
 
 func runAfdianSponsorSync(ctx context.Context, db *dbManager.Client, cfg harukiConfig.AfdianConfig, logger *harukiLogger.Logger) {

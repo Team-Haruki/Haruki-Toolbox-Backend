@@ -202,8 +202,15 @@ func Run(cfg harukiConfig.Config) error {
 	apiHelper.BotCredentialSignToken = cfg.HarukiBot.CredentialSignToken
 	harukiAPI.RegisterRoutes(apiHelper)
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
-	defer stopSchedulers()
-	startAfdianSponsorSyncScheduler(schedulerCtx, entClient, cfg.Afdian, mainLogger)
+	waitAfdianScheduler := startAfdianSponsorSyncScheduler(schedulerCtx, entClient, cfg.Afdian, mainLogger)
+	// Cancel then drain the scheduler goroutine before the deferred entClient.Close
+	// runs, so an in-flight sync never uses the client after it is closed. Both
+	// calls are idempotent, so the explicit shutdown path below can repeat them.
+	stopAndWaitSchedulers := func() {
+		stopSchedulers()
+		waitAfdianScheduler()
+	}
+	defer stopAndWaitSchedulers()
 	loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()
 	if len(failedRegions) > 0 {
 		mainLogger.Warnf("Suite restorer initialized with %d loaded region(s), %d failed region(s): %v", loadedRegions, len(failedRegions), failedRegions)
@@ -243,7 +250,7 @@ func Run(cfg harukiConfig.Config) error {
 		mainLogger.Infof("shutdown signal received, stopping server")
 	}
 
-	stopSchedulers()
+	stopAndWaitSchedulers()
 	shutdownTimeout := time.Duration(cfg.Backend.ShutdownTimeout) * time.Second
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()

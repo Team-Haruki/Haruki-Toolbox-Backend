@@ -2,6 +2,7 @@ package sponsor
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -41,12 +42,25 @@ func handleGetSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		cfg := config.Cfg.Afdian
+		secret := strings.TrimSpace(cfg.WebhookSecret)
+		apiConfigured := strings.TrimSpace(cfg.UserID) != "" && strings.TrimSpace(cfg.APIToken) != ""
 
-		// First gate: the URL secret. Afdian webhooks are unsigned, so when a
-		// webhook_secret is configured the caller must hit the secret path.
-		if secret := strings.TrimSpace(cfg.WebhookSecret); secret != "" && c.Params("secret") != secret {
-			harukiLogger.Warnf("Afdian webhook rejected: callback secret mismatch")
+		// Fail closed: Afdian webhooks are unsigned, so with neither authenticity
+		// gate configured (no URL secret AND no API credentials to re-verify) the
+		// body cannot be trusted. Refuse to persist it rather than accept forgery.
+		if secret == "" && !apiConfigured {
+			harukiLogger.Warnf("Afdian webhook rejected: neither webhook secret nor API credentials are configured")
 			return afdianAck(c)
+		}
+
+		// First gate: the URL secret, compared in constant time. When configured,
+		// the caller must hit the secret path.
+		if secret != "" {
+			provided := strings.TrimSpace(c.Params("secret"))
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(secret)) != 1 {
+				harukiLogger.Warnf("Afdian webhook rejected: callback secret mismatch")
+				return afdianAck(c)
+			}
 		}
 
 		var payload map[string]any
@@ -67,7 +81,9 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		verified, found, err := VerifyAfdianOrder(c.Context(), cfg, parsed.OutTradeNo, now)
 		switch {
 		case errors.Is(err, ErrAfdianNotConfigured):
-			harukiLogger.Warnf("Afdian webhook order %q accepted without API verification: api credentials not configured", parsed.OutTradeNo)
+			// Reachable only when the URL secret gate above passed, so the body is
+			// trusted by virtue of the secret even though API re-verification is off.
+			harukiLogger.Warnf("Afdian webhook order %q accepted via URL secret without API verification", parsed.OutTradeNo)
 		case err != nil:
 			harukiLogger.Warnf("Afdian webhook order %q verification request failed: %v", parsed.OutTradeNo, err)
 			return afdianAck(c)
