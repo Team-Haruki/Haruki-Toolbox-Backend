@@ -4,11 +4,35 @@ import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"sort"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+// currentActorIsSuperAdmin reports whether the authenticated admin is a super_admin.
+func currentActorIsSuperAdmin(c fiber.Ctx) (bool, error) {
+	_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+	if err != nil {
+		return false, err
+	}
+	return adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin, nil
+}
+
+// scopeSystemLogsForActor hides super_admin-actor rows from non-super-admins, so a
+// plain admin cannot read a super_admin's audit history (IP/UA/action timeline).
+// Rows with no actor_role (anonymous/user/system) stay visible.
+func scopeSystemLogsForActor(query *postgresql.SystemLogQuery, isSuperAdmin bool) *postgresql.SystemLogQuery {
+	if isSuperAdmin {
+		return query
+	}
+	return query.Where(systemlog.Or(
+		systemlog.ActorRoleIsNil(),
+		systemlog.ActorRoleNEQ(adminCoreModule.RoleSuperAdmin),
+	))
+}
 
 type categoryCount struct {
 	Key   string `json:"key"`

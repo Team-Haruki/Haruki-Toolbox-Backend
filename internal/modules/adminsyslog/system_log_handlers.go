@@ -19,8 +19,13 @@ func handleQuerySystemLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return respondFiberOrBadRequest(c, err, "invalid query filters")
 		}
 
+		isSuperAdmin, err := currentActorIsSuperAdmin(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		dbCtx := c.Context()
-		baseQuery := applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters)
+		baseQuery := scopeSystemLogsForActor(applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -70,8 +75,13 @@ func handleGetSystemLogSummary(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			return respondFiberOrBadRequest(c, err, "invalid query filters")
 		}
 
+		isSuperAdmin, err := currentActorIsSuperAdmin(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		dbCtx := c.Context()
-		baseQuery := applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters)
+		baseQuery := scopeSystemLogsForActor(applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -167,6 +177,11 @@ func handleGetSystemLogDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorBadRequest(c, "id must be a positive integer")
 		}
 
+		isSuperAdmin, err := currentActorIsSuperAdmin(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		row, err := apiHelper.DBManager.DB.SystemLog.Query().
 			Where(systemlog.IDEQ(id)).
 			Only(c.Context())
@@ -175,6 +190,11 @@ func handleGetSystemLogDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 				return harukiAPIHelper.ErrorNotFound(c, "system log not found")
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query system log detail")
+		}
+
+		// A plain admin must not read a super_admin's audit entry.
+		if !isSuperAdmin && row.ActorRole != nil && adminCoreModule.NormalizeRole(*row.ActorRole) == adminCoreModule.RoleSuperAdmin {
+			return harukiAPIHelper.ErrorNotFound(c, "system log not found")
 		}
 
 		items := adminCoreModule.BuildSystemLogItems([]*postgresql.SystemLog{row})
@@ -205,7 +225,12 @@ func handleExportSystemLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return harukiAPIHelper.ErrorBadRequest(c, "format must be one of: json, csv")
 		}
 
-		baseQuery := applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters)
+		isSuperAdmin, err := currentActorIsSuperAdmin(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
+		baseQuery := scopeSystemLogsForActor(applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
 		rows, err := applySystemLogSorting(baseQuery.Clone(), filters.Sort).
 			Limit(limit).
 			All(c.Context())

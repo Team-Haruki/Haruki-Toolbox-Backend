@@ -17,6 +17,11 @@ func handleGetUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return harukiAPIHelper.ErrorBadRequest(c, "target_user_id is required")
 		}
 
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		dbUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).
@@ -26,6 +31,11 @@ func handleGetUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 				return harukiAPIHelper.ErrorNotFound(c, "user not found")
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query user role")
+		}
+
+		// A plain admin must not read a higher-privilege user's role/ban status.
+		if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, dbUser.ID, string(dbUser.Role)); err != nil {
+			return adminCoreModule.RespondFiberOrForbidden(c, err, "insufficient permissions")
 		}
 
 		resp := userRoleResponse{
