@@ -58,6 +58,7 @@ func Run(cfg harukiConfig.Config) error {
 
 	mainLogger := harukiLogger.NewLogger("Main", cfg.Backend.LogLevel, loggerWriter)
 	mainLogger.Infof("%s", fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
+	mainLogger.Infof("Build commit: %s, built at: %s", harukiVersion.Commit, harukiVersion.BuildDate)
 	mainLogger.Infof("Powered By Haruki Dev Team")
 
 	sekaiAPIClient := harukiSekaiAPIClient.NewHarukiSekaiAPIClient(cfg.SekaiAPI.APIEndpoint, cfg.SekaiAPI.APIToken)

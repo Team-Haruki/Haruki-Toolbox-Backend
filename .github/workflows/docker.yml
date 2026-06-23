@@ -72,6 +72,19 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
 
+      - name: Resolve build metadata
+        id: build_meta
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${{ github.ref_name }}"
+          else
+            version="${{ github.ref_name }}-$(echo "${{ github.sha }}" | cut -c1-7)"
+          fi
+          {
+            echo "version=${version}"
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and optionally push image
         uses: docker/build-push-action@v7
         with:
@@ -80,5 +93,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.build_meta.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.build_meta.outputs.date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

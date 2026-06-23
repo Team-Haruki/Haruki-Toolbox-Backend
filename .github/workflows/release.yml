@@ -51,7 +51,12 @@ jobs:
           mkdir -p dist
           MODULE=$(go list -m)
           VERSION="${{ github.ref_name }}"
-          go build -trimpath -ldflags "-s -w -X ${MODULE}/version.Version=${VERSION}" -o "dist/${{ env.BINARY_NAME }}" .
+          GIT_SHA="${{ github.sha }}"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go build -trimpath -ldflags "-s -w \
+            -X ${MODULE}/version.Version=${VERSION} \
+            -X ${MODULE}/version.Commit=${GIT_SHA} \
+            -X ${MODULE}/version.BuildDate=${BUILD_DATE}" -o "dist/${{ env.BINARY_NAME }}" .
           tar -czf "dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz" -C dist "${{ env.BINARY_NAME }}"
 
       - name: Upload packaged artifact
