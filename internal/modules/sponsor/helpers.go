@@ -171,8 +171,17 @@ func BuildSponsorPageResponse(rows []*postgresql.Sponsor, now time.Time) Sponsor
 
 func sortSponsorItems(items []SponsorItem) {
 	sort.SliceStable(items, func(i, j int) bool {
+		// Primary: higher tier (plan rank) first.
 		if items[i].PlanRank != items[j].PlanRank {
 			return items[i].PlanRank > items[j].PlanRank
+		}
+		// Secondary: longer duration first (later expiry ahead; one-time/no-expiry last).
+		ei, ej := items[i].PlanExpiresAt, items[j].PlanExpiresAt
+		if (ei == nil) != (ej == nil) {
+			return ej == nil
+		}
+		if ei != nil && ej != nil && !ei.Equal(*ej) {
+			return ei.After(*ej)
 		}
 		if items[i].PlanName != items[j].PlanName {
 			return items[i].PlanName < items[j].PlanName

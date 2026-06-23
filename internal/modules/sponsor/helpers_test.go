@@ -229,6 +229,59 @@ func TestSponsorPageResponseHidesPaymentAmount(t *testing.T) {
 	}
 }
 
+func TestSortSponsorItemsTierThenDuration(t *testing.T) {
+	now := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	month := 1
+	soon := now.Add(60 * 24 * time.Hour)
+	later := now.Add(300 * 24 * time.Hour)
+
+	// Lower tier but longer duration must still rank below a higher tier.
+	lowTierLongDuration := &postgresql.Sponsor{
+		ID:            "low-long",
+		PlanName:      stringPointerOrNil("简单支持一下"),
+		Source:        sponsorSchema.SourceAfdian,
+		IsActive:      true,
+		PlanRank:      500,
+		PlanPayMonths: &month,
+		PlanExpiresAt: &later,
+		SupportCount:  1,
+	}
+	highTierShortDuration := &postgresql.Sponsor{
+		ID:            "high-short",
+		PlanName:      stringPointerOrNil("强烈支持一下"),
+		Source:        sponsorSchema.SourceAfdian,
+		IsActive:      true,
+		PlanRank:      3000,
+		PlanPayMonths: &month,
+		PlanExpiresAt: &soon,
+		SupportCount:  1,
+	}
+	// Same tier as above: longer remaining duration wins the tiebreak.
+	highTierLongDuration := &postgresql.Sponsor{
+		ID:            "high-long",
+		PlanName:      stringPointerOrNil("强烈支持一下"),
+		Source:        sponsorSchema.SourceAfdian,
+		IsActive:      true,
+		PlanRank:      3000,
+		PlanPayMonths: &month,
+		PlanExpiresAt: &later,
+		SupportCount:  1,
+	}
+
+	resp := BuildSponsorPageResponse(
+		[]*postgresql.Sponsor{lowTierLongDuration, highTierShortDuration, highTierLongDuration},
+		now,
+	)
+
+	got := []string{resp.Supporters[0].ID, resp.Supporters[1].ID, resp.Supporters[2].ID}
+	want := []string{"high-long", "high-short", "low-long"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sort order = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestBuildSponsorPageResponseExpiresDurationSponsors(t *testing.T) {
 	now := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
 	oneTime := &postgresql.Sponsor{
