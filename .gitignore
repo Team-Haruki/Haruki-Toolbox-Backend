@@ -47,6 +47,9 @@ registration-handoff.cn.md
 # Local one-off backfill command (kept locally, not pushed)
 cmd/suite-rec-backfill/
 
+# Internal security audit record (contains unfixed-vuln detail; do not publish)
+SECURITY-AUDIT-2026-06.md
+
 
 
 # OS generated files
