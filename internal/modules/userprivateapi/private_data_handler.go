@@ -77,8 +77,10 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		dbUser := gameAccountBinding.Edges.User
 
 		// The requester is authorized if either: they are the owner's own bound
-		// social account, or the owner granted fast-verification to this platform
-		// account. Both must be scoped to the resolved owner (dbUser.ID); querying
+		// social account, or the owner authorized this platform account (any
+		// authorize-social grant — the direct data fetch intentionally does NOT
+		// require allow_fast_verification; that flag gates the bindings query API
+		// only). Both must be scoped to the resolved owner (dbUser.ID); querying
 		// the authorize table without the owner constraint is a cross-user IDOR.
 		authorized := dbUser.Edges.SocialPlatformInfo != nil &&
 			dbUser.Edges.SocialPlatformInfo.Platform == platform &&
@@ -89,7 +91,6 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 					authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
 					authorizesocialplatforminfo.PlatformEQ(platform),
 					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
-					authorizesocialplatforminfo.AllowFastVerificationEQ(true),
 				).
 				Exist(ctx)
 			if authErr != nil {
