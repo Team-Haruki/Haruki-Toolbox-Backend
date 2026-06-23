@@ -7,7 +7,7 @@ import (
 
 const (
 	defaultAdminOAuthClientStatsWindowHours = 24
-	maxAdminOAuthClientStatsWindowHours     = 24 * 30
+	maxAdminOAuthClientStatsWindowHours     = 24 * 366 // up to ~1 year (leap-safe); coarse buckets keep point count sane
 
 	defaultAdminOAuthClientPage     = 1
 	defaultAdminOAuthClientPageSize = 100

@@ -43,7 +43,8 @@ func TestParseAdminOAuthClientStatsWindowHours(t *testing.T) {
 	})
 
 	t.Run("exceeds max", func(t *testing.T) {
-		if _, err := parseAdminOAuthClientStatsWindowHours("999"); err == nil {
+		oversized := fmt.Sprintf("%d", maxAdminOAuthClientStatsWindowHours+1)
+		if _, err := parseAdminOAuthClientStatsWindowHours(oversized); err == nil {
 			t.Fatalf("expected oversized hours to fail")
 		}
 	})

@@ -20,7 +20,7 @@ const (
 
 const (
 	defaultRiskEventWindowHours = 24
-	maxRiskEventRangeHours      = 24 * 30
+	maxRiskEventRangeHours      = 24 * 366 // up to ~1 year (leap-safe); coarse buckets keep point count sane
 )
 
 func resolveRiskEventTimeRange(fromRaw, toRaw string, now time.Time) (time.Time, time.Time, error) {
