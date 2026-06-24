@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 
+	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -20,7 +22,12 @@ type FriendLinkData struct {
 func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		links, err := apiHelper.DBManager.DB.FriendLink.Query().All(ctx)
+		links, err := apiHelper.DBManager.DB.FriendLink.Query().
+			Order(
+				friendlink.BySortOrder(sql.OrderAsc()),
+				friendlink.ByID(sql.OrderAsc()),
+			).
+			All(ctx)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "Failed to fetch friend links")
 		}

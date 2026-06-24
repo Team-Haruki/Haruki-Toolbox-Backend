@@ -24,6 +24,9 @@ func (FriendLink) Fields() []ent.Field {
 			MaxLen(500),
 		field.JSON("tags", []string{}).
 			Optional(),
+		field.Int("sort_order").
+			Default(0).
+			Comment("Manual ordering weight; ascending, lower values appear first."),
 	}
 }
 

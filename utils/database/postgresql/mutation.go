@@ -784,6 +784,8 @@ type FriendLinkMutation struct {
 	url           *string
 	tags          *[]string
 	appendtags    []string
+	sort_order    *int
+	addsort_order *int
 	clearedFields map[string]struct{}
 	done          bool
 	oldValue      func(context.Context) (*FriendLink, error)
@@ -1103,6 +1105,62 @@ func (m *FriendLinkMutation) ResetTags() {
 	delete(m.clearedFields, friendlink.FieldTags)
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (m *FriendLinkMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *FriendLinkMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the FriendLink entity.
+// If the FriendLink object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FriendLinkMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *FriendLinkMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *FriendLinkMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *FriendLinkMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
 // Where appends a list predicates to the FriendLinkMutation builder.
 func (m *FriendLinkMutation) Where(ps ...predicate.FriendLink) {
 	m.predicates = append(m.predicates, ps...)
@@ -1137,7 +1195,7 @@ func (m *FriendLinkMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FriendLinkMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.name != nil {
 		fields = append(fields, friendlink.FieldName)
 	}
@@ -1152,6 +1210,9 @@ func (m *FriendLinkMutation) Fields() []string {
 	}
 	if m.tags != nil {
 		fields = append(fields, friendlink.FieldTags)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, friendlink.FieldSortOrder)
 	}
 	return fields
 }
@@ -1171,6 +1232,8 @@ func (m *FriendLinkMutation) Field(name string) (ent.Value, bool) {
 		return m.URL()
 	case friendlink.FieldTags:
 		return m.Tags()
+	case friendlink.FieldSortOrder:
+		return m.SortOrder()
 	}
 	return nil, false
 }
@@ -1190,6 +1253,8 @@ func (m *FriendLinkMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldURL(ctx)
 	case friendlink.FieldTags:
 		return m.OldTags(ctx)
+	case friendlink.FieldSortOrder:
+		return m.OldSortOrder(ctx)
 	}
 	return nil, fmt.Errorf("unknown FriendLink field %s", name)
 }
@@ -1234,6 +1299,13 @@ func (m *FriendLinkMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTags(v)
 		return nil
+	case friendlink.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
 	}
 	return fmt.Errorf("unknown FriendLink field %s", name)
 }
@@ -1241,13 +1313,21 @@ func (m *FriendLinkMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *FriendLinkMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, friendlink.FieldSortOrder)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *FriendLinkMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case friendlink.FieldSortOrder:
+		return m.AddedSortOrder()
+	}
 	return nil, false
 }
 
@@ -1256,6 +1336,13 @@ func (m *FriendLinkMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *FriendLinkMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case friendlink.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
 	}
 	return fmt.Errorf("unknown FriendLink numeric field %s", name)
 }
@@ -1306,6 +1393,9 @@ func (m *FriendLinkMutation) ResetField(name string) error {
 		return nil
 	case friendlink.FieldTags:
 		m.ResetTags()
+		return nil
+	case friendlink.FieldSortOrder:
+		m.ResetSortOrder()
 		return nil
 	}
 	return fmt.Errorf("unknown FriendLink field %s", name)

@@ -21,6 +21,8 @@ const (
 	FieldURL = "url"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
+	// FieldSortOrder holds the string denoting the sort_order field in the database.
+	FieldSortOrder = "sort_order"
 	// Table holds the table name of the friendlink in the database.
 	Table = "friend_links"
 )
@@ -33,6 +35,7 @@ var Columns = []string{
 	FieldAvatar,
 	FieldURL,
 	FieldTags,
+	FieldSortOrder,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -54,6 +57,8 @@ var (
 	AvatarValidator func(string) error
 	// URLValidator is a validator for the "url" field. It is called by the builders before save.
 	URLValidator func(string) error
+	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
+	DefaultSortOrder int
 )
 
 // OrderOption defines the ordering options for the FriendLink queries.
@@ -82,4 +87,9 @@ func ByAvatar(opts ...sql.OrderTermOption) OrderOption {
 // ByURL orders the results by the url field.
 func ByURL(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldURL, opts...).ToFunc()
+}
+
+// BySortOrder orders the results by the sort_order field.
+func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
 }

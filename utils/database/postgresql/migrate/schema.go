@@ -48,6 +48,7 @@ var (
 		{Name: "avatar", Type: field.TypeString, Size: 500},
 		{Name: "url", Type: field.TypeString, Size: 500},
 		{Name: "tags", Type: field.TypeJSON, Nullable: true},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 	}
 	// FriendLinksTable holds the schema information for the "friend_links" table.
 	FriendLinksTable = &schema.Table{

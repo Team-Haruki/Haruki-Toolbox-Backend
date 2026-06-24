@@ -49,6 +49,20 @@ func (_c *FriendLinkCreate) SetTags(v []string) *FriendLinkCreate {
 	return _c
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (_c *FriendLinkCreate) SetSortOrder(v int) *FriendLinkCreate {
+	_c.mutation.SetSortOrder(v)
+	return _c
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_c *FriendLinkCreate) SetNillableSortOrder(v *int) *FriendLinkCreate {
+	if v != nil {
+		_c.SetSortOrder(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *FriendLinkCreate) SetID(v int) *FriendLinkCreate {
 	_c.mutation.SetID(v)
@@ -62,6 +76,7 @@ func (_c *FriendLinkCreate) Mutation() *FriendLinkMutation {
 
 // Save creates the FriendLink in the database.
 func (_c *FriendLinkCreate) Save(ctx context.Context) (*FriendLink, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -84,6 +99,14 @@ func (_c *FriendLinkCreate) Exec(ctx context.Context) error {
 func (_c *FriendLinkCreate) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_c *FriendLinkCreate) defaults() {
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		v := friendlink.DefaultSortOrder
+		_c.mutation.SetSortOrder(v)
 	}
 }
 
@@ -120,6 +143,9 @@ func (_c *FriendLinkCreate) check() error {
 		if err := friendlink.URLValidator(v); err != nil {
 			return &ValidationError{Name: "url", err: fmt.Errorf(`postgresql: validator failed for field "FriendLink.url": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		return &ValidationError{Name: "sort_order", err: errors.New(`postgresql: missing required field "FriendLink.sort_order"`)}
 	}
 	return nil
 }
@@ -173,6 +199,10 @@ func (_c *FriendLinkCreate) createSpec() (*FriendLink, *sqlgraph.CreateSpec) {
 		_spec.SetField(friendlink.FieldTags, field.TypeJSON, value)
 		_node.Tags = value
 	}
+	if value, ok := _c.mutation.SortOrder(); ok {
+		_spec.SetField(friendlink.FieldSortOrder, field.TypeInt, value)
+		_node.SortOrder = value
+	}
 	return _node, _spec
 }
 
@@ -194,6 +224,7 @@ func (_c *FriendLinkCreateBulk) Save(ctx context.Context) ([]*FriendLink, error)
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*FriendLinkMutation)
 				if !ok {

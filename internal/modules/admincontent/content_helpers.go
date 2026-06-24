@@ -53,6 +53,12 @@ func parseAdminFriendLinkPayload(c fiber.Ctx) (*adminFriendLinkPayload, error) {
 	payload.Avatar = strings.TrimSpace(payload.Avatar)
 	payload.URL = strings.TrimSpace(payload.URL)
 	payload.Tags = sanitizeAdminTags(payload.Tags)
+	if payload.SortOrder == 0 {
+		payload.SortOrder = payload.SortOrderSnake
+	}
+	if payload.SortOrder < 0 {
+		payload.SortOrder = 0
+	}
 
 	if payload.Name == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "name is required")
@@ -173,6 +179,7 @@ func buildAdminFriendLinkItem(row *postgresql.FriendLink) adminFriendLinkItem {
 		Avatar:      row.Avatar,
 		URL:         row.URL,
 		Tags:        append([]string(nil), row.Tags...),
+		SortOrder:   row.SortOrder,
 	}
 }
 
@@ -182,7 +189,8 @@ func buildAdminFriendLinkCreateBuilder(apiHelper *harukiAPIHelper.HarukiToolboxR
 		SetDescription(payload.Description).
 		SetAvatar(payload.Avatar).
 		SetURL(payload.URL).
-		SetTags(payload.Tags)
+		SetTags(payload.Tags).
+		SetSortOrder(payload.SortOrder)
 }
 
 func queryNextFriendLinkID(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (int, error) {

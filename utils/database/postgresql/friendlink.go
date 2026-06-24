@@ -26,7 +26,9 @@ type FriendLink struct {
 	// URL holds the value of the "url" field.
 	URL string `json:"url,omitempty"`
 	// Tags holds the value of the "tags" field.
-	Tags         []string `json:"tags,omitempty"`
+	Tags []string `json:"tags,omitempty"`
+	// Manual ordering weight; ascending, lower values appear first.
+	SortOrder    int `json:"sort_order,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -37,7 +39,7 @@ func (*FriendLink) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case friendlink.FieldTags:
 			values[i] = new([]byte)
-		case friendlink.FieldID:
+		case friendlink.FieldID, friendlink.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
 		case friendlink.FieldName, friendlink.FieldDescription, friendlink.FieldAvatar, friendlink.FieldURL:
 			values[i] = new(sql.NullString)
@@ -94,6 +96,12 @@ func (_m *FriendLink) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field tags: %w", err)
 				}
 			}
+		case friendlink.FieldSortOrder:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sort_order", values[i])
+			} else if value.Valid {
+				_m.SortOrder = int(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -144,6 +152,9 @@ func (_m *FriendLink) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("tags=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
+	builder.WriteString(", ")
+	builder.WriteString("sort_order=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -13,11 +13,13 @@ import (
 )
 
 type adminFriendLinkPayload struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Avatar      string   `json:"avatar"`
-	URL         string   `json:"url"`
-	Tags        []string `json:"tags"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Avatar         string   `json:"avatar"`
+	URL            string   `json:"url"`
+	Tags           []string `json:"tags"`
+	SortOrder      int      `json:"sortOrder"`
+	SortOrderSnake int      `json:"sort_order"`
 }
 
 type adminFriendLinkItem struct {
@@ -27,6 +29,7 @@ type adminFriendLinkItem struct {
 	Avatar      string   `json:"avatar"`
 	URL         string   `json:"url"`
 	Tags        []string `json:"tags"`
+	SortOrder   int      `json:"sortOrder"`
 }
 
 type adminFriendLinksResponse struct {
@@ -89,7 +92,10 @@ func handleAdminListFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	return func(c fiber.Ctx) error {
 		const action = adminContentActionFriendLinkList
 		rows, err := apiHelper.DBManager.DB.FriendLink.Query().
-			Order(friendlink.ByID(sql.OrderAsc())).
+			Order(
+				friendlink.BySortOrder(sql.OrderAsc()),
+				friendlink.ByID(sql.OrderAsc()),
+			).
 			All(c.Context())
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, adminAuditTargetIDAll, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryFriendLinksFailed, nil))
@@ -180,6 +186,7 @@ func handleAdminUpdateFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			SetAvatar(payload.Avatar).
 			SetURL(payload.URL).
 			SetTags(payload.Tags).
+			SetSortOrder(payload.SortOrder).
 			Save(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {

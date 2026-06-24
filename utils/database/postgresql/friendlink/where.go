@@ -72,6 +72,11 @@ func URL(v string) predicate.FriendLink {
 	return predicate.FriendLink(sql.FieldEQ(FieldURL, v))
 }
 
+// SortOrder applies equality check predicate on the "sort_order" field. It's identical to SortOrderEQ.
+func SortOrder(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldEQ(FieldSortOrder, v))
+}
+
 // NameEQ applies the EQ predicate on the "name" field.
 func NameEQ(v string) predicate.FriendLink {
 	return predicate.FriendLink(sql.FieldEQ(FieldName, v))
@@ -340,6 +345,46 @@ func TagsIsNil() predicate.FriendLink {
 // TagsNotNil applies the NotNil predicate on the "tags" field.
 func TagsNotNil() predicate.FriendLink {
 	return predicate.FriendLink(sql.FieldNotNull(FieldTags))
+}
+
+// SortOrderEQ applies the EQ predicate on the "sort_order" field.
+func SortOrderEQ(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldEQ(FieldSortOrder, v))
+}
+
+// SortOrderNEQ applies the NEQ predicate on the "sort_order" field.
+func SortOrderNEQ(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldNEQ(FieldSortOrder, v))
+}
+
+// SortOrderIn applies the In predicate on the "sort_order" field.
+func SortOrderIn(vs ...int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldIn(FieldSortOrder, vs...))
+}
+
+// SortOrderNotIn applies the NotIn predicate on the "sort_order" field.
+func SortOrderNotIn(vs ...int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldNotIn(FieldSortOrder, vs...))
+}
+
+// SortOrderGT applies the GT predicate on the "sort_order" field.
+func SortOrderGT(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldGT(FieldSortOrder, v))
+}
+
+// SortOrderGTE applies the GTE predicate on the "sort_order" field.
+func SortOrderGTE(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldGTE(FieldSortOrder, v))
+}
+
+// SortOrderLT applies the LT predicate on the "sort_order" field.
+func SortOrderLT(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldLT(FieldSortOrder, v))
+}
+
+// SortOrderLTE applies the LTE predicate on the "sort_order" field.
+func SortOrderLTE(v int) predicate.FriendLink {
+	return predicate.FriendLink(sql.FieldLTE(FieldSortOrder, v))
 }
 
 // And groups predicates with the AND operator between them.

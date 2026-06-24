@@ -102,6 +102,27 @@ func (_u *FriendLinkUpdate) ClearTags() *FriendLinkUpdate {
 	return _u
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (_u *FriendLinkUpdate) SetSortOrder(v int) *FriendLinkUpdate {
+	_u.mutation.ResetSortOrder()
+	_u.mutation.SetSortOrder(v)
+	return _u
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_u *FriendLinkUpdate) SetNillableSortOrder(v *int) *FriendLinkUpdate {
+	if v != nil {
+		_u.SetSortOrder(*v)
+	}
+	return _u
+}
+
+// AddSortOrder adds value to the "sort_order" field.
+func (_u *FriendLinkUpdate) AddSortOrder(v int) *FriendLinkUpdate {
+	_u.mutation.AddSortOrder(v)
+	return _u
+}
+
 // Mutation returns the FriendLinkMutation object of the builder.
 func (_u *FriendLinkUpdate) Mutation() *FriendLinkMutation {
 	return _u.mutation
@@ -194,6 +215,12 @@ func (_u *FriendLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.TagsCleared() {
 		_spec.ClearField(friendlink.FieldTags, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SortOrder(); ok {
+		_spec.SetField(friendlink.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSortOrder(); ok {
+		_spec.AddField(friendlink.FieldSortOrder, field.TypeInt, value)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{friendlink.Label}
@@ -285,6 +312,27 @@ func (_u *FriendLinkUpdateOne) AppendTags(v []string) *FriendLinkUpdateOne {
 // ClearTags clears the value of the "tags" field.
 func (_u *FriendLinkUpdateOne) ClearTags() *FriendLinkUpdateOne {
 	_u.mutation.ClearTags()
+	return _u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (_u *FriendLinkUpdateOne) SetSortOrder(v int) *FriendLinkUpdateOne {
+	_u.mutation.ResetSortOrder()
+	_u.mutation.SetSortOrder(v)
+	return _u
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_u *FriendLinkUpdateOne) SetNillableSortOrder(v *int) *FriendLinkUpdateOne {
+	if v != nil {
+		_u.SetSortOrder(*v)
+	}
+	return _u
+}
+
+// AddSortOrder adds value to the "sort_order" field.
+func (_u *FriendLinkUpdateOne) AddSortOrder(v int) *FriendLinkUpdateOne {
+	_u.mutation.AddSortOrder(v)
 	return _u
 }
 
@@ -409,6 +457,12 @@ func (_u *FriendLinkUpdateOne) sqlSave(ctx context.Context) (_node *FriendLink, 
 	}
 	if _u.mutation.TagsCleared() {
 		_spec.ClearField(friendlink.FieldTags, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SortOrder(); ok {
+		_spec.SetField(friendlink.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSortOrder(); ok {
+		_spec.AddField(friendlink.FieldSortOrder, field.TypeInt, value)
 	}
 	_node = &FriendLink{config: _u.config}
 	_spec.Assign = _node.assignValues

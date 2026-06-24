@@ -55,6 +55,10 @@ func init() {
 	friendlinkDescURL := friendlinkFields[4].Descriptor()
 	// friendlink.URLValidator is a validator for the "url" field. It is called by the builders before save.
 	friendlink.URLValidator = friendlinkDescURL.Validators[0].(func(string) error)
+	// friendlinkDescSortOrder is the schema descriptor for sort_order field.
+	friendlinkDescSortOrder := friendlinkFields[6].Descriptor()
+	// friendlink.DefaultSortOrder holds the default value on creation for the sort_order field.
+	friendlink.DefaultSortOrder = friendlinkDescSortOrder.Default.(int)
 	gameaccountbindingFields := schema.GameAccountBinding{}.Fields()
 	_ = gameaccountbindingFields
 	// gameaccountbindingDescVerified is the schema descriptor for verified field.
