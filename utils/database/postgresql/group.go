@@ -18,6 +18,8 @@ type Group struct {
 	ID int `json:"id,omitempty"`
 	// Group holds the value of the "group" field.
 	Group string `json:"group,omitempty"`
+	// Manual ordering weight; ascending, lower values appear first.
+	SortOrder int `json:"sort_order,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GroupQuery when eager-loading is set.
 	Edges        GroupEdges `json:"edges"`
@@ -47,7 +49,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case group.FieldID:
+		case group.FieldID, group.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
 		case group.FieldGroup:
 			values[i] = new(sql.NullString)
@@ -77,6 +79,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field group", values[i])
 			} else if value.Valid {
 				_m.Group = value.String
+			}
+		case group.FieldSortOrder:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sort_order", values[i])
+			} else if value.Valid {
+				_m.SortOrder = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -121,6 +129,9 @@ func (_m *Group) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("group=")
 	builder.WriteString(_m.Group)
+	builder.WriteString(", ")
+	builder.WriteString("sort_order=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
 	builder.WriteByte(')')
 	return builder.String()
 }

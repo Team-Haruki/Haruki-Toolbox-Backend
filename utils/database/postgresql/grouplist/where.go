@@ -78,6 +78,11 @@ func Detail(v string) predicate.GroupList {
 	return predicate.GroupList(sql.FieldEQ(FieldDetail, v))
 }
 
+// SortOrder applies equality check predicate on the "sort_order" field. It's identical to SortOrderEQ.
+func SortOrder(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldEQ(FieldSortOrder, v))
+}
+
 // NameEQ applies the EQ predicate on the "name" field.
 func NameEQ(v string) predicate.GroupList {
 	return predicate.GroupList(sql.FieldEQ(FieldName, v))
@@ -421,6 +426,46 @@ func DetailEqualFold(v string) predicate.GroupList {
 // DetailContainsFold applies the ContainsFold predicate on the "detail" field.
 func DetailContainsFold(v string) predicate.GroupList {
 	return predicate.GroupList(sql.FieldContainsFold(FieldDetail, v))
+}
+
+// SortOrderEQ applies the EQ predicate on the "sort_order" field.
+func SortOrderEQ(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldEQ(FieldSortOrder, v))
+}
+
+// SortOrderNEQ applies the NEQ predicate on the "sort_order" field.
+func SortOrderNEQ(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldNEQ(FieldSortOrder, v))
+}
+
+// SortOrderIn applies the In predicate on the "sort_order" field.
+func SortOrderIn(vs ...int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldIn(FieldSortOrder, vs...))
+}
+
+// SortOrderNotIn applies the NotIn predicate on the "sort_order" field.
+func SortOrderNotIn(vs ...int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldNotIn(FieldSortOrder, vs...))
+}
+
+// SortOrderGT applies the GT predicate on the "sort_order" field.
+func SortOrderGT(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldGT(FieldSortOrder, v))
+}
+
+// SortOrderGTE applies the GTE predicate on the "sort_order" field.
+func SortOrderGTE(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldGTE(FieldSortOrder, v))
+}
+
+// SortOrderLT applies the LT predicate on the "sort_order" field.
+func SortOrderLT(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldLT(FieldSortOrder, v))
+}
+
+// SortOrderLTE applies the LTE predicate on the "sort_order" field.
+func SortOrderLTE(v int) predicate.GroupList {
+	return predicate.GroupList(sql.FieldLTE(FieldSortOrder, v))
 }
 
 // HasGroup applies the HasEdge predicate on the "group" edge.

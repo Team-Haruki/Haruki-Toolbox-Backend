@@ -43,6 +43,8 @@ type adminFriendGroupPayload struct {
 	GroupName      string `json:"groupName"`
 	GroupNameSnake string `json:"group_name"`
 	Name           string `json:"name"`
+	SortOrder      int    `json:"sortOrder"`
+	SortOrderSnake int    `json:"sort_order"`
 }
 
 type adminFriendGroupItemPayload struct {
@@ -53,6 +55,8 @@ type adminFriendGroupItemPayload struct {
 	GroupInfoSnake string  `json:"group_info"`
 	Detail         string  `json:"detail"`
 	Description    string  `json:"description"`
+	SortOrder      int     `json:"sortOrder"`
+	SortOrderSnake int     `json:"sort_order"`
 }
 
 type adminFriendGroupItem struct {
@@ -62,11 +66,13 @@ type adminFriendGroupItem struct {
 	Bg        *string `json:"bg,omitempty"`
 	GroupInfo string  `json:"groupInfo"`
 	Detail    string  `json:"detail"`
+	SortOrder int     `json:"sortOrder"`
 }
 
 type adminFriendGroup struct {
 	ID        int                    `json:"id"`
 	Group     string                 `json:"group"`
+	SortOrder int                    `json:"sortOrder"`
 	GroupList []adminFriendGroupItem `json:"groupList"`
 }
 
@@ -78,8 +84,9 @@ type adminFriendGroupsResponse struct {
 }
 
 type adminFriendGroupCreateResponse struct {
-	ID    int    `json:"id"`
-	Group string `json:"group"`
+	ID        int    `json:"id"`
+	Group     string `json:"group"`
+	SortOrder int    `json:"sortOrder"`
 }
 
 type adminFriendGroupItemResponse struct {
@@ -244,6 +251,7 @@ func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	friendGroups := content.Group("/friend-groups")
 	friendGroups.Get("", handleAdminListFriendGroups(apiHelper))
 	friendGroups.Post("", handleAdminCreateFriendGroup(apiHelper))
+	friendGroups.Put("/:group_id", handleAdminUpdateFriendGroup(apiHelper))
 	friendGroups.Delete("/:group_id", handleAdminDeleteFriendGroup(apiHelper))
 	friendGroups.Post("/:group_id/items", handleAdminCreateFriendGroupItem(apiHelper))
 	friendGroups.Put("/:group_id/items/:item_id", handleAdminUpdateFriendGroupItem(apiHelper))

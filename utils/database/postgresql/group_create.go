@@ -26,6 +26,20 @@ func (_c *GroupCreate) SetGroup(v string) *GroupCreate {
 	return _c
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (_c *GroupCreate) SetSortOrder(v int) *GroupCreate {
+	_c.mutation.SetSortOrder(v)
+	return _c
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSortOrder(v *int) *GroupCreate {
+	if v != nil {
+		_c.SetSortOrder(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *GroupCreate) SetID(v int) *GroupCreate {
 	_c.mutation.SetID(v)
@@ -54,6 +68,7 @@ func (_c *GroupCreate) Mutation() *GroupMutation {
 
 // Save creates the Group in the database.
 func (_c *GroupCreate) Save(ctx context.Context) (*Group, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -79,6 +94,14 @@ func (_c *GroupCreate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (_c *GroupCreate) defaults() {
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		v := group.DefaultSortOrder
+		_c.mutation.SetSortOrder(v)
+	}
+}
+
 // check runs all checks and user-defined validators on the builder.
 func (_c *GroupCreate) check() error {
 	if _, ok := _c.mutation.Group(); !ok {
@@ -88,6 +111,9 @@ func (_c *GroupCreate) check() error {
 		if err := group.GroupValidator(v); err != nil {
 			return &ValidationError{Name: "group", err: fmt.Errorf(`postgresql: validator failed for field "Group.group": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		return &ValidationError{Name: "sort_order", err: errors.New(`postgresql: missing required field "Group.sort_order"`)}
 	}
 	return nil
 }
@@ -124,6 +150,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Group(); ok {
 		_spec.SetField(group.FieldGroup, field.TypeString, value)
 		_node.Group = value
+	}
+	if value, ok := _c.mutation.SortOrder(); ok {
+		_spec.SetField(group.FieldSortOrder, field.TypeInt, value)
+		_node.SortOrder = value
 	}
 	if nodes := _c.mutation.GroupListIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -162,6 +192,7 @@ func (_c *GroupCreateBulk) Save(ctx context.Context) ([]*Group, error) {
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*GroupMutation)
 				if !ok {

@@ -27,6 +27,8 @@ type GroupList struct {
 	GroupInfo string `json:"group_info,omitempty"`
 	// Detail holds the value of the "detail" field.
 	Detail string `json:"detail,omitempty"`
+	// Manual ordering weight; ascending, lower values appear first.
+	SortOrder int `json:"sort_order,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GroupListQuery when eager-loading is set.
 	Edges            GroupListEdges `json:"edges"`
@@ -59,7 +61,7 @@ func (*GroupList) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case grouplist.FieldID:
+		case grouplist.FieldID, grouplist.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
 		case grouplist.FieldName, grouplist.FieldAvatar, grouplist.FieldBg, grouplist.FieldGroupInfo, grouplist.FieldDetail:
 			values[i] = new(sql.NullString)
@@ -117,6 +119,12 @@ func (_m *GroupList) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field detail", values[i])
 			} else if value.Valid {
 				_m.Detail = value.String
+			}
+		case grouplist.FieldSortOrder:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sort_order", values[i])
+			} else if value.Valid {
+				_m.SortOrder = int(value.Int64)
 			}
 		case grouplist.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -184,6 +192,9 @@ func (_m *GroupList) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("detail=")
 	builder.WriteString(_m.Detail)
+	builder.WriteString(", ")
+	builder.WriteString("sort_order=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
 	builder.WriteByte(')')
 	return builder.String()
 }

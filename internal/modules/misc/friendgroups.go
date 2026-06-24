@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 
+	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -12,7 +16,16 @@ func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		groups, err := apiHelper.DBManager.DB.Group.Query().
-			WithGroupList().
+			WithGroupList(func(q *postgresql.GroupListQuery) {
+				q.Order(
+					grouplist.BySortOrder(sql.OrderAsc()),
+					grouplist.ByID(sql.OrderAsc()),
+				)
+			}).
+			Order(
+				group.BySortOrder(sql.OrderAsc()),
+				group.ByID(sql.OrderAsc()),
+			).
 			All(ctx)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "Failed to fetch friend groups")

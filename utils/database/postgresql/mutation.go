@@ -2936,6 +2936,8 @@ type GroupMutation struct {
 	typ               string
 	id                *int
 	group             *string
+	sort_order        *int
+	addsort_order     *int
 	clearedFields     map[string]struct{}
 	group_list        map[int]struct{}
 	removedgroup_list map[int]struct{}
@@ -3085,6 +3087,62 @@ func (m *GroupMutation) ResetGroup() {
 	m.group = nil
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (m *GroupMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *GroupMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *GroupMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *GroupMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *GroupMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
 // AddGroupListIDs adds the "group_list" edge to the GroupList entity by ids.
 func (m *GroupMutation) AddGroupListIDs(ids ...int) {
 	if m.group_list == nil {
@@ -3173,9 +3231,12 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 1)
+	fields := make([]string, 0, 2)
 	if m.group != nil {
 		fields = append(fields, group.FieldGroup)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, group.FieldSortOrder)
 	}
 	return fields
 }
@@ -3187,6 +3248,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case group.FieldGroup:
 		return m.Group()
+	case group.FieldSortOrder:
+		return m.SortOrder()
 	}
 	return nil, false
 }
@@ -3198,6 +3261,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 	switch name {
 	case group.FieldGroup:
 		return m.OldGroup(ctx)
+	case group.FieldSortOrder:
+		return m.OldSortOrder(ctx)
 	}
 	return nil, fmt.Errorf("unknown Group field %s", name)
 }
@@ -3214,6 +3279,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGroup(v)
 		return nil
+	case group.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Group field %s", name)
 }
@@ -3221,13 +3293,21 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *GroupMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, group.FieldSortOrder)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case group.FieldSortOrder:
+		return m.AddedSortOrder()
+	}
 	return nil, false
 }
 
@@ -3236,6 +3316,13 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *GroupMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case group.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Group numeric field %s", name)
 }
@@ -3265,6 +3352,9 @@ func (m *GroupMutation) ResetField(name string) error {
 	switch name {
 	case group.FieldGroup:
 		m.ResetGroup()
+		return nil
+	case group.FieldSortOrder:
+		m.ResetSortOrder()
 		return nil
 	}
 	return fmt.Errorf("unknown Group field %s", name)
@@ -3365,6 +3455,8 @@ type GroupListMutation struct {
 	bg            *string
 	group_info    *string
 	detail        *string
+	sort_order    *int
+	addsort_order *int
 	clearedFields map[string]struct{}
 	group         *int
 	clearedgroup  bool
@@ -3683,6 +3775,62 @@ func (m *GroupListMutation) ResetDetail() {
 	m.detail = nil
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (m *GroupListMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *GroupListMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the GroupList entity.
+// If the GroupList object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupListMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *GroupListMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *GroupListMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *GroupListMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
 // SetGroupID sets the "group" edge to the Group entity by id.
 func (m *GroupListMutation) SetGroupID(id int) {
 	m.group = &id
@@ -3756,7 +3904,7 @@ func (m *GroupListMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupListMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.name != nil {
 		fields = append(fields, grouplist.FieldName)
 	}
@@ -3771,6 +3919,9 @@ func (m *GroupListMutation) Fields() []string {
 	}
 	if m.detail != nil {
 		fields = append(fields, grouplist.FieldDetail)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, grouplist.FieldSortOrder)
 	}
 	return fields
 }
@@ -3790,6 +3941,8 @@ func (m *GroupListMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupInfo()
 	case grouplist.FieldDetail:
 		return m.Detail()
+	case grouplist.FieldSortOrder:
+		return m.SortOrder()
 	}
 	return nil, false
 }
@@ -3809,6 +3962,8 @@ func (m *GroupListMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldGroupInfo(ctx)
 	case grouplist.FieldDetail:
 		return m.OldDetail(ctx)
+	case grouplist.FieldSortOrder:
+		return m.OldSortOrder(ctx)
 	}
 	return nil, fmt.Errorf("unknown GroupList field %s", name)
 }
@@ -3853,6 +4008,13 @@ func (m *GroupListMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDetail(v)
 		return nil
+	case grouplist.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
 	}
 	return fmt.Errorf("unknown GroupList field %s", name)
 }
@@ -3860,13 +4022,21 @@ func (m *GroupListMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *GroupListMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, grouplist.FieldSortOrder)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *GroupListMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case grouplist.FieldSortOrder:
+		return m.AddedSortOrder()
+	}
 	return nil, false
 }
 
@@ -3875,6 +4045,13 @@ func (m *GroupListMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *GroupListMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case grouplist.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
 	}
 	return fmt.Errorf("unknown GroupList numeric field %s", name)
 }
@@ -3931,6 +4108,9 @@ func (m *GroupListMutation) ResetField(name string) error {
 		return nil
 	case grouplist.FieldDetail:
 		m.ResetDetail()
+		return nil
+	case grouplist.FieldSortOrder:
+		m.ResetSortOrder()
 		return nil
 	}
 	return fmt.Errorf("unknown GroupList field %s", name)

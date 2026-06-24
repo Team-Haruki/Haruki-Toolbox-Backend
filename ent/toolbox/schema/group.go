@@ -19,6 +19,9 @@ func (Group) Fields() []ent.Field {
 		field.String("group").
 			MaxLen(64).
 			Unique(),
+		field.Int("sort_order").
+			Default(0).
+			Comment("Manual ordering weight; ascending, lower values appear first."),
 	}
 }
 

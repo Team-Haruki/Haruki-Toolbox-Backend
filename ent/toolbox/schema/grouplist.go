@@ -29,6 +29,9 @@ func (GroupList) Fields() []ent.Field {
 			MaxLen(100),
 		field.String("detail").
 			MaxLen(300),
+		field.Int("sort_order").
+			Default(0).
+			Comment("Manual ordering weight; ascending, lower values appear first."),
 	}
 }
 

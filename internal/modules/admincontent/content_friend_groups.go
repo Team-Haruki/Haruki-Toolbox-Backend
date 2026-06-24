@@ -16,8 +16,16 @@ func handleAdminListFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 	return func(c fiber.Ctx) error {
 		const action = adminContentActionFriendGroupList
 		rows, err := apiHelper.DBManager.DB.Group.Query().
-			WithGroupList().
-			Order(group.ByID(sql.OrderAsc())).
+			WithGroupList(func(q *postgresql.GroupListQuery) {
+				q.Order(
+					grouplist.BySortOrder(sql.OrderAsc()),
+					grouplist.ByID(sql.OrderAsc()),
+				)
+			}).
+			Order(
+				group.BySortOrder(sql.OrderAsc()),
+				group.ByID(sql.OrderAsc()),
+			).
 			All(c.Context())
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, adminAuditTargetIDAll, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryFriendGroupsFailed, nil))
@@ -32,6 +40,7 @@ func handleAdminListFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			items = append(items, adminFriendGroup{
 				ID:        row.ID,
 				Group:     row.Group,
+				SortOrder: row.SortOrder,
 				GroupList: groupItems,
 			})
 		}
@@ -61,6 +70,7 @@ func handleAdminCreateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 
 		created, err := apiHelper.DBManager.DB.Group.Create().
 			SetGroup(payload.Group).
+			SetSortOrder(payload.SortOrder).
 			Save(c.Context())
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
@@ -71,9 +81,47 @@ func handleAdminCreateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorInternal(c, "failed to create friend group")
 		}
 
-		resp := adminFriendGroupCreateResponse{ID: created.ID, Group: created.Group}
+		resp := adminFriendGroupCreateResponse{ID: created.ID, Group: created.Group, SortOrder: created.SortOrder}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(created.ID), harukiAPIHelper.SystemLogResultSuccess, nil)
 		return harukiAPIHelper.SuccessResponse(c, "friend group created", &resp)
+	}
+}
+
+func handleAdminUpdateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		const action = adminContentActionFriendGroupUpdate
+		groupID, err := parseAdminPathPositiveInt(c.Params("group_id"), "group_id")
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidGroupId, nil))
+			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid group_id")
+		}
+
+		payload, err := parseAdminFriendGroupPayload(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
+			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
+		}
+
+		updated, err := apiHelper.DBManager.DB.Group.UpdateOneID(groupID).
+			SetGroup(payload.Group).
+			SetSortOrder(payload.SortOrder).
+			Save(c.Context())
+		if err != nil {
+			if postgresql.IsNotFound(err) {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendGroupNotFound, nil))
+				return harukiAPIHelper.ErrorNotFound(c, "friend group not found")
+			}
+			if postgresql.IsConstraintError(err) {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendGroupConflict, nil))
+				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group already exists", nil)
+			}
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateFriendGroupFailed, nil))
+			return harukiAPIHelper.ErrorInternal(c, "failed to update friend group")
+		}
+
+		resp := adminFriendGroupCreateResponse{ID: updated.ID, Group: updated.Group, SortOrder: updated.SortOrder}
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultSuccess, nil)
+		return harukiAPIHelper.SuccessResponse(c, "friend group updated", &resp)
 	}
 }
 
@@ -230,7 +278,8 @@ func handleAdminUpdateFriendGroupItem(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		updater := existing.Update().
 			SetName(payload.Name).
 			SetGroupInfo(payload.GroupInfo).
-			SetDetail(payload.Detail)
+			SetDetail(payload.Detail).
+			SetSortOrder(payload.SortOrder)
 		if payload.Avatar != nil {
 			if *payload.Avatar == "" {
 				updater.ClearAvatar()

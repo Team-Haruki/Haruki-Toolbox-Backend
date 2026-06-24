@@ -66,6 +66,20 @@ func (_c *GroupListCreate) SetDetail(v string) *GroupListCreate {
 	return _c
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (_c *GroupListCreate) SetSortOrder(v int) *GroupListCreate {
+	_c.mutation.SetSortOrder(v)
+	return _c
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_c *GroupListCreate) SetNillableSortOrder(v *int) *GroupListCreate {
+	if v != nil {
+		_c.SetSortOrder(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *GroupListCreate) SetID(v int) *GroupListCreate {
 	_c.mutation.SetID(v)
@@ -90,6 +104,7 @@ func (_c *GroupListCreate) Mutation() *GroupListMutation {
 
 // Save creates the GroupList in the database.
 func (_c *GroupListCreate) Save(ctx context.Context) (*GroupList, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -112,6 +127,14 @@ func (_c *GroupListCreate) Exec(ctx context.Context) error {
 func (_c *GroupListCreate) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_c *GroupListCreate) defaults() {
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		v := grouplist.DefaultSortOrder
+		_c.mutation.SetSortOrder(v)
 	}
 }
 
@@ -150,6 +173,9 @@ func (_c *GroupListCreate) check() error {
 		if err := grouplist.DetailValidator(v); err != nil {
 			return &ValidationError{Name: "detail", err: fmt.Errorf(`postgresql: validator failed for field "GroupList.detail": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.SortOrder(); !ok {
+		return &ValidationError{Name: "sort_order", err: errors.New(`postgresql: missing required field "GroupList.sort_order"`)}
 	}
 	if len(_c.mutation.GroupIDs()) == 0 {
 		return &ValidationError{Name: "group", err: errors.New(`postgresql: missing required edge "GroupList.group"`)}
@@ -206,6 +232,10 @@ func (_c *GroupListCreate) createSpec() (*GroupList, *sqlgraph.CreateSpec) {
 		_spec.SetField(grouplist.FieldDetail, field.TypeString, value)
 		_node.Detail = value
 	}
+	if value, ok := _c.mutation.SortOrder(); ok {
+		_spec.SetField(grouplist.FieldSortOrder, field.TypeInt, value)
+		_node.SortOrder = value
+	}
 	if nodes := _c.mutation.GroupIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -244,6 +274,7 @@ func (_c *GroupListCreateBulk) Save(ctx context.Context) ([]*GroupList, error) {
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*GroupListMutation)
 				if !ok {

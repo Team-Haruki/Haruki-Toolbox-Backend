@@ -108,6 +108,12 @@ func parseAdminFriendGroupPayload(c fiber.Ctx) (*adminFriendGroupPayload, error)
 	if utf8.RuneCountInString(payload.Group) > 64 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "group exceeds max length")
 	}
+	if payload.SortOrder == 0 {
+		payload.SortOrder = payload.SortOrderSnake
+	}
+	if payload.SortOrder < 0 {
+		payload.SortOrder = 0
+	}
 	return &payload, nil
 }
 
@@ -168,6 +174,12 @@ func parseAdminFriendGroupItemPayload(c fiber.Ctx) (*adminFriendGroupItemPayload
 	if utf8.RuneCountInString(payload.Detail) > 300 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "detail exceeds max length")
 	}
+	if payload.SortOrder == 0 {
+		payload.SortOrder = payload.SortOrderSnake
+	}
+	if payload.SortOrder < 0 {
+		payload.SortOrder = 0
+	}
 	return &payload, nil
 }
 
@@ -215,6 +227,7 @@ func buildAdminFriendGroupItems(rows []*postgresql.GroupList) []adminFriendGroup
 			Name:      row.Name,
 			GroupInfo: row.GroupInfo,
 			Detail:    row.Detail,
+			SortOrder: row.SortOrder,
 		}
 		if row.Avatar != nil {
 			avatar := *row.Avatar
@@ -234,7 +247,8 @@ func buildAdminFriendGroupItemCreateBuilder(apiHelper *harukiAPIHelper.HarukiToo
 		SetGroupID(groupID).
 		SetName(payload.Name).
 		SetGroupInfo(payload.GroupInfo).
-		SetDetail(payload.Detail)
+		SetDetail(payload.Detail).
+		SetSortOrder(payload.SortOrder)
 	if payload.Avatar != nil && *payload.Avatar != "" {
 		builder.SetAvatar(*payload.Avatar)
 	}

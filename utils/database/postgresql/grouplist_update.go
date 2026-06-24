@@ -110,6 +110,27 @@ func (_u *GroupListUpdate) SetNillableDetail(v *string) *GroupListUpdate {
 	return _u
 }
 
+// SetSortOrder sets the "sort_order" field.
+func (_u *GroupListUpdate) SetSortOrder(v int) *GroupListUpdate {
+	_u.mutation.ResetSortOrder()
+	_u.mutation.SetSortOrder(v)
+	return _u
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_u *GroupListUpdate) SetNillableSortOrder(v *int) *GroupListUpdate {
+	if v != nil {
+		_u.SetSortOrder(*v)
+	}
+	return _u
+}
+
+// AddSortOrder adds value to the "sort_order" field.
+func (_u *GroupListUpdate) AddSortOrder(v int) *GroupListUpdate {
+	_u.mutation.AddSortOrder(v)
+	return _u
+}
+
 // SetGroupID sets the "group" edge to the Group entity by ID.
 func (_u *GroupListUpdate) SetGroupID(id int) *GroupListUpdate {
 	_u.mutation.SetGroupID(id)
@@ -224,6 +245,12 @@ func (_u *GroupListUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Detail(); ok {
 		_spec.SetField(grouplist.FieldDetail, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SortOrder(); ok {
+		_spec.SetField(grouplist.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSortOrder(); ok {
+		_spec.AddField(grouplist.FieldSortOrder, field.TypeInt, value)
 	}
 	if _u.mutation.GroupCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -353,6 +380,27 @@ func (_u *GroupListUpdateOne) SetNillableDetail(v *string) *GroupListUpdateOne {
 	if v != nil {
 		_u.SetDetail(*v)
 	}
+	return _u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (_u *GroupListUpdateOne) SetSortOrder(v int) *GroupListUpdateOne {
+	_u.mutation.ResetSortOrder()
+	_u.mutation.SetSortOrder(v)
+	return _u
+}
+
+// SetNillableSortOrder sets the "sort_order" field if the given value is not nil.
+func (_u *GroupListUpdateOne) SetNillableSortOrder(v *int) *GroupListUpdateOne {
+	if v != nil {
+		_u.SetSortOrder(*v)
+	}
+	return _u
+}
+
+// AddSortOrder adds value to the "sort_order" field.
+func (_u *GroupListUpdateOne) AddSortOrder(v int) *GroupListUpdateOne {
+	_u.mutation.AddSortOrder(v)
 	return _u
 }
 
@@ -500,6 +548,12 @@ func (_u *GroupListUpdateOne) sqlSave(ctx context.Context) (_node *GroupList, er
 	}
 	if value, ok := _u.mutation.Detail(); ok {
 		_spec.SetField(grouplist.FieldDetail, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SortOrder(); ok {
+		_spec.SetField(grouplist.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedSortOrder(); ok {
+		_spec.AddField(grouplist.FieldSortOrder, field.TypeInt, value)
 	}
 	if _u.mutation.GroupCleared() {
 		edge := &sqlgraph.EdgeSpec{

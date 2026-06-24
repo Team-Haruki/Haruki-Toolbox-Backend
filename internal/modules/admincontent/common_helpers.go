@@ -19,6 +19,7 @@ const (
 	adminFailureReasonQueryFriendGroupsFailed            = "query_friend_groups_failed"
 	adminFailureReasonFriendGroupConflict                = "friend_group_conflict"
 	adminFailureReasonCreateFriendGroupFailed            = "create_friend_group_failed"
+	adminFailureReasonUpdateFriendGroupFailed            = "update_friend_group_failed"
 	adminFailureReasonInvalidGroupId                     = "invalid_group_id"
 	adminFailureReasonStartTransactionFailed             = "start_transaction_failed"
 	adminFailureReasonDeleteGroupItemsFailed             = "delete_group_items_failed"

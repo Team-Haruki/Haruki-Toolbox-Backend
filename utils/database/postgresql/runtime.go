@@ -103,6 +103,10 @@ func init() {
 	groupDescGroup := groupFields[1].Descriptor()
 	// group.GroupValidator is a validator for the "group" field. It is called by the builders before save.
 	group.GroupValidator = groupDescGroup.Validators[0].(func(string) error)
+	// groupDescSortOrder is the schema descriptor for sort_order field.
+	groupDescSortOrder := groupFields[2].Descriptor()
+	// group.DefaultSortOrder holds the default value on creation for the sort_order field.
+	group.DefaultSortOrder = groupDescSortOrder.Default.(int)
 	grouplistFields := schema.GroupList{}.Fields()
 	_ = grouplistFields
 	// grouplistDescName is the schema descriptor for name field.
@@ -125,6 +129,10 @@ func init() {
 	grouplistDescDetail := grouplistFields[5].Descriptor()
 	// grouplist.DetailValidator is a validator for the "detail" field. It is called by the builders before save.
 	grouplist.DetailValidator = grouplistDescDetail.Validators[0].(func(string) error)
+	// grouplistDescSortOrder is the schema descriptor for sort_order field.
+	grouplistDescSortOrder := grouplistFields[6].Descriptor()
+	// grouplist.DefaultSortOrder holds the default value on creation for the sort_order field.
+	grouplist.DefaultSortOrder = grouplistDescSortOrder.Default.(int)
 	iosscriptcodeFields := schema.IOSScriptCode{}.Fields()
 	_ = iosscriptcodeFields
 	// iosscriptcodeDescUploadCode is the schema descriptor for upload_code field.

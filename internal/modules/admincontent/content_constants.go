@@ -7,6 +7,7 @@ const (
 	adminContentActionFriendLinkDelete      = "admin.content.friend_link.delete"
 	adminContentActionFriendGroupList       = "admin.content.friend_group.list"
 	adminContentActionFriendGroupCreate     = "admin.content.friend_group.create"
+	adminContentActionFriendGroupUpdate     = "admin.content.friend_group.update"
 	adminContentActionFriendGroupDelete     = "admin.content.friend_group.delete"
 	adminContentActionFriendGroupItemCreate = "admin.content.friend_group_item.create"
 	adminContentActionFriendGroupItemUpdate = "admin.content.friend_group_item.update"

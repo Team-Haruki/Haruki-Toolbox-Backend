@@ -14,6 +14,8 @@ const (
 	FieldID = "id"
 	// FieldGroup holds the string denoting the group field in the database.
 	FieldGroup = "group"
+	// FieldSortOrder holds the string denoting the sort_order field in the database.
+	FieldSortOrder = "sort_order"
 	// EdgeGroupList holds the string denoting the group_list edge name in mutations.
 	EdgeGroupList = "group_list"
 	// Table holds the table name of the group in the database.
@@ -31,6 +33,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldGroup,
+	FieldSortOrder,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -46,6 +49,8 @@ func ValidColumn(column string) bool {
 var (
 	// GroupValidator is a validator for the "group" field. It is called by the builders before save.
 	GroupValidator func(string) error
+	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
+	DefaultSortOrder int
 )
 
 // OrderOption defines the ordering options for the Group queries.
@@ -59,6 +64,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByGroup orders the results by the group field.
 func ByGroup(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroup, opts...).ToFunc()
+}
+
+// BySortOrder orders the results by the sort_order field.
+func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
 }
 
 // ByGroupListCount orders the results by group_list count.

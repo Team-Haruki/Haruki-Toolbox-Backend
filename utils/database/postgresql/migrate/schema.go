@@ -150,6 +150,7 @@ var (
 	GroupsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "group", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 	}
 	// GroupsTable holds the schema information for the "groups" table.
 	GroupsTable = &schema.Table{
@@ -165,6 +166,7 @@ var (
 		{Name: "bg", Type: field.TypeString, Nullable: true, Size: 500},
 		{Name: "group_info", Type: field.TypeString, Size: 100},
 		{Name: "detail", Type: field.TypeString, Size: 300},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "group_group_list", Type: field.TypeInt},
 	}
 	// GroupListsTable holds the schema information for the "group_lists" table.
@@ -175,7 +177,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "group_lists_groups_group_list",
-				Columns:    []*schema.Column{GroupListsColumns[6]},
+				Columns:    []*schema.Column{GroupListsColumns[7]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.Cascade,
 			},

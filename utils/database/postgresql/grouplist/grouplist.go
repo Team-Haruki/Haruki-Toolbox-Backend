@@ -22,6 +22,8 @@ const (
 	FieldGroupInfo = "group_info"
 	// FieldDetail holds the string denoting the detail field in the database.
 	FieldDetail = "detail"
+	// FieldSortOrder holds the string denoting the sort_order field in the database.
+	FieldSortOrder = "sort_order"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
 	EdgeGroup = "group"
 	// Table holds the table name of the grouplist in the database.
@@ -43,6 +45,7 @@ var Columns = []string{
 	FieldBg,
 	FieldGroupInfo,
 	FieldDetail,
+	FieldSortOrder,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "group_lists"
@@ -77,6 +80,8 @@ var (
 	GroupInfoValidator func(string) error
 	// DetailValidator is a validator for the "detail" field. It is called by the builders before save.
 	DetailValidator func(string) error
+	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
+	DefaultSortOrder int
 )
 
 // OrderOption defines the ordering options for the GroupList queries.
@@ -110,6 +115,11 @@ func ByGroupInfo(opts ...sql.OrderTermOption) OrderOption {
 // ByDetail orders the results by the detail field.
 func ByDetail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDetail, opts...).ToFunc()
+}
+
+// BySortOrder orders the results by the sort_order field.
+func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
 }
 
 // ByGroupField orders the results by group field.
