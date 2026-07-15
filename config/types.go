@@ -110,6 +110,12 @@ type BackendConfig struct {
 	ProxyHeader      string   `yaml:"proxy_header"`
 	BackendURL       string   `yaml:"backend_url"`
 	BackendCDNURL    string   `yaml:"backend_cdn_url"`
+	// ProfilingEnabled turns on opt-in performance instrumentation: a periodic
+	// Mongo/PG pool + Go GC stats sampler and slow-request autopsies. Off by default;
+	// safe to flip on during an incident to diagnose resource saturation.
+	ProfilingEnabled bool `yaml:"profiling_enabled"`
+	// ProfilingIntervalSeconds is how often the stats sampler logs (default 15s).
+	ProfilingIntervalSeconds int `yaml:"profiling_interval_seconds"`
 }
 
 type SMTPConfig struct {

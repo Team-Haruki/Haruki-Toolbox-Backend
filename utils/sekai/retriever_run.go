@@ -6,6 +6,12 @@ import (
 )
 
 func (r *HarukiSekaiDataRetriever) Run(ctx context.Context) (*harukiUtils.SekaiInheritDataRetrieverResponse, error) {
+	// Bound the entire inherit sequence so a degraded upstream cannot hang the
+	// caller for the unbounded sum of every per-call timeout. This does not make
+	// the handler asynchronous (a separate change) — it only caps how long one
+	// inherit can occupy the request goroutine.
+	ctx, cancel := context.WithTimeout(ctx, retrieverRunTimeout)
+	defer cancel()
 	if err := r.client.Init(ctx); err != nil {
 		r.isErrorExist = true
 		r.ErrorMessage = err.Error()

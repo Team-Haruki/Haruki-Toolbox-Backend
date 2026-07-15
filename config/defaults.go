@@ -52,6 +52,9 @@ func normalizeConfigDefaults(cfg *Config) error {
 	if cfg.Backend.ShutdownTimeout <= 0 {
 		cfg.Backend.ShutdownTimeout = 10
 	}
+	if cfg.Backend.ProfilingIntervalSeconds <= 0 {
+		cfg.Backend.ProfilingIntervalSeconds = 15
+	}
 	if cfg.UserSystem.SMTP.TimeoutSeconds <= 0 {
 		cfg.UserSystem.SMTP.TimeoutSeconds = 10
 	}

@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
+	entsql "entgo.io/ent/dialect/sql"
 	"errors"
 	"fmt"
 	harukiAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/api"
@@ -14,6 +16,7 @@ import (
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	perfdebug "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfdebug"
 	harukiSekaiAPIClient "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
 	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
@@ -55,6 +58,7 @@ func Run(cfg harukiConfig.Config) error {
 	// Set global log level and file writer for NewLoggerFromGlobal
 	harukiLogger.SetGlobalLogLevel(cfg.Backend.LogLevel)
 	harukiLogger.SetGlobalFileWriter(loggerWriter)
+	perfdebug.SetEnabled(cfg.Backend.ProfilingEnabled)
 
 	mainLogger := harukiLogger.NewLogger("Main", cfg.Backend.LogLevel, loggerWriter)
 	mainLogger.Infof("%s", fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
@@ -62,6 +66,14 @@ func Run(cfg harukiConfig.Config) error {
 	mainLogger.Infof("Powered By Haruki Dev Team")
 
 	sekaiAPIClient := harukiSekaiAPIClient.NewHarukiSekaiAPIClient(cfg.SekaiAPI.APIEndpoint, cfg.SekaiAPI.APIToken)
+	// When profiling is enabled, attach a pool monitor so the stats sampler can
+	// observe client-side checkout waits (invisible to Mongo's server-side slow log).
+	var mongoPoolStats *harukiMongo.PoolStats
+	var mongoOpts []harukiMongo.MongoOption
+	if cfg.Backend.ProfilingEnabled {
+		mongoPoolStats = harukiMongo.NewPoolStats()
+		mongoOpts = append(mongoOpts, harukiMongo.WithPoolMonitor(mongoPoolStats.Monitor()))
+	}
 	mongoCtx, cancelMongoInit := startupContext()
 	mongoManager, err := harukiMongo.NewMongoDBManager(
 		mongoCtx,
@@ -69,6 +81,7 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.MongoDB.DB,
 		cfg.MongoDB.Suite,
 		cfg.MongoDB.Mysekai,
+		mongoOpts...,
 	)
 	cancelMongoInit()
 	if err != nil {
@@ -90,10 +103,11 @@ func Run(cfg harukiConfig.Config) error {
 		return fmt.Errorf("init Redis: %w", err)
 	}
 	cancelRedisInit()
-	entClient, err := dbManager.Open(cfg.UserSystem.DBType, cfg.UserSystem.DBURL)
+	entSQLDB, err := openTunedSQLDB(cfg.UserSystem.DBType, cfg.UserSystem.DBURL, 50, 10)
 	if err != nil {
 		return fmt.Errorf("init PostgreSQL: %w", err)
 	}
+	entClient := dbManager.NewClient(dbManager.Driver(entsql.OpenDB(cfg.UserSystem.DBType, entSQLDB)))
 	defer func() {
 		_ = entClient.Close()
 	}()
@@ -170,11 +184,14 @@ func Run(cfg harukiConfig.Config) error {
 	}()
 
 	dbMgr := harukiDatabaseManager.NewHarukiToolboxDBManager(entClient, redisClient, mongoManager)
+	var botStatsDB *sql.DB
 	if botDBURL := strings.TrimSpace(cfg.HarukiBot.DBURL); botDBURL != "" {
-		botClient, botErr := neopgManager.Open(cfg.UserSystem.DBType, botDBURL)
+		botSQLDB, botErr := openTunedSQLDB(cfg.UserSystem.DBType, botDBURL, 20, 5)
 		if botErr != nil {
 			return fmt.Errorf("init Bot PostgreSQL: %w", botErr)
 		}
+		botStatsDB = botSQLDB
+		botClient := neopgManager.NewClient(neopgManager.Driver(entsql.OpenDB(cfg.UserSystem.DBType, botSQLDB)))
 		defer func() {
 			_ = botClient.Close()
 		}()
@@ -210,12 +227,22 @@ func Run(cfg harukiConfig.Config) error {
 	harukiAPI.RegisterRoutes(apiHelper)
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
 	waitAfdianScheduler := startAfdianSponsorSyncScheduler(schedulerCtx, entClient, cfg.Afdian, mainLogger)
-	// Cancel then drain the scheduler goroutine before the deferred entClient.Close
-	// runs, so an in-flight sync never uses the client after it is closed. Both
+	waitStatsSampler := func() {}
+	if cfg.Backend.ProfilingEnabled {
+		sqlPools := []sqlPoolSource{{name: "toolbox", db: entSQLDB}}
+		if botStatsDB != nil {
+			sqlPools = append(sqlPools, sqlPoolSource{name: "bot", db: botStatsDB})
+		}
+		samplerInterval := time.Duration(cfg.Backend.ProfilingIntervalSeconds) * time.Second
+		waitStatsSampler = startStatsSampler(schedulerCtx, samplerInterval, mongoPoolStats, sqlPools, mainLogger)
+	}
+	// Cancel then drain the scheduler goroutines before the deferred entClient.Close
+	// runs, so an in-flight sync/sampler never uses the client after it is closed. All
 	// calls are idempotent, so the explicit shutdown path below can repeat them.
 	stopAndWaitSchedulers := func() {
 		stopSchedulers()
 		waitAfdianScheduler()
+		waitStatsSampler()
 	}
 	defer stopAndWaitSchedulers()
 	loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()
