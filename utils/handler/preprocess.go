@@ -128,10 +128,16 @@ func (h *DataHandler) validateOtherServerImagePath(
 	return h.verifyGameAccountExists(uid, server)
 }
 
+// gameAccountVerifyTimeout bounds the synchronous game-API existence check. It runs
+// deep in the upload-preprocess chain while the caller holds an uploadSemaphore slot,
+// so without an explicit deadline a degraded game API would pin that slot for the
+// full client timeout, throttling upload throughput during an outage.
+const gameAccountVerifyTimeout = 5 * time.Second
+
 func (h *DataHandler) verifyGameAccountExists(uid string, server utils.SupportedDataUploadServer) error {
-	// This runs deep in the synchronous upload-preprocess chain which carries no
-	// context; the Sekai API client's request timeout bounds the call.
-	resultInfo, _, err := h.SekaiAPIClient.GetUserProfile(context.Background(), uid, string(server))
+	ctx, cancel := context.WithTimeout(context.Background(), gameAccountVerifyTimeout)
+	defer cancel()
+	resultInfo, _, err := h.SekaiAPIClient.GetUserProfile(ctx, uid, string(server))
 	if resultInfo == nil {
 		if err != nil {
 			return err

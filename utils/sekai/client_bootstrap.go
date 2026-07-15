@@ -74,9 +74,14 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 	var lastErr error
 
 	for i := range retries {
+		if i > 0 {
+			clientSleep(time.Duration(i) * 500 * time.Millisecond)
+		}
 		status, headers, _, err := c.httpClient.RequestWithHeaders(ctx, httpMethodPost, url, nil, nil)
 		if err != nil {
-			lastErr = err
+			// Wrap as APIError{0} (transport failure) so a hard-down signature host is
+			// visible to the inherit circuit breaker's degradation classifier.
+			lastErr = NewAPIError(url, httpMethodPost, 0, "request failed", err)
 			c.logger.Warnf("Cookie request failed (attempt %d/%d): %v", i+1, retries, err)
 			continue
 		}
@@ -96,7 +101,7 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 			c.logger.Errorf("Cookie response missing Set-Cookie header")
 			continue
 		}
-		lastErr = fmt.Errorf("unexpected status code: %d", status)
+		lastErr = NewAPIError(url, httpMethodPost, status, "unexpected status code", nil)
 		c.logger.Errorf("Cookie request failed with status %d", status)
 	}
 
@@ -115,9 +120,14 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 	var lastErr error
 
 	for i := range retries {
+		if i > 0 {
+			clientSleep(time.Duration(i) * 500 * time.Millisecond)
+		}
 		status, _, body, err := c.httpClient.Request(ctx, httpMethodGet, c.versionURL, nil, nil)
 		if err != nil {
-			lastErr = err
+			// Wrap as APIError{0} (transport failure) so a hard-down version host is
+			// visible to the inherit circuit breaker's degradation classifier.
+			lastErr = NewAPIError(c.versionURL, httpMethodGet, 0, "request failed", err)
 			c.logger.Warnf("Version request failed (attempt %d/%d): %v", i+1, retries, err)
 			continue
 		}
@@ -132,7 +142,7 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 			c.logger.Infof("Parsed %s server app version: %s", serverName, versionData.AppVersion)
 			return nil
 		}
-		lastErr = fmt.Errorf("unexpected status code: %d", status)
+		lastErr = NewAPIError(c.versionURL, httpMethodGet, status, "unexpected status code", nil)
 		c.logger.Errorf("Version request failed with status %d", status)
 	}
 
@@ -166,10 +176,10 @@ func (c *HarukiSekaiClient) generateInheritToken() (string, error) {
 }
 
 func (c *HarukiSekaiClient) Init(ctx context.Context) error {
-	if err := c.getCookies(ctx, 4); err != nil {
+	if err := c.getCookies(ctx, 2); err != nil {
 		return err
 	}
-	if err := c.parseAppVersion(ctx, 4); err != nil {
+	if err := c.parseAppVersion(ctx, 2); err != nil {
 		return err
 	}
 	if err := c.InheritAccount(ctx, true); err != nil {

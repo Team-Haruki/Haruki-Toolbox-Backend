@@ -138,6 +138,12 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.Backend.ProxyHeader, "BACKEND_PROXY_HEADER")
 	overrideString(&cfg.Backend.BackendURL, "BACKEND_URL", "BACKEND_PUBLIC_BASE_URL")
 	overrideString(&cfg.Backend.BackendCDNURL, "BACKEND_CDN_URL")
+	if err := overrideBool(&cfg.Backend.ProfilingEnabled, "BACKEND_PROFILING_ENABLED"); err != nil {
+		return err
+	}
+	if err := overrideInt(&cfg.Backend.ProfilingIntervalSeconds, "BACKEND_PROFILING_INTERVAL_SECONDS"); err != nil {
+		return err
+	}
 
 	overrideString(&cfg.OAuth2.Provider, "OAUTH2_PROVIDER")
 	overrideString(&cfg.OAuth2.HydraPublicURL, "HYDRA_PUBLIC_URL", "HYDRA_PUBLIC_BASE_URL")

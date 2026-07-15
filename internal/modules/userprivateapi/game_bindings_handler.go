@@ -1,6 +1,7 @@
 package userprivateapi
 
 import (
+	"context"
 	harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
@@ -8,14 +9,20 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/sync/errgroup"
 )
 
+// gameBindingsReadTimeout bounds this token-gated read so it fails fast under
+// contention instead of hanging on the shared connection pools.
+const gameBindingsReadTimeout = 3 * time.Second
+
 func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		ctx, cancel := context.WithTimeout(c.Context(), gameBindingsReadTimeout)
+		defer cancel()
 		platform := c.Query("platform")
 		platformUserID := c.Query("platform_user_id")
 		if platform == "" || platformUserID == "" {

@@ -6,6 +6,7 @@ import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -27,8 +28,38 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err := c.Bind().Body(data); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
+		// Fast-fail when the game API for this server is already degraded, so we stop
+		// hammering a failing upstream and the caller learns immediately instead of
+		// blocking for the full ~90s run cap.
+		allowed, retryAfter, breakerToken := inheritBreaker.Allow(server)
+		if !allowed {
+			c.Set("Retry-After", strconv.Itoa(retryAfterSeconds(retryAfter)))
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game server temporarily degraded, please retry later", nil)
+		}
+		// Bound concurrent inherits per server; overflow fast-fails rather than
+		// piling up slow goroutines against one game server. Release the breaker probe
+		// permit (if this admission was a half-open probe) since we never touched the
+		// upstream.
+		if !inheritLimiter.acquire(server) {
+			inheritBreaker.ReleaseProbe(server, breakerToken)
+			c.Set("Retry-After", strconv.Itoa(retryAfterSeconds(inheritBreakerRetryAfterFloor)))
+			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many concurrent inherit requests, please retry later", nil)
+		}
+		defer inheritLimiter.release(server)
+		// Guarantee the breaker epoch is resolved even if retriever.Run panics (which
+		// would otherwise leak a half-open probe). Default to degraded; the normal path
+		// below overwrites it with the real verdict and marks it recorded. RecordResult
+		// ignores a stale token, so the deferred call is a harmless no-op afterwards.
+		breakerRecorded := false
+		defer func() {
+			if !breakerRecorded {
+				inheritBreaker.RecordResult(server, breakerToken, true)
+			}
+		}()
 		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType)
 		result, err := retriever.Run(ctx)
+		inheritBreaker.RecordResult(server, breakerToken, inheritFailureIsUpstreamDegradation(err))
+		breakerRecorded = true
 		if err != nil {
 			uploadServer := harukiUtils.SupportedDataUploadServer(server)
 			recordInheritRetrievalFailure(apiHelper, uploadServer, uploadType, result, err)

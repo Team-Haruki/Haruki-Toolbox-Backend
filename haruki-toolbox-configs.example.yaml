@@ -98,6 +98,13 @@ backend:
     - "100.64.0.0/10"
     - "10.0.0.0/8"
   proxy_header: "X-Forwarded-For"
+  # Opt-in performance instrumentation. When true, the backend attaches a MongoDB
+  # pool monitor and periodically logs Mongo pool / PostgreSQL pool / Go GC stats,
+  # and logs a per-stage autopsy for box reads slower than 500ms. Off by default;
+  # safe to enable during an incident to diagnose resource saturation. Env overrides:
+  # BACKEND_PROFILING_ENABLED, BACKEND_PROFILING_INTERVAL_SECONDS.
+  profiling_enabled: false
+  profiling_interval_seconds: 15
 
 third_party_data_provider:
   endpoint_8823: ""
