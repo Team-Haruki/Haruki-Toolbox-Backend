@@ -150,6 +150,23 @@ func (s *SessionHandler) hasKratosProviderConfigured() bool {
 	return strings.TrimSpace(s.KratosPublicURL) != ""
 }
 
+// kratosSharedTransport is a dedicated clone of http.DefaultTransport used as the
+// base for all Kratos HTTP calls. Cloning preserves DefaultTransport's proxy, TLS and
+// dial settings while giving the Kratos client its own connection pool, isolated from
+// the global default pool. That isolation matters under test: httptest.Server.Close()
+// calls http.DefaultTransport.CloseIdleConnections(), so when the Kratos client shared
+// DefaultTransport a sibling parallel test tearing down its server could yank a pooled
+// connection out from under an in-flight request ("http: CloseIdleConnections called").
+// A dedicated transport removes that shared state with no change to production behavior.
+var kratosSharedTransport = cloneDefaultTransport()
+
+func cloneDefaultTransport() http.RoundTripper {
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		return t.Clone()
+	}
+	return http.DefaultTransport
+}
+
 func (s *SessionHandler) kratosHTTPClient() *http.Client {
 	if s.KratosHTTPClient != nil {
 		return s.KratosHTTPClient
@@ -161,7 +178,7 @@ func (s *SessionHandler) kratosHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &kratosRequestMetadataTransport{
-			base: http.DefaultTransport,
+			base: kratosSharedTransport,
 		},
 	}
 }
