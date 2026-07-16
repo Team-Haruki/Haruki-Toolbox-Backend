@@ -2,7 +2,6 @@ package data
 
 import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"strconv"
 	"strings"
 	"time"
@@ -34,8 +33,11 @@ const (
 // case the caller responds 304.
 //
 // publicKeyFiltered is true on the public and OAuth2 surfaces, whose responses
-// are filtered through the public-API key allowlist; the private surface passes
-// false. The conditional read is disabled whenever answering 304 could diverge
+// are filtered through the public-API key allowlist; those callers pass the
+// allowlist they already fetched for this request (resolving it is a Redis
+// round trip, so it is fetched once per request and shared with the read-key
+// digest). The private surface passes false and nil. The conditional read is
+// disabled whenever answering 304 could diverge
 // from what the full path would say about the same request: a non-empty key
 // filter must include upload_time (otherwise the client cannot maintain its
 // stamp, and on allowlisted surfaces an existing document can project to an
@@ -53,10 +55,10 @@ const (
 // surface.
 func CheckNotModified(
 	c fiber.Ctx,
-	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	dataType harukiUtils.UploadDataType,
 	requestKey string,
 	publicKeyFiltered bool,
+	publicAllowedKeys []string,
 	stamp int64,
 ) bool {
 	known := ParseKnownUploadTime(c.Query(QueryKnownUploadTime))
@@ -71,13 +73,9 @@ func CheckNotModified(
 		return false
 	}
 	if publicKeyFiltered {
-		if apiHelper == nil {
-			return false
-		}
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
-			allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
-			for _, k := range publicAPIAllowedKeys {
+			allowedKeySet := make(map[string]struct{}, len(publicAllowedKeys))
+			for _, k := range publicAllowedKeys {
 				allowedKeySet[k] = struct{}{}
 			}
 			if _, ok := allowedKeySet["upload_time"]; !ok {

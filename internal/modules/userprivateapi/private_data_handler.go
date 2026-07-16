@@ -161,7 +161,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			harukiLogger.Warnf("Failed to resolve private game data stamp (server=%s,user_id=%s): %v", server, userIDStr, stampErr)
 			stamp = -1 // unresolved: bypass the cache, never 304
 		}
-		if stampConfirmed && data.CheckNotModified(c, apiHelper, dataType, requestKey, false, stamp) {
+		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, false, nil, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
 		var cacheKey string

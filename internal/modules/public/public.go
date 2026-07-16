@@ -79,7 +79,13 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Warnf("Failed to resolve public game data stamp (server=%s,user_id=%d): %v", server, userID, stampErr)
 			stamp = -1 // unresolved: bypass the cache, never 304
 		}
-		if stampConfirmed && data.CheckNotModified(c, apiHelper, dataType, requestKey, true, stamp) {
+		// Fetched once per request: resolving the allowlist costs a Redis round
+		// trip, and both the conditional gate and the read-key digest need it.
+		var suiteAllowedKeys []string
+		if dataType == harukiUtils.UploadDataTypeSuite {
+			suiteAllowedKeys = apiHelper.GetPublicAPIAllowedKeys()
+		}
+		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
 		var cacheKey string
@@ -92,7 +98,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			// the body, so key and body stay atomic under concurrent edits.
 			readKey := cacheKey
 			if dataType == harukiUtils.UploadDataTypeSuite {
-				readKey += ":a=" + data.PublicAllowlistDigest(apiHelper.GetPublicAPIAllowedKeys())
+				readKey += ":a=" + data.PublicAllowlistDigest(suiteAllowedKeys)
 			}
 			if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, readKey); err == nil && found {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {

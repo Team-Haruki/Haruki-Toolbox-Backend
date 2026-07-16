@@ -40,8 +40,10 @@ const (
 	// collision is only possible while the generation is young (mint-to-persist
 	// lag), so bodies written within FreshGenerationWindow of their stamp get
 	// the short TTL — restoring the old 5-minute self-heal bound for exactly
-	// the collision class — and stable generations keep the full TTL.
-	FreshGenerationWindow   = 30 * time.Second
+	// the collision class — and stable generations keep the full TTL. The
+	// window must cover the slowest mint-to-persist path: the async iOS chunk
+	// upload runs its whole pipeline under a 2-minute budget after stamping.
+	FreshGenerationWindow   = 3 * time.Minute
 	FreshGenerationCacheTTL = 5 * time.Minute
 	// GameDataStampMemoTTL bounds the per-document upload_time memo that lets
 	// the read path resolve the current cache generation from Redis instead of
