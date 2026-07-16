@@ -72,6 +72,9 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		requestKey := c.Query("key")
+		if data.CheckNotModified(ctx, c, apiHelper, userID, server, dataType, requestKey, true) {
+			return c.SendStatus(fiber.StatusNotModified)
+		}
 		cacheKey := harukiRedis.BuildGameDataCacheKey("public", string(server), string(dataType), userID, requestKey)
 		if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); err == nil && found {
 			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)

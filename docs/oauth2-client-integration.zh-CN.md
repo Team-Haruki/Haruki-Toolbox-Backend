@@ -420,6 +420,16 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 - 同时返回 `userGamedata.userIdString` 作为字符串镜像，JS / TS 客户端应优先读取该字段以避免 64 位整数精度丢失
 - 当响应暴露顶层 `_id` 时，会同时返回 `_idString`
 
+条件拉取（避免重复拉取未变化的数据）：
+
+- 请求可附带 `?known_upload_time=<unix 秒>`，值取自上一次完整响应数据中的 `upload_time` 字段；如果你使用 `key` 过滤字段，必须把 `upload_time` 一并列入，否则该参数会被忽略（完整响应里也拿不到新的时间戳）
+- 若数据自那以后没有更新，直接返回 `304 Not Modified`（空响应体，附带 `X-Upload-Time` 响应头），客户端应继续使用本地已有数据；原本的"先探测 `upload_time` 再拉全量"两次请求可以合并为一次
+- 若数据已更新（或服务端无法确认未变化），返回完整数据，行为与不带该参数时完全一致；此时应从响应数据的 `upload_time` 字段刷新本地记录的值——完整响应不附带 `X-Upload-Time` 头，时间戳一律以响应体为准
+- 参数值非法时按未携带处理（类比 HTTP 对不可解析 `If-Modified-Since` 的处理方式），不会报错
+- 该参数不改变鉴权与字段可见性：suite 数据面上，若服务端配置的公开字段允许列表不含 `upload_time`，该参数会被忽略；`key` 过滤无效时不会返回 304，而是照常返回原有错误
+- 时间戳精度为 unix 秒，同一秒内的多次上传无法通过时间戳区分（该限制与"先探测 `upload_time` 再拉全量"的方式一致）；对一致性极敏感的场景请直接拉取完整数据
+- public API 与 private token API 的同形数据读取接口同样支持该参数
+
 ---
 
 ## 8. 当前可申请的 scope
