@@ -62,6 +62,39 @@ func buildSuiteResponse(result bson.D, keys []string) bson.D {
 	return resp
 }
 
+// InvalidSuiteRequestKey returns the first requested suite key the allowlist
+// rejects. The conditional (?known_upload_time) path uses it as a gate so a
+// request the full path would 400 is never answered with a 304.
+func InvalidSuiteRequestKey(requestKey string, allowedKeySet map[string]struct{}) (string, bool) {
+	if requestKey == "" {
+		return "", false
+	}
+	for _, key := range strings.Split(requestKey, ",") {
+		if key == "userGamedata" {
+			continue
+		}
+		if _, ok := allowedKeySet[key]; !ok {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+// InvalidMysekaiRequestKey returns the first requested mysekai key that is
+// empty or that Mongo would treat as a dotted projection path or operator, so
+// a caller cannot probe nested document structure.
+func InvalidMysekaiRequestKey(requestKey string) (string, bool) {
+	if requestKey == "" {
+		return "", false
+	}
+	for _, key := range strings.Split(requestKey, ",") {
+		if strings.TrimSpace(key) == "" || strings.ContainsAny(key, ".$") {
+			return key, true
+		}
+	}
+	return "", false
+}
+
 // HandleSuiteRequest takes an explicit ctx (rather than deriving one from the
 // fiber request) so callers can bound the Mongo read with a deadline — Fiber v3
 // request contexts carry none.
@@ -70,15 +103,10 @@ func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 	if requestKey == "" {
 		keys = allowedKeys
 	} else {
-		keys = strings.Split(requestKey, ",")
-		for _, key := range keys {
-			if key == "userGamedata" {
-				continue
-			}
-			if _, ok := allowedKeySet[key]; !ok {
-				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
-			}
+		if key, invalid := InvalidSuiteRequestKey(requestKey, allowedKeySet); invalid {
+			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
 		}
+		keys = strings.Split(requestKey, ",")
 	}
 
 	projection := buildSuiteProjection(keys)
@@ -112,14 +140,10 @@ func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
 	var keys []string
 	if requestKey != "" {
-		keys = strings.Split(requestKey, ",")
-		for _, key := range keys {
-			// Reject keys Mongo would treat as a dotted projection path or operator,
-			// so a caller cannot probe nested document structure.
-			if strings.TrimSpace(key) == "" || strings.ContainsAny(key, ".$") {
-				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
-			}
+		if key, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
+			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
 		}
+		keys = strings.Split(requestKey, ",")
 	}
 
 	projection := buildMysekaiProjection(keys)

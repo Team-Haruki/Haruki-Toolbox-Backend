@@ -183,6 +183,7 @@ https://example.com/apiwebhook/jp/suite/123456789
 3. 服务端回调时，以回调是否收到为准，不要依赖同步确认
 4. 如果管理员更新了 `credential`，及时替换成新的 token
 5. 如果需要轮换授权，联系管理员更新 endpoint 并下发新 token
+6. 回调 body 为空，需要自行回源拉取数据；如果除回调外还有轮询兜底逻辑，轮询回源时建议附带 `?known_upload_time=<上次拉取到的 upload_time>`——数据未变化时服务端直接返回 `304 Not Modified`（空响应体，并附带 `X-Upload-Time` 响应头），避免重复拉取全量数据
 
 ## 11. 常见问题
 

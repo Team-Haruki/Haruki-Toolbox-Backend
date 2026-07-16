@@ -68,6 +68,9 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		requestKey := c.Query("key")
+		if data.CheckNotModified(ctx, c, apiHelper, gameUserID, server, dataType, requestKey, true) {
+			return c.SendStatus(fiber.StatusNotModified)
+		}
 		cacheKey := harukiRedis.BuildGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey)
 		if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); cErr == nil && found {
 			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
