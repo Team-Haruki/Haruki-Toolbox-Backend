@@ -4,6 +4,7 @@ import (
 	"context"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
@@ -150,6 +151,9 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
 		}
 		requestKey := c.Query("key")
+		if data.CheckNotModified(ctx, c, apiHelper, userID, server, dataType, requestKey, false) {
+			return c.SendStatus(fiber.StatusNotModified)
+		}
 		cacheKey := harukiRedis.BuildGameDataCacheKey("private", string(server), string(dataType), userID, requestKey)
 		cacheStart := time.Now()
 		cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey)

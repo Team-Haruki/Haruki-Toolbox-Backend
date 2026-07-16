@@ -346,6 +346,37 @@ func (m *MongoDBManager) GetData(
 	return result, err
 }
 
+// GetUploadTime reads only the stored document's upload_time stamp, for the
+// conditional (?known_upload_time) read path. The projection keeps the implicit
+// _id inclusion so an existing document always yields a non-empty result even
+// when it predates the upload_time stamp; found therefore means "document
+// exists", and uploadTime is 0 when the stamp is missing or non-numeric.
+func (m *MongoDBManager) GetUploadTime(
+	ctx context.Context,
+	userID int64,
+	server string,
+	dataType utils.UploadDataType,
+) (uploadTime int64, found bool, err error) {
+	result, err := m.GetDataWithProjection(ctx, userID, server, dataType, bson.M{fieldUploadTime: 1})
+	if err != nil {
+		return 0, false, err
+	}
+	if len(result) == 0 {
+		return 0, false, nil
+	}
+	return uploadTimeFromResult(result), true, nil
+}
+
+func uploadTimeFromResult(result bson.D) int64 {
+	for _, elem := range result {
+		if elem.Key == fieldUploadTime {
+			parsed, _ := toInt64(elem.Value)
+			return parsed
+		}
+	}
+	return 0
+}
+
 func (m *MongoDBManager) GetDataWithProjection(
 	ctx context.Context,
 	userID int64,
