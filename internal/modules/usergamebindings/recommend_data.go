@@ -1,6 +1,7 @@
 package usergamebindings
 
 import (
+	"context"
 	"errors"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -10,9 +11,15 @@ import (
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+// deckRecommendReadTimeout bounds the deck-recommend data read. It is wider than
+// the other read deadlines because mysekai mode issues two sequential Mongo
+// fetches (suite subset + mysekai subset).
+const deckRecommendReadTimeout = 5 * time.Second
 
 type deckRecommendDataMode string
 
@@ -59,7 +66,10 @@ func validateVerifiedOwnedGameAccountBinding(binding *postgresql.GameAccountBind
 
 func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		// Bound the PG binding lookup and both Mongo fetches; Fiber v3 request
+		// contexts carry no deadline.
+		ctx, cancel := context.WithTimeout(c.Context(), deckRecommendReadTimeout)
+		defer cancel()
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")

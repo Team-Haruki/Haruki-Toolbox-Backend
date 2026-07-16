@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"fmt"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -61,9 +62,10 @@ func buildSuiteResponse(result bson.D, keys []string) bson.D {
 	return resp
 }
 
-func HandleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (any, error) {
-	ctx := c.Context()
-
+// HandleSuiteRequest takes an explicit ctx (rather than deriving one from the
+// fiber request) so callers can bound the Mongo read with a deadline — Fiber v3
+// request contexts carry none.
+func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (any, error) {
 	var keys []string
 	if requestKey == "" {
 		keys = allowedKeys
@@ -105,9 +107,9 @@ func HandleSuiteRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	return NormalizeProviderResponse(buildSuiteResponse(result, keys)), nil
 }
 
-func HandleMysekaiRequest(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
-	ctx := c.Context()
-
+// HandleMysekaiRequest takes an explicit ctx for the same reason as
+// HandleSuiteRequest: the caller owns the read deadline.
+func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
 	var keys []string
 	if requestKey != "" {
 		keys = strings.Split(requestKey, ",")
