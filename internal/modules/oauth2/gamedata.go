@@ -68,15 +68,28 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		requestKey := c.Query("key")
-		if data.CheckNotModified(ctx, c, apiHelper, gameUserID, server, dataType, requestKey, true) {
+		// Resolve the document generation once: it drives both the conditional
+		// 304 answer and which versioned cache entry this request may read.
+		stamp, stampErr := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, gameUserID)
+		if stampErr != nil {
+			harukiLogger.Warnf("Failed to resolve OAuth2 game data stamp (server=%s,user_id=%d): %v", server, gameUserID, stampErr)
+			stamp = -1 // unresolved: bypass the cache, never 304
+		}
+		if data.CheckNotModified(c, apiHelper, dataType, requestKey, true, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
-		cacheKey := harukiRedis.BuildGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey)
-		if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); cErr == nil && found {
-			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-			return c.SendString(cached)
-		} else if cErr != nil {
-			harukiLogger.Warnf("Failed to read OAuth2 game data cache: %v", cErr)
+		var cacheKey string
+		if stamp > 0 {
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp)
+			if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); cErr == nil && found {
+				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
+					return nil
+				} else {
+					harukiLogger.Warnf("Failed to serve cached OAuth2 game data, refetching: %v", sErr)
+				}
+			} else if cErr != nil {
+				harukiLogger.Warnf("Failed to read OAuth2 game data cache: %v", cErr)
+			}
 		}
 
 		body, err := loadOAuth2GameData(apiHelper, cacheKey, server, dataType, gameUserID, requestKey)
@@ -87,15 +100,21 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Errorf("Failed to load OAuth2 game data: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
 		}
-		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-		return c.SendString(body)
+		if sErr := data.ServeGameDataBody(c, body); sErr != nil {
+			harukiLogger.Errorf("Failed to serve OAuth2 game data: %v", sErr)
+			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
+		}
+		return nil
 	}
 }
 
-// loadOAuth2GameData resolves the JSON body for cacheKey, collapsing concurrent
-// same-key misses via singleflight and marshaling the response exactly once —
-// the same shape as loadPublicGameData/loadPrivateData. The access check stays
-// with the per-request caller; only the post-authz materialization is shared.
+// loadOAuth2GameData resolves the stored (gzip-compressed) body for this
+// request, collapsing concurrent same-request misses via singleflight and
+// marshaling+compressing the response exactly once — the same shape as
+// loadPublicGameData/loadPrivateData. The access check stays with the
+// per-request caller; only the post-authz materialization is shared. cacheKey
+// may be empty (unresolved document generation), in which case the result is
+// served but not cached.
 func loadOAuth2GameData(
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	cacheKey string,
@@ -104,10 +123,9 @@ func loadOAuth2GameData(
 	gameUserID int64,
 	requestKey string,
 ) (string, error) {
-	// Key the flight on cacheKey plus the raw request key (see loadPublicGameData):
-	// only byte-identical requests may share a result; the cache itself stays
-	// keyed by the trimmed cacheKey.
-	flightKey := cacheKey + "\x00" + requestKey
+	// Generation-independent flight key on the raw request key (see
+	// loadPublicGameData): only byte-identical requests may share a result.
+	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(gameUserID, 10) + "\x00" + requestKey
 	v, err, _ := oauth2GameDataGroup.Do(flightKey, func() (any, error) {
 		// Detached from any single caller's request lifetime; still bounded.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), oauth2GameDataReadTimeout)
@@ -131,13 +149,20 @@ func loadOAuth2GameData(
 		if mErr != nil {
 			return nil, mErr
 		}
-		body := string(encoded)
-		// Detach the cache write from the read deadline so a near-deadline but
-		// successful read still populates the cache for subsequent requests.
-		cacheCtx, cancelCache := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancelCache()
-		if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, 300*time.Second); cErr != nil {
-			harukiLogger.Warnf("Failed to write OAuth2 game data cache: %v", cErr)
+		body, cmpErr := data.CompressGameDataBody(encoded)
+		if cmpErr != nil {
+			harukiLogger.Warnf("Failed to compress OAuth2 game data body, storing plain: %v", cmpErr)
+			body = string(encoded)
+		}
+		if cacheKey != "" {
+			// Detach the cache write from the read deadline so a near-deadline
+			// but successful read still populates the cache for subsequent
+			// requests.
+			cacheCtx, cancelCache := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancelCache()
+			if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, harukiRedis.GameDataCacheTTL); cErr != nil {
+				harukiLogger.Warnf("Failed to write OAuth2 game data cache: %v", cErr)
+			}
 		}
 		return body, nil
 	})

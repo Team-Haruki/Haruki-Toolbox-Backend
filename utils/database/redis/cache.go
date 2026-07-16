@@ -20,6 +20,20 @@ const (
 	gameDataNamespace = "game_data"
 	emptyQueryHash    = "none"
 
+	// GameDataCacheTTL bounds versioned game-data body entries. It is a
+	// garbage backstop, not a freshness mechanism: bodies are keyed by the
+	// document's upload_time (see BuildVersionedGameDataCacheKey), so a new
+	// upload simply moves readers to a new key and stale generations die by
+	// TTL, LRU eviction (the production instance runs volatile-lru), or the
+	// upload-time cache clear.
+	GameDataCacheTTL = 7 * 24 * time.Hour
+	// GameDataStampMemoTTL bounds the per-document upload_time memo that lets
+	// the read path resolve the current cache generation from Redis instead of
+	// Mongo. It is the system-wide staleness ceiling: every invalidation gap
+	// (missed clear, upload race, memo overwrite race) self-heals within one
+	// memo lifetime.
+	GameDataStampMemoTTL = 60 * time.Second
+
 	redisIncrementWithTTLScript = `
 local count = redis.call('INCR', KEYS[1])
 if count == 1 then
@@ -67,6 +81,31 @@ func BuildGameDataCacheKey(surface, server, dataType string, userID int64, reque
 	pathBuilder.WriteByte(':')
 	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
 	return buildCacheKey(gameDataNamespace, pathBuilder.String(), queryString)
+}
+
+// BuildVersionedGameDataCacheKey keys a cached body by the document generation
+// that produced it (the stored upload_time). The version segment sits after
+// query=, so the per-user clear pattern in ClearCache still matches every
+// generation.
+func BuildVersionedGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string, uploadTime int64) string {
+	return BuildGameDataCacheKey(surface, server, dataType, userID, requestKey) + ":v=" + strconv.FormatInt(uploadTime, 10)
+}
+
+// BuildGameDataStampMemoKey addresses the short-lived upload_time memo for one
+// stored document. It lives in the game_data namespace on purpose: the
+// admin-side ClearNamespace on allowlist changes wipes it together with the
+// bodies.
+func BuildGameDataStampMemoKey(server, dataType string, userID int64) string {
+	var sb strings.Builder
+	sb.Grow(len(gameDataNamespace) + len(server) + len(dataType) + 28)
+	sb.WriteString(gameDataNamespace)
+	sb.WriteString(":stamp:")
+	sb.WriteString(server)
+	sb.WriteByte(':')
+	sb.WriteString(dataType)
+	sb.WriteByte(':')
+	sb.WriteString(strconv.FormatInt(userID, 10))
+	return sb.String()
 }
 
 func buildCacheKey(namespace, path, queryString string) string {
@@ -266,6 +305,12 @@ func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server st
 	}
 	if err := r.clearCachePattern(ctx, fmt.Sprintf("%s:*:%s:%s:%d:query=*", gameDataNamespace, server, dataType, userID)); err != nil {
 		return err
+	}
+	// Drop the upload_time memo too, so the next read re-resolves the current
+	// generation from Mongo instead of serving the pre-clear one for up to
+	// GameDataStampMemoTTL.
+	if err := r.Redis.Del(ctx, BuildGameDataStampMemoKey(server, dataType, userID)).Err(); err != nil {
+		return fmt.Errorf("clear game data stamp memo failed: %w", err)
 	}
 	return nil
 }
