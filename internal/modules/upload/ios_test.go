@@ -3,11 +3,65 @@ package upload
 import (
 	"context"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 )
+
+// TestIOSUploadChunkStoreConcurrentPersistAccounting guards the atomicity of the
+// persist script: size accounting must stay exact under concurrent writers with
+// no process-level lock (the pre-Lua implementation needed a global mutex for
+// this, which also serialized unrelated users). Each goroutine persists a
+// distinct chunk of a shared upload; afterwards the stored size must equal the
+// exact sum of chunk lengths and the chunk count must equal the writer count.
+func TestIOSUploadChunkStoreConcurrentPersistAccounting(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 424242, "upload-id")
+
+	const totalChunks = 16
+	chunk := []byte("0123456789abcdef")
+	var wg sync.WaitGroup
+	errs := make([]error, totalChunks)
+	for i := 0; i < totalChunks; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, errs[idx] = persistIOSUploadChunk(ctx, client, uploadKey, totalChunks, idx, chunk)
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("persistIOSUploadChunk(%d) returned error: %v", i, err)
+		}
+	}
+
+	metaKey, chunkDataKey, _ := iosUploadRedisKeys(uploadKey)
+	rawSize, err := client.HGet(ctx, metaKey, "size").Result()
+	if err != nil {
+		t.Fatalf("HGet(size) returned error: %v", err)
+	}
+	size, err := strconv.ParseInt(rawSize, 10, 64)
+	if err != nil {
+		t.Fatalf("parse stored size %q: %v", rawSize, err)
+	}
+	if want := int64(totalChunks * len(chunk)); size != want {
+		t.Fatalf("stored size = %d, want %d", size, want)
+	}
+	count, err := client.HLen(ctx, chunkDataKey).Result()
+	if err != nil {
+		t.Fatalf("HLen returned error: %v", err)
+	}
+	if count != totalChunks {
+		t.Fatalf("chunk count = %d, want %d", count, totalChunks)
+	}
+}
 
 func TestValidateDataUploadHeader(t *testing.T) {
 	t.Parallel()

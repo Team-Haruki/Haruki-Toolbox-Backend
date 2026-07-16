@@ -32,6 +32,12 @@ func (GameAccountBinding) Edges() []ent.Edge {
 func (GameAccountBinding) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("server", "game_user_id").Unique(),
+		// Index the implicit user FK column: every per-owner binding lookup
+		// (browser /me and /settings eager loads, bot bindings resolution,
+		// OAuth2 userinfo, iOS per-chunk ownership checks) filters on it, and
+		// without an index each one sequential-scans a monotonically growing
+		// table.
+		index.Edges("user"),
 	}
 }
 

@@ -1,6 +1,7 @@
 package usergamebindings
 
 import (
+	"context"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -12,6 +13,10 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+// ownedGameAccountReadTimeout bounds the owned-account data read (PG access
+// check + Mongo fetch); Fiber v3 request contexts carry no deadline.
+const ownedGameAccountReadTimeout = 3 * time.Second
 
 type ownedGameAccountDataType string
 
@@ -42,7 +47,11 @@ func buildPublicAPIAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		// Bound the PG access check and Mongo reads; the profile branch keeps the
+		// request context because it proxies an upstream game-API call with its
+		// own client-side timeout.
+		ctx, cancel := context.WithTimeout(c.Context(), ownedGameAccountReadTimeout)
+		defer cancel()
 
 		authUserID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -80,13 +89,13 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 
 		switch dataType {
 		case ownedGameAccountDataTypeSuite:
-			resp, err := handleOwnedSuiteData(c, apiHelper, gameUserID, server)
+			resp, err := handleOwnedSuiteData(ctx, c, apiHelper, gameUserID, server)
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
 			return c.JSON(resp)
 		case ownedGameAccountDataTypeMysekai:
-			resp, err := data.HandleMysekaiRequest(c, apiHelper, gameUserID, server, c.Query("key"))
+			resp, err := data.HandleMysekaiRequest(ctx, apiHelper, gameUserID, server, c.Query("key"))
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
@@ -102,9 +111,9 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	}
 }
 
-func handleOwnedSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserID int64, server harukiUtils.SupportedDataUploadServer) (any, error) {
+func handleOwnedSuiteData(ctx context.Context, c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserID int64, server harukiUtils.SupportedDataUploadServer) (any, error) {
 	allowedKeySet, allowedKeys := buildPublicAPIAllowedKeySet(apiHelper)
-	return data.HandleSuiteRequest(c, apiHelper, gameUserID, server, c.Query("key"), allowedKeySet, allowedKeys)
+	return data.HandleSuiteRequest(ctx, apiHelper, gameUserID, server, c.Query("key"), allowedKeySet, allowedKeys)
 }
 
 func sendOwnedGameAccountProfile(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr string, server harukiUtils.SupportedDataUploadServer) error {

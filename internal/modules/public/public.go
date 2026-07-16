@@ -15,7 +15,20 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
+	"golang.org/x/sync/singleflight"
 )
+
+// publicReadTimeout bounds the whole public read path (PG binding lookup, Redis
+// cache ops, Mongo fetch). Fiber v3 request contexts carry no deadline, so
+// without this a stalled dependency parks the request indefinitely — the same
+// landmine class fixed for private box reads in v8.3.0.
+const publicReadTimeout = 3 * time.Second
+
+// publicDataGroup collapses concurrent cache misses for the same cacheKey into a
+// single Mongo read + marshal + cache write. Misses here are correlated: every
+// upload invalidates all cached surfaces for that user and then fans out webhook
+// notifications, so subscribers commonly re-fetch the same key at once.
+var publicDataGroup singleflight.Group
 
 func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType harukiUtils.UploadDataType) bool {
 	if record == nil || !record.Verified {
@@ -35,7 +48,10 @@ func validatePublicAPIAccess(record *postgresql.GameAccountBinding, dataType har
 
 func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
+		// Bound every downstream DB/cache op so a contended read fails fast
+		// instead of parking a connection — mirrors the private box-read path.
+		ctx, cancel := context.WithTimeout(c.Context(), publicReadTimeout)
+		defer cancel()
 		server, dataType, userID, userIDStr, parseErr := parseParams(c)
 		if parseErr != nil {
 			return harukiAPIHelper.ErrorNotFound(c, "not found")
@@ -55,7 +71,6 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorNotFound(c, "not found")
 		}
 
-		var resp any
 		requestKey := c.Query("key")
 		cacheKey := harukiRedis.BuildGameDataCacheKey("public", string(server), string(dataType), userID, requestKey)
 		if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey); err == nil && found {
@@ -64,16 +79,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		} else if err != nil {
 			harukiLogger.Warnf("Failed to read public game data cache: %v", err)
 		}
-		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
-		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
-		for _, k := range publicAPIAllowedKeys {
-			allowedKeySet[k] = struct{}{}
-		}
-		if dataType == harukiUtils.UploadDataTypeSuite {
-			resp, err = data.HandleSuiteRequest(c, apiHelper, userID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
-		} else {
-			resp, err = data.HandleMysekaiRequest(c, apiHelper, userID, server, requestKey)
-		}
+		body, err := loadPublicGameData(apiHelper, cacheKey, server, dataType, userID, requestKey)
 		if err != nil {
 			if fErr, ok := err.(*fiber.Error); ok {
 				if fErr.Code == fiber.StatusInternalServerError {
@@ -84,15 +90,68 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Errorf("Failed to load public game data: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
 		}
-		if encoded, mErr := sonic.Marshal(resp); mErr == nil {
-			if err := apiHelper.DBManager.Redis.SetRawCache(ctx, cacheKey, string(encoded), 300*time.Second); err != nil {
-				harukiLogger.Warnf("Failed to write public game data cache: %v", err)
-			}
-		} else {
-			harukiLogger.Warnf("Failed to marshal public game data cache: %v", mErr)
-		}
-		return c.JSON(resp)
+		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+		return c.SendString(body)
 	}
+}
+
+// loadPublicGameData resolves the JSON body for cacheKey, collapsing concurrent
+// same-key misses via singleflight and marshaling the response exactly once (the
+// previous code encoded once for the cache and again in c.JSON) — the same shape
+// as loadPrivateData on the private box-read path. Authorization stays with the
+// per-request caller; only the post-authz data materialization is shared.
+func loadPublicGameData(
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	cacheKey string,
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	userID int64,
+	requestKey string,
+) (string, error) {
+	// Key the flight on cacheKey plus the raw request key: BuildGameDataCacheKey
+	// trims whitespace, so two raw keys can map to one cacheKey while producing
+	// different responses (a padded key fails validation). Only byte-identical
+	// requests may share a result; the cache itself stays keyed by cacheKey.
+	flightKey := cacheKey + "\x00" + requestKey
+	v, err, _ := publicDataGroup.Do(flightKey, func() (any, error) {
+		// Detached from any single caller's request lifetime: this fetch serves
+		// every coalesced waiter, so a leader disconnecting must not fail the
+		// others. Still bounded so it cannot run away.
+		fetchCtx, cancel := context.WithTimeout(context.Background(), publicReadTimeout)
+		defer cancel()
+		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
+		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
+		for _, k := range publicAPIAllowedKeys {
+			allowedKeySet[k] = struct{}{}
+		}
+		var resp any
+		var loadErr error
+		if dataType == harukiUtils.UploadDataTypeSuite {
+			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
+		} else {
+			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, userID, server, requestKey)
+		}
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		encoded, mErr := sonic.Marshal(resp)
+		if mErr != nil {
+			return nil, mErr
+		}
+		body := string(encoded)
+		// Detach the cache write from the read deadline so a near-deadline but
+		// successful read still populates the cache for subsequent requests.
+		cacheCtx, cancelCache := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancelCache()
+		if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, 300*time.Second); cErr != nil {
+			harukiLogger.Warnf("Failed to write public game data cache: %v", cErr)
+		}
+		return body, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return v.(string), nil
 }
 
 func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType, int64, string, *fiber.Error) {

@@ -85,6 +85,11 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{GameAccountBindingsColumns[1], GameAccountBindingsColumns[2]},
 			},
+			{
+				Name:    "gameaccountbinding_user_game_account_bindings",
+				Unique:  false,
+				Columns: []*schema.Column{GameAccountBindingsColumns[6]},
+			},
 		},
 	}
 	// GameAccountDataGrantsColumns holds the columns for the "game_account_data_grants" table.

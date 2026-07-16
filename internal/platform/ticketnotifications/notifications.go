@@ -148,20 +148,28 @@ func sendTicketMail(event Event, recipients []string, action string) {
 	}
 }
 
+// BuildEvent clones every request-derived string it stores: events outlive the
+// request handler (they are dispatched to a background mail worker), while
+// actorUserID and message may alias the pooled request body/header buffers
+// (sonic decodes with CopyString=false) and ent Create returns rows that still
+// hold the very input strings. Cloning here keeps the Event fully heap-owned no
+// matter which call site built it.
 func BuildEvent(ticketRow *postgresql.Ticket, actorUserID string, message string, mailSender MailSender) Event {
+	actor := strings.Clone(strings.TrimSpace(actorUserID))
+	message = strings.Clone(message)
 	if ticketRow == nil {
-		return Event{ActorUserID: strings.TrimSpace(actorUserID), Message: message, MailSender: mailSender, FrontendURL: config.Cfg.UserSystem.FrontendURL, DetailPath: "/tickets", DisplayName: config.Cfg.UserSystem.SMTP.MailName}
+		return Event{ActorUserID: actor, Message: message, MailSender: mailSender, FrontendURL: config.Cfg.UserSystem.FrontendURL, DetailPath: "/tickets", DisplayName: config.Cfg.UserSystem.SMTP.MailName}
 	}
 	return Event{
 		Ticket: TicketContext{
 			InternalID:      ticketRow.ID,
-			PublicID:        ticketRow.TicketID,
-			CreatorUserID:   ticketRow.CreatorUserID,
-			Subject:         ticketRow.Subject,
+			PublicID:        strings.Clone(ticketRow.TicketID),
+			CreatorUserID:   strings.Clone(ticketRow.CreatorUserID),
+			Subject:         strings.Clone(ticketRow.Subject),
 			Status:          ticketRow.Status,
-			AssigneeAdminID: ticketAssigneeAdminID(ticketRow),
+			AssigneeAdminID: strings.Clone(ticketAssigneeAdminID(ticketRow)),
 		},
-		ActorUserID: strings.TrimSpace(actorUserID),
+		ActorUserID: actor,
 		Message:     message,
 		FrontendURL: config.Cfg.UserSystem.FrontendURL,
 		DetailPath:  "/tickets",
