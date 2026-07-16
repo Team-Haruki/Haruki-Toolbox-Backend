@@ -94,13 +94,14 @@ func resolveStampFallback(
 	return 0, false, cause
 }
 
-// ConfirmGameDataCacheWrite fences a singleflight leader's cache write against
-// the races a versioned key cannot express on its own: the write is allowed
-// only when the generation's second has fully elapsed (two same-second uploads
-// share a stamp, so a body fetched between them could otherwise be pinned
-// under the still-current key) and a fresh Mongo read — bypassing the memo —
-// still reports the same stamp (a concurrent upload with a newer stamp would
-// otherwise let this write resurrect an already-cleared generation). Skipping
+// ConfirmGameDataCacheWrite fences a singleflight leader's cache write: the
+// write is allowed only when the generation's second has fully elapsed and a
+// fresh Mongo read — bypassing the memo — still reports the same stamp, so a
+// leader racing an upload with a NEWER stamp can never resurrect an
+// already-cleared generation. It cannot detect a same-stamp collision (two
+// uploads minted in one wall-clock second where the body was read between
+// their persists — indistinguishable by stamp comparison); that residual class
+// is bounded instead by FreshGenerationCacheTTL at the write site. Skipping
 // the write is always safe: the next miss simply rematerializes.
 func ConfirmGameDataCacheWrite(
 	ctx context.Context,
@@ -118,6 +119,22 @@ func ConfirmGameDataCacheWrite(
 	}
 	current, found, err := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
 	return err == nil && found && current == stamp
+}
+
+// GameDataCacheWriteTTL picks the retention for a fenced cache write: keyed
+// (?key=) bodies get the shorter inflation-capping horizon, and bodies written
+// while their generation is still young get FreshGenerationCacheTTL so a
+// same-stamp collision (see ConfirmGameDataCacheWrite) self-heals within
+// minutes instead of persisting for the full TTL.
+func GameDataCacheWriteTTL(requestKey string, stamp int64) time.Duration {
+	ttl := harukiRedis.GameDataCacheTTL
+	if requestKey != "" {
+		ttl = harukiRedis.KeyedGameDataCacheTTL
+	}
+	if time.Now().Unix()-stamp < int64(harukiRedis.FreshGenerationWindow/time.Second) {
+		ttl = harukiRedis.FreshGenerationCacheTTL
+	}
+	return ttl
 }
 
 // PublicAllowlistDigest fingerprints the public-API suite key allowlist for

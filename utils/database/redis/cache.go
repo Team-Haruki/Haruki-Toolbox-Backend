@@ -33,6 +33,16 @@ const (
 	// a shorter horizon caps that inflation while still covering real polling
 	// intervals.
 	KeyedGameDataCacheTTL = 6 * time.Hour
+	// FreshGenerationWindow / FreshGenerationCacheTTL bound the one race a
+	// versioned key plus write fence cannot express: two uploads minted in the
+	// same wall-clock second share a stamp, so a body read between their
+	// persists can be pinned under the still-current generation. Such a
+	// collision is only possible while the generation is young (mint-to-persist
+	// lag), so bodies written within FreshGenerationWindow of their stamp get
+	// the short TTL — restoring the old 5-minute self-heal bound for exactly
+	// the collision class — and stable generations keep the full TTL.
+	FreshGenerationWindow   = 30 * time.Second
+	FreshGenerationCacheTTL = 5 * time.Minute
 	// GameDataStampMemoTTL bounds the per-document upload_time memo that lets
 	// the read path resolve the current cache generation from Redis instead of
 	// Mongo. It is the staleness ceiling for every stamp-changing write path

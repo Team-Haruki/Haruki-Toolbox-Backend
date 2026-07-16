@@ -253,12 +253,8 @@ func loadPrivateData(
 			// under a live generation key.
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			ttl := harukiRedis.GameDataCacheTTL
-			if requestKey != "" {
-				ttl = harukiRedis.KeyedGameDataCacheTTL
-			}
 			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, userID, stamp) {
-				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, ttl); cErr != nil {
+				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
 					harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
 				}
 			}
