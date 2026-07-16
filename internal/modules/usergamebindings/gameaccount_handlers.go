@@ -1,10 +1,12 @@
 package usergamebindings
 
 import (
+	"context"
 	"errors"
 
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
+	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -175,7 +177,16 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 		if saveResult != nil && saveResult.Transferred {
 			previousOwnerUserID = saveResult.PreviousOwnerUserID
-			notifyPreviousGameAccountBindingOwner(apiHelper, saveResult, serverStr, gameUserIDStr, time.Now())
+			// Send the transfer mail off the request path: its result was always
+			// discarded (log-only), so a slow SMTP server should not delay the
+			// binding response. Clone the params — fiber recycles their backing
+			// buffers after the handler returns.
+			transferServer := strings.Clone(serverStr)
+			transferGameUserID := strings.Clone(gameUserIDStr)
+			transferredAt := time.Now()
+			platformMailNotify.Dispatch(func(context.Context) {
+				notifyPreviousGameAccountBindingOwner(apiHelper, saveResult, transferServer, transferGameUserID, transferredAt)
+			})
 		}
 
 		bindings, err := getUserBindings(ctx, apiHelper, userID)

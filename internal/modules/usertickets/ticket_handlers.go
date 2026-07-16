@@ -1,7 +1,9 @@
 package usertickets
 
 import (
+	"context"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	platformTicketNotifications "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/ticketnotifications"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -117,7 +119,14 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		createdTicketID = ticketID
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		platformTicketNotifications.NotifyAdminsOfNewTicket(c.Context(), apiHelper.DBManager.DB, platformTicketNotifications.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient))
+		// Notify off the request path: the send result was always discarded
+		// (log-only), so the response should not wait on the SMTP conversation.
+		// BuildEvent clones every request-derived string, so the event is safe
+		// to read after this handler returns.
+		event := platformTicketNotifications.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient)
+		platformMailNotify.Dispatch(func(ctx context.Context) {
+			platformTicketNotifications.NotifyAdminsOfNewTicket(ctx, apiHelper.DBManager.DB, event)
+		})
 		resp := createUserTicketResponse{TicketID: ticketID}
 		return harukiAPIHelper.SuccessResponse(c, "ticket created", &resp)
 	}
@@ -294,7 +303,9 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 
 		event := platformTicketNotifications.BuildEvent(row, userID, message, apiHelper.SMTPClient)
 		event.Ticket.Status = ticket.StatusPendingAdmin
-		platformTicketNotifications.NotifyAdminsOfUserReply(c.Context(), apiHelper.DBManager.DB, event)
+		platformMailNotify.Dispatch(func(ctx context.Context) {
+			platformTicketNotifications.NotifyAdminsOfUserReply(ctx, apiHelper.DBManager.DB, event)
+		})
 		items := buildUserTicketMessageItems([]*postgresql.TicketMessage{createdMessage})
 		return harukiAPIHelper.SuccessResponse(c, "message added", &items[0])
 	}

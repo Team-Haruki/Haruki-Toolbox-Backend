@@ -1,7 +1,9 @@
 package admintickets
 
 import (
+	"context"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	platformTicketNotifications "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/ticketnotifications"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -163,9 +165,14 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		if !payload.Internal {
+			// Notify off the request path: the send result was always discarded
+			// (log-only). BuildEvent clones every request-derived string, so the
+			// event is safe to read after this handler returns.
 			event := platformTicketNotifications.BuildEvent(row, actorUserID, message, apiHelper.SMTPClient)
 			event.Ticket.Status = ticket.StatusPendingUser
-			platformTicketNotifications.NotifyUserOfAdminReply(c.Context(), apiHelper.DBManager.DB, event)
+			platformMailNotify.Dispatch(func(ctx context.Context) {
+				platformTicketNotifications.NotifyUserOfAdminReply(ctx, apiHelper.DBManager.DB, event)
+			})
 		}
 		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketMessageSenderUserIDs([]*postgresql.TicketMessage{savedMessage}))
 		if err != nil {
