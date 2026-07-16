@@ -2,57 +2,131 @@ package data
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // ResolveGameDataStamp returns the stored document's current upload_time (0
 // when the document is missing or predates the stamp), preferring a short
 // Redis memo over a Mongo projection read so the steady-state read path stays
-// Redis-only. The memo is the freshness ceiling of the whole cache layer: it
-// lives for GameDataStampMemoTTL, is deleted by every per-user cache clear
-// (upload, binding changes) and by the allowlist namespace wipe, and a stale
-// memo can at worst serve the previous consistent generation for one memo
-// lifetime.
+// Redis-only. The memo is the freshness ceiling of every stamp-changing write
+// path: it lives for GameDataStampMemoTTL and is deleted by every per-user
+// cache clear (upload, backfill has its own stamp bump, binding changes) and
+// by the allowlist namespace wipe.
+//
+// confirmed reports whether the stamp came from the memo or a live Mongo read.
+// When Mongo is unreachable and no memo exists, the long-lived fallback key
+// supplies the last stamp a live read ever resolved, so warm cache generations
+// keep serving through a Mongo outage — but such a stamp is NOT confirmed and
+// must never answer a conditional 304.
 func ResolveGameDataStamp(
 	ctx context.Context,
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	server harukiUtils.SupportedDataUploadServer,
 	dataType harukiUtils.UploadDataType,
 	userID int64,
-) (int64, error) {
+) (stamp int64, confirmed bool, err error) {
 	if apiHelper == nil || apiHelper.DBManager == nil {
-		return 0, fmt.Errorf("db manager is nil")
+		return 0, false, fmt.Errorf("db manager is nil")
 	}
 	memoKey := harukiRedis.BuildGameDataStampMemoKey(string(server), string(dataType), userID)
 	if apiHelper.DBManager.Redis != nil {
-		if raw, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, memoKey); err == nil && found {
-			if stamp, pErr := strconv.ParseInt(raw, 10, 64); pErr == nil {
-				return stamp, nil
+		if raw, found, rErr := apiHelper.DBManager.Redis.GetRawCache(ctx, memoKey); rErr == nil && found {
+			if parsed, pErr := strconv.ParseInt(raw, 10, 64); pErr == nil {
+				return parsed, true, nil
 			}
 			// A corrupt memo falls through to Mongo and is overwritten below.
 		}
 	}
 	if apiHelper.DBManager.Mongo == nil {
-		return 0, fmt.Errorf("mongo manager is nil")
+		return resolveStampFallback(ctx, apiHelper, server, dataType, userID, fmt.Errorf("mongo manager is nil"))
 	}
-	stamp, found, err := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
-	if err != nil {
-		return 0, err
+	current, found, mErr := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
+	if mErr != nil {
+		return resolveStampFallback(ctx, apiHelper, server, dataType, userID, mErr)
 	}
 	if !found {
-		stamp = 0
+		current = 0
 	}
 	if apiHelper.DBManager.Redis != nil {
 		// Best-effort: a failed memo write only means the next read resolves
 		// from Mongo again.
-		if mErr := apiHelper.DBManager.Redis.SetRawCache(ctx, memoKey, strconv.FormatInt(stamp, 10), harukiRedis.GameDataStampMemoTTL); mErr != nil {
-			harukiLogger.Warnf("Failed to write game data stamp memo %s: %v", memoKey, mErr)
+		value := strconv.FormatInt(current, 10)
+		if wErr := apiHelper.DBManager.Redis.SetRawCache(ctx, memoKey, value, harukiRedis.GameDataStampMemoTTL); wErr != nil {
+			harukiLogger.Warnf("Failed to write game data stamp memo %s: %v", memoKey, wErr)
+		}
+		fallbackKey := harukiRedis.BuildGameDataStampFallbackKey(string(server), string(dataType), userID)
+		if wErr := apiHelper.DBManager.Redis.SetRawCache(ctx, fallbackKey, value, harukiRedis.GameDataCacheTTL); wErr != nil {
+			harukiLogger.Warnf("Failed to write game data stamp fallback %s: %v", fallbackKey, wErr)
 		}
 	}
-	return stamp, nil
+	return current, true, nil
+}
+
+// resolveStampFallback serves the last stamp a live read ever resolved when
+// Mongo is unreachable, so existing cache generations stay servable through an
+// outage. The stamp is unconfirmed; when no fallback exists the original
+// resolve error surfaces and the full path owns the failure.
+func resolveStampFallback(
+	ctx context.Context,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	userID int64,
+	cause error,
+) (int64, bool, error) {
+	if apiHelper.DBManager.Redis != nil {
+		fallbackKey := harukiRedis.BuildGameDataStampFallbackKey(string(server), string(dataType), userID)
+		if raw, found, rErr := apiHelper.DBManager.Redis.GetRawCache(ctx, fallbackKey); rErr == nil && found {
+			if parsed, pErr := strconv.ParseInt(raw, 10, 64); pErr == nil {
+				return parsed, false, nil
+			}
+		}
+	}
+	return 0, false, cause
+}
+
+// ConfirmGameDataCacheWrite fences a singleflight leader's cache write against
+// the races a versioned key cannot express on its own: the write is allowed
+// only when the generation's second has fully elapsed (two same-second uploads
+// share a stamp, so a body fetched between them could otherwise be pinned
+// under the still-current key) and a fresh Mongo read — bypassing the memo —
+// still reports the same stamp (a concurrent upload with a newer stamp would
+// otherwise let this write resurrect an already-cleared generation). Skipping
+// the write is always safe: the next miss simply rematerializes.
+func ConfirmGameDataCacheWrite(
+	ctx context.Context,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	userID int64,
+	stamp int64,
+) bool {
+	if stamp <= 0 || stamp >= time.Now().Unix() {
+		return false
+	}
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Mongo == nil {
+		return false
+	}
+	current, found, err := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
+	return err == nil && found && current == stamp
+}
+
+// PublicAllowlistDigest fingerprints the public-API suite key allowlist for
+// use as a cache-key segment: suite bodies on the public and OAuth2 surfaces
+// are shaped by the allowlist, so an allowlist edit must move readers to new
+// entries — the document stamp alone cannot express that change, and an
+// in-flight leader could otherwise re-cache an old-allowlist body after the
+// admin-side namespace wipe.
+func PublicAllowlistDigest(allowedKeys []string) string {
+	sum := md5.Sum([]byte(strings.Join(allowedKeys, ",")))
+	return hex.EncodeToString(sum[:8])
 }

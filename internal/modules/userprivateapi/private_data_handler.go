@@ -51,7 +51,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		// Mongo without server-side slow logs (client-side pool waits are invisible
 		// there). Timestamps are captured unconditionally (~ns) and only formatted when
 		// the read is slow and profiling is enabled.
-		var dBinding, dAuth, dCache, dLoad time.Duration
+		var dBinding, dAuth, dStamp, dCache, dLoad time.Duration
 		defer func() {
 			if !perfdebug.Enabled() {
 				return
@@ -60,9 +60,10 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			if total < privateReadSlowThreshold {
 				return
 			}
-			harukiLogger.Warnf("slow private read: server=%s data_type=%s user_id=%s total=%s binding=%s auth=%s cache=%s load=%s",
+			harukiLogger.Warnf("slow private read: server=%s data_type=%s user_id=%s total=%s binding=%s auth=%s stamp=%s cache=%s load=%s",
 				serverStr, dataTypeStr, userIDStr, total.Round(time.Millisecond),
 				dBinding.Round(time.Millisecond), dAuth.Round(time.Millisecond),
+				dStamp.Round(time.Millisecond),
 				dCache.Round(time.Millisecond), dLoad.Round(time.Millisecond))
 		}()
 		platform := c.Query("platform")
@@ -153,12 +154,14 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		requestKey := c.Query("key")
 		// Resolve the document generation once: it drives both the conditional
 		// 304 answer and which versioned cache entry this request may read.
-		stamp, stampErr := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, userID)
+		stampStart := time.Now()
+		stamp, stampConfirmed, stampErr := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, userID)
+		dStamp = time.Since(stampStart)
 		if stampErr != nil {
 			harukiLogger.Warnf("Failed to resolve private game data stamp (server=%s,user_id=%s): %v", server, userIDStr, stampErr)
 			stamp = -1 // unresolved: bypass the cache, never 304
 		}
-		if data.CheckNotModified(c, apiHelper, dataType, requestKey, false, stamp) {
+		if stampConfirmed && data.CheckNotModified(c, apiHelper, dataType, requestKey, false, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
 		var cacheKey string
@@ -178,7 +181,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			}
 		}
 		loadStart := time.Now()
-		body, found, err := loadPrivateData(apiHelper, cacheKey, server, dataType, userID, requestKey)
+		body, found, err := loadPrivateData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp)
 		dLoad = time.Since(loadStart)
 		if lookupErr := mapPrivateDataQueryError(err); lookupErr != nil {
 			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
@@ -209,6 +212,7 @@ func loadPrivateData(
 	dataType harukiUtils.UploadDataType,
 	userID int64,
 	requestKey string,
+	stamp int64,
 ) (string, bool, error) {
 	type payload struct {
 		body  string
@@ -244,11 +248,19 @@ func loadPrivateData(
 		if cacheKey != "" {
 			// Detach the cache write from the request deadline so a near-deadline
 			// but successful read still populates the cache for subsequent
-			// requests.
+			// requests. The write is fenced (see ConfirmGameDataCacheWrite) so a
+			// leader racing an upload or a cache wipe cannot pin a stale body
+			// under a live generation key.
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, harukiRedis.GameDataCacheTTL); cErr != nil {
-				harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
+			ttl := harukiRedis.GameDataCacheTTL
+			if requestKey != "" {
+				ttl = harukiRedis.KeyedGameDataCacheTTL
+			}
+			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, userID, stamp) {
+				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, ttl); cErr != nil {
+					harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
+				}
 			}
 		}
 		return payload{body: body, found: true}, nil
