@@ -51,7 +51,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		// Mongo without server-side slow logs (client-side pool waits are invisible
 		// there). Timestamps are captured unconditionally (~ns) and only formatted when
 		// the read is slow and profiling is enabled.
-		var dBinding, dAuth, dCache, dLoad time.Duration
+		var dBinding, dAuth, dStamp, dCache, dLoad time.Duration
 		defer func() {
 			if !perfdebug.Enabled() {
 				return
@@ -60,9 +60,10 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			if total < privateReadSlowThreshold {
 				return
 			}
-			harukiLogger.Warnf("slow private read: server=%s data_type=%s user_id=%s total=%s binding=%s auth=%s cache=%s load=%s",
+			harukiLogger.Warnf("slow private read: server=%s data_type=%s user_id=%s total=%s binding=%s auth=%s stamp=%s cache=%s load=%s",
 				serverStr, dataTypeStr, userIDStr, total.Round(time.Millisecond),
 				dBinding.Round(time.Millisecond), dAuth.Round(time.Millisecond),
+				dStamp.Round(time.Millisecond),
 				dCache.Round(time.Millisecond), dLoad.Round(time.Millisecond))
 		}()
 		platform := c.Query("platform")
@@ -151,21 +152,36 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			return harukiApiHelper.ErrorForbidden(c, "forbidden: invalid platform or platform_user_id for this user")
 		}
 		requestKey := c.Query("key")
-		if data.CheckNotModified(ctx, c, apiHelper, userID, server, dataType, requestKey, false) {
+		// Resolve the document generation once: it drives both the conditional
+		// 304 answer and which versioned cache entry this request may read.
+		stampStart := time.Now()
+		stamp, stampConfirmed, stampErr := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, userID)
+		dStamp = time.Since(stampStart)
+		if stampErr != nil {
+			harukiLogger.Warnf("Failed to resolve private game data stamp (server=%s,user_id=%s): %v", server, userIDStr, stampErr)
+			stamp = -1 // unresolved: bypass the cache, never 304
+		}
+		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, false, nil, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
-		cacheKey := harukiRedis.BuildGameDataCacheKey("private", string(server), string(dataType), userID, requestKey)
-		cacheStart := time.Now()
-		cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey)
-		dCache = time.Since(cacheStart)
-		if cErr == nil && cacheFound {
-			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-			return c.SendString(cached)
-		} else if cErr != nil {
-			harukiLogger.Warnf("Failed to read private game data cache: %v", cErr)
+		var cacheKey string
+		if stamp > 0 {
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("private", string(server), string(dataType), userID, requestKey, stamp)
+			cacheStart := time.Now()
+			cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey)
+			dCache = time.Since(cacheStart)
+			if cErr == nil && cacheFound {
+				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
+					return nil
+				} else {
+					harukiLogger.Warnf("Failed to serve cached private game data, refetching: %v", sErr)
+				}
+			} else if cErr != nil {
+				harukiLogger.Warnf("Failed to read private game data cache: %v", cErr)
+			}
 		}
 		loadStart := time.Now()
-		body, found, err := loadPrivateData(apiHelper, cacheKey, server, dataType, userID, requestKey)
+		body, found, err := loadPrivateData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp)
 		dLoad = time.Since(loadStart)
 		if lookupErr := mapPrivateDataQueryError(err); lookupErr != nil {
 			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
@@ -174,15 +190,21 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if !found {
 			return harukiApiHelper.ErrorNotFound(c, "game data not found")
 		}
-		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-		return c.SendString(body)
+		if sErr := data.ServeGameDataBody(c, body); sErr != nil {
+			harukiLogger.Errorf("Failed to serve private game data: %v", sErr)
+			return harukiApiHelper.ErrorInternal(c, "failed to get user data")
+		}
+		return nil
 	}
 }
 
-// loadPrivateData resolves the JSON body for cacheKey, collapsing concurrent
-// same-key misses via singleflight so a burst does a single Mongo pull + marshal +
-// cache write. It reports whether the document exists and marshals the response
-// exactly once (the previous code marshaled once for the cache and again in c.JSON).
+// loadPrivateData resolves the stored (gzip-compressed) body for this request,
+// collapsing concurrent same-request misses via singleflight so a burst does a
+// single Mongo pull + marshal + compress + cache write. It reports whether the
+// document exists and marshals the response exactly once (the previous code
+// marshaled once for the cache and again in c.JSON). cacheKey may be empty
+// (unresolved document generation), in which case the result is served but not
+// cached.
 func loadPrivateData(
 	apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers,
 	cacheKey string,
@@ -190,12 +212,18 @@ func loadPrivateData(
 	dataType harukiUtils.UploadDataType,
 	userID int64,
 	requestKey string,
+	stamp int64,
 ) (string, bool, error) {
 	type payload struct {
 		body  string
 		found bool
 	}
-	v, err, _ := privateDataGroup.Do(cacheKey, func() (any, error) {
+	// Generation-independent flight key on the raw request key, mirroring
+	// loadPublicGameData: coalesce all concurrent misses for one
+	// document+filter regardless of which cache generation each caller
+	// resolved.
+	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(userID, 10) + "\x00" + requestKey
+	v, err, _ := privateDataGroup.Do(flightKey, func() (any, error) {
 		// Detach from any single caller's request lifetime: this fetch serves every
 		// coalesced waiter, so a leader disconnecting must not fail the others. It is
 		// still bounded so it cannot run away.
@@ -212,14 +240,26 @@ func loadPrivateData(
 		if encErr != nil {
 			return nil, encErr
 		}
-		// Detach the cache write from the request deadline so a near-deadline but
-		// successful read still populates the cache for subsequent requests.
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, string(encoded), 300*time.Second); cErr != nil {
-			harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
+		body, cmpErr := data.CompressGameDataBody(encoded)
+		if cmpErr != nil {
+			harukiLogger.Warnf("Failed to compress private game data body, storing plain: %v", cmpErr)
+			body = string(encoded)
 		}
-		return payload{body: string(encoded), found: true}, nil
+		if cacheKey != "" {
+			// Detach the cache write from the request deadline so a near-deadline
+			// but successful read still populates the cache for subsequent
+			// requests. The write is fenced (see ConfirmGameDataCacheWrite) so a
+			// leader racing an upload or a cache wipe cannot pin a stale body
+			// under a live generation key.
+			cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, userID, stamp) {
+				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
+					harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
+				}
+			}
+		}
+		return payload{body: body, found: true}, nil
 	})
 	if err != nil {
 		return "", false, err

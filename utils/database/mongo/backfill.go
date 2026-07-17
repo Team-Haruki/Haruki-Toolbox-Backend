@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -88,6 +90,12 @@ func (m *MongoDBManager) BackfillSuiteMergeFields(
 	if len(finalData) == 0 || !opts.Apply {
 		return result, nil
 	}
+
+	// The document's content changes, so its generation stamp must change with
+	// it: the serving layer keys cached bodies and conditional 304 answers by
+	// upload_time, and a stampless backfill would leave every surface pinned to
+	// the pre-backfill generation until the user's next upload.
+	finalData[fieldUploadTime] = time.Now().Unix()
 
 	filter := bson.M{fieldID: userID}
 	if opts.FilterServer {

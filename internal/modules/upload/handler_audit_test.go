@@ -94,6 +94,16 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 				).
 				Only(ctx)
 			if syslogErr != nil {
+				// The system log is written after the upload log by the same
+				// async audit goroutine, so it may not be visible yet (or the
+				// SQLite table may be mid-write) — keep polling until deadline.
+				if postgresql.IsNotFound(syslogErr) || strings.Contains(strings.ToLower(syslogErr.Error()), "database table is locked") {
+					if time.Now().After(deadline) {
+						t.Fatalf("timed out waiting for system log to be written")
+					}
+					time.Sleep(20 * time.Millisecond)
+					continue
+				}
 				t.Fatalf("query system log returned error: %v", syslogErr)
 			}
 			if syslog.Metadata["failureStage"] != uploadStageAccountPolicy {
@@ -170,6 +180,16 @@ func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
 				).
 				Only(ctx)
 			if syslogErr != nil {
+				// The system log is written after the upload log by the same
+				// async audit goroutine, so it may not be visible yet (or the
+				// SQLite table may be mid-write) — keep polling until deadline.
+				if postgresql.IsNotFound(syslogErr) || strings.Contains(strings.ToLower(syslogErr.Error()), "database table is locked") {
+					if time.Now().After(deadline) {
+						t.Fatalf("timed out waiting for system log to be written")
+					}
+					time.Sleep(20 * time.Millisecond)
+					continue
+				}
 				t.Fatalf("query system log returned error: %v", syslogErr)
 			}
 			if syslog.Metadata["failureStage"] != "retrieve_suite" {

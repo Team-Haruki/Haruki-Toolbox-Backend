@@ -20,6 +20,39 @@ const (
 	gameDataNamespace = "game_data"
 	emptyQueryHash    = "none"
 
+	// GameDataCacheTTL bounds versioned game-data body entries. It is a
+	// garbage backstop, not a freshness mechanism: bodies are keyed by the
+	// document's upload_time (see BuildVersionedGameDataCacheKey), so a new
+	// upload simply moves readers to a new key and stale generations die by
+	// TTL, LRU eviction (the production instance runs volatile-lru), or the
+	// upload-time cache clear.
+	GameDataCacheTTL = 7 * 24 * time.Hour
+	// KeyedGameDataCacheTTL bounds bodies materialized for an explicit ?key=
+	// filter. Distinct key permutations each mint their own cache entry, so an
+	// authorized caller could otherwise accumulate a week of junk generations;
+	// a shorter horizon caps that inflation while still covering real polling
+	// intervals.
+	KeyedGameDataCacheTTL = 6 * time.Hour
+	// FreshGenerationWindow / FreshGenerationCacheTTL bound the one race a
+	// versioned key plus write fence cannot express: two uploads minted in the
+	// same wall-clock second share a stamp, so a body read between their
+	// persists can be pinned under the still-current generation. Such a
+	// collision is only possible while the generation is young (mint-to-persist
+	// lag), so bodies written within FreshGenerationWindow of their stamp get
+	// the short TTL — restoring the old 5-minute self-heal bound for exactly
+	// the collision class — and stable generations keep the full TTL. The
+	// window must cover the slowest mint-to-persist path: the async iOS chunk
+	// upload runs its whole pipeline under a 2-minute budget after stamping.
+	FreshGenerationWindow   = 3 * time.Minute
+	FreshGenerationCacheTTL = 5 * time.Minute
+	// GameDataStampMemoTTL bounds the per-document upload_time memo that lets
+	// the read path resolve the current cache generation from Redis instead of
+	// Mongo. It is the staleness ceiling for every stamp-changing write path
+	// (uploads, backfill, binding clears); the residual same-second upload
+	// window is fenced separately at cache-write time (see
+	// ConfirmGameDataCacheWrite).
+	GameDataStampMemoTTL = 60 * time.Second
+
 	redisIncrementWithTTLScript = `
 local count = redis.call('INCR', KEYS[1])
 if count == 1 then
@@ -67,6 +100,43 @@ func BuildGameDataCacheKey(surface, server, dataType string, userID int64, reque
 	pathBuilder.WriteByte(':')
 	pathBuilder.WriteString(strconv.FormatInt(userID, 10))
 	return buildCacheKey(gameDataNamespace, pathBuilder.String(), queryString)
+}
+
+// BuildVersionedGameDataCacheKey keys a cached body by the document generation
+// that produced it (the stored upload_time). The version segment sits after
+// query=, so the per-user clear pattern in ClearCache still matches every
+// generation.
+func BuildVersionedGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string, uploadTime int64) string {
+	return BuildGameDataCacheKey(surface, server, dataType, userID, requestKey) + ":v=" + strconv.FormatInt(uploadTime, 10)
+}
+
+// BuildGameDataStampMemoKey addresses the short-lived upload_time memo for one
+// stored document. It lives in the game_data namespace on purpose: the
+// admin-side ClearNamespace on allowlist changes wipes it together with the
+// bodies.
+func BuildGameDataStampMemoKey(server, dataType string, userID int64) string {
+	return buildStampKey(":stamp:", server, dataType, userID)
+}
+
+// BuildGameDataStampFallbackKey addresses the long-lived last-known stamp used
+// only when Mongo cannot be reached: it lets warm cache generations keep
+// serving through a Mongo outage instead of failing every read after the 60s
+// memo expires. It is never trusted for conditional 304 answers.
+func BuildGameDataStampFallbackKey(server, dataType string, userID int64) string {
+	return buildStampKey(":stamplast:", server, dataType, userID)
+}
+
+func buildStampKey(kind, server, dataType string, userID int64) string {
+	var sb strings.Builder
+	sb.Grow(len(gameDataNamespace) + len(kind) + len(server) + len(dataType) + 22)
+	sb.WriteString(gameDataNamespace)
+	sb.WriteString(kind)
+	sb.WriteString(server)
+	sb.WriteByte(':')
+	sb.WriteString(dataType)
+	sb.WriteByte(':')
+	sb.WriteString(strconv.FormatInt(userID, 10))
+	return sb.String()
 }
 
 func buildCacheKey(namespace, path, queryString string) string {
@@ -243,12 +313,12 @@ func (r *HarukiRedisManager) ClearNamespace(ctx context.Context, namespace strin
 	var cursor uint64
 	pattern := namespace + ":*"
 	for {
-		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
+		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 1000).Result()
 		if err != nil {
 			return fmt.Errorf("clear redis namespace scan failed: %w", err)
 		}
 		if len(keys) > 0 {
-			if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
+			if err := r.Redis.Unlink(ctx, keys...).Err(); err != nil {
 				return fmt.Errorf("clear redis namespace delete failed: %w", err)
 			}
 		}
@@ -264,24 +334,33 @@ func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server st
 	if r == nil || r.Redis == nil {
 		return fmt.Errorf("redis client is nil")
 	}
-	if err := r.clearCachePattern(ctx, fmt.Sprintf("%s:*:%s:%s:%d:query=*", gameDataNamespace, server, dataType, userID)); err != nil {
-		return err
+	// Drop the stamp keys FIRST: the memo is the freshness authority, so the
+	// next read re-resolves the current generation from Mongo even if the
+	// (slower, SCAN-based) body sweep below fails midway.
+	if err := r.Redis.Unlink(ctx,
+		BuildGameDataStampMemoKey(server, dataType, userID),
+		BuildGameDataStampFallbackKey(server, dataType, userID),
+	).Err(); err != nil {
+		return fmt.Errorf("clear game data stamp keys failed: %w", err)
 	}
-	return nil
+	return r.clearCachePattern(ctx, fmt.Sprintf("%s:*:%s:%s:%d:query=*", gameDataNamespace, server, dataType, userID))
 }
 
 func (r *HarukiRedisManager) clearCachePattern(ctx context.Context, pattern string) error {
 	if r == nil || r.Redis == nil {
 		return fmt.Errorf("redis client is nil")
 	}
+	// COUNT 1000 + UNLINK keep the full-keyspace SCAN sweep cheap enough to run
+	// in the upload path: fewer round trips against a 7-day keyspace, and
+	// reclamation happens off the Redis main thread.
 	var cursor uint64
 	for {
-		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 100).Result()
+		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 1000).Result()
 		if err != nil {
 			return fmt.Errorf("clear redis cache scan failed: %w", err)
 		}
 		if len(keys) > 0 {
-			if err := r.Redis.Del(ctx, keys...).Err(); err != nil {
+			if err := r.Redis.Unlink(ctx, keys...).Err(); err != nil {
 				return fmt.Errorf("clear redis cache delete failed: %w", err)
 			}
 		}

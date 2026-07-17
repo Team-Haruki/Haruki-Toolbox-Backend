@@ -1,10 +1,7 @@
 package data
 
 import (
-	"context"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
 	"strings"
 	"time"
@@ -29,12 +26,18 @@ const (
 
 // CheckNotModified implements the ?known_upload_time conditional read shared by
 // the public, private, and OAuth2 game-data endpoints. It must run only after
-// the caller has fully authorized the request. It reports true when the client
-// already holds the current document, in which case the caller responds 304.
+// the caller has fully authorized the request. stamp is the document's current
+// upload_time as resolved by ResolveGameDataStamp (0 or negative when the
+// document is missing, unstamped, or the stamp could not be resolved). It
+// reports true when the client already holds the current document, in which
+// case the caller responds 304.
 //
 // publicKeyFiltered is true on the public and OAuth2 surfaces, whose responses
-// are filtered through the public-API key allowlist; the private surface passes
-// false. The conditional read is disabled whenever answering 304 could diverge
+// are filtered through the public-API key allowlist; those callers pass the
+// allowlist they already fetched for this request (resolving it is a Redis
+// round trip, so it is fetched once per request and shared with the read-key
+// digest). The private surface passes false and nil. The conditional read is
+// disabled whenever answering 304 could diverge
 // from what the full path would say about the same request: a non-empty key
 // filter must include upload_time (otherwise the client cannot maintain its
 // stamp, and on allowlisted surfaces an existing document can project to an
@@ -47,23 +50,19 @@ const (
 //
 // The check is a pure optimization and never introduces a new failure mode:
 // malformed values are ignored the way HTTP ignores an unparsable
-// If-Modified-Since, and a missing document or a lookup error falls through to
-// the existing full path, which owns the 404/500 semantics of its surface.
+// If-Modified-Since, and a missing document or an unresolved stamp falls
+// through to the existing full path, which owns the 404/500 semantics of its
+// surface.
 func CheckNotModified(
-	ctx context.Context,
 	c fiber.Ctx,
-	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
-	userID int64,
-	server harukiUtils.SupportedDataUploadServer,
 	dataType harukiUtils.UploadDataType,
 	requestKey string,
 	publicKeyFiltered bool,
+	publicAllowedKeys []string,
+	stamp int64,
 ) bool {
 	known := ParseKnownUploadTime(c.Query(QueryKnownUploadTime))
 	if known <= 0 {
-		return false
-	}
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Mongo == nil {
 		return false
 	}
 	if requestKey != "" && !requestKeyIncludesUploadTime(requestKey) {
@@ -75,9 +74,8 @@ func CheckNotModified(
 	}
 	if publicKeyFiltered {
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
-			allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
-			for _, k := range publicAPIAllowedKeys {
+			allowedKeySet := make(map[string]struct{}, len(publicAllowedKeys))
+			for _, k := range publicAllowedKeys {
 				allowedKeySet[k] = struct{}{}
 			}
 			if _, ok := allowedKeySet["upload_time"]; !ok {
@@ -96,15 +94,14 @@ func CheckNotModified(
 		// and let the full path behave exactly as it always has.
 		return false
 	}
-	current, found, err := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
-	if err != nil {
-		harukiLogger.Warnf("Failed to read upload_time for conditional request (server=%s,data_type=%s,user_id=%d): %v", server, dataType, userID, err)
+	if !notModifiedDecision(known, stamp, time.Now().Unix(), stamp > 0) {
 		return false
 	}
-	if !notModifiedDecision(known, current, time.Now().Unix(), found) {
-		return false
-	}
-	c.Set(HeaderUploadTime, strconv.FormatInt(current, 10))
+	// A 304 carries the headers its 200 counterpart would: the full response
+	// varies on Accept-Encoding (see ServeGameDataBody), so shared caches must
+	// see the same Vary here.
+	appendVaryAcceptEncoding(c)
+	c.Set(HeaderUploadTime, strconv.FormatInt(stamp, 10))
 	return true
 }
 
