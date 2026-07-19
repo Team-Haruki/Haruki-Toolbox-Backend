@@ -87,15 +87,23 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorForbidden(c, "not authorized to access this binding")
 		}
 
+		requestKey := c.Query("key")
 		switch dataType {
 		case ownedGameAccountDataTypeSuite:
-			resp, err := handleOwnedSuiteData(ctx, c, apiHelper, gameUserID, server)
+			allowedKeySet, allowedKeys := buildPublicAPIAllowedKeySet(apiHelper)
+			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeSuite, requestKey, true, allowedKeys) {
+				return c.SendStatus(fiber.StatusNotModified)
+			}
+			resp, err := data.HandleSuiteRequest(ctx, apiHelper, gameUserID, server, requestKey, allowedKeySet, allowedKeys)
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
 			return c.JSON(resp)
 		case ownedGameAccountDataTypeMysekai:
-			resp, err := data.HandleMysekaiRequest(ctx, apiHelper, gameUserID, server, c.Query("key"))
+			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeMysekai, requestKey, false, nil) {
+				return c.SendStatus(fiber.StatusNotModified)
+			}
+			resp, err := data.HandleMysekaiRequest(ctx, apiHelper, gameUserID, server, requestKey)
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
@@ -111,9 +119,26 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	}
 }
 
-func handleOwnedSuiteData(ctx context.Context, c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserID int64, server harukiUtils.SupportedDataUploadServer) (any, error) {
-	allowedKeySet, allowedKeys := buildPublicAPIAllowedKeySet(apiHelper)
-	return data.HandleSuiteRequest(ctx, apiHelper, gameUserID, server, c.Query("key"), allowedKeySet, allowedKeys)
+func ownedGameAccountNotModified(
+	ctx context.Context,
+	c fiber.Ctx,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	gameUserID int64,
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	requestKey string,
+	publicKeyFiltered bool,
+	publicAllowedKeys []string,
+) bool {
+	if data.ParseKnownUploadTime(c.Query(data.QueryKnownUploadTime)) <= 0 {
+		return false
+	}
+	stamp, confirmed, err := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, gameUserID)
+	if err != nil {
+		harukiLogger.Warnf("Failed to resolve owned game account data stamp (server=%s,data_type=%s,user_id=%d): %v", server, dataType, gameUserID, err)
+		return false
+	}
+	return confirmed && data.CheckNotModified(c, dataType, requestKey, publicKeyFiltered, publicAllowedKeys, stamp)
 }
 
 func sendOwnedGameAccountProfile(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr string, server harukiUtils.SupportedDataUploadServer) error {

@@ -315,6 +315,9 @@ Hydra 在当前项目里负责：
 - `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/:data_type`
 - `:data_type` 允许 `suite`、`mysekai`、`profile`
 - `suite` 和 `mysekai` 复用 public API / OAuth2 game-data 的数据读取逻辑，并支持 `key` 查询参数
+- `suite` 和 `mysekai` 支持 `known_upload_time=<上次完整响应中的 upload_time>` 条件读取；数据未变化时返回 `304 Not Modified`、空响应体和 `X-Upload-Time` 响应头
+- 使用 `key` 过滤时必须同时请求 `upload_time` 才可能返回 304；suite 的公开字段允许列表不包含 `upload_time` 时也会回退到完整响应
+- 完整响应的时间戳始终以响应体 `upload_time` 为准；时间戳精度为 unix 秒，同一秒内多次上传无法区分
 - `profile` 通过 Haruki Sekai API 读取绑定账号 profile，并直接透传 JSON 响应体
 - 该接口会校验浏览器登录态、`:toolbox_user_id` 是否为当前用户、账号绑定是否属于当前用户且已验证；`suite` / `mysekai` 也允许通过有效的游戏账号数据授权读取
 - `suite` 数据会保留 `userGamedata.userId` number 字段，并额外返回 `userGamedata.userIdString` 字符串镜像；前端应优先使用字符串字段避免 64 位整数精度丢失

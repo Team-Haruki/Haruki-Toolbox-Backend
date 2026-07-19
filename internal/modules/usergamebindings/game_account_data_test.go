@@ -1,7 +1,9 @@
 package usergamebindings
 
 import (
+	"context"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"net/http/httptest"
 	"testing"
 
@@ -41,6 +43,42 @@ func TestParseOwnedGameAccountDataType(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Fatalf("data type = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestOwnedGameAccountConditionalReadIgnoresMissingOrInvalidStamp(t *testing.T) {
+	t.Parallel()
+
+	for _, query := range []string{"", "?known_upload_time=invalid", "?known_upload_time=0"} {
+		query := query
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			app := fiber.New()
+			app.Get("/data", func(c fiber.Ctx) error {
+				if ownedGameAccountNotModified(
+					context.Background(),
+					c,
+					nil,
+					123,
+					harukiUtils.SupportedDataUploadServerJP,
+					harukiUtils.UploadDataTypeSuite,
+					"",
+					true,
+					[]string{"upload_time"},
+				) {
+					t.Fatal("invalid or missing stamp must not produce 304")
+				}
+				return c.SendStatus(fiber.StatusOK)
+			})
+
+			resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/data"+query, nil))
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusOK)
 			}
 		})
 	}
