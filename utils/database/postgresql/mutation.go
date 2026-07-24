@@ -1458,6 +1458,7 @@ type GameAccountBindingMutation struct {
 	server        *string
 	game_user_id  *string
 	verified      *bool
+	is_default    *bool
 	suite         **schema.SuiteDataPrivacySettings
 	mysekai       **schema.MysekaiDataPrivacySettings
 	clearedFields map[string]struct{}
@@ -1674,6 +1675,42 @@ func (m *GameAccountBindingMutation) ResetVerified() {
 	m.verified = nil
 }
 
+// SetIsDefault sets the "is_default" field.
+func (m *GameAccountBindingMutation) SetIsDefault(b bool) {
+	m.is_default = &b
+}
+
+// IsDefault returns the value of the "is_default" field in the mutation.
+func (m *GameAccountBindingMutation) IsDefault() (r bool, exists bool) {
+	v := m.is_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsDefault returns the old "is_default" field's value of the GameAccountBinding entity.
+// If the GameAccountBinding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountBindingMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
+	}
+	return oldValue.IsDefault, nil
+}
+
+// ResetIsDefault resets all changes to the "is_default" field.
+func (m *GameAccountBindingMutation) ResetIsDefault() {
+	m.is_default = nil
+}
+
 // SetSuite sets the "suite" field.
 func (m *GameAccountBindingMutation) SetSuite(sdps *schema.SuiteDataPrivacySettings) {
 	m.suite = &sdps
@@ -1845,7 +1882,7 @@ func (m *GameAccountBindingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameAccountBindingMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.server != nil {
 		fields = append(fields, gameaccountbinding.FieldServer)
 	}
@@ -1854,6 +1891,9 @@ func (m *GameAccountBindingMutation) Fields() []string {
 	}
 	if m.verified != nil {
 		fields = append(fields, gameaccountbinding.FieldVerified)
+	}
+	if m.is_default != nil {
+		fields = append(fields, gameaccountbinding.FieldIsDefault)
 	}
 	if m.suite != nil {
 		fields = append(fields, gameaccountbinding.FieldSuite)
@@ -1875,6 +1915,8 @@ func (m *GameAccountBindingMutation) Field(name string) (ent.Value, bool) {
 		return m.GameUserID()
 	case gameaccountbinding.FieldVerified:
 		return m.Verified()
+	case gameaccountbinding.FieldIsDefault:
+		return m.IsDefault()
 	case gameaccountbinding.FieldSuite:
 		return m.Suite()
 	case gameaccountbinding.FieldMysekai:
@@ -1894,6 +1936,8 @@ func (m *GameAccountBindingMutation) OldField(ctx context.Context, name string) 
 		return m.OldGameUserID(ctx)
 	case gameaccountbinding.FieldVerified:
 		return m.OldVerified(ctx)
+	case gameaccountbinding.FieldIsDefault:
+		return m.OldIsDefault(ctx)
 	case gameaccountbinding.FieldSuite:
 		return m.OldSuite(ctx)
 	case gameaccountbinding.FieldMysekai:
@@ -1927,6 +1971,13 @@ func (m *GameAccountBindingMutation) SetField(name string, value ent.Value) erro
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetVerified(v)
+		return nil
+	case gameaccountbinding.FieldIsDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsDefault(v)
 		return nil
 	case gameaccountbinding.FieldSuite:
 		v, ok := value.(*schema.SuiteDataPrivacySettings)
@@ -2014,6 +2065,9 @@ func (m *GameAccountBindingMutation) ResetField(name string) error {
 		return nil
 	case gameaccountbinding.FieldVerified:
 		m.ResetVerified()
+		return nil
+	case gameaccountbinding.FieldIsDefault:
+		m.ResetIsDefault()
 		return nil
 	case gameaccountbinding.FieldSuite:
 		m.ResetSuite()

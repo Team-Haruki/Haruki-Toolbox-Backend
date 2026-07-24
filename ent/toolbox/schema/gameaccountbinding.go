@@ -18,6 +18,10 @@ func (GameAccountBinding) Fields() []ent.Field {
 		field.String("server").Comment("jp | en | tw | kr | cn"),
 		field.String("game_user_id"),
 		field.Bool("verified").Default(false),
+		// At most one binding per user carries is_default=true (the user's
+		// global default account); enforced in application transactions, not by
+		// a DB constraint, so legacy rows may simply all be false.
+		field.Bool("is_default").Default(false),
 		field.JSON("suite", &SuiteDataPrivacySettings{}).Optional(),
 		field.JSON("mysekai", &MysekaiDataPrivacySettings{}).Optional(),
 	}

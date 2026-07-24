@@ -94,11 +94,12 @@ func buildGameAccountBindingsFromUser(user *postgresql.User) []GameAccountBindin
 		result = make([]GameAccountBinding, 0, len(user.Edges.GameAccountBindings))
 		for _, g := range user.Edges.GameAccountBindings {
 			result = append(result, GameAccountBinding{
-				Server:   utils.SupportedDataUploadServer(g.Server),
-				UserID:   g.GameUserID,
-				Verified: g.Verified,
-				Suite:    g.Suite,
-				Mysekai:  g.Mysekai,
+				Server:    utils.SupportedDataUploadServer(g.Server),
+				UserID:    g.GameUserID,
+				Verified:  g.Verified,
+				IsDefault: g.IsDefault,
+				Suite:     g.Suite,
+				Mysekai:   g.Mysekai,
 			})
 		}
 	}

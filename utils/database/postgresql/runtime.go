@@ -65,6 +65,10 @@ func init() {
 	gameaccountbindingDescVerified := gameaccountbindingFields[2].Descriptor()
 	// gameaccountbinding.DefaultVerified holds the default value on creation for the verified field.
 	gameaccountbinding.DefaultVerified = gameaccountbindingDescVerified.Default.(bool)
+	// gameaccountbindingDescIsDefault is the schema descriptor for is_default field.
+	gameaccountbindingDescIsDefault := gameaccountbindingFields[3].Descriptor()
+	// gameaccountbinding.DefaultIsDefault holds the default value on creation for the is_default field.
+	gameaccountbinding.DefaultIsDefault = gameaccountbindingDescIsDefault.Default.(bool)
 	gameaccountdatagrantFields := schema.GameAccountDataGrant{}.Fields()
 	_ = gameaccountdatagrantFields
 	// gameaccountdatagrantDescOwnerUserID is the schema descriptor for owner_user_id field.

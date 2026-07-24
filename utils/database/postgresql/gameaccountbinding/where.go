@@ -68,6 +68,11 @@ func Verified(v bool) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldEQ(FieldVerified, v))
 }
 
+// IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
+func IsDefault(v bool) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldEQ(FieldIsDefault, v))
+}
+
 // ServerEQ applies the EQ predicate on the "server" field.
 func ServerEQ(v string) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldEQ(FieldServer, v))
@@ -206,6 +211,16 @@ func VerifiedEQ(v bool) predicate.GameAccountBinding {
 // VerifiedNEQ applies the NEQ predicate on the "verified" field.
 func VerifiedNEQ(v bool) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldNEQ(FieldVerified, v))
+}
+
+// IsDefaultEQ applies the EQ predicate on the "is_default" field.
+func IsDefaultEQ(v bool) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldEQ(FieldIsDefault, v))
+}
+
+// IsDefaultNEQ applies the NEQ predicate on the "is_default" field.
+func IsDefaultNEQ(v bool) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldNEQ(FieldIsDefault, v))
 }
 
 // SuiteIsNil applies the IsNil predicate on the "suite" field.

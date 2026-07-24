@@ -11,6 +11,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
@@ -268,14 +269,56 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorBadRequest(c, "binding is not verified yet")
 		}
 
-		_, err = existing.Update().
-			SetSuite(req.Suite).
-			SetMysekai(req.MySekai).
-			Save(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to update game account binding: %v", err)
-			reason = "update_binding_failed"
-			return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
+		if req.IsDefault != nil && *req.IsDefault {
+			// Making this binding the default clears the flag from every other
+			// binding of the user inside one transaction.
+			tx, txErr := apiHelper.DBManager.DB.Tx(ctx)
+			if txErr != nil {
+				harukiLogger.Errorf("Failed to open transaction for binding update: %v", txErr)
+				reason = "update_binding_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
+			}
+			if _, txErr = tx.GameAccountBinding.Update().
+				Where(
+					gameaccountbinding.HasUserWith(userSchema.IDEQ(userID)),
+					gameaccountbinding.IsDefaultEQ(true),
+					gameaccountbinding.IDNEQ(existing.ID),
+				).
+				SetIsDefault(false).
+				Save(ctx); txErr != nil {
+				_ = tx.Rollback()
+				harukiLogger.Errorf("Failed to clear previous default binding: %v", txErr)
+				reason = "update_binding_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
+			}
+			if _, txErr = tx.GameAccountBinding.UpdateOneID(existing.ID).
+				SetSuite(req.Suite).
+				SetMysekai(req.MySekai).
+				SetIsDefault(true).
+				Save(ctx); txErr != nil {
+				_ = tx.Rollback()
+				harukiLogger.Errorf("Failed to update game account binding: %v", txErr)
+				reason = "update_binding_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
+			}
+			if txErr = tx.Commit(); txErr != nil {
+				_ = tx.Rollback()
+				harukiLogger.Errorf("Failed to commit binding update: %v", txErr)
+				reason = "update_binding_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
+			}
+		} else {
+			update := existing.Update().
+				SetSuite(req.Suite).
+				SetMysekai(req.MySekai)
+			if req.IsDefault != nil {
+				update = update.SetIsDefault(false)
+			}
+			if _, err = update.Save(ctx); err != nil {
+				harukiLogger.Errorf("Failed to update game account binding: %v", err)
+				reason = "update_binding_failed"
+				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
+			}
 		}
 		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 

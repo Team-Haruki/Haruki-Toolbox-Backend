@@ -43,14 +43,29 @@ func getUserBindings(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolb
 	var resp []harukiAPIHelper.GameAccountBinding
 	for _, b := range bindings {
 		resp = append(resp, harukiAPIHelper.GameAccountBinding{
-			Server:   utils.SupportedDataUploadServer(b.Server),
-			UserID:   b.GameUserID,
-			Verified: b.Verified,
-			Suite:    b.Suite,
-			Mysekai:  b.Mysekai,
+			Server:    utils.SupportedDataUploadServer(b.Server),
+			UserID:    b.GameUserID,
+			Verified:  b.Verified,
+			IsDefault: b.IsDefault,
+			Suite:     b.Suite,
+			Mysekai:   b.Mysekai,
 		})
 	}
 	return resp, nil
+}
+
+// userHasOtherDefaultBinding reports whether the user owns a default-marked
+// binding other than excludeBindingID (pass 0 to consider all bindings).
+func userHasOtherDefaultBinding(ctx context.Context, client *postgresql.Client, userID string, excludeBindingID int) (bool, error) {
+	query := client.GameAccountBinding.Query().
+		Where(
+			gameaccountbinding.HasUserWith(userSchema.IDEQ(strings.TrimSpace(userID))),
+			gameaccountbinding.IsDefaultEQ(true),
+		)
+	if excludeBindingID != 0 {
+		query = query.Where(gameaccountbinding.IDNEQ(excludeBindingID))
+	}
+	return query.Exist(ctx)
 }
 
 func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) (*postgresql.GameAccountBinding, error) {
@@ -99,14 +114,22 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 			}
 		}
 
+		hasOtherDefault, err := userHasOtherDefaultBinding(ctx, apiHelper.DBManager.DB, userID, existing.ID)
+		if err != nil {
+			return nil, err
+		}
+
 		tx, err := apiHelper.DBManager.DB.Tx(ctx)
 		if err != nil {
 			return nil, err
 		}
+		// A (re)bound account never keeps a previous owner's default flag; it
+		// becomes the new owner's default only when they have none yet.
 		update := tx.GameAccountBinding.UpdateOneID(existing.ID).
 			SetVerified(true).
 			SetSuite(req.Suite).
 			SetMysekai(req.MySekai).
+			SetIsDefault(!hasOtherDefault).
 			SetUserID(userID)
 		if _, err = update.Save(ctx); err != nil {
 			_ = tx.Rollback()
@@ -131,13 +154,19 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 		return result, nil
 	}
 
-	_, err := apiHelper.DBManager.DB.GameAccountBinding.
+	hasDefault, err := userHasOtherDefaultBinding(ctx, apiHelper.DBManager.DB, userID, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = apiHelper.DBManager.DB.GameAccountBinding.
 		Create().
 		SetServer(serverStr).
 		SetGameUserID(gameUserIDStr).
 		SetVerified(true).
 		SetSuite(req.Suite).
 		SetMysekai(req.MySekai).
+		SetIsDefault(!hasDefault).
 		SetUserID(userID).
 		Save(ctx)
 	if err != nil {

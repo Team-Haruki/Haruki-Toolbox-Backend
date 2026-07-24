@@ -47,6 +47,20 @@ func (_c *GameAccountBindingCreate) SetNillableVerified(v *bool) *GameAccountBin
 	return _c
 }
 
+// SetIsDefault sets the "is_default" field.
+func (_c *GameAccountBindingCreate) SetIsDefault(v bool) *GameAccountBindingCreate {
+	_c.mutation.SetIsDefault(v)
+	return _c
+}
+
+// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
+func (_c *GameAccountBindingCreate) SetNillableIsDefault(v *bool) *GameAccountBindingCreate {
+	if v != nil {
+		_c.SetIsDefault(*v)
+	}
+	return _c
+}
+
 // SetSuite sets the "suite" field.
 func (_c *GameAccountBindingCreate) SetSuite(v *schema.SuiteDataPrivacySettings) *GameAccountBindingCreate {
 	_c.mutation.SetSuite(v)
@@ -117,6 +131,10 @@ func (_c *GameAccountBindingCreate) defaults() {
 		v := gameaccountbinding.DefaultVerified
 		_c.mutation.SetVerified(v)
 	}
+	if _, ok := _c.mutation.IsDefault(); !ok {
+		v := gameaccountbinding.DefaultIsDefault
+		_c.mutation.SetIsDefault(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -129,6 +147,9 @@ func (_c *GameAccountBindingCreate) check() error {
 	}
 	if _, ok := _c.mutation.Verified(); !ok {
 		return &ValidationError{Name: "verified", err: errors.New(`postgresql: missing required field "GameAccountBinding.verified"`)}
+	}
+	if _, ok := _c.mutation.IsDefault(); !ok {
+		return &ValidationError{Name: "is_default", err: errors.New(`postgresql: missing required field "GameAccountBinding.is_default"`)}
 	}
 	return nil
 }
@@ -167,6 +188,10 @@ func (_c *GameAccountBindingCreate) createSpec() (*GameAccountBinding, *sqlgraph
 	if value, ok := _c.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
 		_node.Verified = value
+	}
+	if value, ok := _c.mutation.IsDefault(); ok {
+		_spec.SetField(gameaccountbinding.FieldIsDefault, field.TypeBool, value)
+		_node.IsDefault = value
 	}
 	if value, ok := _c.mutation.Suite(); ok {
 		_spec.SetField(gameaccountbinding.FieldSuite, field.TypeJSON, value)

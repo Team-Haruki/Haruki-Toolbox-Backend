@@ -88,6 +88,7 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 		type bindingEntry struct {
 			Server     string `json:"server"`
 			GameUserID string `json:"gameUserId"`
+			IsDefault  bool   `json:"isDefault"`
 		}
 		type bindingKey struct {
 			Server     string
@@ -111,6 +112,7 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 				result = append(result, bindingEntry{
 					Server:     b.Server,
 					GameUserID: b.GameUserID,
+					IsDefault:  b.IsDefault,
 				})
 			}
 			return nil
