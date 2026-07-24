@@ -62,6 +62,7 @@ var (
 		{Name: "server", Type: field.TypeString},
 		{Name: "game_user_id", Type: field.TypeString},
 		{Name: "verified", Type: field.TypeBool, Default: false},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
 		{Name: "suite", Type: field.TypeJSON, Nullable: true},
 		{Name: "mysekai", Type: field.TypeJSON, Nullable: true},
 		{Name: "user_game_account_bindings", Type: field.TypeString, Nullable: true},
@@ -74,7 +75,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "game_account_bindings_users_game_account_bindings",
-				Columns:    []*schema.Column{GameAccountBindingsColumns[6]},
+				Columns:    []*schema.Column{GameAccountBindingsColumns[7]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -88,7 +89,7 @@ var (
 			{
 				Name:    "gameaccountbinding_user_game_account_bindings",
 				Unique:  false,
-				Columns: []*schema.Column{GameAccountBindingsColumns[6]},
+				Columns: []*schema.Column{GameAccountBindingsColumns[7]},
 			},
 		},
 	}

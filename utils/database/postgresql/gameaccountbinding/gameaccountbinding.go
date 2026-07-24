@@ -18,6 +18,8 @@ const (
 	FieldGameUserID = "game_user_id"
 	// FieldVerified holds the string denoting the verified field in the database.
 	FieldVerified = "verified"
+	// FieldIsDefault holds the string denoting the is_default field in the database.
+	FieldIsDefault = "is_default"
 	// FieldSuite holds the string denoting the suite field in the database.
 	FieldSuite = "suite"
 	// FieldMysekai holds the string denoting the mysekai field in the database.
@@ -41,6 +43,7 @@ var Columns = []string{
 	FieldServer,
 	FieldGameUserID,
 	FieldVerified,
+	FieldIsDefault,
 	FieldSuite,
 	FieldMysekai,
 }
@@ -69,6 +72,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultVerified holds the default value on creation for the "verified" field.
 	DefaultVerified bool
+	// DefaultIsDefault holds the default value on creation for the "is_default" field.
+	DefaultIsDefault bool
 )
 
 // OrderOption defines the ordering options for the GameAccountBinding queries.
@@ -92,6 +97,11 @@ func ByGameUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByVerified orders the results by the verified field.
 func ByVerified(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVerified, opts...).ToFunc()
+}
+
+// ByIsDefault orders the results by the is_default field.
+func ByIsDefault(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsDefault, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

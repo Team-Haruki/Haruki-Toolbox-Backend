@@ -25,6 +25,8 @@ type GameAccountBinding struct {
 	GameUserID string `json:"game_user_id,omitempty"`
 	// Verified holds the value of the "verified" field.
 	Verified bool `json:"verified,omitempty"`
+	// IsDefault holds the value of the "is_default" field.
+	IsDefault bool `json:"is_default,omitempty"`
 	// Suite holds the value of the "suite" field.
 	Suite *schema.SuiteDataPrivacySettings `json:"suite,omitempty"`
 	// Mysekai holds the value of the "mysekai" field.
@@ -63,7 +65,7 @@ func (*GameAccountBinding) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case gameaccountbinding.FieldSuite, gameaccountbinding.FieldMysekai:
 			values[i] = new([]byte)
-		case gameaccountbinding.FieldVerified:
+		case gameaccountbinding.FieldVerified, gameaccountbinding.FieldIsDefault:
 			values[i] = new(sql.NullBool)
 		case gameaccountbinding.FieldID:
 			values[i] = new(sql.NullInt64)
@@ -109,6 +111,12 @@ func (_m *GameAccountBinding) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field verified", values[i])
 			} else if value.Valid {
 				_m.Verified = value.Bool
+			}
+		case gameaccountbinding.FieldIsDefault:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_default", values[i])
+			} else if value.Valid {
+				_m.IsDefault = value.Bool
 			}
 		case gameaccountbinding.FieldSuite:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -182,6 +190,9 @@ func (_m *GameAccountBinding) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("verified=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Verified))
+	builder.WriteString(", ")
+	builder.WriteString("is_default=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IsDefault))
 	builder.WriteString(", ")
 	builder.WriteString("suite=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Suite))

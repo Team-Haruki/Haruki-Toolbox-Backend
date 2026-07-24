@@ -185,11 +185,12 @@ func buildAdminGameBindingItems(rows []*postgresql.GameAccountBinding) []harukiA
 	items := make([]harukiAPIHelper.GameAccountBinding, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, harukiAPIHelper.GameAccountBinding{
-			Server:   harukiUtils.SupportedDataUploadServer(row.Server),
-			UserID:   row.GameUserID,
-			Verified: row.Verified,
-			Suite:    row.Suite,
-			Mysekai:  row.Mysekai,
+			Server:    harukiUtils.SupportedDataUploadServer(row.Server),
+			UserID:    row.GameUserID,
+			Verified:  row.Verified,
+			IsDefault: row.IsDefault,
+			Suite:     row.Suite,
+			Mysekai:   row.Mysekai,
 		})
 	}
 	return items

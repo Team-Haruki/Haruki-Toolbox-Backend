@@ -71,6 +71,20 @@ func (_u *GameAccountBindingUpdate) SetNillableVerified(v *bool) *GameAccountBin
 	return _u
 }
 
+// SetIsDefault sets the "is_default" field.
+func (_u *GameAccountBindingUpdate) SetIsDefault(v bool) *GameAccountBindingUpdate {
+	_u.mutation.SetIsDefault(v)
+	return _u
+}
+
+// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
+func (_u *GameAccountBindingUpdate) SetNillableIsDefault(v *bool) *GameAccountBindingUpdate {
+	if v != nil {
+		_u.SetIsDefault(*v)
+	}
+	return _u
+}
+
 // SetSuite sets the "suite" field.
 func (_u *GameAccountBindingUpdate) SetSuite(v *schema.SuiteDataPrivacySettings) *GameAccountBindingUpdate {
 	_u.mutation.SetSuite(v)
@@ -169,6 +183,9 @@ func (_u *GameAccountBindingUpdate) sqlSave(ctx context.Context) (_node int, err
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IsDefault(); ok {
+		_spec.SetField(gameaccountbinding.FieldIsDefault, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Suite(); ok {
 		_spec.SetField(gameaccountbinding.FieldSuite, field.TypeJSON, value)
@@ -269,6 +286,20 @@ func (_u *GameAccountBindingUpdateOne) SetVerified(v bool) *GameAccountBindingUp
 func (_u *GameAccountBindingUpdateOne) SetNillableVerified(v *bool) *GameAccountBindingUpdateOne {
 	if v != nil {
 		_u.SetVerified(*v)
+	}
+	return _u
+}
+
+// SetIsDefault sets the "is_default" field.
+func (_u *GameAccountBindingUpdateOne) SetIsDefault(v bool) *GameAccountBindingUpdateOne {
+	_u.mutation.SetIsDefault(v)
+	return _u
+}
+
+// SetNillableIsDefault sets the "is_default" field if the given value is not nil.
+func (_u *GameAccountBindingUpdateOne) SetNillableIsDefault(v *bool) *GameAccountBindingUpdateOne {
+	if v != nil {
+		_u.SetIsDefault(*v)
 	}
 	return _u
 }
@@ -401,6 +432,9 @@ func (_u *GameAccountBindingUpdateOne) sqlSave(ctx context.Context) (_node *Game
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IsDefault(); ok {
+		_spec.SetField(gameaccountbinding.FieldIsDefault, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Suite(); ok {
 		_spec.SetField(gameaccountbinding.FieldSuite, field.TypeJSON, value)

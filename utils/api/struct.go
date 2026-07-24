@@ -95,6 +95,9 @@ type GameAccountBindingPayload struct {
 type CreateGameAccountBindingPayload struct {
 	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
 	MySekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
+	// Optional: when set, marks (true) or unmarks (false) this binding as the
+	// user's global default account. Omitted -> unchanged.
+	IsDefault *bool `json:"isDefault"`
 }
 
 type RegisterOrLoginSuccessResponse struct {
@@ -143,11 +146,12 @@ type AuthorizeSocialPlatformInfo struct {
 }
 
 type GameAccountBinding struct {
-	Server   utils.SupportedDataUploadServer    `json:"server"`
-	UserID   string                             `json:"userId"`
-	Verified bool                               `json:"verified"`
-	Suite    *schema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
-	Mysekai  *schema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
+	Server    utils.SupportedDataUploadServer    `json:"server"`
+	UserID    string                             `json:"userId"`
+	Verified  bool                               `json:"verified"`
+	IsDefault bool                               `json:"isDefault"`
+	Suite     *schema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
+	Mysekai   *schema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
 }
 
 type GenerateSocialPlatformCodeResponse struct {
