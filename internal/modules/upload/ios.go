@@ -256,7 +256,12 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			defer cancel()
 			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, &toolboxUserID, apiHelper, harukiUtils.UploadMethodIOSScript)
 			if err != nil {
-				logger.Errorf("HandleUpload failed: %v", err)
+				// HandleUpload already logs every failure with full context at
+				// WARNING inside its fail() helper. This async fire-and-forget
+				// path has no response to return the error on, so it only needs
+				// a debug breadcrumb — re-logging at ERROR duplicated the line
+				// and inflated the error rate with routine user-input failures.
+				logger.Debugf("async HandleUpload finished with error: %v", err)
 			}
 		}(completedChunks, gameUserId, server, string(uploadType), toolboxUserIDCopy)
 		return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
