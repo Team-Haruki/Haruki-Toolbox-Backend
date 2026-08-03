@@ -15,7 +15,7 @@ require (
 	github.com/iancoleman/orderedmap v0.3.0
 	github.com/klauspost/compress v1.19.0
 	github.com/lib/pq v1.12.3
-	github.com/mattn/go-sqlite3 v1.14.48
+	github.com/mattn/go-sqlite3 v1.14.49
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/shamaton/msgpack/v3 v3.2.0
 	github.com/vgorin/cryptogo v0.0.0-20180620052908-eca286428d40
