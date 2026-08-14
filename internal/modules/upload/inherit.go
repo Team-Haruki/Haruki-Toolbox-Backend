@@ -11,7 +11,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		serverStr := c.Params("server")
@@ -56,29 +56,30 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				inheritBreaker.RecordResult(server, breakerToken, true)
 			}
 		}()
-		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType)
+		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType, dependencies.ServerCryptor)
 		result, err := retriever.Run(ctx)
 		inheritBreaker.RecordResult(server, breakerToken, inheritFailureIsUpstreamDegradation(err))
 		breakerRecorded = true
 		if err != nil {
 			uploadServer := harukiUtils.SupportedDataUploadServer(server)
-			recordInheritRetrievalFailure(apiHelper, uploadServer, uploadType, result, err)
+			recordInheritRetrievalFailure(apiHelper, dependencies, uploadServer, uploadType, result, err)
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to retrieve game data")
 		}
 		uploadServer := harukiUtils.SupportedDataUploadServer(server)
-		if err := uploadMysekaiDataIfNeeded(c, apiHelper, uploadType, result, uploadServer); err != nil {
+		if err := uploadMysekaiDataIfNeeded(c, apiHelper, dependencies, uploadType, result, uploadServer); err != nil {
 			return err
 		}
-		if err := uploadSuiteData(c, apiHelper, result, uploadServer); err != nil {
+		if err := uploadSuiteData(c, apiHelper, dependencies, result, uploadServer); err != nil {
 			return err
 		}
 		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded data.", serverStr, result.UserID), nil)
 	}
 }
 
-func recordInheritRetrievalFailure(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server harukiUtils.SupportedDataUploadServer, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, err error) {
+func recordInheritRetrievalFailure(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, server harukiUtils.SupportedDataUploadServer, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, err error) {
+	logger := dependencies.DataHandlerLogger
 	if result == nil || result.UserID <= 0 {
-		sharedDataHandlerLogger.Warnf("Skip inherit retrieval failure upload log because game user ID is unavailable: %v", err)
+		logger.Warnf("Skip inherit retrieval failure upload log because game user ID is unavailable: %v", err)
 		return
 	}
 	dataType := inheritRetrievalFailureDataType(uploadType, err)
@@ -89,7 +90,7 @@ func recordInheritRetrievalFailure(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		UploadMethod:       harukiUtils.UploadMethodInherit,
 		FailureStage:       "retrieve_" + string(dataType),
 	}
-	dispatchUploadAuditLog(apiHelper, sharedDataHandlerLogger, uploadCtx, false, buildUploadAuditErrorMessage(err, nil))
+	dispatchUploadAuditLog(apiHelper, logger, dependencies.BackgroundTasks, uploadCtx, false, buildUploadAuditErrorMessage(err, nil))
 }
 
 func inheritRetrievalFailureDataType(uploadType harukiUtils.UploadDataType, err error) harukiUtils.UploadDataType {
@@ -108,7 +109,7 @@ func inheritRetrievalFailureDataType(uploadType harukiUtils.UploadDataType, err 
 	return harukiUtils.UploadDataTypeSuite
 }
 
-func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {
+func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, uploadType harukiUtils.UploadDataType, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {
 	ctx := c.Context()
 	if uploadType != harukiUtils.UploadDataTypeMysekai {
 		return nil
@@ -124,6 +125,7 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 		&result.UserID,
 		nil,
 		apiHelper,
+		dependencies,
 		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
@@ -135,7 +137,7 @@ func uploadMysekaiDataIfNeeded(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToo
 	return nil
 }
 
-func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {
+func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, result *harukiUtils.SekaiInheritDataRetrieverResponse, server harukiUtils.SupportedDataUploadServer) error {
 	ctx := c.Context()
 	if result.Suite == nil {
 		return harukiAPIHelper.ErrorBadRequest(c, "Retrieve suite data failed: unknown error")
@@ -148,6 +150,7 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		&result.UserID,
 		nil,
 		apiHelper,
+		dependencies,
 		harukiUtils.UploadMethodInherit,
 	)
 	if err != nil {
@@ -159,8 +162,8 @@ func uploadSuiteData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	return nil
 }
 
-func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerInheritRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	api := apiHelper.Router.Group("/api/inherit/:server/:upload_type", openUploadEntryGuard(apiHelper))
 
-	api.Post("/submit", handleInheritSubmit(apiHelper))
+	api.Post("/submit", handleInheritSubmit(apiHelper, dependencies))
 }

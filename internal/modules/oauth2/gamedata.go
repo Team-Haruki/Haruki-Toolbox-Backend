@@ -199,10 +199,10 @@ func loadOAuth2GameData(
 	return v.(string), nil
 }
 
-func registerOAuth2GameDataRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerOAuth2GameDataRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) {
 	o := apiHelper.Router.Group("/api/oauth2/game-data")
 	o.Get("/:server/:data_type/:user_id",
-		harukiOAuth2.VerifyOAuth2Token(apiHelper.DBManager.DB, harukiOAuth2.ScopeGameDataRead),
+		harukiOAuth2.VerifyOAuth2Token(hydraConfig, apiHelper.DBManager.DB, harukiOAuth2.ScopeGameDataRead, checkHydraOAuth2ClientActive(hydraConfig)),
 		handleOAuth2GetGameData(apiHelper),
 	)
 }

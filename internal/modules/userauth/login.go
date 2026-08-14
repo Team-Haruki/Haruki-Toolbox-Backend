@@ -3,7 +3,7 @@ package userauth
 import (
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -12,7 +12,11 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleLogin(
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	turnstileVerifier harukiCloudflare.Verifier,
+	userDataBuilder harukiAPIHelper.UserDataBuilder,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		logLogin := func(result string, targetUserID string, actorRole string, reason string) {
@@ -46,7 +50,7 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "invalid_email")
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid email or password")
 		}
-		result, err := cloudflare.ValidateTurnstile(payload.ChallengeToken, c.IP())
+		result, err := harukiCloudflare.Verify(c.Context(), turnstileVerifier, payload.ChallengeToken, c.IP())
 		if err != nil {
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "challenge_service_unavailable")
 			return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
@@ -69,7 +73,7 @@ func handleLogin(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 			logLogin(harukiAPIHelper.SystemLogResultFailure, "", "", "managed_identity_required")
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, ManagedIdentityMessage, nil)
 		}
-		return handleLoginViaKratos(c, apiHelper, payload, logLogin)
+		return handleLoginViaKratos(c, apiHelper, payload, logLogin, userDataBuilder)
 	}
 }
 
@@ -102,6 +106,7 @@ func handleLoginViaKratos(
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	payload harukiAPIHelper.LoginPayload,
 	logLogin func(result string, targetUserID string, actorRole string, reason string),
+	userDataBuilder harukiAPIHelper.UserDataBuilder,
 ) error {
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 
@@ -181,7 +186,7 @@ func handleLoginViaKratos(
 
 	finalizeLoginRateLimitReservation(c, apiHelper, payload.Email)
 	logLogin(harukiAPIHelper.SystemLogResultSuccess, user.ID, string(user.Role), "ok")
-	ud := harukiAPIHelper.BuildUserDataFromDBUser(user, &sessionToken)
+	ud := userDataBuilder.BuildFromDBUser(user, &sessionToken)
 	resp := harukiAPIHelper.RegisterOrLoginSuccessResponse{Status: fiber.StatusOK, Message: "login success", UserData: ud}
 	return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &resp)
 }

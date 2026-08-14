@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 
@@ -534,16 +533,12 @@ func ParseAfdianWebhookPayload(payload map[string]any, now time.Time) (parsedAfd
 // reach the open API (e.g. to verify a webhook order) are missing.
 var ErrAfdianNotConfigured = errors.New("afdian user_id or api token is not configured")
 
-func afdianHTTPClient(cfg config.AfdianConfig) *http.Client {
-	return &http.Client{Timeout: time.Duration(maxInt(cfg.RequestTimeoutSecond, 10)) * time.Second}
+func afdianHTTPClient(cfg AfdianConfig) *http.Client {
+	return &http.Client{Timeout: cfg.timeout()}
 }
 
-func afdianBaseURL(cfg config.AfdianConfig) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.APIBaseURL), "/")
-	if baseURL == "" {
-		baseURL = "https://afdian.com/api/open"
-	}
-	return baseURL
+func afdianBaseURL(cfg AfdianConfig) string {
+	return cfg.baseURL()
 }
 
 // VerifyAfdianOrder re-queries the Afdian open API for the given out_trade_no and
@@ -551,12 +546,12 @@ func afdianBaseURL(cfg config.AfdianConfig) string {
 // callers must use this to confirm an order is real before trusting it. Returns
 // ErrAfdianNotConfigured when API credentials are missing, or found=false when the
 // order does not exist on Afdian's side (likely forged).
-func VerifyAfdianOrder(ctx context.Context, cfg config.AfdianConfig, outTradeNo string, now time.Time) (parsedAfdianSponsor, bool, error) {
+func VerifyAfdianOrder(ctx context.Context, cfg AfdianConfig, outTradeNo string, now time.Time) (parsedAfdianSponsor, bool, error) {
 	outTradeNo = strings.TrimSpace(outTradeNo)
 	if outTradeNo == "" {
 		return parsedAfdianSponsor{}, false, nil
 	}
-	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+	if !cfg.credentialsConfigured() {
 		return parsedAfdianSponsor{}, false, ErrAfdianNotConfigured
 	}
 
@@ -571,7 +566,7 @@ func VerifyAfdianOrder(ctx context.Context, cfg config.AfdianConfig, outTradeNo 
 	return parsed, true, nil
 }
 
-func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL string, cfg config.AfdianConfig, outTradeNo string) (map[string]any, bool, error) {
+func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL string, cfg AfdianConfig, outTradeNo string) (map[string]any, bool, error) {
 	paramsBytes, err := json.Marshal(map[string]any{"out_trade_no": outTradeNo})
 	if err != nil {
 		return nil, false, err
@@ -579,10 +574,10 @@ func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL
 	params := string(paramsBytes)
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	body := map[string]any{
-		"user_id": cfg.UserID,
+		"user_id": cfg.userID,
 		"params":  params,
 		"ts":      ts,
-		"sign":    afdianSign(cfg.APIToken, params, ts, cfg.UserID),
+		"sign":    afdianSign(cfg.apiToken, params, ts, cfg.userID),
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -637,8 +632,8 @@ func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL
 	return nil, false, nil
 }
 
-func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg config.AfdianConfig, now time.Time) (AfdianSyncResult, error) {
-	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg AfdianConfig, now time.Time) (AfdianSyncResult, error) {
+	if !cfg.credentialsConfigured() {
 		return AfdianSyncResult{}, ErrAfdianNotConfigured
 	}
 	client := afdianHTTPClient(cfg)
@@ -668,7 +663,7 @@ func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg config.A
 	return result, nil
 }
 
-func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL string, cfg config.AfdianConfig, page int) ([]map[string]any, int, error) {
+func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL string, cfg AfdianConfig, page int) ([]map[string]any, int, error) {
 	paramsBytes, err := json.Marshal(map[string]any{
 		"page": page,
 	})
@@ -678,10 +673,10 @@ func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL st
 	params := string(paramsBytes)
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	body := map[string]any{
-		"user_id": cfg.UserID,
+		"user_id": cfg.userID,
 		"params":  params,
 		"ts":      ts,
-		"sign":    afdianSign(cfg.APIToken, params, ts, cfg.UserID),
+		"sign":    afdianSign(cfg.apiToken, params, ts, cfg.userID),
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {

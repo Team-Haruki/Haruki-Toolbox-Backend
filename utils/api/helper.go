@@ -2,51 +2,29 @@ package api
 
 import (
 	"context"
+
+	platformRuntimeConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
 	smtp2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	"sync"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/redis/go-redis/v9"
 )
 
-const runtimeConfigStoreTimeout = 500 * time.Millisecond
-
-var runtimeConfigStoreUpdateMu sync.Mutex
-
-type RuntimeConfigUpdate struct {
-	PublicAPIAllowedKeys *[]string
-	PrivateAPIToken      *string
-	PrivateAPIUserAgent  *string
-	HarukiProxyUserAgent *string
-	HarukiProxyVersion   *string
-	HarukiProxySecret    *string
-	HarukiProxyUnpackKey *string
-	WebhookJWTSecret     *string
-	WebhookEnabled       *bool
-}
-
-type runtimeConfigSnapshot struct {
-	PublicAPIAllowedKeys []string `json:"publicApiAllowedKeys"`
-	PrivateAPIToken      string   `json:"privateApiToken"`
-	PrivateAPIUserAgent  string   `json:"privateApiUserAgent"`
-	HarukiProxyUserAgent string   `json:"harukiProxyUserAgent"`
-	HarukiProxyVersion   string   `json:"harukiProxyVersion"`
-	HarukiProxySecret    string   `json:"harukiProxySecret"`
-	HarukiProxyUnpackKey string   `json:"harukiProxyUnpackKey"`
-	WebhookJWTSecret     string   `json:"webhookJwtSecret"`
-	WebhookEnabled       *bool    `json:"webhookEnabled,omitempty"`
-}
+type RuntimeConfigUpdate = platformRuntimeConfig.Update
 
 type HarukiToolboxRouterHelpers struct {
-	Router                 fiber.Router
-	DBManager              *database.HarukiToolboxDBManager
-	SMTPClient             *smtp2.HarukiSMTPClient
-	SessionHandler         *SessionHandler
-	SekaiAPIClient         *sekaiapi.HarukiSekaiAPIClient
+	Router         fiber.Router
+	DBManager      *database.HarukiToolboxDBManager
+	SMTPClient     *smtp2.HarukiSMTPClient
+	SessionHandler *SessionHandler
+	SekaiAPIClient *sekaiapi.HarukiSekaiAPIClient
+	RuntimeConfig  *platformRuntimeConfig.Service
+
+	// Deprecated compatibility fields. New modules should depend on
+	// RuntimeConfig (or a narrower interface) instead of this service locator.
 	PublicAPIAllowedKeys   []string
 	PrivateAPIToken        string
 	PrivateAPIUserAgent    string
@@ -68,76 +46,27 @@ func NewHarukiToolboxRouterHelpers(
 	smtpClient *smtp2.HarukiSMTPClient,
 	sessionHandler *SessionHandler,
 	sekaiAPIClient *sekaiapi.HarukiSekaiAPIClient,
-	publicAPIAllowedKeys []string,
-	privateAPIToken string,
-	privateAPIUserAgent string,
-	harukiProxyUserAgent string,
-	harukiProxyVersion string,
-	harukiProxySecret string,
-	HarukiProxyUnpackKey string,
-	webhookJWTSecret string,
-	webhookEnabled bool,
+	runtimeConfig *platformRuntimeConfig.Service,
 ) *HarukiToolboxRouterHelpers {
-	copiedPublicAPIAllowedKeys := append([]string(nil), publicAPIAllowedKeys...)
-	webhookEnabledCopy := webhookEnabled
-
-	return &HarukiToolboxRouterHelpers{
-		Router:               router,
-		DBManager:            dbManager,
-		SMTPClient:           smtpClient,
-		SessionHandler:       sessionHandler,
-		SekaiAPIClient:       sekaiAPIClient,
-		PublicAPIAllowedKeys: copiedPublicAPIAllowedKeys,
-		PrivateAPIToken:      privateAPIToken,
-		PrivateAPIUserAgent:  privateAPIUserAgent,
-		HarukiProxyUserAgent: harukiProxyUserAgent,
-		HarukiProxyVersion:   harukiProxyVersion,
-		HarukiProxySecret:    harukiProxySecret,
-		HarukiProxyUnpackKey: HarukiProxyUnpackKey,
-		WebhookJWTSecret:     webhookJWTSecret,
-		WebhookEnabled:       &webhookEnabledCopy,
+	helper := &HarukiToolboxRouterHelpers{
+		Router:         router,
+		DBManager:      dbManager,
+		SMTPClient:     smtpClient,
+		SessionHandler: sessionHandler,
+		SekaiAPIClient: sekaiAPIClient,
+		RuntimeConfig:  runtimeConfig,
 	}
+	if runtimeConfig != nil {
+		snapshot, _ := runtimeConfig.Current(context.Background())
+		helper.applyLegacyRuntimeConfigSnapshot(snapshot)
+	}
+	return helper
 }
 
-func NewHarukiToolboxDBHelpers(
-	router fiber.Router,
-	dbManager *database.HarukiToolboxDBManager,
-	smtpClient *smtp2.HarukiSMTPClient,
-	sessionHandler *SessionHandler,
-	sekaiAPIClient *sekaiapi.HarukiSekaiAPIClient,
-	publicAPIAllowedKeys []string,
-	privateAPIToken string,
-	privateAPIUserAgent string,
-	harukiProxyUserAgent string,
-	harukiProxyVersion string,
-	harukiProxySecret string,
-	HarukiProxyUnpackKey string,
-	webhookJWTSecret string,
-	webhookEnabled bool,
-) *HarukiToolboxRouterHelpers {
-	return NewHarukiToolboxRouterHelpers(
-		router,
-		dbManager,
-		smtpClient,
-		sessionHandler,
-		sekaiAPIClient,
-		publicAPIAllowedKeys,
-		privateAPIToken,
-		privateAPIUserAgent,
-		harukiProxyUserAgent,
-		harukiProxyVersion,
-		harukiProxySecret,
-		HarukiProxyUnpackKey,
-		webhookJWTSecret,
-		webhookEnabled,
-	)
-}
-
-func (h *HarukiToolboxRouterHelpers) runtimeConfigStoreKey() string {
-	return harukiRedis.BuildRuntimeConfigKey()
-}
-
-func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() runtimeConfigSnapshot {
+func (h *HarukiToolboxRouterHelpers) legacyRuntimeConfigSnapshot() platformRuntimeConfig.Snapshot {
+	if h == nil {
+		return platformRuntimeConfig.Snapshot{}
+	}
 	publicAPIAllowedKeys := func() []string {
 		h.publicAPIKeysMu.RLock()
 		defer h.publicAPIKeysMu.RUnlock()
@@ -151,7 +80,7 @@ func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() runtimeConfi
 		value := *h.WebhookEnabled
 		webhookEnabled = &value
 	}
-	return runtimeConfigSnapshot{
+	return platformRuntimeConfig.Snapshot{
 		PublicAPIAllowedKeys: publicAPIAllowedKeys,
 		PrivateAPIToken:      h.PrivateAPIToken,
 		PrivateAPIUserAgent:  h.PrivateAPIUserAgent,
@@ -164,7 +93,10 @@ func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() runtimeConfi
 	}
 }
 
-func (h *HarukiToolboxRouterHelpers) applyRuntimeConfigSnapshot(snapshot runtimeConfigSnapshot) {
+func (h *HarukiToolboxRouterHelpers) applyLegacyRuntimeConfigSnapshot(snapshot platformRuntimeConfig.Snapshot) {
+	if h == nil {
+		return
+	}
 	h.runtimeConfigMu.Lock()
 	h.PrivateAPIToken = snapshot.PrivateAPIToken
 	h.PrivateAPIUserAgent = snapshot.PrivateAPIUserAgent
@@ -186,98 +118,54 @@ func (h *HarukiToolboxRouterHelpers) applyRuntimeConfigSnapshot(snapshot runtime
 	h.publicAPIKeysMu.Unlock()
 }
 
-func (h *HarukiToolboxRouterHelpers) loadRuntimeConfigSnapshotFromStore(ctx context.Context) (*runtimeConfigSnapshot, bool, error) {
-	if h == nil || h.DBManager == nil || h.DBManager.Redis == nil {
-		return nil, false, nil
-	}
-	var snapshot runtimeConfigSnapshot
-	found, err := h.DBManager.Redis.GetCache(ctx, h.runtimeConfigStoreKey(), &snapshot)
-	if err != nil {
-		return nil, false, err
-	}
-	if !found {
-		return nil, false, nil
-	}
-	snapshot.PublicAPIAllowedKeys = append([]string(nil), snapshot.PublicAPIAllowedKeys...)
-	return &snapshot, true, nil
-}
-
-func (h *HarukiToolboxRouterHelpers) syncRuntimeConfigFromStore() {
-	if h == nil || h.DBManager == nil || h.DBManager.Redis == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), runtimeConfigStoreTimeout)
-	defer cancel()
-	snapshot, found, err := h.loadRuntimeConfigSnapshotFromStore(ctx)
-	if err != nil || !found || snapshot == nil {
-		return
-	}
-	h.applyRuntimeConfigSnapshot(*snapshot)
-}
-
-func (h *HarukiToolboxRouterHelpers) persistRuntimeConfigSnapshot(ctx context.Context, snapshot runtimeConfigSnapshot) error {
-	if h == nil || h.DBManager == nil || h.DBManager.Redis == nil {
+func (h *HarukiToolboxRouterHelpers) runtimeConfigService() *platformRuntimeConfig.Service {
+	if h == nil {
 		return nil
 	}
-	snapshot.PublicAPIAllowedKeys = append([]string(nil), snapshot.PublicAPIAllowedKeys...)
-	return h.DBManager.Redis.SetCache(ctx, h.runtimeConfigStoreKey(), snapshot, 0)
+	h.runtimeConfigMu.RLock()
+	service := h.RuntimeConfig
+	h.runtimeConfigMu.RUnlock()
+	if service != nil {
+		return service
+	}
+
+	var runtimeStore platformRuntimeConfig.Store
+	if h.DBManager != nil {
+		runtimeStore = platformRuntimeConfig.NewRedisStore(h.DBManager.Redis)
+	}
+	// Do not retain this compatibility service: callers that still initialize
+	// the deprecated public fields directly must see subsequent direct changes.
+	return platformRuntimeConfig.New(h.legacyRuntimeConfigSnapshot(), runtimeStore)
+}
+
+func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() platformRuntimeConfig.Snapshot {
+	service := h.runtimeConfigService()
+	if service == nil {
+		return platformRuntimeConfig.Snapshot{}
+	}
+	snapshot, _ := service.Current(context.Background())
+	h.applyLegacyRuntimeConfigSnapshot(snapshot)
+	return snapshot
 }
 
 func (h *HarukiToolboxRouterHelpers) UpdateRuntimeConfig(update RuntimeConfigUpdate) error {
 	if h == nil {
 		return nil
 	}
-	runtimeConfigStoreUpdateMu.Lock()
-	defer runtimeConfigStoreUpdateMu.Unlock()
-
-	h.syncRuntimeConfigFromStore()
-	snapshot := h.currentRuntimeConfigSnapshot()
-
-	if update.PublicAPIAllowedKeys != nil {
-		snapshot.PublicAPIAllowedKeys = append([]string(nil), (*update.PublicAPIAllowedKeys)...)
+	service := h.runtimeConfigService()
+	if service == nil {
+		return nil
 	}
-	if update.PrivateAPIToken != nil {
-		snapshot.PrivateAPIToken = *update.PrivateAPIToken
+	if err := service.Update(context.Background(), update); err != nil {
+		return err
 	}
-	if update.PrivateAPIUserAgent != nil {
-		snapshot.PrivateAPIUserAgent = *update.PrivateAPIUserAgent
-	}
-	if update.HarukiProxyUserAgent != nil {
-		snapshot.HarukiProxyUserAgent = *update.HarukiProxyUserAgent
-	}
-	if update.HarukiProxyVersion != nil {
-		snapshot.HarukiProxyVersion = *update.HarukiProxyVersion
-	}
-	if update.HarukiProxySecret != nil {
-		snapshot.HarukiProxySecret = *update.HarukiProxySecret
-	}
-	if update.HarukiProxyUnpackKey != nil {
-		snapshot.HarukiProxyUnpackKey = *update.HarukiProxyUnpackKey
-	}
-	if update.WebhookJWTSecret != nil {
-		snapshot.WebhookJWTSecret = *update.WebhookJWTSecret
-	}
-	if update.WebhookEnabled != nil {
-		webhookEnabled := *update.WebhookEnabled
-		snapshot.WebhookEnabled = &webhookEnabled
-	}
-
-	if h.DBManager != nil && h.DBManager.Redis != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), runtimeConfigStoreTimeout)
-		defer cancel()
-		if err := h.persistRuntimeConfigSnapshot(ctx, snapshot); err != nil {
-			return err
-		}
-	}
-	h.applyRuntimeConfigSnapshot(snapshot)
+	snapshot, _ := service.Current(context.Background())
+	h.applyLegacyRuntimeConfigSnapshot(snapshot)
 	return nil
 }
 
 func (h *HarukiToolboxRouterHelpers) GetPublicAPIAllowedKeys() []string {
-	h.syncRuntimeConfigFromStore()
-	h.publicAPIKeysMu.RLock()
-	defer h.publicAPIKeysMu.RUnlock()
-	return append([]string(nil), h.PublicAPIAllowedKeys...)
+	return h.currentRuntimeConfigSnapshot().PublicAPIAllowedKeys
 }
 
 func (h *HarukiToolboxRouterHelpers) SetPublicAPIAllowedKeys(keys []string) {
@@ -288,10 +176,8 @@ func (h *HarukiToolboxRouterHelpers) SetPublicAPIAllowedKeys(keys []string) {
 }
 
 func (h *HarukiToolboxRouterHelpers) GetPrivateAPIAuth() (string, string) {
-	h.syncRuntimeConfigFromStore()
-	h.runtimeConfigMu.RLock()
-	defer h.runtimeConfigMu.RUnlock()
-	return h.PrivateAPIToken, h.PrivateAPIUserAgent
+	snapshot := h.currentRuntimeConfigSnapshot()
+	return snapshot.PrivateAPIToken, snapshot.PrivateAPIUserAgent
 }
 
 func (h *HarukiToolboxRouterHelpers) SetPrivateAPIToken(token string) {
@@ -303,10 +189,8 @@ func (h *HarukiToolboxRouterHelpers) SetPrivateAPIUserAgent(userAgent string) {
 }
 
 func (h *HarukiToolboxRouterHelpers) GetHarukiProxyConfig() (string, string, string, string) {
-	h.syncRuntimeConfigFromStore()
-	h.runtimeConfigMu.RLock()
-	defer h.runtimeConfigMu.RUnlock()
-	return h.HarukiProxyUserAgent, h.HarukiProxyVersion, h.HarukiProxySecret, h.HarukiProxyUnpackKey
+	snapshot := h.currentRuntimeConfigSnapshot()
+	return snapshot.HarukiProxyUserAgent, snapshot.HarukiProxyVersion, snapshot.HarukiProxySecret, snapshot.HarukiProxyUnpackKey
 }
 
 func (h *HarukiToolboxRouterHelpers) SetHarukiProxyUserAgent(userAgent string) {
@@ -326,10 +210,7 @@ func (h *HarukiToolboxRouterHelpers) SetHarukiProxyUnpackKey(unpackKey string) {
 }
 
 func (h *HarukiToolboxRouterHelpers) GetWebhookJWTSecret() string {
-	h.syncRuntimeConfigFromStore()
-	h.runtimeConfigMu.RLock()
-	defer h.runtimeConfigMu.RUnlock()
-	return h.WebhookJWTSecret
+	return h.currentRuntimeConfigSnapshot().WebhookJWTSecret
 }
 
 func (h *HarukiToolboxRouterHelpers) SetWebhookJWTSecret(secret string) {
@@ -340,13 +221,11 @@ func (h *HarukiToolboxRouterHelpers) GetWebhookEnabled() bool {
 	if h == nil {
 		return true
 	}
-	h.syncRuntimeConfigFromStore()
-	h.runtimeConfigMu.RLock()
-	defer h.runtimeConfigMu.RUnlock()
-	if h.WebhookEnabled == nil {
+	snapshot := h.currentRuntimeConfigSnapshot()
+	if snapshot.WebhookEnabled == nil {
 		return true
 	}
-	return *h.WebhookEnabled
+	return *snapshot.WebhookEnabled
 }
 
 func (h *HarukiToolboxRouterHelpers) SetWebhookEnabled(enabled bool) {

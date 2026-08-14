@@ -20,6 +20,7 @@ type CompareOptions struct {
 	SchemaPath         string
 	InputFormat        string
 	Server             harukiUtils.SupportedDataUploadServer
+	ServerCryptor      sekai.ServerCryptor
 }
 
 type CompareReport struct {
@@ -134,7 +135,7 @@ func decodeSampleMsgpack(options CompareOptions) ([]byte, error) {
 		if options.Server == "" {
 			return nil, fmt.Errorf("server is required when input format is raw-upload")
 		}
-		msgpackBytes, err := sekai.DecryptToMsgpack(sampleBytes, options.Server)
+		msgpackBytes, err := options.ServerCryptor.DecryptToMsgpack(sampleBytes, options.Server)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt raw upload sample: %w", err)
 		}

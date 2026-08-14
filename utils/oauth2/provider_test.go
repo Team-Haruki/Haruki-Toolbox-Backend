@@ -1,25 +1,27 @@
 package oauth2
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
 	"time"
 )
 
-func TestOAuth2Provider(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
-	config.Cfg.OAuth2.Provider = ""
-	if got := OAuth2Provider(); got != ProviderHydra {
-		t.Fatalf("OAuth2Provider() = %q, want %q", got, ProviderHydra)
+func TestHydraConfigDefaultsProvider(t *testing.T) {
+	config := NewHydraConfig(HydraConfigOptions{})
+	if got := config.Provider(); got != ProviderHydra {
+		t.Fatalf("Provider() = %q, want %q", got, ProviderHydra)
+	}
+	if !config.Enabled() {
+		t.Fatal("default Hydra config should be enabled")
 	}
 
-	config.Cfg.OAuth2.Provider = "HyDrA"
-	if got := OAuth2Provider(); got != ProviderHydra {
-		t.Fatalf("OAuth2Provider() = %q, want %q", got, ProviderHydra)
+	config = NewHydraConfig(HydraConfigOptions{Provider: "HyDrA"})
+	if got := config.Provider(); got != ProviderHydra {
+		t.Fatalf("Provider() = %q, want %q", got, ProviderHydra)
+	}
+
+	config = NewHydraConfig(HydraConfigOptions{Provider: "builtin"})
+	if config.Enabled() {
+		t.Fatal("non-Hydra provider should be disabled")
 	}
 }
 
@@ -46,51 +48,49 @@ func TestBuildHydraEndpoint(t *testing.T) {
 
 	t.Run("reject invalid base URL", func(t *testing.T) {
 		if _, err := buildHydraEndpoint("/relative", "/oauth2/token"); err == nil {
-			t.Fatalf("buildHydraEndpoint should fail for invalid base URL")
+			t.Fatal("buildHydraEndpoint should fail for invalid base URL")
 		}
 	})
 }
 
-func TestHydraBrowserEndpoint(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
+func TestHydraConfigBrowserEndpointFallback(t *testing.T) {
+	config := NewHydraConfig(HydraConfigOptions{
+		PublicURL:  "http://hydra:4444",
+		BrowserURL: "https://gateway.example.com",
 	})
-
-	config.Cfg.OAuth2.HydraPublicURL = "http://hydra:4444"
-	config.Cfg.OAuth2.HydraBrowserURL = "https://gateway.example.com"
-
-	got, err := HydraBrowserEndpoint("/oauth2/auth")
+	got, err := config.BrowserEndpoint("/oauth2/auth")
 	if err != nil {
-		t.Fatalf("HydraBrowserEndpoint returned error: %v", err)
+		t.Fatalf("BrowserEndpoint returned error: %v", err)
 	}
 	if got != "https://gateway.example.com/oauth2/auth" {
-		t.Fatalf("HydraBrowserEndpoint() = %q", got)
+		t.Fatalf("BrowserEndpoint() = %q", got)
 	}
 
-	config.Cfg.OAuth2.HydraBrowserURL = ""
-	got, err = HydraBrowserEndpoint("/oauth2/auth")
+	config = NewHydraConfig(HydraConfigOptions{PublicURL: "http://hydra:4444"})
+	got, err = config.BrowserEndpoint("/oauth2/auth")
 	if err != nil {
-		t.Fatalf("HydraBrowserEndpoint fallback returned error: %v", err)
+		t.Fatalf("BrowserEndpoint fallback returned error: %v", err)
 	}
 	if got != "http://hydra:4444/oauth2/auth" {
-		t.Fatalf("HydraBrowserEndpoint() fallback = %q", got)
+		t.Fatalf("BrowserEndpoint() fallback = %q", got)
 	}
 }
 
-func TestHydraRequestTimeout(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
+func TestHydraConfigCopiesCredentialsAndTimeout(t *testing.T) {
+	config := NewHydraConfig(HydraConfigOptions{
+		ClientID:     " client-id ",
+		ClientSecret: "client-secret",
 	})
-
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 0
-	if got := HydraRequestTimeout(); got != 10*time.Second {
-		t.Fatalf("HydraRequestTimeout() = %s, want %s", got, 10*time.Second)
+	clientID, clientSecret := config.ClientCredentials()
+	if clientID != "client-id" || clientSecret != "client-secret" {
+		t.Fatalf("ClientCredentials() = (%q, %q)", clientID, clientSecret)
+	}
+	if got := config.RequestTimeout(); got != 10*time.Second {
+		t.Fatalf("RequestTimeout() = %s, want %s", got, 10*time.Second)
 	}
 
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 27
-	if got := HydraRequestTimeout(); got != 27*time.Second {
-		t.Fatalf("HydraRequestTimeout() = %s, want %s", got, 27*time.Second)
+	config = NewHydraConfig(HydraConfigOptions{RequestTimeout: 27 * time.Second})
+	if got := config.RequestTimeout(); got != 27*time.Second {
+		t.Fatalf("RequestTimeout() = %s, want %s", got, 27*time.Second)
 	}
 }

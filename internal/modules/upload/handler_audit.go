@@ -5,6 +5,7 @@ import (
 	"fmt"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 	"time"
@@ -42,17 +43,41 @@ func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResul
 func dispatchUploadAuditLog(
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	logger *harukiLogger.Logger,
+	backgroundTasks harukiBackground.Runner,
+	uploadCtx *uploadContext,
+	success bool,
+	errorMessage *string,
+) {
+	dispatchUploadAuditLogWithSemaphore(uploadAuditSemaphore, helper, logger, backgroundTasks, uploadCtx, success, errorMessage)
+}
+
+func dispatchUploadAuditLogWithSemaphore(
+	semaphore chan struct{},
+	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	logger *harukiLogger.Logger,
+	backgroundTasks harukiBackground.Runner,
 	uploadCtx *uploadContext,
 	success bool,
 	errorMessage *string,
 ) {
 	select {
-	case uploadAuditSemaphore <- struct{}{}:
-		go func() {
-			defer func() { <-uploadAuditSemaphore }()
+	case semaphore <- struct{}{}:
+		accepted := startBackgroundTask(backgroundTasks, logger, "upload-audit", func() {
+			defer func() { <-semaphore }()
 			persistUploadAuditLog(helper, logger, uploadCtx, success, errorMessage)
-		}()
+		})
+		if !accepted {
+			// The task never took ownership of the reserved slot.
+			<-semaphore
+			// Preserve the audit record and the historical caller-side
+			// backpressure behavior even if lifecycle admission is rejected.
+			persistUploadAuditLog(helper, logger, uploadCtx, success, errorMessage)
+		}
 	default:
+		// Preserve the historical bounded/backpressure behavior: at most 64
+		// detached audit goroutines; overflow persists in the request/parent task.
+		// For an iOS parent using InlineRunner, both branches remain inside that
+		// already tracked parent lifetime.
 		persistUploadAuditLog(helper, logger, uploadCtx, success, errorMessage)
 	}
 }

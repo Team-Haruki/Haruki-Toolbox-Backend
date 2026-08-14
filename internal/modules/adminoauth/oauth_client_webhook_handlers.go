@@ -6,13 +6,14 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"strings"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleListHydraOAuthClientWebhooks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleListHydraOAuthClientWebhooks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
@@ -20,7 +21,7 @@ func handleListHydraOAuthClientWebhooks(apiHelper *harukiAPIHelper.HarukiToolbox
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
 		}
 
-		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), clientID); err != nil {
+		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientWebhookList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorNotFound(c, "oauth client not found")
@@ -53,7 +54,7 @@ func handleListHydraOAuthClientWebhooks(apiHelper *harukiAPIHelper.HarukiToolbox
 	}
 }
 
-func handleCreateHydraOAuthClientWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleCreateHydraOAuthClientWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
@@ -61,7 +62,7 @@ func handleCreateHydraOAuthClientWebhook(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
 		}
 
-		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), clientID); err != nil {
+		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientWebhookCreate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorNotFound(c, "oauth client not found")

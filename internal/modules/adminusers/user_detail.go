@@ -94,7 +94,7 @@ func queryAdminUserDetailActivitySummary(c fiber.Ctx, apiHelper *harukiAPIHelper
 	return summary, nil
 }
 
-func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userDataBuilder harukiAPIHelper.UserDataBuilder) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		targetUserID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetUserID == "" {
@@ -144,7 +144,7 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		}
 
 		resp := adminUserDetailResponse{
-			UserData:        harukiAPIHelper.BuildUserDataFromDBUser(dbUser, nil),
+			UserData:        userDataBuilder.BuildFromDBUser(dbUser, nil),
 			Banned:          dbUser.Banned,
 			AllowCNMysekai:  dbUser.AllowCnMysekai,
 			BanReason:       dbUser.BanReason,

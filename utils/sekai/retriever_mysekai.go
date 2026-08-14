@@ -52,7 +52,7 @@ func (r *HarukiSekaiDataRetriever) ensureMysekaiNotInMaintenance(ctx context.Con
 }
 
 func (r *HarukiSekaiDataRetriever) runMysekaiFollowupCalls(ctx context.Context) {
-	roomReq, err := Pack(RequestDataMySekaiRoom, harukiUtils.SupportedDataUploadServer(r.client.server))
+	roomReq, err := r.client.serverCryptor.Pack(RequestDataMySekaiRoom, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if err != nil {
 		r.logger.Warnf("Failed to pack room request: %v", err)
 	} else if err := callAndIgnoreError(ctx, r.client, mysekaiRoomPath(r.client.userID), httpMethodPost, roomReq); err != nil {
@@ -83,7 +83,7 @@ func (r *HarukiSekaiDataRetriever) checkModuleMaintenance(
 		return NewDataRetrievalError("mysekai", "maintenance_check", fmt.Sprintf("unexpected status: %d", status), nil)
 	}
 
-	ongoing, err := checkMaintenanceFromBody(resp, r.client.server)
+	ongoing, err := checkMaintenanceFromBody(r.client.serverCryptor, resp, r.client.server)
 	if err != nil {
 		r.logger.Warnf("Failed to unpack %s maintenance response: %v", displayName, err)
 		return nil

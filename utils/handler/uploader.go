@@ -44,9 +44,9 @@ var bytesBufferPool = sync.Pool{
 	},
 }
 
-func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
+func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer, serverCryptor sekai.ServerCryptor) ([]byte, error) {
 
-	msgpackBytes, err := sekai.DecryptToMsgpack(rawData, server)
+	msgpackBytes, err := serverCryptor.DecryptToMsgpack(rawData, server)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt data: %w", err)
 	}
@@ -79,8 +79,13 @@ func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]
 	return result, nil
 }
 
-func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
-	unpacked, err := sekai.Unpack(rawData, server)
+func processDataWithRestore(
+	rawData []byte,
+	server utils.SupportedDataUploadServer,
+	serverCryptor sekai.ServerCryptor,
+	suiteRestoreService *SuiteRestoreService,
+) ([]byte, error) {
+	unpacked, err := serverCryptor.Unpack(rawData, server)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack data: %w", err)
 	}
@@ -89,7 +94,7 @@ func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServ
 		return nil, fmt.Errorf("unpacked data is not a map")
 	}
 
-	restored, _, err := RestoreSuite(server, unpackedMap, SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync})
+	restored, _, err := suiteRestoreService.Restore(server, unpackedMap, SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync})
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore suite data: %w", err)
 	}
@@ -180,14 +185,47 @@ func checkUserExists(t syncTarget, userID int64, server utils.SupportedDataUploa
 	return false
 }
 
-func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) {
+func DataSyncer(
+	userID int64,
+	server utils.SupportedDataUploadServer,
+	dataType utils.UploadDataType,
+	rawData []byte,
+	settings apiHelper.HarukiToolboxGameAccountPrivacySettings,
+	serverCryptor sekai.ServerCryptor,
+	suiteRestoreService *SuiteRestoreService,
+) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("DataSyncer panicked: %v", r)
 		}
 	}()
 
-	cfg := harukiConfig.Cfg.ThirdPartyDataProvider
+	runDataSyncer(
+		harukiConfig.Cfg.ThirdPartyDataProvider,
+		userID,
+		server,
+		dataType,
+		rawData,
+		settings,
+		serverCryptor,
+		suiteRestoreService,
+		sendData,
+	)
+}
+
+type syncDataSender func(string, int64, utils.SupportedDataUploadServer, utils.UploadDataType, []byte, string, map[string]string)
+
+func runDataSyncer(
+	cfg harukiConfig.ThirdPartyDataProviderConfig,
+	userID int64,
+	server utils.SupportedDataUploadServer,
+	dataType utils.UploadDataType,
+	rawData []byte,
+	settings apiHelper.HarukiToolboxGameAccountPrivacySettings,
+	serverCryptor sekai.ServerCryptor,
+	suiteRestoreService *SuiteRestoreService,
+	sender syncDataSender,
+) {
 	targets := buildSyncTargets(cfg, dataType, settings)
 
 	if len(targets) == 0 {
@@ -199,7 +237,7 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 	var processedData []byte
 	if needsProcessed {
 		var err error
-		processedData, err = processDataOnce(rawData, server)
+		processedData, err = processDataOnce(rawData, server, serverCryptor)
 		if err != nil {
 			logger.Warnf("Failed to pre-process data: %v", err)
 			needsProcessed = false
@@ -209,13 +247,14 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 	var restoredData []byte
 	if needsRestored {
 		var err error
-		restoredData, err = processDataWithRestore(rawData, server)
+		restoredData, err = processDataWithRestore(rawData, server, serverCryptor, suiteRestoreService)
 		if err != nil {
 			logger.Warnf("Failed to process data with restore: %v", err)
 			needsRestored = false
 		}
 	}
 
+	var sendTasks sync.WaitGroup
 	for _, t := range targets {
 		t := t
 
@@ -236,6 +275,11 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 		headers := buildSyncHeaders(t, userID, server, dataType)
 
 		logger.Infof("Syncing %s data to %s...", dataType, t.url)
-		go sendData(t.url, userID, server, dataType, data, encoding, headers)
+		sendTasks.Add(1)
+		go func() {
+			defer sendTasks.Done()
+			sender(t.url, userID, server, dataType, data, encoding, headers)
+		}()
 	}
+	sendTasks.Wait()
 }

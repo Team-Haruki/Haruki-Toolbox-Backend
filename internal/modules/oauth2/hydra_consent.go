@@ -34,11 +34,11 @@ func hydraConsentSessionKey(session HydraConsentSession) string {
 	return strings.TrimSpace(session.ConsentRequestID) + "\x00" + strings.TrimSpace(session.ConsentRequest.Client.ClientID)
 }
 
-func HydraOAuthManagementEnabled() bool {
-	return harukiOAuth2.UseHydraProvider()
+func HydraOAuthManagementEnabled(hydraConfig *harukiOAuth2.HydraConfig) bool {
+	return hydraConfig != nil && hydraConfig.Enabled()
 }
 
-func ListHydraConsentSessions(ctx context.Context, subject string) ([]HydraConsentSession, error) {
+func ListHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject string) ([]HydraConsentSession, error) {
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
 		return nil, fmt.Errorf("subject is required")
@@ -48,7 +48,7 @@ func ListHydraConsentSessions(ctx context.Context, subject string) ([]HydraConse
 	seenPageTokens := make(map[string]struct{})
 	sessions := make([]HydraConsentSession, 0)
 	for {
-		page, nextPageToken, err := listHydraConsentSessionsPage(ctx, subject, pageToken)
+		page, nextPageToken, err := listHydraConsentSessionsPage(ctx, hydraConfig, subject, pageToken)
 		if err != nil {
 			return nil, err
 		}
@@ -64,7 +64,7 @@ func ListHydraConsentSessions(ctx context.Context, subject string) ([]HydraConse
 	}
 }
 
-func ListHydraConsentSessionsForSubjects(ctx context.Context, subjects []string) ([]HydraConsentSession, error) {
+func ListHydraConsentSessionsForSubjects(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subjects []string) ([]HydraConsentSession, error) {
 	normalizedSubjects := normalizeHydraSubjects(subjects...)
 	if len(normalizedSubjects) == 0 {
 		return nil, fmt.Errorf("at least one subject is required")
@@ -73,7 +73,7 @@ func ListHydraConsentSessionsForSubjects(ctx context.Context, subjects []string)
 	sessions := make([]HydraConsentSession, 0)
 	seen := make(map[string]struct{})
 	for _, subject := range normalizedSubjects {
-		items, err := ListHydraConsentSessions(ctx, subject)
+		items, err := ListHydraConsentSessions(ctx, hydraConfig, subject)
 		if err != nil {
 			return nil, err
 		}
@@ -89,8 +89,8 @@ func ListHydraConsentSessionsForSubjects(ctx context.Context, subjects []string)
 	return sessions, nil
 }
 
-func listHydraConsentSessionsPage(ctx context.Context, subject, pageToken string) ([]HydraConsentSession, string, error) {
-	targetURL, err := harukiOAuth2.HydraAdminEndpoint("/admin/oauth2/auth/sessions/consent")
+func listHydraConsentSessionsPage(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject, pageToken string) ([]HydraConsentSession, string, error) {
+	targetURL, err := hydraConfig.AdminEndpoint("/admin/oauth2/auth/sessions/consent")
 	if err != nil {
 		return nil, "", err
 	}
@@ -109,11 +109,11 @@ func listHydraConsentSessionsPage(ctx context.Context, subject, pageToken string
 		return nil, "", fmt.Errorf("failed to create hydra request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	if clientID, clientSecret := harukiOAuth2.HydraClientCredentials(); clientID != "" {
+	if clientID, clientSecret := hydraConfig.ClientCredentials(); clientID != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 
-	resp, err := hydraHTTPClient().Do(req)
+	resp, err := hydraConfig.Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to call hydra: %w", err)
 	}
@@ -172,7 +172,7 @@ func extractHydraNextPageToken(linkHeaders []string) string {
 	return ""
 }
 
-func RevokeHydraConsentSessions(ctx context.Context, subject, clientID string) error {
+func RevokeHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject, clientID string) error {
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
 		return fmt.Errorf("subject is required")
@@ -184,11 +184,11 @@ func RevokeHydraConsentSessions(ctx context.Context, subject, clientID string) e
 	} else {
 		query.Set("all", "true")
 	}
-	_, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", query, nil)
+	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", query, nil)
 	return err
 }
 
-func RevokeHydraConsentSessionsForSubjects(ctx context.Context, subjects []string, clientID string) error {
+func RevokeHydraConsentSessionsForSubjects(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subjects []string, clientID string) error {
 	normalizedSubjects := normalizeHydraSubjects(subjects...)
 	if len(normalizedSubjects) == 0 {
 		return fmt.Errorf("at least one subject is required")
@@ -196,20 +196,20 @@ func RevokeHydraConsentSessionsForSubjects(ctx context.Context, subjects []strin
 
 	var firstErr error
 	for _, subject := range normalizedSubjects {
-		if err := RevokeHydraConsentSessions(ctx, subject, clientID); err != nil && firstErr == nil {
+		if err := RevokeHydraConsentSessions(ctx, hydraConfig, subject, clientID); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
 	return firstErr
 }
 
-func HydraConsentSessionExistsForClient(ctx context.Context, subject, clientID string) (bool, error) {
+func HydraConsentSessionExistsForClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject, clientID string) (bool, error) {
 	subject = strings.TrimSpace(subject)
 	clientID = strings.TrimSpace(clientID)
 	if subject == "" || clientID == "" {
 		return false, fmt.Errorf("subject and clientID are required")
 	}
-	sessions, err := ListHydraConsentSessions(ctx, subject)
+	sessions, err := ListHydraConsentSessions(ctx, hydraConfig, subject)
 	if err != nil {
 		return false, err
 	}
@@ -221,13 +221,13 @@ func HydraConsentSessionExistsForClient(ctx context.Context, subject, clientID s
 	return false, nil
 }
 
-func HydraConsentSessionExistsForSubjects(ctx context.Context, subjects []string, clientID string) (bool, error) {
+func HydraConsentSessionExistsForSubjects(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subjects []string, clientID string) (bool, error) {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {
 		return false, fmt.Errorf("clientID is required")
 	}
 
-	sessions, err := ListHydraConsentSessionsForSubjects(ctx, subjects)
+	sessions, err := ListHydraConsentSessionsForSubjects(ctx, hydraConfig, subjects)
 	if err != nil {
 		return false, err
 	}

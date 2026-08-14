@@ -3,8 +3,6 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -220,46 +218,6 @@ func TestParseWebhookCallbackSupportsOAuth2ClientWebhook(t *testing.T) {
 	}
 }
 
-func TestOAuth2WebhookAuthorizedClientIDsDeduplicatesGameDataScope(t *testing.T) {
-	t.Parallel()
-
-	got := oauth2WebhookAuthorizedClientIDs([]oauth2Module.HydraConsentSession{
-		{
-			GrantScope: []string{"user:read"},
-			ConsentRequest: oauth2Module.HydraConsentRequest{
-				Client: oauth2Module.HydraConsentClient{ClientID: "client-without-data"},
-			},
-		},
-		{
-			GrantScope: []string{"game-data:read"},
-			ConsentRequest: oauth2Module.HydraConsentRequest{
-				Client: oauth2Module.HydraConsentClient{ClientID: "client-a"},
-			},
-		},
-		{
-			GrantScope: []string{"bindings:read", "game-data:read"},
-			ConsentRequest: oauth2Module.HydraConsentRequest{
-				Client: oauth2Module.HydraConsentClient{ClientID: "client-a"},
-			},
-		},
-		{
-			GrantScope: []string{"game-data:read"},
-			ConsentRequest: oauth2Module.HydraConsentRequest{
-				Client: oauth2Module.HydraConsentClient{ClientID: "client-b"},
-			},
-		},
-	})
-	want := []string{"client-a", "client-b"}
-	if len(got) != len(want) {
-		t.Fatalf("len(got) = %d, want %d: %v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
 func TestValidateWebhookCallbackURLRejectsResolvedPrivateIP(t *testing.T) {
 	originalLookup := webhookIPAddrLookup
 	webhookIPAddrLookup = func(ctx context.Context, host string) ([]net.IPAddr, error) {
@@ -271,6 +229,34 @@ func TestValidateWebhookCallbackURLRejectsResolvedPrivateIP(t *testing.T) {
 
 	if _, ok := ValidateWebhookCallbackURL("https://example.com/callback"); ok {
 		t.Fatalf("expected callback URL resolving to loopback IP to be rejected")
+	}
+}
+
+func TestValidateWebhookCallbackURLRejectsTailscaleAndCGNATAddresses(t *testing.T) {
+	if _, ok := ValidateWebhookCallbackURL("https://100.64.0.1/callback"); ok {
+		t.Fatal("expected direct RFC 6598 callback address to be rejected")
+	}
+
+	originalLookup := webhookIPAddrLookup
+	webhookIPAddrLookup = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("100.100.100.100")}}, nil
+	}
+	defer func() {
+		webhookIPAddrLookup = originalLookup
+	}()
+
+	if _, ok := ValidateWebhookCallbackURL("https://tailnet-host.example/callback"); ok {
+		t.Fatal("expected hostname resolving into RFC 6598 space to be rejected")
+	}
+	if _, err := webhookSafeDialContext(context.Background(), "tcp", "tailnet-host.example:443"); err == nil || !strings.Contains(err.Error(), "blocked private webhook address") {
+		t.Fatalf("dial-time RFC 6598 validation error = %v, want blocked address", err)
+	}
+}
+
+func TestWebhookSafeDialRejectsLiteralTailscaleAndCGNATAddress(t *testing.T) {
+	_, err := webhookSafeDialContext(context.Background(), "tcp", "100.100.100.100:443")
+	if err == nil || !strings.Contains(err.Error(), "blocked private webhook address") {
+		t.Fatalf("literal dial-time RFC 6598 validation error = %v, want blocked address", err)
 	}
 }
 
@@ -366,15 +352,12 @@ func TestExtractBirthdayPartyData(t *testing.T) {
 }
 
 func TestShouldRestoreSuiteForDB(t *testing.T) {
-	original := harukiConfig.Cfg.RestoreSuite.EnableRegions
-	defer func() { harukiConfig.Cfg.RestoreSuite.EnableRegions = original }()
+	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{EnableRegions: []string{"jp", "en"}})
 
-	harukiConfig.Cfg.RestoreSuite.EnableRegions = []string{"jp", "en"}
-
-	if !shouldRestoreSuiteForDB(harukiUtils.SupportedDataUploadServerJP) {
+	if !service.shouldRestoreSuiteForDB(harukiUtils.SupportedDataUploadServerJP) {
 		t.Fatalf("shouldRestoreSuiteForDB should return true for configured region jp")
 	}
-	if shouldRestoreSuiteForDB(harukiUtils.SupportedDataUploadServerKR) {
+	if service.shouldRestoreSuiteForDB(harukiUtils.SupportedDataUploadServerKR) {
 		t.Fatalf("shouldRestoreSuiteForDB should return false for non-configured region kr")
 	}
 }

@@ -3,11 +3,13 @@ package admintickets
 import (
 	"context"
 	"fmt"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
 	"unicode/utf8"
@@ -136,43 +138,8 @@ func applyAdminTicketLatestMessageSummary(item *adminTicketListItem, rows []*pos
 	item.LastMessageAt = &lastMessageAt
 }
 
-func appendAdminTicketSystemMessage(ctx context.Context, tx *postgresql.Tx, ticketID int, message string) error {
-	message = strings.TrimSpace(message)
-	if message == "" {
-		return nil
-	}
-	_, err := tx.TicketMessage.Create().
-		SetTicketID(ticketID).
-		SetSenderRole(ticketmessage.SenderRoleSystem).
-		SetInternal(true).
-		SetMessage(message).
-		Save(ctx)
-	return err
-}
-
 func buildAdminTicketStatusEventMessage(previous ticket.Status, next ticket.Status) string {
-	return fmt.Sprintf("Status changed: %s -> %s", formatAdminTicketStatusLabel(previous), formatAdminTicketStatusLabel(next))
-}
-
-func formatAdminTicketStatusLabel(status ticket.Status) string {
-	switch status {
-	case ticket.StatusOpen:
-		return "Open"
-	case ticket.StatusPendingAdmin:
-		return "Pending admin"
-	case ticket.StatusPendingUser:
-		return "Pending user"
-	case ticket.StatusResolved:
-		return "Resolved"
-	case ticket.StatusClosed:
-		return "Closed"
-	default:
-		statusValue := strings.TrimSpace(string(status))
-		if statusValue == "" {
-			return "Unknown"
-		}
-		return statusValue
-	}
+	return ticketsModule.BuildStatusEventMessage(previous, next)
 }
 
 func formatAdminTicketAssigneeLabel(assigneeAdminID string, nameByUserID map[string]string) string {
@@ -214,29 +181,19 @@ func buildAdminTicketMessageItems(rows []*postgresql.TicketMessage, userNameByUs
 }
 
 func parseAdminTicketStatus(raw string) (ticket.Status, error) {
-	trimmed := strings.ToLower(strings.TrimSpace(raw))
-	if trimmed == "" {
-		return "", nil
+	value, err := ticketsModule.ParseStatus(raw)
+	if err != nil {
+		return "", fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	switch ticket.Status(trimmed) {
-	case ticket.StatusOpen, ticket.StatusPendingAdmin, ticket.StatusPendingUser, ticket.StatusResolved, ticket.StatusClosed:
-		return ticket.Status(trimmed), nil
-	default:
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid status")
-	}
+	return value, nil
 }
 
 func parseAdminTicketPriority(raw string) (ticket.Priority, error) {
-	trimmed := strings.ToLower(strings.TrimSpace(raw))
-	if trimmed == "" {
-		return "", nil
+	value, err := ticketsModule.ParsePriority(raw, "")
+	if err != nil {
+		return "", fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	switch ticket.Priority(trimmed) {
-	case ticket.PriorityLow, ticket.PriorityNormal, ticket.PriorityHigh, ticket.PriorityUrgent:
-		return ticket.Priority(trimmed), nil
-	default:
-		return "", fiber.NewError(fiber.StatusBadRequest, "invalid priority")
-	}
+	return value, nil
 }
 
 func parseAdminTicketQuickFilter(raw string) (adminTicketQuickFilter, error) {
@@ -350,6 +307,31 @@ func applyAdminTicketFilters(query *postgresql.TicketQuery, filters *adminTicket
 	return q
 }
 
+// scopeAdminTicketQueryForActor applies the same role boundary before both
+// Count and pagination. Tickets do not have an Ent edge to their creator, so
+// the creator IDs must be resolved from the users table first.
+func scopeAdminTicketQueryForActor(
+	ctx context.Context,
+	db *postgresql.Client,
+	query *postgresql.TicketQuery,
+	actorRole string,
+) (*postgresql.TicketQuery, error) {
+	if adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin {
+		return query, nil
+	}
+
+	superAdminIDs, err := db.User.Query().
+		Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).
+		IDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(superAdminIDs) == 0 {
+		return query, nil
+	}
+	return query.Where(ticket.CreatorUserIDNotIn(superAdminIDs...)), nil
+}
+
 func collectAdminTicketUserIDs(rows []*postgresql.Ticket) []string {
 	userIDs := make([]string, 0, len(rows)*2)
 	for _, row := range rows {
@@ -379,4 +361,35 @@ func queryAdminTicketByPublicID(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	return apiHelper.DBManager.DB.Ticket.Query().
 		Where(ticket.TicketIDEQ(publicTicketID)).
 		Only(c.Context())
+}
+
+func ensureAdminCanManageTicketCreator(
+	c fiber.Ctx,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	actorUserID string,
+	actorRole string,
+	row *postgresql.Ticket,
+) error {
+	creator, err := apiHelper.DBManager.DB.User.Query().
+		Where(userSchema.IDEQ(row.CreatorUserID)).
+		Select(userSchema.FieldID, userSchema.FieldRole).
+		Only(c.Context())
+	if err != nil {
+		return err
+	}
+	return adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, creator.ID, string(creator.Role))
+}
+
+func ensureAdminCanAssignToTarget(actorUserID, actorRole string, target *postgresql.User) error {
+	if target == nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "assignee admin is missing")
+	}
+
+	// Self-assignment is an ordinary ticket workflow operation, not an
+	// administrative mutation of the current user's account. For every other
+	// assignee, reuse the canonical role-hierarchy check.
+	if strings.TrimSpace(actorUserID) == strings.TrimSpace(target.ID) {
+		return nil
+	}
+	return adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, target.ID, string(target.Role))
 }

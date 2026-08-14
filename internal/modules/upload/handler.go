@@ -27,6 +27,7 @@ func HandleUpload(
 	gameUserID *int64,
 	userID *string,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	dependencies Dependencies,
 	uploadMethod harukiUtils.UploadMethod,
 ) (*harukiUtils.HandleDataResult, error) {
 
@@ -37,13 +38,13 @@ func HandleUpload(
 	if err != nil {
 		return nil, err
 	}
-	handler := newUploadDataHandler(helper)
+	handler := newUploadDataHandler(helper, dependencies)
 	auditWritten := false
 	writeUploadAudit := func(success bool, errorMessage *string) {
 		if auditWritten {
 			return
 		}
-		dispatchUploadAuditLog(helper, handler.Logger, uploadCtx, success, errorMessage)
+		dispatchUploadAuditLog(helper, handler.Logger, dependencies.BackgroundTasks, uploadCtx, success, errorMessage)
 		auditWritten = true
 	}
 	fail := func(stage string, result *harukiUtils.HandleDataResult, err error) (*harukiUtils.HandleDataResult, error) {

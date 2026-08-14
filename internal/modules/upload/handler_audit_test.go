@@ -1,10 +1,12 @@
 package upload
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,10 +17,87 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+type queuedUploadRunner struct {
+	mu     sync.Mutex
+	accept bool
+	calls  int
+	tasks  []func()
+}
+
+func (r *queuedUploadRunner) Go(_ string, task func()) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls++
+	if r.accept {
+		r.tasks = append(r.tasks, task)
+	}
+	return r.accept
+}
+
+func (r *queuedUploadRunner) snapshot() (int, []func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls, append([]func(){}, r.tasks...)
+}
+
+func TestDispatchUploadAuditKeepsBoundedAsyncSlotsUnderConcurrency(t *testing.T) {
+	t.Parallel()
+
+	const capacity = 4
+	semaphore := make(chan struct{}, capacity)
+	runner := &queuedUploadRunner{accept: true}
+	logger := harukiLogger.NewLogger("audit-test", "DEBUG", &bytes.Buffer{})
+	var callers sync.WaitGroup
+	for range 64 {
+		callers.Add(1)
+		go func() {
+			defer callers.Done()
+			dispatchUploadAuditLogWithSemaphore(semaphore, nil, logger, runner, nil, false, nil)
+		}()
+	}
+	callers.Wait()
+
+	calls, tasks := runner.snapshot()
+	if calls != capacity {
+		t.Fatalf("async runner calls = %d, want semaphore capacity %d", calls, capacity)
+	}
+	if len(tasks) != capacity || len(semaphore) != capacity {
+		t.Fatalf("queued tasks/slots = %d/%d, want %d/%d", len(tasks), len(semaphore), capacity, capacity)
+	}
+	for _, task := range tasks {
+		task()
+	}
+	if len(semaphore) != 0 {
+		t.Fatalf("semaphore slots after tasks = %d, want 0", len(semaphore))
+	}
+}
+
+func TestDispatchUploadAuditRejectionLogsAndReleasesSlot(t *testing.T) {
+	t.Parallel()
+
+	semaphore := make(chan struct{}, 1)
+	runner := &queuedUploadRunner{accept: false}
+	var output bytes.Buffer
+	logger := harukiLogger.NewLogger("audit-test", "DEBUG", &output)
+	dispatchUploadAuditLogWithSemaphore(semaphore, nil, logger, runner, nil, false, nil)
+
+	calls, tasks := runner.snapshot()
+	if calls != 1 || len(tasks) != 0 {
+		t.Fatalf("runner calls/tasks = %d/%d, want 1/0", calls, len(tasks))
+	}
+	if len(semaphore) != 0 {
+		t.Fatalf("semaphore slots after rejection = %d, want 0", len(semaphore))
+	}
+	if !strings.Contains(output.String(), "rejected") {
+		t.Fatalf("rejection log = %q, want warning", output.String())
+	}
+}
 
 func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 	t.Parallel()
@@ -63,6 +142,7 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 		&gameUserID,
 		nil,
 		helper,
+		testUploadDependencies(),
 		harukiUtils.UploadMethodIOSProxy,
 	)
 	if !errors.Is(err, errUploadCNMysekaiDenied) {
@@ -148,6 +228,7 @@ func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
 
 	recordInheritRetrievalFailure(
 		helper,
+		testUploadDependencies(),
 		harukiUtils.SupportedDataUploadServerEN,
 		harukiUtils.UploadDataTypeSuite,
 		&harukiUtils.SekaiInheritDataRetrieverResponse{UserID: gameUserID},

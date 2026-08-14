@@ -2,37 +2,28 @@ package oauth2
 
 import (
 	"context"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"testing"
+	"time"
+
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 )
 
 func TestHydraOAuthManagementEnabledFollowsProvider(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
-	config.Cfg.OAuth2.Provider = "hydra"
-	config.Cfg.OAuth2.HydraAdminURL = ""
-	if !HydraOAuthManagementEnabled() {
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{Provider: "hydra"})
+	if !HydraOAuthManagementEnabled(hydraConfig) {
 		t.Fatalf("expected hydra provider to enable hydra management mode even without admin url")
 	}
 
-	config.Cfg.OAuth2.Provider = "builtin"
-	if HydraOAuthManagementEnabled() {
+	disabledConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{Provider: "builtin"})
+	if HydraOAuthManagementEnabled(disabledConfig) {
 		t.Fatalf("expected builtin provider to disable hydra management mode")
 	}
 }
 
 func TestListHydraConsentSessionsPaginates(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
@@ -57,10 +48,12 @@ func TestListHydraConsentSessionsPaginates(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		RequestTimeout: 5 * time.Second,
+	})
 
-	sessions, err := ListHydraConsentSessions(context.Background(), "u-1")
+	sessions, err := ListHydraConsentSessions(context.Background(), hydraConfig, "u-1")
 	if err != nil {
 		t.Fatalf("ListHydraConsentSessions returned error: %v", err)
 	}
@@ -76,11 +69,6 @@ func TestListHydraConsentSessionsPaginates(t *testing.T) {
 }
 
 func TestHydraConsentSessionExistsForClient(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
 			w.WriteHeader(http.StatusNotFound)
@@ -91,10 +79,12 @@ func TestHydraConsentSessionExistsForClient(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		RequestTimeout: 5 * time.Second,
+	})
 
-	exists, err := HydraConsentSessionExistsForClient(context.Background(), "u-1", "client-a")
+	exists, err := HydraConsentSessionExistsForClient(context.Background(), hydraConfig, "u-1", "client-a")
 	if err != nil {
 		t.Fatalf("HydraConsentSessionExistsForClient returned error: %v", err)
 	}
@@ -102,7 +92,7 @@ func TestHydraConsentSessionExistsForClient(t *testing.T) {
 		t.Fatalf("expected client-a to exist")
 	}
 
-	exists, err = HydraConsentSessionExistsForClient(context.Background(), "u-1", "client-b")
+	exists, err = HydraConsentSessionExistsForClient(context.Background(), hydraConfig, "u-1", "client-b")
 	if err != nil {
 		t.Fatalf("HydraConsentSessionExistsForClient returned error: %v", err)
 	}
@@ -112,11 +102,6 @@ func TestHydraConsentSessionExistsForClient(t *testing.T) {
 }
 
 func TestListHydraConsentSessionsForSubjectsDeduplicates(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
 			w.WriteHeader(http.StatusNotFound)
@@ -134,10 +119,12 @@ func TestListHydraConsentSessionsForSubjectsDeduplicates(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		RequestTimeout: 5 * time.Second,
+	})
 
-	sessions, err := ListHydraConsentSessionsForSubjects(context.Background(), []string{"kratos-1", "u-1"})
+	sessions, err := ListHydraConsentSessionsForSubjects(context.Background(), hydraConfig, []string{"kratos-1", "u-1"})
 	if err != nil {
 		t.Fatalf("ListHydraConsentSessionsForSubjects returned error: %v", err)
 	}
@@ -151,7 +138,7 @@ func TestListHydraConsentSessionsForSubjectsDeduplicates(t *testing.T) {
 		t.Fatalf("second consent request id = %q, want %q", sessions[1].ConsentRequestID, "c-legacy")
 	}
 
-	exists, err := HydraConsentSessionExistsForSubjects(context.Background(), []string{"kratos-1", "u-1"}, "client-b")
+	exists, err := HydraConsentSessionExistsForSubjects(context.Background(), hydraConfig, []string{"kratos-1", "u-1"}, "client-b")
 	if err != nil {
 		t.Fatalf("HydraConsentSessionExistsForSubjects returned error: %v", err)
 	}
@@ -161,11 +148,6 @@ func TestListHydraConsentSessionsForSubjectsDeduplicates(t *testing.T) {
 }
 
 func TestRevokeHydraConsentSessionsForSubjectsRevokesAllSubjects(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	seenSubjects := make([]string, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
@@ -181,10 +163,12 @@ func TestRevokeHydraConsentSessionsForSubjectsRevokesAllSubjects(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		RequestTimeout: 5 * time.Second,
+	})
 
-	if err := RevokeHydraConsentSessionsForSubjects(context.Background(), []string{"kratos-1", "u-1", "kratos-1"}, "client-a"); err != nil {
+	if err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, []string{"kratos-1", "u-1", "kratos-1"}, "client-a"); err != nil {
 		t.Fatalf("RevokeHydraConsentSessionsForSubjects returned error: %v", err)
 	}
 	slices.Sort(seenSubjects)

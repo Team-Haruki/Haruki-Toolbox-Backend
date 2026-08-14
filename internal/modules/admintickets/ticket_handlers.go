@@ -2,17 +2,17 @@ package admintickets
 
 import (
 	"context"
+	"errors"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
-	platformTicketNotifications "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/ticketnotifications"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"strings"
-	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -20,7 +20,7 @@ import (
 
 func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		actorUserID, _, err := adminCoreModule.CurrentAdminActor(c)
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
@@ -31,6 +31,10 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 
 		baseQuery := applyAdminTicketFilters(apiHelper.DBManager.DB.Ticket.Query(), filters)
+		baseQuery, err = scopeAdminTicketQueryForActor(c.Context(), apiHelper.DBManager.DB, baseQuery, actorRole)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope tickets")
+		}
 		total, err := baseQuery.Clone().Count(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to count tickets")
@@ -71,6 +75,11 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 
 func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		publicTicketID := strings.TrimSpace(c.Params("ticket_id"))
 		if publicTicketID == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket_id is required")
@@ -87,6 +96,12 @@ func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket detail")
 		}
+		if err := ensureAdminCanManageTicketCreator(c, apiHelper, actorUserID, actorRole, row); err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
+			}
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to authorize ticket")
+		}
 
 		userIDs := append(collectAdminTicketUserIDs([]*postgresql.Ticket{row}), collectAdminTicketMessageSenderUserIDs(row.Edges.Messages)...)
 		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, userIDs)
@@ -102,9 +117,9 @@ func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	}
 }
 
-func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, notificationConfig ticketsModule.NotificationConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		actorUserID, _, err := adminCoreModule.CurrentAdminActor(c)
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
@@ -117,9 +132,8 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		if err := c.Bind().Body(&payload); err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
-		message := strings.TrimSpace(payload.Message)
-		messageLength := utf8.RuneCountInString(message)
-		if messageLength == 0 || messageLength > maxAdminTicketMessageLength {
+		message, err := ticketsModule.NormalizeMessage(payload.Message)
+		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "message must be 1-4000 characters")
 		}
 
@@ -130,37 +144,19 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
-
-		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
-		}
-
-		savedMessage, err := tx.TicketMessage.Create().
-			SetTicketID(row.ID).
-			SetSenderUserID(actorUserID).
-			SetSenderRole(ticketmessage.SenderRoleAdmin).
-			SetInternal(payload.Internal).
-			SetMessage(message).
-			Save(c.Context())
-		if err != nil {
-			_ = tx.Rollback()
-			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
-		}
-
-		if !payload.Internal && row.Status != ticket.StatusClosed {
-			update := tx.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusPendingUser)
-			if row.ClosedAt != nil {
-				update.ClearClosedAt()
+		if err := ensureAdminCanManageTicketCreator(c, apiHelper, actorUserID, actorRole, row); err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
 			}
-			if _, err := update.Save(c.Context()); err != nil {
-				_ = tx.Rollback()
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to authorize ticket")
+		}
+
+		savedMessage, err := ticketsModule.NewService(apiHelper.DBManager.DB, adminNow).
+			AppendAdminMessage(c.Context(), row, actorUserID, message, payload.Internal)
+		if err != nil {
+			if errors.Is(err, ticketsModule.ErrPersistTicketStatus) {
 				return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
 			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
 			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
 		}
 
@@ -168,10 +164,10 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			// Notify off the request path: the send result was always discarded
 			// (log-only). BuildEvent clones every request-derived string, so the
 			// event is safe to read after this handler returns.
-			event := platformTicketNotifications.BuildEvent(row, actorUserID, message, apiHelper.SMTPClient)
+			event := ticketsModule.BuildEvent(row, actorUserID, message, apiHelper.SMTPClient, notificationConfig)
 			event.Ticket.Status = ticket.StatusPendingUser
 			platformMailNotify.Dispatch(func(ctx context.Context) {
-				platformTicketNotifications.NotifyUserOfAdminReply(ctx, apiHelper.DBManager.DB, event)
+				ticketsModule.NotifyUserOfAdminReply(ctx, apiHelper.DBManager.DB, event)
 			})
 		}
 		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketMessageSenderUserIDs([]*postgresql.TicketMessage{savedMessage}))
@@ -188,6 +184,11 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		publicTicketID := strings.TrimSpace(c.Params("ticket_id"))
 		if publicTicketID == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket_id is required")
@@ -208,33 +209,19 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
-
-		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
-		}
-
-		update := tx.Ticket.UpdateOneID(row.ID).SetStatus(statusValue)
-		if statusValue == ticket.StatusClosed {
-			if row.ClosedAt == nil {
-				update.SetClosedAt(adminNowUTC())
+		if err := ensureAdminCanManageTicketCreator(c, apiHelper, actorUserID, actorRole, row); err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
 			}
-		} else {
-			update.ClearClosedAt()
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to authorize ticket")
 		}
-		updated, err := update.Save(c.Context())
+
+		updated, err := ticketsModule.NewService(apiHelper.DBManager.DB, adminNow).
+			UpdateStatus(c.Context(), row, statusValue)
 		if err != nil {
-			_ = tx.Rollback()
-			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
-		}
-		if row.Status != statusValue {
-			if err := appendAdminTicketSystemMessage(c.Context(), tx, row.ID, buildAdminTicketStatusEventMessage(row.Status, statusValue)); err != nil {
-				_ = tx.Rollback()
+			if errors.Is(err, ticketsModule.ErrAppendSystemMessage) {
 				return harukiAPIHelper.ErrorInternal(c, "failed to append ticket system message")
 			}
-		}
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
 			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
 		}
 		updated, err = apiHelper.DBManager.DB.Ticket.Query().
@@ -261,6 +248,11 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 
 func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+
 		publicTicketID := strings.TrimSpace(c.Params("ticket_id"))
 		if publicTicketID == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket_id is required")
@@ -277,6 +269,12 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
+		if err := ensureAdminCanManageTicketCreator(c, apiHelper, actorUserID, actorRole, row); err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
+			}
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to authorize ticket")
+		}
 
 		assignee := ""
 		if payload.AssigneeAdminID != nil {
@@ -289,7 +287,7 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if assignee != "" {
 			assigneeUser, err := apiHelper.DBManager.DB.User.Query().
 				Where(userSchema.IDEQ(assignee)).
-				Select(userSchema.FieldRole, userSchema.FieldBanned).
+				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).
 				Only(c.Context())
 			if err != nil {
 				if postgresql.IsNotFound(err) {
@@ -303,6 +301,9 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			}
 			if assigneeUser.Banned {
 				return harukiAPIHelper.ErrorBadRequest(c, "assignee admin is banned")
+			}
+			if err := ensureAdminCanAssignToTarget(actorUserID, actorRole, assigneeUser); err != nil {
+				return adminCoreModule.RespondFiberOrForbidden(c, err, "insufficient permissions")
 			}
 		}
 		assigneeNameByUserID := map[string]string{}
@@ -330,7 +331,7 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
 		}
 		if previousAssignee != assignee {
-			if err := appendAdminTicketSystemMessage(c.Context(), tx, row.ID, buildAdminTicketAssigneeEventMessage(previousAssignee, assignee, assigneeNameByUserID)); err != nil {
+			if err := ticketsModule.AppendSystemMessage(c.Context(), tx, row.ID, buildAdminTicketAssigneeEventMessage(previousAssignee, assignee, assigneeNameByUserID)); err != nil {
 				_ = tx.Rollback()
 				return harukiAPIHelper.ErrorInternal(c, "failed to append ticket system message")
 			}

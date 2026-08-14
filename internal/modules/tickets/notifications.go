@@ -1,18 +1,18 @@
-package ticketnotifications
+package tickets
 
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"html"
+	"net/url"
+	"strings"
+	"unicode/utf8"
+
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"html"
-	"net/url"
-	"strings"
-	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 )
@@ -22,8 +22,17 @@ const (
 	ticketMailPreviewLength      = 240
 )
 
+// MailSender is the outbound mail port required by ticket notifications.
 type MailSender interface {
 	Send(to []string, subject, body string, displayName string) error
+}
+
+// NotificationConfig is supplied by the composition/transport layer. Keeping
+// it in the event makes background jobs independent of mutable global config.
+type NotificationConfig struct {
+	FrontendURL string
+	DetailPath  string
+	DisplayName string
 }
 
 type TicketContext struct {
@@ -148,17 +157,26 @@ func sendTicketMail(event Event, recipients []string, action string) {
 	}
 }
 
-// BuildEvent clones every request-derived string it stores: events outlive the
-// request handler (they are dispatched to a background mail worker), while
-// actorUserID and message may alias the pooled request body/header buffers
-// (sonic decodes with CopyString=false) and ent Create returns rows that still
-// hold the very input strings. Cloning here keeps the Event fully heap-owned no
-// matter which call site built it.
-func BuildEvent(ticketRow *postgresql.Ticket, actorUserID string, message string, mailSender MailSender) Event {
+// BuildEvent clones every request-derived string it stores. Events are sent by
+// a background worker after Fiber may have recycled request buffers.
+func BuildEvent(ticketRow *postgresql.Ticket, actorUserID, message string, mailSender MailSender, cfg NotificationConfig) Event {
 	actor := strings.Clone(strings.TrimSpace(actorUserID))
 	message = strings.Clone(message)
+	frontendURL := strings.Clone(cfg.FrontendURL)
+	detailPath := strings.Clone(strings.TrimSpace(cfg.DetailPath))
+	if detailPath == "" {
+		detailPath = "/tickets"
+	}
+	displayName := strings.Clone(strings.TrimSpace(cfg.DisplayName))
 	if ticketRow == nil {
-		return Event{ActorUserID: actor, Message: message, MailSender: mailSender, FrontendURL: config.Cfg.UserSystem.FrontendURL, DetailPath: "/tickets", DisplayName: config.Cfg.UserSystem.SMTP.MailName}
+		return Event{
+			ActorUserID: actor,
+			Message:     message,
+			MailSender:  mailSender,
+			FrontendURL: frontendURL,
+			DetailPath:  detailPath,
+			DisplayName: displayName,
+		}
 	}
 	return Event{
 		Ticket: TicketContext{
@@ -171,10 +189,10 @@ func BuildEvent(ticketRow *postgresql.Ticket, actorUserID string, message string
 		},
 		ActorUserID: actor,
 		Message:     message,
-		FrontendURL: config.Cfg.UserSystem.FrontendURL,
-		DetailPath:  "/tickets",
+		FrontendURL: frontendURL,
+		DetailPath:  detailPath,
 		MailSender:  mailSender,
-		DisplayName: strings.TrimSpace(config.Cfg.UserSystem.SMTP.MailName),
+		DisplayName: displayName,
 	}
 }
 
@@ -220,7 +238,7 @@ func buildTicketMailBody(event Event) string {
 	return builder.String()
 }
 
-func writeTicketMailListItem(builder *strings.Builder, label string, value string) {
+func writeTicketMailListItem(builder *strings.Builder, label, value string) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return

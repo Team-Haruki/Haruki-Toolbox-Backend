@@ -1,13 +1,63 @@
 package adminstats
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+
+	_ "github.com/mattn/go-sqlite3"
+
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestScopeUploadLogsForAdminActorHidesSuperAdminOwners(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:admin-stats-upload-visibility?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+
+	if _, err := client.User.Create().SetID("super").SetName("super").SetEmail("super@example.com").SetRole(userSchema.RoleSuperAdmin).Save(ctx); err != nil {
+		t.Fatalf("seed super admin: %v", err)
+	}
+	seed := func(owner string) {
+		builder := client.UploadLog.Create().SetServer("jp").SetGameUserID("123").SetDataType("suite").SetUploadMethod("manual").SetSuccess(true).SetUploadTime(time.Now())
+		if owner != "" {
+			builder.SetToolboxUserID(owner)
+		}
+		if _, err := builder.Save(ctx); err != nil {
+			t.Fatalf("seed upload log: %v", err)
+		}
+	}
+	seed("super")
+	seed("user")
+	seed("")
+
+	query, err := scopeUploadLogsForAdminActor(ctx, client, client.UploadLog.Query(), adminCoreModule.RoleAdmin)
+	if err != nil {
+		t.Fatalf("scope admin upload logs: %v", err)
+	}
+	rows, err := query.All(ctx)
+	if err != nil {
+		t.Fatalf("query admin upload logs: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("admin visible upload logs = %d, want 2", len(rows))
+	}
+
+	query, err = scopeUploadLogsForAdminActor(ctx, client, client.UploadLog.Query(), adminCoreModule.RoleSuperAdmin)
+	if err != nil {
+		t.Fatalf("scope super-admin upload logs: %v", err)
+	}
+	count, err := query.Count(ctx)
+	if err != nil || count != 3 {
+		t.Fatalf("super-admin visible upload logs = %d, err=%v, want 3", count, err)
+	}
+}
 
 func TestParseCSVValues(t *testing.T) {
 	got := parseCSVValues(" manual,ios_script,manual , , inherit ")

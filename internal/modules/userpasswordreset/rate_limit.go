@@ -89,7 +89,7 @@ func checkResetPasswordSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.Har
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildResetPasswordSendRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildResetPasswordSendRateLimitTargetKey(email)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildResetPasswordSendRateLimitTargetKey(email)
 	values, err := apiHelper.DBManager.Redis.Redis.Eval(
 		ctx,
 		resetPasswordSendRateLimitReserveScript,
@@ -122,7 +122,7 @@ func releaseResetPasswordSendRateLimitReservation(c fiber.Ctx, apiHelper *haruki
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildResetPasswordSendRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildResetPasswordSendRateLimitTargetKey(email)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildResetPasswordSendRateLimitTargetKey(email)
 	_, err := apiHelper.DBManager.Redis.Redis.Eval(ctx, resetPasswordSendRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
 	return err
 }
@@ -137,7 +137,7 @@ func checkResetPasswordApplyRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.Ha
 		target = "ip:" + strings.TrimSpace(clientIP)
 	}
 	ipKey := harukiRedis.BuildResetPasswordApplyRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildResetPasswordApplyRateLimitTargetKey(target)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildResetPasswordApplyRateLimitTargetKey(target)
 	values, err := apiHelper.DBManager.Redis.Redis.Eval(
 		ctx,
 		resetPasswordSendRateLimitReserveScript,

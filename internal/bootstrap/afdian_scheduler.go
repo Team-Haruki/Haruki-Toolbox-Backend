@@ -2,36 +2,29 @@ package bootstrap
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
-const defaultAfdianSponsorSyncInterval = 5 * time.Minute
-
 // startAfdianSponsorSyncScheduler launches the background sync and returns a
 // function that blocks until the goroutine has fully exited. Callers must cancel
 // ctx and then invoke the returned wait before closing the Ent client, otherwise
 // an in-flight sync can use the client after it is closed.
-func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, cfg harukiConfig.AfdianConfig, logger *harukiLogger.Logger) func() {
-	if !cfg.SyncEnabled {
+func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, cfg sponsorModule.AfdianConfig, logger *harukiLogger.Logger) func() {
+	if !cfg.SyncEnabled() {
 		logger.Infof("afdian sponsor sync scheduler disabled: sync_enabled is false")
 		return func() {}
 	}
-	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+	if !cfg.CredentialsConfigured() {
 		logger.Infof("afdian sponsor sync scheduler disabled: afdian user_id or api token is not configured")
 		return func() {}
 	}
 
-	interval := defaultAfdianSponsorSyncInterval
-	if cfg.SyncIntervalSeconds > 0 {
-		interval = time.Duration(cfg.SyncIntervalSeconds) * time.Second
-	}
+	interval := cfg.SyncInterval()
 
 	logger.Infof("afdian sponsor sync scheduler enabled with interval %s", interval)
 	var wg sync.WaitGroup
@@ -55,7 +48,7 @@ func startAfdianSponsorSyncScheduler(ctx context.Context, db *dbManager.Client, 
 	return wg.Wait
 }
 
-func runAfdianSponsorSync(ctx context.Context, db *dbManager.Client, cfg harukiConfig.AfdianConfig, logger *harukiLogger.Logger) {
+func runAfdianSponsorSync(ctx context.Context, db *dbManager.Client, cfg sponsorModule.AfdianConfig, logger *harukiLogger.Logger) {
 	startedAt := time.Now().UTC()
 	result, err := sponsorModule.SyncAfdianSponsors(ctx, db, cfg, startedAt)
 	if err != nil {

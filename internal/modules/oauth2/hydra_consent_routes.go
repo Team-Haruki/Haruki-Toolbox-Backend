@@ -11,17 +11,18 @@ import (
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleHydraGetConsentRequest() fiber.Handler {
+func handleHydraGetConsentRequest(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		challenge := strings.TrimSpace(c.Query("consent_challenge"))
 		if challenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "consent_challenge is required")
 		}
-		resp, err := getHydraConsentRequest(c.Context(), challenge)
+		resp, err := getHydraConsentRequest(c.Context(), hydraConfig, challenge)
 		if err != nil {
 			return respondHydraError(c, err, "failed to query consent request")
 		}
@@ -32,7 +33,7 @@ func handleHydraGetConsentRequest() fiber.Handler {
 	}
 }
 
-func handleHydraAcceptConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleHydraAcceptConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -52,7 +53,7 @@ func handleHydraAcceptConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorBadRequest(c, "consentChallenge is required")
 		}
 
-		redirect, err := acceptHydraConsent(c.Context(), apiHelper, userID, hydraSubject, payload.ConsentChallenge, payload.GrantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
+		redirect, err := acceptHydraConsent(c.Context(), apiHelper, hydraConfig, userID, hydraSubject, payload.ConsentChallenge, payload.GrantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
 		if err != nil {
 			return respondHydraError(c, err, "failed to accept consent request")
 		}
@@ -60,7 +61,7 @@ func handleHydraAcceptConsent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 	}
 }
 
-func handleHydraRejectConsent() fiber.Handler {
+func handleHydraRejectConsent(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		var payload hydraConsentRejectPayload
 		if err := bindBodyIfPresent(c, &payload); err != nil {
@@ -70,7 +71,7 @@ func handleHydraRejectConsent() fiber.Handler {
 		if payload.ConsentChallenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "consentChallenge is required")
 		}
-		consentReq, err := getHydraConsentRequest(c.Context(), payload.ConsentChallenge)
+		consentReq, err := getHydraConsentRequest(c.Context(), hydraConfig, payload.ConsentChallenge)
 		if err != nil {
 			return respondHydraError(c, err, "failed to query consent request")
 		}
@@ -87,7 +88,7 @@ func handleHydraRejectConsent() fiber.Handler {
 			payload.StatusCode = fiber.StatusForbidden
 		}
 
-		redirect, err := sendHydraAdminJSON(c.Context(), http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
+		redirect, err := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
 			"error":             payload.Error,
 			"error_description": payload.ErrorDescription,
 			"status_code":       payload.StatusCode,
@@ -99,7 +100,7 @@ func handleHydraRejectConsent() fiber.Handler {
 	}
 }
 
-func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -120,14 +121,14 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		}
 
 		if !payload.Approved {
-			consentReq, err := getHydraConsentRequest(c.Context(), payload.ConsentChallenge)
+			consentReq, err := getHydraConsentRequest(c.Context(), hydraConfig, payload.ConsentChallenge)
 			if err != nil {
 				return respondHydraError(c, err, "failed to query consent request")
 			}
 			if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
 				return respondHydraError(c, err, "failed to validate consent request subject")
 			}
-			rejectResp, rejectErr := sendHydraAdminJSON(c.Context(), http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
+			rejectResp, rejectErr := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
 				"error":             "access_denied",
 				"error_description": "user denied the consent request",
 				"status_code":       fiber.StatusForbidden,
@@ -143,7 +144,7 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			grantScope = strings.Fields(payload.Scope)
 		}
 
-		redirect, acceptErr := acceptHydraConsent(c.Context(), apiHelper, userID, hydraSubject, payload.ConsentChallenge, grantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
+		redirect, acceptErr := acceptHydraConsent(c.Context(), apiHelper, hydraConfig, userID, hydraSubject, payload.ConsentChallenge, grantScope, payload.GrantAccessTokenAudience, payload.Remember, payload.RememberFor)
 		if acceptErr != nil {
 			return respondHydraError(c, acceptErr, "failed to accept consent request")
 		}
@@ -151,8 +152,8 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 	}
 }
 
-func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string, hydraSubject string, consentChallenge string, requestedGrantScope []string, requestedAudience []string, remember bool, rememberFor int64) (*hydraRedirectResponse, error) {
-	consentReq, err := getHydraConsentRequest(ctx, consentChallenge)
+func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, userID string, hydraSubject string, consentChallenge string, requestedGrantScope []string, requestedAudience []string, remember bool, rememberFor int64) (*hydraRedirectResponse, error) {
+	consentReq, err := getHydraConsentRequest(ctx, hydraConfig, consentChallenge)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +187,7 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 		idToken["email"] = dbUser.Email
 	}
 
-	return sendHydraAdminJSON(ctx, http.MethodPut, "/admin/oauth2/auth/requests/consent/accept", url.Values{"consent_challenge": {consentChallenge}}, map[string]any{
+	return sendHydraAdminJSON(ctx, hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/accept", url.Values{"consent_challenge": {consentChallenge}}, map[string]any{
 		"grant_scope":                 grantScope,
 		"grant_access_token_audience": audience,
 		"remember":                    remember,

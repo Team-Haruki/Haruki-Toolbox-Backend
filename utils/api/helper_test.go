@@ -1,6 +1,7 @@
 package api
 
 import (
+	platformRuntimeConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"testing"
@@ -29,21 +30,24 @@ func TestPublicAPIAllowedKeysCopySemantics(t *testing.T) {
 
 func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
 	input := []string{"a", "b"}
+	runtimeConfig := platformRuntimeConfig.New(platformRuntimeConfig.Snapshot{
+		PublicAPIAllowedKeys: input,
+		PrivateAPIToken:      "private-token",
+		PrivateAPIUserAgent:  "private-agent",
+		HarukiProxyUserAgent: "proxy-agent",
+		HarukiProxyVersion:   "v1",
+		HarukiProxySecret:    "proxy-secret",
+		HarukiProxyUnpackKey: "proxy-unpack-key",
+		WebhookJWTSecret:     "webhook-secret",
+		WebhookEnabled:       boolPointer(true),
+	}, nil)
 	helper := NewHarukiToolboxRouterHelpers(
 		nil,
 		nil,
 		nil,
 		nil,
 		nil,
-		input,
-		"private-token",
-		"private-agent",
-		"proxy-agent",
-		"v1",
-		"proxy-secret",
-		"proxy-unpack-key",
-		"webhook-secret",
-		true,
+		runtimeConfig,
 	)
 
 	input[0] = "mutated"
@@ -51,6 +55,10 @@ func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
 	if len(keys) != 2 || keys[0] != "a" || keys[1] != "b" {
 		t.Fatalf("constructor did not copy public keys: %#v", keys)
 	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func TestRuntimeConfigGettersAndSetters(t *testing.T) {

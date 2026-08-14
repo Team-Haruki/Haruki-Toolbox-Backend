@@ -3,11 +3,12 @@ package adminusers
 import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, action string) fiber.Handler {
+func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, action string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
@@ -68,7 +69,7 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			case adminBatchActionBan:
 				affected, err = executeBatchBan(c.Context(), apiHelper, actorUserID, actorRole, targetUser.ID, reason)
 				if err == nil {
-					sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+					sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, hydraConfig, targetUser.ID, targetUser.KratosIdentityID)
 					if sessionClearFailed || oauthRevokeFailed {
 						item.Message, _ = resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed)
 					}
@@ -122,14 +123,14 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 	}
 }
 
-func handleBatchBanUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return handleBatchUserOperation(apiHelper, adminBatchActionBan)
+func handleBatchBanUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
+	return handleBatchUserOperation(apiHelper, hydraConfig, adminBatchActionBan)
 }
 
 func handleBatchUnbanUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return handleBatchUserOperation(apiHelper, adminBatchActionUnban)
+	return handleBatchUserOperation(apiHelper, nil, adminBatchActionUnban)
 }
 
 func handleBatchForceLogoutUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return handleBatchUserOperation(apiHelper, adminBatchActionForceLogout)
+	return handleBatchUserOperation(apiHelper, nil, adminBatchActionForceLogout)
 }

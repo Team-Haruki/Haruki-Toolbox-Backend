@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -33,11 +32,11 @@ type hydraIntrospectionResponse struct {
 	Iat      int64  `json:"iat"`
 }
 
-// OAuth2ClientActiveChecker, when set, is consulted during bearer-token
+// ClientActiveChecker, when provided, is consulted during bearer-token
 // authentication to reject tokens issued to a client that has since been
 // disabled (so disabling a client revokes its access even before its tokens
-// expire). It is wired by the oauth2 module at startup to avoid an import cycle.
-var OAuth2ClientActiveChecker func(ctx context.Context, clientID string) (bool, error)
+// expire).
+type ClientActiveChecker func(ctx context.Context, clientID string) (bool, error)
 
 type hydraIntrospectionError struct {
 	Status  int
@@ -58,12 +57,6 @@ type oauth2BearerAuthFailure struct {
 	Message   string
 	Scope     string
 }
-
-var (
-	hydraIntrospectionHTTPClientMu      sync.RWMutex
-	hydraIntrospectionSharedHTTPClient  *http.Client
-	hydraIntrospectionSharedTimeoutNano int64
-)
 
 func (e *hydraIntrospectionError) Error() string {
 	return fmt.Sprintf("hydra introspection failed with status %d: %s", e.Status, e.Message)
@@ -88,9 +81,9 @@ func buildBearerChallenge(errorCode, description, scope string) string {
 	return strings.Join(parts, ", ")
 }
 
-func VerifyOAuth2Token(db *postgresql.Client, requiredScope string) fiber.Handler {
+func VerifyOAuth2Token(hydraConfig *HydraConfig, db *postgresql.Client, requiredScope string, clientActiveChecker ClientActiveChecker) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		result, authFailure := authenticateOAuth2BearerToken(c, db, requiredScope)
+		result, authFailure := authenticateOAuth2BearerToken(c, hydraConfig, db, requiredScope, clientActiveChecker)
 		if authFailure != nil {
 			return respondOAuth2BearerError(c, authFailure)
 		}
@@ -124,13 +117,13 @@ func applyOAuth2BearerAuthLocals(c fiber.Ctx, result *oauth2BearerAuthResult) {
 	c.Locals("oauth2Scopes", result.Scopes)
 }
 
-func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredScope string) (*oauth2BearerAuthResult, *oauth2BearerAuthFailure) {
+func authenticateOAuth2BearerToken(c fiber.Ctx, hydraConfig *HydraConfig, db *postgresql.Client, requiredScope string, clientActiveChecker ClientActiveChecker) (*oauth2BearerAuthResult, *oauth2BearerAuthFailure) {
 	tokenStr, ok := platformAuthHeader.ExtractBearerToken(c.Get("Authorization"))
 	if !ok {
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, Message: "missing or invalid authorization header"}
 	}
 
-	introspection, err := introspectHydraToken(c.Context(), tokenStr)
+	introspection, err := introspectHydraToken(c.Context(), hydraConfig, tokenStr)
 	if err != nil {
 		harukiLogger.Errorf("OAuth2 introspection failed: %v", err)
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 introspection unavailable"}
@@ -140,7 +133,7 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 	}
 	// Pin the token type: only access tokens may authenticate API calls (reject a
 	// refresh token presented as a bearer token).
-	if introspection.TokenUse != "" && introspection.TokenUse != "access_token" {
+	if introspection.TokenUse != "access_token" {
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "invalid token type"}
 	}
 
@@ -171,9 +164,14 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 subject validation unavailable"}
 	}
 
+	clientID := strings.TrimSpace(introspection.ClientID)
+	if clientID == "" {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token client is missing"}
+	}
+
 	// Reject tokens issued to a client that has since been disabled.
-	if OAuth2ClientActiveChecker != nil && strings.TrimSpace(introspection.ClientID) != "" {
-		active, err := OAuth2ClientActiveChecker(c.Context(), strings.TrimSpace(introspection.ClientID))
+	if clientActiveChecker != nil {
+		active, err := clientActiveChecker(c.Context(), clientID)
 		if err != nil {
 			harukiLogger.Errorf("OAuth2 client active check failed: %v", err)
 			return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 client validation unavailable"}
@@ -192,7 +190,7 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, db *postgresql.Client, requiredS
 		Subject:    subject,
 		UserID:     resolvedUserID,
 		IdentityID: resolvedIdentityID,
-		ClientID:   introspection.ClientID,
+		ClientID:   clientID,
 		Scopes:     scopes,
 	}, nil
 }
@@ -250,8 +248,8 @@ func parseHydraScopeList(scopeRaw string) []string {
 	return strings.Fields(strings.TrimSpace(scopeRaw))
 }
 
-func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectionResponse, error) {
-	targetURL, err := HydraAdminEndpoint("/admin/oauth2/introspect")
+func introspectHydraToken(ctx context.Context, hydraConfig *HydraConfig, token string) (*hydraIntrospectionResponse, error) {
+	targetURL, err := hydraConfig.AdminEndpoint("/admin/oauth2/introspect")
 	if err != nil {
 		return nil, err
 	}
@@ -266,11 +264,11 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	if clientID, clientSecret := HydraClientCredentials(); clientID != "" {
+	if clientID, clientSecret := hydraConfig.ClientCredentials(); clientID != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 
-	resp, err := hydraIntrospectionHTTPClient().Do(req)
+	resp, err := hydraConfig.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call hydra introspection endpoint: %w", err)
 	}
@@ -302,29 +300,6 @@ func introspectHydraToken(ctx context.Context, token string) (*hydraIntrospectio
 		return nil, fmt.Errorf("failed to decode hydra introspection payload: %w", err)
 	}
 	return &parsed, nil
-}
-
-func hydraIntrospectionHTTPClient() *http.Client {
-	timeout := HydraRequestTimeout()
-	timeoutNano := timeout.Nanoseconds()
-
-	hydraIntrospectionHTTPClientMu.RLock()
-	if hydraIntrospectionSharedHTTPClient != nil && hydraIntrospectionSharedTimeoutNano == timeoutNano {
-		client := hydraIntrospectionSharedHTTPClient
-		hydraIntrospectionHTTPClientMu.RUnlock()
-		return client
-	}
-	hydraIntrospectionHTTPClientMu.RUnlock()
-
-	client := &http.Client{Timeout: timeout}
-
-	hydraIntrospectionHTTPClientMu.Lock()
-	defer hydraIntrospectionHTTPClientMu.Unlock()
-	if hydraIntrospectionSharedHTTPClient == nil || hydraIntrospectionSharedTimeoutNano != timeoutNano {
-		hydraIntrospectionSharedHTTPClient = client
-		hydraIntrospectionSharedTimeoutNano = timeoutNano
-	}
-	return hydraIntrospectionSharedHTTPClient
 }
 
 func stringifyAny(value any) string {

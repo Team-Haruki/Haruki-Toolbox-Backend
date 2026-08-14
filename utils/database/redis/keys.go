@@ -4,7 +4,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"strconv"
 	"strings"
 )
@@ -52,32 +51,43 @@ const (
 	KeyActionEvent           = "event"
 )
 
-func BuildBotVerifyCodeKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, hashNormalizedIdentifier(qq))
+// KeyBuilder owns the startup secret used to pseudonymize sensitive
+// identifiers in Redis keys. The zero value intentionally uses the historical
+// SHA-256 fallback so tests and standalone utilities remain deterministic.
+type KeyBuilder struct {
+	identifierHashSecret string
 }
 
-func BuildBotVerifyAttemptKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, hashNormalizedIdentifier(qq))
+func NewKeyBuilder(identifierHashSecret string) KeyBuilder {
+	return KeyBuilder{identifierHashSecret: identifierHashSecret}
+}
+
+func (b KeyBuilder) BuildBotVerifyCodeKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, b.hashNormalizedIdentifier(qq))
+}
+
+func (b KeyBuilder) BuildBotVerifyAttemptKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, b.hashNormalizedIdentifier(qq))
 }
 
 func BuildBotSendMailRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionIP, clientIP)
 }
 
-func BuildBotSendMailRateLimitTargetKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotSendMailRateLimitTargetKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(qq))
 }
 
-func BuildBotRegisterRateLimitTargetKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotRegisterRateLimitTargetKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, b.hashNormalizedIdentifier(qq))
 }
 
-func BuildEmailVerifyKey(email string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, hashNormalizedIdentifier(email))
+func (b KeyBuilder) BuildEmailVerifyKey(email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, b.hashNormalizedIdentifier(email))
 }
 
-func BuildResetPasswordKey(email string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, hashNormalizedIdentifier(email))
+func (b KeyBuilder) BuildResetPasswordKey(email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, b.hashNormalizedIdentifier(email))
 }
 
 func BuildGameAccountVerifyKey(userID, server, gameUserID string) string {
@@ -122,8 +132,8 @@ func BuildQQMailSendRateLimitUserKey(userID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "qq-mail", KeyActionSend, "user", strings.TrimSpace(userID))
 }
 
-func BuildQQMailSendRateLimitTargetKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "qq-mail", KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildQQMailSendRateLimitTargetKey(qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "qq-mail", KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(qq))
 }
 
 func BuildStatusTokenKey(token string) string {
@@ -138,8 +148,8 @@ func BuildStatusTokenBindingKey(token string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionStatusToken, token, KeyActionBinding)
 }
 
-func BuildOTPAttemptKey(email string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionAttempt, hashNormalizedIdentifier(email))
+func (b KeyBuilder) BuildOTPAttemptKey(email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionAttempt, b.hashNormalizedIdentifier(email))
 }
 
 func BuildOTPVerifyAttemptIPKey(clientIP string) string {
@@ -154,32 +164,32 @@ func BuildEmailVerifySendRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, KeyDimensionIP, clientIP)
 }
 
-func BuildEmailVerifySendRateLimitTargetKey(email string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(email))
+func (b KeyBuilder) BuildEmailVerifySendRateLimitTargetKey(email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(email))
 }
 
 func BuildResetPasswordSendRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionSend, KeyDimensionIP, clientIP)
 }
 
-func BuildResetPasswordSendRateLimitTargetKey(email string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionSend, KeyDimensionUser, hashNormalizedIdentifier(email))
+func (b KeyBuilder) BuildResetPasswordSendRateLimitTargetKey(email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(email))
 }
 
 func BuildResetPasswordApplyRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionAttempt, KeyDimensionIP, clientIP)
 }
 
-func BuildResetPasswordApplyRateLimitTargetKey(target string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionAttempt, KeyDimensionUser, hashNormalizedIdentifier(target))
+func (b KeyBuilder) BuildResetPasswordApplyRateLimitTargetKey(target string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionAttempt, KeyDimensionUser, b.hashNormalizedIdentifier(target))
 }
 
 func BuildLoginRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionIP, clientIP)
 }
 
-func BuildLoginRateLimitTargetKey(email string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionUser, hashNormalizedIdentifier(email))
+func (b KeyBuilder) BuildLoginRateLimitTargetKey(email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionUser, b.hashNormalizedIdentifier(email))
 }
 
 func BuildUploadIngressRateLimitKey(windowUnix int64, bucket string) string {
@@ -235,9 +245,9 @@ func buildKey(parts ...string) string {
 	return strings.Join(parts, ":")
 }
 
-func hashNormalizedIdentifier(raw string) string {
+func (b KeyBuilder) hashNormalizedIdentifier(raw string) string {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
-	if secret := strings.TrimSpace(harukiConfig.Cfg.UserSystem.SessionSignToken); secret != "" {
+	if secret := strings.TrimSpace(b.identifierHashSecret); secret != "" {
 		mac := hmac.New(sha256.New, []byte(secret))
 		_, _ = mac.Write([]byte(normalized))
 		return hex.EncodeToString(mac.Sum(nil))

@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 )
 
 func (h *DataHandler) notifyHMESBirthdayEvent(ctx context.Context, event *BirthdayMonitorEvent) error {
-	cfg := config.Cfg.Subscription
-	if event == nil || strings.TrimSpace(cfg.HMESInternalBaseURL) == "" {
+	cfg := h.BirthdaySubscription
+	if event == nil || strings.TrimSpace(cfg.hmesInternalBaseURL) == "" {
 		if event != nil {
 			h.Logger.Warnf("birthday subscription HMES notify skipped: hmes_internal_base_url is not configured event=%s subscription=%s", event.EventID, event.SubscriptionID)
 		}
@@ -27,8 +25,8 @@ func (h *DataHandler) notifyHMESBirthdayEvent(ctx context.Context, event *Birthd
 	if err != nil {
 		return err
 	}
-	endpoint := strings.TrimRight(cfg.HMESInternalBaseURL, "/") + "/internal/events"
-	status, _, respBody, err := h.HttpClient.Request(ctx, "POST", endpoint, subscriptionJSONHeaders(cfg.HMESInternalToken, cfg.UserAgent), body)
+	endpoint := strings.TrimRight(cfg.hmesInternalBaseURL, "/") + "/internal/events"
+	status, _, respBody, err := h.HttpClient.Request(ctx, "POST", endpoint, subscriptionJSONHeaders(cfg.hmesInternalToken, cfg.userAgent), body)
 	if err != nil {
 		return err
 	}

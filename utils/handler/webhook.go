@@ -3,14 +3,13 @@ package handler
 import (
 	"context"
 	"fmt"
-	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
 	"io"
 	"net"
 	stdhttp "net/http"
+	"net/netip"
 	urlpkg "net/url"
 	"strings"
 	"sync"
@@ -20,6 +19,13 @@ import (
 const webhookCallbackTimeout = 10 * time.Second
 
 var webhookIPAddrLookup = net.DefaultResolver.LookupIPAddr
+
+var webhookBlockedPublicPrefixes = []netip.Prefix{
+	// RFC 6598 shared address space is also used by Tailscale. Go's
+	// net.IP.IsPrivate intentionally does not classify it as private, but a
+	// webhook must never use it to reach services on the deployment overlay.
+	netip.MustParsePrefix("100.64.0.0/10"),
+}
 
 // webhookSafeDialContext resolves the target host at connection time and dials
 // only public IPs, defeating DNS-rebinding: validating the URL's DNS up front is
@@ -113,7 +119,20 @@ func isWebhookCallbackHostAllowed(host string) bool {
 }
 
 func isPrivateOrLocalIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified()
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	address, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return true
+	}
+	address = address.Unmap()
+	for _, prefix := range webhookBlockedPublicPrefixes {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func ValidateWebhookCallbackURL(rawURL string) (string, bool) {
@@ -219,26 +238,6 @@ func parseWebhookCallback(cb any) (string, string, bool) {
 	}
 }
 
-func oauth2WebhookAuthorizedClientIDs(sessions []oauth2Module.HydraConsentSession) []string {
-	clientIDs := make([]string, 0, len(sessions))
-	seen := make(map[string]struct{}, len(sessions))
-	for _, session := range sessions {
-		if !harukiOAuth2.HasScope(session.GrantScope, harukiOAuth2.ScopeGameDataRead) {
-			continue
-		}
-		clientID := strings.TrimSpace(session.ConsentRequest.Client.ClientID)
-		if clientID == "" {
-			continue
-		}
-		if _, ok := seen[clientID]; ok {
-			continue
-		}
-		seen[clientID] = struct{}{}
-		clientIDs = append(clientIDs, clientID)
-	}
-	return clientIDs
-}
-
 func applyWebhookPlaceholders(rawURL string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) string {
 	url := strings.ReplaceAll(rawURL, "{user_id}", fmt.Sprint(userID))
 	url = strings.ReplaceAll(url, "{server}", string(server))
@@ -288,10 +287,10 @@ func (h *DataHandler) CallOAuth2Webhook(
 	server utils.SupportedDataUploadServer,
 	dataType utils.UploadDataType,
 ) {
-	if h == nil || !h.WebhookEnabled || h.DBManager == nil || h.DBManager.DB == nil {
+	if h == nil || !h.WebhookEnabled || h.DBManager == nil || h.DBManager.DB == nil || h.OAuth2WebhookAuthorizer == nil {
 		return
 	}
-	if !oauth2Module.HydraOAuthManagementEnabled() {
+	if !h.OAuth2WebhookAuthorizer.Enabled() {
 		return
 	}
 
@@ -306,16 +305,11 @@ func (h *DataHandler) CallOAuth2Webhook(
 		return
 	}
 
-	subjects := oauth2Module.HydraSubjectsForUser(owner.UserID, owner.KratosIdentityID)
-	if len(subjects) == 0 {
-		return
-	}
-	sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(ctx, subjects)
+	clientIDs, err := h.OAuth2WebhookAuthorizer.AuthorizedClientIDs(ctx, owner.UserID, owner.KratosIdentityID)
 	if err != nil {
 		h.Logger.Warnf("Failed to query OAuth2 consent sessions for webhook: owner=%s err=%v", owner.UserID, err)
 		return
 	}
-	clientIDs := oauth2WebhookAuthorizedClientIDs(sessions)
 	if len(clientIDs) == 0 {
 		return
 	}

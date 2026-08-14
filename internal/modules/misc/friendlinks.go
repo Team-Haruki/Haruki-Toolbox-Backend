@@ -1,8 +1,6 @@
 package misc
 
 import (
-	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 
@@ -19,7 +17,7 @@ type FriendLinkData struct {
 	Tags        []string `json:"tags"`
 }
 
-func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, assets AssetsConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		links, err := apiHelper.DBManager.DB.FriendLink.Query().
@@ -39,7 +37,7 @@ func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			}
 			var avatarPath string
 			if link.Avatar != "" {
-				avatarPath = fmt.Sprintf("%s/friend-links/%s", config.Cfg.UserSystem.AvatarURL, link.Avatar)
+				avatarPath = assets.FriendLinkURL(link.Avatar)
 			}
 			result = append(result, FriendLinkData{
 				ID:          link.ID,
@@ -54,7 +52,7 @@ func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 	}
 }
 
-func registerFriendLinksRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerFriendLinksRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, assets AssetsConfig) {
 	api := apiHelper.Router.Group("/api/misc")
-	api.Get("/friend_links", handleGetFriendLinks(apiHelper))
+	api.Get("/friend_links", handleGetFriendLinks(apiHelper, assets))
 }

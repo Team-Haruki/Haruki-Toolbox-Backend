@@ -44,7 +44,7 @@ func TestVerifyEmailOTPConsumesCode(t *testing.T) {
 	apiHelper, redisManager := newRegisterOTPHelper(t)
 	email := "register-otp@example.com"
 	code := "123456"
-	key := harukiRedis.BuildEmailVerifyKey(email)
+	key := redisManager.KeyBuilder().BuildEmailVerifyKey(email)
 
 	if err := redisManager.SetCache(context.Background(), key, code, 5*time.Minute); err != nil {
 		t.Fatalf("seed code key error: %v", err)
@@ -87,5 +87,58 @@ func TestVerifyEmailOTPConsumesCode(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("second verify status = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
+	}
+}
+
+func TestVerifyEmailOTPRejectsAfterAttemptLimit(t *testing.T) {
+	t.Parallel()
+
+	apiHelper, redisManager := newRegisterOTPHelper(t)
+	email := "register-attempt-limit@example.com"
+	code := "123456"
+	key := redisManager.KeyBuilder().BuildEmailVerifyKey(email)
+	if err := redisManager.SetCache(context.Background(), key, code, 5*time.Minute); err != nil {
+		t.Fatalf("seed code key error: %v", err)
+	}
+
+	app := fiber.New()
+	app.Get("/verify/:otp", func(c fiber.Ctx) error {
+		ok, err := verifyEmailOTP(c, apiHelper, email, c.Params("otp"))
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "redis error")
+		}
+		if !ok {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid or expired verification code")
+		}
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	for attempt := 0; attempt < registerOTPAttemptLimit; attempt++ {
+		req := httptest.NewRequest(http.MethodGet, "/verify/000000", nil)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("wrong attempt %d error: %v", attempt+1, err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("wrong attempt %d status = %d, want %d", attempt+1, resp.StatusCode, fiber.StatusBadRequest)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/verify/"+code, nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("attempt after limit error: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("attempt after limit status = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
+	}
+	exists, err := redisManager.Redis.Exists(context.Background(), key).Result()
+	if err != nil {
+		t.Fatalf("exists check error: %v", err)
+	}
+	if exists != 1 {
+		t.Fatal("attempt-limited verification unexpectedly consumed the code")
 	}
 }

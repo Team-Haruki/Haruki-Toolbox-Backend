@@ -5,10 +5,10 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
-func RegisterUserInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	meHandler, meRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedUser(apiHelper), handleGetMe(apiHelper))
+func RegisterUserInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userDataBuilder harukiAPIHelper.UserDataBuilder) {
+	meHandler, meRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedUser(apiHelper), handleGetMe(apiHelper, userDataBuilder))
 	apiHelper.Router.Get("/api/user/me", meHandler, meRest...)
 
-	settingsHandler, settingsRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleGetSettings(apiHelper))
+	settingsHandler, settingsRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleGetSettings(apiHelper, userDataBuilder))
 	apiHelper.Router.Get("/api/user/:toolbox_user_id/get-settings", settingsHandler, settingsRest...)
 }

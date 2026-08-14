@@ -14,7 +14,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleListHydraOAuthClients(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleListHydraOAuthClients(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		windowHours, err := parseAdminOAuthClientStatsWindowHours(c.Query("hours"))
 		if err != nil {
@@ -34,7 +34,7 @@ func handleListHydraOAuthClients(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 		now := adminNowUTC()
 		windowStart := now.Add(-time.Duration(windowHours) * time.Hour)
-		hydraClients, err := oauth2Module.ListHydraOAuthClients(c.Context())
+		hydraClients, err := oauth2Module.ListHydraOAuthClients(c.Context(), hydraConfig)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientList, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientsFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth clients")
@@ -102,7 +102,7 @@ func handleListHydraOAuthClients(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 	}
 }
 
-func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		_, _, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
@@ -122,7 +122,7 @@ func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 				return harukiAPIHelper.ErrorInternal(c, "failed to create oauth client")
 			}
 		}
-		createdClient, err := oauth2Module.CreateHydraOAuthClient(c.Context(), oauth2Module.HydraOAuthClientUpsertInput{
+		createdClient, err := oauth2Module.CreateHydraOAuthClient(c.Context(), hydraConfig, oauth2Module.HydraOAuthClientUpsertInput{
 			ClientID:     payload.ClientID,
 			ClientSecret: plainSecret,
 			ClientName:   payload.Name,
@@ -159,7 +159,7 @@ func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	}
 }
 
-func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
@@ -176,7 +176,7 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
-		updatedClient, err := oauth2Module.SetHydraOAuthClientActive(c.Context(), clientID, active)
+		updatedClient, err := oauth2Module.SetHydraOAuthClientActive(c.Context(), hydraConfig, clientID, active)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
@@ -191,7 +191,7 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 	}
 }
 
-func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
@@ -208,7 +208,7 @@ func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
-		currentClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), clientID)
+		currentClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
@@ -217,7 +217,7 @@ func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
 		}
-		updatedClient, err := oauth2Module.UpdateHydraOAuthClient(c.Context(), clientID, oauth2Module.HydraOAuthClientUpsertInput{
+		updatedClient, err := oauth2Module.UpdateHydraOAuthClient(c.Context(), hydraConfig, clientID, oauth2Module.HydraOAuthClientUpsertInput{
 			ClientID:     clientID,
 			ClientName:   payload.Name,
 			ClientType:   payload.ClientType,
@@ -243,7 +243,7 @@ func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	}
 }
 
-func handleRotateHydraOAuthClientSecret(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleRotateHydraOAuthClientSecret(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
@@ -260,7 +260,7 @@ func handleRotateHydraOAuthClientSecret(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRotateSecret, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonGenerateClientSecretFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to rotate oauth client secret")
 		}
-		if _, err := oauth2Module.RotateHydraOAuthClientSecret(c.Context(), clientID, plainSecret); err != nil {
+		if _, err := oauth2Module.RotateHydraOAuthClientSecret(c.Context(), hydraConfig, clientID, plainSecret); err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRotateSecret, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorNotFound(c, "client not found")
@@ -274,7 +274,7 @@ func handleRotateHydraOAuthClientSecret(apiHelper *harukiAPIHelper.HarukiToolbox
 	}
 }
 
-func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
@@ -291,7 +291,7 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
-		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), clientID); err != nil {
+		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorNotFound(c, "client not found")
@@ -301,22 +301,22 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 		deletedAuthorizations := 0
 		if options.DeleteAuthorizations {
-			if records, listErr := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, clientID); listErr == nil {
+			if records, listErr := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID); listErr == nil {
 				deletedAuthorizations = len(records)
 			}
-			if err := oauth2Module.RevokeHydraConsentSessionsByClient(c.Context(), clientID); err != nil {
+			if err := oauth2Module.RevokeHydraConsentSessionsByClient(c.Context(), hydraConfig, clientID); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteAuthorizationsFailed, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorInternal(c, "failed to delete oauth authorizations")
 			}
 		}
 		deletedTokens := 0
 		if options.DeleteTokens {
-			if err := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), clientID); err != nil {
+			if err := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteTokensFailed, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorInternal(c, "failed to delete oauth tokens")
 			}
 		}
-		if err := oauth2Module.DeleteHydraOAuthClient(c.Context(), clientID); err != nil {
+		if err := oauth2Module.DeleteHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete oauth client")
 		}

@@ -14,6 +14,15 @@ import (
 
 func handleListAdminWebhooks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+		if adminCoreModule.NormalizeRole(actorRole) != adminCoreModule.RoleSuperAdmin {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionList, adminWebhookTargetType, adminWebhookTargetIDAll, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata("permission_denied", nil))
+			return harukiAPIHelper.ErrorForbidden(c, "super admin access required")
+		}
+
 		rows, err := apiHelper.DBManager.DB.WebhookEndpoint.Query().
 			WithSubscriptions().
 			Order(webhookendpoint.ByCreatedAt(sql.OrderDesc()), webhookendpoint.ByID(sql.OrderAsc())).

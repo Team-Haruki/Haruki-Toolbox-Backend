@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
 	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
@@ -60,7 +59,7 @@ func hasProfileUpdatePayload(payload harukiAPIHelper.UpdateProfilePayload) bool 
 	return payload.AvatarBase64 != nil
 }
 
-func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, profileConfig Config) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -150,12 +149,12 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image dimensions are too large", nil)
 			}
 			avatarFileName = uuid.NewString() + ext
-			if err := ensureAvatarSaveDir(config.Cfg.UserSystem.AvatarSaveDir); err != nil {
+			if err := ensureAvatarSaveDir(profileConfig.AvatarSaveDir()); err != nil {
 				harukiLogger.Errorf("Failed to prepare avatar directory: %v", err)
 				reason = "save_avatar_failed"
 				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
 			}
-			savePath := buildAvatarFilePath(config.Cfg.UserSystem.AvatarSaveDir, avatarFileName)
+			savePath := buildAvatarFilePath(profileConfig.AvatarSaveDir(), avatarFileName)
 			if err := os.WriteFile(savePath, decodedAvatar, 0644); err != nil {
 				harukiLogger.Errorf("Failed to save avatar file: %v", err)
 				reason = "save_avatar_failed"
@@ -177,14 +176,14 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
 		}
 		if updatedAvatar && oldAvatarPath != "" && oldAvatarPath != avatarFileName {
-			oldAvatarFullPath := buildAvatarFilePath(config.Cfg.UserSystem.AvatarSaveDir, oldAvatarPath)
+			oldAvatarFullPath := buildAvatarFilePath(profileConfig.AvatarSaveDir(), oldAvatarPath)
 			if err := removeAvatarFileIfExists(oldAvatarFullPath); err != nil {
 				harukiLogger.Warnf("Failed to cleanup old avatar file for user %s: %v", userID, err)
 			}
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{}
 		if payload.AvatarBase64 != nil {
-			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.AvatarURL, "/"), avatarFileName)
+			url := profileConfig.AvatarURL(avatarFileName)
 			ud.AvatarPath = &url
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
@@ -313,14 +312,14 @@ func handleChangePasswordViaKratos(
 	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
 }
 
-func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, profileConfig Config) {
 	if apiHelper == nil || apiHelper.Router == nil || apiHelper.SessionHandler == nil {
 		return
 	}
 
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
-	profileHandler, profileRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleUpdateProfile(apiHelper))
+	profileHandler, profileRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleUpdateProfile(apiHelper, profileConfig))
 	r.Put("/profile", profileHandler, profileRest...)
 	if apiHelper.SessionHandler.UsesManagedBrowserAuth() {
 		r.Put("/change-password", userauth.LegacyAuthDisabledHandler())

@@ -14,8 +14,8 @@ import (
 	"github.com/bytedance/sonic"
 )
 
-func getHydraLoginRequest(ctx context.Context, challenge string) (*hydraLoginRequestResponse, error) {
-	response, err := sendHydraAdminRequest(ctx, http.MethodGet, "/admin/oauth2/auth/requests/login", url.Values{"login_challenge": {challenge}}, nil)
+func getHydraLoginRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, challenge string) (*hydraLoginRequestResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodGet, "/admin/oauth2/auth/requests/login", url.Values{"login_challenge": {challenge}}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -26,8 +26,8 @@ func getHydraLoginRequest(ctx context.Context, challenge string) (*hydraLoginReq
 	return &parsed, nil
 }
 
-func getHydraConsentRequest(ctx context.Context, challenge string) (*hydraConsentRequestResponse, error) {
-	response, err := sendHydraAdminRequest(ctx, http.MethodGet, "/admin/oauth2/auth/requests/consent", url.Values{"consent_challenge": {challenge}}, nil)
+func getHydraConsentRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, challenge string) (*hydraConsentRequestResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodGet, "/admin/oauth2/auth/requests/consent", url.Values{"consent_challenge": {challenge}}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -38,8 +38,8 @@ func getHydraConsentRequest(ctx context.Context, challenge string) (*hydraConsen
 	return &parsed, nil
 }
 
-func sendHydraAdminJSON(ctx context.Context, method string, endpointPath string, query url.Values, payload map[string]any) (*hydraRedirectResponse, error) {
-	response, err := sendHydraAdminRequest(ctx, method, endpointPath, query, payload)
+func sendHydraAdminJSON(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, query url.Values, payload map[string]any) (*hydraRedirectResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, method, endpointPath, query, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +50,8 @@ func sendHydraAdminJSON(ctx context.Context, method string, endpointPath string,
 	return &parsed, nil
 }
 
-func sendHydraAdminRequest(ctx context.Context, method string, endpointPath string, query url.Values, payload map[string]any) ([]byte, error) {
-	targetURL, err := harukiOAuth2.HydraAdminEndpoint(endpointPath)
+func sendHydraAdminRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, query url.Values, payload map[string]any) ([]byte, error) {
+	targetURL, err := hydraConfig.AdminEndpoint(endpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -75,11 +75,11 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if clientID, clientSecret := harukiOAuth2.HydraClientCredentials(); clientID != "" {
+	if clientID, clientSecret := hydraConfig.ClientCredentials(); clientID != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 
-	resp, err := hydraHTTPClient().Do(req)
+	resp, err := hydraConfig.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call hydra: %w", err)
 	}
@@ -107,21 +107,4 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 	}
 
 	return body, nil
-}
-
-func hydraHTTPClient() *http.Client {
-	timeout := harukiOAuth2.HydraRequestTimeout()
-	timeoutNano := timeout.Nanoseconds()
-
-	hydraHTTPClientMu.Lock()
-	defer hydraHTTPClientMu.Unlock()
-
-	if hydraSharedHTTPClient != nil && hydraSharedTimeoutNano == timeoutNano {
-		return hydraSharedHTTPClient
-	}
-
-	client := &http.Client{Timeout: timeout}
-	hydraSharedHTTPClient = client
-	hydraSharedTimeoutNano = timeoutNano
-	return hydraSharedHTTPClient
 }

@@ -29,7 +29,7 @@
 - 旧 `data/suite_structures.json` 已移除，`restore_suite.structures_file` 示例配置已指向 `./data/suite_user.avsc`。
 - compact restore 的重复展开算法已抽到 `utils/compactrestore`，查询侧 `utils/api/data` 只保留 BSON 适配。
 - 未接入 runtime 的 `utils/nuverse` master restorer 已移除；本项目当前只保留 suite restorer。
-- suite restore 已增加统一 `RestoreSuite` 门面，上传 DB 预处理和第三方同步恢复路径都通过同一入口调用。
+- suite restore 已增加实例化 `SuiteRestoreService` 门面，上传 DB 预处理和第三方同步恢复路径共享同一服务实例。
 - Docker workflow PR path filter 已清理旧 Rust 路径并改为 Go 项目真实路径。
 - `internal/modules/usercore` 已增加组合 route guard helper，并替换等价的用户路由 guard 链。
 - `utils/orderedmsgpack` 已完成解码硬化，并移除内部自定义 `OrderedMap` msgpack ext；生产入口只保留标准 msgpack 解码。
@@ -76,7 +76,8 @@
 
 ### 2.1 启动入口克制
 
-`main.go` 没有塞入业务逻辑，只加载配置并调用 `internal/bootstrap.Run`。
+`main.go` 没有塞入业务逻辑，只加载配置并按
+`internal/bootstrap.Build -> Application.Serve -> Application.Close` 驱动进程生命周期。
 
 这符合当前架构约束，也让后续重构可以集中在 bootstrap 内部，而不影响程序入口。
 
@@ -300,12 +301,11 @@ Docker workflow 的 PR path filter 曾包含 `Cargo.toml`、`Cargo.lock`、`src/
 
 ```go
 if dataType == utils.UploadDataTypeSuite {
-    data = cleanSuite(data)
-    if shouldRestoreSuiteForDB(server) {
-        if r := getSuiteRestorer(server); r != nil {
-            data = r.RestoreFields(data)
-        }
-    }
+    data, report, err = h.SuiteRestoreService.Restore(
+        server,
+        data,
+        SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase},
+    )
 }
 ```
 
@@ -485,11 +485,17 @@ go run ./cmd/nuverse-restore-compare \
 
 如果未来 master data 也要恢复，应另开阶段评估，不混入 suite upload restore。
 
-### 阶段 5：已实现统一 `RestoreSuite` 门面
+### 阶段 5：已实现实例化 `SuiteRestoreService` 门面
 
 上传路径当前通过统一入口恢复 suite 数据：
 
 ```go
+type SuiteRestoreServiceOptions struct {
+    StructuresFile  map[string]string
+    EnableRegions   []string
+    SuiteRemoveKeys []string
+}
+
 type SuiteRestoreReport struct {
     Region         string
     Source         string
@@ -500,12 +506,14 @@ type SuiteRestoreReport struct {
     FailedFields   []string
 }
 
-func RestoreSuite(
+func (s *SuiteRestoreService) Restore(
     server utils.SupportedDataUploadServer,
     data map[string]any,
     options SuiteRestoreOptions,
 ) (map[string]any, SuiteRestoreReport, error)
 ```
+
+`bootstrap.Build` 为每个应用实例构造一次服务并加载 schema；同一实例显式注入上传 `DataHandler`、第三方 `DataSyncer`、健康检查和启动状态日志。配置集合在构造时复制，加载失败只记录为 degraded 状态，不阻止应用完成构建。
 
 内部包裹 StructTool/Avro schema 生成的 `utils/suiterestore.Restorer`，并保留两种 purpose：
 

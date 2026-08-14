@@ -71,7 +71,7 @@ func checkLoginRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRo
 	ctx := c.Context()
 	normalizedEmail := platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildLoginRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildLoginRateLimitTargetKey(normalizedEmail)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildLoginRateLimitTargetKey(normalizedEmail)
 
 	values, err := apiHelper.DBManager.Redis.Redis.Eval(
 		ctx,
@@ -105,7 +105,7 @@ func releaseLoginRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.Ha
 	ctx := c.Context()
 	normalizedEmail := platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildLoginRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildLoginRateLimitTargetKey(normalizedEmail)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildLoginRateLimitTargetKey(normalizedEmail)
 	_, err := apiHelper.DBManager.Redis.Redis.Eval(ctx, loginRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
 	return err
 }

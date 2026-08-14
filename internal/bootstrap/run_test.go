@@ -5,6 +5,7 @@ import (
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"io"
 	"os"
 	"path/filepath"
@@ -127,6 +128,31 @@ func newBootstrapSQLMockClient(t *testing.T) (*dbManager.Client, sqlmock.Sqlmock
 func expectSchemaExistsQuery(mock sqlmock.Sqlmock, query string, exists bool) {
 	rows := sqlmock.NewRows([]string{"exists"}).AddRow(exists)
 	mock.ExpectQuery(regexp.QuoteMeta(query)).WillReturnRows(rows)
+}
+
+func TestPrepareToolboxDatabaseValidatesAndCleansUpManualSchema(t *testing.T) {
+	client, mock := newBootstrapSQLMockClient(t)
+	cfg := harukiConfig.Config{}
+	logger := harukiLogger.NewLogger("BootstrapTest", "INFO", io.Discard)
+
+	rows := sqlmock.NewRows([]string{"to_regclass"}).AddRow("users")
+	mock.ExpectQuery(regexp.QuoteMeta(checkUsersTableExistsSQL)).WillReturnRows(rows)
+	expectSchemaExistsQuery(mock, checkUsersEmailLowerUniqueIndexExistsSQL, true)
+	expectSchemaExistsQuery(mock, checkUsersKratosIdentityColumnExistsSQL, true)
+	expectSchemaExistsQuery(mock, checkUsersKratosIdentityUniqueIndexExistsSQL, true)
+	rows = sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_endpoints")
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookEndpointsTableExistsSQL)).WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_subscriptions")
+	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookSubscriptionsTableExistsSQL)).WillReturnRows(rows)
+	expectSchemaExistsQuery(mock, checkWebhookEndpointsEnabledColumnExistsSQL, true)
+	mock.ExpectExec("DELETE FROM").WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 2))
+
+	if err := prepareToolboxDatabase(cfg, client, logger); err != nil {
+		t.Fatalf("prepareToolboxDatabase returned error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
 }
 
 func TestEnsureUsersSchemaCompatibilityValidatesWithoutDDLWhenAutoMigrateDisabled(t *testing.T) {
@@ -280,6 +306,36 @@ func TestValidateUserSystemConfig(t *testing.T) {
 		cfg.UserSystem.AuthProxySessionHeader = "X-Auth-Proxy-Session-Id"
 		if err := validateUserSystemConfig(cfg); err != nil {
 			t.Fatalf("expected complete auth proxy config to pass, got %v", err)
+		}
+	})
+}
+
+func TestValidateBackendConfigRequiresExactTrustedProxyAddresses(t *testing.T) {
+	t.Run("trust proxy disabled ignores list", func(t *testing.T) {
+		cfg := harukiConfig.Config{}
+		cfg.Backend.TrustProxies = []string{"10.0.0.0/8"}
+		if err := validateBackendConfig(cfg); err != nil {
+			t.Fatalf("disabled trust proxy should ignore list: %v", err)
+		}
+	})
+
+	t.Run("broad networks rejected", func(t *testing.T) {
+		cfg := harukiConfig.Config{}
+		cfg.Backend.EnableTrustProxy = true
+		cfg.Backend.ProxyHeader = "X-Forwarded-For"
+		cfg.Backend.TrustProxies = []string{"100.64.0.0/10"}
+		if err := validateBackendConfig(cfg); err == nil {
+			t.Fatal("expected a shared trusted proxy network to be rejected")
+		}
+	})
+
+	t.Run("exact edge addresses accepted", func(t *testing.T) {
+		cfg := harukiConfig.Config{}
+		cfg.Backend.EnableTrustProxy = true
+		cfg.Backend.ProxyHeader = "X-Forwarded-For"
+		cfg.Backend.TrustProxies = []string{"127.0.0.1", "10.42.0.7/32", "::1/128"}
+		if err := validateBackendConfig(cfg); err != nil {
+			t.Fatalf("exact edge proxy addresses should pass: %v", err)
 		}
 	})
 }

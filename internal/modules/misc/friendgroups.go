@@ -1,8 +1,6 @@
 package misc
 
 import (
-	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
@@ -12,7 +10,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, assets AssetsConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		groups, err := apiHelper.DBManager.DB.Group.Query().
@@ -37,10 +35,10 @@ func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 				var avatarPath string
 				var bgPath string
 				if item.Avatar != nil {
-					avatarPath = fmt.Sprintf("%s/friend-links/%s", config.Cfg.UserSystem.AvatarURL, *item.Avatar)
+					avatarPath = assets.FriendLinkURL(*item.Avatar)
 				}
 				if item.Bg != nil {
-					bgPath = fmt.Sprintf("%s/friend-links/%s", config.Cfg.UserSystem.AvatarURL, *item.Bg)
+					bgPath = assets.FriendLinkURL(*item.Bg)
 				}
 				items = append(items, FriendGroupItem{
 					Name:      item.Name,
@@ -59,7 +57,7 @@ func handleGetFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 	}
 }
 
-func registerFriendGroupsRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerFriendGroupsRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, assets AssetsConfig) {
 	api := apiHelper.Router.Group("/api/misc")
-	api.Get("/friend_groups", handleGetFriendGroups(apiHelper))
+	api.Get("/friend_groups", handleGetFriendGroups(apiHelper, assets))
 }

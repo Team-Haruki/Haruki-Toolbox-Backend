@@ -2,8 +2,6 @@ package oauth2
 
 import (
 	"fmt"
-	"net/http"
-	"sync"
 )
 
 type hydraOAuthClientDetails struct {
@@ -86,12 +84,6 @@ type hydraRequestError struct {
 	Status  int
 	Message string
 }
-
-var (
-	hydraHTTPClientMu      sync.RWMutex
-	hydraSharedHTTPClient  *http.Client
-	hydraSharedTimeoutNano int64
-)
 
 func (e *hydraRequestError) Error() string {
 	return fmt.Sprintf("hydra request failed with status %d: %s", e.Status, e.Message)

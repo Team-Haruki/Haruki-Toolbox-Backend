@@ -7,8 +7,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+func RegisterAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	registerAdminSelfRoutes(apiHelper, adminGroup)
 	registerAdminConfigRoutes(apiHelper, adminGroup)
 }

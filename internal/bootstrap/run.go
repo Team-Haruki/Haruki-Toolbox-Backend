@@ -2,157 +2,68 @@ package bootstrap
 
 import (
 	"context"
-	"database/sql"
-	entsql "entgo.io/ent/dialect/sql"
-	"errors"
 	"fmt"
-	harukiAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/api"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiDatabaseManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
-	harukiMongo "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/mongo"
-	neopgManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
-	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	perfdebug "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfdebug"
-	harukiSekaiAPIClient "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
-	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
-	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
-	"net/http"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
+	harukiAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/api"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	iosModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/ios"
+	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
+	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
+	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
+	userProfileModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
+	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
+	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+
 	"github.com/gofiber/fiber/v3"
-	_ "github.com/lib/pq"
 )
 
-const resourceCloseTimeout = 5 * time.Second
-
-func Run(cfg harukiConfig.Config) error {
+// Build validates cfg and assembles the server, workers, and external resources.
+// If assembly fails, every resource acquired so far is released before Build
+// returns. The returned Application owns all successfully assembled resources.
+func Build(cfg harukiConfig.Config) (*Application, error) {
 	if err := validateOAuth2ProviderConfig(cfg); err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateUserSystemConfig(cfg); err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateBackendConfig(cfg); err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateBotRegistrationConfig(cfg); err != nil {
-		return err
+		return nil, err
 	}
 
-	loggerWriter, closeMainLogFile, err := openMainLogWriter(cfg.Backend.MainLogFile)
-	if err != nil {
-		return fmt.Errorf("open main log file: %w", err)
+	application := &Application{
+		shutdownTimeout: time.Duration(cfg.Backend.ShutdownTimeout) * time.Second,
 	}
+	buildComplete := false
 	defer func() {
-		_ = closeMainLogFile()
-	}()
-
-	// Set global log level and file writer for NewLoggerFromGlobal
-	harukiLogger.SetGlobalLogLevel(cfg.Backend.LogLevel)
-	harukiLogger.SetGlobalFileWriter(loggerWriter)
-	perfdebug.SetEnabled(cfg.Backend.ProfilingEnabled)
-
-	mainLogger := harukiLogger.NewLogger("Main", cfg.Backend.LogLevel, loggerWriter)
-	mainLogger.Infof("%s", fmt.Sprintf("========================= Haruki Toolbox Backend %s =========================", harukiVersion.Version))
-	mainLogger.Infof("Build commit: %s, built at: %s", harukiVersion.Commit, harukiVersion.BuildDate)
-	mainLogger.Infof("Powered By Haruki Dev Team")
-
-	sekaiAPIClient := harukiSekaiAPIClient.NewHarukiSekaiAPIClient(cfg.SekaiAPI.APIEndpoint, cfg.SekaiAPI.APIToken)
-	// When profiling is enabled, attach a pool monitor so the stats sampler can
-	// observe client-side checkout waits (invisible to Mongo's server-side slow log).
-	var mongoPoolStats *harukiMongo.PoolStats
-	var mongoOpts []harukiMongo.MongoOption
-	if cfg.Backend.ProfilingEnabled {
-		mongoPoolStats = harukiMongo.NewPoolStats()
-		mongoOpts = append(mongoOpts, harukiMongo.WithPoolMonitor(mongoPoolStats.Monitor()))
-	}
-	mongoCtx, cancelMongoInit := startupContext()
-	mongoManager, err := harukiMongo.NewMongoDBManager(
-		mongoCtx,
-		cfg.MongoDB.URL,
-		cfg.MongoDB.DB,
-		cfg.MongoDB.Suite,
-		cfg.MongoDB.Mysekai,
-		mongoOpts...,
-	)
-	cancelMongoInit()
-	if err != nil {
-		return fmt.Errorf("init MongoDB: %w", err)
-	}
-	defer func() {
-		closeCtx, cancel := context.WithTimeout(context.Background(), resourceCloseTimeout)
-		defer cancel()
-		_ = mongoManager.Disconnect(closeCtx)
-	}()
-
-	redisClient := harukiRedis.NewRedisClient(cfg.Redis)
-	defer func() {
-		_ = redisClient.Close()
-	}()
-	redisCtx, cancelRedisInit := startupContext()
-	if err := ensureRedisReady(redisCtx, redisClient); err != nil {
-		cancelRedisInit()
-		return fmt.Errorf("init Redis: %w", err)
-	}
-	cancelRedisInit()
-	entSQLDB, err := openTunedSQLDB(cfg.UserSystem.DBType, cfg.UserSystem.DBURL, 50, 10)
-	if err != nil {
-		return fmt.Errorf("init PostgreSQL: %w", err)
-	}
-	entClient := dbManager.NewClient(dbManager.Driver(entsql.OpenDB(cfg.UserSystem.DBType, entSQLDB)))
-	defer func() {
-		_ = entClient.Close()
-	}()
-	if cfg.Backend.AutoMigrate {
-		schemaCtx, cancelSchema := startupContext()
-		if err := entClient.Schema.Create(schemaCtx); err != nil {
-			cancelSchema()
-			return fmt.Errorf("create schema resources: %w", err)
+		if !buildComplete {
+			application.stopAndWaitWorkers()
+			if application.drainBackgroundTasks() == nil {
+				_ = application.closeResources()
+			}
 		}
-		cancelSchema()
-		mainLogger.Infof("auto schema migration completed")
-	} else {
-		mainLogger.Infof("auto schema migration disabled")
-		existsCtx, cancelExists := startupContext()
-		exists, existsErr := usersTableExists(existsCtx, entClient)
-		cancelExists()
-		if existsErr != nil {
-			return fmt.Errorf("check schema state when auto_migrate disabled: %w", existsErr)
-		}
-		if !exists {
-			return fmt.Errorf("database schema is not initialized (users table missing) while backend.auto_migrate=false")
-		}
-	}
-	usersSchemaCtx, cancelUsersSchema := startupContext()
-	if err := ensureUsersSchemaCompatibility(usersSchemaCtx, entClient, cfg.Backend.AutoMigrate); err != nil {
-		cancelUsersSchema()
-		return fmt.Errorf("ensure users schema compatibility: %w", err)
-	}
-	cancelUsersSchema()
-	webhookSchemaCtx, cancelWebhookSchema := startupContext()
-	if err := ensureWebhookSchemaCompatibility(webhookSchemaCtx, entClient, cfg.Backend.AutoMigrate); err != nil {
-		cancelWebhookSchema()
-		return fmt.Errorf("ensure webhook schema compatibility: %w", err)
-	}
-	cancelWebhookSchema()
-	grantsCleanupCtx, cancelGrantsCleanup := startupContext()
-	if deleted, err := entClient.CleanupExpiredGameAccountDataGrants(grantsCleanupCtx, time.Now().UTC()); err != nil {
-		mainLogger.Warnf("failed to cleanup expired game account data grants: %v", err)
-	} else if deleted > 0 {
-		mainLogger.Infof("cleaned up %d expired game account data grant(s)", deleted)
-	}
-	cancelGrantsCleanup()
+	}()
 
-	smtpClient := harukiSMTP.NewSMTPClient(cfg.UserSystem.SMTP)
-	sessionHandler := harukiAPIHelper.NewSessionHandler(redisClient.Redis, cfg.UserSystem.SessionSignToken)
+	resources, err := acquireApplicationResources(cfg, application)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ory session wiring remains in the composition root so every HTTP module
+	// shares the same trusted-header and Kratos integration.
+	sessionHandler := harukiAPIHelper.NewSessionHandler(resources.redisClient.Redis, cfg.UserSystem.SessionSignToken)
 	sessionHandler.ConfigureIdentityProvider(
 		cfg.UserSystem.AuthProvider,
 		cfg.UserSystem.KratosPublicURL,
@@ -162,7 +73,7 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.KratosAutoLinkByEmail,
 		cfg.UserSystem.KratosAutoProvisionUser,
 		time.Duration(cfg.UserSystem.KratosRequestTimeout)*time.Second,
-		entClient,
+		resources.toolboxClient,
 	)
 	sessionHandler.ConfigureAuthProxy(
 		cfg.UserSystem.AuthProxyEnabled,
@@ -175,126 +86,139 @@ func Run(cfg harukiConfig.Config) error {
 		cfg.UserSystem.AuthProxyUserIDHeader,
 	)
 	sessionHandler.ConfigureAuthProxySessionHeader(cfg.UserSystem.AuthProxySessionHeader)
-	app, closeAccessLogFile, err := newFiberApp(cfg)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = closeAccessLogFile()
-	}()
 
-	dbMgr := harukiDatabaseManager.NewHarukiToolboxDBManager(entClient, redisClient, mongoManager)
-	var botStatsDB *sql.DB
-	if botDBURL := strings.TrimSpace(cfg.HarukiBot.DBURL); botDBURL != "" {
-		botSQLDB, botErr := openTunedSQLDB(cfg.UserSystem.DBType, botDBURL, 20, 5)
-		if botErr != nil {
-			return fmt.Errorf("init Bot PostgreSQL: %w", botErr)
-		}
-		botStatsDB = botSQLDB
-		botClient := neopgManager.NewClient(neopgManager.Driver(entsql.OpenDB(cfg.UserSystem.DBType, botSQLDB)))
-		defer func() {
-			_ = botClient.Close()
-		}()
-		if cfg.Backend.AutoMigrate {
-			botSchemaCtx, cancelBotSchema := startupContext()
-			if err := botClient.Schema.Create(botSchemaCtx); err != nil {
-				cancelBotSchema()
-				return fmt.Errorf("create bot schema resources: %w", err)
-			}
-			cancelBotSchema()
-			mainLogger.Infof("bot schema migration completed")
-		}
-		dbMgr.BotDB = botClient
+	if err := resources.acquireHTTPResources(cfg, application); err != nil {
+		return nil, err
 	}
+	if err := resources.acquireBotDatabase(cfg, application); err != nil {
+		return nil, err
+	}
+
+	// Runtime-mutable settings are seeded from immutable startup configuration
+	// and distributed through the existing Redis record.
+	runtimeConfig := newRuntimeConfigService(cfg, resources.redisClient)
 	apiHelper := harukiAPIHelper.NewHarukiToolboxRouterHelpers(
-		app,
-		dbMgr,
-		smtpClient,
+		resources.fiberApp,
+		resources.databaseManager,
+		resources.smtpClient,
 		sessionHandler,
-		sekaiAPIClient,
-		cfg.Others.PublicAPIAllowedKeys,
-		cfg.MongoDB.PrivateApiSecret,
-		cfg.MongoDB.PrivateApiUserAgent,
-		cfg.HarukiProxy.UserAgent,
-		cfg.HarukiProxy.Version,
-		cfg.HarukiProxy.Secret,
-		cfg.HarukiProxy.UnpackKey,
-		cfg.Webhook.JWTSecret,
-		cfg.Webhook.Enabled,
+		resources.sekaiAPIClient,
+		runtimeConfig,
 	)
 	apiHelper.BotRegistrationEnabled = cfg.HarukiBot.EnableRegistration
 	apiHelper.BotCredentialSignToken = cfg.HarukiBot.CredentialSignToken
-	harukiAPI.RegisterRoutes(apiHelper)
+	turnstileVerifier := harukiCloudflare.NewClient(harukiCloudflare.Config{
+		Secret:  cfg.UserSystem.CloudflareSecret,
+		Bypass:  cfg.UserSystem.TurnstileBypass,
+		Proxy:   cfg.Proxy,
+		Timeout: 5 * time.Second,
+	})
+	suiteRestoreService := harukiHandler.NewSuiteRestoreService(harukiHandler.SuiteRestoreServiceOptions{
+		StructuresFile:  cfg.RestoreSuite.StructuresFile,
+		EnableRegions:   cfg.RestoreSuite.EnableRegions,
+		SuiteRemoveKeys: cfg.SekaiClient.SuiteRemoveKeys,
+	})
+	application.backgroundTasks = harukiBackground.NewTaskGroup(func(name string, recovered any) {
+		resources.logger.Errorf("Background task %q panicked: %v", name, recovered)
+	})
+	afdianConfig := sponsorModule.NewAfdianConfig(sponsorModule.AfdianConfigOptions{
+		UserID:         cfg.Afdian.UserID,
+		APIToken:       cfg.Afdian.APIToken,
+		APIBaseURL:     cfg.Afdian.APIBaseURL,
+		RequestTimeout: time.Duration(cfg.Afdian.RequestTimeoutSecond) * time.Second,
+		WebhookSecret:  cfg.Afdian.WebhookSecret,
+		SyncEnabled:    cfg.Afdian.SyncEnabled,
+		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
+	})
+	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
+		BackgroundTasks:   application.backgroundTasks,
+		TurnstileVerifier: turnstileVerifier,
+		UserDataBuilder:   harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
+		AfdianConfig:      afdianConfig,
+		MiscAssets: miscModule.NewAssetsConfig(miscModule.AssetsConfigOptions{
+			AvatarBaseURL: cfg.UserSystem.AvatarURL,
+		}),
+		IOSEndpoints: iosModule.NewEndpointConfig(iosModule.EndpointConfigOptions{
+			BackendURL:    cfg.Backend.BackendURL,
+			BackendCDNURL: cfg.Backend.BackendCDNURL,
+		}),
+		HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+			Provider:       cfg.OAuth2.Provider,
+			PublicURL:      cfg.OAuth2.HydraPublicURL,
+			BrowserURL:     cfg.OAuth2.HydraBrowserURL,
+			AdminURL:       cfg.OAuth2.HydraAdminURL,
+			ClientID:       cfg.OAuth2.HydraClientID,
+			ClientSecret:   cfg.OAuth2.HydraClientSecret,
+			RequestTimeout: time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
+		}),
+		OAuth2AvatarBaseURL: cfg.UserSystem.AvatarURL,
+		UploadHTTPClient:    harukiHttp.NewClient(strings.TrimSpace(cfg.Proxy), 15*time.Second),
+		UploadLogger:        harukiLogger.NewLoggerFromGlobal("SekaiDataHandler"),
+		BirthdaySubscription: harukiHandler.NewBirthdaySubscriptionConfig(harukiHandler.BirthdaySubscriptionConfigOptions{
+			HMESInternalBaseURL: cfg.Subscription.HMESInternalBaseURL,
+			HMESInternalToken:   cfg.Subscription.HMESInternalToken,
+			UserAgent:           cfg.Subscription.UserAgent,
+			RequestTimeout:      time.Duration(cfg.Subscription.RequestTimeoutSecond) * time.Second,
+		}),
+		SuiteRestoreService: suiteRestoreService,
+		ServerCryptor: harukiSekai.NewServerCryptor(harukiSekai.ServerCryptorConfig{
+			ENServerAESKey:    cfg.SekaiClient.ENServerAESKey,
+			ENServerAESIV:     cfg.SekaiClient.ENServerAESIV,
+			OtherServerAESKey: cfg.SekaiClient.OtherServerAESKey,
+			OtherServerAESIV:  cfg.SekaiClient.OtherServerAESIV,
+		}),
+		UploadProxy: cfg.Proxy,
+		UserProfileConfig: userProfileModule.NewConfig(userProfileModule.ConfigOptions{
+			AvatarSaveDir: cfg.UserSystem.AvatarSaveDir,
+			AvatarBaseURL: cfg.UserSystem.AvatarURL,
+		}),
+		SocialBotVerify: userSocialModule.NewBotVerifyConfig(userSocialModule.BotVerifyConfigOptions{
+			Token: cfg.UserSystem.SocialPlatformVerifyToken,
+		}),
+		TicketNotifications: ticketsModule.NotificationConfig{
+			FrontendURL: cfg.UserSystem.FrontendURL,
+			DetailPath:  "/tickets",
+			DisplayName: cfg.UserSystem.SMTP.MailName,
+		},
+	})
+
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
-	waitAfdianScheduler := startAfdianSponsorSyncScheduler(schedulerCtx, entClient, cfg.Afdian, mainLogger)
+	waitAfdianScheduler := startAfdianSponsorSyncScheduler(schedulerCtx, resources.toolboxClient, afdianConfig, resources.logger)
 	waitStatsSampler := func() {}
 	if cfg.Backend.ProfilingEnabled {
-		sqlPools := []sqlPoolSource{{name: "toolbox", db: entSQLDB}}
-		if botStatsDB != nil {
-			sqlPools = append(sqlPools, sqlPoolSource{name: "bot", db: botStatsDB})
+		sqlPools := []sqlPoolSource{{name: "toolbox", db: resources.toolboxSQLDB}}
+		if resources.botSQLDB != nil {
+			sqlPools = append(sqlPools, sqlPoolSource{name: "bot", db: resources.botSQLDB})
 		}
 		samplerInterval := time.Duration(cfg.Backend.ProfilingIntervalSeconds) * time.Second
-		waitStatsSampler = startStatsSampler(schedulerCtx, samplerInterval, mongoPoolStats, sqlPools, mainLogger)
+		waitStatsSampler = startStatsSampler(schedulerCtx, samplerInterval, resources.mongoPoolStats, sqlPools, resources.logger)
 	}
-	// Cancel then drain the scheduler goroutines before the deferred entClient.Close
-	// runs, so an in-flight sync/sampler never uses the client after it is closed. All
-	// calls are idempotent, so the explicit shutdown path below can repeat them.
-	stopAndWaitSchedulers := func() {
+	// Workers are owned by Application so Serve/Close always cancel and drain them
+	// before any database resource is released.
+	application.stopWorkers = func() {
 		stopSchedulers()
 		waitAfdianScheduler()
 		waitStatsSampler()
 	}
-	defer stopAndWaitSchedulers()
-	loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()
+
+	loadedRegions, failedRegions := suiteRestoreService.LoadStatus()
 	if len(failedRegions) > 0 {
-		mainLogger.Warnf("Suite restorer initialized with %d loaded region(s), %d failed region(s): %v", loadedRegions, len(failedRegions), failedRegions)
+		resources.logger.Warnf("Suite restorer initialized with %d loaded region(s), %d failed region(s): %v", loadedRegions, len(failedRegions), failedRegions)
 	} else {
-		mainLogger.Infof("Suite restorer initialized with %d loaded region(s)", loadedRegions)
+		resources.logger.Infof("Suite restorer initialized with %d loaded region(s)", loadedRegions)
 	}
 
-	addr := fmt.Sprintf("%s:%d", cfg.Backend.Host, cfg.Backend.Port)
-	listenConfig := fiber.ListenConfig{DisableStartupMessage: true}
+	application.fiberApp = resources.fiberApp
+	application.logger = resources.logger
+	application.address = fmt.Sprintf("%s:%d", cfg.Backend.Host, cfg.Backend.Port)
+	application.serverType = "HTTP"
+	application.listenConfig = fiber.ListenConfig{DisableStartupMessage: true}
 	if cfg.Backend.SSL {
-		mainLogger.Infof("SSL enabled, starting HTTPS server at %s", addr)
-		listenConfig.CertFile = cfg.Backend.SSLCert
-		listenConfig.CertKeyFile = cfg.Backend.SSLKey
-	} else {
-		mainLogger.Infof("Starting HTTP server at %s", addr)
+		application.serverType = "HTTPS"
+		application.listenConfig.CertFile = cfg.Backend.SSLCert
+		application.listenConfig.CertKeyFile = cfg.Backend.SSLKey
 	}
 
-	serverType := "HTTP"
-	if cfg.Backend.SSL {
-		serverType = "HTTPS"
-	}
-	listenErrCh := make(chan error, 1)
-	go func() {
-		listenErrCh <- app.Listen(addr, listenConfig)
-	}()
-
-	shutdownSignalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	select {
-	case err := <-listenErrCh:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("start %s server: %w", serverType, err)
-		}
-		return nil
-	case <-shutdownSignalCtx.Done():
-		mainLogger.Infof("shutdown signal received, stopping server")
-	}
-
-	stopAndWaitSchedulers()
-	shutdownTimeout := time.Duration(cfg.Backend.ShutdownTimeout) * time.Second
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
-		return fmt.Errorf("graceful shutdown failed: %w", err)
-	}
-
-	if err := <-listenErrCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("server stopped with error: %w", err)
-	}
-	mainLogger.Infof("server shutdown completed")
-	return nil
+	buildComplete = true
+	return application, nil
 }

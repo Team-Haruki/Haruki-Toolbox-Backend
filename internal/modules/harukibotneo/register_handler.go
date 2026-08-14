@@ -1,6 +1,7 @@
 package harukibotneo
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -41,7 +42,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		ctx := c.Context()
 
 		// Register rate limit
-		rlKey := harukiRedis.BuildBotRegisterRateLimitTargetKey(qqStr)
+		rlKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotRegisterRateLimitTargetKey(qqStr)
 		count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, rlKey, registerRateLimitWindow)
 		if err != nil {
 			harukiLogger.Errorf("Failed to check register rate limit: %v", err)
@@ -52,7 +53,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		}
 
 		// Verify code
-		codeKey := harukiRedis.BuildBotVerifyCodeKey(qqStr)
+		codeKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyCodeKey(qqStr)
 		var storedCode string
 		found, err := apiHelper.DBManager.Redis.GetCache(ctx, codeKey, &storedCode)
 		if err != nil {
@@ -63,15 +64,15 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, "verification code not found or expired")
 		}
 		if subtle.ConstantTimeCompare([]byte(payload.VerificationCode), []byte(storedCode)) != 1 {
-			// Track attempts
-			attemptKey := harukiRedis.BuildBotVerifyAttemptKey(qqStr)
-			var attemptCount int
-			if af, _ := apiHelper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount); af && attemptCount >= maxVerifyAttempts {
-				_ = apiHelper.DBManager.Redis.DeleteCache(ctx, codeKey)
-				_ = apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey)
+			attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(qqStr)
+			limited, err := recordInvalidVerificationAttempt(ctx, apiHelper.DBManager.Redis, attemptKey, codeKey)
+			if err != nil {
+				harukiLogger.Errorf("Failed to track verification attempts: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "registration service unavailable")
+			}
+			if limited {
 				return harukiAPIHelper.ErrorBadRequest(c, "too many verification attempts, please request a new code")
 			}
-			_ = apiHelper.DBManager.Redis.SetCache(ctx, attemptKey, attemptCount+1, verifyCodeTTL)
 			return harukiAPIHelper.ErrorBadRequest(c, "verification code is invalid")
 		}
 
@@ -149,7 +150,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		}
 
 		// Cleanup Redis
-		attemptKey := harukiRedis.BuildBotVerifyAttemptKey(qqStr)
+		attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(qqStr)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey)
 
 		result := registrationResultData{
@@ -158,4 +159,27 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		}
 		return harukiAPIHelper.UpdatedDataResponse(c, statusCode, message, &result)
 	}
+}
+
+// recordInvalidVerificationAttempt uses one Redis operation to increment and
+// initialize the TTL. A read-then-write counter lets concurrent wrong guesses
+// overwrite each other and bypass maxVerifyAttempts.
+func recordInvalidVerificationAttempt(
+	ctx context.Context,
+	redisManager *harukiRedis.HarukiRedisManager,
+	attemptKey string,
+	codeKey string,
+) (bool, error) {
+	count, err := redisManager.IncrementWithTTL(ctx, attemptKey, verifyCodeTTL)
+	if err != nil {
+		return false, err
+	}
+	if count <= int64(maxVerifyAttempts) {
+		return false, nil
+	}
+	_ = redisManager.DeleteCache(ctx, codeKey)
+	// Keep the over-limit counter until its TTL expires. Deleting it here would
+	// let already in-flight wrong guesses recreate the key at 1 and slip back
+	// below the limit after another request crossed the threshold.
+	return true, nil
 }

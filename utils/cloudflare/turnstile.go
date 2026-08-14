@@ -1,27 +1,41 @@
 package cloudflare
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
-	"sync"
 	"time"
+
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
 )
 
-const verifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+const (
+	verifyURL      = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+	defaultTimeout = 5 * time.Second
+)
 
 var ErrTurnstileUnavailable = errors.New("turnstile service unavailable")
 
-var (
-	turnstileClientMu    sync.RWMutex
-	turnstileClient      *resty.Client
-	turnstileClientProxy string
-)
+type Config struct {
+	Secret  string
+	Bypass  bool
+	Proxy   string
+	Timeout time.Duration
+}
+
+type Verifier interface {
+	Verify(ctx context.Context, response, remoteIP string) (*TurnstileResponse, error)
+}
+
+type Client struct {
+	secret     string
+	bypass     bool
+	httpClient *resty.Client
+}
 
 type TurnstileResponse struct {
 	Success     bool     `json:"success"`
@@ -32,29 +46,57 @@ type TurnstileResponse struct {
 	Cdata       string   `json:"cdata,omitempty"`
 }
 
+func NewClient(cfg Config) *Client {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	httpClient := resty.New().SetTimeout(timeout)
+	if proxy := strings.TrimSpace(cfg.Proxy); proxy != "" {
+		httpClient.SetProxy(proxy)
+	}
+	return &Client{
+		secret:     cfg.Secret,
+		bypass:     cfg.Bypass,
+		httpClient: httpClient,
+	}
+}
+
 func IsTurnstileUnavailable(err error) bool {
 	return errors.Is(err, ErrTurnstileUnavailable)
 }
 
-func ValidateTurnstile(response, remoteIP string) (*TurnstileResponse, error) {
-	if config.Cfg.UserSystem.TurnstileBypass {
-		return &TurnstileResponse{
-			Success: true,
-		}, nil
+// Verify delegates to verifier while treating a missing route dependency as an
+// unavailable upstream instead of allowing an interface method call to panic.
+func Verify(ctx context.Context, verifier Verifier, response, remoteIP string) (*TurnstileResponse, error) {
+	if verifier == nil {
+		return nil, fmt.Errorf("%w: verifier is not configured", ErrTurnstileUnavailable)
+	}
+	return verifier.Verify(ctx, response, remoteIP)
+}
+
+func (c *Client) Verify(ctx context.Context, response, remoteIP string) (*TurnstileResponse, error) {
+	if c == nil || c.httpClient == nil {
+		return nil, fmt.Errorf("%w: client is not configured", ErrTurnstileUnavailable)
+	}
+	if c.bypass {
+		return &TurnstileResponse{Success: true}, nil
 	}
 	payload := map[string]string{
-		"secret":   config.Cfg.UserSystem.CloudflareSecret,
+		"secret":   c.secret,
 		"response": response,
 	}
 	if remoteIP != "" {
 		payload["remoteip"] = remoteIP
 	}
 	body, _ := sonic.Marshal(payload)
-	client := turnstileHTTPClient(config.Cfg.Proxy)
-	resp, err := client.R().
+	request := c.httpClient.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(body).
-		Post(verifyURL)
+		SetBody(body)
+	if ctx != nil {
+		request.SetContext(ctx)
+	}
+	resp, err := request.Post(verifyURL)
 	if err != nil {
 		harukiLogger.Errorf("Turnstile request failed: %v", err)
 		return nil, fmt.Errorf("%w: request failed: %v", ErrTurnstileUnavailable, err)
@@ -82,29 +124,4 @@ func isTurnstileServiceFailure(errorCodes []string) bool {
 		}
 	}
 	return false
-}
-
-func turnstileHTTPClient(proxy string) *resty.Client {
-	proxy = strings.TrimSpace(proxy)
-
-	turnstileClientMu.RLock()
-	if turnstileClient != nil && turnstileClientProxy == proxy {
-		client := turnstileClient
-		turnstileClientMu.RUnlock()
-		return client
-	}
-	turnstileClientMu.RUnlock()
-
-	client := resty.New().SetTimeout(5 * time.Second)
-	if proxy != "" {
-		client.SetProxy(proxy)
-	}
-
-	turnstileClientMu.Lock()
-	defer turnstileClientMu.Unlock()
-	if turnstileClient == nil || turnstileClientProxy != proxy {
-		turnstileClient = client
-		turnstileClientProxy = proxy
-	}
-	return turnstileClient
 }

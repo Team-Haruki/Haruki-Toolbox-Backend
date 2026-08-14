@@ -95,7 +95,7 @@ func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	return plaintext, nil
 }
 
-func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		serverStr := c.Params("server")
@@ -128,6 +128,7 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			&gameUserID,
 			nil,
 			apiHelper,
+			dependencies,
 			harukiUtils.UploadMethodHarukiProxy,
 		)
 		if err != nil {
@@ -140,10 +141,10 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	}
 }
 
-func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	for _, prefix := range []string{"/harukiproxy/:server/:user_id/:data_type", "/api/harukiproxy/:server/:user_id/:data_type"} {
 		api := apiHelper.Router.Group(prefix, validateHarukiProxyClientHeader(apiHelper))
 
-		api.Post("/upload", handleHarukiProxyUpload(apiHelper))
+		api.Post("/upload", handleHarukiProxyUpload(apiHelper, dependencies))
 	}
 }

@@ -8,8 +8,32 @@ import (
 	"strings"
 	"testing"
 
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestScopeHydraClientAuthorizationRecordsForActorEnforcesRoleHierarchy(t *testing.T) {
+	records := []hydraClientAuthorizationRecord{
+		{User: &postgresql.User{ID: "actor", Role: userSchema.RoleAdmin}},
+		{User: &postgresql.User{ID: "peer", Role: userSchema.RoleAdmin}},
+		{User: &postgresql.User{ID: "user", Role: userSchema.RoleUser}},
+		{User: &postgresql.User{ID: "super", Role: userSchema.RoleSuperAdmin}},
+		{User: nil},
+	}
+
+	visible := scopeHydraClientAuthorizationRecordsForActor(records, "actor", adminCoreModule.RoleAdmin)
+	if len(visible) != 2 || visible[0].User.ID != "peer" || visible[1].User.ID != "user" {
+		t.Fatalf("admin visible records = %#v, want peer admin and user only", visible)
+	}
+
+	visible = scopeHydraClientAuthorizationRecordsForActor(records, "different-super", adminCoreModule.RoleSuperAdmin)
+	if len(visible) != 4 {
+		t.Fatalf("super-admin visible records = %d, want 4", len(visible))
+	}
+}
 
 func TestParseAdminOAuthClientAuthorizationsFilters(t *testing.T) {
 	app := fiber.New()

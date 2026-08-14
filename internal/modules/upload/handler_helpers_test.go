@@ -1,7 +1,6 @@
 package upload
 
 import (
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -161,42 +160,5 @@ func TestMapUploadProcessingError(t *testing.T) {
 	}
 	if got := mapUploadProcessingError(nil); got != nil {
 		t.Fatalf("expected nil error to stay nil, got %#v", got)
-	}
-}
-
-func TestGetSharedHTTPClientReloadsOnProxyChange(t *testing.T) {
-	originalCfg := harukiConfig.Cfg
-	sharedHttpClientMu.Lock()
-	originalClient := sharedHttpClient
-	originalProxy := sharedHttpClientProxy
-	sharedHttpClient = nil
-	sharedHttpClientProxy = ""
-	sharedHttpClientMu.Unlock()
-
-	t.Cleanup(func() {
-		harukiConfig.Cfg = originalCfg
-		sharedHttpClientMu.Lock()
-		sharedHttpClient = originalClient
-		sharedHttpClientProxy = originalProxy
-		sharedHttpClientMu.Unlock()
-	})
-
-	harukiConfig.Cfg.Proxy = "http://127.0.0.1:8080"
-	first := getSharedHTTPClient()
-	if first == nil {
-		t.Fatalf("expected non-nil http client")
-	}
-	second := getSharedHTTPClient()
-	if first != second {
-		t.Fatalf("expected shared client to be reused when proxy does not change")
-	}
-
-	harukiConfig.Cfg.Proxy = "http://127.0.0.1:18080"
-	third := getSharedHTTPClient()
-	if third == nil {
-		t.Fatalf("expected non-nil reloaded http client")
-	}
-	if third == first {
-		t.Fatalf("expected shared client to reload after proxy change")
 	}
 }

@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"fmt"
+	"net/netip"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"strings"
@@ -62,6 +64,27 @@ func validateBackendConfig(cfg harukiConfig.Config) error {
 	if cfg.Backend.SSL {
 		if strings.TrimSpace(cfg.Backend.SSLCert) == "" || strings.TrimSpace(cfg.Backend.SSLKey) == "" {
 			return fmt.Errorf("backend.ssl_cert and backend.ssl_key are required when backend.ssl=true")
+		}
+	}
+	if cfg.Backend.EnableTrustProxy {
+		if strings.TrimSpace(cfg.Backend.ProxyHeader) == "" {
+			return fmt.Errorf("backend.proxy_header is required when backend.enable_trust_proxy=true")
+		}
+		if len(cfg.Backend.TrustProxies) == 0 {
+			return fmt.Errorf("backend.trusted_proxies must contain the exact edge proxy IP when backend.enable_trust_proxy=true")
+		}
+		for _, rawProxy := range cfg.Backend.TrustProxies {
+			proxy := strings.TrimSpace(rawProxy)
+			if proxy == "" {
+				return fmt.Errorf("backend.trusted_proxies must not contain an empty value")
+			}
+			if _, err := netip.ParseAddr(proxy); err == nil {
+				continue
+			}
+			prefix, err := netip.ParsePrefix(proxy)
+			if err != nil || prefix.Bits() != prefix.Addr().BitLen() {
+				return fmt.Errorf("backend.trusted_proxies entry %q must be an exact edge proxy IP (/32 for IPv4 or /128 for IPv6), not a shared network", proxy)
+			}
 		}
 	}
 	return nil

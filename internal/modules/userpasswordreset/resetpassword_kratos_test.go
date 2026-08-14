@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
@@ -66,14 +66,8 @@ func TestHandleSendResetPasswordViaKratos(t *testing.T) {
 		SessionHandler: sessionHandler,
 	}
 
-	prevBypass := config.Cfg.UserSystem.TurnstileBypass
-	config.Cfg.UserSystem.TurnstileBypass = true
-	defer func() {
-		config.Cfg.UserSystem.TurnstileBypass = prevBypass
-	}()
-
 	app := fiber.New()
-	app.Post("/api/user/reset-password/send", handleSendResetPassword(apiHelper))
+	app.Post("/api/user/reset-password/send", handleSendResetPassword(apiHelper, harukiCloudflare.NewClient(harukiCloudflare.Config{Bypass: true})))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/user/reset-password/send", strings.NewReader(`{"email":"recover@example.com","challengeToken":"bypass"}`))
 	req.Header.Set("Content-Type", "application/json")

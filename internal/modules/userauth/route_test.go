@@ -20,7 +20,7 @@ func TestRegisterUserAuthRoutesDisablesLegacyEndpointsWhenManagedIdentityEnabled
 	app := fiber.New()
 	helper := newManagedIdentityHelper()
 	helper.Router = app
-	RegisterUserAuthRoutes(helper)
+	RegisterUserAuthRoutes(helper, nil, harukiAPIHelper.UserDataBuilder{})
 
 	for _, path := range []string{"/api/user/login", "/api/user/register"} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)

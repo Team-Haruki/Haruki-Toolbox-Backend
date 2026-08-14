@@ -3,9 +3,10 @@ package userpasswordreset
 import (
 	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 )
 
-func RegisterUserResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func RegisterUserResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) {
 	if apiHelper == nil || apiHelper.Router == nil {
 		return
 	}
@@ -18,6 +19,6 @@ func RegisterUserResetPasswordRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRou
 		return
 	}
 
-	a.Post("/reset-password/send", handleSendResetPassword(apiHelper))
+	a.Post("/reset-password/send", handleSendResetPassword(apiHelper, turnstileVerifier))
 	a.Post("/reset-password", handleResetPassword(apiHelper))
 }

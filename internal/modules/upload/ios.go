@@ -3,9 +3,9 @@ package upload
 import (
 	"context"
 	"fmt"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
@@ -57,7 +57,7 @@ func buildChunkUploadKey(toolboxUserID string, server harukiUtils.SupportedDataU
 	return fmt.Sprintf("%s%s%s%s%d%s%s", toolboxUserID, chunkUploadIDSepChar, server, chunkUploadIDSepChar, gameUserID, chunkUploadIDSepChar, uploadID)
 }
 
-func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
@@ -71,16 +71,17 @@ func handleIOSProxySuite(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		}
 		logger.Infof("Received %s server suite request from user %d", server, userID)
 		proxyHandler := HandleProxyUpload(
-			harukiConfig.Cfg.Proxy,
+			dependencies.Proxy,
 			harukiUtils.UploadDataTypeSuite,
 			apiHelper,
+			dependencies,
 			nil,
 		)
 		return proxyHandler(c)
 	}
 }
 
-func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
@@ -94,16 +95,17 @@ func handleIOSProxyMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		}
 		logger.Infof("Received %s server mysekai request from user %d", server, userID)
 		proxyHandler := HandleProxyUpload(
-			harukiConfig.Cfg.Proxy,
+			dependencies.Proxy,
 			harukiUtils.UploadDataTypeMysekai,
 			apiHelper,
+			dependencies,
 			nil,
 		)
 		return proxyHandler(c)
 	}
 }
 
-func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userIDStr := c.Params("user_id")
 		serverStr := c.Params("server")
@@ -122,16 +124,17 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 		}
 		logger.Infof("Received %s server mysekai birthday party delivery request from user %d for party id %d", server, userID, partyID)
 		proxyHandler := HandleProxyUpload(
-			harukiConfig.Cfg.Proxy,
+			dependencies.Proxy,
 			harukiUtils.UploadDataTypeMysekaiBirthdayParty,
 			apiHelper,
+			dependencies,
 			&partyID,
 		)
 		return proxyHandler(c)
 	}
 }
 
-func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, logger *harukiLogger.Logger) fiber.Handler {
+func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		uploadCode := c.Params("upload_code")
@@ -238,7 +241,8 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 
 		toolboxUserIDCopy := toolboxUserID
-		go func(chunks []harukiUtils.DataChunk, userId int64, server harukiUtils.SupportedDataUploadServer, uploadType string, toolboxUserID string) {
+		accepted := startBackgroundTask(dependencies.BackgroundTasks, logger, "ios-upload-assembly", func() {
+			chunks := completedChunks
 			sort.Slice(chunks, func(x, y int) bool {
 				return chunks[x].ChunkIndex < chunks[y].ChunkIndex
 			})
@@ -254,7 +258,12 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			}
 			uploadCtx, cancel := context.WithTimeout(context.Background(), asyncUploadTimeout)
 			defer cancel()
-			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &userId, &toolboxUserID, apiHelper, harukiUtils.UploadMethodIOSScript)
+			// The assembly itself was admitted before shutdown sealing. Keep all
+			// follow-up audit/fanout work inside this tracked parent so it cannot
+			// race task-group shutdown by attempting nested admission later.
+			innerDependencies := dependencies
+			innerDependencies.BackgroundTasks = harukiBackground.InlineRunner{}
+			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript)
 			if err != nil {
 				// HandleUpload already logs every failure with full context at
 				// WARNING inside its fail() helper. This async fire-and-forget
@@ -263,7 +272,10 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 				// and inflated the error rate with routine user-input failures.
 				logger.Debugf("async HandleUpload finished with error: %v", err)
 			}
-		}(completedChunks, gameUserId, server, string(uploadType), toolboxUserIDCopy)
+		})
+		if !accepted {
+			return harukiAPIHelper.ErrorInternal(c, "upload service is shutting down")
+		}
 		return harukiAPIHelper.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 	}
 }
@@ -272,15 +284,15 @@ func parseIOSProxyPathInt(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
 
-func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	logger := harukiLogger.NewLoggerFromGlobal("HarukiSekaiIOS")
 	proxyGuard := openUploadEntryGuard(apiHelper)
 	for _, prefix := range []string{"/ios", "/api/ios"} {
 		api := apiHelper.Router.Group(prefix)
 
-		api.Post("/script/:upload_code/upload", proxyGuard, handleIOSScriptUploadWithValidation(apiHelper, logger))
-		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, logger))
-		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, logger))
-		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, logger))
+		api.Post("/script/:upload_code/upload", proxyGuard, handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
+		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, dependencies, logger))
+		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, dependencies, logger))
+		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, dependencies, logger))
 	}
 }

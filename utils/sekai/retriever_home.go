@@ -30,7 +30,7 @@ func (r *HarukiSekaiDataRetriever) RefreshHome(ctx context.Context, friends bool
 	}
 
 	refreshData := selectRefreshPayload(login)
-	data, err := Pack(refreshData, harukiUtils.SupportedDataUploadServer(r.client.server))
+	data, err := r.client.serverCryptor.Pack(refreshData, harukiUtils.SupportedDataUploadServer(r.client.server))
 	if err != nil {
 		r.logger.Warnf("Failed to pack refresh data: %v", err)
 		return NewDataRetrievalError("home", "pack", "failed to pack refresh data", err)

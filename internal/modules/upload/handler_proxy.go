@@ -28,6 +28,7 @@ func HandleProxyUpload(
 	proxy string,
 	dataType harukiUtils.UploadDataType,
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	dependencies Dependencies,
 	mysekaiBirthdayPartyID *int64,
 ) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -75,7 +76,7 @@ func HandleProxyUpload(
 			return fiber.NewError(fiber.StatusInternalServerError, "proxy upstream request failed")
 		}
 		if dataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty {
-			unpackedData, err := sekai.Unpack(resp.RawBody, server)
+			unpackedData, err := dependencies.ServerCryptor.Unpack(resp.RawBody, server)
 			if err != nil {
 				harukiLogger.Warnf("Proxy upload unpack failed for %s/%s/%s: %v", serverStr, userIDStr, dataType, err)
 				return fiber.NewError(fiber.StatusInternalServerError, "failed to parse proxy response")
@@ -90,7 +91,7 @@ func HandleProxyUpload(
 				return c.Status(resp.StatusCode).Send(resp.RawBody)
 			}
 		}
-		if _, err := HandleUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper, harukiUtils.UploadMethodIOSProxy); err != nil {
+		if _, err := HandleUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper, dependencies, harukiUtils.UploadMethodIOSProxy); err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
 				return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 			}

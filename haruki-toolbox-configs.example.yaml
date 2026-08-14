@@ -89,14 +89,12 @@ backend:
   # Do not set lowercase env vars that collide with these tag names.
   access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"
   access_log_path: "access.log"
-  enable_trust_proxy: true
-  trusted_proxies:
-    - "127.0.0.0/8"
-    - "::1/128"
-    - "192.168.0.0/16"
-    - "172.16.0.0/12"
-    - "100.64.0.0/10"
-    - "10.0.0.0/8"
+  # Keep disabled until the backend is placed behind a known edge proxy. When
+  # enabled, list only that proxy's exact IP (/32 or /128); trusting a LAN,
+  # Docker, or Tailscale subnet lets any peer spoof X-Forwarded-For and bypass
+  # IP-based rate limits.
+  enable_trust_proxy: false
+  trusted_proxies: []
   proxy_header: "X-Forwarded-For"
   # Opt-in performance instrumentation. When true, the backend attaches a MongoDB
   # pool monitor and periodically logs Mongo pool / PostgreSQL pool / Go GC stats,

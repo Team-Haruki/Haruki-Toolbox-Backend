@@ -3,20 +3,50 @@ package sekai
 import (
 	"fmt"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"github.com/iancoleman/orderedmap"
 )
 
-func getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
+// ServerCryptorConfig contains the Project Sekai client AES material used for
+// server payloads. NewServerCryptor copies these strings into an immutable
+// value, so independently assembled application instances cannot observe each
+// other's configuration.
+type ServerCryptorConfig struct {
+	ENServerAESKey    string
+	ENServerAESIV     string
+	OtherServerAESKey string
+	OtherServerAESIV  string
+}
+
+// ServerCryptor selects the EN client key for EN payloads and the shared
+// non-EN client key for every other supported region, matching the historical
+// wire behavior. Key validation remains lazy so malformed configuration still
+// surfaces at the first pack/unpack operation rather than during assembly.
+type ServerCryptor struct {
+	enServerAESKey    string
+	enServerAESIV     string
+	otherServerAESKey string
+	otherServerAESIV  string
+}
+
+func NewServerCryptor(cfg ServerCryptorConfig) ServerCryptor {
+	return ServerCryptor{
+		enServerAESKey:    cfg.ENServerAESKey,
+		enServerAESIV:     cfg.ENServerAESIV,
+		otherServerAESKey: cfg.OtherServerAESKey,
+		otherServerAESIV:  cfg.OtherServerAESIV,
+	}
+}
+
+func (c ServerCryptor) getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
 	var keyHex, ivHex string
 	if server == utils.SupportedDataUploadServerEN {
-		keyHex = config.Cfg.SekaiClient.ENServerAESKey
-		ivHex = config.Cfg.SekaiClient.ENServerAESIV
+		keyHex = c.enServerAESKey
+		ivHex = c.enServerAESIV
 	} else {
-		keyHex = config.Cfg.SekaiClient.OtherServerAESKey
-		ivHex = config.Cfg.SekaiClient.OtherServerAESIV
+		keyHex = c.otherServerAESKey
+		ivHex = c.otherServerAESIV
 	}
 
 	cryptor, err := NewSekaiCryptorFromHex(keyHex, ivHex)
@@ -26,8 +56,8 @@ func getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
 	return cryptor, nil
 }
 
-func Pack(content any, server utils.SupportedDataUploadServer) ([]byte, error) {
-	cryptor, err := getCryptor(server)
+func (c ServerCryptor) Pack(content any, server utils.SupportedDataUploadServer) ([]byte, error) {
+	cryptor, err := c.getCryptor(server)
 	if err != nil {
 		return nil, err
 	}
@@ -38,8 +68,8 @@ func Pack(content any, server utils.SupportedDataUploadServer) ([]byte, error) {
 	return result, nil
 }
 
-func Unpack(content []byte, server utils.SupportedDataUploadServer) (any, error) {
-	cryptor, err := getCryptor(server)
+func (c ServerCryptor) Unpack(content []byte, server utils.SupportedDataUploadServer) (any, error) {
+	cryptor, err := c.getCryptor(server)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +80,8 @@ func Unpack(content []byte, server utils.SupportedDataUploadServer) (any, error)
 	return result, nil
 }
 
-func UnpackOrdered(content []byte, server utils.SupportedDataUploadServer) (*orderedmap.OrderedMap, error) {
-	cryptor, err := getCryptor(server)
+func (c ServerCryptor) UnpackOrdered(content []byte, server utils.SupportedDataUploadServer) (*orderedmap.OrderedMap, error) {
+	cryptor, err := c.getCryptor(server)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +92,8 @@ func UnpackOrdered(content []byte, server utils.SupportedDataUploadServer) (*ord
 	return result, nil
 }
 
-func DecryptToMsgpack(content []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
-	cryptor, err := getCryptor(server)
+func (c ServerCryptor) DecryptToMsgpack(content []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
+	cryptor, err := c.getCryptor(server)
 	if err != nil {
 		return nil, err
 	}

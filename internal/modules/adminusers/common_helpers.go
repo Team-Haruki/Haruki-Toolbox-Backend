@@ -50,6 +50,14 @@ func applyManagedTargetUserUpdateGuards(query *postgresql.UserUpdate, actorUserI
 	return guarded
 }
 
+func scopeAdminUserQueryForActor(query *postgresql.UserQuery, actorUserID, actorRole string) *postgresql.UserQuery {
+	scoped := query.Where(userSchema.IDNEQ(strings.TrimSpace(actorUserID)))
+	if adminCoreModule.NormalizeRole(actorRole) != adminCoreModule.RoleSuperAdmin {
+		scoped = scoped.Where(userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
+	}
+	return scoped
+}
+
 func resolveManagedTargetUserUpdateMiss(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, actorUserID, actorRole, targetUserID string) error {
 	target, err := apiHelper.DBManager.DB.User.Query().
 		Where(userSchema.IDEQ(strings.TrimSpace(targetUserID))).

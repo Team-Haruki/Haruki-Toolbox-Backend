@@ -1,11 +1,12 @@
 package adminsyslog
 
 import (
+	"context"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"sort"
 	"time"
 
@@ -24,14 +25,12 @@ func currentActorIsSuperAdmin(c fiber.Ctx) (bool, error) {
 // scopeSystemLogsForActor hides super_admin-actor rows from non-super-admins, so a
 // plain admin cannot read a super_admin's audit history (IP/UA/action timeline).
 // Rows with no actor_role (anonymous/user/system) stay visible.
-func scopeSystemLogsForActor(query *postgresql.SystemLogQuery, isSuperAdmin bool) *postgresql.SystemLogQuery {
+func scopeSystemLogsForActor(ctx context.Context, db *postgresql.Client, query *postgresql.SystemLogQuery, isSuperAdmin bool) (*postgresql.SystemLogQuery, error) {
+	actorRole := adminCoreModule.RoleAdmin
 	if isSuperAdmin {
-		return query
+		actorRole = adminCoreModule.RoleSuperAdmin
 	}
-	return query.Where(systemlog.Or(
-		systemlog.ActorRoleIsNil(),
-		systemlog.ActorRoleNEQ(adminCoreModule.RoleSuperAdmin),
-	))
+	return adminCoreModule.ScopeSystemLogsForAdminActor(ctx, db, query, actorRole)
 }
 
 type categoryCount struct {

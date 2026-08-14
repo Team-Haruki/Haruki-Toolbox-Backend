@@ -15,7 +15,7 @@ func TestRegisterUserProfileRoutesDisablesChangePasswordWhenManagedIdentityEnabl
 	sessionHandler := harukiAPIHelper.NewSessionHandler(nil, "")
 	sessionHandler.ConfigureIdentityProvider("kratos", "http://kratos.example", "http://kratos-admin.example", "", "", true, true, time.Second, nil)
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, SessionHandler: sessionHandler}
-	RegisterUserProfileRoutes(helper)
+	RegisterUserProfileRoutes(helper, Config{})
 
 	req := httptest.NewRequest(http.MethodPut, "/api/user/u-1/change-password", nil)
 	resp, err := app.Test(req)

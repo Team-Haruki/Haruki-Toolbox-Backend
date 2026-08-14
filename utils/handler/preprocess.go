@@ -33,7 +33,7 @@ func (h *DataHandler) PreHandleData(
 		if err := validateSuiteData(data); err != nil {
 			return nil, err
 		}
-		restored, _, err := RestoreSuite(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase})
+		restored, _, err := h.SuiteRestoreService.Restore(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase})
 		if err != nil {
 			return nil, err
 		}

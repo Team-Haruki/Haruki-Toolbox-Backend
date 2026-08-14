@@ -10,7 +10,11 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func loadCurrentUserData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (*harukiAPIHelper.HarukiToolboxUserData, error) {
+func loadCurrentUserData(
+	c fiber.Ctx,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	userDataBuilder harukiAPIHelper.UserDataBuilder,
+) (*harukiAPIHelper.HarukiToolboxUserData, error) {
 	ctx := c.Context()
 	userID, err := userCoreModule.CurrentUserID(c)
 	if err != nil {
@@ -37,7 +41,7 @@ func loadCurrentUserData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRo
 		fallback := false
 		emailVerifiedOverride = &fallback
 	}
-	ud := harukiAPIHelper.BuildUserDataFromDBUserWithEmailVerified(user, nil, emailVerifiedOverride)
+	ud := userDataBuilder.BuildFromDBUserWithEmailVerified(user, nil, emailVerifiedOverride)
 	if displayName, ok := c.Locals("displayName").(string); ok {
 		trimmed := strings.TrimSpace(displayName)
 		if trimmed != "" {
@@ -47,9 +51,9 @@ func loadCurrentUserData(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRo
 	return &ud, nil
 }
 
-func handleGetMe(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetMe(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userDataBuilder harukiAPIHelper.UserDataBuilder) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ud, err := loadCurrentUserData(c, apiHelper)
+		ud, err := loadCurrentUserData(c, apiHelper, userDataBuilder)
 		if err != nil {
 			return err
 		}
@@ -57,9 +61,9 @@ func handleGetMe(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Ha
 	}
 }
 
-func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetSettings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userDataBuilder harukiAPIHelper.UserDataBuilder) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ud, err := loadCurrentUserData(c, apiHelper)
+		ud, err := loadCurrentUserData(c, apiHelper, userDataBuilder)
 		if err != nil {
 			return err
 		}

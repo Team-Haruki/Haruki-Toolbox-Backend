@@ -1,7 +1,10 @@
 package adminusers
 
 import (
+	"encoding/json"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +14,44 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestHandleListUsersScopesResultsBeforePagination(t *testing.T) {
+	helper := newAdminUserTicketNotificationTestHelper(t)
+	seedAdminUserTicketNotificationTestUser(t, helper, "actor-admin", "actor", "actor@example.com", roleAdmin, false, false)
+	seedAdminUserTicketNotificationTestUser(t, helper, "ordinary-user", "ordinary", "ordinary@example.com", roleUser, false, false)
+	seedAdminUserTicketNotificationTestUser(t, helper, "hidden-super", "super", "super@example.com", roleSuperAdmin, false, false)
+
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor-admin")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	})
+	app.Get("/", handleListUsers(helper))
+
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("app.Test() error: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, fiber.StatusOK)
+	}
+
+	var payload harukiAPIHelper.GenericResponse[adminUserListResponse]
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.UpdatedData == nil {
+		t.Fatal("updatedData is nil")
+	}
+	if payload.UpdatedData.Total != 1 || len(payload.UpdatedData.Items) != 1 {
+		t.Fatalf("scoped total/items = %d/%d, want 1/1", payload.UpdatedData.Total, len(payload.UpdatedData.Items))
+	}
+	if payload.UpdatedData.Items[0].UserID != "ordinary-user" {
+		t.Fatalf("visible user = %q, want ordinary-user", payload.UpdatedData.Items[0].UserID)
+	}
+}
 
 func requireFiberErrorCode(t *testing.T, err error, wantCode int) {
 	t.Helper()

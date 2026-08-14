@@ -5,6 +5,7 @@ import (
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -19,7 +20,7 @@ type oauthAuthorizationResponse struct {
 	CreatedAt        string   `json:"createdAt"`
 }
 
-func handleListOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleListOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		_, err := userCoreModule.CurrentUserID(c)
@@ -30,7 +31,7 @@ func handleListOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
-		sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(ctx, hydraSubjects)
+		sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(ctx, hydraConfig, hydraSubjects)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query hydra oauth consent sessions: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query authorizations")
@@ -54,7 +55,7 @@ func handleListOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	}
 }
 
-func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID, err := userCoreModule.CurrentUserID(c)
@@ -72,7 +73,7 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.oauth.authorization.revoke", result, userID, map[string]any{"reason": reason, "clientID": clientID})
 		}()
 		if strings.TrimSpace(clientID) != "" {
-			exists, err := oauth2Module.HydraConsentSessionExistsForSubjects(ctx, hydraSubjects, clientID)
+			exists, err := oauth2Module.HydraConsentSessionExistsForSubjects(ctx, hydraConfig, hydraSubjects, clientID)
 			if err != nil {
 				harukiLogger.Errorf("Failed to query hydra oauth consent sessions before revoke: %v", err)
 				reason = "query_client_failed"
@@ -83,7 +84,7 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				return harukiAPIHelper.ErrorNotFound(c, "client not found")
 			}
 		}
-		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, hydraSubjects, clientID); err != nil {
+		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, hydraConfig, hydraSubjects, clientID); err != nil {
 			harukiLogger.Errorf("Failed to revoke hydra oauth consent sessions: %v", err)
 			reason = "revoke_authorization_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to revoke authorization")
@@ -94,8 +95,8 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 	}
 }
 
-func RegisterUserOAuthAuthorizationRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func RegisterUserOAuthAuthorizationRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) {
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/oauth2/authorizations", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"))...)
-	r.Get("/", handleListOAuthAuthorizations(apiHelper))
-	r.Delete("/:client_id", handleRevokeOAuthAuthorization(apiHelper))
+	r.Get("/", handleListOAuthAuthorizations(apiHelper, hydraConfig))
+	r.Delete("/:client_id", handleRevokeOAuthAuthorization(apiHelper, hydraConfig))
 }

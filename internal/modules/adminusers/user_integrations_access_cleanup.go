@@ -5,6 +5,7 @@ import (
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"strconv"
 	"strings"
 )
@@ -37,10 +38,10 @@ func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.Ha
 	return sessionClearFailed
 }
 
-func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (oauthRevokeFailed bool) {
-	if oauth2Module.HydraOAuthManagementEnabled() {
+func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, targetUserID string, kratosIdentityID *string) (oauthRevokeFailed bool) {
+	if oauth2Module.HydraOAuthManagementEnabled(hydraConfig) {
 		subjects := oauth2Module.HydraSubjectsForUser(targetUserID, kratosIdentityID)
-		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, subjects, ""); err != nil {
+		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, hydraConfig, subjects, ""); err != nil {
 			oauthRevokeFailed = true
 		}
 		return oauthRevokeFailed
@@ -48,9 +49,9 @@ func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelpe
 	return true
 }
 
-func cleanupManagedUserAccessAfterBan(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool, oauthRevokeFailed bool) {
+func cleanupManagedUserAccessAfterBan(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, targetUserID string, kratosIdentityID *string) (sessionClearFailed bool, oauthRevokeFailed bool) {
 	sessionClearFailed = clearManagedUserSessions(ctx, apiHelper, targetUserID, kratosIdentityID)
-	oauthRevokeFailed = revokeManagedUserOAuthTokens(ctx, apiHelper, targetUserID, kratosIdentityID)
+	oauthRevokeFailed = revokeManagedUserOAuthTokens(ctx, apiHelper, hydraConfig, targetUserID, kratosIdentityID)
 	return sessionClearFailed, oauthRevokeFailed
 }
 

@@ -15,13 +15,13 @@ import (
 )
 
 // validateNoMongoOperatorKeys rejects attacker-controlled field names that Mongo
-// would interpret as a dotted field path or an operator ($...). Upload payloads
+// would interpret as a dotted field path or an operator-bearing key. Upload payloads
 // are decrypted with the public game client key, so their keys are untrusted.
 func validateNoMongoOperatorKeys(value any) error {
 	switch v := value.(type) {
 	case map[string]any:
 		for k, val := range v {
-			if strings.HasPrefix(k, "$") || strings.Contains(k, ".") {
+			if strings.ContainsAny(k, ".$") {
 				return fmt.Errorf("invalid field name %q", k)
 			}
 			if err := validateNoMongoOperatorKeys(val); err != nil {

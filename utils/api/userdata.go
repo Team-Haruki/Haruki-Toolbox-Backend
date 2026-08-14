@@ -2,22 +2,33 @@ package api
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"strings"
 )
 
-func BuildUserDataFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
-	return BuildUserDataFromDBUserWithEmailVerified(user, sessionToken, nil)
+// UserDataBuilder converts database users into API response models using the
+// immutable asset settings captured at startup.
+type UserDataBuilder struct {
+	avatarBaseURL string
 }
 
-func BuildUserDataFromDBUserWithEmailVerified(user *postgresql.User, sessionToken *string, emailVerifiedOverride *bool) HarukiToolboxUserData {
+// NewUserDataBuilder preserves avatarBaseURL verbatim. Existing API responses
+// historically joined this value with "/avatars/" without normalizing slashes.
+func NewUserDataBuilder(avatarBaseURL string) UserDataBuilder {
+	return UserDataBuilder{avatarBaseURL: avatarBaseURL}
+}
+
+func (b UserDataBuilder) BuildFromDBUser(user *postgresql.User, sessionToken *string) HarukiToolboxUserData {
+	return b.BuildFromDBUserWithEmailVerified(user, sessionToken, nil)
+}
+
+func (b UserDataBuilder) BuildFromDBUserWithEmailVerified(user *postgresql.User, sessionToken *string, emailVerifiedOverride *bool) HarukiToolboxUserData {
 	emailInfo := buildEmailInfoFromUser(user, emailVerifiedOverride)
 	socialPlatformInfo := buildSocialPlatformInfoFromUser(user)
 	authorizeSocialPlatformInfo := buildAuthorizeSocialPlatformInfoFromUser(user)
 	gameAccountBindings := buildGameAccountBindingsFromUser(user)
-	avatarURL := buildAvatarURLFromUser(user)
+	avatarURL := b.buildAvatarURLFromUser(user)
 	iosUploadCode := buildIOSUploadCodeFromUser(user)
 	role := string(user.Role)
 
@@ -106,9 +117,9 @@ func buildGameAccountBindingsFromUser(user *postgresql.User) []GameAccountBindin
 	return result
 }
 
-func buildAvatarURLFromUser(user *postgresql.User) string {
+func (b UserDataBuilder) buildAvatarURLFromUser(user *postgresql.User) string {
 	if user.AvatarPath != nil {
-		return fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.AvatarURL, *user.AvatarPath)
+		return fmt.Sprintf("%s/avatars/%s", b.avatarBaseURL, *user.AvatarPath)
 	}
 	return ""
 }

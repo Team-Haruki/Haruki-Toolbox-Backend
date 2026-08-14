@@ -65,6 +65,7 @@ const (
 	adminFailureReasonMissingClientID                 = "missing_client_id"
 	adminFailureReasonMissingUserSession              = "missing_user_session"
 	adminFailureReasonNothingToRevoke                 = "nothing_to_revoke"
+	adminFailureReasonPermissionDenied                = "permission_denied"
 	adminFailureReasonQueryAuditLogsFailed            = "query_audit_logs_failed"
 	adminFailureReasonQueryAuthorizationTrendsFailed  = "query_authorization_trends_failed"
 	adminFailureReasonQueryAuthorizationsFailed       = "query_authorizations_failed"

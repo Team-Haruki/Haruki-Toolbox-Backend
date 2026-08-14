@@ -13,7 +13,7 @@ func TestBuildUserDataFromDBUserIncludesRole(t *testing.T) {
 		AllowCnMysekai: true,
 	}
 
-	ud := BuildUserDataFromDBUser(dbUser, nil)
+	ud := NewUserDataBuilder("https://assets.example.test").BuildFromDBUser(dbUser, nil)
 	if ud.Role == nil {
 		t.Fatalf("Role should not be nil")
 	}
@@ -31,7 +31,7 @@ func TestBuildUserDataFromDBUserWithEmailVerifiedUsesOverride(t *testing.T) {
 	}
 	emailVerified := true
 
-	ud := BuildUserDataFromDBUserWithEmailVerified(dbUser, nil, &emailVerified)
+	ud := NewUserDataBuilder("https://assets.example.test").BuildFromDBUserWithEmailVerified(dbUser, nil, &emailVerified)
 	if ud.EmailInfo == nil {
 		t.Fatalf("EmailInfo should not be nil")
 	}
@@ -48,7 +48,7 @@ func TestBuildUserDataFromDBUserKratosFallbackEmailVerifiedTrue(t *testing.T) {
 		KratosIdentityID: strPtr("kratos-identity-2"),
 	}
 
-	ud := BuildUserDataFromDBUser(dbUser, nil)
+	ud := NewUserDataBuilder("https://assets.example.test").BuildFromDBUser(dbUser, nil)
 	if ud.EmailInfo == nil {
 		t.Fatalf("EmailInfo should not be nil")
 	}
@@ -66,7 +66,7 @@ func TestBuildUserDataFromDBUserWithEmailVerifiedUsesFalseOverride(t *testing.T)
 	}
 	emailVerified := false
 
-	ud := BuildUserDataFromDBUserWithEmailVerified(dbUser, nil, &emailVerified)
+	ud := NewUserDataBuilder("https://assets.example.test").BuildFromDBUserWithEmailVerified(dbUser, nil, &emailVerified)
 	if ud.EmailInfo == nil {
 		t.Fatalf("EmailInfo should not be nil")
 	}
@@ -77,4 +77,51 @@ func TestBuildUserDataFromDBUserWithEmailVerifiedUsesFalseOverride(t *testing.T)
 
 func strPtr(value string) *string {
 	return &value
+}
+
+func TestUserDataBuilderPreservesAvatarURLJoining(t *testing.T) {
+	tests := []struct {
+		name    string
+		baseURL string
+		want    string
+	}{
+		{
+			name:    "regular base URL",
+			baseURL: "https://assets.example.test",
+			want:    "https://assets.example.test/avatars/avatar.png",
+		},
+		{
+			name:    "trailing slash remains visible",
+			baseURL: "https://assets.example.test/",
+			want:    "https://assets.example.test//avatars/avatar.png",
+		},
+		{
+			name: "empty base URL",
+			want: "/avatars/avatar.png",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			avatarPath := "avatar.png"
+			dbUser := &postgresql.User{AvatarPath: &avatarPath}
+			userData := NewUserDataBuilder(test.baseURL).BuildFromDBUser(dbUser, nil)
+			if userData.AvatarPath == nil {
+				t.Fatal("AvatarPath should not be nil")
+			}
+			if got := *userData.AvatarPath; got != test.want {
+				t.Fatalf("AvatarPath = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestUserDataBuilderLeavesMissingAvatarEmpty(t *testing.T) {
+	userData := NewUserDataBuilder("https://assets.example.test").BuildFromDBUser(&postgresql.User{}, nil)
+	if userData.AvatarPath == nil {
+		t.Fatal("AvatarPath should not be nil")
+	}
+	if got := *userData.AvatarPath; got != "" {
+		t.Fatalf("AvatarPath = %q, want empty", got)
+	}
 }

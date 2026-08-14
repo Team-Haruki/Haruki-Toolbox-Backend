@@ -8,6 +8,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 
 	"gopkg.in/yaml.v3"
 )
@@ -51,12 +52,19 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
+	var serverCryptor sekai.ServerCryptor
 	if inputFormat == nuversestruct.InputFormatRawUpload {
 		loadedPath, err := loadConfig(configPath)
 		if err != nil {
 			fatalf("%v", err)
 		}
 		fmt.Fprintf(os.Stderr, "nuverse-restore-compare: loaded config %s\n", loadedPath)
+		serverCryptor = sekai.NewServerCryptor(sekai.ServerCryptorConfig{
+			ENServerAESKey:    config.Cfg.SekaiClient.ENServerAESKey,
+			ENServerAESIV:     config.Cfg.SekaiClient.ENServerAESIV,
+			OtherServerAESKey: config.Cfg.SekaiClient.OtherServerAESKey,
+			OtherServerAESIV:  config.Cfg.SekaiClient.OtherServerAESIV,
+		})
 	}
 
 	report, err := nuversestruct.CompareSuiteRestore(nuversestruct.CompareOptions{
@@ -65,6 +73,7 @@ func main() {
 		SchemaPath:         schemaPath,
 		InputFormat:        inputFormat,
 		Server:             server,
+		ServerCryptor:      serverCryptor,
 	})
 	if err != nil {
 		fatalf("%v", err)

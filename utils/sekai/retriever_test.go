@@ -3,7 +3,6 @@ package sekai
 import (
 	"context"
 	"errors"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +19,7 @@ func TestNewSekaiDataRetriever_InvalidServer(t *testing.T) {
 		harukiUtils.SupportedInheritUploadServer("kr"),
 		harukiUtils.InheritInformation{},
 		harukiUtils.UploadDataTypeSuite,
+		ServerCryptor{},
 	)
 	if !r.isErrorExist {
 		t.Fatalf("retriever should be in error state for unsupported server")
@@ -99,21 +99,13 @@ func TestRetrieverHelpers_FlagsAndPayload(t *testing.T) {
 }
 
 func TestRetrieverHelpers_UnpackAndMaintenance(t *testing.T) {
-	originalCfg := harukiConfig.Cfg
-	t.Cleanup(func() {
-		harukiConfig.Cfg = originalCfg
-	})
-	harukiConfig.Cfg.SekaiClient.OtherServerAESKey = testAESKeyHex
-	harukiConfig.Cfg.SekaiClient.OtherServerAESIV = testAESIVHex
-	harukiConfig.Cfg.SekaiClient.ENServerAESKey = testAESKeyHex
-	harukiConfig.Cfg.SekaiClient.ENServerAESIV = testAESIVHex
-
-	encrypted, err := Pack(map[string]any{"isOngoing": true}, harukiUtils.SupportedDataUploadServerJP)
+	serverCryptor := testServerCryptor()
+	encrypted, err := serverCryptor.Pack(map[string]any{"isOngoing": true}, harukiUtils.SupportedDataUploadServerJP)
 	if err != nil {
 		t.Fatalf("Pack failed: %v", err)
 	}
 
-	m, err := unpackResponseToMap(encrypted, JP)
+	m, err := unpackResponseToMap(serverCryptor, encrypted, JP)
 	if err != nil {
 		t.Fatalf("unpackResponseToMap failed: %v", err)
 	}
@@ -121,7 +113,7 @@ func TestRetrieverHelpers_UnpackAndMaintenance(t *testing.T) {
 		t.Fatalf("unexpected map value: %v", m["isOngoing"])
 	}
 
-	ongoing, err := checkMaintenanceFromBody(encrypted, JP)
+	ongoing, err := checkMaintenanceFromBody(serverCryptor, encrypted, JP)
 	if err != nil {
 		t.Fatalf("checkMaintenanceFromBody failed: %v", err)
 	}
@@ -131,25 +123,18 @@ func TestRetrieverHelpers_UnpackAndMaintenance(t *testing.T) {
 }
 
 func TestRetrieverHelpers_UnpackTypeError(t *testing.T) {
-	originalCfg := harukiConfig.Cfg
-	t.Cleanup(func() {
-		harukiConfig.Cfg = originalCfg
-	})
-	harukiConfig.Cfg.SekaiClient.OtherServerAESKey = testAESKeyHex
-	harukiConfig.Cfg.SekaiClient.OtherServerAESIV = testAESIVHex
-
-	encrypted, err := Pack([]any{1, 2, 3}, harukiUtils.SupportedDataUploadServerJP)
+	serverCryptor := testServerCryptor()
+	encrypted, err := serverCryptor.Pack([]any{1, 2, 3}, harukiUtils.SupportedDataUploadServerJP)
 	if err != nil {
 		t.Fatalf("Pack failed: %v", err)
 	}
 
-	if _, err := unpackResponseToMap(encrypted, JP); err == nil {
+	if _, err := unpackResponseToMap(serverCryptor, encrypted, JP); err == nil {
 		t.Fatalf("unpackResponseToMap should fail for non-map payload")
 	}
 }
 
 func TestRetrieverRunReturnsErrorForRequiredSuiteFailure(t *testing.T) {
-	withTestSekaiCrypto(t)
 	withFastRetrieverSleeps(t)
 
 	userID := int64(164337024457871363)
@@ -178,7 +163,6 @@ func TestRetrieverRunReturnsErrorForRequiredSuiteFailure(t *testing.T) {
 }
 
 func TestRetrieverRunIgnoresFinalHomeRefreshFailure(t *testing.T) {
-	withTestSekaiCrypto(t)
 	withFastRetrieverSleeps(t)
 
 	userID := int64(164337024457871363)
@@ -193,18 +177,6 @@ func TestRetrieverRunIgnoresFinalHomeRefreshFailure(t *testing.T) {
 	if result == nil || result.UserID != userID || len(result.Suite) == 0 {
 		t.Fatalf("Run result = %#v, want userID and suite payload", result)
 	}
-}
-
-func withTestSekaiCrypto(t *testing.T) {
-	t.Helper()
-	originalCfg := harukiConfig.Cfg
-	t.Cleanup(func() {
-		harukiConfig.Cfg = originalCfg
-	})
-	harukiConfig.Cfg.SekaiClient.OtherServerAESKey = testAESKeyHex
-	harukiConfig.Cfg.SekaiClient.OtherServerAESIV = testAESIVHex
-	harukiConfig.Cfg.SekaiClient.ENServerAESKey = testAESKeyHex
-	harukiConfig.Cfg.SekaiClient.ENServerAESIV = testAESIVHex
 }
 
 func withFastRetrieverSleeps(t *testing.T) {
@@ -222,6 +194,7 @@ func withFastRetrieverSleeps(t *testing.T) {
 func newTestRetriever(baseURL string, userID int64) *HarukiSekaiDataRetriever {
 	client := NewSekaiClientWithConfig(ClientConfig{
 		Server:          EN,
+		ServerCryptor:   testServerCryptor(),
 		API:             baseURL + "/api",
 		VersionURL:      baseURL + "/version",
 		Inherit:         harukiUtils.InheritInformation{InheritID: "inherit-id", InheritPassword: "password"},
@@ -267,7 +240,7 @@ func newRetrieverTestServer(t *testing.T, userID int64, suiteStatus int, homeRef
 
 func writePackedTestResponse(t *testing.T, w http.ResponseWriter, payload map[string]any) {
 	t.Helper()
-	packed, err := Pack(payload, harukiUtils.SupportedDataUploadServerEN)
+	packed, err := testServerCryptor().Pack(payload, harukiUtils.SupportedDataUploadServerEN)
 	if err != nil {
 		t.Fatalf("Pack test response failed: %v", err)
 	}

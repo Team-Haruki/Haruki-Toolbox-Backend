@@ -16,7 +16,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, endpoints EndpointConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		uploadCode := c.Params("upload_code")
@@ -140,7 +140,7 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			Mode:        mode,
 			ChunkSizeMB: chunkSizeMB,
 		}
-		endpoint := getEndpoint(endpointType)
+		endpoint := endpoints.endpoint(endpointType)
 		content, err := iosGen.GenerateModule(req, endpoint, endpointStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate module")

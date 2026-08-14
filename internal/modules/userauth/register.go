@@ -1,11 +1,11 @@
 package userauth
 
 import (
+	"crypto/subtle"
 	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strings"
 	"time"
@@ -33,7 +33,11 @@ const (
 	registerOTPAttemptTTL                     = 5 * time.Minute
 )
 
-func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleRegister(
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	turnstileVerifier harukiCloudflare.Verifier,
+	userDataBuilder harukiAPIHelper.UserDataBuilder,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		logRegister := func(result string, targetUserID string, reason string) {
@@ -63,7 +67,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonEmailUnavailable)
 			return harukiAPIHelper.ErrorBadRequest(c, "email is required")
 		}
-		vresp, err := cloudflare.ValidateTurnstile(req.ChallengeToken, c.IP())
+		vresp, err := harukiCloudflare.Verify(c.Context(), turnstileVerifier, req.ChallengeToken, c.IP())
 		if err != nil {
 			logRegister(harukiAPIHelper.SystemLogResultFailure, "", registerReasonChallengeServiceUnavailable)
 			return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
@@ -94,7 +98,7 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, userModule.PasswordTooLongMessage)
 		}
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
-			return handleRegisterViaKratos(c, apiHelper, req, logRegister)
+			return handleRegisterViaKratos(c, apiHelper, req, logRegister, userDataBuilder)
 		}
 		logRegister(harukiAPIHelper.SystemLogResultFailure, "", "managed_identity_required")
 		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, ManagedIdentityMessage, nil)
@@ -104,30 +108,24 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 func verifyEmailOTP(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) (bool, error) {
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
-	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
-	var attemptCount int
-	found, err := apiHelper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount)
+	attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildOTPAttemptKey(email)
+	attemptCount, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, registerOTPAttemptTTL)
 	if err != nil {
-		harukiLogger.Errorf("Failed to get OTP attempt count: %v", err)
+		harukiLogger.Errorf("Failed to update OTP attempt count: %v", err)
 		return false, err
 	}
-	if found && attemptCount >= registerOTPAttemptLimit {
+	if attemptCount > registerOTPAttemptLimit {
 		return false, nil
 	}
 
-	redisKey := harukiRedis.BuildEmailVerifyKey(email)
+	redisKey := apiHelper.DBManager.Redis.KeyBuilder().BuildEmailVerifyKey(email)
 	var storedOTP string
-	found, err = apiHelper.DBManager.Redis.GetCache(ctx, redisKey, &storedOTP)
+	found, err := apiHelper.DBManager.Redis.GetCache(ctx, redisKey, &storedOTP)
 	if err != nil {
 		harukiLogger.Errorf("Failed to get OTP from redis: %v", err)
 		return false, err
 	}
-	if !found || storedOTP != otp {
-		newCount := attemptCount + 1
-		if setErr := apiHelper.DBManager.Redis.SetCache(ctx, attemptKey, newCount, registerOTPAttemptTTL); setErr != nil {
-			harukiLogger.Errorf("Failed to update OTP attempt count: %v", setErr)
-			return false, setErr
-		}
+	if !found || subtle.ConstantTimeCompare([]byte(storedOTP), []byte(otp)) != 1 {
 		return false, nil
 	}
 
@@ -164,6 +162,7 @@ func handleRegisterViaKratos(
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	req harukiAPIHelper.RegisterPayload,
 	logRegister func(result string, targetUserID string, reason string),
+	userDataBuilder harukiAPIHelper.UserDataBuilder,
 ) error {
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	traits := map[string]any{}
@@ -228,7 +227,7 @@ func handleRegisterViaKratos(
 	}
 
 	role := string(newUser.Role)
-	ud := harukiAPIHelper.BuildUserDataFromDBUser(newUser, &sessionToken)
+	ud := userDataBuilder.BuildFromDBUser(newUser, &sessionToken)
 	if ud.Role == nil {
 		ud.Role = &role
 	}

@@ -8,11 +8,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 )
+
+const (
+	compareTestAESKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	compareTestAESIVHex  = "0102030405060708090a0b0c0d0e0f10"
+)
+
+func compareTestServerCryptor() sekai.ServerCryptor {
+	return sekai.NewServerCryptor(sekai.ServerCryptorConfig{
+		ENServerAESKey:    compareTestAESKeyHex,
+		ENServerAESIV:     compareTestAESIVHex,
+		OtherServerAESKey: compareTestAESKeyHex,
+		OtherServerAESIV:  compareTestAESIVHex,
+	})
+}
 
 func TestCompareSuiteRestoreReportsShapeChanges(t *testing.T) {
 	dir := t.TempDir()
@@ -160,13 +173,6 @@ func TestCompareSuiteRestoreReportGolden(t *testing.T) {
 }
 
 func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
-	originalCfg := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = originalCfg
-	})
-	config.Cfg.SekaiClient.OtherServerAESKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	config.Cfg.SekaiClient.OtherServerAESIV = "0102030405060708090a0b0c0d0e0f10"
-
 	dir := t.TempDir()
 	schemaPath := filepath.Join(dir, "schema.json")
 	samplePath := filepath.Join(dir, "sample.raw")
@@ -182,8 +188,8 @@ func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
 		t.Fatalf("marshal sample: %v", err)
 	}
 	cryptor, err := sekai.NewSekaiCryptorFromHex(
-		config.Cfg.SekaiClient.OtherServerAESKey,
-		config.Cfg.SekaiClient.OtherServerAESIV,
+		compareTestAESKeyHex,
+		compareTestAESIVHex,
 	)
 	if err != nil {
 		t.Fatalf("create cryptor: %v", err)
@@ -201,6 +207,7 @@ func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
 		SchemaPath:        schemaPath,
 		InputFormat:       InputFormatRawUpload,
 		Server:            harukiUtils.SupportedDataUploadServerJP,
+		ServerCryptor:     compareTestServerCryptor(),
 	})
 	if err != nil {
 		t.Fatalf("CompareSuiteRestore raw upload returned error: %v", err)
@@ -211,13 +218,6 @@ func TestCompareSuiteRestoreRawUploadInput(t *testing.T) {
 }
 
 func TestCompareSuiteRestoreRawUploadFixtureGolden(t *testing.T) {
-	originalCfg := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = originalCfg
-	})
-	config.Cfg.SekaiClient.OtherServerAESKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	config.Cfg.SekaiClient.OtherServerAESIV = "0102030405060708090a0b0c0d0e0f10"
-
 	dir := t.TempDir()
 	samplePath := filepath.Join(dir, "minimal_suite_sample.raw")
 	rawUpload, err := hex.DecodeString(strings.TrimSpace(string(readTestdata(t, "minimal_suite_sample.raw_upload.hex"))))
@@ -234,6 +234,7 @@ func TestCompareSuiteRestoreRawUploadFixtureGolden(t *testing.T) {
 		SchemaPath:         "testdata/suite_schema.avro.json",
 		InputFormat:        InputFormatRawUpload,
 		Server:             harukiUtils.SupportedDataUploadServerJP,
+		ServerCryptor:      compareTestServerCryptor(),
 	})
 	if err != nil {
 		t.Fatalf("CompareSuiteRestore raw upload fixture returned error: %v", err)

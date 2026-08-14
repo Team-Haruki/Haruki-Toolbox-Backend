@@ -69,7 +69,7 @@ func respondQQMailRateLimited(c fiber.Ctx, key string, message string, apiHelper
 
 func checkQQMailSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, qq string) (limited bool, key string, message string, err error) {
 	userKey := harukiRedis.BuildQQMailSendRateLimitUserKey(userID)
-	targetKey := harukiRedis.BuildQQMailSendRateLimitTargetKey(qq)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildQQMailSendRateLimitTargetKey(qq)
 	values, err := apiHelper.DBManager.Redis.Redis.Eval(
 		c.Context(),
 		socialRateLimitReserveScript,
@@ -100,7 +100,7 @@ func checkQQMailSendRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTool
 
 func releaseQQMailSendRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, qq string) error {
 	userKey := harukiRedis.BuildQQMailSendRateLimitUserKey(userID)
-	targetKey := harukiRedis.BuildQQMailSendRateLimitTargetKey(qq)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildQQMailSendRateLimitTargetKey(qq)
 	_, err := apiHelper.DBManager.Redis.Redis.Eval(c.Context(), socialRateLimitReleaseScript, []string{userKey, targetKey}).Result()
 	return err
 }

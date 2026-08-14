@@ -10,7 +10,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID, err := userCoreModule.CurrentUserID(c)
@@ -40,6 +40,7 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			&gameUserID,
 			&userID,
 			apiHelper,
+			dependencies,
 			harukiUtils.UploadMethodManual,
 		)
 		if err != nil {
@@ -52,8 +53,8 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 	}
 }
 
-func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	api := apiHelper.Router.Group("/api/manual/:server/:user_id/:data_type", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedUser(apiHelper))...)
 
-	api.Post("/upload", handleManualUpload(apiHelper))
+	api.Post("/upload", handleManualUpload(apiHelper, dependencies))
 }

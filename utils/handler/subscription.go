@@ -2,29 +2,26 @@ package handler
 
 import (
 	"context"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"strconv"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 )
 
 func (h *DataHandler) ProcessBirthdaySubscriptionAsync(userID int64, server utils.SupportedDataUploadServer, data map[string]any) {
-	go h.processBirthdaySubscription(userID, server, data)
+	h.submitBackgroundTask("birthday-subscription", func() {
+		h.processBirthdaySubscription(userID, server, data)
+	})
 }
 
 func (h *DataHandler) processBirthdaySubscription(userID int64, server utils.SupportedDataUploadServer, data map[string]any) {
-	cfg := config.Cfg.Subscription
 	redisManager := h.birthdayRedis()
 	if redisManager == nil {
 		h.Logger.Warnf("birthday subscription skipped: redis is unavailable server=%s uid=%d", server, userID)
 		return
 	}
-	timeout := time.Duration(cfg.RequestTimeoutSecond) * time.Second
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), h.BirthdaySubscription.timeout())
 	defer cancel()
 
 	monitor, found, err := GetBirthdayMonitorMirror(ctx, redisManager, string(server), strconv.FormatInt(userID, 10))

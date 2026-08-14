@@ -11,6 +11,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -364,6 +365,87 @@ func TestGetVerificationCodeTooManyAttempts(t *testing.T) {
 	if !errors.Is(err, errGameAccountVerificationTooManyAttempts) {
 		t.Fatalf("error = %v, want %v", err, errGameAccountVerificationTooManyAttempts)
 	}
+	var attemptCount int
+	if found, getErr := redisManager.GetCache(ctx, attemptKey, &attemptCount); getErr != nil || !found {
+		t.Fatalf("read attempt count: found=%v error=%v", found, getErr)
+	}
+	if attemptCount != gameAccountVerificationMaxAttempts+1 {
+		t.Fatalf("attempt count = %d, want %d", attemptCount, gameAccountVerificationMaxAttempts+1)
+	}
+}
+
+func TestGetVerificationCodeMissingDoesNotReserveAttempt(t *testing.T) {
+	t.Parallel()
+
+	helper, redisManager, ctx := newGameBindingRedisHelper(t)
+	userID, server, gameUserID := "u1", "jp", "12345"
+	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, server, gameUserID)
+
+	_, err := getVerificationCode(ctx, helper, userID, server, gameUserID)
+	if !errors.Is(err, errGameAccountVerificationCodeExpired) {
+		t.Fatalf("error = %v, want %v", err, errGameAccountVerificationCodeExpired)
+	}
+	if exists, existsErr := redisManager.Redis.Exists(ctx, attemptKey).Result(); existsErr != nil {
+		t.Fatalf("attempt key exists check error: %v", existsErr)
+	} else if exists != 0 {
+		t.Fatalf("missing verification code reserved an attempt, exists=%d", exists)
+	}
+}
+
+func TestGetVerificationCodeAtomicallyReservesConcurrentAttempts(t *testing.T) {
+	t.Parallel()
+
+	helper, redisManager, ctx := newGameBindingRedisHelper(t)
+	userID, server, gameUserID := "u1", "jp", "12345"
+	codeKey := harukiRedis.BuildGameAccountVerifyKey(userID, server, gameUserID)
+	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, server, gameUserID)
+	if err := redisManager.SetCache(ctx, codeKey, "1/2/3/4/5/6", time.Minute); err != nil {
+		t.Fatalf("seed code key error: %v", err)
+	}
+
+	const callers = 32
+	start := make(chan struct{})
+	results := make(chan error, callers)
+	var callersDone sync.WaitGroup
+	callersDone.Add(callers)
+	for range callers {
+		go func() {
+			defer callersDone.Done()
+			<-start
+			_, err := getVerificationCode(ctx, helper, userID, server, gameUserID)
+			results <- err
+		}()
+	}
+	close(start)
+	callersDone.Wait()
+	close(results)
+
+	accepted := 0
+	rejected := 0
+	for err := range results {
+		switch {
+		case err == nil:
+			accepted++
+		case errors.Is(err, errGameAccountVerificationTooManyAttempts):
+			rejected++
+		default:
+			t.Fatalf("unexpected reservation error: %v", err)
+		}
+	}
+	if accepted != gameAccountVerificationMaxAttempts {
+		t.Fatalf("accepted attempts = %d, want %d", accepted, gameAccountVerificationMaxAttempts)
+	}
+	if rejected != callers-gameAccountVerificationMaxAttempts {
+		t.Fatalf("rejected attempts = %d, want %d", rejected, callers-gameAccountVerificationMaxAttempts)
+	}
+
+	var attemptCount int
+	if found, err := redisManager.GetCache(ctx, attemptKey, &attemptCount); err != nil || !found {
+		t.Fatalf("read final attempt count: found=%v error=%v", found, err)
+	}
+	if attemptCount != callers {
+		t.Fatalf("final attempt count = %d, want %d", attemptCount, callers)
+	}
 }
 
 func TestConsumeGameAccountVerificationCode(t *testing.T) {
@@ -392,20 +474,6 @@ func TestConsumeGameAccountVerificationCode(t *testing.T) {
 	}
 	if exists != 0 {
 		t.Fatalf("expected verification and attempt keys to be removed, exists=%d", exists)
-	}
-}
-
-func TestShouldIncrementGameAccountVerificationAttempt(t *testing.T) {
-	t.Parallel()
-
-	if !shouldIncrementGameAccountVerificationAttempt(errGameAccountVerificationCodeMissing) {
-		t.Fatalf("missing-code error should increment attempts")
-	}
-	if !shouldIncrementGameAccountVerificationAttempt(errGameAccountVerificationCodeMismatch) {
-		t.Fatalf("mismatch error should increment attempts")
-	}
-	if shouldIncrementGameAccountVerificationAttempt(errors.New("server unavailable")) {
-		t.Fatalf("non-verification error should not increment attempts")
 	}
 }
 

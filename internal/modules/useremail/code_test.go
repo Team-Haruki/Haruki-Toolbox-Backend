@@ -105,8 +105,8 @@ func TestVerifyEmailHandlerConsumesCodeAndClearsAttempts(t *testing.T) {
 	helper, redisManager, ctx := newEmailVerifyTestHelper(t)
 	email := "test@example.com"
 	code := "123456"
-	verifyKey := harukiRedis.BuildEmailVerifyKey(email)
-	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
+	verifyKey := redisManager.KeyBuilder().BuildEmailVerifyKey(email)
+	attemptKey := redisManager.KeyBuilder().BuildOTPAttemptKey(email)
 
 	if err := redisManager.SetCache(ctx, verifyKey, code, 5*time.Minute); err != nil {
 		t.Fatalf("seed verify code error: %v", err)
@@ -139,8 +139,8 @@ func TestVerifyEmailHandlerWrongCodeIncrementsAttempts(t *testing.T) {
 
 	helper, redisManager, ctx := newEmailVerifyTestHelper(t)
 	email := "wrong@example.com"
-	verifyKey := harukiRedis.BuildEmailVerifyKey(email)
-	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
+	verifyKey := redisManager.KeyBuilder().BuildEmailVerifyKey(email)
+	attemptKey := redisManager.KeyBuilder().BuildOTPAttemptKey(email)
 
 	if err := redisManager.SetCache(ctx, verifyKey, "654321", 5*time.Minute); err != nil {
 		t.Fatalf("seed verify code error: %v", err)

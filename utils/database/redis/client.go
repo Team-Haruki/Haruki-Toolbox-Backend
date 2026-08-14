@@ -14,6 +14,14 @@ const redisPingTimeout = 5 * time.Second
 
 type HarukiRedisManager struct {
 	Redis *redis.Client
+	keys  KeyBuilder
+}
+
+func (r *HarukiRedisManager) KeyBuilder() KeyBuilder {
+	if r == nil {
+		return KeyBuilder{}
+	}
+	return r.keys
 }
 
 func (r *HarukiRedisManager) Close() error {
@@ -23,7 +31,7 @@ func (r *HarukiRedisManager) Close() error {
 	return r.Redis.Close()
 }
 
-func NewRedisClient(cfg config.RedisConfig) *HarukiRedisManager {
+func NewRedisClient(cfg config.RedisConfig, identifierHashSecret string) *HarukiRedisManager {
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Password: cfg.Password,
@@ -36,5 +44,6 @@ func NewRedisClient(cfg config.RedisConfig) *HarukiRedisManager {
 	}
 	return &HarukiRedisManager{
 		Redis: client,
+		keys:  NewKeyBuilder(identifierHashSecret),
 	}
 }

@@ -3,7 +3,6 @@ package adminsponsor
 import (
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	sharedSponsor "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -143,9 +142,9 @@ func handleAdminUpdateSponsor(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 	}
 }
 
-func handleAdminSyncAfdianSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleAdminSyncAfdianSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, afdianConfig sharedSponsor.AfdianConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		result, err := sharedSponsor.SyncAfdianSponsors(c.Context(), apiHelper.DBManager.DB, config.Cfg.Afdian, time.Now().UTC())
+		result, err := sharedSponsor.SyncAfdianSponsors(c.Context(), apiHelper.DBManager.DB, afdianConfig, time.Now().UTC())
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionSyncAfdian, adminSponsorTargetType, "afdian", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata("afdian_sync_failed", map[string]any{"error": err.Error()}))
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to sync afdian sponsors: "+err.Error())

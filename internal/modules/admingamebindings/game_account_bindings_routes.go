@@ -3,10 +3,11 @@ package admingamebindings
 import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+
+	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterAdminGlobalGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+func RegisterAdminGlobalGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	gameBindings := adminGroup.Group("/game-account-bindings", adminCoreModule.RequireAdmin(apiHelper))
 	gameBindings.Get("", handleAdminListGlobalGameAccountBindings(apiHelper))
 	gameBindings.Post("/batch-delete", handleAdminBatchDeleteGlobalGameAccountBindings(apiHelper))

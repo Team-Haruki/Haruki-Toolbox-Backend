@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -21,11 +20,11 @@ const (
 	afdianCallbackRateLimitMax    = 60
 )
 
-func RegisterSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func RegisterSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, afdianConfig AfdianConfig) {
 	apiHelper.Router.Get("/api/misc/sponsors", handleGetSponsors(apiHelper))
 	apiHelper.Router.Get("/api/sponsor/afdian", handleGetSponsors(apiHelper))
-	apiHelper.Router.Post("/api/sponsor/afdian/callback", handleAfdianCallback(apiHelper))
-	apiHelper.Router.Post("/api/sponsor/afdian/callback/:secret", handleAfdianCallback(apiHelper))
+	apiHelper.Router.Post("/api/sponsor/afdian/callback", handleAfdianCallback(apiHelper, afdianConfig))
+	apiHelper.Router.Post("/api/sponsor/afdian/callback/:secret", handleAfdianCallback(apiHelper, afdianConfig))
 }
 
 // afdianAck returns the minimal response Afdian expects so it does not retry the
@@ -45,10 +44,8 @@ func handleGetSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 	}
 }
 
-func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, cfg AfdianConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		cfg := config.Cfg.Afdian
-
 		// Per-IP rate limit: the callback is public and triggers an outbound
 		// Afdian API verification, so bound abuse/amplification per source.
 		if apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil {
@@ -58,8 +55,8 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			}
 		}
 
-		secret := strings.TrimSpace(cfg.WebhookSecret)
-		apiConfigured := strings.TrimSpace(cfg.UserID) != "" && strings.TrimSpace(cfg.APIToken) != ""
+		secret := cfg.WebhookSecret()
+		apiConfigured := cfg.CredentialsConfigured()
 
 		// Fail closed: Afdian webhooks are unsigned, so with neither authenticity
 		// gate configured (no URL secret AND no API credentials to re-verify) the

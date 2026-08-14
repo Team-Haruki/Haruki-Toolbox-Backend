@@ -13,7 +13,7 @@ import (
 func checkSendMailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, qq string) (limited bool, key string, message string, err error) {
 	ctx := c.Context()
 	ipKey := harukiRedis.BuildBotSendMailRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildBotSendMailRateLimitTargetKey(qq)
+	targetKey := helper.DBManager.Redis.KeyBuilder().BuildBotSendMailRateLimitTargetKey(qq)
 	values, err := helper.DBManager.Redis.Redis.Eval(
 		ctx,
 		sendMailRateLimitScript,
@@ -45,7 +45,7 @@ func checkSendMailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRo
 func releaseSendMailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, qq string) {
 	ctx := c.Context()
 	ipKey := harukiRedis.BuildBotSendMailRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildBotSendMailRateLimitTargetKey(qq)
+	targetKey := helper.DBManager.Redis.KeyBuilder().BuildBotSendMailRateLimitTargetKey(qq)
 	_, err := helper.DBManager.Redis.Redis.Eval(ctx, sendMailRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
 	if err != nil {
 		harukiLogger.Warnf("Failed to release send mail rate limit reservation: %v", err)

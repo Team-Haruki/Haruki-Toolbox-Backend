@@ -32,7 +32,7 @@ func (c *HarukiSekaiClient) InheritAccount(ctx context.Context, returnUserID boo
 		return fmt.Errorf("inherit account failed, status=%d", status)
 	}
 
-	unpackedAny, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
+	unpackedAny, err := c.serverCryptor.Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
 		c.logger.Errorf("Failed to unpack inherit response: %v", err)
 		return err
@@ -124,7 +124,7 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		"deviceId":        nil,
 		"authTriggerType": "normal",
 	}
-	packed, err := Pack(body, harukiUtils.SupportedDataUploadServer(c.server))
+	packed, err := c.serverCryptor.Pack(body, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
 		c.logger.Errorf("Failed to pack login request: %v", err)
 		return err
@@ -140,7 +140,7 @@ func (c *HarukiSekaiClient) Login(ctx context.Context) error {
 		return fmt.Errorf("account login failed, status=403")
 	}
 
-	unpackedAny, err := Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
+	unpackedAny, err := c.serverCryptor.Unpack(resp, harukiUtils.SupportedDataUploadServer(c.server))
 	if err != nil {
 		c.logger.Errorf("Failed to unpack login response: %v", err)
 		return err

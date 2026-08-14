@@ -1,23 +1,19 @@
 package oauth2
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 func TestVerifyOAuth2TokenViaHydraIntrospection(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/admin/oauth2/introspect" {
 			w.WriteHeader(http.StatusNotFound)
@@ -31,24 +27,29 @@ func TestVerifyOAuth2TokenViaHydraIntrospection(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch token {
 		case "token-active":
-			_, _ = w.Write([]byte(`{"active":true,"sub":"u-1","client_id":"c-1","scope":"user:read bindings:read"}`))
+			_, _ = w.Write([]byte(`{"active":true,"sub":"u-1","client_id":"c-1","scope":"user:read bindings:read","token_use":"access_token"}`))
+		case "token-missing-type":
+			_, _ = w.Write([]byte(`{"active":true,"sub":"u-1","client_id":"c-1","scope":"user:read"}`))
+		case "token-refresh":
+			_, _ = w.Write([]byte(`{"active":true,"sub":"u-1","client_id":"c-1","scope":"user:read","token_use":"refresh_token"}`))
+		case "token-missing-client":
+			_, _ = w.Write([]byte(`{"active":true,"sub":"u-1","scope":"user:read","token_use":"access_token"}`))
 		default:
 			_, _ = w.Write([]byte(`{"active":false}`))
 		}
 	}))
 	t.Cleanup(server.Close)
 
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 5
+	hydraConfig := NewHydraConfig(HydraConfigOptions{AdminURL: server.URL, RequestTimeout: 5 * time.Second})
 
 	app := fiber.New()
-	app.Get("/ok", VerifyOAuth2Token(nil, ScopeUserRead), func(c fiber.Ctx) error {
+	app.Get("/ok", VerifyOAuth2Token(hydraConfig, nil, ScopeUserRead, nil), func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"userID":   c.Locals("userID"),
 			"clientID": c.Locals("oauth2ClientID"),
 		})
 	})
-	app.Get("/scope", VerifyOAuth2Token(nil, ScopeGameDataRead), func(c fiber.Ctx) error {
+	app.Get("/scope", VerifyOAuth2Token(hydraConfig, nil, ScopeGameDataRead, nil), func(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
@@ -92,11 +93,23 @@ func TestVerifyOAuth2TokenViaHydraIntrospection(t *testing.T) {
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
 	}
+
+	for _, token := range []string{"token-missing-type", "token-refresh", "token-missing-client"} {
+		req = httptest.NewRequest(http.MethodGet, "/ok", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err = app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test(%s) returned error: %v", token, err)
+		}
+		if resp.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("status for %s = %d, want %d", token, resp.StatusCode, fiber.StatusUnauthorized)
+		}
+	}
 }
 
 func TestVerifyOAuth2TokenSetsBearerChallengeOnMissingAuthorization(t *testing.T) {
 	app := fiber.New()
-	app.Get("/protected", VerifyOAuth2Token(nil, ScopeUserRead), func(c fiber.Ctx) error {
+	app.Get("/protected", VerifyOAuth2Token(NewHydraConfig(HydraConfigOptions{}), nil, ScopeUserRead, nil), func(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNoContent)
 	})
 
@@ -110,5 +123,56 @@ func TestVerifyOAuth2TokenSetsBearerChallengeOnMissingAuthorization(t *testing.T
 	}
 	if got := resp.Header.Get("WWW-Authenticate"); !strings.HasPrefix(got, "Bearer realm=") {
 		t.Fatalf("WWW-Authenticate = %q, want bearer challenge", got)
+	}
+}
+
+func TestVerifyOAuth2TokenScopesClientCheckerToMiddleware(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/admin/oauth2/introspect" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"active":true,"sub":"u-1","client_id":"disabled-client","scope":"user:read","token_use":"access_token"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	hydraConfig := NewHydraConfig(HydraConfigOptions{AdminURL: server.URL, RequestTimeout: 5 * time.Second})
+
+	checkedClientID := ""
+	checker := func(_ context.Context, clientID string) (bool, error) {
+		checkedClientID = clientID
+		return false, nil
+	}
+
+	app := fiber.New()
+	app.Get("/checked", VerifyOAuth2Token(hydraConfig, nil, ScopeUserRead, checker), func(c fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+	app.Get("/unchecked", VerifyOAuth2Token(hydraConfig, nil, ScopeUserRead, nil), func(c fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	checkedReq := httptest.NewRequest(http.MethodGet, "/checked", nil)
+	checkedReq.Header.Set("Authorization", "Bearer token-active")
+	checkedResp, err := app.Test(checkedReq)
+	if err != nil {
+		t.Fatalf("checked app.Test returned error: %v", err)
+	}
+	if checkedResp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("checked status = %d, want %d", checkedResp.StatusCode, fiber.StatusUnauthorized)
+	}
+	if checkedClientID != "disabled-client" {
+		t.Fatalf("checked client id = %q, want disabled-client", checkedClientID)
+	}
+
+	uncheckedReq := httptest.NewRequest(http.MethodGet, "/unchecked", nil)
+	uncheckedReq.Header.Set("Authorization", "Bearer token-active")
+	uncheckedResp, err := app.Test(uncheckedReq)
+	if err != nil {
+		t.Fatalf("unchecked app.Test returned error: %v", err)
+	}
+	if uncheckedResp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("unchecked status = %d, want %d", uncheckedResp.StatusCode, fiber.StatusNoContent)
 	}
 }

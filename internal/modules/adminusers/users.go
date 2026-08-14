@@ -6,6 +6,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -13,13 +14,21 @@ import (
 
 func handleListUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
 		filters, err := parseAdminUserQueryFilters(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid query filters")
 		}
 
 		dbCtx := c.Context()
-		baseQuery := applyAdminUserQueryFilters(apiHelper.DBManager.DB.User.Query(), filters)
+		baseQuery := scopeAdminUserQueryForActor(
+			applyAdminUserQueryFilters(apiHelper.DBManager.DB.User.Query(), filters),
+			actorUserID,
+			actorRole,
+		)
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -71,7 +80,7 @@ func handleListUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 	}
 }
 
-func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		targetUserID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetUserID == "" {
@@ -170,7 +179,7 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			Banned:    updatedUser.Banned,
 			BanReason: updatedUser.BanReason,
 		}
-		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, hydraConfig, targetUser.ID, targetUser.KratosIdentityID)
 		clearedSessions := !sessionClearFailed
 		revokedOAuthTokens := !oauthRevokeFailed
 		resp.ClearedSessions = &clearedSessions

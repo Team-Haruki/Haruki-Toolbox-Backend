@@ -238,8 +238,7 @@ func handleAdminDeleteFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 	}
 }
 
-func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	content := adminGroup.Group("/content", adminCoreModule.RequireAdmin(apiHelper))
 
 	friendLinks := content.Group("/friend-links")

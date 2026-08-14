@@ -15,7 +15,7 @@ func TestRegisterUserResetPasswordRoutesDisablesLegacyEndpointsWhenManagedIdenti
 	sessionHandler := harukiAPIHelper.NewSessionHandler(nil, "")
 	sessionHandler.ConfigureIdentityProvider("kratos", "http://kratos.example", "http://kratos-admin.example", "", "", true, true, time.Second, nil)
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, SessionHandler: sessionHandler}
-	RegisterUserResetPasswordRoutes(helper)
+	RegisterUserResetPasswordRoutes(helper, nil)
 
 	for _, path := range []string{"/api/user/reset-password/send", "/api/user/reset-password"} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)

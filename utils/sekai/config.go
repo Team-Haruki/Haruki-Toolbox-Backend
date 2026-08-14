@@ -78,6 +78,7 @@ func GetServerConfig(server harukiUtils.SupportedInheritUploadServer) (*ServerCo
 
 type Client struct {
 	server          harukiUtils.SupportedInheritUploadServer
+	serverCryptor   ServerCryptor
 	api             string
 	versionURL      string
 	inherit         harukiUtils.InheritInformation

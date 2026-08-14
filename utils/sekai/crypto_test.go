@@ -3,15 +3,26 @@ package sekai
 import (
 	"bytes"
 	"errors"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"strings"
 	"testing"
 )
 
 const (
-	testAESKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	testAESIVHex  = "0102030405060708090a0b0c0d0e0f10"
+	testAESKeyHex  = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	testAESIVHex   = "0102030405060708090a0b0c0d0e0f10"
+	testAESKeyHex2 = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+	testAESIVHex2  = "100f0e0d0c0b0a090807060504030201"
 )
+
+func testServerCryptor() ServerCryptor {
+	return NewServerCryptor(ServerCryptorConfig{
+		ENServerAESKey:    testAESKeyHex,
+		ENServerAESIV:     testAESIVHex,
+		OtherServerAESKey: testAESKeyHex,
+		OtherServerAESIV:  testAESIVHex,
+	})
+}
 
 func mustTestCryptor(t *testing.T) *SekaiCryptor {
 	t.Helper()
@@ -152,16 +163,6 @@ func TestUnpackOrdered(t *testing.T) {
 }
 
 func TestDecryptToMsgpack(t *testing.T) {
-	originalCfg := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = originalCfg
-	})
-
-	config.Cfg.SekaiClient.ENServerAESKey = testAESKeyHex
-	config.Cfg.SekaiClient.ENServerAESIV = testAESIVHex
-	config.Cfg.SekaiClient.OtherServerAESKey = testAESKeyHex
-	config.Cfg.SekaiClient.OtherServerAESIV = testAESIVHex
-
 	cryptor := mustTestCryptor(t)
 	rawMsgpack := []byte{0x81, 0xa1, 'a', 0x01}
 	encrypted, err := cryptor.Pack(rawMsgpack)
@@ -169,11 +170,107 @@ func TestDecryptToMsgpack(t *testing.T) {
 		t.Fatalf("Pack raw msgpack failed: %v", err)
 	}
 
-	decrypted, err := DecryptToMsgpack(encrypted, harukiUtils.SupportedDataUploadServerJP)
+	decrypted, err := testServerCryptor().DecryptToMsgpack(encrypted, harukiUtils.SupportedDataUploadServerJP)
 	if err != nil {
 		t.Fatalf("DecryptToMsgpack failed: %v", err)
 	}
 	if !bytes.Equal(decrypted, rawMsgpack) {
 		t.Fatalf("DecryptToMsgpack mismatch: got %x want %x", decrypted, rawMsgpack)
+	}
+}
+
+func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
+	serverCryptor := NewServerCryptor(ServerCryptorConfig{
+		ENServerAESKey:    testAESKeyHex,
+		ENServerAESIV:     testAESIVHex,
+		OtherServerAESKey: testAESKeyHex2,
+		OtherServerAESIV:  testAESIVHex2,
+	})
+	payload := map[string]any{"server": "selection"}
+
+	encryptedEN, err := serverCryptor.Pack(payload, harukiUtils.SupportedDataUploadServerEN)
+	if err != nil {
+		t.Fatalf("Pack EN failed: %v", err)
+	}
+	enReference, err := NewSekaiCryptorFromHex(testAESKeyHex, testAESIVHex)
+	if err != nil {
+		t.Fatalf("create EN reference cryptor: %v", err)
+	}
+	wantEN, err := enReference.Pack(payload)
+	if err != nil {
+		t.Fatalf("pack EN reference: %v", err)
+	}
+	if !bytes.Equal(encryptedEN, wantEN) {
+		t.Fatal("EN payload did not use the configured EN key and IV")
+	}
+
+	otherReference, err := NewSekaiCryptorFromHex(testAESKeyHex2, testAESIVHex2)
+	if err != nil {
+		t.Fatalf("create other-server reference cryptor: %v", err)
+	}
+	for _, server := range []harukiUtils.SupportedDataUploadServer{
+		harukiUtils.SupportedDataUploadServerJP,
+		harukiUtils.SupportedDataUploadServerTW,
+		harukiUtils.SupportedDataUploadServerKR,
+		harukiUtils.SupportedDataUploadServerCN,
+	} {
+		encrypted, err := serverCryptor.Pack(payload, server)
+		if err != nil {
+			t.Fatalf("Pack %s failed: %v", server, err)
+		}
+		want, err := otherReference.Pack(payload)
+		if err != nil {
+			t.Fatalf("pack other-server reference: %v", err)
+		}
+		if !bytes.Equal(encrypted, want) {
+			t.Fatalf("%s payload did not use the configured other-server key and IV", server)
+		}
+	}
+}
+
+func TestServerCryptorInstancesAreIsolated(t *testing.T) {
+	first := testServerCryptor()
+	second := NewServerCryptor(ServerCryptorConfig{
+		ENServerAESKey:    testAESKeyHex2,
+		ENServerAESIV:     testAESIVHex2,
+		OtherServerAESKey: testAESKeyHex2,
+		OtherServerAESIV:  testAESIVHex2,
+	})
+	payload := map[string]any{"instance": "first"}
+
+	firstCiphertext, err := first.Pack(payload, harukiUtils.SupportedDataUploadServerEN)
+	if err != nil {
+		t.Fatalf("first Pack failed: %v", err)
+	}
+	secondCiphertext, err := second.Pack(payload, harukiUtils.SupportedDataUploadServerEN)
+	if err != nil {
+		t.Fatalf("second Pack failed: %v", err)
+	}
+	if bytes.Equal(firstCiphertext, secondCiphertext) {
+		t.Fatal("independent ServerCryptor instances produced identical ciphertext with different material")
+	}
+	if _, err := first.Unpack(firstCiphertext, harukiUtils.SupportedDataUploadServerEN); err != nil {
+		t.Fatalf("first instance could not unpack its payload: %v", err)
+	}
+	if _, err := second.Unpack(secondCiphertext, harukiUtils.SupportedDataUploadServerEN); err != nil {
+		t.Fatalf("second instance could not unpack its payload: %v", err)
+	}
+}
+
+func TestServerCryptorZeroValueFailsClosed(t *testing.T) {
+	var serverCryptor ServerCryptor
+	_, err := serverCryptor.Pack(map[string]any{"a": 1}, harukiUtils.SupportedDataUploadServerJP)
+	if err == nil {
+		t.Fatal("zero-value ServerCryptor Pack should fail")
+	}
+	var cryptoErr *CryptoError
+	if !errors.As(err, &cryptoErr) || cryptoErr.Operation != "getCryptor" {
+		t.Fatalf("zero-value ServerCryptor error = %v, want getCryptor CryptoError", err)
+	}
+	if !strings.Contains(err.Error(), "invalid iv length: got 0, want 16") {
+		t.Fatalf("zero-value ServerCryptor error = %v, want legacy empty key/IV validation error", err)
+	}
+	if _, err := serverCryptor.Unpack([]byte("invalid"), harukiUtils.SupportedDataUploadServerEN); err == nil {
+		t.Fatal("zero-value ServerCryptor Unpack should fail")
 	}
 }

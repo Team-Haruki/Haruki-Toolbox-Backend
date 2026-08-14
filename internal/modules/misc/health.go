@@ -12,14 +12,12 @@ import (
 
 const dependencyHealthTimeout = 2 * time.Second
 
-func handleHealth(apiHelpers ...*harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	var apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
-	if len(apiHelpers) > 0 {
-		apiHelper = apiHelpers[0]
-	}
-
+func handleHealth(
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	suiteRestoreService *harukiHandler.SuiteRestoreService,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()
+		loadedRegions, failedRegions := suiteRestoreService.LoadStatus()
 		dependencies := buildDependencyHealth(c.Context(), apiHelper)
 
 		status := "ok"

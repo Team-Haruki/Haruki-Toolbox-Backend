@@ -9,16 +9,22 @@ import (
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleListHydraOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleListHydraOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
+		}
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 		filters, err := parseAdminOAuthClientAuthorizationsFilters(c)
 		if err != nil {
@@ -29,7 +35,7 @@ func handleListHydraOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiT
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidQueryFilters, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorBadRequest(c, "include_revoked is not supported in hydra mode")
 		}
-		hydraClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), clientID)
+		hydraClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
@@ -38,11 +44,12 @@ func handleListHydraOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiT
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
 		}
-		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, clientID)
+		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth authorizations")
 		}
+		records = scopeHydraClientAuthorizationRecordsForActor(records, actorUserID, actorRole)
 		sort.Slice(records, func(i, j int) bool {
 			left := hydraConsentHandledAt(records[i].Session)
 			right := hydraConsentHandledAt(records[j].Session)
@@ -95,19 +102,24 @@ func handleListHydraOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiT
 	}
 }
 
-func handleGetHydraOAuthClientStatistics(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetHydraOAuthClientStatistics(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clientID := strings.TrimSpace(c.Params("client_id"))
 		if clientID == "" {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
 		}
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
 		filters, err := parseAdminOAuthClientStatisticsFilters(c, adminNow())
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidQueryFilters, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid query filters")
 		}
-		hydraClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), clientID)
+		hydraClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
@@ -116,11 +128,12 @@ func handleGetHydraOAuthClientStatistics(apiHelper *harukiAPIHelper.HarukiToolbo
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
 		}
-		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, clientID)
+		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client statistics")
 		}
+		records = scopeHydraClientAuthorizationRecordsForActor(records, actorUserID, actorRole)
 		authorizationTimes := make([]time.Time, 0, len(records))
 		authorizationCreatedInRange := 0
 		for _, record := range records {
