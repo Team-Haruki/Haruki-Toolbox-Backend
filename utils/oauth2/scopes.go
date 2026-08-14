@@ -1,6 +1,9 @@
 package oauth2
 
 const (
+	ScopeOpenID        = "openid"
+	ScopeProfile       = "profile"
+	ScopeEmail         = "email"
 	ScopeOfflineAccess = "offline_access"
 	ScopeUserRead      = "user:read"
 	ScopeBindingsRead  = "bindings:read"
@@ -9,6 +12,9 @@ const (
 )
 
 var AllScopes = map[string]string{
+	ScopeOpenID:        "Sign in with your Haruki Toolbox identity",
+	ScopeProfile:       "Read your display name",
+	ScopeEmail:         "Read your email address and verification status",
 	ScopeOfflineAccess: "Request refresh_token issuance for long-lived delegated access",
 	ScopeUserRead:      "Read your profile (name and avatar)",
 	ScopeBindingsRead:  "Read your bound game accounts",

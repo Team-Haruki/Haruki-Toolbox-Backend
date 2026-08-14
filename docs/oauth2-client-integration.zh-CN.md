@@ -1,8 +1,8 @@
-# Haruki Toolbox OAuth2 客户端对接说明（最新版本）
+# Haruki Toolbox OAuth2 / OpenID Connect 客户端对接说明
 
 本文档只说明一件事：
 
-> **最新版本的 OAuth2 客户端应该如何接入 Haruki Toolbox。**
+> **OAuth2 客户端如何接入 Haruki Toolbox，以及如何把 Toolbox 作为 OIDC Provider 完成登录。**
 
 不展开旧版本历史，不展开过多内部实现，只讲客户端和前端实际该怎么对接。
 
@@ -41,6 +41,48 @@
 - 浏览器发起 OAuth2 授权时，真正展示给用户的登录页和授权页应该是前端页面
 - 后端提供的是 OAuth2 编排 API
 - 前端页面负责消费这些 API 并完成跳转
+
+### 1.1 Toolbox 作为 OIDC Provider
+
+Toolbox 的 OIDC issuer 由 Hydra 的 `HYDRA_PUBLIC_BASE_URL` 决定。当前线上 issuer 是：
+
+```text
+https://toolbox-api-direct.haruki.seiunx.com
+```
+
+标准 OIDC 元数据与端点：
+
+- Discovery：`https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration`
+- Authorization：`https://toolbox-api-direct.haruki.seiunx.com/oauth2/auth`
+- Token：`https://toolbox-api-direct.haruki.seiunx.com/oauth2/token`
+- JWKS：`https://toolbox-api-direct.haruki.seiunx.com/oauth2/jwks.json`
+- UserInfo：`https://toolbox-api-direct.haruki.seiunx.com/userinfo`
+
+OIDC 客户端应从 Discovery 文档读取端点，不要在 SDK 内硬编码。现有
+`/api/oauth2/authorize` 与 `/api/oauth2/token` 仍作为兼容入口保留。
+
+发起登录时至少请求 `openid`，常见组合是：
+
+```text
+scope=openid profile email
+```
+
+授权成功后 token 响应会包含 `id_token`。客户端必须使用 Discovery 中的 JWKS 校验签名，
+并校验 `iss`、`aud`、`exp` 与自己生成的 `nonce`；账户主键应使用标准 `sub`，不要使用可能
+变化的邮箱。`uid` 是兼容既有 Toolbox API 的本地用户 ID 扩展 claim。
+
+标准 claims 按用户实际授权的 scope 最小化发放：
+
+- `openid`：签发 ID Token 与标准 `sub`
+- `profile`：增加 `name`
+- `email`：增加 `email` 与 `email_verified`
+
+只有管理员为 client 登记的 scope 才能被请求；`profile`、`email` 不能脱离 `openid` 单独登记。
+
+当前先开放 OIDC 登录、ID Token 与 UserInfo。RP-Initiated Logout / Single Logout 尚未完成
+Hydra `logout_challenge`、Kratos 会话注销与前端跳转的端到端编排，客户端暂时不要依赖
+Discovery 中可能出现的 `end_session_endpoint`；应用退出时应清理自己的本地会话，必要时调用
+token revoke 接口。
 
 ---
 
@@ -436,6 +478,9 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 当前内置 scope 如下：
 
+- `openid`
+- `profile`
+- `email`
 - `offline_access`
 - `user:read`
 - `bindings:read`
@@ -445,6 +490,9 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 但当前最新版本对外明确可用、且文档已覆盖的主要是：
 
 - `offline_access`
+- `openid`
+- `profile`
+- `email`
 - `user:read`
 - `bindings:read`
 - `game-data:read`
@@ -481,6 +529,9 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
     "https://viewer.unipjsk.com/oauth2/callback/code"
   ],
   "scopes": [
+    "openid",
+    "profile",
+    "email",
     "offline_access",
     "game-data:read"
   ]

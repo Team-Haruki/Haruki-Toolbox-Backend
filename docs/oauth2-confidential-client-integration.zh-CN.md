@@ -77,6 +77,11 @@
 
 - `offline_access`
 
+如果你希望使用 Haruki Toolbox 完成 OIDC 登录，scope 至少要包含 `openid`；通常同时请求
+`profile email`。Token 响应中的 `id_token` 必须通过 issuer 的 Discovery/JWKS 校验，账户
+关联使用标准 `sub`，不要使用邮箱作为稳定主键。完整端点和 claim 说明见
+[`docs/oauth2-client-integration.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/oauth2-client-integration.zh-CN.md)。
+
 ### 3.2 当前不建议按已支持来假设的能力
 
 以下场景这份服务端当前**不要默认当作已支持**：
