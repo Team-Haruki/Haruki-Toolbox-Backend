@@ -523,6 +523,19 @@ registration flow 中 `method=oidc`、`provider=apple` 的 UI node。
 
 其中 `auth_proxy_session_header` 现在是运行必需项，不再是可选项。
 
+部署层面还有两项与 Auth Proxy 直接相关：
+
+- `BACKEND_ENABLE_TRUST_PROXY`（默认 `false`）
+- `BACKEND_TRUSTED_PROXIES`
+
+backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而不是真实客户端。
+只有在开启 trust proxy **并且**把 `BACKEND_TRUSTED_PROXIES` 精确设为边缘代理地址
+（IPv4 写 `/32`、IPv6 写 `/128`）时，`X-Forwarded-For` 才会被采信。
+
+**不要填 Docker、LAN 或 Tailscale 网段。** 那等于信任该网段内的每个容器和节点，
+其中任何一个都能伪造 `X-Forwarded-For`。不确定边缘代理地址时就保持 `false`：
+限流会退化成按 Oathkeeper 这一个地址计数，粗糙但不会被绕过。
+
 ### 11.3 Hydra 相关
 
 核心配置项：
@@ -592,6 +605,20 @@ registration flow 中 `method=oidc`、`provider=apple` 的 UI node。
 - `utils/api/session_handler.go`
 - `utils/oauth2/...`
 - `internal/modules/oauth2/...`
+
+### 12.6 开了 trust proxy 却没限定可信代理
+
+后果：
+
+- 所有以 IP 为键的限流、尝试计数、验证码次数上限全部失效
+- 表面上一切正常，日志里的来源 IP 也「看起来对」
+
+原因：
+
+- `BACKEND_ENABLE_TRUST_PROXY=true` 而 `BACKEND_TRUSTED_PROXIES` 为空或填了网段时，
+  `X-Forwarded-For` 变成客户端可控输入，攻击者每次请求换一个伪造 IP 即可绕过上限
+
+见 §11.2。
 
 ## 13. 对后续开发的建议
 
