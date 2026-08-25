@@ -167,8 +167,7 @@ Ory 相关改动尤其建议关注：
 
 - `docs/README.md` — 文档索引，按读者分组；新增文档在这里登记
 - `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明
-- `docs/oauth2-client-integration.zh-CN.md` — OAuth2 公开客户端对接
-- `docs/oauth2-confidential-client-integration.zh-CN.md` — OAuth2 机密客户端对接
+- `docs/oauth2-integration.zh-CN.md` — OAuth2 / OIDC 接入(公开 + 保密客户端 + Webhook)
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
 - `docs/afdian-sponsor-integration.zh-CN.md` — 爱发电赞助 webhook/同步对接
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则

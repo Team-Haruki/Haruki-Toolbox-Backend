@@ -8,16 +8,13 @@
 
 | 文档 | 回答什么问题 |
 | --- | --- |
-| [OAuth2 客户端接入](oauth2-client-integration.zh-CN.md) | 授权码流程、token、用户信息与绑定、游戏数据读取与**代理上传**、可申请的 scope。公开客户端与整体流程的主文档 |
-| [OAuth2 机密客户端接入](oauth2-confidential-client-integration.zh-CN.md) | 持有 client secret 的服务端集成与公开客户端的差异 |
-| [OAuth2 Webhook 接入](oauth2-webhook-integration.zh-CN.md) | 用户数据更新时如何收到回调，基于 OAuth2 consent，不要求 `allowPublicApi` |
+| [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) | 唯一的 OAuth2 文档：公开与保密两种客户端、授权码流程、token 与刷新、用户信息与绑定、游戏数据读取与**代理上传**、数据更新 Webhook、可申请的 scope |
 | [Public API Webhook 接入](webhook-integration.zh-CN.md) | 基于 token 自行订阅具体游戏账号的旧版 webhook |
 
 ## 给站内前端
 
 | 文档 | 回答什么问题 |
 | --- | --- |
-| [前端对接补充说明](frontend-integration-notes.zh-CN.md) | **只记录还没接完的契约**和前端需长期遵守的约束。当前是游戏账号选择器数据源与功能能力对照表 |
 | [游戏账号数据授权](game-account-data-grants.zh-CN.md) | 把自己的账号数据授权给其他 Toolbox 用户；可访问账号聚合接口的字段与语义 |
 
 ## 给本项目开发者

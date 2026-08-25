@@ -69,8 +69,7 @@ Bot 数据库使用独立 DSN（`haruki_bot.db_url`）。不要随意手改生�
 
 涉及 OAuth2 客户端对接变化时，同步更新：
 
-- `docs/oauth2-client-integration.zh-CN.md`
-- `docs/oauth2-confidential-client-integration.zh-CN.md`
+- `docs/oauth2-integration.zh-CN.md`
 
 涉及 Webhook 对接变化时，同步更新：
 

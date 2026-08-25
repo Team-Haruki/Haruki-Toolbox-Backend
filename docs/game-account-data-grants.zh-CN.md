@@ -2,8 +2,6 @@
 
 游戏账号数据授权允许用户把自己已经验证绑定的账号数据授权给另一个 Toolbox 用户读取。支持 `suite` / `mysekai`（已上传并存储的数据）和 `profile`（实时向游戏 API 查询），不影响 public API 或 private token API。
 
-前端集中对接说明见 [`docs/frontend-integration-notes.zh-CN.md`](frontend-integration-notes.zh-CN.md)。
-
 ## 权限规则
 
 - 授权创建者必须拥有对应 `server + game_user_id` 的 verified binding
@@ -102,6 +100,20 @@ GET /api/user/:toolbox_user_id/accessible-game-accounts
 - 授权条目已按读取时的同一组谓词预过滤：绑定存在且 verified、绑定当前所有者仍是授权发起者、双方均未封禁、授权未过期。列表与读取结果因此保持一致，但仍存在「列出之后、读取之前授权失效」的窗口，前端遇到 `403/404` 时应重新拉取本接口而不是弹全局错误。
 - 同一账号的多条授权（不同 `dataType`）合并为一个条目；自己拥有的账号即使同时被授权，也只按 `own` 返回一条。
 - 排序：`own` 在前（默认账号优先），`granted` 按最近授权时间倒序。
+
+## 功能与能力对照
+
+前端页面到 `capabilities` key 的映射。后端不持有这张表 —— 它是前端功能与授权类型之间的约定，改动前端功能时需要同步维护。
+
+| 前端功能 | 需要的 capability |
+| --- | --- |
+| events / training / cards / music | `suite` |
+| 烤森相关 | `mysekai` |
+| 组卡（deck recommend） | `recommend` |
+| 烤森组卡 | `recommend` **且** `mysekai` |
+| player-profile | `profile` |
+
+功能门控只看 `capabilities`，不要按 `ownership` 硬编码 —— 这样以后新增可授权类型，选择器零改动。
 
 ## 数据读取影响
 
