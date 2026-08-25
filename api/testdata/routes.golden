@@ -72,6 +72,7 @@ GET /api/private/game-binding
 GET /api/private/game-data/:server/:data_type/:user_id
 GET /api/public/:server/:data_type/:user_id
 GET /api/sponsor/afdian
+GET /api/user/:toolbox_user_id/accessible-game-accounts
 GET /api/user/:toolbox_user_id/activity-logs/
 GET /api/user/:toolbox_user_id/game-account-grants
 GET /api/user/:toolbox_user_id/game-account-grants/received

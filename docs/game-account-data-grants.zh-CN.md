@@ -52,12 +52,66 @@ Content-Type: application/json
 DELETE /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
 ```
 
+## 可访问账号聚合接口
+
+选择器不应该自己去合并「我的绑定」和「收到的授权」，也不应该复刻后端的有效性判断。以下接口返回当前用户**现在就能读到数据**的全部游戏账号，本人绑定与有效授权已经合并、去重、预过滤。
+
+```http
+GET /api/user/:toolbox_user_id/accessible-game-accounts
+```
+
+鉴权与绑定接口一致（登录、未封禁、`:toolbox_user_id` 必须是当前登录用户）。
+
+```json
+{
+  "generatedAt": "2026-08-25T12:00:00Z",
+  "total": 2,
+  "accounts": [
+    {
+      "server": "jp",
+      "gameUserId": "123456789",
+      "ownership": "own",
+      "verified": true,
+      "isDefault": true,
+      "capabilities": { "suite": {}, "mysekai": {}, "profile": {}, "recommend": {} },
+      "owner": null
+    },
+    {
+      "server": "jp",
+      "gameUserId": "987654321",
+      "ownership": "granted",
+      "verified": true,
+      "isDefault": false,
+      "capabilities": {
+        "suite": { "expiresAt": "2026-09-30T00:00:00Z" },
+        "mysekai": { "expiresAt": "2026-09-01T00:00:00Z" },
+        "recommend": { "expiresAt": "2026-09-30T00:00:00Z" }
+      },
+      "owner": { "userId": "b7e2...", "name": "某某", "avatarPath": "/avatars/xx.png" }
+    }
+  ]
+}
+```
+
+语义约定：
+
+- **`capabilities` 是唯一的功能门控依据。** key 在不在里面，决定该账号能不能用于对应功能；value 携带该能力的到期时间，本人账号无到期（空对象）。前端不要按 `ownership` 硬编码功能可用性；以后新增可授权类型，选择器零改动。
+- `recommend` 是**派生能力**，不是新的授权类型，表示 `recommend-data` 可用。它由 `recommend-data` 基础模式所读的数据类型推导（当前为 `suite`），到期时间取所依赖能力中最早的。烤森组卡模式额外需要 `mysekai`，前端同时检查这两个 key 即可——这正是读取路径本身的判断。
+- `profile` 不可授权，因此只会出现在 `ownership: "own"` 的条目上。
+- 未验证的本人绑定仍会返回（`verified: false`），但 `capabilities` 为空对象：它确实读不了数据，前端应展示为「存在但不可用」而不是隐藏。
+- 授权条目已按读取时的同一组谓词预过滤：绑定存在且 verified、绑定当前所有者仍是授权发起者、双方均未封禁、授权未过期。列表与读取结果因此保持一致，但仍存在「列出之后、读取之前授权失效」的窗口，前端遇到 `403/404` 时应重新拉取本接口而不是弹全局错误。
+- 同一账号的多条授权（不同 `dataType`）合并为一个条目；自己拥有的账号即使同时被授权，也只按 `own` 返回一条。
+- 排序：`own` 在前（默认账号优先），`granted` 按最近授权时间倒序。
+
 ## 数据读取影响
 
 以下入口支持 owner 或有效授权用户读取：
 
 - `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/:data_type`
+- `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/recommend-data`
 - `GET /api/oauth2/game-data/:server/:data_type/:user_id`
+
+`recommend-data` 的授权口径与通用数据入口一致：默认（组卡）模式需要 `suite`，`mode=mysekai` 需要 `suite` 且 `mysekai`。绑定不存在或未验证返回 `404`，存在但无权限返回 `403`。
 
 浏览器 owned-account 入口的 `suite` / `mysekai` 读取可附带 `known_upload_time=<上次完整响应中的 upload_time>`。数据未变化时返回 `304 Not Modified`；若使用 `key` 过滤，必须同时包含 `upload_time`。该优化在所有权或授权校验完成后运行，不改变授权范围及错误语义。
 

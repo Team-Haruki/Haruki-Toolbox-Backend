@@ -9,6 +9,12 @@ func RegisterUserGameAccountBindingRoutes(apiHelper *harukiAPIHelper.HarukiToolb
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"))...)
 	grants := apiHelper.Router.Group("/api/user/:toolbox_user_id/game-account-grants", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedVerifiedSelf(apiHelper, "toolbox_user_id"))...)
 
+	// The selector-facing aggregate: every account the caller may read, own
+	// bindings and live grants alike. It sits beside the binding group rather
+	// than inside it because it is not scoped to a single game account.
+	accessible := apiHelper.Router.Group("/api/user/:toolbox_user_id/accessible-game-accounts", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"))...)
+	accessible.Get("", handleListAccessibleGameAccounts(apiHelper))
+
 	grants.Get("", handleListOwnedGameAccountDataGrants(apiHelper))
 	grants.Get("/received", handleListReceivedGameAccountDataGrants(apiHelper))
 	grants.RouteChain("/:server/:game_user_id/:data_type/:grantee_user_id").

@@ -290,7 +290,7 @@
 
 - id: haruki-protected-user-get
   match:
-    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
+    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|accessible-game-accounts/?|game-account-grants/received/?|game-account-grants/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
     methods: [GET]
   upstream:
     url: http://backend:16666
