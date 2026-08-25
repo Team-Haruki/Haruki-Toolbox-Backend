@@ -1,5 +1,11 @@
 name: ${COMPOSE_PROJECT_NAME:-haruki-toolbox}
 
+# Every published port MUST carry an explicit host IP. A bare "PORT:PORT"
+# binds 0.0.0.0, and Docker's DNAT rules bypass the host firewall's INPUT chain
+# entirely — ufw can report "default deny (incoming)" while the port answers
+# from the public internet. Bind to 127.0.0.1 (host-network consumers such as a
+# local WAF/reverse proxy) plus ${TAILSCALE_IP} (other nodes); public traffic
+# must arrive through the edge proxy, never at a container port.
 services:
   mihomo:
     image: metacubex/mihomo
@@ -8,8 +14,10 @@ services:
     networks:
       - haruki-net
     ports:
-      - "7890:7890"
-      - "9090:9090"
+      - "127.0.0.1:7890:7890"
+      - "127.0.0.1:9090:9090"
+      - "${TAILSCALE_IP}:7890:7890"
+      - "${TAILSCALE_IP}:9090:9090"
     volumes:
       - ${STACK_HOST_ROOT}/mihomo/${MIHOMO_PROFILE_NAME}.yaml:/root/.config/mihomo/config.yaml
     healthcheck:
@@ -37,7 +45,8 @@ services:
       HARUKI_DB_USER: ${HARUKI_DB_USER}
       HARUKI_DB_PASSWORD: ${HARUKI_DB_PASSWORD}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+      - "${TAILSCALE_IP}:${POSTGRES_PORT}:5432"
     volumes:
       - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/18/docker
       - ${STACK_HOST_ROOT}/postgres-init:/docker-entrypoint-initdb.d:ro
@@ -57,7 +66,8 @@ services:
       - haruki-net
     command: redis-server --save 60 1 --requirepass ${REDIS_PASSWORD}
     ports:
-      - "${REDIS_PORT}:6379"
+      - "127.0.0.1:${REDIS_PORT}:6379"
+      - "${TAILSCALE_IP}:${REDIS_PORT}:6379"
     volumes:
       - ${REDIS_DATA_PATH}:/data
     healthcheck:
@@ -80,7 +90,8 @@ services:
     volumes:
       - ${MONGO_DATA_PATH}:/data/db
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
+      - "${TAILSCALE_IP}:27017:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--username", "${MONGO_ROOT_USERNAME}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 5s
@@ -117,8 +128,10 @@ services:
         condition: service_healthy
     command: serve -c /etc/config/kratos/kratos.yml all --watch-courier
     ports:
-      - "${KRATOS_PUBLIC_PORT}:4433"
-      - "${KRATOS_ADMIN_PORT}:4434"
+      - "127.0.0.1:${KRATOS_PUBLIC_PORT}:4433"
+      - "${TAILSCALE_IP}:${KRATOS_PUBLIC_PORT}:4433"
+      - "127.0.0.1:${KRATOS_ADMIN_PORT}:4434"
+      - "${TAILSCALE_IP}:${KRATOS_ADMIN_PORT}:4434"
     environment:
       DSN: postgres://${KRATOS_DB_USER}:${KRATOS_DB_PASSWORD}@postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: info
@@ -333,7 +346,8 @@ services:
         condition: service_healthy
     command: serve proxy -c /etc/config/oathkeeper/oathkeeper.yml
     ports:
-      - "${OATHKEEPER_PROXY_PORT}:4455"
+      - "127.0.0.1:${OATHKEEPER_PROXY_PORT}:4455"
+      - "${TAILSCALE_IP}:${OATHKEEPER_PROXY_PORT}:4455"
     environment:
       LOG_LEVEL: info
       SERVE_PROXY_CORS_ALLOWED_ORIGINS_0: ${FRONTEND_PUBLIC_URL}
@@ -355,7 +369,8 @@ services:
       mihomo:
         condition: service_healthy
     ports:
-      - "${KRATOS_ADMIN_UI_PORT}:3000"
+      - "127.0.0.1:${KRATOS_ADMIN_UI_PORT}:3000"
+      - "${TAILSCALE_IP}:${KRATOS_ADMIN_UI_PORT}:3000"
     environment:
       KRATOS_ADMIN_URL: http://kratos:4434
       KRATOS_PUBLIC_URL: http://kratos:4433
