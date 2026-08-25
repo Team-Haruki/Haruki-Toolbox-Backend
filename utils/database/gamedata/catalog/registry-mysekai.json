@@ -1,0 +1,379 @@
+{
+ "collection": "mysekai",
+ "table": "game_mysekai",
+ "flattenKey": "updatedResources",
+ "entries": [
+  {
+   "key": "isEnabled",
+   "column": "is_enabled_j",
+   "storage": "json"
+  },
+  {
+   "key": "isExpireMysekaiSiteHousingPresetExtendSlot",
+   "column": "is_expire_mysekai_site_housing_preset_extend_slot_j",
+   "storage": "json"
+  },
+  {
+   "key": "isMysekaiGateRefreshed",
+   "column": "is_mysekai_gate_refreshed_j",
+   "storage": "json"
+  },
+  {
+   "key": "isRefreshed",
+   "column": "is_refreshed_j",
+   "storage": "json"
+  },
+  {
+   "key": "mysekaiHousingCompetitionPendingNotifyReviewCount",
+   "column": "mysekai_housing_competition_pending_notify_review_count_j",
+   "storage": "json"
+  },
+  {
+   "key": "mysekaiHousingCompetitionUnreadBanInfoList",
+   "column": "mysekai_housing_competition_unread_ban_info_list_j",
+   "storage": "json"
+  },
+  {
+   "key": "mysekaiPhenomenaSchedules",
+   "column": "mysekai_phenomena_schedules_j",
+   "storage": "json"
+  },
+  {
+   "key": "newArrivalMysekaiHousingCompetitionBackNumberList",
+   "column": "new_arrival_mysekai_housing_competition_back_number_list_j",
+   "storage": "json"
+  },
+  {
+   "key": "policy",
+   "column": "policy_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.bgipRedDotCount",
+   "path": "updatedResources",
+   "child": "bgipRedDotCount",
+   "column": "r_bgip_red_dot_count_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.now",
+   "path": "updatedResources",
+   "child": "now",
+   "column": "r_now_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.refreshableTypes",
+   "path": "updatedResources",
+   "child": "refreshableTypes",
+   "column": "r_refreshable_types_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.unreadUserTopics",
+   "path": "updatedResources",
+   "child": "unreadUserTopics",
+   "column": "r_unread_user_topics_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userBillingRefunds",
+   "path": "updatedResources",
+   "child": "userBillingRefunds",
+   "column": "r_user_billing_refunds_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userBirthdayParties",
+   "path": "updatedResources",
+   "child": "userBirthdayParties",
+   "column": "r_user_birthday_parties_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userGachaCeilExchanges",
+   "path": "updatedResources",
+   "child": "userGachaCeilExchanges",
+   "column": "r_user_gacha_ceil_exchanges_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userHomeBanners",
+   "path": "updatedResources",
+   "child": "userHomeBanners",
+   "column": "r_user_home_banners_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userInformations",
+   "path": "updatedResources",
+   "child": "userInformations",
+   "column": "r_user_informations_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMaterialExchanges",
+   "path": "updatedResources",
+   "child": "userMaterialExchanges",
+   "column": "r_user_material_exchanges_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMaterials",
+   "path": "updatedResources",
+   "child": "userMaterials",
+   "column": "r_user_materials_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiBlueprintShopItems",
+   "path": "updatedResources",
+   "child": "userMysekaiBlueprintShopItems",
+   "column": "r_user_mysekai_blueprint_shop_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiBlueprints",
+   "path": "updatedResources",
+   "child": "userMysekaiBlueprints",
+   "column": "r_user_mysekai_blueprints_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiCharacterTalks",
+   "path": "updatedResources",
+   "child": "userMysekaiCharacterTalks",
+   "column": "r_user_mysekai_character_talks_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiConvertItemHistories",
+   "path": "updatedResources",
+   "child": "userMysekaiConvertItemHistories",
+   "column": "r_user_mysekai_convert_item_histories_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiConvertSlots",
+   "path": "updatedResources",
+   "child": "userMysekaiConvertSlots",
+   "column": "r_user_mysekai_convert_slots_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiFixturePossession",
+   "path": "updatedResources",
+   "child": "userMysekaiFixturePossession",
+   "column": "r_user_mysekai_fixture_possession_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiFixtures",
+   "path": "updatedResources",
+   "child": "userMysekaiFixtures",
+   "column": "r_user_mysekai_fixtures_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiGamedata",
+   "path": "updatedResources",
+   "child": "userMysekaiGamedata",
+   "column": "r_user_mysekai_gamedata_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiGateCharacters",
+   "path": "updatedResources",
+   "child": "userMysekaiGateCharacters",
+   "column": "r_user_mysekai_gate_characters_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiGateCommonInfo",
+   "path": "updatedResources",
+   "child": "userMysekaiGateCommonInfo",
+   "column": "r_user_mysekai_gate_common_info_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiGateSkin",
+   "path": "updatedResources",
+   "child": "userMysekaiGateSkin",
+   "column": "r_user_mysekai_gate_skin_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiGates",
+   "path": "updatedResources",
+   "child": "userMysekaiGates",
+   "column": "r_user_mysekai_gates_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiHarvestMaps",
+   "path": "updatedResources",
+   "child": "userMysekaiHarvestMaps",
+   "column": "r_user_mysekai_harvest_maps_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiHousingCompetitions",
+   "path": "updatedResources",
+   "child": "userMysekaiHousingCompetitions",
+   "column": "r_user_mysekai_housing_competitions_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiItems",
+   "path": "updatedResources",
+   "child": "userMysekaiItems",
+   "column": "r_user_mysekai_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiMaterialPossession",
+   "path": "updatedResources",
+   "child": "userMysekaiMaterialPossession",
+   "column": "r_user_mysekai_material_possession_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiMusicPlayFixtureSettings",
+   "path": "updatedResources",
+   "child": "userMysekaiMusicPlayFixtureSettings",
+   "column": "r_user_mysekai_music_play_fixture_settings_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiMusicRecords",
+   "path": "updatedResources",
+   "child": "userMysekaiMusicRecords",
+   "column": "r_user_mysekai_music_records_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiNormalMissionSheet",
+   "path": "updatedResources",
+   "child": "userMysekaiNormalMissionSheet",
+   "column": "r_user_mysekai_normal_mission_sheet_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiNormalMissions",
+   "path": "updatedResources",
+   "child": "userMysekaiNormalMissions",
+   "column": "r_user_mysekai_normal_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiPhenomenas",
+   "path": "updatedResources",
+   "child": "userMysekaiPhenomenas",
+   "column": "r_user_mysekai_phenomenas_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiPhotoDecorations",
+   "path": "updatedResources",
+   "child": "userMysekaiPhotoDecorations",
+   "column": "r_user_mysekai_photo_decorations_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiPhotos",
+   "path": "updatedResources",
+   "child": "userMysekaiPhotos",
+   "column": "r_user_mysekai_photos_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiReleaseElements",
+   "path": "updatedResources",
+   "child": "userMysekaiReleaseElements",
+   "column": "r_user_mysekai_release_elements_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiSiteHousingLayouts",
+   "path": "updatedResources",
+   "child": "userMysekaiSiteHousingLayouts",
+   "column": "r_user_mysekai_site_housing_layouts_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiSiteHousingPresetSlots",
+   "path": "updatedResources",
+   "child": "userMysekaiSiteHousingPresetSlots",
+   "column": "r_user_mysekai_site_housing_preset_slots_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiStamina",
+   "path": "updatedResources",
+   "child": "userMysekaiStamina",
+   "column": "r_user_mysekai_stamina_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiSystemFixtureActions",
+   "path": "updatedResources",
+   "child": "userMysekaiSystemFixtureActions",
+   "column": "r_user_mysekai_system_fixture_actions_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiTools",
+   "path": "updatedResources",
+   "child": "userMysekaiTools",
+   "column": "r_user_mysekai_tools_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiTreasureBoxes",
+   "path": "updatedResources",
+   "child": "userMysekaiTreasureBoxes",
+   "column": "r_user_mysekai_treasure_boxes_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userMysekaiVisitSetting",
+   "path": "updatedResources",
+   "child": "userMysekaiVisitSetting",
+   "column": "r_user_mysekai_visit_setting_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userPresents",
+   "path": "updatedResources",
+   "child": "userPresents",
+   "column": "r_user_presents_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userRankMatchResult",
+   "path": "updatedResources",
+   "child": "userRankMatchResult",
+   "column": "r_user_rank_match_result_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userUnprocessedOrders",
+   "path": "updatedResources",
+   "child": "userUnprocessedOrders",
+   "column": "r_user_unprocessed_orders_j",
+   "storage": "json"
+  },
+  {
+   "key": "updatedResources.userViewableAppeal",
+   "path": "updatedResources",
+   "child": "userViewableAppeal",
+   "column": "r_user_viewable_appeal_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGateCharacterVisit",
+   "column": "user_mysekai_gate_character_visit_j",
+   "storage": "json"
+  }
+ ]
+}
