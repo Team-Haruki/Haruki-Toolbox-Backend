@@ -44,7 +44,7 @@ https://toolbox-api-direct.haruki.seiunx.com
 | JWKS | `/.well-known/jwks.json` | 200，2 把 RS256 |
 | UserInfo | `/userinfo` | 可用 |
 | Revocation | `/oauth2/revoke` | 可用 |
-| End Session | `/oauth2/sessions/logout` | 302，但流程未打通，见下方警告 |
+| End Session | `/oauth2/sessions/logout` | ✅ 可用，见下方 |
 
 OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码**。现有 `/api/oauth2/authorize` 与 `/api/oauth2/token` 仍作为兼容入口保留。
 
@@ -65,15 +65,13 @@ OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码
 
 只有管理员为 client 登记的 scope 才能被请求；`profile`、`email` 不能脱离 `openid` 单独登记。
 
-> ⚠️ **RP-Initiated Logout 尚未端到端打通，客户端必须显式禁用它。**
+> **RP-Initiated Logout 已打通（2026-08-26）。** 后端提供 `/api/oauth2/logout`、
+> `/logout/accept`、`/logout/reject` 三个编排端点（与 login / consent 同构，但**匿名可访问** ——
+> 到达登出挑战的用户正在退出，Kratos 会话可能已经失效，要求登录会让登出恰好在最需要时失败；
+> challenge 本身就是凭证）；前端 `/logout` 页面消费它们，并在确认时一并结束 Kratos 会话。
 >
-> 端点本身可达（2026-08-26 补齐了 Oathkeeper 路由，此前返回的是 Oathkeeper 的 404 而非
-> Hydra 的响应），但：不带 `id_token_hint` 会 302 到 Hydra 内置兜底页而该页 404；带
-> `post_logout_redirect_uri` 却不带 `id_token_hint` 时 Hydra 报 `invalid_request`；带
-> `id_token_hint` 的标准流程会跳到前端 `/logout`，而该页处理 `logout_challenge` 的编排
-> 尚未完成。
->
-> 应用退出时应清理自己的本地会话，必要时调用 `/oauth2/revoke` 撤销 token。
+> RP 侧需要登记 `post_logout_redirect_uri`，请求时带 `id_token_hint`。详见
+> [`oidc-provider.zh-CN.md`](oidc-provider.zh-CN.md) §5。
 
 ---
 

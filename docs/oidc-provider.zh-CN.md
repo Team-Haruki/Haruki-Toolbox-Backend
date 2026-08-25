@@ -6,7 +6,7 @@
 [`oauth2-integration.zh-CN.md`](oauth2-integration.zh-CN.md)。
 
 Haruki Toolbox 是一个标准的 OpenID Connect Provider，底层是 Ory Hydra。你可以用任何成熟的
-OIDC 客户端库接入，不需要为 Haruki 写特殊代码 —— **除了本文最后列出的两处偏差**。
+OIDC 客户端库接入，不需要为 Haruki 写特殊代码 —— **除了 §4 那一处偏差**。
 
 ---
 
@@ -34,7 +34,7 @@ https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration
 | JWKS | `/.well-known/jwks.json` | ✅ 2 把 RS256 密钥 |
 | UserInfo | `/userinfo` | ✅ |
 | Revocation | `/oauth2/revoke` | ✅ |
-| End Session | `/oauth2/sessions/logout` | ⚠️ 见 §5 |
+| End Session | `/oauth2/sessions/logout` | ✅ 见 §5 |
 
 支持 `authorization_code` + PKCE（`S256` 与 `plain`），签名算法 RS256。
 
@@ -118,36 +118,28 @@ Discovery 目前公布的是：
 
 ---
 
-## 5. 偏差二：必须显式关闭 RP-Initiated Logout
+## 5. 登出（RP-Initiated Logout）
 
-Discovery 公布了 `end_session_endpoint`：
+Discovery 公布的 `end_session_endpoint` 现已可用：
 
 ```text
 https://toolbox-api-direct.haruki.seiunx.com/oauth2/sessions/logout
 ```
 
-端点本身可达（2026-08-26 补齐了路由），但**登出流程尚未端到端打通**：
+标准流程：带 `id_token_hint`（可选 `post_logout_redirect_uri`）请求该端点 → Haruki 展示确认页 →
+用户确认后浏览器跳回你的 `post_logout_redirect_uri`。
 
-- 不带 `id_token_hint` 请求 → 302 到 Hydra 内置兜底页，而该兜底页当前返回 404
-- 带 `post_logout_redirect_uri` 但不带 `id_token_hint` → Hydra 明确报错 `invalid_request`
-- 带 `id_token_hint` 的标准流程会跳到 Haruki 前端的 `/logout` 页面，但该页面处理
-  `logout_challenge` 的编排尚未完成
+**`post_logout_redirect_uri` 必须随 client 一起登记**，和 `redirect_uris` 一样精确匹配。申请
+client 时一并提供。
 
-**你该怎么做：**
+两个行为需要知道：
 
-在库的配置里**显式禁用 RP-Initiated Logout / Single Logout**，不要让它按 Discovery 自动发现。用户登出时：
+- **必须带 `id_token_hint`。** 只带 `post_logout_redirect_uri` 而不带它，Hydra 会返回
+  `invalid_request`。多数库默认会带。
+- **用户确认登出时，Haruki 会同时结束用户在本站的登录态。** 这是 OIDC 登出应有的语义 ——
+  只结束你这一侧而保留 OP 会话的话，用户下次授权会被静默重新登录，等于没退出。
 
-1. 清理你自己站点的会话
-2. 需要的话调用 `/oauth2/revoke` 撤销 token
-
-```bash
-curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/oauth2/revoke' \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'token=<token>' \
-  -d 'token_type_hint=refresh_token'
-```
-
-> 这条打通后本文档会更新。在那之前，**按 Discovery 自动配置登出的库会在用户点登出时报错**。
+用户也可以在确认页上取消，此时浏览器不会跳转回你的站点，你的会话应保持原状。
 
 ---
 
@@ -165,7 +157,7 @@ const client = new issuer.Client({
   redirect_uris: ['https://example.com/callback'],
   response_types: ['code'],
 });
-// 不要调用 client.endSessionUrl() —— 见 §5
+// client.endSessionUrl() 可用,记得传 id_token_hint
 ```
 
 **Spring Security**
@@ -184,14 +176,14 @@ spring:
             scope: openid,profile,email      # 显式写死,不要依赖 scopes_supported
 ```
 
-不要注册 `OidcClientInitiatedLogoutSuccessHandler`，改用普通的 `logout()`。
+可以正常使用 `OidcClientInitiatedLogoutSuccessHandler`，并在后台登记 `post-logout-redirect-uri`。
 
 **`mod_auth_openidc`**
 
 ```apache
 OIDCProviderMetadataURL https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration
 OIDCScope "openid profile email"
-# 不要设置 OIDCProviderEndSessionEndpoint
+# OIDCProviderEndSessionEndpoint 由 Discovery 提供,无需手动设置
 ```
 
 ---
@@ -206,11 +198,13 @@ OIDCScope "openid profile email"
 | 公开客户端换 token 失败 | 没做 PKCE —— 公开客户端必须带 `code_verifier` |
 | 拿不到 `refresh_token` | scope 里没有 `offline_access` |
 | 拿不到 `name` / `email` | 对应 scope 未登记，或用户在授权页上没有勾选 |
-| 登出报错 | 见 §5，需要关闭 RP-Initiated Logout |
+| 登出报 `invalid_request` | 没带 `id_token_hint`,见 §5 |
+| 登出后没跳回来 | `post_logout_redirect_uri` 未登记或不匹配 |
 
 ---
 
 ## 8. 一句话
 
 > 用 issuer `https://toolbox-api-direct.haruki.seiunx.com` 接标准 OIDC 授权码流程，
-> 用 `sub` 做用户主键，**把 scope 写死在配置里、把 RP-Initiated Logout 关掉**。
+> 用 `sub` 做用户主键，**把 scope 写死在配置里**（别信 Discovery 的 `scopes_supported`），
+> 登出记得登记 `post_logout_redirect_uri`。

@@ -38,6 +38,18 @@ func getHydraConsentRequest(ctx context.Context, hydraConfig *harukiOAuth2.Hydra
 	return &parsed, nil
 }
 
+func getHydraLogoutRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, challenge string) (*hydraLogoutRequestResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodGet, "/admin/oauth2/auth/requests/logout", url.Values{"logout_challenge": {challenge}}, nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed hydraLogoutRequestResponse
+	if err := sonic.Unmarshal(response, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to decode hydra logout request: %w", err)
+	}
+	return &parsed, nil
+}
+
 func sendHydraAdminJSON(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, query url.Values, payload map[string]any) (*hydraRedirectResponse, error) {
 	response, err := sendHydraAdminRequest(ctx, hydraConfig, method, endpointPath, query, payload)
 	if err != nil {

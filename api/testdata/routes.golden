@@ -66,6 +66,7 @@ GET /api/oauth2/authorize
 GET /api/oauth2/consent
 GET /api/oauth2/game-data/:server/:data_type/:user_id
 GET /api/oauth2/login
+GET /api/oauth2/logout
 GET /api/oauth2/user/bindings
 GET /api/oauth2/user/profile
 GET /api/private/game-binding
@@ -132,6 +133,8 @@ POST /api/oauth2/consent/reject
 POST /api/oauth2/game-data/:server/:data_type/:user_id
 POST /api/oauth2/login/accept
 POST /api/oauth2/login/reject
+POST /api/oauth2/logout/accept
+POST /api/oauth2/logout/reject
 POST /api/oauth2/revoke
 POST /api/oauth2/token
 POST /api/sponsor/afdian/callback

@@ -244,7 +244,11 @@
 
 - id: haruki-public-oauth-proxy
   match:
-    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login>
+    # logout/* is anonymous alongside login and token: a user reaching a
+    # logout challenge is on their way out and their Kratos session may
+    # already be gone. The challenge is the credential — Hydra minted it,
+    # it is single-use, and it names the session being ended.
+    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login|logout|logout/accept|logout/reject>
     methods: [GET, POST]
   upstream:
     url: http://backend:16666

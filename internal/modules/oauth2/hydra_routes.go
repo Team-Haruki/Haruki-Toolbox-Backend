@@ -24,6 +24,12 @@ func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 	loginRejectHandler, loginRejectRest := authenticatedUser(handleHydraRejectLogin(hydraConfig))
 	apiHelper.Router.Post("/api/oauth2/login/reject", loginRejectHandler, loginRejectRest...)
 
+	// Anonymous, unlike consent: see the comment on handleHydraGetLogoutRequest.
+	// A user arriving here is on their way out and may no longer have a session.
+	apiHelper.Router.Get("/api/oauth2/logout", handleHydraGetLogoutRequest(hydraConfig))
+	apiHelper.Router.Post("/api/oauth2/logout/accept", handleHydraAcceptLogout(hydraConfig))
+	apiHelper.Router.Post("/api/oauth2/logout/reject", handleHydraRejectLogout(hydraConfig))
+
 	consentHandler, consentRest := authenticatedUser(handleHydraGetConsentRequest(hydraConfig))
 	apiHelper.Router.Get("/api/oauth2/consent", consentHandler, consentRest...)
 	consentAcceptHandler, consentAcceptRest := authenticatedUser(handleHydraAcceptConsent(apiHelper, hydraConfig))

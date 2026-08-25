@@ -31,6 +31,26 @@ type hydraConsentRequestResponse struct {
 	Client                       hydraOAuthClientDetails `json:"client"`
 }
 
+// hydraLogoutRequestResponse is what Hydra returns for a logout challenge.
+//
+// Client is a pointer because Hydra omits it for a logout the user started on
+// the OP itself rather than one an RP initiated — the frontend uses its presence
+// to decide between naming the application and using generic wording.
+type hydraLogoutRequestResponse struct {
+	Challenge   string                   `json:"challenge"`
+	Subject     string                   `json:"subject"`
+	SessionID   string                   `json:"sid"`
+	RequestURL  string                   `json:"request_url"`
+	RPInitiated bool                     `json:"rp_initiated"`
+	Client      *hydraOAuthClientDetails `json:"client,omitempty"`
+}
+
+// hydraLogoutPayload carries the challenge for accept and reject alike; neither
+// takes any other field.
+type hydraLogoutPayload struct {
+	LogoutChallenge string `json:"logoutChallenge"`
+}
+
 type hydraRedirectResponse struct {
 	RedirectTo string `json:"redirect_to"`
 }
