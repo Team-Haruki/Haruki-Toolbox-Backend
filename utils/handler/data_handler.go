@@ -68,6 +68,10 @@ func (h *DataHandler) PersistUploadData(ctx context.Context, data map[string]any
 		h.Logger.Errorf("Failed to update mongo data: %v", err)
 		return err
 	}
+	// Mirror into the PostgreSQL game-data store. MongoDB is authoritative until
+	// game_data.read_source flips; after it flips this write is what makes an
+	// upload readable. It never fails the upload — see shadowWriteGameData.
+	h.shadowWriteGameData(ctx, data, server, dataType, *expectedUserID)
 	return nil
 }
 
