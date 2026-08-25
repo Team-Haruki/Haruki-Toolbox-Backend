@@ -956,6 +956,41 @@ WHERE user_id = $3 AND server = $4;
 - **Mongo 保持只读直到第 10 步** —— §7.1 第 6～10 步之间 MongoDB 不再被写入但数据完整保留，是随时可用的回滚快照
 - **回滚 = 把读源翻回 Mongo** —— 第 9 步（清空 `suite_remove_keys`）之前，回滚只是一个配置项
 
+### 7.3.1 写路径已接入（2026-08-26）
+
+§6.2 描述的 PG 写语义此前只存在于 `utils/database/gamedata/writer.go`：`WriteSuite` /
+`WriteMysekai` / `WriteBirthdayParty` 三种模式都实现了，但**全仓库没有任何调用方** ——
+`Store.Write` 只被迁移 CLI 用（`WriteMigrate`），而 `DBManager.GameData` 在生产代码里
+只出现在 `ReadsFromPostgres()` 判断里。也就是说这个库当时只能读、不能写。
+
+后果是：如果直接翻 `read_source` 到 postgres，**窗口结束后的每一笔上传都会对读取不可见**
+—— 上传返回 200、审计日志记 success，读取却拿着一行冻结的数据。这不是数据陈旧，是功能性失效。
+
+`utils/handler/gamedata_write.go` 把三种模式接进了 `PersistUploadData`（三种上传类型
+唯一的写入点）。
+
+**与本方案原设计的一处偏差**：§7.3 废弃的是「灰度期双写 + 差异检测 + 修复队列」那一整套，
+而 §5.4 第 4 步要求切换后「停止 Mongo 写」。当前实现是**两边都写**（Mongo 先、PG 后）：
+
+- 好处：Mongo 始终保持最新，§7.1 第 6～10 步之间的回滚快照永远是当前的，回滚窗口不再有
+  时间边界
+- 代价：Mongo 继续增长。这与 §1.1 的 16 MB 上限无关（21 键不在 Mongo 侧恢复），但等
+  第 10 步之后应该用一个开关把 Mongo 写关掉
+
+三个刻意的选择：
+
+- **同步写**。异步镜像会让客户端上传后立刻读到自己的旧行 —— 那正是切换后绝不能有的窗口。
+  代价是给上传加了延迟，因此设 20 s 上限，并用 `context.WithoutCancel` 脱离请求 deadline
+  （大文档解码后调用方的 deadline 可能只剩几秒，半途放弃的镜像比给它独立预算更糟）
+- **永不让上传失败**。走到这一步 Mongo 已经落库；把 game-data 故障变成用户可见的上传失败，
+  是拿一个可恢复的分歧换一个不可恢复的。分歧交给 `verify` 发现
+- **绝不选 `WriteMigrate`**。那个模式整行替换，而上传是部分文档，用错会抹掉上传未携带的
+  所有键。有测试锁死这一点
+
+§6.2 标为「移除 Mongo 时最容易漏掉的安全回归」的显式上界已确认到位：`DefaultLimits()`
+给出 `MaxKeyBytes` 64 MiB / `MaxRowBytes` 192 MiB / `MaxExtraKeys` 128 /
+`MaxExtraBytes` 32 MiB。三个历史合并列的解码也确认用 `UseNumber` 而非默认 `float64`。
+
 ### 7.4 生产普查结果与放行判定
 
 M1–M4 已于 2026-08-23 在生产主库完成（数据见 §3.0）。M5–M6 已于 2026-08-24 在全量装载后的本地 PG 上完成（§7.5）。
