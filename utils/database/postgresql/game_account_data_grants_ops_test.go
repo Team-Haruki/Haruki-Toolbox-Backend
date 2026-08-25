@@ -73,12 +73,26 @@ func TestGameAccountDataGrantAccessAndCleanup(t *testing.T) {
 		t.Fatalf("unexpected grantee access: %+v", granteeAccess)
 	}
 
+	// profile is grantable, but a suite grant must not carry it: each data type
+	// is granted on its own row, so holding one says nothing about the others.
 	profileAccess, err := client.CanAccessGameAccountData(context.Background(), "grantee", "jp", "123", "profile", now)
 	if err != nil {
 		t.Fatalf("profile grant lookup returned error: %v", err)
 	}
 	if profileAccess == nil || profileAccess.Allowed {
-		t.Fatalf("profile should not be granted, got %+v", profileAccess)
+		t.Fatalf("a suite grant must not grant profile, got %+v", profileAccess)
+	}
+
+	// Granted explicitly, it is readable.
+	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "owner", "grantee", "jp", "123", "profile", now.Add(time.Hour)); err != nil {
+		t.Fatalf("upsert profile grant returned error: %v", err)
+	}
+	profileAccess, err = client.CanAccessGameAccountData(context.Background(), "grantee", "jp", "123", "profile", now)
+	if err != nil {
+		t.Fatalf("profile grant lookup returned error: %v", err)
+	}
+	if profileAccess == nil || !profileAccess.Allowed || !profileAccess.ViaGrant {
+		t.Fatalf("explicit profile grant should be allowed via grant, got %+v", profileAccess)
 	}
 
 	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "owner", "banned", "jp", "123", "suite", now.Add(time.Hour)); err != nil {

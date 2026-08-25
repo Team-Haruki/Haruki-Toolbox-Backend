@@ -36,9 +36,17 @@ var (
 	ErrGameAccountDataGrantGranteeNotFound = errors.New("game account data grant grantee user not found")
 )
 
+// IsGrantableGameAccountDataType reports whether an owner may share one data
+// type with another Toolbox user.
+//
+// profile is grantable even though it is not stored data: it is proxied live
+// from the game API and is the least sensitive of the three — it is what other
+// players already see in game, whereas suite is the full save. Granting it lets
+// the grantee's requests reach the upstream API on the owner's account, which is
+// a cost the owner takes on knowingly by granting.
 func IsGrantableGameAccountDataType(dataType string) bool {
 	switch strings.ToLower(strings.TrimSpace(dataType)) {
-	case "suite", "mysekai":
+	case "suite", "mysekai", "profile":
 		return true
 	default:
 		return false

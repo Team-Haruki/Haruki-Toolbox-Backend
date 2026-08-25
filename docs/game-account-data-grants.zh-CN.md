@@ -1,6 +1,6 @@
 # 游戏账号数据授权说明
 
-游戏账号数据授权允许用户把自己已经验证绑定的账号数据授权给另一个 Toolbox 用户读取。第一版只支持已上传并存储的 `suite` / `mysekai` 数据，不支持 `profile` 实时查询，也不影响 public API 或 private token API。
+游戏账号数据授权允许用户把自己已经验证绑定的账号数据授权给另一个 Toolbox 用户读取。支持 `suite` / `mysekai`（已上传并存储的数据）和 `profile`（实时向游戏 API 查询），不影响 public API 或 private token API。
 
 前端集中对接说明见 [`docs/frontend-integration-notes.zh-CN.md`](frontend-integration-notes.zh-CN.md)。
 
@@ -43,7 +43,7 @@ Content-Type: application/json
 
 - `server`: `jp` / `en` / `tw` / `kr` / `cn`
 - `game_user_id`: 游戏账号 ID
-- `data_type`: `suite` / `mysekai`
+- `data_type`: `suite` / `mysekai` / `profile`
 - `grantee_user_id`: 被授权的 Toolbox 用户 ID
 
 ### 撤销授权
@@ -97,7 +97,7 @@ GET /api/user/:toolbox_user_id/accessible-game-accounts
 
 - **`capabilities` 是唯一的功能门控依据。** key 在不在里面，决定该账号能不能用于对应功能；value 携带该能力的到期时间，本人账号无到期（空对象）。前端不要按 `ownership` 硬编码功能可用性；以后新增可授权类型，选择器零改动。
 - `recommend` 是**派生能力**，不是新的授权类型，表示 `recommend-data` 可用。它由 `recommend-data` 基础模式所读的数据类型推导（当前为 `suite`），到期时间取所依赖能力中最早的。烤森组卡模式额外需要 `mysekai`，前端同时检查这两个 key 即可——这正是读取路径本身的判断。
-- `profile` 不可授权，因此只会出现在 `ownership: "own"` 的条目上。
+- `profile` 可授权，但**每种类型各自一行**：拿到 `suite` 授权不代表拿到 `profile`。它与另外两种的区别是实时向游戏 API 查询，而不是读已存储的数据 —— 因此被授权方的请求会打到 owner 账号的上游接口。
 - 未验证的本人绑定仍会返回（`verified: false`），但 `capabilities` 为空对象：它确实读不了数据，前端应展示为「存在但不可用」而不是隐藏。
 - 授权条目已按读取时的同一组谓词预过滤：绑定存在且 verified、绑定当前所有者仍是授权发起者、双方均未封禁、授权未过期。列表与读取结果因此保持一致，但仍存在「列出之后、读取之前授权失效」的窗口，前端遇到 `403/404` 时应重新拉取本接口而不是弹全局错误。
 - 同一账号的多条授权（不同 `dataType`）合并为一个条目；自己拥有的账号即使同时被授权，也只按 `own` 返回一条。

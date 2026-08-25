@@ -109,9 +109,8 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			}
 			return data.SendGameDataResponse(c, resp)
 		case ownedGameAccountDataTypeProfile:
-			if access.ViaGrant {
-				return harukiAPIHelper.ErrorForbidden(c, "profile access cannot be granted")
-			}
+			// Reached only after CanAccessGameAccountData allowed it, which for a
+			// grantee means the owner granted this data type explicitly.
 			return sendOwnedGameAccountProfile(c, apiHelper, gameUserIDStr, server)
 		default:
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")

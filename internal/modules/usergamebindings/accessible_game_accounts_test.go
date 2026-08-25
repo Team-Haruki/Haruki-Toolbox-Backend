@@ -97,9 +97,10 @@ func TestBuildAccessibleGameAccountItemsAggregatesGrants(t *testing.T) {
 	if item.Owner.AvatarPath == nil || *item.Owner.AvatarPath != avatar {
 		t.Fatalf("Owner.AvatarPath = %v, want %s", item.Owner.AvatarPath, avatar)
 	}
-	// profile is not grantable, so it must never appear on a granted account.
+	// profile is grantable now, but only when granted: this account was granted
+	// suite and mysekai only, so profile must be absent.
 	if _, ok := item.Capabilities["profile"]; ok {
-		t.Fatalf("granted capabilities expose profile: %v", capabilityKeys(item.Capabilities))
+		t.Fatalf("granted capabilities expose profile without a profile grant: %v", capabilityKeys(item.Capabilities))
 	}
 	if got := item.Capabilities["suite"].ExpiresAt; got == nil || !got.Equal(suiteExpiry) {
 		t.Fatalf("suite expiry = %v, want %v", got, suiteExpiry)
@@ -184,5 +185,34 @@ func TestDeckRecommendRequiredDataTypes(t *testing.T) {
 	got := deckRecommendRequiredDataTypes(deckRecommendDataModeMysekai)
 	if len(got) != 2 || got[0] != ownedGameAccountDataTypeSuite || got[1] != ownedGameAccountDataTypeMysekai {
 		t.Fatalf("mysekai mode requires %v, want [suite mysekai]", got)
+	}
+}
+
+// profile became grantable on 2026-08-26. The aggregate must surface it, because
+// capabilities is the only gate a client consults — a profile grant the endpoint
+// does not report is a grant the UI can never act on.
+func TestBuildAccessibleGameAccountItemsSurfacesGrantedProfile(t *testing.T) {
+	expiry := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	accessible := &postgresql.AccessibleGameAccounts{
+		Grants: []postgresql.AccessibleGameAccountGrant{
+			{
+				Server: "jp", GameUserID: "777", DataType: "profile",
+				ExpiresAt: expiry,
+				GrantedAt: time.Date(2026, 8, 26, 0, 0, 0, 0, time.UTC),
+				Owner:     postgresql.AccessibleGameAccountOwner{UserID: "owner-5", Name: "Owner Five"},
+			},
+		},
+	}
+	items := buildAccessibleGameAccountItems(accessible)
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	got := items[0].Capabilities["profile"].ExpiresAt
+	if got == nil || !got.Equal(expiry) {
+		t.Fatalf("profile expiry = %v, want %v", got, expiry)
+	}
+	// A profile grant alone does not make recommend-data callable: that needs suite.
+	if _, ok := items[0].Capabilities[gameAccountCapabilityRecommend]; ok {
+		t.Fatalf("recommend offered from a profile-only grant: %v", capabilityKeys(items[0].Capabilities))
 	}
 }

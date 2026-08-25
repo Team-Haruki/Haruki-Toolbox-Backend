@@ -43,7 +43,7 @@ GET /api/user/:toolbox_user_id/accessible-game-accounts
 
 注意：
 
-- `profile` 仍只允许 owner 自己读取，不支持授权。
+- `profile` 已可授权（2026-08-26）。它与 suite/mysekai 一样各自一行，`capabilities` 里出现才代表可用。
 - `recommend-data` 默认模式需要 `suite`，`mode=mysekai` 需要 `suite` 且 `mysekai`；绑定不存在或未验证返回 `404`，存在但无权限返回 `403`。
 - public API 和 private token API 不支持此授权模型。
 - OAuth2 读取仍要求 token scope 包含 `game-data:read`。
