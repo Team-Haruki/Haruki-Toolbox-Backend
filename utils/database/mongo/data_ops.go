@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/gamemerge"
 	"strings"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -142,175 +143,24 @@ func (m *MongoDBManager) buildFinalData(oldData, data map[string]any) bson.M {
 	return finalData
 }
 
-func mergeUserEvents(oldData, newData map[string]any) []any {
-	oldEvents := extractAnySlice(oldData[fieldUserEvents])
-	newEvents := extractAnySlice(newData[fieldUserEvents])
-	allEvents := append(oldEvents, newEvents...)
+// The three history merges live in utils/database/gamedata/gamemerge so the
+// MongoDB path and the PostgreSQL path run the SAME implementation. Keeping one
+// copy is what makes the existing merge tests evidence that the cutover did not
+// change behaviour.
 
-	latestEvents := make(map[int64]map[string]any)
-	for _, ev := range allEvents {
-		e, ok := normalizeDocument(ev)
-		if !ok {
-			continue
-		}
-		eventID, ok := getRequiredInt(e, fieldEventID)
-		if !ok {
-			continue
-		}
-		if old, exists := latestEvents[eventID]; !exists || shouldReplaceEvent(e, old) {
-			latestEvents[eventID] = e
-		}
-	}
+// bsonNormalizer teaches the shared merges the shapes the MongoDB driver hands
+// back, on top of the plain Go ones.
+type bsonNormalizer struct{ gamemerge.JSONNormalizer }
 
-	if len(latestEvents) == 0 {
-		return nil
+func (bsonNormalizer) Slice(value any) []any {
+	if a, ok := value.(bson.A); ok {
+		return []any(a)
 	}
-
-	arr := make([]any, 0, len(latestEvents))
-	for _, v := range latestEvents {
-		arr = append(arr, v)
-	}
-	return arr
+	return gamemerge.AnySlice(value)
 }
 
-func shouldReplaceEvent(newEvent, oldEvent map[string]any) bool {
-	newPoint := getInt(newEvent, fieldEventPoint)
-	oldPoint := getInt(oldEvent, fieldEventPoint)
-
-	// Higher eventPoint always wins
-	if newPoint > oldPoint {
-		return true
-	}
-	// Lower eventPoint never wins
-	if newPoint < oldPoint {
-		return false
-	}
-	// Equal eventPoint: prefer the one with rank field (post-event data is more complete)
-	_, newHasRank := newEvent[fieldEventRank]
-	_, oldHasRank := oldEvent[fieldEventRank]
-	if newHasRank && !oldHasRank {
-		return true
-	}
-	// If both have rank or neither has rank, keep existing (don't replace)
-	return false
-}
-
-type bloomKey struct {
-	EventID, CharID int64
-}
-
-func mergeWorldBlooms(oldData, newData map[string]any) []any {
-	oldBlooms := extractAnySlice(oldData[fieldUserWorldBlooms])
-	newBlooms := extractAnySlice(newData[fieldUserWorldBlooms])
-	allBlooms := append(oldBlooms, newBlooms...)
-
-	latestBlooms := make(map[bloomKey]map[string]any)
-	for _, bv := range allBlooms {
-		b, ok := normalizeDocument(bv)
-		if !ok {
-			continue
-		}
-		eventID, ok := getRequiredInt(b, fieldEventID)
-		if !ok {
-			continue
-		}
-		charID, ok := getRequiredInt(b, fieldGameCharacterID)
-		if !ok {
-			continue
-		}
-		key := bloomKey{
-			EventID: eventID,
-			CharID:  charID,
-		}
-		if old, exists := latestBlooms[key]; !exists || shouldReplaceBloom(b, old) {
-			latestBlooms[key] = b
-		}
-	}
-
-	if len(latestBlooms) == 0 {
-		return nil
-	}
-
-	arr := make([]any, 0, len(latestBlooms))
-	for _, v := range latestBlooms {
-		arr = append(arr, v)
-	}
-	return arr
-}
-
-func shouldReplaceBloom(newBloom, oldBloom map[string]any) bool {
-	newPoint := getInt(newBloom, fieldWorldBloomChapterPoint)
-	oldPoint := getInt(oldBloom, fieldWorldBloomChapterPoint)
-	return newPoint >= oldPoint
-}
-
-type gachaKey struct {
-	GachaID         int64
-	GachaBehaviorID int64
-}
-
-func mergeUserGachas(oldData, newData map[string]any) []any {
-	oldGachas := extractAnySlice(oldData[fieldUserGachas])
-	newGachas := extractAnySlice(newData[fieldUserGachas])
-	allGachas := append(oldGachas, newGachas...)
-
-	latestGachas := make(map[gachaKey]map[string]any)
-	for _, gv := range allGachas {
-		gacha, ok := normalizeDocument(gv)
-		if !ok {
-			continue
-		}
-		gachaID, ok := getRequiredInt(gacha, fieldGachaID)
-		if !ok {
-			continue
-		}
-		gachaBehaviorID, ok := getRequiredInt(gacha, fieldGachaBehaviorID)
-		if !ok {
-			continue
-		}
-		key := gachaKey{
-			GachaID:         gachaID,
-			GachaBehaviorID: gachaBehaviorID,
-		}
-		if old, exists := latestGachas[key]; !exists || shouldReplaceGacha(gacha, old) {
-			latestGachas[key] = gacha
-		}
-	}
-
-	if len(latestGachas) == 0 {
-		return nil
-	}
-
-	arr := make([]any, 0, len(latestGachas))
-	for _, v := range latestGachas {
-		arr = append(arr, v)
-	}
-	return arr
-}
-
-func shouldReplaceGacha(newGacha, oldGacha map[string]any) bool {
-	newLastSpinAt := getInt(newGacha, fieldLastSpinAt)
-	oldLastSpinAt := getInt(oldGacha, fieldLastSpinAt)
-	return newLastSpinAt >= oldLastSpinAt
-}
-
-func extractAnySlice(value any) []any {
+func (bsonNormalizer) Document(value any) (map[string]any, bool) {
 	switch typed := value.(type) {
-	case nil:
-		return nil
-	case []any:
-		return typed
-	case bson.A:
-		return []any(typed)
-	default:
-		return nil
-	}
-}
-
-func normalizeDocument(value any) (map[string]any, bool) {
-	switch typed := value.(type) {
-	case map[string]any:
-		return typed, true
 	case bson.M:
 		return map[string]any(typed), true
 	case bson.D:
@@ -319,9 +169,26 @@ func normalizeDocument(value any) (map[string]any, bool) {
 			converted[item.Key] = item.Value
 		}
 		return converted, true
-	default:
-		return nil, false
 	}
+	return gamemerge.Document(value)
+}
+
+func mergeUserEvents(oldData, newData map[string]any) []any {
+	return gamemerge.Events(bsonNormalizer{}, oldData[fieldUserEvents], newData[fieldUserEvents])
+}
+
+func mergeWorldBlooms(oldData, newData map[string]any) []any {
+	return gamemerge.WorldBlooms(bsonNormalizer{}, oldData[fieldUserWorldBlooms], newData[fieldUserWorldBlooms])
+}
+
+func mergeUserGachas(oldData, newData map[string]any) []any {
+	return gamemerge.Gachas(bsonNormalizer{}, oldData[fieldUserGachas], newData[fieldUserGachas])
+}
+
+func extractAnySlice(value any) []any { return bsonNormalizer{}.Slice(value) }
+
+func normalizeDocument(value any) (map[string]any, bool) {
+	return bsonNormalizer{}.Document(value)
 }
 
 func (m *MongoDBManager) GetData(
