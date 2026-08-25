@@ -83,14 +83,16 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 	publicModule.RegisterPublicRoutes(apiHelper)
 	subscriptionModule.RegisterSubscriptionRoutes(apiHelper)
 	uploadModule.RegisterUploadRoutes(apiHelper, uploadModule.Dependencies{
-		BackgroundTasks:         dependencies.BackgroundTasks,
-		OAuth2WebhookAuthorizer: oauth2Module.WebhookAuthorizer{HydraConfig: dependencies.HydraConfig},
-		HTTPClient:              dependencies.UploadHTTPClient,
-		DataHandlerLogger:       dependencies.UploadLogger,
-		BirthdaySubscription:    dependencies.BirthdaySubscription,
-		SuiteRestoreService:     dependencies.SuiteRestoreService,
-		ServerCryptor:           dependencies.ServerCryptor,
-		Proxy:                   dependencies.UploadProxy,
+		BackgroundTasks:           dependencies.BackgroundTasks,
+		OAuth2WebhookAuthorizer:   oauth2Module.WebhookAuthorizer{HydraConfig: dependencies.HydraConfig},
+		HydraConfig:               dependencies.HydraConfig,
+		OAuth2ClientActiveChecker: oauth2Module.HydraClientActiveChecker(dependencies.HydraConfig),
+		HTTPClient:                dependencies.UploadHTTPClient,
+		DataHandlerLogger:         dependencies.UploadLogger,
+		BirthdaySubscription:      dependencies.BirthdaySubscription,
+		SuiteRestoreService:       dependencies.SuiteRestoreService,
+		ServerCryptor:             dependencies.ServerCryptor,
+		Proxy:                     dependencies.UploadProxy,
 	})
 	iosModule.RegisterIOSRoutes(apiHelper, dependencies.IOSEndpoints)
 	oauth2Module.RegisterOAuth2Routes(apiHelper, oauth2Module.RouteOptions{

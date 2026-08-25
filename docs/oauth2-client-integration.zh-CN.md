@@ -474,6 +474,52 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 ---
 
+### 7.4 游戏数据上传（代理上传）
+
+接口：
+
+- `POST /api/oauth2/game-data/:server/:data_type/:user_id`
+
+需要 scope：
+
+- `game-data:write`
+
+请求体是**原始游戏负载**——也就是你从游戏抓到的、未解密的原文，与 `manual` / proxy / 脚本上传接口收的是同一种东西。`Content-Type` 不限，服务端读原始 body。
+
+成功返回与手动上传一致；负载被拒时返回对应的错误码与说明。
+
+#### 为什么必须是原始负载
+
+服务端解密之后，会要求**游戏自己写在负载里的** game user id 与 URL 里的 `:user_id` 一致，不一致直接拒绝。
+
+这是这个接口的防伪基础：拿到某个账号的 token，并不等于可以往那个账号里写任意内容——你还得拿得出游戏为该账号生成的真实负载。如果接口收已经解码好的 JSON，那个 id 就变成了客户端自己填的字段，这条防线就没了。
+
+因此**不会**提供"提交已解码 JSON"的变体。
+
+#### 授权比读取更严
+
+读取允许通过 **grant**（其他用户把自己的数据共享给你）访问；上传**不允许**：
+
+| | 自己拥有的绑定 | 通过 grant 获得的访问 |
+|---|---|---|
+| `GET`（读取） | ✅ | ✅ |
+| `POST`（上传） | ✅ | ❌ `403` |
+
+别人授权你**查看**他的数据，不等于授权你**覆盖**他的数据。
+
+#### 其余校验
+
+这个接口走的是与其他上传方式完全相同的处理链路，因此同样会：
+
+- 校验该 token 对应的用户拥有这个绑定，且绑定已验证通过
+- 校验账号所有者未被封禁
+- 应用该账号的上传策略（例如公开 API 可见性、cn 服 mysekai 限制）
+- 写入审计日志，上传方式记为 `oauth2`，可与账号所有者本人的上传区分开
+
+另外，**token 所属 client 被停用后，该 token 立刻失去上传能力**，无需等待其自然过期。
+
+---
+
 ## 8. 当前可申请的 scope
 
 当前内置 scope 如下：
@@ -487,17 +533,13 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 - `game-data:read`
 - `game-data:write`
 
-但当前最新版本对外明确可用、且文档已覆盖的主要是：
+全部 scope 均已对外可用且被本文覆盖。
 
-- `offline_access`
-- `openid`
-- `profile`
-- `email`
-- `user:read`
-- `bindings:read`
-- `game-data:read`
+`game-data:write` 是其中唯一的**写**权限，申请时请注意：
 
-如果你需要 `game-data:write`，应先和服务端确认是否已经开放对应 bearer token 写接口。
+- 它允许你代表用户上传游戏数据（§7.4），只对用户**自己拥有**的绑定生效
+- 它不隐含 `game-data:read`；两者需要分别申请
+- 同意页会向用户展示"Upload game data on your behalf"，用户可以只授予读、不授予写
 
 ---
 

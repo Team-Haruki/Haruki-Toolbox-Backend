@@ -360,11 +360,14 @@ Authorization: Bearer <access_token>
 
 - `GET /api/oauth2/game-data/:server/:data_type/:user_id`
 - 需要 scope：`game-data:read`
+- `POST /api/oauth2/game-data/:server/:data_type/:user_id`
+- 需要 scope：`game-data:write`，请求体是**原始游戏负载**；详见 `oauth2-client-integration.zh-CN.md` §7.4
 
 注意：
 
 - 游戏数据接口还会检查 token 对应用户是否有该绑定
 - 也会检查绑定是否已经验证
+- **上传接口比读取更严**：只接受用户自己拥有的绑定，通过授权（grant）获得的访问是只读的
 - `suite` 数据中的 `userGamedata.userId` 保持原有 number 字段，同时返回 `userGamedata.userIdString` 字符串镜像；JS / TS 客户端应优先读取字符串字段
 - 当响应暴露顶层 `_id` 时，会同时返回 `_idString`
 

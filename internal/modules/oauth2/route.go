@@ -20,6 +20,13 @@ func RegisterOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	registerOAuth2GameDataRoutes(apiHelper, options.HydraConfig)
 }
 
+// HydraClientActiveChecker reports whether the client behind a token is still
+// enabled. Exported so other modules can gate delegated access on it without
+// reimplementing the Hydra lookup.
+func HydraClientActiveChecker(hydraConfig *harukiOAuth2.HydraConfig) harukiOAuth2.ClientActiveChecker {
+	return checkHydraOAuth2ClientActive(hydraConfig)
+}
+
 func checkHydraOAuth2ClientActive(hydraConfig *harukiOAuth2.HydraConfig) harukiOAuth2.ClientActiveChecker {
 	return func(ctx context.Context, clientID string) (bool, error) {
 		client, err := GetHydraOAuthClient(ctx, hydraConfig, clientID)
