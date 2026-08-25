@@ -472,6 +472,41 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 - `KRATOS_AUTO_LINK_BY_EMAIL`
 - `KRATOS_AUTO_PROVISION_USER`
 
+#### 11.1.1 Sign in with Apple
+
+Kratos 的 Apple provider 配置位于 `external/kratos/kratos.yml`，claim mapper 位于
+`external/kratos/oidc.apple.jsonnet`。Apple 登录完成后仍由 Kratos 创建会话，Backend 和
+Oathkeeper 的会话验证方式不变。
+
+在 Apple Developer 后台完成以下配置：
+
+1. 创建并启用 **Sign in with Apple** 的 App ID。
+2. 创建 **Services ID**；该 Identifier 是 `KRATOS_OIDC_APPLE_CLIENT_ID`，不是 Bundle ID。
+3. 在 Services ID 的 Web Authentication 配置中登记：
+   - Domain：`KRATOS_PUBLIC_BASE_URL` 的主机名，例如 `toolbox-auth.example.com`
+   - Return URL：`https://<Kratos 公网域名>/self-service/methods/oidc/callback/apple`
+4. 创建启用了 Sign in with Apple 的私钥，并记录 Team ID 和 Key ID。
+
+部署环境需要设置：
+
+- `KRATOS_OIDC_APPLE_CLIENT_ID`
+- `KRATOS_OIDC_APPLE_TEAM_ID`
+- `KRATOS_OIDC_APPLE_PRIVATE_KEY_ID`
+- `KRATOS_OIDC_APPLE_PRIVATE_KEY`（完整 `.p8` PEM，包含首尾标记）
+
+`.env` 支持用单引号保存多行 PEM，例如：
+
+```dotenv
+KRATOS_OIDC_APPLE_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----
+<private key content>
+-----END PRIVATE KEY-----'
+```
+
+真实私钥不得提交到仓库。Apple 浏览器回调使用 `form_post`，因此 provider 的 `id` 必须保持
+为 `apple`，不可改成自定义值。Mapper 只接受 Apple 标记为已验证的邮箱；Apple 的隐藏邮箱
+（Private Relay）也可以正常使用。前端无需硬编码 provider 列表，应渲染 Kratos login /
+registration flow 中 `method=oidc`、`provider=apple` 的 UI node。
+
 ### 11.2 Auth Proxy / Oathkeeper 相关
 
 核心配置项：

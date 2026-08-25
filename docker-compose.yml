@@ -103,6 +103,7 @@ services:
       - ${STACK_HOST_ROOT}/kratos/kratos.yml:/etc/config/kratos/kratos.yml:ro
       - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
       - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
+      - ${STACK_HOST_ROOT}/kratos/oidc.apple.jsonnet:/etc/config/kratos/oidc.apple.jsonnet:ro
 
   kratos:
     image: oryd/kratos:${ORY_VERSION}
@@ -146,8 +147,24 @@ services:
       SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ID: ${KRATOS_PASSKEY_RP_ID:-toolbox.example.com}
       SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ORIGINS_0: ${KRATOS_PASSKEY_RP_ORIGIN:-https://toolbox.example.com}
       SELFSERVICE_METHODS_OIDC_ENABLED: "true"
+      # Setting any indexed provider through environment variables rebuilds the
+      # provider array, so keep every required field explicit for both entries.
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_ID: google
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_PROVIDER: google
       SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID: ${KRATOS_OIDC_GOOGLE_CLIENT_ID:-change-me-google-client-id}
       SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_SECRET: ${KRATOS_OIDC_GOOGLE_CLIENT_SECRET:-change-me-google-client-secret}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_MAPPER_URL: file:///etc/config/kratos/oidc.google.jsonnet
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_SCOPE_0: email
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_SCOPE_1: profile
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_ID: apple
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_PROVIDER: apple
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_CLIENT_ID: ${KRATOS_OIDC_APPLE_CLIENT_ID:-change-me-apple-services-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_APPLE_TEAM_ID: ${KRATOS_OIDC_APPLE_TEAM_ID:-change-me-apple-team-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_APPLE_PRIVATE_KEY_ID: ${KRATOS_OIDC_APPLE_PRIVATE_KEY_ID:-change-me-apple-private-key-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_APPLE_PRIVATE_KEY: ${KRATOS_OIDC_APPLE_PRIVATE_KEY:-change-me-apple-private-key}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_ISSUER_URL: https://appleid.apple.com
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_MAPPER_URL: file:///etc/config/kratos/oidc.apple.jsonnet
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_SCOPE_0: email
       SELFSERVICE_METHODS_TOTP_ENABLED: "true"
       SELFSERVICE_METHODS_TOTP_CONFIG_ISSUER: ${KRATOS_MFA_TOTP_ISSUER:-Haruki Toolbox}
       SELFSERVICE_METHODS_LOOKUP_SECRET_ENABLED: "true"
@@ -170,6 +187,7 @@ services:
       - ${STACK_HOST_ROOT}/kratos/kratos.yml:/etc/config/kratos/kratos.yml:ro
       - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
       - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
+      - ${STACK_HOST_ROOT}/kratos/oidc.apple.jsonnet:/etc/config/kratos/oidc.apple.jsonnet:ro
 
   hydra-migrate:
     image: oryd/hydra:${ORY_VERSION}

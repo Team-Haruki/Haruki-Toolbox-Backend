@@ -54,6 +54,18 @@ selfservice:
                 name: null
                 given_name: null
                 family_name: null
+          # The provider id must remain "apple": Apple returns the browser
+          # callback with form_post and Kratos applies provider-specific CSRF handling.
+          - id: apple
+            provider: apple
+            client_id: change-me-apple-services-id
+            apple_team_id: change-me-apple-team-id
+            apple_private_key_id: change-me-apple-private-key-id
+            apple_private_key: change-me-apple-private-key
+            issuer_url: https://appleid.apple.com
+            mapper_url: file:///etc/config/kratos/oidc.apple.jsonnet
+            scope:
+              - email
     totp:
       enabled: true
       config:
