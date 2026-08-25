@@ -133,9 +133,9 @@ log:
 
 secrets:
   cookie:
-    - "change-me-kratos-cookie-secret-32bytes"
+    - "change-me-kratos-cookie-32bytes-"
   cipher:
-    - "change-me-kratos-cipher-secret-32bytes"
+    - "change-me-kratos-cipher-32bytes-"
 
 ciphers:
   algorithm: xchacha20-poly1305
