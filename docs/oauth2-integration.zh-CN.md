@@ -6,6 +6,9 @@
 
 覆盖公开客户端（SPA / Web 前端）、保密客户端（Telegram Bot / 服务端后端）以及数据更新回调，不展开旧版本历史与内部实现。
 
+> 如果你**只想让用户用 Haruki 账号登录你的站点**、不需要读取游戏数据，请直接看
+> [`oidc-provider.zh-CN.md`](oidc-provider.zh-CN.md) —— 那篇只讲 OIDC，更短。
+
 ---
 
 ## 1. 接入地址与 OIDC 元数据
@@ -33,15 +36,22 @@ https://toolbox-api-direct.haruki.seiunx.com
 
 标准 OIDC 元数据与端点：
 
-| 用途 | 端点 |
-| --- | --- |
-| Discovery | `/.well-known/openid-configuration` |
-| Authorization | `/oauth2/auth` |
-| Token | `/oauth2/token` |
-| JWKS | `/oauth2/jwks.json` |
-| UserInfo | `/userinfo` |
+| 用途 | 端点 | 实测 |
+| --- | --- | --- |
+| Discovery | `/.well-known/openid-configuration` | 200 |
+| Authorization | `/oauth2/auth` | 302 |
+| Token | `/oauth2/token` | 可用 |
+| JWKS | `/.well-known/jwks.json` | 200，2 把 RS256 |
+| UserInfo | `/userinfo` | 可用 |
+| Revocation | `/oauth2/revoke` | 可用 |
+| End Session | `/oauth2/sessions/logout` | 302，但流程未打通，见下方警告 |
 
 OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码**。现有 `/api/oauth2/authorize` 与 `/api/oauth2/token` 仍作为兼容入口保留。
+
+> ⚠️ **Discovery 的 `scopes_supported` 与 `claims_supported` 不完整。** 它们分别只公布
+> `openid` / `offline_access` / `offline` 和 `sub`，这是 Hydra 的默认公告行为 —— 实际可用的
+> scope 由管理员为你的 client 登记（完整清单见 §9），claims 见下文。**不要拿 Discovery 里
+> 这两个字段当能力清单。**
 
 发起登录时至少请求 `openid`，常见组合是 `scope=openid profile email`。
 
@@ -55,7 +65,15 @@ OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码
 
 只有管理员为 client 登记的 scope 才能被请求；`profile`、`email` 不能脱离 `openid` 单独登记。
 
-> 当前先开放 OIDC 登录、ID Token 与 UserInfo。RP-Initiated Logout / Single Logout 尚未完成 Hydra `logout_challenge`、Kratos 会话注销与前端跳转的端到端编排，客户端暂时**不要依赖** Discovery 中可能出现的 `end_session_endpoint`；应用退出时应清理自己的本地会话，必要时调用 token revoke 接口。
+> ⚠️ **RP-Initiated Logout 尚未端到端打通，客户端必须显式禁用它。**
+>
+> 端点本身可达（2026-08-26 补齐了 Oathkeeper 路由，此前返回的是 Oathkeeper 的 404 而非
+> Hydra 的响应），但：不带 `id_token_hint` 会 302 到 Hydra 内置兜底页而该页 404；带
+> `post_logout_redirect_uri` 却不带 `id_token_hint` 时 Hydra 报 `invalid_request`；带
+> `id_token_hint` 的标准流程会跳到前端 `/logout`，而该页处理 `logout_challenge` 的编排
+> 尚未完成。
+>
+> 应用退出时应清理自己的本地会话，必要时调用 `/oauth2/revoke` 撤销 token。
 
 ---
 

@@ -13,7 +13,13 @@
 
 - id: hydra-public-oauth
   match:
-    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/jwks.json|userinfo>
+    # oauth2/sessions/logout is the OIDC end_session_endpoint. Hydra serves it
+    # (302 when reached directly) and Discovery advertises it, so any RP that
+    # auto-discovers logout hits it — without this rule they got Oathkeeper's
+    # 404, not Hydra's response.
+    # jwks lives at /.well-known/jwks.json (covered by the well-known rule);
+    # Hydra returns 404 for /oauth2/jwks.json, so that alternative is dropped.
+    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/sessions/logout|userinfo>
     methods: [GET, POST]
   upstream:
     url: http://hydra:4444
