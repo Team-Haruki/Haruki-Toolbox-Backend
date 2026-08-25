@@ -113,7 +113,7 @@ GET /api/user/:toolbox_user_id/accessible-game-accounts
 
 `recommend-data` 的授权口径与通用数据入口一致：默认（组卡）模式需要 `suite`，`mode=mysekai` 需要 `suite` 且 `mysekai`。绑定不存在或未验证返回 `404`，存在但无权限返回 `403`。
 
-浏览器 owned-account 入口的 `suite` / `mysekai` 读取可附带 `known_upload_time=<上次完整响应中的 upload_time>`。数据未变化时返回 `304 Not Modified`；若使用 `key` 过滤，必须同时包含 `upload_time`。该优化在所有权或授权校验完成后运行，不改变授权范围及错误语义。
+浏览器 owned-account 入口中，**只有 `:data_type` 这一条**（不含 `recommend-data`）的 `suite` / `mysekai` 读取可附带 `known_upload_time=<上次完整响应中的 upload_time>`。数据未变化时返回 `304 Not Modified`；若使用 `key` 过滤，必须同时包含 `upload_time`。该优化在所有权或授权校验完成后运行，不改变授权范围及错误语义。
 
 OAuth2 入口仍要求 token scope 包含 `game-data:read`。授权不会改变 public API、private token API、Redis 数据缓存 key 或 Mongo 数据形状。
 

@@ -17,7 +17,7 @@
 
 | 文档 | 回答什么问题 |
 | --- | --- |
-| [前端对接补充说明](frontend-integration-notes.zh-CN.md) | 各功能对接要点的集中入口：游戏账号选择器数据源、账号数据授权、admin 集成管理 |
+| [前端对接补充说明](frontend-integration-notes.zh-CN.md) | **只记录还没接完的契约**和前端需长期遵守的约束。当前是游戏账号选择器数据源与功能能力对照表 |
 | [游戏账号数据授权](game-account-data-grants.zh-CN.md) | 把自己的账号数据授权给其他 Toolbox 用户；可访问账号聚合接口的字段与语义 |
 
 ## 给本项目开发者
@@ -26,7 +26,6 @@
 | --- | --- |
 | [后端架构与渐进重构约定](backend-architecture.zh-CN.md) | 目标目录结构、依赖方向、模块边界。代码评审的架构基线 |
 | [Ory 套件使用说明](ory-suite-usage.zh-CN.md) | Kratos / Hydra / Oathkeeper 各自的职责、登录态验证方式、为什么大量旧接口返回 410 |
-| [HarukiBot NEO 注册与凭据重置](haruki-bot-neo-registration.zh-CN.md) | Bot 侧注册与凭据重置流程 |
 | [爱发电赞助集成](afdian-sponsor-integration.zh-CN.md) | 赞助墙的 webhook 与同步行为 |
 
 ## 进行中的计划

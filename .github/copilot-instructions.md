@@ -67,10 +67,6 @@ Bot 数据库使用独立 DSN（`haruki_bot.db_url`）。不要随意手改生�
 
 - `docs/ory-suite-usage.zh-CN.md`
 
-涉及 HarukiBot NEO 注册/凭据重置流程变化时，同步更新：
-
-- `docs/haruki-bot-neo-registration.zh-CN.md`
-
 涉及 OAuth2 客户端对接变化时，同步更新：
 
 - `docs/oauth2-client-integration.zh-CN.md`

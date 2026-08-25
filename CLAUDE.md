@@ -87,10 +87,10 @@ Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` ov
 
 ## Documentation
 
-- `docs/README.md` is the index, grouped by audience. Add new docs there. Plan/progress docs are kept only while the work is unfinished — delete them once it lands; the history stays in git.
+- `docs/README.md` is the index, grouped by audience. Add new docs there. Docs about our own systems are kept only while the work is unfinished — delete them once it lands and move anything the code cannot state into a comment next to the code; the history stays in git. Docs for external integrators are kept regardless.
+- `docs/frontend-integration-notes.zh-CN.md` holds only contracts the frontend has NOT finished consuming, plus constraints it must keep following. Delete a section once the frontend ships it.
 - Links inside `docs/` must be repo-relative (`oauth2-client-integration.zh-CN.md`, `../internal/...`). Never commit an absolute path from your own machine.
 - When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
-- When changing HarukiBot NEO registration/credential reset flow, update `docs/haruki-bot-neo-registration.zh-CN.md`.
 - When changing OAuth2 client integration, update `docs/oauth2-client-integration.zh-CN.md` or `docs/oauth2-confidential-client-integration.zh-CN.md`.
 - When changing webhook behavior, update `docs/webhook-integration.zh-CN.md` and `docs/oauth2-webhook-integration.zh-CN.md`.
 - When changing game account data grants or the accessible-accounts aggregate, update `docs/game-account-data-grants.zh-CN.md`; browser/frontend contracts also go in `docs/frontend-integration-notes.zh-CN.md`.

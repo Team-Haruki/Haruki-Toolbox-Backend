@@ -17,6 +17,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// handleRegister issues a bot credential, or resets an existing one.
+//
+// What the caller gets back is the contract with the other codebase: a HS256 JWT
+// carrying {bot_id, credential}, signed with BotCredentialSignToken, which the
+// bot then presents to Haruki-Cloud to authenticate. Both sides must be
+// configured with the same signing token (haruki-toolbox-configs.yaml
+// `haruki_bot.credential_sign_token`), so changing it here breaks every bot
+// until Haruki-Cloud is updated too.
+//
+// Only a bcrypt hash of the credential is persisted, so the plaintext exists in
+// exactly one response and can never be recovered. Losing it means resetting,
+// and a reset invalidates the previous credential immediately and irreversibly
+// — any client still holding the old one starts failing at once. Callers must
+// treat this response as a one-time secret handoff.
 func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if !apiHelper.BotRegistrationEnabled {

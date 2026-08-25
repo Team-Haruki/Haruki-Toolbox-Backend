@@ -68,10 +68,10 @@ https://example.com/oauth-webhook/jp/suite/123456789
 
 OAuth2 Webhook endpoint 由管理员在 OAuth2 client 下维护：
 
-- `GET /admin/oauth-clients/:client_id/webhooks`
-- `POST /admin/oauth-clients/:client_id/webhooks`
-- `PUT /admin/oauth-clients/:client_id/webhooks/:webhook_id`
-- `DELETE /admin/oauth-clients/:client_id/webhooks/:webhook_id`
+- `GET /api/admin/oauth-clients/:client_id/webhooks`
+- `POST /api/admin/oauth-clients/:client_id/webhooks`
+- `PUT /api/admin/oauth-clients/:client_id/webhooks/:webhook_id`
+- `DELETE /api/admin/oauth-clients/:client_id/webhooks/:webhook_id`
 
 创建或更新 endpoint 时会校验 callback URL，拒绝 localhost、内网 IP、回环地址、带用户名密码的 URL 和非 HTTP/HTTPS URL。
 
