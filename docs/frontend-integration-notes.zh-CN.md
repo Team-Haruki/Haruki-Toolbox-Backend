@@ -57,6 +57,8 @@
 
 `platform` 可选值：`qq`、`qq_bot`、`discord`、`telegram`。`verified` 可省略，默认按已验证保存。若接口返回 conflict，表示同一平台账号已绑定到其它 Toolbox 用户。
 
+查询响应中的 `exists` 表示该用户是否已有主社交平台信息。`DELETE` 只清除主社交平台，不影响授权社交平台列表。
+
 ## 用户账号数据授权
 
 位置建议：用户自己的游戏账号详情页，针对每个已验证绑定账号提供“数据授权”管理入口。
@@ -92,7 +94,7 @@
 GET /api/user/:toolbox_user_id/accessible-game-accounts
 ```
 
-它返回当前用户能读到数据的全部账号（本人绑定 + 有效授权），已按读取时的同一组谓词预过滤。字段与语义见 [`docs/game-account-data-grants.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/game-account-data-grants.zh-CN.md) 的「可访问账号聚合接口」。
+它返回当前用户能读到数据的全部账号（本人绑定 + 有效授权），已按读取时的同一组谓词预过滤。字段与语义见 [`docs/game-account-data-grants.zh-CN.md`](game-account-data-grants.zh-CN.md) 的「可访问账号聚合接口」。
 
 前端约束：
 

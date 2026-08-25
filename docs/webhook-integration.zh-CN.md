@@ -123,6 +123,8 @@ X-Haruki-Suite-Webhook-Token: <token>
 如果全局开关关闭，所有 endpoint 都不会收到回调。  
 如果某个 endpoint 关闭，只有这个 endpoint 不会收到回调。
 
+触发条件不区分上传来源：手动上传、代理上传、iOS 脚本，以及第三方客户端通过 OAuth2 `game-data:write` 发起的代理上传，都会照常触发回调。
+
 ## 7. 回调请求格式
 
 服务端会对 `callbackUrl` 发起：

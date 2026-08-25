@@ -2,7 +2,7 @@
 
 OAuth2 Webhook 用于通知已经通过 OAuth2 授权读取游戏数据的第三方客户端：用户绑定账号的数据已经上传更新。它和旧 public API Webhook 分离，不需要用户开启 `allowPublicApi`。
 
-前端集中对接说明见 [`docs/frontend-integration-notes.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/frontend-integration-notes.zh-CN.md)。
+前端集中对接说明见 [`docs/frontend-integration-notes.zh-CN.md`](frontend-integration-notes.zh-CN.md)。
 
 ## 触发条件
 
@@ -15,6 +15,16 @@ OAuth2 Webhook 用于通知已经通过 OAuth2 授权读取游戏数据的第三
 - consent 的 grant scope 包含 `game-data:read`
 
 满足条件时，服务端会向该 client 的 webhook endpoint 发起回调。Hydra 查询失败或回调失败不会影响上传响应，只会记录日志。
+
+## 上传来源不影响触发
+
+判断条件只看"这个账号的数据更新了"，不看是谁上传的。手动上传、代理上传、iOS 脚本，以及第三方客户端自己用 `game-data:write` 发起的**代理上传**（见
+[`oauth2-client-integration.zh-CN.md`](oauth2-client-integration.zh-CN.md) §7.4），走的是同一条处理链路，因此都会照常触发回调。
+
+这意味着两件事：
+
+- 你用 `game-data:write` 上传成功后，**自己配置的 webhook 也会被回调一次**。如果你的实现是"收到回调就去拉数据"，注意避免自己触发自己的循环。
+- 触发回调要求的是用户对你的 client 有包含 `game-data:read` 的有效 consent。`game-data:write` 不隐含读权限，只授予了写而没授予读的用户，其数据更新不会回调给你。
 
 ## 回调请求
 

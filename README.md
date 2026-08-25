@@ -22,8 +22,8 @@ It also utilizes Redis for efficient caching to speed up API responses.
 ## Development Notes
 
 - Start from [`docs/README.md`](./docs/README.md) for the full documentation index.
-- See [`docs/development.md`](./docs/development.md) for toolchain/config resolution rules.
-- See [`docs/architecture.md`](./docs/architecture.md) for API and module package structure.
+- See [`docs/backend-architecture.zh-CN.md`](./docs/backend-architecture.zh-CN.md) for module boundaries and allowed dependency directions.
+- See [`CLAUDE.md`](./CLAUDE.md) for build, test, code generation and commit conventions.
 
 ## License
 

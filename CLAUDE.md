@@ -87,10 +87,13 @@ Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` ov
 
 ## Documentation
 
+- `docs/README.md` is the index, grouped by audience. Add new docs there. Plan/progress docs are kept only while the work is unfinished — delete them once it lands; the history stays in git.
+- Links inside `docs/` must be repo-relative (`oauth2-client-integration.zh-CN.md`, `../internal/...`). Never commit an absolute path from your own machine.
 - When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
 - When changing HarukiBot NEO registration/credential reset flow, update `docs/haruki-bot-neo-registration.zh-CN.md`.
 - When changing OAuth2 client integration, update `docs/oauth2-client-integration.zh-CN.md` or `docs/oauth2-confidential-client-integration.zh-CN.md`.
-- When changing webhook behavior, update `docs/webhook-integration.zh-CN.md`.
+- When changing webhook behavior, update `docs/webhook-integration.zh-CN.md` and `docs/oauth2-webhook-integration.zh-CN.md`.
+- When changing game account data grants or the accessible-accounts aggregate, update `docs/game-account-data-grants.zh-CN.md`; browser/frontend contracts also go in `docs/frontend-integration-notes.zh-CN.md`.
 - When changing Afdian sponsor webhook/sync behavior, update `docs/afdian-sponsor-integration.zh-CN.md`.
 - Oathkeeper access rules live in `external/oathkeeper/access-rules.yml` — update when adding/removing public or protected endpoints. The backend's auth-proxy header conventions also live in `external/oathkeeper/oathkeeper.yml` (header mutator).
 

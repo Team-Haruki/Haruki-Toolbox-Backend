@@ -15,11 +15,11 @@
 
 请额外阅读：
 
-- [`docs/oauth2-confidential-client-integration.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/oauth2-confidential-client-integration.zh-CN.md)
+- [`docs/oauth2-confidential-client-integration.zh-CN.md`](oauth2-confidential-client-integration.zh-CN.md)
 
 如果你的客户端需要在授权用户数据更新后收到通知，请阅读：
 
-- [`docs/oauth2-webhook-integration.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/oauth2-webhook-integration.zh-CN.md)
+- [`docs/oauth2-webhook-integration.zh-CN.md`](oauth2-webhook-integration.zh-CN.md)
 
 ---
 

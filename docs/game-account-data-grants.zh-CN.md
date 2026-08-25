@@ -2,7 +2,7 @@
 
 游戏账号数据授权允许用户把自己已经验证绑定的账号数据授权给另一个 Toolbox 用户读取。第一版只支持已上传并存储的 `suite` / `mysekai` 数据，不支持 `profile` 实时查询，也不影响 public API 或 private token API。
 
-前端集中对接说明见 [`docs/frontend-integration-notes.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/frontend-integration-notes.zh-CN.md)。
+前端集中对接说明见 [`docs/frontend-integration-notes.zh-CN.md`](frontend-integration-notes.zh-CN.md)。
 
 ## 权限规则
 
