@@ -281,7 +281,11 @@ services:
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: "16666"
       BACKEND_AUTO_MIGRATE: "${BACKEND_AUTO_MIGRATE:-true}"
-      BACKEND_ENABLE_TRUST_PROXY: "true"
+      # Keep forwarded-IP trust disabled unless this deployment assigns its edge
+      # proxy a stable address and sets BACKEND_TRUSTED_PROXIES to that exact IP.
+      # Broad Docker/LAN/Tailscale networks must never be trusted as proxies.
+      BACKEND_ENABLE_TRUST_PROXY: "${BACKEND_ENABLE_TRUST_PROXY:-false}"
+      BACKEND_TRUSTED_PROXIES: "${BACKEND_TRUSTED_PROXIES:-}"
       BACKEND_PROXY_HEADER: X-Forwarded-For
       BACKEND_URL: ${BACKEND_PUBLIC_BASE_URL}
       BACKEND_CDN_URL: ${ASSET_PUBLIC_BASE_URL}
