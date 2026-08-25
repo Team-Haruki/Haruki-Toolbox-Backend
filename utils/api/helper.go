@@ -25,7 +25,7 @@ type HarukiToolboxRouterHelpers struct {
 
 	// Deprecated compatibility fields. New modules should depend on
 	// RuntimeConfig (or a narrower interface) instead of this service locator.
-	PublicAPIAllowedKeys   []string
+	AllowedKeys            []string
 	PrivateAPIToken        string
 	PrivateAPIUserAgent    string
 	HarukiProxyUserAgent   string
@@ -36,7 +36,7 @@ type HarukiToolboxRouterHelpers struct {
 	WebhookEnabled         *bool
 	BotRegistrationEnabled bool
 	BotCredentialSignToken string
-	publicAPIKeysMu        sync.RWMutex
+	allowedKeysMu          sync.RWMutex
 	runtimeConfigMu        sync.RWMutex
 }
 
@@ -67,10 +67,10 @@ func (h *HarukiToolboxRouterHelpers) legacyRuntimeConfigSnapshot() platformRunti
 	if h == nil {
 		return platformRuntimeConfig.Snapshot{}
 	}
-	publicAPIAllowedKeys := func() []string {
-		h.publicAPIKeysMu.RLock()
-		defer h.publicAPIKeysMu.RUnlock()
-		return append([]string(nil), h.PublicAPIAllowedKeys...)
+	allowedKeys := func() []string {
+		h.allowedKeysMu.RLock()
+		defer h.allowedKeysMu.RUnlock()
+		return append([]string(nil), h.AllowedKeys...)
 	}()
 
 	h.runtimeConfigMu.RLock()
@@ -81,7 +81,7 @@ func (h *HarukiToolboxRouterHelpers) legacyRuntimeConfigSnapshot() platformRunti
 		webhookEnabled = &value
 	}
 	return platformRuntimeConfig.Snapshot{
-		PublicAPIAllowedKeys: publicAPIAllowedKeys,
+		AllowedKeys:          allowedKeys,
 		PrivateAPIToken:      h.PrivateAPIToken,
 		PrivateAPIUserAgent:  h.PrivateAPIUserAgent,
 		HarukiProxyUserAgent: h.HarukiProxyUserAgent,
@@ -113,9 +113,9 @@ func (h *HarukiToolboxRouterHelpers) applyLegacyRuntimeConfigSnapshot(snapshot p
 	}
 	h.runtimeConfigMu.Unlock()
 
-	h.publicAPIKeysMu.Lock()
-	h.PublicAPIAllowedKeys = append([]string(nil), snapshot.PublicAPIAllowedKeys...)
-	h.publicAPIKeysMu.Unlock()
+	h.allowedKeysMu.Lock()
+	h.AllowedKeys = append([]string(nil), snapshot.AllowedKeys...)
+	h.allowedKeysMu.Unlock()
 }
 
 func (h *HarukiToolboxRouterHelpers) runtimeConfigService() *platformRuntimeConfig.Service {
@@ -164,14 +164,14 @@ func (h *HarukiToolboxRouterHelpers) UpdateRuntimeConfig(update RuntimeConfigUpd
 	return nil
 }
 
-func (h *HarukiToolboxRouterHelpers) GetPublicAPIAllowedKeys() []string {
-	return h.currentRuntimeConfigSnapshot().PublicAPIAllowedKeys
+func (h *HarukiToolboxRouterHelpers) GetAllowedKeys() []string {
+	return h.currentRuntimeConfigSnapshot().AllowedKeys
 }
 
-func (h *HarukiToolboxRouterHelpers) SetPublicAPIAllowedKeys(keys []string) {
+func (h *HarukiToolboxRouterHelpers) SetAllowedKeys(keys []string) {
 	keysCopy := append([]string(nil), keys...)
 	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{
-		PublicAPIAllowedKeys: &keysCopy,
+		AllowedKeys: &keysCopy,
 	})
 }
 

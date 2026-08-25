@@ -46,10 +46,7 @@ func ResolveGameDataStamp(
 			// A corrupt memo falls through to Mongo and is overwritten below.
 		}
 	}
-	if apiHelper.DBManager.Mongo == nil {
-		return resolveStampFallback(ctx, apiHelper, server, dataType, userID, fmt.Errorf("mongo manager is nil"))
-	}
-	current, found, mErr := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
+	current, found, mErr := readUploadTime(ctx, apiHelper, server, dataType, userID)
 	if mErr != nil {
 		return resolveStampFallback(ctx, apiHelper, server, dataType, userID, mErr)
 	}
@@ -114,10 +111,10 @@ func ConfirmGameDataCacheWrite(
 	if stamp <= 0 || stamp >= time.Now().Unix() {
 		return false
 	}
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Mongo == nil {
+	if apiHelper == nil || apiHelper.DBManager == nil {
 		return false
 	}
-	current, found, err := apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
+	current, found, err := readUploadTime(ctx, apiHelper, server, dataType, userID)
 	return err == nil && found && current == stamp
 }
 
@@ -146,4 +143,32 @@ func GameDataCacheWriteTTL(requestKey string, stamp int64) time.Duration {
 func PublicAllowlistDigest(allowedKeys []string) string {
 	sum := md5.Sum([]byte(strings.Join(allowedKeys, ",")))
 	return hex.EncodeToString(sum[:8])
+}
+
+// readUploadTime resolves the generation stamp from whichever datastore is
+// currently authoritative.
+//
+// This indirection is what keeps the cache correct across the cutover. Both
+// callers previously reached straight into DBManager.Mongo and returned a bare
+// false when it was nil — so the moment MongoDB is removed, the write fence
+// would refuse every write, the response cache would sit permanently empty, and
+// NOTHING would report it: an empty cache is indistinguishable from a cold one.
+func readUploadTime(
+	ctx context.Context,
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	userID int64,
+) (int64, bool, error) {
+	if gd := apiHelper.DBManager.GameData; gd.ReadsFromPostgres() {
+		collection := "mysekai"
+		if dataType == harukiUtils.UploadDataTypeSuite {
+			collection = "suite"
+		}
+		return gd.StoreFor(collection).UploadTime(ctx, userID, string(server))
+	}
+	if apiHelper.DBManager.Mongo == nil {
+		return 0, false, fmt.Errorf("no game data store is configured")
+	}
+	return apiHelper.DBManager.Mongo.GetUploadTime(ctx, userID, string(server), dataType)
 }

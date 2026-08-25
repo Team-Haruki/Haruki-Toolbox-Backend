@@ -11,6 +11,13 @@ func defaultConfig() Config {
 			AutoMigrate:     false,
 			ShutdownTimeout: 10,
 		},
+		GameData: GameDataConfig{
+			ReadSource: GameDataReadMongo,
+			// MaxConns 0 keeps pgx's own default; MinConns 0 is resolved to
+			// MaxConns by the pool so it always starts warm.
+			MaxConns: 0,
+			MinConns: 0,
+		},
 		OAuth2: OAuth2Config{
 			Provider:                  "hydra",
 			HydraRequestTimeoutSecond: 10,
@@ -49,6 +56,28 @@ func defaultConfig() Config {
 }
 
 func normalizeConfigDefaults(cfg *Config) error {
+	// `public_api_allowed_keys` was renamed to `allowed_keys` when the list
+	// became the single allowlist for every non-private API. Accept the old
+	// spelling rather than silently serving an empty allowlist, which would turn
+	// every public game-data response into {}.
+	if len(cfg.Others.AllowedKeys) == 0 && len(cfg.Others.DeprecatedPublicAPIAllowedKeys) > 0 {
+		cfg.Others.AllowedKeys = append([]string(nil), cfg.Others.DeprecatedPublicAPIAllowedKeys...)
+	}
+	cfg.Others.DeprecatedPublicAPIAllowedKeys = nil
+
+	if cfg.GameData.ReadSource == "" {
+		cfg.GameData.ReadSource = GameDataReadMongo
+	}
+	switch cfg.GameData.ReadSource {
+	case GameDataReadMongo, GameDataReadPostgres:
+	default:
+		return fmt.Errorf("game_data.read_source must be %q or %q, got %q",
+			GameDataReadMongo, GameDataReadPostgres, cfg.GameData.ReadSource)
+	}
+	if cfg.GameData.ReadSource == GameDataReadPostgres && cfg.GameData.URL == "" {
+		return fmt.Errorf("game_data.read_source=%q requires game_data.url", GameDataReadPostgres)
+	}
+
 	if cfg.Backend.ShutdownTimeout <= 0 {
 		cfg.Backend.ShutdownTimeout = 10
 	}

@@ -12,7 +12,7 @@ import (
 
 func TestRuntimeConfigCompositionCopiesMutableValues(t *testing.T) {
 	cfg := harukiConfig.Config{}
-	cfg.Others.PublicAPIAllowedKeys = []string{"key-a", "key-b"}
+	cfg.Others.AllowedKeys = []string{"key-a", "key-b"}
 	cfg.MongoDB.PrivateApiSecret = "private-token"
 	cfg.MongoDB.PrivateApiUserAgent = "private-agent"
 	cfg.HarukiProxy.UserAgent = "proxy-agent"
@@ -23,27 +23,27 @@ func TestRuntimeConfigCompositionCopiesMutableValues(t *testing.T) {
 	cfg.Webhook.Enabled = true
 
 	service := newRuntimeConfigService(cfg, nil)
-	cfg.Others.PublicAPIAllowedKeys[0] = "mutated-after-build"
+	cfg.Others.AllowedKeys[0] = "mutated-after-build"
 	cfg.Webhook.Enabled = false
 
 	snapshot, err := service.Current(t.Context())
 	if err != nil {
 		t.Fatalf("Current returned error: %v", err)
 	}
-	if !reflect.DeepEqual(snapshot.PublicAPIAllowedKeys, []string{"key-a", "key-b"}) {
-		t.Fatalf("PublicAPIAllowedKeys = %#v, want copied startup values", snapshot.PublicAPIAllowedKeys)
+	if !reflect.DeepEqual(snapshot.AllowedKeys, []string{"key-a", "key-b"}) {
+		t.Fatalf("AllowedKeys = %#v, want copied startup values", snapshot.AllowedKeys)
 	}
 	if snapshot.WebhookEnabled == nil || !*snapshot.WebhookEnabled {
 		t.Fatalf("WebhookEnabled = %v, want independent true pointer", snapshot.WebhookEnabled)
 	}
 
-	snapshot.PublicAPIAllowedKeys[0] = "mutated-return-value"
+	snapshot.AllowedKeys[0] = "mutated-return-value"
 	*snapshot.WebhookEnabled = false
 	again, err := service.Current(t.Context())
 	if err != nil {
 		t.Fatalf("second Current returned error: %v", err)
 	}
-	if again.PublicAPIAllowedKeys[0] != "key-a" || again.WebhookEnabled == nil || !*again.WebhookEnabled {
+	if again.AllowedKeys[0] != "key-a" || again.WebhookEnabled == nil || !*again.WebhookEnabled {
 		t.Fatalf("service leaked mutable snapshot values: %#v", again)
 	}
 }

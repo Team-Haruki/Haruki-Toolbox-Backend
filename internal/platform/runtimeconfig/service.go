@@ -11,7 +11,7 @@ const defaultStoreTimeout = 500 * time.Millisecond
 // Update describes a partial runtime configuration update. Nil fields retain
 // their current values.
 type Update struct {
-	PublicAPIAllowedKeys *[]string
+	AllowedKeys          *[]string
 	PrivateAPIToken      *string
 	PrivateAPIUserAgent  *string
 	HarukiProxyUserAgent *string
@@ -26,7 +26,12 @@ type Update struct {
 // names intentionally match the existing Redis payload so extracting this
 // service does not invalidate settings written by older backend instances.
 type Snapshot struct {
-	PublicAPIAllowedKeys []string `json:"publicApiAllowedKeys"`
+	// AllowedKeys keeps the WIRE name `publicApiAllowedKeys` even though the Go
+	// field was renamed. The snapshot is persisted in Redis and read back by
+	// every instance, so during a rolling deploy old and new binaries share one
+	// payload: renaming the JSON member would make each version drop the field
+	// the other wrote, and every backend would lose its allowlist at once.
+	AllowedKeys          []string `json:"publicApiAllowedKeys"`
 	PrivateAPIToken      string   `json:"privateApiToken"`
 	PrivateAPIUserAgent  string   `json:"privateApiUserAgent"`
 	HarukiProxyUserAgent string   `json:"harukiProxyUserAgent"`
@@ -146,8 +151,8 @@ func (s *Service) setLocalSnapshot(snapshot Snapshot) {
 }
 
 func applyUpdate(snapshot *Snapshot, update Update) {
-	if update.PublicAPIAllowedKeys != nil {
-		snapshot.PublicAPIAllowedKeys = append([]string(nil), (*update.PublicAPIAllowedKeys)...)
+	if update.AllowedKeys != nil {
+		snapshot.AllowedKeys = append([]string(nil), (*update.AllowedKeys)...)
 	}
 	if update.PrivateAPIToken != nil {
 		snapshot.PrivateAPIToken = *update.PrivateAPIToken
@@ -177,7 +182,7 @@ func applyUpdate(snapshot *Snapshot, update Update) {
 }
 
 func cloneSnapshot(snapshot Snapshot) Snapshot {
-	snapshot.PublicAPIAllowedKeys = append([]string(nil), snapshot.PublicAPIAllowedKeys...)
+	snapshot.AllowedKeys = append([]string(nil), snapshot.AllowedKeys...)
 	if snapshot.WebhookEnabled != nil {
 		enabled := *snapshot.WebhookEnabled
 		snapshot.WebhookEnabled = &enabled

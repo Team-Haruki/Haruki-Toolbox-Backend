@@ -15,8 +15,15 @@ func RegisterAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 func registerAdminConfigRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	cfg := adminGroup.Group("/config", adminCoreModule.RequireSuperAdmin(apiHelper))
 	requireReauth := RequireRecentAdminReauth(apiHelper)
+	// The route path and the admin JSON member keep their original spelling even
+	// though the Go field is now AllowedKeys: both are the wire contract that
+	// existing admin clients and the persisted Redis snapshot use.
 	cfg.Get("/public-api-keys", handleGetPublicAPIAllowedKeys(apiHelper))
 	cfg.Put("/public-api-keys", requireReauth, handleUpdatePublicAPIAllowedKeys(apiHelper))
+	// Required by the MongoDB -> PostgreSQL cutover: flipping the read source
+	// must purge the game-data cache in the same step, because no cache key
+	// records which datastore produced the body it holds.
+	cfg.Post("/game-data-cache/purge", requireReauth, handlePurgeGameDataCache(apiHelper))
 	cfg.Get("/runtime", handleGetRuntimeConfig(apiHelper))
 	cfg.Put("/runtime", requireReauth, handleUpdateRuntimeConfig(apiHelper))
 }

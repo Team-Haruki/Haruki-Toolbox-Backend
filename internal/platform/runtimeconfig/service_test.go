@@ -39,23 +39,23 @@ func (s *memoryStore) Apply(_ context.Context, update Update, fallback Snapshot)
 func TestServiceCopiesSnapshotsAndUpdates(t *testing.T) {
 	enabled := true
 	service := New(Snapshot{
-		PublicAPIAllowedKeys: []string{"a"},
-		WebhookEnabled:       &enabled,
+		AllowedKeys:    []string{"a"},
+		WebhookEnabled: &enabled,
 	}, nil)
 
 	first, err := service.Current(t.Context())
 	if err != nil {
 		t.Fatalf("Current returned error: %v", err)
 	}
-	first.PublicAPIAllowedKeys[0] = "mutated"
+	first.AllowedKeys[0] = "mutated"
 	*first.WebhookEnabled = false
 
 	second, err := service.Current(t.Context())
 	if err != nil {
 		t.Fatalf("Current returned error: %v", err)
 	}
-	if !reflect.DeepEqual(second.PublicAPIAllowedKeys, []string{"a"}) {
-		t.Fatalf("Current leaked public key slice: %#v", second.PublicAPIAllowedKeys)
+	if !reflect.DeepEqual(second.AllowedKeys, []string{"a"}) {
+		t.Fatalf("Current leaked public key slice: %#v", second.AllowedKeys)
 	}
 	if second.WebhookEnabled == nil || !*second.WebhookEnabled {
 		t.Fatalf("Current leaked webhook enabled pointer")
@@ -64,14 +64,14 @@ func TestServiceCopiesSnapshotsAndUpdates(t *testing.T) {
 	keys := []string{"b", "c"}
 	secret := "rotated"
 	if err := service.Update(t.Context(), Update{
-		PublicAPIAllowedKeys: &keys,
-		WebhookJWTSecret:     &secret,
+		AllowedKeys:      &keys,
+		WebhookJWTSecret: &secret,
 	}); err != nil {
 		t.Fatalf("Update returned error: %v", err)
 	}
 	keys[0] = "changed"
 	updated, _ := service.Current(t.Context())
-	if !reflect.DeepEqual(updated.PublicAPIAllowedKeys, []string{"b", "c"}) || updated.WebhookJWTSecret != "rotated" {
+	if !reflect.DeepEqual(updated.AllowedKeys, []string{"b", "c"}) || updated.WebhookJWTSecret != "rotated" {
 		t.Fatalf("updated snapshot = %#v", updated)
 	}
 }

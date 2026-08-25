@@ -13,25 +13,25 @@ func TestPublicAPIAllowedKeysCopySemantics(t *testing.T) {
 	helper := &HarukiToolboxRouterHelpers{}
 
 	input := []string{"a", "b"}
-	helper.SetPublicAPIAllowedKeys(input)
+	helper.SetAllowedKeys(input)
 	input[0] = "mutated"
 
-	stored := helper.GetPublicAPIAllowedKeys()
+	stored := helper.GetAllowedKeys()
 	if len(stored) != 2 || stored[0] != "a" || stored[1] != "b" {
 		t.Fatalf("stored keys mismatch: %#v", stored)
 	}
 
 	stored[1] = "changed"
-	again := helper.GetPublicAPIAllowedKeys()
+	again := helper.GetAllowedKeys()
 	if len(again) != 2 || again[0] != "a" || again[1] != "b" {
-		t.Fatalf("GetPublicAPIAllowedKeys leaked internal slice: %#v", again)
+		t.Fatalf("GetAllowedKeys leaked internal slice: %#v", again)
 	}
 }
 
 func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
 	input := []string{"a", "b"}
 	runtimeConfig := platformRuntimeConfig.New(platformRuntimeConfig.Snapshot{
-		PublicAPIAllowedKeys: input,
+		AllowedKeys:          input,
 		PrivateAPIToken:      "private-token",
 		PrivateAPIUserAgent:  "private-agent",
 		HarukiProxyUserAgent: "proxy-agent",
@@ -51,7 +51,7 @@ func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
 	)
 
 	input[0] = "mutated"
-	keys := helper.GetPublicAPIAllowedKeys()
+	keys := helper.GetAllowedKeys()
 	if len(keys) != 2 || keys[0] != "a" || keys[1] != "b" {
 		t.Fatalf("constructor did not copy public keys: %#v", keys)
 	}

@@ -32,6 +32,15 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.MongoDB.PrivateApiSecret, "PRIVATE_API_SECRET")
 	overrideString(&cfg.MongoDB.PrivateApiUserAgent, "PRIVATE_API_USER_AGENT")
 
+	overrideString(&cfg.GameData.URL, "GAME_DATA_URL")
+	overrideString((*string)(&cfg.GameData.ReadSource), "GAME_DATA_READ_SOURCE")
+	if err := overrideInt(&cfg.GameData.MaxConns, "GAME_DATA_MAX_CONNS"); err != nil {
+		return err
+	}
+	if err := overrideInt(&cfg.GameData.MinConns, "GAME_DATA_MIN_CONNS"); err != nil {
+		return err
+	}
+
 	overrideString(&cfg.Redis.Host, "REDIS_HOST")
 	if err := overrideInt(&cfg.Redis.Port, "REDIS_PORT"); err != nil {
 		return err
@@ -163,7 +172,11 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.HarukiProxy.Secret, "HARUKI_PROXY_SECRET")
 	overrideString(&cfg.HarukiProxy.UnpackKey, "HARUKI_PROXY_UNPACK_KEY")
 
-	if err := overrideCSV(&cfg.Others.PublicAPIAllowedKeys, "PUBLIC_API_ALLOWED_KEYS"); err != nil {
+	// Both spellings are accepted; ALLOWED_KEYS wins when both are set.
+	if err := overrideCSV(&cfg.Others.AllowedKeys, "PUBLIC_API_ALLOWED_KEYS"); err != nil {
+		return err
+	}
+	if err := overrideCSV(&cfg.Others.AllowedKeys, "ALLOWED_KEYS"); err != nil {
 		return err
 	}
 

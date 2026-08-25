@@ -109,6 +109,12 @@ func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 		keys = strings.Split(requestKey, ",")
 	}
 
+	// Cutover switch. Returns a rendered BODY, which the caller serves as-is.
+	if gd := apiHelper.DBManager.GameData; gd.ReadsFromPostgres() {
+		return suiteBodyFromPostgres(ctx, gd.Suite(), userID, server, keys,
+			requestKey != "" && len(keys) == 1)
+	}
+
 	projection := buildSuiteProjection(keys)
 	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(ctx, userID, string(server), harukiUtils.UploadDataTypeSuite, projection)
 	if err != nil {
@@ -144,6 +150,10 @@ func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
 		}
 		keys = strings.Split(requestKey, ",")
+	}
+
+	if gd := apiHelper.DBManager.GameData; gd.ReadsFromPostgres() {
+		return mysekaiBodyFromPostgres(ctx, gd.Mysekai(), userID, server, keys)
 	}
 
 	projection := buildMysekaiProjection(keys)

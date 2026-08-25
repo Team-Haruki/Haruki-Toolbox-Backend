@@ -36,8 +36,8 @@ func parseOwnedGameAccountDataType(raw string) (ownedGameAccountDataType, *fiber
 	}
 }
 
-func buildPublicAPIAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (map[string]struct{}, []string) {
-	allowedKeys := apiHelper.GetPublicAPIAllowedKeys()
+func buildAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (map[string]struct{}, []string) {
+	allowedKeys := apiHelper.GetAllowedKeys()
 	allowedKeySet := make(map[string]struct{}, len(allowedKeys))
 	for _, key := range allowedKeys {
 		allowedKeySet[key] = struct{}{}
@@ -90,7 +90,7 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		requestKey := c.Query("key")
 		switch dataType {
 		case ownedGameAccountDataTypeSuite:
-			allowedKeySet, allowedKeys := buildPublicAPIAllowedKeySet(apiHelper)
+			allowedKeySet, allowedKeys := buildAllowedKeySet(apiHelper)
 			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeSuite, requestKey, true, allowedKeys) {
 				return c.SendStatus(fiber.StatusNotModified)
 			}
@@ -98,7 +98,7 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
-			return c.JSON(resp)
+			return data.SendGameDataResponse(c, resp)
 		case ownedGameAccountDataTypeMysekai:
 			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeMysekai, requestKey, false, nil) {
 				return c.SendStatus(fiber.StatusNotModified)
@@ -107,7 +107,7 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
-			return c.JSON(resp)
+			return data.SendGameDataResponse(c, resp)
 		case ownedGameAccountDataTypeProfile:
 			if access.ViaGrant {
 				return harukiAPIHelper.ErrorForbidden(c, "profile access cannot be granted")

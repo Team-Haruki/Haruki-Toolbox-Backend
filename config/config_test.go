@@ -357,3 +357,69 @@ func sameExistingPath(a, b string) bool {
 	}
 	return filepath.Clean(a) == filepath.Clean(b)
 }
+
+// The allowlist was renamed from public_api_allowed_keys to allowed_keys when it
+// became the single list for every non-private API. An existing config file must
+// keep working: silently serving an empty allowlist would turn every public
+// game-data response into {}.
+func TestDeprecatedPublicAPIAllowedKeysIsAccepted(t *testing.T) {
+	cfg := Config{}
+	cfg.Others.DeprecatedPublicAPIAllowedKeys = []string{"userCards", "userDecks"}
+	if err := normalizeConfigDefaults(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Others.AllowedKeys) != 2 || cfg.Others.AllowedKeys[0] != "userCards" {
+		t.Fatalf("deprecated allowlist not adopted: %v", cfg.Others.AllowedKeys)
+	}
+	if cfg.Others.DeprecatedPublicAPIAllowedKeys != nil {
+		t.Fatal("deprecated field was not cleared after folding")
+	}
+}
+
+// The new spelling wins when both are present, so a half-migrated file is not
+// silently governed by the stale list.
+func TestNewAllowlistSpellingWinsOverTheDeprecatedOne(t *testing.T) {
+	cfg := Config{}
+	cfg.Others.AllowedKeys = []string{"new"}
+	cfg.Others.DeprecatedPublicAPIAllowedKeys = []string{"old"}
+	if err := normalizeConfigDefaults(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Others.AllowedKeys) != 1 || cfg.Others.AllowedKeys[0] != "new" {
+		t.Fatalf("deprecated list overrode the new one: %v", cfg.Others.AllowedKeys)
+	}
+}
+
+// The read source defaults to mongo, so deploying the cutover code changes
+// nothing until the flip is made deliberately.
+func TestGameDataReadSourceDefaultsToMongo(t *testing.T) {
+	cfg := Config{}
+	if err := normalizeConfigDefaults(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GameData.ReadSource != GameDataReadMongo {
+		t.Fatalf("ReadSource = %q, want %q", cfg.GameData.ReadSource, GameDataReadMongo)
+	}
+}
+
+// Pointing reads at PostgreSQL without a DSN would start cleanly and then fail
+// every request; refuse at boot instead.
+func TestPostgresReadSourceRequiresAURL(t *testing.T) {
+	cfg := Config{}
+	cfg.GameData.ReadSource = GameDataReadPostgres
+	if err := normalizeConfigDefaults(&cfg); err == nil {
+		t.Fatal("postgres read source accepted with no URL")
+	}
+	cfg.GameData.URL = "postgres://u@h/db"
+	if err := normalizeConfigDefaults(&cfg); err != nil {
+		t.Fatalf("valid postgres read source rejected: %v", err)
+	}
+}
+
+func TestUnknownReadSourceIsRejected(t *testing.T) {
+	cfg := Config{}
+	cfg.GameData.ReadSource = "cassandra"
+	if err := normalizeConfigDefaults(&cfg); err == nil {
+		t.Fatal("unknown read source accepted")
+	}
+}

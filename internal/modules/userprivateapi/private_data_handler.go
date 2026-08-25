@@ -229,16 +229,12 @@ func loadPrivateData(
 		// still bounded so it cannot run away.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), privateReadTimeout)
 		defer cancel()
-		result, fetchErr := fetchPrivateData(fetchCtx, apiHelper, server, dataType, userID, requestKey)
-		if fetchErr != nil {
-			return nil, fetchErr
-		}
-		if len(result) == 0 {
-			return payload{found: false}, nil
-		}
-		encoded, encErr := sonic.Marshal(buildPrivateDataResponse(requestKey, result))
+		encoded, found, encErr := renderPrivateData(fetchCtx, apiHelper, server, dataType, userID, requestKey)
 		if encErr != nil {
 			return nil, encErr
+		}
+		if !found {
+			return payload{found: false}, nil
 		}
 		body, cmpErr := data.CompressGameDataBody(encoded)
 		if cmpErr != nil {
@@ -271,6 +267,65 @@ func loadPrivateData(
 // fetchPrivateData reads the stored document, projecting to only the requested
 // keys when a comma-separated `key` filter is supplied so the box read no longer
 // transfers and decodes the full multi-MB document for a keyed request.
+// renderPrivateData produces the private-surface body from whichever datastore
+// is currently authoritative.
+//
+// The two paths must agree on three things that are easy to get wrong:
+//
+//  1. 404 here means the ROW is absent, and only that. Every other surface 404s
+//     when the requested keys are all empty; harmonising them would reintroduce,
+//     through a new mechanism, the bug buildKeyProjection's comment describes.
+//  2. A key the surface cannot resolve renders `null`, not `[]`.
+//  3. The response uses the UNTRIMMED request keys while the projection uses
+//     trimmed ones. That mismatch is existing behaviour: `?key= userCards `
+//     selects the column and then fails to find it, so it answers null. It is
+//     reproduced rather than fixed, because fixing it is an externally visible
+//     change that belongs in its own release.
+func renderPrivateData(
+	ctx context.Context,
+	apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers,
+	server harukiUtils.SupportedDataUploadServer,
+	dataType harukiUtils.UploadDataType,
+	userID int64,
+	requestKey string,
+) ([]byte, bool, error) {
+	if gd := apiHelper.DBManager.GameData; gd.ReadsFromPostgres() {
+		store := gd.Suite()
+		if dataType != harukiUtils.UploadDataTypeSuite {
+			store = gd.Mysekai()
+		}
+		var renderKeys []string
+		var fetchKeys []string
+		if requestKey != "" {
+			renderKeys = strings.Split(requestKey, ",")
+			for _, k := range renderKeys {
+				fetchKeys = append(fetchKeys, strings.TrimSpace(k))
+			}
+		}
+		body, err := data.PrivateBodyFromPostgres(ctx, store, userID, string(server), fetchKeys, renderKeys)
+		if err != nil {
+			if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusNotFound {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
+		return body, true, nil
+	}
+
+	result, fetchErr := fetchPrivateData(ctx, apiHelper, server, dataType, userID, requestKey)
+	if fetchErr != nil {
+		return nil, false, fetchErr
+	}
+	if len(result) == 0 {
+		return nil, false, nil
+	}
+	encoded, encErr := sonic.Marshal(buildPrivateDataResponse(requestKey, result))
+	if encErr != nil {
+		return nil, false, encErr
+	}
+	return encoded, true, nil
+}
+
 func fetchPrivateData(
 	ctx context.Context,
 	apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers,

@@ -16,6 +16,7 @@ import (
 // but adding another process service here would deepen service-locator usage.
 var legacyAggregateFields = map[string][]string{
 	"utils/api/helper.go:HarukiToolboxRouterHelpers": {
+		"AllowedKeys",
 		"BotCredentialSignToken",
 		"BotRegistrationEnabled",
 		"DBManager",
@@ -25,7 +26,6 @@ var legacyAggregateFields = map[string][]string{
 		"HarukiProxyVersion",
 		"PrivateAPIToken",
 		"PrivateAPIUserAgent",
-		"PublicAPIAllowedKeys",
 		"Router",
 		"RuntimeConfig",
 		"SMTPClient",
@@ -33,12 +33,18 @@ var legacyAggregateFields = map[string][]string{
 		"SessionHandler",
 		"WebhookEnabled",
 		"WebhookJWTSecret",
-		"publicAPIKeysMu",
+		"allowedKeysMu",
 		"runtimeConfigMu",
 	},
+	// GameData is not a new process service: it is the PostgreSQL store that
+	// REPLACES Mongo for suite/mysekai game data. Both entries are removed
+	// together when MongoDB is decommissioned, so the aggregate ends up one
+	// field smaller than it started. See
+	// docs/database-consolidation-plan.zh-CN.md.
 	"utils/database/manager.go:HarukiToolboxDBManager": {
 		"BotDB",
 		"DB",
+		"GameData",
 		"Mongo",
 		"Redis",
 	},

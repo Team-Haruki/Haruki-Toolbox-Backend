@@ -13,7 +13,6 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
 
-	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -83,7 +82,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// trip, and both the conditional gate and the read-key digest need it.
 		var suiteAllowedKeys []string
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			suiteAllowedKeys = apiHelper.GetPublicAPIAllowedKeys()
+			suiteAllowedKeys = apiHelper.GetAllowedKeys()
 		}
 		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
@@ -156,22 +155,22 @@ func loadPublicGameData(
 		// others. Still bounded so it cannot run away.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), publicReadTimeout)
 		defer cancel()
-		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
-		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
-		for _, k := range publicAPIAllowedKeys {
+		allowedKeys := apiHelper.GetAllowedKeys()
+		allowedKeySet := make(map[string]struct{}, len(allowedKeys))
+		for _, k := range allowedKeys {
 			allowedKeySet[k] = struct{}{}
 		}
 		var resp any
 		var loadErr error
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
+			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeySet, allowedKeys)
 		} else {
 			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, userID, server, requestKey)
 		}
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		encoded, mErr := sonic.Marshal(resp)
+		encoded, mErr := data.EncodeGameDataBody(resp)
 		if mErr != nil {
 			return nil, mErr
 		}
@@ -186,7 +185,7 @@ func loadPublicGameData(
 				// Digest from the same slice that shaped this body, so an
 				// allowlist edit mid-flight cannot pair a new-config key with
 				// an old-config body (or vice versa).
-				writeKey += ":a=" + data.PublicAllowlistDigest(publicAPIAllowedKeys)
+				writeKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			}
 			// Detach the cache write from the read deadline so a near-deadline
 			// but successful read still populates the cache for subsequent

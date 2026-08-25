@@ -10,6 +10,8 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiDatabaseManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiGameData "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata"
+	gamedataCatalog "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 	harukiMongo "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/mongo"
 	neopgManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -37,6 +39,8 @@ type applicationResources struct {
 	redisClient     *harukiRedis.HarukiRedisManager
 	toolboxSQLDB    *sql.DB
 	toolboxClient   *dbManager.Client
+	gameDataPool    *harukiGameData.Pool
+	gameDataService *harukiGameData.Service
 	smtpClient      *harukiSMTP.HarukiSMTPClient
 	fiberApp        *fiber.App
 	databaseManager *harukiDatabaseManager.HarukiToolboxDBManager
@@ -110,11 +114,57 @@ func acquireApplicationResources(cfg harukiConfig.Config, owner *Application) (*
 		return nil, err
 	}
 
+	// The game-data pool is optional while the cutover is in flight: with no
+	// `game_data.url` configured the backend keeps serving suite/mysekai out of
+	// MongoDB exactly as before. Once configured it is a hard dependency, so a
+	// bad DSN fails startup rather than surfacing on the first request.
+	if cfg.GameData.URL != "" {
+		gameDataCtx, cancelGameDataInit := startupContext()
+		resources.gameDataPool, err = harukiGameData.NewPool(gameDataCtx, harukiGameData.PoolConfig{
+			URL:      cfg.GameData.URL,
+			MaxConns: int32(cfg.GameData.MaxConns),
+			MinConns: int32(cfg.GameData.MinConns),
+		})
+		cancelGameDataInit()
+		if err != nil {
+			return nil, fmt.Errorf("init game data PostgreSQL: %w", err)
+		}
+		owner.addResourceCloser("Game Data PostgreSQL", resources.gameDataPool.Close)
+		resources.gameDataService = harukiGameData.NewService(
+			resources.gameDataPool,
+			cfg.GameData.ReadSource == harukiConfig.GameDataReadPostgres,
+		)
+
+		schemaCtx, cancelGameDataSchema := startupContext()
+		states, schemaErr := harukiGameData.EnsureSchema(
+			schemaCtx, resources.gameDataPool, cfg.Backend.AutoMigrate,
+			gamedataCatalog.Suite(), gamedataCatalog.Mysekai(),
+		)
+		cancelGameDataSchema()
+		if schemaErr != nil {
+			return nil, fmt.Errorf("init game data schema: %w", schemaErr)
+		}
+		for _, st := range states {
+			switch {
+			case st.Created:
+				resources.logger.Infof("game data table %s created from catalog %s", st.Table, st.Checksum)
+			case len(st.UnknownColumns) > 0:
+				// Not fatal: a rollback leaves columns this build no longer
+				// names, and their rows stay readable.
+				resources.logger.Warnf("game data table %s has %d column(s) this build does not know (first: %s)",
+					st.Table, len(st.UnknownColumns), st.UnknownColumns[0])
+			default:
+				resources.logger.Infof("game data table %s matches catalog %s", st.Table, st.Checksum)
+			}
+		}
+	}
+
 	resources.smtpClient = harukiSMTP.NewSMTPClient(cfg.UserSystem.SMTP)
 	resources.databaseManager = harukiDatabaseManager.NewHarukiToolboxDBManager(
 		resources.toolboxClient,
 		resources.redisClient,
 		resources.mongoManager,
+		resources.gameDataService,
 	)
 	return resources, nil
 }

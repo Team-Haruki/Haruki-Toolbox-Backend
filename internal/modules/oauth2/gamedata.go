@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -79,7 +78,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// trip, and both the conditional gate and the read-key digest need it.
 		var suiteAllowedKeys []string
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			suiteAllowedKeys = apiHelper.GetPublicAPIAllowedKeys()
+			suiteAllowedKeys = apiHelper.GetAllowedKeys()
 		}
 		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
@@ -146,22 +145,22 @@ func loadOAuth2GameData(
 		// Detached from any single caller's request lifetime; still bounded.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), oauth2GameDataReadTimeout)
 		defer cancel()
-		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
-		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
-		for _, k := range publicAPIAllowedKeys {
+		allowedKeys := apiHelper.GetAllowedKeys()
+		allowedKeySet := make(map[string]struct{}, len(allowedKeys))
+		for _, k := range allowedKeys {
 			allowedKeySet[k] = struct{}{}
 		}
 		var resp any
 		var loadErr error
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, gameUserID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
+			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, gameUserID, server, requestKey, allowedKeySet, allowedKeys)
 		} else {
 			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, gameUserID, server, requestKey)
 		}
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		encoded, mErr := sonic.Marshal(resp)
+		encoded, mErr := data.EncodeGameDataBody(resp)
 		if mErr != nil {
 			return nil, mErr
 		}
@@ -176,7 +175,7 @@ func loadOAuth2GameData(
 				// Digest from the same slice that shaped this body, so an
 				// allowlist edit mid-flight cannot pair a new-config key with
 				// an old-config body (or vice versa).
-				writeKey += ":a=" + data.PublicAllowlistDigest(publicAPIAllowedKeys)
+				writeKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			}
 			// Detach the cache write from the read deadline so a near-deadline
 			// but successful read still populates the cache for subsequent

@@ -91,6 +91,7 @@ GET /ios/script/:upload_code/haruki-toolbox.js
 GET /public/:server/:data_type/:user_id
 GET /webhook/subscribers
 PATCH /api/user/:toolbox_user_id/game-account/:server/:game_user_id
+POST /api/admin/config/game-data-cache/purge
 POST /api/admin/content/friend-groups
 POST /api/admin/content/friend-groups/:group_id/items
 POST /api/admin/content/friend-links

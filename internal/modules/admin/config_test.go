@@ -39,7 +39,7 @@ func TestSanitizePublicAPIAllowedKeys(t *testing.T) {
 
 func TestHandleUpdatePublicAPIAllowedKeys(t *testing.T) {
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
-	helper.SetPublicAPIAllowedKeys([]string{"initial"})
+	helper.SetAllowedKeys([]string{"initial"})
 
 	app := fiber.New()
 	app.Put("/", handleUpdatePublicAPIAllowedKeys(helper))
@@ -62,7 +62,7 @@ func TestHandleUpdatePublicAPIAllowedKeys(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 
-	updatedKeys := helper.GetPublicAPIAllowedKeys()
+	updatedKeys := helper.GetAllowedKeys()
 	if len(updatedKeys) != 2 || updatedKeys[0] != "key-a" || updatedKeys[1] != "key-b" {
 		t.Fatalf("helper keys not updated as expected: %#v", updatedKeys)
 	}
@@ -132,7 +132,7 @@ func TestHandleUpdateRuntimeConfig(t *testing.T) {
 		HarukiProxyUnpackKey: "old-unpack",
 		WebhookJWTSecret:     "old-webhook",
 	}
-	helper.SetPublicAPIAllowedKeys([]string{"old-key"})
+	helper.SetAllowedKeys([]string{"old-key"})
 
 	app := fiber.New()
 	app.Put("/", handleUpdateRuntimeConfig(helper))
@@ -173,8 +173,8 @@ func TestHandleUpdateRuntimeConfig(t *testing.T) {
 	if helper.GetWebhookJWTSecret() != "new-webhook" {
 		t.Fatalf("webhook secret not updated")
 	}
-	if len(helper.GetPublicAPIAllowedKeys()) != 2 {
-		t.Fatalf("public api keys not updated: %#v", helper.GetPublicAPIAllowedKeys())
+	if len(helper.GetAllowedKeys()) != 2 {
+		t.Fatalf("public api keys not updated: %#v", helper.GetAllowedKeys())
 	}
 }
 
@@ -274,7 +274,7 @@ func TestHandleUpdateRuntimeConfigPropagatesAcrossHelpers(t *testing.T) {
 	if helper2.GetWebhookJWTSecret() != "shared-webhook-secret" {
 		t.Fatalf("helper2 webhook secret = %q, want %q", helper2.GetWebhookJWTSecret(), "shared-webhook-secret")
 	}
-	keys := helper2.GetPublicAPIAllowedKeys()
+	keys := helper2.GetAllowedKeys()
 	if len(keys) != 1 || keys[0] != "shared-key" {
 		t.Fatalf("helper2 public api keys = %#v, want [shared-key]", keys)
 	}

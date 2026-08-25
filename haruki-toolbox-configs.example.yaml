@@ -40,6 +40,25 @@ mongodb:
   private_api_secret: "Bearer "
   private_api_user_agent: ""
 
+# Dedicated PostgreSQL store for Project Sekai suite/mysekai game data.
+# Separate pool from `user_system` on purpose: that one runs Ent over lib/pq
+# (text protocol), while these reads move whole json columns as bytes.
+game_data:
+  url: "postgres://user:pass@localhost:5432/haruki_gamedata?sslmode=disable"
+  # Which datastore serves game-data reads: "mongo" (default) or "postgres".
+  # Flip to "postgres" inside the read-only maintenance window, after the
+  # backfill has been verified. Flipping REQUIRES wiping the game-data Redis
+  # namespace in the same step: no cache key records which datastore produced a
+  # body, so a stamp minted against one store would answer 304 for a body built
+  # by the other.
+  read_source: "mongo"
+  # 0 keeps pgx's default ceiling (max(4, NumCPU)).
+  max_conns: 0
+  # 0 means "same as max_conns". Leave it there: pgx opens connections lazily,
+  # so an unwarmed pool reports a spurious EmptyAcquireCount equal to the worker
+  # count on the first burst after every restart.
+  min_conns: 0
+
 redis:
   host: "localhost"
   port: 6379
@@ -184,7 +203,12 @@ subscription:
   request_timeout_seconds: 5
 
 others:
-  public_api_allowed_keys:
+  # One allowlist for EVERY non-private API: the public endpoints, the OAuth2
+  # game-data endpoint and the owned-account endpoint all use this list. The
+  # private API is not bound by it (internal surface, no external callers).
+  #
+  # `public_api_allowed_keys` is the former name and is still accepted.
+  allowed_keys:
     - "userDecks"
     - "userCards"
     - "userAreas"
