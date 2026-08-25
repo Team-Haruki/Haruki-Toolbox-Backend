@@ -331,7 +331,7 @@ Hydra 在当前项目里负责：
 - 查询参数 `mode=suite|mysekai`，默认 `suite`
 - `mode=mysekai` 会在 suite 基础数据上合并 MySekai 推荐所需字段，方便前端 wasm 直接作为 `user_data` 使用
 
-游戏账号数据授权接口见 [`docs/game-account-data-grants.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/game-account-data-grants.zh-CN.md)。
+游戏账号数据授权接口见 [`docs/game-account-data-grants.zh-CN.md`](game-account-data-grants.zh-CN.md)。
 
 ### 9.2 会话级重认证支撑
 
@@ -383,6 +383,37 @@ Hydra 需要 subject。项目里的策略是：
 
 - 新 OAuth2 数据尽量围绕 Kratos identity 稳定下来
 - 老数据、过渡期客户端仍有兼容空间
+
+### 10.2.1 RP-Initiated Logout（2026-08-26 打通）
+
+登出与登录同构，但**三个编排端点是匿名的**：
+
+```text
+GET  /api/oauth2/logout          查询 logout request
+POST /api/oauth2/logout/accept   接受，返回 redirect_to
+POST /api/oauth2/logout/reject   拒绝，Hydra 返回 204 无 body
+```
+
+匿名是刻意的。到达登出挑战的用户正在退出，Kratos 会话可能已经失效 —— 要求登录会让登出恰好
+在最需要的时刻失败。challenge 本身就是凭证：Hydra 签发、一次性、指名要结束的会话。这与
+consent 端点要求登录的取舍不同，因为 consent 是在授予权限，登出是在收回。
+
+完整链条：
+
+```text
+RP 带 id_token_hint 请求 /oauth2/sessions/logout
+  → Oathkeeper 放行（hydra-public-oauth 规则）
+  → Hydra 生成 logout_challenge，跳转 URLS_LOGOUT
+  → 前端 /logout 页面消费上面三个端点
+  → accept 时前端同时注销 Kratos 会话
+  → 浏览器跳回 RP 的 post_logout_redirect_uri
+```
+
+**前端在 accept 时一并注销 Kratos 会话**，这是必需的：只结束 Hydra 会话而保留 Kratos 的话，
+用户下次授权会因 `skip=true` 被静默重新登录，等于没退出。
+
+一个实现细节：`reject` 不能复用 `sendHydraAdminJSON`。Hydra 对它返回 204 空 body，而那个
+helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —— 用户取消登出反而收到 500。
 
 ### 10.3 Token Introspection
 
