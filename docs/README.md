@@ -32,4 +32,4 @@
 
 | 文档 | 状态 |
 | --- | --- |
-| [数据库合并计划](database-consolidation-plan.zh-CN.md) | 进行中。代码部分已完成；切换读取来源、下线 MongoDB 需要停机窗口 |
+| [数据库合并计划](database-consolidation-plan.zh-CN.md) | 进行中。代码已上生产、双写运行中，读源仍为 MongoDB；翻转读源与下线 MongoDB 需要停机窗口 |
