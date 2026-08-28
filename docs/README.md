@@ -32,4 +32,4 @@
 
 | 文档 | 状态 |
 | --- | --- |
-| [数据库合并计划](database-consolidation-plan.zh-CN.md) | 已切换：2026-08-29 起从 PostgreSQL 读取，双写保留 MongoDB 作回滚快照。观察期后删除旧数据、下线 MongoDB |
+| [数据库合并计划](database-consolidation-plan.zh-CN.md) | 已切换：2026-08-29 起从 PostgreSQL 读取，18 个曾被丢弃的键已对外开放（待公告）。观察期后删除旧数据、下线 MongoDB |
