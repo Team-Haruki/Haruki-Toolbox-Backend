@@ -82,7 +82,7 @@ func TestMergeUpsertOnlyTouchesSuppliedColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sql, args := s.upsertStatement(1, 1, enc, false)
+	sql, args := s.upsertStatement(1, 1, enc, clearNone)
 	if strings.Contains(sql, catalog.QuoteIdent("user_decks_j")) {
 		t.Fatalf("merge statement mentions an unsupplied column:\n%s", sql)
 	}
@@ -95,6 +95,84 @@ func TestMergeUpsertOnlyTouchesSuppliedColumns(t *testing.T) {
 	}
 }
 
+// A mysekai upload replaces `updatedResources` wholesale on MongoDB, because it
+// is one field there. Every flattened child must therefore be hard-assigned —
+// including the ones the upload omitted, which is how a resource the player no
+// longer has stops being reported. Merging them made PostgreSQL a union over
+// every upload ever sent.
+func TestMysekaiUpsertClearsAbsentFlattenedChildren(t *testing.T) {
+	s := mysekaiStore()
+	children := s.cat.FlattenChildren()
+	if len(children) == 0 {
+		t.Skip("mysekai catalog has no flattened children")
+	}
+	var stats WriteStats
+	enc, err := s.encode(map[string]any{
+		"updatedResources": map[string]any{children[0].Child: []any{1}},
+	}, WriteMysekai, &stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, _ := s.upsertStatement(1, 1, enc, clearFlattened)
+	for _, e := range children {
+		q := catalog.QuoteIdent(e.Column)
+		if !strings.Contains(sql, q+" = EXCLUDED."+q) {
+			t.Fatalf("flattened child %s is not cleared:\n%s", e.Column, sql)
+		}
+	}
+	// `extra` holds the flattened children the catalog does not name, so it is
+	// swapped out with the parent rather than merged.
+	qx := catalog.QuoteIdent(catalog.ExtraColumn)
+	if !strings.Contains(sql, qx+" = EXCLUDED."+qx) {
+		t.Fatalf("extra is merged, so an unnamed child would survive:\n%s", sql)
+	}
+}
+
+// The flattened clear must not leak into top-level columns: those really are
+// merged by `$set`, and clearing one would delete data on a partial upload.
+func TestMysekaiUpsertStillMergesTopLevelColumns(t *testing.T) {
+	s := mysekaiStore()
+	var top *catalog.Entry
+	for i := range s.cat.Entries {
+		if s.cat.Entries[i].Path == "" {
+			top = &s.cat.Entries[i]
+			break
+		}
+	}
+	if top == nil {
+		t.Skip("mysekai catalog has no top-level column")
+	}
+	var stats WriteStats
+	enc, err := s.encode(map[string]any{top.Key: []any{1}}, WriteMysekai, &stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, _ := s.upsertStatement(1, 1, enc, clearFlattened)
+	q := catalog.QuoteIdent(top.Column)
+	if !strings.Contains(sql, q+" = COALESCE(EXCLUDED."+q) {
+		t.Fatalf("top-level column %s is no longer merged:\n%s", top.Column, sql)
+	}
+}
+
+// A catalog with no flattened parent — suite — must be untouched by the scope,
+// or every partial suite upload would start clearing columns.
+func TestClearFlattenedIsANoOpWithoutAFlattenedParent(t *testing.T) {
+	s := suiteStore()
+	if len(s.cat.FlattenChildren()) != 0 {
+		t.Skip("suite catalog gained a flattened parent")
+	}
+	var stats WriteStats
+	enc, err := s.encode(map[string]any{"userCards": []any{1}}, WriteMysekai, &stats)
+	if err != nil {
+		t.Fatal(err)
+	}
+	flat, _ := s.upsertStatement(1, 1, enc, clearFlattened)
+	merge, _ := s.upsertStatement(1, 1, enc, clearNone)
+	if flat != merge {
+		t.Fatalf("clearFlattened changed a catalog with no flattened parent:\n%s\n%s", flat, merge)
+	}
+}
+
 // The migration replace must mention EVERY data column, so a re-run rebuilds the
 // row rather than leaving stale values behind.
 func TestReplaceUpsertTouchesEveryColumn(t *testing.T) {
@@ -104,7 +182,7 @@ func TestReplaceUpsertTouchesEveryColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sql, args := s.upsertStatement(1, 1, enc, true)
+	sql, args := s.upsertStatement(1, 1, enc, clearAll)
 	if strings.Contains(sql, "COALESCE") {
 		t.Fatalf("replace statement merges:\n%s", sql)
 	}

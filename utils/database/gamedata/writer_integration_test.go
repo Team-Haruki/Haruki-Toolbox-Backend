@@ -95,6 +95,43 @@ func TestWriteMergePreservesOmittedColumns(t *testing.T) {
 	}
 }
 
+// `updatedResources` is one field on MongoDB, so `$set` swaps the whole
+// sub-document: a child the upload stopped carrying is gone there. Merging the
+// children here made the row a union over every upload the player ever sent,
+// which surfaced as PostgreSQL reporting resources MongoDB had already dropped.
+func TestWriteMysekaiClearsAbsentFlattenedChildren(t *testing.T) {
+	s, ctx := writeTestStore(t, catalog.Mysekai())
+	const id, server = int64(28808221489823747), "jp"
+
+	mustWrite(t, s, ctx, id, server, map[string]any{
+		"policy": "public",
+		"updatedResources": map[string]any{
+			"userMysekaiGates": []any{map[string]any{"mysekaiGateId": 1}},
+			"userMysekaiItems": []any{map[string]any{"mysekaiItemId": 7}},
+		},
+	}, WriteMysekai)
+
+	// A later upload that no longer carries the gates.
+	mustWrite(t, s, ctx, id, server, map[string]any{
+		"updatedResources": map[string]any{
+			"userMysekaiItems": []any{map[string]any{"mysekaiItemId": 8}},
+		},
+	}, WriteMysekai)
+
+	if got, ok := mustValue(t, s, ctx, id, server, "updatedResources.userMysekaiGates"); ok {
+		t.Fatalf("userMysekaiGates survived an upload that dropped it: %s", got)
+	}
+	items, ok := mustValue(t, s, ctx, id, server, "updatedResources.userMysekaiItems")
+	if !ok || items != `[{"mysekaiItemId":8}]` {
+		t.Fatalf("userMysekaiItems = %s (ok=%v), want the newer value", items, ok)
+	}
+	// The top-level field is still a `$set` merge and must survive.
+	policy, ok := mustValue(t, s, ctx, id, server, "policy")
+	if !ok || policy != `"public"` {
+		t.Fatalf("policy = %s (ok=%v): a top-level field was cleared", policy, ok)
+	}
+}
+
 // Migration replaces the whole row, so a re-run rebuilds it instead of leaving
 // values no longer present in the source.
 func TestWriteMigrateClearsAbsentColumns(t *testing.T) {

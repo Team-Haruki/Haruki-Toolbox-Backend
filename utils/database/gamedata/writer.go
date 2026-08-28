@@ -24,9 +24,10 @@ const (
 	// MERGE, so a key the upload omits keeps its stored value; and the three
 	// history keys accumulate rather than being replaced.
 	WriteSuite WriteMode = iota
-	// WriteMysekai is an upload of mysekai data: the columns present are
-	// written, the ones absent are left alone. Same merge semantics, no history
-	// accumulation.
+	// WriteMysekai is an upload of mysekai data. Top-level fields merge like
+	// suite, but `updatedResources` is ONE field on MongoDB, so `$set` swaps the
+	// whole sub-document: every flattened child the upload omits is cleared
+	// here too. No history accumulation.
 	WriteMysekai
 	// WriteBirthdayParty writes only the harvest map, upload time and server.
 	// It is a partial write of a mysekai row, not a mysekai upload.
@@ -92,7 +93,7 @@ func (s *Store) Write(ctx context.Context, userID int64, server string, data map
 	case WriteBirthdayParty:
 		return stats, s.writeBirthdayParty(ctx, userID, code, enc)
 	default:
-		return stats, s.writeMerge(ctx, userID, code, enc)
+		return stats, s.writeMysekai(ctx, userID, code, enc)
 	}
 }
 
@@ -252,13 +253,17 @@ func (e *encoded) setColumn(col string, b []byte) {
 	e.columns[col] = b
 }
 
-// writeMerge upserts the columns the upload carried and leaves the rest alone.
+// writeMysekai upserts a mysekai upload.
 //
-// This is `$set`'s top-level merge, expressed in SQL. Writing every column and
-// letting the absent ones default to NULL would clear stored data on every
-// partial upload.
-func (s *Store) writeMerge(ctx context.Context, userID int64, code int16, enc *encoded) error {
-	sql, args := s.upsertStatement(userID, code, enc, false)
+// Top-level fields merge — this is `$set`'s top-level merge, expressed in SQL,
+// and writing every column with NULL for the absent ones would clear stored
+// data on every partial upload. The flattened parent is the exception: it is a
+// single field on MongoDB, so `$set` swaps the whole sub-document and a child
+// the upload stopped carrying is gone there. Merging those children here made
+// the row a union over every upload the player ever sent, which showed up as
+// PostgreSQL reporting resources MongoDB had already dropped.
+func (s *Store) writeMysekai(ctx context.Context, userID int64, code int16, enc *encoded) error {
+	sql, args := s.upsertStatement(userID, code, enc, clearFlattened)
 	_, err := s.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
@@ -269,7 +274,7 @@ func (s *Store) writeMerge(ctx context.Context, userID int64, code int16, enc *e
 // writeReplace overwrites every data column, clearing the ones the source did
 // not carry. Migration only.
 func (s *Store) writeReplace(ctx context.Context, userID int64, code int16, enc *encoded) error {
-	sql, args := s.upsertStatement(userID, code, enc, true)
+	sql, args := s.upsertStatement(userID, code, enc, clearAll)
 	_, err := s.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return fmt.Errorf("gamedata: replace %s: %w", s.cat.Table, err)
@@ -338,7 +343,7 @@ func (s *Store) writeSuite(ctx context.Context, userID int64, code int16, enc *e
 		stats.Columns = len(enc.columns)
 	}
 
-	sql, args := s.upsertStatement(userID, code, enc, false)
+	sql, args := s.upsertStatement(userID, code, enc, clearNone)
 	if _, err := tx.Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
 	}
@@ -404,20 +409,74 @@ func (s *Store) readMergedColumns(ctx context.Context, tx pgx.Tx, userID int64, 
 	return out, nil
 }
 
-// upsertStatement builds the INSERT ... ON CONFLICT for the columns present.
-// replaceAll=true additionally clears every catalog column the upload did not
-// carry, which is the migration semantic.
-func (s *Store) upsertStatement(userID int64, code int16, enc *encoded, replaceAll bool) (string, []any) {
+// clearScope says which stored columns a write is allowed to erase. It exists
+// because "what MongoDB's `$set` replaces" is not the same set of columns for
+// every upload: the flattened parent is ONE document field there, so `$set`
+// swaps the whole sub-document, while a real top-level key is merged.
+type clearScope int
+
+const (
+	// clearNone leaves every column the upload did not carry alone. This is
+	// `$set`'s top-level merge.
+	clearNone clearScope = iota
+	// clearFlattened additionally clears the flattened children — MongoDB
+	// replaces the flattened parent atomically, so a child that vanished from
+	// the upload must vanish here too. Catalogs without a flattened parent are
+	// unaffected, which keeps suite on a pure merge.
+	clearFlattened
+	// clearAll rebuilds the row. Migration only.
+	clearAll
+)
+
+// replacedColumns returns the data columns the scope hard-assigns from EXCLUDED
+// instead of merging, and the order they must be written in.
+func (s *Store) replacedColumns(scope clearScope, order []string) (map[string]bool, []string) {
+	switch scope {
+	case clearAll:
+		out := make([]string, 0, s.cat.Len())
+		replace := make(map[string]bool, s.cat.Len()+2)
+		// upload_time and extra are rebuilt too: a re-run that merged them
+		// would keep a timestamp and unknown keys the source no longer has.
+		replace[catalog.ColUploadTime] = true
+		replace[catalog.ExtraColumn] = true
+		for i := range s.cat.Entries {
+			out = append(out, s.cat.Entries[i].Column)
+			replace[s.cat.Entries[i].Column] = true
+		}
+		return replace, out
+	case clearFlattened:
+		children := s.cat.FlattenChildren()
+		if len(children) == 0 {
+			return nil, order
+		}
+		present := make(map[string]bool, len(order))
+		for _, c := range order {
+			present[c] = true
+		}
+		out := append(make([]string, 0, len(order)+len(children)), order...)
+		// `extra` carries the flattened children the catalog does not name, so
+		// it belongs to the parent MongoDB swaps out. It is hard-assigned for
+		// the same reason the named children are.
+		replace := map[string]bool{catalog.ExtraColumn: true}
+		for _, e := range children {
+			replace[e.Column] = true
+			if !present[e.Column] {
+				out = append(out, e.Column)
+			}
+		}
+		return replace, out
+	default:
+		return nil, order
+	}
+}
+
+// upsertStatement builds the INSERT ... ON CONFLICT for the columns present,
+// plus whatever `scope` says must be cleared even though the upload omitted it.
+func (s *Store) upsertStatement(userID int64, code int16, enc *encoded, scope clearScope) (string, []any) {
 	cols := []string{catalog.ColUserID, catalog.ColServer, catalog.ColUploadTime, catalog.ExtraColumn}
 	args := []any{userID, code, nullableInt(enc), nullableBytes(enc.extra)}
 
-	writeOrder := enc.order
-	if replaceAll {
-		writeOrder = make([]string, 0, s.cat.Len())
-		for i := range s.cat.Entries {
-			writeOrder = append(writeOrder, s.cat.Entries[i].Column)
-		}
-	}
+	replace, writeOrder := s.replacedColumns(scope, enc.order)
 	for _, col := range writeOrder {
 		cols = append(cols, col)
 		args = append(args, nullableBytes(enc.columns[col]))
@@ -433,7 +492,7 @@ func (s *Store) upsertStatement(userID int64, code int16, enc *encoded, replaceA
 	sets := make([]string, 0, len(cols))
 	for _, c := range cols[2:] { // skip the primary key columns
 		q := catalog.QuoteIdent(c)
-		if replaceAll {
+		if replace[c] {
 			sets = append(sets, fmt.Sprintf("%s = EXCLUDED.%s", q, q))
 			continue
 		}
