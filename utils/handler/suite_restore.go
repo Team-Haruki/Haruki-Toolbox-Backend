@@ -54,9 +54,16 @@ type SuiteRestoreService struct {
 	structuresFile  map[string]string
 	enableRegions   []string
 	suiteRemoveKeys []string
-	// mongoOnlyRemoveKeys is the second list, already expanded with compact
-	// spellings. Kept separate rather than merged so StripForMongoStore cannot
-	// accidentally blank a key the game-data store is meant to keep.
+	// mongoOnlyRemoveKeys is the second list, and unlike suiteRemoveKeys it is
+	// NOT expanded with compact spellings.
+	//
+	// cn/tw/kr send only the compact form, so expanding here would blank the
+	// only copy MongoDB holds — and MongoDB is still the read source. The
+	// PostgreSQL row would keep the value, but nothing reads it yet, so those
+	// regions would lose the key on the private API until the cutover. Adding
+	// the expansion is safe once reads come from PostgreSQL; until then the
+	// three big keys stay unstripped for cn/tw/kr, which is exactly the state
+	// they have always been in.
 	mongoOnlyRemoveKeys []string
 
 	restorers    map[string]*suiterestore.Restorer
@@ -66,11 +73,12 @@ type SuiteRestoreService struct {
 
 func NewSuiteRestoreService(options SuiteRestoreServiceOptions) *SuiteRestoreService {
 	service := &SuiteRestoreService{
-		initialized:         true,
-		structuresFile:      copyStringMap(options.StructuresFile),
-		enableRegions:       append([]string(nil), options.EnableRegions...),
-		suiteRemoveKeys:     withCompactSpellings(options.SuiteRemoveKeys),
-		mongoOnlyRemoveKeys: withCompactSpellings(options.MongoOnlyRemoveKeys),
+		initialized:     true,
+		structuresFile:  copyStringMap(options.StructuresFile),
+		enableRegions:   append([]string(nil), options.EnableRegions...),
+		suiteRemoveKeys: withCompactSpellings(options.SuiteRemoveKeys),
+		// NOT expanded with compact spellings, deliberately — see the field doc.
+		mongoOnlyRemoveKeys: append([]string(nil), options.MongoOnlyRemoveKeys...),
 		restorers:           make(map[string]*suiterestore.Restorer),
 		sources:             make(map[string]string),
 		loadFailures:        make(map[string]string),
@@ -160,6 +168,10 @@ func normalizeSuiteRestorePurpose(purpose SuiteRestorePurpose) SuiteRestorePurpo
 // value. An empty array is a valid stored value for either spelling — the
 // stored form is self-describing, an object is compact and an array is row form
 // — so one blanking rule covers both.
+//
+// Applied to the list blanked in EVERY store, where a missed spelling means the
+// key stays readable somewhere. Deliberately NOT applied to the MongoDB-only
+// list; see the mongoOnlyRemoveKeys field doc.
 func withCompactSpellings(keys []string) []string {
 	out := make([]string, 0, len(keys)*2)
 	seen := make(map[string]bool, len(keys)*2)

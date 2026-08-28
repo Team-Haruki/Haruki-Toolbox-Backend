@@ -213,6 +213,11 @@ type SekaiClientConfig struct {
 	// limit — while the same data occupies 1.36 MB in PostgreSQL. Keys move here
 	// from SuiteRemoveKeys once they are no longer response-visible, and the
 	// stripping stays for as long as MongoDB is written to at all.
+	//
+	// Compact spellings are NOT covered here. cn/tw/kr send only the compact
+	// form, and MongoDB is still the read source, so blanking it would drop the
+	// only readable copy until the cutover. Add them after reads come from
+	// PostgreSQL.
 	SuiteMongoOnlyRemoveKeys []string `yaml:"suite_mongo_only_remove_keys"`
 }
 

@@ -194,7 +194,9 @@ sekai_client:
   # a real heavy jp account is 16.16 MB of BSON unstripped and cannot be written
   # to MongoDB at all, while the same upload occupies 1.36 MB in PostgreSQL.
   # Move a key here from suite_remove_keys once exposing it no longer changes an
-  # API response; compact spellings are covered automatically.
+  # API response. Compact spellings are NOT covered here: cn/tw/kr send only the
+  # compact form and MongoDB is still the read source, so blanking it would drop
+  # the only readable copy until the cutover.
   suite_mongo_only_remove_keys: []
 
 

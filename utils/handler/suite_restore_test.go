@@ -366,16 +366,39 @@ func TestStripForMongoStoreLeavesTheCallerMapIntact(t *testing.T) {
 	}
 }
 
-// cn/tw/kr send the compact spelling. Blanking only the row-form name is why
-// 5,821 of 5,822 cn rows kept the full value for as long as the feature existed.
-func TestRemoveKeysCoverCompactSpellings(t *testing.T) {
+// cn/tw/kr send the compact spelling. For the list blanked in EVERY store a
+// missed spelling means the key stays readable somewhere, so it is expanded —
+// blanking only the row-form name is why 5,821 of 5,822 cn rows kept the full
+// value for as long as the feature existed.
+func TestSharedRemoveKeysCoverCompactSpellings(t *testing.T) {
+	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
+		SuiteRemoveKeys: []string{"userCostume3dShopItems"},
+	})
+	data := map[string]any{"compactUserCostume3dShopItems": map[string]any{"rows": []any{1}}}
+	service.cleanSuite(data)
+	if got, ok := data["compactUserCostume3dShopItems"].([]any); !ok || len(got) != 0 {
+		t.Fatalf("compact spelling was not blanked: %#v", data["compactUserCostume3dShopItems"])
+	}
+}
+
+// The MongoDB-only list is the opposite case, and the asymmetry is deliberate.
+// cn/tw/kr send ONLY the compact form, so blanking it would remove the single
+// copy MongoDB holds while MongoDB is still the read source — PostgreSQL keeps
+// the value but nothing reads it yet. Expanding here is safe only after the
+// cutover.
+func TestMongoOnlyRemoveKeysLeaveCompactSpellingsAlone(t *testing.T) {
 	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
 		MongoOnlyRemoveKeys: []string{"userCostume3dShopItems"},
 	})
 	data := map[string]any{"compactUserCostume3dShopItems": map[string]any{"rows": []any{1}}}
 	mongoData := service.StripForMongoStore(data)
-	if got, ok := mongoData["compactUserCostume3dShopItems"].([]any); !ok || len(got) != 0 {
-		t.Fatalf("compact spelling was not blanked: %#v", mongoData["compactUserCostume3dShopItems"])
+	if _, blanked := mongoData["compactUserCostume3dShopItems"].([]any); blanked {
+		t.Fatal("compact spelling was blanked; cn/tw/kr would lose the key until the read cutover")
+	}
+	// The row-form spelling, which jp/en send, must still be blanked.
+	rowForm := map[string]any{"userCostume3dShopItems": []any{1, 2}}
+	if got, ok := service.StripForMongoStore(rowForm)["userCostume3dShopItems"].([]any); !ok || len(got) != 0 {
+		t.Fatalf("row form was not blanked: %#v", rowForm["userCostume3dShopItems"])
 	}
 }
 
