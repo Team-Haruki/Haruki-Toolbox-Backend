@@ -2,7 +2,7 @@ package redis
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -154,7 +154,7 @@ func getQueryHash(queryString string) string {
 	if queryString == "" {
 		return emptyQueryHash
 	}
-	hash := md5.Sum([]byte(queryString))
+	hash := sha256.Sum256([]byte(queryString))
 	return hex.EncodeToString(hash[:])
 }
 

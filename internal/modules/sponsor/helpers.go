@@ -17,6 +17,7 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
+	"github.com/google/uuid"
 
 	sql "entgo.io/ent/dialect/sql"
 )
@@ -210,8 +211,7 @@ func stableSponsorID(afdianUserID string, outTradeNo string) string {
 	if outTradeNo != "" {
 		return "afdian_order_" + outTradeNo
 	}
-	sum := md5.Sum([]byte(time.Now().UTC().Format(time.RFC3339Nano)))
-	return "sponsor_" + hex.EncodeToString(sum[:])
+	return "sponsor_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
 func parseAmountRank(amount string) int {
@@ -733,6 +733,9 @@ func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL st
 }
 
 func afdianSign(token string, params string, ts string, userID string) string {
-	sum := md5.Sum([]byte(token + "params" + params + "ts" + ts + "user_id" + userID))
+	// Afdian's published API protocol requires this exact MD5 signature format.
+	// It authenticates a compatibility request and is not used for password
+	// storage, content integrity, or any protocol we control.
+	sum := md5.Sum([]byte(token + "params" + params + "ts" + ts + "user_id" + userID)) // NOSONAR
 	return hex.EncodeToString(sum[:])
 }

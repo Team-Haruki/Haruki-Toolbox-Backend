@@ -24,7 +24,7 @@ var webhookBlockedPublicPrefixes = []netip.Prefix{
 	// RFC 6598 shared address space is also used by Tailscale. Go's
 	// net.IP.IsPrivate intentionally does not classify it as private, but a
 	// webhook must never use it to reach services on the deployment overlay.
-	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("100.64.0.0/10"), // NOSONAR -- deliberately blocked RFC 6598 range
 }
 
 // webhookSafeDialContext resolves the target host at connection time and dials

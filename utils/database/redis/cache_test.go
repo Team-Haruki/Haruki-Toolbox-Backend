@@ -11,8 +11,8 @@ func TestGetQueryHash(t *testing.T) {
 	if got := getQueryHash(""); got != emptyQueryHash {
 		t.Fatalf("getQueryHash(empty) = %q, want %q", got, emptyQueryHash)
 	}
-	if got := getQueryHash("key=upload_time"); got != "b6715d065478a9abd37d540714b8b78d" {
-		t.Fatalf("getQueryHash(value) = %q, want fixed md5 hash", got)
+	if got := getQueryHash("key=upload_time"); got != "077cf26fb70c674b95bdbc7947ed791cf37b7db7d28332cddfbc04e70c39d645" {
+		t.Fatalf("getQueryHash(value) = %q, want fixed SHA-256 hash", got)
 	}
 }
 
@@ -22,7 +22,7 @@ func TestBuildCacheKey(t *testing.T) {
 	if got := buildCacheKey("ns", "/a/b", ""); got != "ns:/a/b:query=none" {
 		t.Fatalf("buildCacheKey without query = %q", got)
 	}
-	if got := buildCacheKey("ns", "/a/b", "x=1"); got != "ns:/a/b:query=a255512f9d61a6777bd5a304235bd26d" {
+	if got := buildCacheKey("ns", "/a/b", "x=1"); got != "ns:/a/b:query=1f206b11c23e28cc250ded7fc0098d3823a8467a54340f1ac4e535cb8544493f" {
 		t.Fatalf("buildCacheKey with query = %q", got)
 	}
 }
@@ -31,7 +31,7 @@ func TestBuildGameDataCacheKey(t *testing.T) {
 	t.Parallel()
 
 	got := BuildGameDataCacheKey("public", "jp", "suite", 123, " upload_time ")
-	want := "game_data:public:jp:suite:123:query=b6715d065478a9abd37d540714b8b78d"
+	want := "game_data:public:jp:suite:123:query=077cf26fb70c674b95bdbc7947ed791cf37b7db7d28332cddfbc04e70c39d645"
 	if got != want {
 		t.Fatalf("BuildGameDataCacheKey = %q, want %q", got, want)
 	}

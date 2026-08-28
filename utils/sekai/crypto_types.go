@@ -45,10 +45,13 @@ func NewSekaiCryptorFromHex(aesKeyHex, aesIVHex string) (*SekaiCryptor, error) {
 func (c *SekaiCryptor) newCBC(encrypt bool) cipher.BlockMode {
 	iv := make([]byte, len(c.iv))
 	copy(iv, c.iv)
+	// Project Sekai's wire protocol mandates AES-CBC with a configured IV and
+	// PKCS#7 padding. These payloads use the public game-client key and are
+	// attacker-controlled input, not a confidentiality or authenticity boundary.
 	if encrypt {
-		return cipher.NewCBCEncrypter(c.block, iv)
+		return cipher.NewCBCEncrypter(c.block, iv) // NOSONAR
 	}
-	return cipher.NewCBCDecrypter(c.block, iv)
+	return cipher.NewCBCDecrypter(c.block, iv) // NOSONAR
 }
 
 type MsgpackMarshaler interface {

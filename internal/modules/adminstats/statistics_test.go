@@ -205,38 +205,41 @@ func TestAccumulateRegistrationTimeseriesFromUsers(t *testing.T) {
 	}
 }
 
-func TestBuildStatisticsBucketExpressionSQL(t *testing.T) {
+func TestStatisticsQueriesAreSelectedFromAllowList(t *testing.T) {
 	t.Parallel()
 
-	hourExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketHour, "created_at", "$3")
+	hourQuery, err := registrationCountsSQL(timeseriesBucketHour)
 	if err != nil {
-		t.Fatalf("buildStatisticsBucketExpressionSQL(hour) returned error: %v", err)
+		t.Fatalf("registrationCountsSQL(hour) returned error: %v", err)
 	}
-	if !strings.Contains(hourExpr, "date_trunc('hour'") {
-		t.Fatalf("hour expression = %q, expected hour date_trunc", hourExpr)
+	if !strings.Contains(hourQuery, "date_trunc('hour'") {
+		t.Fatalf("hour query = %q, expected hour date_trunc", hourQuery)
 	}
 	// The timezone must be bound as a parameter and re-anchored, not inlined.
-	if !strings.Contains(hourExpr, "AT TIME ZONE $3) AT TIME ZONE $3") {
-		t.Fatalf("hour expression = %q, expected re-anchored tz placeholder", hourExpr)
+	if !strings.Contains(hourQuery, "AT TIME ZONE $3) AT TIME ZONE $3") {
+		t.Fatalf("hour query = %q, expected re-anchored tz placeholder", hourQuery)
 	}
 
-	dayExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketDay, "upload_time", "$3")
+	dayQuery, err := uploadCountsSQL(timeseriesBucketDay)
 	if err != nil {
-		t.Fatalf("buildStatisticsBucketExpressionSQL(day) returned error: %v", err)
+		t.Fatalf("uploadCountsSQL(day) returned error: %v", err)
 	}
-	if !strings.Contains(dayExpr, "date_trunc('day'") {
-		t.Fatalf("day expression = %q, expected day date_trunc", dayExpr)
+	if !strings.Contains(dayQuery, "date_trunc('day'") {
+		t.Fatalf("day query = %q, expected day date_trunc", dayQuery)
 	}
 
-	weekExpr, err := buildStatisticsBucketExpressionSQL(timeseriesBucketWeek, "upload_time", "$3")
+	weekQuery, err := uploadCountsSQL(timeseriesBucketWeek)
 	if err != nil {
-		t.Fatalf("buildStatisticsBucketExpressionSQL(week) returned error: %v", err)
+		t.Fatalf("uploadCountsSQL(week) returned error: %v", err)
 	}
-	if !strings.Contains(weekExpr, "date_trunc('week'") {
-		t.Fatalf("week expression = %q, expected week date_trunc", weekExpr)
+	if !strings.Contains(weekQuery, "date_trunc('week'") {
+		t.Fatalf("week query = %q, expected week date_trunc", weekQuery)
 	}
 
-	if _, err := buildStatisticsBucketExpressionSQL("minute", "created_at", "$3"); err == nil {
-		t.Fatalf("expected invalid bucket to fail")
+	if _, err := registrationCountsSQL("minute"); err == nil {
+		t.Fatal("expected invalid registration bucket to fail")
+	}
+	if _, err := uploadCountsSQL("minute"); err == nil {
+		t.Fatal("expected invalid upload bucket to fail")
 	}
 }

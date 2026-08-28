@@ -27,10 +27,14 @@ LABEL org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.created=$BUILD_DATE
 
 WORKDIR /app
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata \
+    && addgroup -S haruki \
+    && adduser -S -G haruki haruki \
+    && mkdir -p logs \
+    && chown haruki:haruki logs
 
-COPY --from=builder /app/haruki-toolbox-backend .
-RUN mkdir -p logs
+COPY --from=builder --chown=haruki:haruki /app/haruki-toolbox-backend .
 
 EXPOSE 6666
+USER haruki
 ENTRYPOINT ["./haruki-toolbox-backend"]

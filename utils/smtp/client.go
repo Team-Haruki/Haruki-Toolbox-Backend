@@ -84,7 +84,7 @@ func dialSMTPImplicitTLS(addr, host string, timeout time.Duration) (*smtp.Client
 		_ = conn.Close()
 		return nil, fmt.Errorf("failed to set SMTP deadline: %w", err)
 	}
-	client, err := smtp.NewClient(conn, host)
+	client, err := smtp.NewClient(conn, host) // NOSONAR -- conn is already a verified TLS connection
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("failed to create SMTP client: %w", err)
@@ -93,6 +93,9 @@ func dialSMTPImplicitTLS(addr, host string, timeout time.Duration) (*smtp.Client
 }
 
 func dialSMTPStartTLS(addr, host string, timeout time.Duration) (*smtp.Client, error) {
+	// STARTTLS necessarily begins with an SMTP greeting on a plain TCP socket.
+	// No credentials, sender, recipients, or message data are sent before the
+	// mandatory STARTTLS capability check and successful TLS upgrade below.
 	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial SMTP: %w", err)
@@ -101,7 +104,7 @@ func dialSMTPStartTLS(addr, host string, timeout time.Duration) (*smtp.Client, e
 		_ = conn.Close()
 		return nil, fmt.Errorf("failed to set SMTP deadline: %w", err)
 	}
-	client, err := smtp.NewClient(conn, host)
+	client, err := smtp.NewClient(conn, host) // NOSONAR -- protocol negotiation only; no sensitive data sent
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("failed to create SMTP client: %w", err)
