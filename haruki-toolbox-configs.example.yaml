@@ -189,6 +189,13 @@ sekai_client:
     - "userArchiveEventEpisodeStatuses"
     - "userCustomProfileResourceUsages"
     - "userCharacterProfileEpisodeStatuses"
+  # Blanked on the way into MongoDB only — the PostgreSQL game-data store keeps
+  # them in full. This is the 16 MB document-limit protection, not a data policy:
+  # a real heavy jp account is 16.16 MB of BSON unstripped and cannot be written
+  # to MongoDB at all, while the same upload occupies 1.36 MB in PostgreSQL.
+  # Move a key here from suite_remove_keys once exposing it no longer changes an
+  # API response; compact spellings are covered automatically.
+  suite_mongo_only_remove_keys: []
 
 
 haruki_bot:

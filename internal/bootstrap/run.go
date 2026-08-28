@@ -114,9 +114,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		Timeout: 5 * time.Second,
 	})
 	suiteRestoreService := harukiHandler.NewSuiteRestoreService(harukiHandler.SuiteRestoreServiceOptions{
-		StructuresFile:  cfg.RestoreSuite.StructuresFile,
-		EnableRegions:   cfg.RestoreSuite.EnableRegions,
-		SuiteRemoveKeys: cfg.SekaiClient.SuiteRemoveKeys,
+		StructuresFile:      cfg.RestoreSuite.StructuresFile,
+		EnableRegions:       cfg.RestoreSuite.EnableRegions,
+		SuiteRemoveKeys:     cfg.SekaiClient.SuiteRemoveKeys,
+		MongoOnlyRemoveKeys: cfg.SekaiClient.SuiteMongoOnlyRemoveKeys,
 	})
 	application.backgroundTasks = harukiBackground.NewTaskGroup(func(name string, recovered any) {
 		resources.logger.Errorf("Background task %q panicked: %v", name, recovered)

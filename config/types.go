@@ -201,7 +201,19 @@ type SekaiClientConfig struct {
 	ENServerAppVersionUrl        string            `yaml:"en_server_app_version_url"`
 	JPServerInheritClientHeaders map[string]string `yaml:"jp_server_inherit_client_headers"`
 	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
-	SuiteRemoveKeys              []string          `yaml:"suite_remove_keys"`
+	// SuiteRemoveKeys are blanked in EVERY store. A key stays here only while
+	// exposing it would change an API response — the game-data store keeps no
+	// copy either, so this is the list that cannot be undone by a read cutover.
+	SuiteRemoveKeys []string `yaml:"suite_remove_keys"`
+	// SuiteMongoOnlyRemoveKeys are blanked in the MongoDB write ONLY; the
+	// PostgreSQL game-data store receives them in full.
+	//
+	// This is the 16 MB protection, not a data policy: measured on a real heavy
+	// jp account, the unstripped document is 16.16 MB of BSON — past MongoDB's
+	// limit — while the same data occupies 1.36 MB in PostgreSQL. Keys move here
+	// from SuiteRemoveKeys once they are no longer response-visible, and the
+	// stripping stays for as long as MongoDB is written to at all.
+	SuiteMongoOnlyRemoveKeys []string `yaml:"suite_mongo_only_remove_keys"`
 }
 
 type SekaiAPIConfig struct {

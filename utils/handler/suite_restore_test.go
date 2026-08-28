@@ -338,3 +338,76 @@ func TestZeroValueSuiteRestoreServiceFailsClosed(t *testing.T) {
 		t.Fatalf("zero-value service status = (%d, %#v), want one degraded failure", loaded, failures)
 	}
 }
+
+// The two lists are not interchangeable. Everything in SuiteRemoveKeys is
+// blanked before either store sees it; MongoOnlyRemoveKeys is blanked on a copy
+// so the game-data store still receives the value.
+func TestStripForMongoStoreLeavesTheCallerMapIntact(t *testing.T) {
+	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
+		MongoOnlyRemoveKeys: []string{"userCostume3dShopItems"},
+	})
+	data := map[string]any{
+		"userCostume3dShopItems": []any{1, 2, 3},
+		"userCards":              []any{4},
+	}
+	mongoData := service.StripForMongoStore(data)
+
+	if got, ok := mongoData["userCostume3dShopItems"].([]any); !ok || len(got) != 0 {
+		t.Fatalf("mongo copy still carries the key: %#v", mongoData["userCostume3dShopItems"])
+	}
+	// The upload map is what the game-data store is about to be handed. If
+	// blanking reached it, PostgreSQL would store the same hole MongoDB does and
+	// the whole split would be pointless.
+	if got, ok := data["userCostume3dShopItems"].([]any); !ok || len(got) != 3 {
+		t.Fatalf("the caller's map was mutated: %#v", data["userCostume3dShopItems"])
+	}
+	if len(mongoData) != len(data) {
+		t.Fatalf("copy has %d keys, original %d", len(mongoData), len(data))
+	}
+}
+
+// cn/tw/kr send the compact spelling. Blanking only the row-form name is why
+// 5,821 of 5,822 cn rows kept the full value for as long as the feature existed.
+func TestRemoveKeysCoverCompactSpellings(t *testing.T) {
+	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
+		MongoOnlyRemoveKeys: []string{"userCostume3dShopItems"},
+	})
+	data := map[string]any{"compactUserCostume3dShopItems": map[string]any{"rows": []any{1}}}
+	mongoData := service.StripForMongoStore(data)
+	if got, ok := mongoData["compactUserCostume3dShopItems"].([]any); !ok || len(got) != 0 {
+		t.Fatalf("compact spelling was not blanked: %#v", mongoData["compactUserCostume3dShopItems"])
+	}
+}
+
+// A key that is still response-visible stays in SuiteRemoveKeys, and must be
+// blanked for BOTH stores — otherwise flipping the read source would start
+// serving it without an announcement.
+func TestStripForMongoStoreDoesNotTouchTheSharedList(t *testing.T) {
+	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
+		SuiteRemoveKeys:     []string{"userProfileHonors"},
+		MongoOnlyRemoveKeys: []string{"userCostume3dShopItems"},
+	})
+	data := map[string]any{"userProfileHonors": []any{1}}
+	mongoData := service.StripForMongoStore(data)
+	// Restore already blanked it for both stores; StripForMongoStore owns the
+	// other list only, so it must leave this one exactly as it found it.
+	if got, ok := mongoData["userProfileHonors"].([]any); !ok || len(got) != 1 {
+		t.Fatalf("shared-list key was touched by the mongo-only strip: %#v", mongoData["userProfileHonors"])
+	}
+}
+
+// An empty MongoOnlyRemoveKeys must reproduce the historical behaviour exactly:
+// one list, blanked everywhere, no copy.
+func TestEmptyMongoOnlyListIsAPassThrough(t *testing.T) {
+	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
+		SuiteRemoveKeys: []string{"removeMe"},
+	})
+	data := map[string]any{"removeMe": []any{1}}
+	mongoData := service.StripForMongoStore(data)
+	if len(mongoData) != len(data) {
+		t.Fatalf("pass-through changed the map: %#v", mongoData)
+	}
+	if got, ok := mongoData["removeMe"].([]any); !ok || len(got) != 1 {
+		t.Fatalf("pass-through blanked a key: %#v", mongoData["removeMe"])
+	}
+}

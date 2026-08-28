@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
@@ -38,6 +39,10 @@ type SuiteRestoreServiceOptions struct {
 	StructuresFile  map[string]string
 	EnableRegions   []string
 	SuiteRemoveKeys []string
+	// MongoOnlyRemoveKeys are blanked on the way into MongoDB and nowhere else.
+	// Leaving it empty reproduces the historical behaviour exactly: everything
+	// listed in SuiteRemoveKeys is blanked before either store sees it.
+	MongoOnlyRemoveKeys []string
 }
 
 // SuiteRestoreService owns the schema-derived restorers and their degraded
@@ -49,6 +54,10 @@ type SuiteRestoreService struct {
 	structuresFile  map[string]string
 	enableRegions   []string
 	suiteRemoveKeys []string
+	// mongoOnlyRemoveKeys is the second list, already expanded with compact
+	// spellings. Kept separate rather than merged so StripForMongoStore cannot
+	// accidentally blank a key the game-data store is meant to keep.
+	mongoOnlyRemoveKeys []string
 
 	restorers    map[string]*suiterestore.Restorer
 	sources      map[string]string
@@ -57,13 +66,14 @@ type SuiteRestoreService struct {
 
 func NewSuiteRestoreService(options SuiteRestoreServiceOptions) *SuiteRestoreService {
 	service := &SuiteRestoreService{
-		initialized:     true,
-		structuresFile:  copyStringMap(options.StructuresFile),
-		enableRegions:   append([]string(nil), options.EnableRegions...),
-		suiteRemoveKeys: append([]string(nil), options.SuiteRemoveKeys...),
-		restorers:       make(map[string]*suiterestore.Restorer),
-		sources:         make(map[string]string),
-		loadFailures:    make(map[string]string),
+		initialized:         true,
+		structuresFile:      copyStringMap(options.StructuresFile),
+		enableRegions:       append([]string(nil), options.EnableRegions...),
+		suiteRemoveKeys:     withCompactSpellings(options.SuiteRemoveKeys),
+		mongoOnlyRemoveKeys: withCompactSpellings(options.MongoOnlyRemoveKeys),
+		restorers:           make(map[string]*suiterestore.Restorer),
+		sources:             make(map[string]string),
+		loadFailures:        make(map[string]string),
 	}
 
 	for region, path := range service.structuresFile {
@@ -141,13 +151,64 @@ func normalizeSuiteRestorePurpose(purpose SuiteRestorePurpose) SuiteRestorePurpo
 	}
 }
 
-func (s *SuiteRestoreService) cleanSuite(suite map[string]any) map[string]any {
-	for _, key := range s.suiteRemoveKeys {
+// withCompactSpellings returns keys plus, for every key the game compacts, its
+// compact spelling.
+//
+// Blanking by exact name alone silently missed cn/tw/kr for as long as the
+// feature has existed: those clients send `compactUserCostume3dShopItems`, not
+// `userCostume3dShopItems`, so 5,821 of 5,822 cn rows still carried the full
+// value. An empty array is a valid stored value for either spelling — the
+// stored form is self-describing, an object is compact and an array is row form
+// — so one blanking rule covers both.
+func withCompactSpellings(keys []string) []string {
+	out := make([]string, 0, len(keys)*2)
+	seen := make(map[string]bool, len(keys)*2)
+	add := func(k string) {
+		if k == "" || seen[k] {
+			return
+		}
+		seen[k] = true
+		out = append(out, k)
+	}
+	for _, k := range keys {
+		add(k)
+		if compact, ok := catalog.CompactPairs[k]; ok {
+			add(compact)
+		}
+	}
+	return out
+}
+
+func blankKeys(suite map[string]any, keys []string) {
+	for _, key := range keys {
 		if _, ok := suite[key]; ok {
 			suite[key] = []any{}
 		}
 	}
+}
+
+func (s *SuiteRestoreService) cleanSuite(suite map[string]any) map[string]any {
+	blankKeys(suite, s.suiteRemoveKeys)
 	return suite
+}
+
+// StripForMongoStore returns a copy of a suite upload with the MongoDB-only
+// keys blanked, leaving the caller's map — the one the PostgreSQL game-data
+// store receives — untouched.
+//
+// The copy is the whole point. cleanSuite blanks in place, so handing it the
+// upload map would empty the very keys the game-data store exists to keep. A
+// shallow copy is enough: only top-level entries are replaced, never mutated.
+func (s *SuiteRestoreService) StripForMongoStore(suite map[string]any) map[string]any {
+	if s == nil || !s.initialized || len(s.mongoOnlyRemoveKeys) == 0 || suite == nil {
+		return suite
+	}
+	out := make(map[string]any, len(suite))
+	for k, v := range suite {
+		out[k] = v
+	}
+	blankKeys(out, s.mongoOnlyRemoveKeys)
+	return out
 }
 
 func (s *SuiteRestoreService) shouldRestoreSuiteForDB(server utils.SupportedDataUploadServer) bool {

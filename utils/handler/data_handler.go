@@ -64,7 +64,17 @@ func (h *DataHandler) ExtractGameUserIDForExpected(data map[string]any, expected
 }
 
 func (h *DataHandler) PersistUploadData(ctx context.Context, data map[string]any, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, expectedUserID *int64) error {
-	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, data, dataType); err != nil {
+	// MongoDB gets the stripped copy, the game-data store gets the upload as it
+	// arrived. The 16 MB document limit is MongoDB's alone: a real heavy jp
+	// account is 16.16 MB of BSON unstripped — it simply cannot be written —
+	// while the same upload is 1.36 MB in PostgreSQL. Stripping for one store
+	// and not the other is what lets the game-data store start keeping the full
+	// document today instead of after MongoDB is decommissioned.
+	mongoData := data
+	if dataType == utils.UploadDataTypeSuite {
+		mongoData = h.SuiteRestoreService.StripForMongoStore(data)
+	}
+	if _, err := h.DBManager.Mongo.UpdateData(ctx, string(server), *expectedUserID, mongoData, dataType); err != nil {
 		h.Logger.Errorf("Failed to update mongo data: %v", err)
 		return err
 	}
