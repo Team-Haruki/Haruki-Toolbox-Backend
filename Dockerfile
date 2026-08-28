@@ -27,9 +27,14 @@ LABEL org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.created=$BUILD_DATE
 
 WORKDIR /app
+# The uid/gid are PINNED. `adduser -S` picks the first free system id, which a
+# base-image change can shift — and the deployment bind-mounts its config, logs
+# and avatar directory from the host, where ownership is enforced by number. A
+# drifting uid would turn into an unreadable config and a crash loop, so the
+# host side is chowned to exactly these ids.
 RUN apk --no-cache add ca-certificates tzdata \
-    && addgroup -S haruki \
-    && adduser -S -G haruki haruki \
+    && addgroup -g 10001 -S haruki \
+    && adduser -u 10001 -S -G haruki haruki \
     && mkdir -p logs \
     && chown haruki:haruki logs
 
