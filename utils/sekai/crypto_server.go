@@ -11,10 +11,18 @@ import (
 
 func getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
 	var keyHex, ivHex string
-	if server == utils.SupportedDataUploadServerEN {
+	switch server {
+	case utils.SupportedDataUploadServerEN:
 		keyHex = config.Cfg.SekaiClient.ENServerAESKey
 		ivHex = config.Cfg.SekaiClient.ENServerAESIV
-	} else {
+	case utils.SupportedDataUploadServerCN:
+		keyHex = config.Cfg.SekaiClient.CNServerAESKey
+		ivHex = config.Cfg.SekaiClient.CNServerAESIV
+		if keyHex == "" && ivHex == "" {
+			keyHex = config.Cfg.SekaiClient.OtherServerAESKey
+			ivHex = config.Cfg.SekaiClient.OtherServerAESIV
+		}
+	default:
 		keyHex = config.Cfg.SekaiClient.OtherServerAESKey
 		ivHex = config.Cfg.SekaiClient.OtherServerAESIV
 	}

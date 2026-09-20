@@ -11,6 +11,8 @@ import (
 const (
 	testAESKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	testAESIVHex  = "0102030405060708090a0b0c0d0e0f10"
+	testCNAESKey  = "102132435465768798a9bacbdcedfe0f"
+	testCNAESIV   = "f0e0d0c0b0a090807060504030201000"
 )
 
 func mustTestCryptor(t *testing.T) *SekaiCryptor {
@@ -175,5 +177,33 @@ func TestDecryptToMsgpack(t *testing.T) {
 	}
 	if !bytes.Equal(decrypted, rawMsgpack) {
 		t.Fatalf("DecryptToMsgpack mismatch: got %x want %x", decrypted, rawMsgpack)
+	}
+}
+
+func TestCNServerCryptorOverride(t *testing.T) {
+	originalCfg := config.Cfg
+	t.Cleanup(func() {
+		config.Cfg = originalCfg
+	})
+
+	config.Cfg.SekaiClient.CNServerAESKey = testCNAESKey
+	config.Cfg.SekaiClient.CNServerAESIV = testCNAESIV
+	config.Cfg.SekaiClient.OtherServerAESKey = testAESKeyHex
+	config.Cfg.SekaiClient.OtherServerAESIV = testAESIVHex
+
+	cnCryptor, err := NewSekaiCryptorFromHex(testCNAESKey, testCNAESIV)
+	if err != nil {
+		t.Fatalf("NewSekaiCryptorFromHex failed: %v", err)
+	}
+	encrypted, err := cnCryptor.Pack(map[string]any{"server": "cn"})
+	if err != nil {
+		t.Fatalf("Pack failed: %v", err)
+	}
+	unpacked, err := Unpack(encrypted, harukiUtils.SupportedDataUploadServerCN)
+	if err != nil {
+		t.Fatalf("CN Unpack failed: %v", err)
+	}
+	if unpacked.(map[string]any)["server"] != "cn" {
+		t.Fatalf("unexpected CN payload: %#v", unpacked)
 	}
 }
