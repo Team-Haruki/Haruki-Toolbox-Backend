@@ -18,6 +18,9 @@ func TestFilterHeaders(t *testing.T) {
 		"X-Not-Allowed":   "x",
 		"Content-Type":    "application/octet-stream",
 		"X-Session-Token": "st",
+		"device_id":       "device-1",
+		"x-gp":            "optional-signature",
+		"X-CHANNEL-OP":    "optional-channel",
 	}
 	filtered := filterHeaders(in)
 
@@ -32,6 +35,15 @@ func TestFilterHeaders(t *testing.T) {
 	}
 	if filtered["content-type"] != "application/octet-stream" {
 		t.Fatalf("content-type should be kept")
+	}
+	if filtered["device_id"] != "device-1" {
+		t.Fatalf("device_id should be kept")
+	}
+	if _, ok := filtered["x-gp"]; ok {
+		t.Fatalf("x-gp should be removed")
+	}
+	if _, ok := filtered["x-channel-op"]; ok {
+		t.Fatalf("x-channel-op should be removed")
 	}
 }
 

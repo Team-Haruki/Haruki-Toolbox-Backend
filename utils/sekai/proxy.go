@@ -33,6 +33,7 @@ var proxyAllowedHeaderSet = map[string]struct{}{
 	"x-app-version":     {},
 	"x-platform":        {},
 	"x-session-token":   {},
+	"device_id":         {},
 	"x-asset-version":   {},
 	"x-request-id":      {},
 	"x-data-version":    {},
