@@ -14,6 +14,8 @@ const (
 	testAESIVHex   = "0102030405060708090a0b0c0d0e0f10"
 	testAESKeyHex2 = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
 	testAESIVHex2  = "100f0e0d0c0b0a090807060504030201"
+	testCNAESKey   = "102132435465768798a9bacbdcedfe0f"
+	testCNAESIV    = "f0e0d0c0b0a090807060504030201000"
 )
 
 func testServerCryptor() ServerCryptor {
@@ -184,6 +186,8 @@ func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
 	serverCryptor := NewServerCryptor(ServerCryptorConfig{
 		ENServerAESKey:    testAESKeyHex,
 		ENServerAESIV:     testAESIVHex,
+		CNServerAESKey:    testCNAESKey,
+		CNServerAESIV:     testCNAESIV,
 		OtherServerAESKey: testAESKeyHex2,
 		OtherServerAESIV:  testAESIVHex2,
 	})
@@ -213,7 +217,6 @@ func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
 		harukiUtils.SupportedDataUploadServerJP,
 		harukiUtils.SupportedDataUploadServerTW,
 		harukiUtils.SupportedDataUploadServerKR,
-		harukiUtils.SupportedDataUploadServerCN,
 	} {
 		encrypted, err := serverCryptor.Pack(payload, server)
 		if err != nil {
@@ -226,6 +229,46 @@ func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
 		if !bytes.Equal(encrypted, want) {
 			t.Fatalf("%s payload did not use the configured other-server key and IV", server)
 		}
+	}
+
+	cnReference, err := NewSekaiCryptorFromHex(testCNAESKey, testCNAESIV)
+	if err != nil {
+		t.Fatalf("create CN reference cryptor: %v", err)
+	}
+	encryptedCN, err := serverCryptor.Pack(payload, harukiUtils.SupportedDataUploadServerCN)
+	if err != nil {
+		t.Fatalf("Pack CN failed: %v", err)
+	}
+	wantCN, err := cnReference.Pack(payload)
+	if err != nil {
+		t.Fatalf("pack CN reference: %v", err)
+	}
+	if !bytes.Equal(encryptedCN, wantCN) {
+		t.Fatal("CN payload did not use the configured CN key and IV")
+	}
+}
+
+func TestServerCryptorCNFallsBackToOtherMaterial(t *testing.T) {
+	serverCryptor := NewServerCryptor(ServerCryptorConfig{
+		OtherServerAESKey: testAESKeyHex2,
+		OtherServerAESIV:  testAESIVHex2,
+	})
+	payload := map[string]any{"server": "cn-fallback"}
+
+	encrypted, err := serverCryptor.Pack(payload, harukiUtils.SupportedDataUploadServerCN)
+	if err != nil {
+		t.Fatalf("Pack CN fallback failed: %v", err)
+	}
+	reference, err := NewSekaiCryptorFromHex(testAESKeyHex2, testAESIVHex2)
+	if err != nil {
+		t.Fatalf("create fallback reference cryptor: %v", err)
+	}
+	want, err := reference.Pack(payload)
+	if err != nil {
+		t.Fatalf("pack fallback reference: %v", err)
+	}
+	if !bytes.Equal(encrypted, want) {
+		t.Fatal("CN payload did not fall back to other-server key and IV")
 	}
 }
 

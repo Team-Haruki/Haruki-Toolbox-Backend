@@ -181,6 +181,8 @@ type SekaiClientConfig struct {
 	KRServerAPIHost2             string            `yaml:"kr_server_api_host_2"`
 	CNServerAPIHost              string            `yaml:"cn_server_api_host"`
 	CNServerAPIHost2             string            `yaml:"cn_server_api_host_2"`
+	CNServerAESKey               string            `yaml:"cn_server_aes_key"`
+	CNServerAESIV                string            `yaml:"cn_server_aes_iv"`
 	OtherServerAESKey            string            `yaml:"other_server_aes_key"`
 	OtherServerAESIV             string            `yaml:"other_server_aes_iv"`
 	JPServerInheritToken         string            `yaml:"jp_server_inherit_token"`

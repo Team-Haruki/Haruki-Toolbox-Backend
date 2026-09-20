@@ -169,6 +169,8 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		ServerCryptor: harukiSekai.NewServerCryptor(harukiSekai.ServerCryptorConfig{
 			ENServerAESKey:    cfg.SekaiClient.ENServerAESKey,
 			ENServerAESIV:     cfg.SekaiClient.ENServerAESIV,
+			CNServerAESKey:    cfg.SekaiClient.CNServerAESKey,
+			CNServerAESIV:     cfg.SekaiClient.CNServerAESIV,
 			OtherServerAESKey: cfg.SekaiClient.OtherServerAESKey,
 			OtherServerAESIV:  cfg.SekaiClient.OtherServerAESIV,
 		}),

@@ -148,6 +148,8 @@ sekai_client:
   tw_server_api_host: ""
   kr_server_api_host: ""
   cn_server_api_host: ""
+  cn_server_aes_key: ""
+  cn_server_aes_iv: ""
   other_server_aes_key: ""
   other_server_aes_iv: ""
   jp_server_inherit_token: ""

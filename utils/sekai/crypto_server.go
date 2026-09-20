@@ -15,17 +15,21 @@ import (
 type ServerCryptorConfig struct {
 	ENServerAESKey    string
 	ENServerAESIV     string
+	CNServerAESKey    string
+	CNServerAESIV     string
 	OtherServerAESKey string
 	OtherServerAESIV  string
 }
 
-// ServerCryptor selects the EN client key for EN payloads and the shared
-// non-EN client key for every other supported region, matching the historical
-// wire behavior. Key validation remains lazy so malformed configuration still
-// surfaces at the first pack/unpack operation rather than during assembly.
+// ServerCryptor selects dedicated EN and CN client keys and the shared key for
+// every other supported region. An empty CN pair falls back to the shared key
+// for backward compatibility. Key validation remains lazy so malformed
+// configuration surfaces at the first pack/unpack operation.
 type ServerCryptor struct {
 	enServerAESKey    string
 	enServerAESIV     string
+	cnServerAESKey    string
+	cnServerAESIV     string
 	otherServerAESKey string
 	otherServerAESIV  string
 }
@@ -34,6 +38,8 @@ func NewServerCryptor(cfg ServerCryptorConfig) ServerCryptor {
 	return ServerCryptor{
 		enServerAESKey:    cfg.ENServerAESKey,
 		enServerAESIV:     cfg.ENServerAESIV,
+		cnServerAESKey:    cfg.CNServerAESKey,
+		cnServerAESIV:     cfg.CNServerAESIV,
 		otherServerAESKey: cfg.OtherServerAESKey,
 		otherServerAESIV:  cfg.OtherServerAESIV,
 	}
@@ -41,10 +47,18 @@ func NewServerCryptor(cfg ServerCryptorConfig) ServerCryptor {
 
 func (c ServerCryptor) getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
 	var keyHex, ivHex string
-	if server == utils.SupportedDataUploadServerEN {
+	switch server {
+	case utils.SupportedDataUploadServerEN:
 		keyHex = c.enServerAESKey
 		ivHex = c.enServerAESIV
-	} else {
+	case utils.SupportedDataUploadServerCN:
+		keyHex = c.cnServerAESKey
+		ivHex = c.cnServerAESIV
+		if keyHex == "" && ivHex == "" {
+			keyHex = c.otherServerAESKey
+			ivHex = c.otherServerAESIV
+		}
+	default:
 		keyHex = c.otherServerAESKey
 		ivHex = c.otherServerAESIV
 	}
