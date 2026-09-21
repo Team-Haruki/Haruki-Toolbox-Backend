@@ -246,6 +246,13 @@ func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
 	if !bytes.Equal(encryptedCN, wantCN) {
 		t.Fatal("CN payload did not use the configured CN key and IV")
 	}
+	unpackedCN, err := serverCryptor.Unpack(wantCN, harukiUtils.SupportedDataUploadServerCN)
+	if err != nil {
+		t.Fatalf("CN override Unpack failed: %v", err)
+	}
+	if unpackedCN.(map[string]any)["server"] != "selection" {
+		t.Fatalf("unexpected CN payload: %#v", unpackedCN)
+	}
 }
 
 func TestServerCryptorCNFallsBackToOtherMaterial(t *testing.T) {
