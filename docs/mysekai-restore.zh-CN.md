@@ -16,6 +16,12 @@ restore_mysekai:
 
 文件在启动时读取并编译为不可变映射；上传、同步和数据库读取共享实例。替换文件后重启生效。文件缺失、具名引用无法解析、重复/不连续 key、递归、歧义及不支持的类型会使启动失败，错误含区服与路径。旧字符串 key schema 不允许被当作位置数组映射使用。
 
+## Suite 复原配置
+
+`restore_suite` 只保留 `structures_file` 区服到 AVSC 路径的映射。所有配置了 schema 的区服在入库和同步时均执行复原，不再需要 `enable_regions`；没有 schema 的区服保留原字段，不使用其他区服的 schema。
+
+`sekai_client.suite_remove_keys` 已移除，不再在入库前按配置置空字段。数据库注册表及 API 的字段访问控制保持生效。升级时可删除旧配置中的这两个字段。
+
 ## 覆盖范围
 
 普通 MYSEKAI 上传、生日活动上传、Suite 携带的采集地图、MYSEKAI JSON+zstd 同步和 Suite restored 同步共用 `utils/mysekairestore`。照片路径与账号存在性校验保持执行，原始加密同步保持原协议。

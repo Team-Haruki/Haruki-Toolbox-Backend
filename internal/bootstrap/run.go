@@ -120,8 +120,6 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	suiteRestoreService := harukiHandler.NewSuiteRestoreService(harukiHandler.SuiteRestoreServiceOptions{
 		MysekaiRestorer: resources.mysekaiRestorer,
 		StructuresFile:  cfg.RestoreSuite.StructuresFile,
-		EnableRegions:   cfg.RestoreSuite.EnableRegions,
-		SuiteRemoveKeys: cfg.SekaiClient.SuiteRemoveKeys,
 	})
 	application.backgroundTasks = harukiBackground.NewTaskGroup(func(name string, recovered any) {
 		resources.logger.Errorf("Background task %q panicked: %v", name, recovered)

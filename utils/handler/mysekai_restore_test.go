@@ -14,7 +14,7 @@ func harvestUpload() map[string]any {
 }
 func TestBirthdayUploadRestoresConfiguredRegion(t *testing.T) {
 	r, _ := mysekairestore.New(map[string]string{"tw": "../../data/suite_user_cn_6.4.0.avsc"})
-	h := &DataHandler{SuiteRestoreService: NewSuiteRestoreService(SuiteRestoreServiceOptions{MysekaiRestorer: r, SuiteRemoveKeys: []string{"userMysekaiHarvestMaps"}})}
+	h := &DataHandler{SuiteRestoreService: NewSuiteRestoreService(SuiteRestoreServiceOptions{MysekaiRestorer: r})}
 	uid := int64(42)
 	got, err := h.PreHandleData(harvestUpload(), &uid, nil, utils.SupportedDataUploadServerTW, utils.UploadDataTypeMysekaiBirthdayParty)
 	if err != nil {

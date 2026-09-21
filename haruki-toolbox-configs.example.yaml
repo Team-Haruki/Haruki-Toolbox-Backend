@@ -141,9 +141,9 @@ restore_mysekai:
     tw: ""
     kr: ""
 
+# Suite restoration runs for every region with a configured schema.
+# Regions without a schema retain their original fields.
 restore_suite:
-  enable_regions:
-    - "tw"
   structures_file:
     tw: "./data/suite_user.avsc"
 
@@ -169,7 +169,6 @@ sekai_client:
     Host: ""
   en_server_inherit_client_headers:
     Host: ""
-  suite_remove_keys: []
 
 
 haruki_bot:

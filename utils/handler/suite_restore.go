@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
@@ -39,8 +38,6 @@ type SuiteRestoreReport struct {
 type SuiteRestoreServiceOptions struct {
 	MysekaiRestorer *mysekairestore.Restorer
 	StructuresFile  map[string]string
-	EnableRegions   []string
-	SuiteRemoveKeys []string
 }
 
 // SuiteRestoreService owns the schema-derived restorers and their degraded
@@ -51,8 +48,6 @@ type SuiteRestoreService struct {
 	mysekaiRestorer *mysekairestore.Restorer
 	initialized     bool
 	structuresFile  map[string]string
-	enableRegions   []string
-	suiteRemoveKeys []string
 
 	restorers    map[string]*suiterestore.Restorer
 	sources      map[string]string
@@ -64,8 +59,6 @@ func NewSuiteRestoreService(options SuiteRestoreServiceOptions) *SuiteRestoreSer
 		initialized:     true,
 		mysekaiRestorer: options.MysekaiRestorer,
 		structuresFile:  copyStringMap(options.StructuresFile),
-		enableRegions:   append([]string(nil), options.EnableRegions...),
-		suiteRemoveKeys: withCompactSpellings(options.SuiteRemoveKeys),
 		restorers:       make(map[string]*suiterestore.Restorer),
 		sources:         make(map[string]string),
 		loadFailures:    make(map[string]string),
@@ -116,14 +109,6 @@ func (s *SuiteRestoreService) Restore(
 		return data, report, fmt.Errorf("suite restore service is not initialized")
 	}
 
-	if purpose == SuiteRestorePurposeDatabase {
-		data = s.cleanSuite(data)
-		if !s.shouldRestoreSuiteForDB(server) {
-			report.Enabled = false
-			return data, report, nil
-		}
-	}
-
 	restorer := s.restorers[string(server)]
 	report.Source = s.sources[string(server)]
 	report.RestorerLoaded = restorer != nil
@@ -144,58 +129,6 @@ func normalizeSuiteRestorePurpose(purpose SuiteRestorePurpose) SuiteRestorePurpo
 	default:
 		return SuiteRestorePurposeDatabase
 	}
-}
-
-// withCompactSpellings returns keys plus, for every key the game compacts, its
-// compact spelling.
-//
-// Blanking by exact name alone silently missed cn/tw/kr for as long as the
-// feature has existed: those clients send `compactUserCostume3dShopItems`, not
-// `userCostume3dShopItems`, so 5,821 of 5,822 cn rows still carried the full
-// value. An empty array is a valid stored value for either spelling — the
-// stored form is self-describing, an object is compact and an array is row form
-// — so one blanking rule covers both.
-//
-// A configured removal applies to both row and compact spellings.
-func withCompactSpellings(keys []string) []string {
-	out := make([]string, 0, len(keys)*2)
-	seen := make(map[string]bool, len(keys)*2)
-	add := func(k string) {
-		if k == "" || seen[k] {
-			return
-		}
-		seen[k] = true
-		out = append(out, k)
-	}
-	for _, k := range keys {
-		add(k)
-		if compact, ok := catalog.CompactPairs[k]; ok {
-			add(compact)
-		}
-	}
-	return out
-}
-
-func blankKeys(suite map[string]any, keys []string) {
-	for _, key := range keys {
-		if _, ok := suite[key]; ok {
-			suite[key] = []any{}
-		}
-	}
-}
-
-func (s *SuiteRestoreService) cleanSuite(suite map[string]any) map[string]any {
-	blankKeys(suite, s.suiteRemoveKeys)
-	return suite
-}
-
-func (s *SuiteRestoreService) shouldRestoreSuiteForDB(server utils.SupportedDataUploadServer) bool {
-	for _, region := range s.enableRegions {
-		if region == string(server) {
-			return true
-		}
-	}
-	return false
 }
 
 // LoadStatus reports the immutable constructor result. The returned failure

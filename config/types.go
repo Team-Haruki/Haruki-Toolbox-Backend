@@ -3,7 +3,6 @@ package config
 import "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 type RestoreSuiteConfig struct {
-	EnableRegions  []string          `yaml:"enable_regions"`
 	StructuresFile map[string]string `yaml:"structures_file"`
 }
 
@@ -187,9 +186,6 @@ type SekaiClientConfig struct {
 	ENServerAppVersionUrl        string            `yaml:"en_server_app_version_url"`
 	JPServerInheritClientHeaders map[string]string `yaml:"jp_server_inherit_client_headers"`
 	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
-	// SuiteRemoveKeys optionally discard fields before PostgreSQL persistence.
-	// Keep empty to retain full uploads; API projections control public access.
-	SuiteRemoveKeys []string `yaml:"suite_remove_keys"`
 }
 
 type SekaiAPIConfig struct {

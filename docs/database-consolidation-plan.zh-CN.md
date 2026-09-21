@@ -1,5 +1,7 @@
 # 数据库整合方案：游戏数据从 MongoDB 迁往 PostgreSQL
 
+> 当前实现说明（2026-09-21）：`sekai_client.suite_remove_keys` 及入库前置空逻辑已移除，`restore_suite.enable_regions` 也已移除；Suite 按各区服配置的 AVSC 自动复原。下文关于这两个配置的描述属于迁移历史记录。
+
 本文记录把 suite / mysekai 游戏数据从 MongoDB 整合进 PostgreSQL 的动机、实测依据、目标结构、迁移 CLI 与灰度步骤。
 
 > 状态：**2026-09-05 已完成 U11 生产切换与 MongoDB 下线**。生产自 2026-08-29 01:29 起读 PostgreSQL；当前执行记录与验收证据见 §0。维护者已决定不需要对外公告。后续各章保留迁移设计与历史实测，历史阶段状态以 §0 为准。

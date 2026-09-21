@@ -351,14 +351,3 @@ func TestExtractBirthdayPartyData(t *testing.T) {
 		t.Fatalf("other fields should be stripped from extracted payload")
 	}
 }
-
-func TestShouldRestoreSuiteForDB(t *testing.T) {
-	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{EnableRegions: []string{"jp", "en"}})
-
-	if !service.shouldRestoreSuiteForDB(harukiUtils.SupportedDataUploadServerJP) {
-		t.Fatalf("shouldRestoreSuiteForDB should return true for configured region jp")
-	}
-	if service.shouldRestoreSuiteForDB(harukiUtils.SupportedDataUploadServerKR) {
-		t.Fatalf("shouldRestoreSuiteForDB should return false for non-configured region kr")
-	}
-}

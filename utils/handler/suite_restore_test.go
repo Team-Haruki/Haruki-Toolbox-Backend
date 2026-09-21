@@ -3,6 +3,7 @@ package handler
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -124,107 +125,36 @@ func TestSuiteRestoreServiceLoadStatusReturnsFailureMapCopy(t *testing.T) {
 	}
 }
 
-func TestSuiteRestoreServiceDatabasePurposeCleansAndRespectsEnabledRegions(t *testing.T) {
-	tmpDir := t.TempDir()
-	schemaPath := writeTestSuiteSchema(t, tmpDir)
-	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
-		StructuresFile:  map[string]string{"jp": schemaPath},
-		EnableRegions:   []string{"jp"},
-		SuiteRemoveKeys: []string{"removeMe"},
-	})
-
-	data := map[string]any{
-		"removeMe":  []any{1},
-		"userCards": []any{[]any{int64(100), int64(30)}},
-	}
-	restored, report, err := service.Restore(
-		harukiUtils.SupportedDataUploadServerJP,
-		data,
-		SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase},
-	)
-	if err != nil {
-		t.Fatalf("Restore returned error: %v", err)
-	}
-	if !report.Enabled || !report.RestorerLoaded || report.Purpose != SuiteRestorePurposeDatabase {
-		t.Fatalf("unexpected report: %#v", report)
-	}
-	if report.Source != schemaPath {
-		t.Fatalf("Source = %q, want %q", report.Source, schemaPath)
-	}
-	if report.RestoredFields != 1 || len(report.FailedFields) != 0 {
-		t.Fatalf("restore report mismatch: %#v", report)
-	}
-	if len(restored["removeMe"].([]any)) != 0 {
-		t.Fatalf("database purpose should clean configured suite keys, got %#v", restored["removeMe"])
-	}
-	card := restored["userCards"].([]any)[0].(map[string]any)
-	if card["cardId"] != int64(100) || card["level"] != int64(30) {
-		t.Fatalf("unexpected restored card: %#v", card)
-	}
-}
-
-func TestSuiteRestoreServiceDatabasePurposeCleansBeforeSkippingDisabledRegion(t *testing.T) {
-	tmpDir := t.TempDir()
-	schemaPath := writeTestSuiteSchema(t, tmpDir)
-	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
-		StructuresFile:  map[string]string{"jp": schemaPath},
-		EnableRegions:   []string{"en"},
-		SuiteRemoveKeys: []string{"removeMe"},
-	})
-
-	data := map[string]any{
-		"removeMe":  []any{1},
-		"userCards": []any{[]any{int64(100), int64(30)}},
-	}
-	restored, report, err := service.Restore(
-		harukiUtils.SupportedDataUploadServerJP,
-		data,
-		SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase},
-	)
-	if err != nil {
-		t.Fatalf("Restore returned error: %v", err)
-	}
-	if report.Enabled {
-		t.Fatalf("database restore should be disabled for jp, report=%#v", report)
-	}
-	if len(restored["removeMe"].([]any)) != 0 {
-		t.Fatalf("database purpose should clean before region gating, got %#v", restored["removeMe"])
-	}
-	if _, ok := restored["userCards"].([]any)[0].([]any); !ok {
-		t.Fatalf("disabled region should keep compact array, got %#v", restored["userCards"])
-	}
-}
-
-func TestSuiteRestoreServiceSyncPurposeIgnoresEnabledRegionsAndDoesNotClean(t *testing.T) {
-	tmpDir := t.TempDir()
-	schemaPath := writeTestSuiteSchema(t, tmpDir)
-	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
-		StructuresFile:  map[string]string{"jp": schemaPath},
-		EnableRegions:   []string{"en"},
-		SuiteRemoveKeys: []string{"removeMe"},
-	})
-
-	data := map[string]any{
-		"removeMe":  []any{1},
-		"userCards": []any{[]any{int64(100), int64(30)}},
-	}
-	restored, report, err := service.Restore(
-		harukiUtils.SupportedDataUploadServerJP,
-		data,
-		SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync},
-	)
-	if err != nil {
-		t.Fatalf("Restore returned error: %v", err)
-	}
-	if !report.Enabled || report.Purpose != SuiteRestorePurposeSync || report.RestoredFields != 1 {
-		t.Fatalf("unexpected sync report: %#v", report)
-	}
-	if len(restored["removeMe"].([]any)) != 1 {
-		t.Fatalf("sync purpose should not clean suite keys, got %#v", restored["removeMe"])
-	}
-	card := restored["userCards"].([]any)[0].(map[string]any)
-	if card["cardId"] != int64(100) || card["level"] != int64(30) {
-		t.Fatalf("unexpected restored card: %#v", card)
+func TestSuiteRestoreServiceRestoresAllRegionsAndPreservesFields(t *testing.T) {
+	schemaPath := writeTestSuiteSchema(t, t.TempDir())
+	for _, region := range []harukiUtils.SupportedDataUploadServer{"jp", "en", "cn", "tw", "kr"} {
+		for _, purpose := range []SuiteRestorePurpose{SuiteRestorePurposeDatabase, SuiteRestorePurposeSync} {
+			t.Run(string(region)+"/"+string(purpose), func(t *testing.T) {
+				service := NewSuiteRestoreService(SuiteRestoreServiceOptions{StructuresFile: map[string]string{string(region): schemaPath}})
+				data := map[string]any{
+					"userCostume3dShopItems":        []any{int64(123)},
+					"compactUserCostume3dShopItems": map[string]any{"rows": []any{int64(456)}},
+					"userCards":                     []any{[]any{int64(100), int64(30)}},
+				}
+				restored, report, err := service.Restore(region, data, SuiteRestoreOptions{Purpose: purpose})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !report.Enabled || !report.RestorerLoaded || report.Source != schemaPath || report.Purpose != purpose || report.RestoredFields != 1 || len(report.FailedFields) != 0 {
+					t.Fatalf("unexpected report: %#v", report)
+				}
+				card := restored["userCards"].([]any)[0].(map[string]any)
+				if card["cardId"] != int64(100) || card["level"] != int64(30) {
+					t.Fatalf("unexpected card: %#v", card)
+				}
+				if !reflect.DeepEqual(restored["userCostume3dShopItems"], data["userCostume3dShopItems"]) || !reflect.DeepEqual(restored["compactUserCostume3dShopItems"], data["compactUserCostume3dShopItems"]) {
+					t.Fatal("restoration changed unrelated fields")
+				}
+				if !reflect.DeepEqual(data["userCostume3dShopItems"], []any{int64(123)}) || !reflect.DeepEqual(data["compactUserCostume3dShopItems"], map[string]any{"rows": []any{int64(456)}}) {
+					t.Fatal("input fields were blanked")
+				}
+			})
+		}
 	}
 }
 
@@ -257,23 +187,15 @@ func TestSuiteRestoreServiceDefensiveCopiesAndInstancesAreIsolated(t *testing.T)
 	tmpDir := t.TempDir()
 	schemaPath := writeTestSuiteSchema(t, tmpDir)
 	structures := map[string]string{"jp": schemaPath}
-	enabledRegions := []string{"jp"}
-	removeKeys := []string{"removeMe"}
 
 	first := NewSuiteRestoreService(SuiteRestoreServiceOptions{
-		StructuresFile:  structures,
-		EnableRegions:   enabledRegions,
-		SuiteRemoveKeys: removeKeys,
+		StructuresFile: structures,
 	})
 	structures["jp"] = filepath.Join(tmpDir, "missing-after-construction.avsc")
 	structures["en"] = schemaPath
-	enabledRegions[0] = "en"
-	removeKeys[0] = "other"
 
 	second := NewSuiteRestoreService(SuiteRestoreServiceOptions{
-		StructuresFile:  map[string]string{},
-		EnableRegions:   []string{"en"},
-		SuiteRemoveKeys: []string{"other"},
+		StructuresFile: map[string]string{},
 	})
 
 	data := map[string]any{
@@ -291,8 +213,8 @@ func TestSuiteRestoreServiceDefensiveCopiesAndInstancesAreIsolated(t *testing.T)
 	if !report.Enabled || !report.RestorerLoaded || report.Source != schemaPath {
 		t.Fatalf("first service observed mutated constructor inputs: %#v", report)
 	}
-	if len(restored["removeMe"].([]any)) != 0 {
-		t.Fatalf("first service observed mutated remove keys: %#v", restored["removeMe"])
+	if len(restored["removeMe"].([]any)) != 1 {
+		t.Fatalf("first service discarded unrelated fields: %#v", restored["removeMe"])
 	}
 
 	firstLoaded, firstFailures := first.LoadStatus()
@@ -336,20 +258,5 @@ func TestZeroValueSuiteRestoreServiceFailsClosed(t *testing.T) {
 	loaded, failures := service.LoadStatus()
 	if loaded != 0 || len(failures) != 1 {
 		t.Fatalf("zero-value service status = (%d, %#v), want one degraded failure", loaded, failures)
-	}
-}
-
-// cn/tw/kr send the compact spelling. For the list blanked in EVERY store a
-// missed spelling means the key stays readable somewhere, so it is expanded —
-// blanking only the row-form name is why 5,821 of 5,822 cn rows kept the full
-// value for as long as the feature existed.
-func TestSharedRemoveKeysCoverCompactSpellings(t *testing.T) {
-	service := NewSuiteRestoreService(SuiteRestoreServiceOptions{
-		SuiteRemoveKeys: []string{"userCostume3dShopItems"},
-	})
-	data := map[string]any{"compactUserCostume3dShopItems": map[string]any{"rows": []any{1}}}
-	service.cleanSuite(data)
-	if got, ok := data["compactUserCostume3dShopItems"].([]any); !ok || len(got) != 0 {
-		t.Fatalf("compact spelling was not blanked: %#v", data["compactUserCostume3dShopItems"])
 	}
 }
