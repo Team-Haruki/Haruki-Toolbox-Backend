@@ -24,7 +24,7 @@ import (
 	"encoding/json/jsontext"
 	"strconv"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 )
 
 // Field names, as the game sends them.

@@ -78,7 +78,7 @@ prepared 数量包含测试初始化和检查语句，并不表示规范版需�
 
 ## 2. 存在性检查正在重复做完整展开
 
-`HasAny(keys)` 为判定 404 调用 `RawValue`；compact 字段会真正展开成行数组，随后 `SuiteBody` 再展开一次。mysekai 的 `updatedResources` 同理，存在性检查和渲染会各自重建整个父对象。[fetch_postgres.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/data/fetch_postgres.go:44)、[store.go:204](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/database/gamedata/store.go:204)、[store.go:304](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/database/gamedata/store.go:304)
+`HasAny(keys)` 为判定 404 调用 `RawValue`；compact 字段会真正展开成行数组，随后 `SuiteBody` 再展开一次。mysekai 的 `updatedResources` 同理，存在性检查和渲染会各自重建整个父对象。[fetch_postgres.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/data/fetch_postgres.go:44)、[store.go:204](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/database/gamedata/store.go:204)、[store.go:304](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/database/gamedata/store.go:304)
 
 合成 `compactUserMusicResults` 样本包含 4096 行，比较当前 `HasAny + SuiteBody` 与只展开一次的成本下界，三轮中位数：
 
@@ -93,7 +93,7 @@ prepared 数量包含测试初始化和检查语句，并不表示规范版需�
 
 ## 3. gzip 复用适合做小型优化，zstd 参数先不改
 
-游戏响应已经做到 gzip 一次写缓存、命中直接发送，这是应保留的优化。但缓存未命中时 `CompressGameDataBody` 每次创建新的 gzip writer 和 buffer。[compressed_body.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/data/compressed_body.go:26)
+游戏响应已经做到 gzip 一次写缓存、命中直接发送，这是应保留的优化。但缓存未命中时 `CompressGameDataBody` 每次创建新的 gzip writer 和 buffer。[compressed_body.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/data/compressed_body.go:26)
 
 约 427 KB、5000 个合成记录的 JSON，三轮中位数：
 
@@ -108,11 +108,11 @@ prepared 数量包含测试初始化和检查语句，并不表示规范版需�
 
 ## 4. 后台同步：减少无效工作与控制驻留内存
 
-上传主流程的 10 个并发槽位在提交后台任务后释放；`TaskGroup` 跟踪退出但没有任务数、队列或驻留字节上限。普通上传先复制整个 raw，再由后台判断有没有适用目标。目标失效或慢响应时，大包和衍生表示可能长时间保留。[handler.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/modules/upload/handler.go:35)、[data_handler.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/handler/data_handler.go:79)、[task_group.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/background/task_group.go:43)
+上传主流程的 10 个并发槽位在提交后台任务后释放；`TaskGroup` 跟踪退出但没有任务数、队列或驻留字节上限。普通上传先复制整个 raw，再由后台判断有没有适用目标。目标失效或慢响应时，大包和衍生表示可能长时间保留。[handler.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/modules/upload/handler.go:35)、[data_handler.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/upload/data_handler.go:79)、[task_group.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/background/task_group.go:43)
 
-不同处理阶段还存在重复工作：主上传解密/解码一次；processed 同步再次解密；restored 同步再次解密和完整解码。两种同步格式都需要时，同一有效 map 上传至少有 3 次 AES 解密、2 次 MessagePack 实体化。当前已经按格式复用生成结果，不是每个目标都重新压缩。[uploader.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/handler/uploader.go:50)
+不同处理阶段还存在重复工作：主上传解密/解码一次；processed 同步再次解密；restored 同步再次解密和完整解码。两种同步格式都需要时，同一有效 map 上传至少有 3 次 AES 解密、2 次 MessagePack 实体化。当前已经按格式复用生成结果，不是每个目标都重新压缩。[uploader.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/upload/uploader.go:50)
 
-restored 同步又调用 `json.Marshal(NormalizeProviderResponse(restored))`，产生整棵归一化副本和完整 JSON 中间体。5000 条简单合成记录的成本拆分：深拷贝+Marshal 为 2.414 ms、2.924 MB/op；预先归一化后只 Marshal 为 1.480 ms、0.643 MB/op。这里是**成本拆分，不是可以直接删除归一化的实现证明**，ID 派生和 nil/非有限值兼容仍要保留。[uploader.go:105](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/handler/uploader.go:105)、[provider_normalize.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/data/provider_normalize.go:39)
+restored 同步又调用 `json.Marshal(NormalizeProviderResponse(restored))`，产生整棵归一化副本和完整 JSON 中间体。5000 条简单合成记录的成本拆分：深拷贝+Marshal 为 2.414 ms、2.924 MB/op；预先归一化后只 Marshal 为 1.480 ms、0.643 MB/op。这里是**成本拆分，不是可以直接删除归一化的实现证明**，ID 派生和 nil/非有限值兼容仍要保留。[uploader.go:105](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/upload/uploader.go:105)、[provider_normalize.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/data/provider_normalize.go:39)
 
 建议分三步：
 
@@ -124,7 +124,7 @@ restored 同步又调用 `json.Marshal(NormalizeProviderResponse(restored))`，�
 
 ## 5. Auth Proxy 请求内复用用户查询
 
-常规已关联用户：身份解析先按 Kratos identity 查询本地 user ID，随后资料同步又按 ID 查询同一用户资料。资料不变时已避免 UPDATE，但仍有两次 SELECT。[session_auth_proxy.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/session_auth_proxy.go:64)、[session_kratos_identity.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/session_kratos_identity.go:115)、[session_profile_sync.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/session_profile_sync.go:25)
+常规已关联用户：身份解析先按 Kratos identity 查询本地 user ID，随后资料同步又按 ID 查询同一用户资料。资料不变时已避免 UPDATE，但仍有两次 SELECT。[session_auth_proxy.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/session_auth_proxy.go:64)、[session_kratos_identity.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/session_kratos_identity.go:115)、[session_profile_sync.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/session_profile_sync.go:25)
 
 把首次查询结果扩大为最小所需资料并在请求内传递，可以省一次 SQL 往返；新建/自动关联分支另测。不建议为此缓存身份授权、角色、封禁或 client active 状态。Oathkeeper 信任头、代理会话 ID、伪造客户端头拒绝、email 验证及 Hydra subject fallback 都保留。验收先看请求 SQL 计数，再看真实 RTT 下的 p95，不能假设省一次查询就让整个请求减半。
 
@@ -144,7 +144,7 @@ restored 同步又调用 `json.Marshal(NormalizeProviderResponse(restored))`，�
 
 建议引入事务内递增的独立 revision，覆盖 suite、mysekai、birthday 局部写、人工维护等全部写入口。新请求使用新版本，旧 body 交给 TTL 回收，上传主要失效 stamp。需要考虑两个不可省略的条件：版本必须在权威写事务中变化，缓存写入仍须校验版本；Redis/PG 故障及旧 stamp fallback 不能把旧数据判成 304。
 
-stamp memo 冷读目前也在 body singleflight 之前，可能出现同用户并发回源和两次顺序 Redis SET；可进一步按账号合并 stamp resolution，并 pipeline 不同 TTL 的回写。[stamp.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/utils/api/data/stamp.go:41)
+stamp memo 冷读目前也在 body singleflight 之前，可能出现同用户并发回源和两次顺序 Redis SET；可进一步按账号合并 stamp resolution，并 pipeline 不同 TTL 的回写。[stamp.go](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/internal/platform/api/data/stamp.go:41)
 
 这个方案会触及 HTTP 条件请求契约，不能直接删除 SCAN 或把所有 `upload_time` 写成当前时间作为替代。先做 1万/10万 key、本地并发上传+读取、同秒写和故障矩阵，再进行部署。
 
@@ -184,9 +184,9 @@ pg_stat_statements 适合确认生产规划/执行成本，但当前没有加载
 - `sql-templates.log`、`pg-sql-cache.log`、`pg-sql-cache-reversed.log`：SQL 文本、prepared 数量和数据库时间对照。
 - `benchmarks.log`、`benchmark-summary.json`：compact、归一化、gzip、zstd 的逐轮测量。
 - `production*.json`、`access-types.json`：脱敏生产聚合及差分。
-- `source/utils/database/gamedata/performance_research_test.go`、`source/utils/api/data/performance_research_test.go`：实验 harness。
+- `source/utils/database/gamedata/performance_research_test.go`、`source/internal/platform/api/data/performance_research_test.go`：实验 harness。
 
-复现入口：在该临时源码副本运行 `go test ./utils/database/gamedata -run TestResearchSQLTemplates -v`，以及 `go test ./utils/database/gamedata ./utils/api/data -run '^$' -bench BenchmarkResearch -benchmem -benchtime=300ms -count=3`。真实数据库对照使用 `PERF_RESEARCH_PG` 指向**可删除表的隔离数据库**，运行 `TestResearchSQLPreparedCache`。临时 PostgreSQL 在本轮结束后移除。
+复现入口：在该临时源码副本运行 `go test ./utils/database/gamedata -run TestResearchSQLTemplates -v`，以及 `go test ./utils/database/gamedata ./internal/platform/api/data -run '^$' -bench BenchmarkResearch -benchmem -benchtime=300ms -count=3`。真实数据库对照使用 `PERF_RESEARCH_PG` 指向**可删除表的隔离数据库**，运行 `TestResearchSQLPreparedCache`。临时 PostgreSQL 在本轮结束后移除。
 
 尚缺峰值时段 CPU/heap/锁 profile、按请求的 cache hit/压缩协商分布、后台目标数量与驻留字节、生产实际 prepare 次数和 SQL IO 时间。它们限制了全站收益估计，但不影响上述已复现的重复工作结论。调研在关键机会已有代码/测量支持、反证已检查、剩余问题需要下一阶段观测时收敛，没有继续做低价值的广泛搜索。
 
@@ -201,7 +201,7 @@ pg_stat_statements 适合确认生产规划/执行成本，但当前没有加载
 
 - `utils/database/gamedata/writer.go`：先计算部分写入、父对象替换或全量替换拥有的字段集合，再固定最终 SQL 列顺序；参数同步排序，原始字段集合和清空范围不变。原有首次 INSERT 占位与 `SELECT FOR UPDATE` 仍保护历史合并。
 - `utils/database/gamedata/store.go`：按规范列名缓存 compact 展开结果与错误，flattened parent 在同一 Row 内复用。Row 仅属于一次同步请求，返回字节不可修改。metadata 仍读取当前字段；正常 row-form 原字节直接返回。带 key 的 SQL 投影按列排序，同时维护扫描位置，响应仍使用请求的 key 顺序。
-- `utils/api/data/compressed_body.go`：`sync.Pool` 独占复用 gzip writer/buffer，归还时 writer 脱离输出缓冲，单个输出缓冲容量超过 1 MiB 即释放。返回 string 复制内容，后续复用不覆盖旧响应。该阈值是单个缓冲的保留上限，sync.Pool 不是进程总内存的硬上限。
+- `internal/platform/api/data/compressed_body.go`：`sync.Pool` 独占复用 gzip writer/buffer，归还时 writer 脱离输出缓冲，单个输出缓冲容量超过 1 MiB 即释放。返回 string 复制内容，后续复用不覆盖旧响应。该阈值是单个缓冲的保留上限，sync.Pool 不是进程总内存的硬上限。
 
 ### 实际实现后的隔离验证
 
@@ -286,7 +286,7 @@ Rust 三次独立进程峰值 RSS 为 174.36–499.86 MiB，样本波动不支�
 
 ## 第三批实施：历史按需读列与认证资料复用（2026-09-08）
 
-本批基于第二批生产版本 `fbf7d6f143b5`，运行源码快照为 `f4fa51cf9021`（工作树内容指纹，不是 Git commit）。生产实现改动限于 `writer.go` 和四个 `utils/api/session_*.go` 文件。后台同步、独立 revision 与管理端聚合仍留作后续批次；引继上传的预期耗时不纳入优化目标。
+本批基于第二批生产版本 `fbf7d6f143b5`，运行源码快照为 `f4fa51cf9021`（工作树内容指纹，不是 Git commit）。生产实现改动限于 `writer.go` 和四个 `internal/platform/api/session_*.go` 文件。后台同步、独立 revision 与管理端聚合仍留作后续批次；引继上传的预期耗时不纳入优化目标。
 
 - Suite 历史合并依据本次上传键，从 `userEvents`、`userWorldBlooms`、`userGachas` 中选择所需列，按固定顺序生成最多七种非空投影。显式 nil 仍算上传键。首次占位 INSERT、事务 `SELECT FOR UPDATE`、合并规则、遗漏列保留和 upload_time 更新均保留。
 - 已关联 Kratos identity 的映射查询一次读取 ID、名称、邮箱、identity ID，直接交给本次请求的资料同步比较，资料查询由两次 SELECT 降为一次。新建、邮箱关联、自定义 resolver 或不同用户快照仍重新读取。没有跨请求缓存，也没有缓存角色、禁用状态或会话授权；Auth Proxy 和 whoami 两条路径均覆盖。

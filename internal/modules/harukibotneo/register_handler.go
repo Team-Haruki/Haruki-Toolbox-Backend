@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 	botUser "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"

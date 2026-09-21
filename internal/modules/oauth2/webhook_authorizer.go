@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
 
 // WebhookAuthorizer adapts Hydra consent state to the narrow capability used

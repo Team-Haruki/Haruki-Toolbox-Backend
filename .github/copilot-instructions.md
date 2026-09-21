@@ -38,8 +38,8 @@
 
 ## 实现偏好
 
-- 优先复用 `utils/api/session_*.go`（会话/认证逻辑都在这族文件）
-- 优先复用 `utils/oauth2/...`
+- 优先复用 `internal/platform/api/session_*.go`（会话/认证逻辑都在这族文件）
+- 优先复用 `internal/platform/oauth2/...`
 - 优先复用 `admincore`、`usercore`
 - 保持 handler 薄，复杂逻辑下沉到模块或 helper
 
@@ -56,8 +56,8 @@ Bot 数据库使用独立 DSN（`haruki_bot.db_url`）。不要随意手改生�
 
 - 先跑触达包测试
 - Ory / Session / OAuth2 改动优先补：
-  - `utils/api/session_handler*_test.go`
-  - `utils/oauth2/*_test.go`
+  - `internal/platform/api/session_handler*_test.go`
+  - `internal/platform/oauth2/*_test.go`
   - 对应模块测试
 - 跨模块变更时运行 `go test ./...`
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 
 	"github.com/gofiber/fiber/v3"
 )

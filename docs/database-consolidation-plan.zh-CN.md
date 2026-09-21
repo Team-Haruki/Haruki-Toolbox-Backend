@@ -46,7 +46,7 @@ PostgreSQL 成为唯一读写源，上传在持久化失败时返回错误，且
 
 ### 1.1 16 MB 单文档硬上限（决定性）
 
-配置项 `sekai_client.suite_remove_keys` 目前会在写入前把 21 个顶层键置空（`utils/handler/suite_restore.go:144` `cleanSuite`）。维护者希望**停止丢弃这些数据**。
+配置项 `sekai_client.suite_remove_keys` 目前会在写入前把 21 个顶层键置空（`internal/platform/upload/suite_restore.go:144` `cleanSuite`）。维护者希望**停止丢弃这些数据**。
 
 **生产全量普查表明：这在 MongoDB 上做不到。** `suite` 集合 10,928 篇文档的现状分布（21 键已置空）：
 
@@ -124,7 +124,7 @@ PostgreSQL 成为唯一读写源，上传在持久化失败时返回错误，且
 | jp | 4,104 | 3,859 | 245 | 35 MB |
 | en | 98 | 97 | 1 | 121 kB |
 
-原因是 `cleanSuite`（`utils/handler/suite_restore.go:144`）**只按精确键名置空**：
+原因是 `cleanSuite`（`internal/platform/upload/suite_restore.go:144`）**只按精确键名置空**：
 
 ```go
 for _, key := range s.suiteRemoveKeys {
@@ -230,7 +230,7 @@ mysekai,?key=A    → { A }    ← 单键不解包，与 suite 不一致
 其他必须保持的细节：
 
 - 缺失的键返回**空数组**（`GetValueFromResult`）
-- `userGamedata` 永远被接受为 `?key=`，且有 7 字段列级白名单（`utils/api/data/utils.go:11`）
+- `userGamedata` 永远被接受为 `?key=`，且有 7 字段列级白名单（`internal/platform/api/data/utils.go:11`）
 - 部分键以 **compact 列式 + `__ENUM__` 字典**形态存储，`buildSuiteProjection` 同时投影明文键和 `compactFieldName(key)`，由 `GetValueFromResult` 展开
 - **私有 API 的 `bsonDGet` 不展开 compact** —— 现存缺陷，见 §7 第 1 步
 
@@ -240,7 +240,7 @@ mysekai,?key=A    → { A }    ← 单键不解包，与 suite 不一致
 
 这一条对迁移的含义是：**不需要"保持点路径可用"，只需要保持"返回 null"**。若要修成真正可用，那是一次**对外行为变更**，必须单独排期并通知调用方。
 
-**响应的对象键顺序今天已经不确定。** `NormalizeProviderResponse` 把 `bson.D` 转成 `map[string]any`（`utils/api/data/provider_normalize.go:54-83`），存储顺序在这一步就丢了；随后 `sonic.Marshal` 走的是 `ConfigDefault`（`SortMapKeys: false`，`internal/bootstrap/fiber.go:20`），所以最终顺序由 Go map 迭代决定 —— 而 Go map 迭代是随机的。
+**响应的对象键顺序今天已经不确定。** `NormalizeProviderResponse` 把 `bson.D` 转成 `map[string]any`（`internal/platform/api/data/provider_normalize.go:54-83`），存储顺序在这一步就丢了；随后 `sonic.Marshal` 走的是 `ConfigDefault`（`SortMapKeys: false`，`internal/bootstrap/fiber.go:20`），所以最终顺序由 Go map 迭代决定 —— 而 Go map 迭代是随机的。
 
 **实测**（sonic v1.15.1，同一篇 7 键元素连续 marshal 200 次）：
 
@@ -539,7 +539,7 @@ ALTER TABLE game_suite ALTER COLUMN user_costume3d_statuses_z SET STORAGE EXTERN
 
 **规则：只对 cn 已经 compact 化的这 6 个键做转换，不自己发明 compact。**
 
-理由是游戏官方已经替我们做过判断，而且实测吻合 —— `userCards` 官方没有 compact 化，实测 6/6 文档参差（同一数组里有的元素带 `episodes`、有的带 `specialTrainingStatus`）；`userMaterialExchanges` 更是 6 种元素形状。对参差数组做 compact 会让缺失字段在还原时变成显式 `null`（对外可见的响应变化），且 `RestoreColumns` 按最短列截断（`compactrestore.go` 的 `numEntries` 循环）会**静默丢数据**。
+理由是游戏官方已经替我们做过判断，而且实测吻合 —— `userCards` 官方没有 compact 化，实测 6/6 文档参差（同一数组里有的元素带 `episodes`、有的带 `specialTrainingStatus`）；`userMaterialExchanges` 更是 6 种元素形状。对参差数组做 compact 会让缺失字段在还原时变成显式 `null`（对外可见的响应变化），且 `RestoreColumns` 按最短列截断（`nuverserestore.go` 的 `numEntries` 循环）会**静默丢数据**。
 
 ##### 最终名单（离线演练后定稿）
 
@@ -698,7 +698,7 @@ cn 官方确实 compact 了这个键，做法是**把 `obtainedAt` 补齐成等�
 
 - 编码策略用**注册表里的固定清单**，不做运行时阈值（列类型是固定的，同一列不可能按行变编码）。
 - 某个键将来确实需要压缩时，走「两列共存」：加 `_z` 新列 → 读端优先取非 NULL 的新列 → 写端写新列并把旧列置 NULL → 确认清空后删旧列。全程无锁表，不需要 `ALTER TYPE`（后者会以 `ACCESS EXCLUSIVE` 重写整表）。
-- 届时 zstd 用 `SpeedDefault`；`github.com/klauspost/compress` 已是直接依赖且已在 `utils/handler/uploader.go:34` 池化。`bytea` 内容需带帧头（magic + 版本 + 原始长度），读端据此判断编码，不靠假设，且必须有 round-trip 测试。
+- 届时 zstd 用 `SpeedDefault`；`github.com/klauspost/compress` 已是直接依赖且已在 `internal/platform/upload/uploader.go:34` 池化。`bytea` 内容需带帧头（magic + 版本 + 原始长度），读端据此判断编码，不靠假设，且必须有 round-trip 测试。
 
 ### 4.8 `public_api_allowed_keys` 合并为统一的 `allowed_keys`
 
@@ -716,7 +716,7 @@ cn 官方确实 compact 了这个键，做法是**把 `obtainedAt` 补齐成等�
 
 三处都是同一个形状：先 `buildPublicAPIAllowedKeySet`，然后在 `if dataType == suite` 分支里用掉，`else` 分支整个忽略。
 
-根因在签名上 —— `HandleMysekaiRequest`（`utils/api/data/fetch.go:140`）**没有白名单参数**，而且：
+根因在签名上 —— `HandleMysekaiRequest`（`internal/platform/api/data/fetch.go:140`）**没有白名单参数**，而且：
 
 ```go
 func buildMysekaiProjection(keys []string) bson.M {
@@ -791,10 +791,10 @@ mysekaiHousingCompetitionUnreadBanInfoList         newArrivalMysekaiHousingCompe
 | `config/env.go:166` | `PUBLIC_API_ALLOWED_KEYS` → `ALLOWED_KEYS` |
 | `internal/platform/runtimeconfig/service.go` | 快照字段与 JSON `publicApiAllowedKeys` → `allowedKeys` |
 | `internal/modules/admin/config.go` / `route.go` | 管理 API 的读写字段跟着改 |
-| `utils/api/helper.go` | `GetPublicAPIAllowedKeys()` → `GetAllowedKeys()` |
-| `utils/api/data/fetch.go` | 只跟着改名，**mysekai 侧不动** —— `HandleMysekaiRequest` 不加白名单参数，`buildMysekaiProjection` 保持排除式 |
+| `internal/platform/api/helper.go` | `GetPublicAPIAllowedKeys()` → `GetAllowedKeys()` |
+| `internal/platform/api/data/fetch.go` | 只跟着改名，**mysekai 侧不动** —— `HandleMysekaiRequest` 不加白名单参数，`buildMysekaiProjection` 保持排除式 |
 | `public.go` / `gamedata.go` / `game_account_data.go` | 三处 `buildPublicAPIAllowedKeySet` 跟着改名；`else` 分支保持原样 |
-| `utils/api/data/stamp.go` | 只跟着改名，条件请求的 allowlist 参与项仍只覆盖 suite |
+| `internal/platform/api/data/stamp.go` | 只跟着改名，条件请求的 allowlist 参与项仍只覆盖 suite |
 | `haruki-toolbox-configs.example.yaml:187` | 键名与示例内容 |
 
 **兼容性**：`public_api_allowed_keys` / `PUBLIC_API_ALLOWED_KEYS` / 管理 API 的 `publicApiAllowedKeys` 要保留一个废弃期别名，读到旧键时告警并映射到新键，**不要直接改名了事** —— 运行期配置存在 Redis 里（`internal/platform/runtimeconfig/redis_store.go`），部署瞬间新旧代码会并存。
@@ -993,7 +993,7 @@ WHERE user_id = $3 AND server = $4;
 
 ### 6.3 缓存
 
-⚠️ **`ConfirmGameDataCacheWrite`（`utils/api/data/stamp.go:113`）在 `DBManager.Mongo == nil` 时直接返回 false**，也就是说 Mongo 一摘掉，**所有响应缓存会静默失效**。必须与读切换在同一个提交里改造。
+⚠️ **`ConfirmGameDataCacheWrite`（`internal/platform/api/data/stamp.go:113`）在 `DBManager.Mongo == nil` 时直接返回 false**，也就是说 Mongo 一摘掉，**所有响应缓存会静默失效**。必须与读切换在同一个提交里改造。
 
 单行原子性让 Mongo 时代的撕裂读问题消失，写栅栏可以简化，但要注意现有栅栏是在 body 物化**之后**再读一次，能捕捉物化期间发生的新上传；改成复用行读结果会丢掉这个窗口。
 
@@ -1259,7 +1259,7 @@ tw 7002442947828554497  shopItems=36,835   statuses=14,559    missions=995
 后果是：如果直接翻 `read_source` 到 postgres，**窗口结束后的每一笔上传都会对读取不可见**
 —— 上传返回 200、审计日志记 success，读取却拿着一行冻结的数据。这不是数据陈旧，是功能性失效。
 
-`utils/handler/gamedata_write.go` 把三种模式接进了 `PersistUploadData`（三种上传类型
+`internal/platform/upload/gamedata_write.go` 把三种模式接进了 `PersistUploadData`（三种上传类型
 唯一的写入点）。
 
 **与本方案原设计的一处偏差**：§7.3 废弃的是「灰度期双写 + 差异检测 + 修复队列」那一整套，
@@ -1320,7 +1320,7 @@ db.mysekai.aggregate([{$sample:{size:400}},{$project:{k:{$objectToArray:"$update
 
 ### 7.5 离线演练结果
 
-演练分两轮。**第一轮（2026-08-23）** 用 262 篇分层抽样的真实生产 suite 文档与全部 4,124 篇 mysekai 文档验证正确性；**第二轮（2026-08-24）** 用**生产 `suite` 集合的全量副本**（10,928 篇，本地 mongodump 还原后逻辑 30.82 GB／磁盘 3.21 GB，与生产的 3.30 GB 吻合）跑完整装载。演练代码调用的是**仓库里真实的展开路径** `data.GetValueFromResult`，不是复刻实现；`schemagen/compactrestore/vendor_sync_test.go` 断言 vendored 副本与 `utils/compactrestore/compactrestore.go` 逐字节相同，该断言通过。
+演练分两轮。**第一轮（2026-08-23）** 用 262 篇分层抽样的真实生产 suite 文档与全部 4,124 篇 mysekai 文档验证正确性；**第二轮（2026-08-24）** 用**生产 `suite` 集合的全量副本**（10,928 篇，本地 mongodump 还原后逻辑 30.82 GB／磁盘 3.21 GB，与生产的 3.30 GB 吻合）跑完整装载。演练代码调用的是**仓库里真实的展开路径** `data.GetValueFromResult`，不是复刻实现；`schemagen/compactrestore/vendor_sync_test.go` 断言 vendored 副本与 `utils/game/nuverserestore/nuverserestore.go` 逐字节相同，该断言通过。
 
 #### 正确性（第一轮，262 篇 + 4,124 篇）
 
@@ -1458,7 +1458,7 @@ compact 化在全量上的实际效果：**5 个键的行式值 6,307.95 MiB →
 | U2 | `utils/database/gamedata/pool.go`、`config`、`internal/bootstrap` | 专用 pgx 池（`MinConns` 预热）、`game_data:` 配置、组合根接线 |
 | U3 | `utils/database/gamedata/schema.go` | 建表 + `game_data_catalog` checksum 校验 |
 | U4 | `store.go`／`response.go`／`compactjson.go` | 行读取、字节拼接、compact 展开 |
-| U5 | `utils/api/data/fetch_postgres.go` | 四个非 private 切面接上读源开关 |
+| U5 | `internal/platform/api/data/fetch_postgres.go` | 四个非 private 切面接上读源开关 |
 | U6 | `internal/modules/userprivateapi/` | 私有面接上开关 |
 | U7 | `utils/database/gamedata/gamemerge/` | 三个历史合并，Mongo 与 PG **共用同一实现** |
 | U8 | `utils/database/gamedata/writer.go`、`validate.go` | 四种写语义、denied 丢弃、上传上限 |
@@ -1481,7 +1481,7 @@ compact 化在全量上的实际效果：**5 个键的行式值 6,307.95 MiB →
 
 **三个数字与一次性 harness 独立吻合**：denied 27,300、并存 12、`verify` 的 `denied-key drop only` 10,716 恰好等于写入侧报告的 `userRegistration` 篇数。两条互不相关的实现路径得出同一结果。
 
-##### 读翻转彩排（`utils/api/data/cutover_dress_rehearsal_test.go`）
+##### 读翻转彩排（`internal/platform/api/data/cutover_dress_rehearsal_test.go`）
 
 `verify` 证明两个库**装着相同的数据**，但没有证明**翻转之后服务出的字节相同** —— 而那正是维护窗口里打开、且请求进行中无法撤回的那一步。彩排把同一批账号分别用 `read_source=mongo` 和 `postgres` 走一遍真实读入口，逐字节（规范化后）比对：
 
@@ -1572,7 +1572,7 @@ gamedata-migrate verify  -data-type all               # differing 与 missing �
 
 #   窗口内也可以直接跑一次读翻转彩排（需要能同时连到两个库）：
 #     GAMEDATA_REHEARSAL_MONGO=... GAMEDATA_REHEARSAL_PG=... \
-#       go test ./utils/api/data -run TestCutoverReadFlip -count=1 -v
+#       go test ./internal/platform/api/data -run TestCutoverReadFlip -count=1 -v
 
 # ---- 只读窗口结束：恢复上传 ----
 ```
@@ -1599,7 +1599,7 @@ gamedata-migrate verify  -data-type all               # differing 与 missing �
 
 **U12a — 剥离下沉到 Mongo 写入路径（可逆，越早越好）**
 
-- 改 `utils/handler/preprocess.go:36`：预处理阶段不再剥离；改在 `PersistUploadData` 里
+- 改 `internal/platform/upload/preprocess.go:36`：预处理阶段不再剥离；改在 `PersistUploadData` 里
   给 Mongo 分支单独造**浅拷贝**再剥离，PG 分支拿完整 `data`
 - ⚠️ `cleanSuite` 原地改写，必须拷贝，否则 PG 那份一起被清空
 - 同时补上 `catalog.CompactPairs` 的 compact 键名（§1.1.2）
@@ -1614,7 +1614,7 @@ gamedata-migrate verify  -data-type all               # differing 与 missing �
 > 观察期内就做了。见 §7.1.3。**对外公告仍未发出。**
 
 - 公开 API 对它从恒返 `[]` 变成真实数据，**随本步一并公告**
-- 它会反转 `utils/handler/suite_restore_test.go` 里的三条断言，同一次提交改掉，别等它
+- 它会反转 `internal/platform/upload/suite_restore_test.go` 里的三条断言，同一次提交改掉，别等它
   以失败的形式出现
 - 回滚 = 把它加回名单，一行配置
 
@@ -1713,10 +1713,10 @@ M5／M6 结果见 §7.4，压测细节见 §7.5。
 |---|---|
 | `utils/database/mongo/data_ops.go` | 四个存取方法与三个历史合并函数 |
 | `utils/database/mongo/fixture_search.go` | 唯一的跨用户聚合（零调用者） |
-| `utils/api/data/fetch.go` | `?key=` 解析、投影构建、响应组装 |
-| `utils/api/data/utils.go` | `GetValueFromResult`、compact 展开、`userGamedata` 列白名单 |
-| `utils/api/data/stamp.go` | 分代缓存的 upload_time 解析与写栅栏 |
-| `utils/handler/suite_restore.go` | `cleanSuite`（`suite_remove_keys`）与 avsc 位置数组还原 |
-| `utils/compactrestore/` | 列式 → 行式展开 |
+| `internal/platform/api/data/fetch.go` | `?key=` 解析、投影构建、响应组装 |
+| `internal/platform/api/data/utils.go` | `GetValueFromResult`、compact 展开、`userGamedata` 列白名单 |
+| `internal/platform/api/data/stamp.go` | 分代缓存的 upload_time 解析与写栅栏 |
+| `internal/platform/upload/suite_restore.go` | `cleanSuite`（`suite_remove_keys`）与 avsc 位置数组还原 |
+| `utils/game/nuverserestore/` | 列式 → 行式展开 |
 | `internal/modules/userprivateapi/` | 私有 API（核心服务在用） |
 | `cmd/suite-rec-backfill/main.go` | 迁移 CLI 的风格模板 |

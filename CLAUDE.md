@@ -19,7 +19,7 @@ go run ./main.go                                # run (needs haruki-toolbox-conf
 
 ```bash
 go test ./internal/modules/somemodule           # single package
-go test ./utils/api ./utils/oauth2              # targeted packages
+go test ./internal/platform/api ./internal/platform/oauth2              # targeted packages
 go test ./...                                   # full suite (use for cross-module changes)
 ```
 
@@ -54,7 +54,7 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 - **Do not** re-introduce legacy local browser login/register/password-reset flows. Those endpoints should stay `410 Gone` or delegate to Ory.
 - When `auth_proxy_enabled` is true: trusted header validation and `auth_proxy_session_header` must be preserved. Sensitive admin ops must use proxy-session-level identity, not just `user_id` or `kratos_identity_id`.
 - Hydra subject strategy: prefer `kratos_identity_id`, fallback to local `users.id`. Do not break backward compatibility of `CurrentHydraSubject`, `CurrentHydraSubjects`, `HydraSubjectsForUser`, or introspection subject mapping.
-- Session/auth logic lives in the `utils/api/session_*.go` family (`session_handler.go` holds `SessionHandler` + config; resolution is split into `session_verify.go`, `session_auth_proxy.go`, `session_kratos_*.go`) — do not duplicate session parsing or Kratos whoami calls in business modules.
+- Session/auth logic lives in the `internal/platform/api/session_*.go` family (`session_handler.go` holds `SessionHandler` + config; resolution is split into `session_verify.go`, `session_auth_proxy.go`, `session_kratos_*.go`) — do not duplicate session parsing or Kratos whoami calls in business modules.
 
 ## Security Invariants
 
@@ -71,8 +71,8 @@ These encode hard-won rules from prior security audits. Do **not** regress them.
 
 ## Key Utility Packages
 
-- `utils/api/` — `SessionHandler`, `HarukiToolboxRouterHelpers`, route middleware
-- `utils/oauth2/` — OAuth2 scope handling, token helpers
+- `internal/platform/api/` — `SessionHandler`, `HarukiToolboxRouterHelpers`, route middleware
+- `internal/platform/oauth2/` — OAuth2 scope handling, token helpers
 - `utils/database/` — Database manager interfaces
 - `utils/database/mongo/` — MongoDB client and operations
 - `utils/database/redis/` — Redis client
@@ -83,7 +83,7 @@ These encode hard-won rules from prior security audits. Do **not** regress them.
 - `internal/modules/sponsor/` + `adminsponsor/` — Afdian sponsor wall (public read + signed/verified webhook) and admin management
 - `utils/orderedmsgpack/`, `utils/streamjson/` — bounded msgpack decoders for untrusted upload data (depth/length validated)
 
-Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `utils/oauth2/` over building parallel helpers.
+Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `internal/platform/oauth2/` over building parallel helpers.
 
 ## Documentation
 

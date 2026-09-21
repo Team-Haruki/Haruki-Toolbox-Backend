@@ -22,9 +22,20 @@ restore_mysekai:
 
 `sekai_client.suite_remove_keys` 已移除，不再在入库前按配置置空字段。数据库注册表及 API 的字段访问控制保持生效。升级时可删除旧配置中的这两个字段。
 
+## 统一复原包
+
+`utils/game/nuverserestore` 统一提供以下入口，旧的四个复原包已移除：
+
+- `NewSuiteFromFile` / `NewSuiteFromBytes` / `NewSuiteFromDefinitions`：构造 `SuiteRestorer`。
+- `NewMysekai`：按区服 AVSC 路径构造 `MysekaiRestorer`，提供 `Document`、`JSON` 和 `Fingerprint`。
+- `RestoreColumns` / `RestoreEnumColumn`：使用 `CompactOptions` 展开列式数据与枚举。
+- `CompareSuiteRestore`：供离线 schema 对照命令使用。
+
+合并包不统一不同格式的容错策略：Suite 保留原有逐字段报告行为，MYSEKAI 保留类型校验与不修改输入的失败语义，compact 保留调用方指定的枚举和列长策略。配置路径、缓存指纹和 HTTP 返回结构不变。
+
 ## 覆盖范围
 
-普通 MYSEKAI 上传、生日活动上传、Suite 携带的采集地图、MYSEKAI JSON+zstd 同步和 Suite restored 同步共用 `utils/mysekairestore`。照片路径与账号存在性校验保持执行，原始加密同步保持原协议。
+普通 MYSEKAI 上传、生日活动上传、Suite 携带的采集地图、MYSEKAI JSON+zstd 同步和 Suite restored 同步共用 `utils/game/nuverserestore`。照片路径与账号存在性校验保持执行，原始加密同步保持原协议。
 
 数据库读取惰性转换采集地图列，在单次 Row 内复用结果。历史数组快照无需重传或回写，完整 MYSEKAI、updatedResources/字段投影和 Suite 采集地图字段均适用。
 

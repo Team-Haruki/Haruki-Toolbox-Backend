@@ -15,7 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 )
 
 func newAuthorizeSocialTestHelper(t *testing.T) *harukiAPIHelper.HarukiToolboxRouterHelpers {

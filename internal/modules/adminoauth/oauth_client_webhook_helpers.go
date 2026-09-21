@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"strings"
 
+	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 
 	"github.com/gofiber/fiber/v3"
 )

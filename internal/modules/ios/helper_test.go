@@ -3,7 +3,7 @@ package ios
 import (
 	"testing"
 
-	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
+	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/ios"
 )
 
 func TestEndpointConfigSelectsDirectAndCDNEndpoints(t *testing.T) {

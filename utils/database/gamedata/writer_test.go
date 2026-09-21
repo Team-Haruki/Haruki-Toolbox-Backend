@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 )

@@ -8,9 +8,9 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/compactrestore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/nuverserestore"
 )
 
 // IsCompactValue reports whether a stored value is in the columnar form.
@@ -54,7 +54,7 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gamedata: compact value is not an object")
 	}
 	var enums orderedDoc
-	if value, ok := doc.get(compactrestore.EnumKey); ok {
+	if value, ok := doc.get(nuverserestore.EnumKey); ok {
 		enums, _ = value.(orderedDoc)
 	}
 	type column struct {
@@ -66,7 +66,7 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 	columns := make([]column, 0, len(doc))
 	rows := -1
 	for _, p := range doc {
-		if p.Key == compactrestore.EnumKey {
+		if p.Key == nuverserestore.EnumKey {
 			continue
 		}
 		key, err := json.Marshal(p.Key)

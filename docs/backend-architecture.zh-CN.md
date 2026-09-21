@@ -20,6 +20,22 @@ utils/database/neopg/            Bot Ent 生成产物（迁移期保持位置不
 
 小模块可以保持少量平铺文件；只有当职责已经明确并且文件数量足够多时，才拆成 `transport`、`service`、`store` 或 `adapter` 子目录。目录层级不应先于实际依赖边界出现。
 
+### 当前共享包布局
+
+| 目录 | 职责 |
+| --- | --- |
+| `internal/platform/api` | HTTP 公共响应、会话验证、身份集成、审计及游戏数据访问；`data`、`ios` 为子包 |
+| `internal/platform/upload` | 游戏上传预处理、Suite 复原编排、同步与通知 |
+| `internal/platform/oauth2` | Hydra 客户端、token introspection 与鉴权中间件 |
+| `utils/game/sekai`、`utils/game/sekaiapi` | 游戏客户端加解密、协议处理及 SekaiAPI 适配 |
+| `utils/game/nuverserestore` | 统一 AVSC 加载、Suite/MYSEKAI 复原、compact 列式展开及离线对照工具 |
+| `utils/codec/{jsoncodec,jsonvalue,msgpackcodec}` | 通用 JSON/MessagePack 编解码与 JSON 值操作 |
+| `utils/orderedmap` | 通用有序容器 |
+| `utils/database` | 数据库连接、游戏数据存储、Redis 及 Ent 生成代码 |
+| `utils/{http,smtp,cloudflare,logger,background,perfstats,perfdebug}` | 网络、邮件、外部适配、日志与运行期基础设施 |
+
+`utils` 根暂保留共享类型和枚举。包迁移直接更新调用方，不保留旧路径转发包；修改 Go 导入路径不改变 HTTP、配置、存储或加密协议。测试数据随包迁移，仓库 `data/` 中的发布 schema 路径保持不变。
+
 ## 2. 依赖方向
 
 允许的核心依赖方向如下：
@@ -35,9 +51,7 @@ main -> bootstrap -> api -> modules -> platform
 - `api/` 只组合路由，不实现用例。
 - 业务模块可以依赖 `internal/platform` 和 `utils`，但不应通过反向 import 暴露自身能力。
 - `internal/platform` 与 `utils` 都不得 import `internal/modules`。
-- `internal/platform` 与 `utils` 是并列的复用层；迁移期少量 `utils` 仍依赖
-  `internal/platform` 的身份、鉴权头和 runtime-config 能力。架构测试把这些
-  既有边精确锁定为只减不增，新增基础能力应放在不造成反向依赖的位置。
+- `internal/platform` 可以依赖 `utils`；`utils` 不得反向依赖 `internal/platform`。原有例外已随平台服务迁移清除，架构测试禁止重新引入。
 - 跨域调用依赖由消费方定义的窄接口，通过 `internal/bootstrap` 注入；不得新增可变包级回调或服务定位器字段。
 - 业务代码不直接依赖另一个模块的 HTTP handler、Fiber 路由或响应类型。
 

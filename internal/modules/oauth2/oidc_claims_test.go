@@ -3,7 +3,7 @@ package oauth2
 import (
 	"testing"
 
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
 
 func TestBuildHydraOIDCIDTokenClaimsHonorsGrantedScopes(t *testing.T) {

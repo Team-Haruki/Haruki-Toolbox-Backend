@@ -10,13 +10,13 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/compactrestore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/nuverserestore"
 )
 
 // referenceProductionRestoreOptions are the exact options the serving path uses today
-// (utils/api/data/utils.go RestoreCompactData). They are not tunable here: the
+// (internal/platform/api/data/utils.go RestoreCompactData). They are not tunable here: the
 // whole point of expanding in this package is to produce the same bytes the
 // MongoDB path produced, and both of these change the output.
 //
@@ -25,8 +25,8 @@ import (
 //   - ParseFloatEnumIndex: float64 is accepted as an index. Without it a
 //     JSON-decoded index would silently fail to resolve and every enum column
 //     would come back null.
-var referenceProductionRestoreOptions = compactrestore.Options{
-	InvalidEnumValue:    compactrestore.NullInvalidEnumValue,
+var referenceProductionRestoreOptions = nuverserestore.CompactOptions{
+	InvalidEnumValue:    nuverserestore.NullInvalidEnumValue,
 	ParseFloatEnumIndex: true,
 }
 
@@ -68,17 +68,17 @@ func referenceExpandCompactJSON(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gamedata: compact value is not an object")
 	}
 
-	// Mirrors extractColumnsAndLabels in utils/api/data/utils.go.
+	// Mirrors extractColumnsAndLabels in internal/platform/api/data/utils.go.
 	var enumRaw referenceOrderedDoc
-	if ev, ok := doc.get(compactrestore.EnumKey); ok {
+	if ev, ok := doc.get(nuverserestore.EnumKey); ok {
 		if ed, ok := ev.(referenceOrderedDoc); ok {
 			enumRaw = ed
 		}
 	}
-	columns := make([]compactrestore.Column, 0, len(doc))
+	columns := make([]nuverserestore.CompactColumn, 0, len(doc))
 	enumColumns := make(map[string][]any, len(doc))
 	for _, p := range doc {
-		if p.Key == compactrestore.EnumKey {
+		if p.Key == nuverserestore.EnumKey {
 			continue
 		}
 		values, _ := p.Val.([]any)
@@ -97,17 +97,17 @@ func referenceExpandCompactJSON(raw []byte) ([]byte, error) {
 			}
 		}
 		if _, isEnum := enumColumns[p.Key]; isEnum {
-			// compactrestore.enumIndex accepts Go int kinds and (with
+			// nuverserestore.enumIndex accepts Go int kinds and (with
 			// ParseFloatEnumIndex) float64, but NEVER jsonvalue.Number. Scalars are
 			// otherwise kept as exact JSON text so no number is reformatted, so
 			// enum indices have to be converted here or every enum column would
 			// restore to null.
 			values = referenceRawIndicesToInt(values)
 		}
-		columns = append(columns, compactrestore.Column{Key: p.Key, Values: values})
+		columns = append(columns, nuverserestore.CompactColumn{Key: p.Key, Values: values})
 	}
 
-	rows := compactrestore.RestoreColumns(columns, enumColumns, referenceProductionRestoreOptions)
+	rows := nuverserestore.RestoreColumns(columns, enumColumns, referenceProductionRestoreOptions)
 
 	out := make([]byte, 0, len(raw)*2)
 	out = append(out, '[')

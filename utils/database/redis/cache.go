@@ -13,7 +13,7 @@ import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 
 	"github.com/redis/go-redis/v9"
 )

@@ -15,9 +15,9 @@
 
 - 启动装配：`internal/bootstrap/run.go`
 - 路由总装配：`api/route.go`
-- Kratos / Auth Proxy 会话处理：`utils/api/session_handler.go`
+- Kratos / Auth Proxy 会话处理：`internal/platform/api/session_handler.go`
 - Hydra 路由兼容层：`internal/modules/oauth2/hydra_routes.go`
-- Hydra token introspection：`utils/oauth2/middleware.go`
+- Hydra token introspection：`internal/platform/oauth2/middleware.go`
 
 ## 2. 项目为什么要用 Ory
 
@@ -98,8 +98,8 @@ Hydra 在当前项目里负责：
 
 - `internal/modules/oauth2/hydra_routes.go`
 - `internal/modules/adminoauth/hydra_handlers.go`
-- `utils/oauth2/middleware.go`
-- `utils/oauth2/provider.go`
+- `internal/platform/oauth2/middleware.go`
+- `internal/platform/oauth2/provider.go`
 
 ## 4. Backend 如何装配 Ory
 
@@ -428,7 +428,7 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 实现位于：
 
-- `utils/oauth2/middleware.go`
+- `internal/platform/oauth2/middleware.go`
 
 这让 API 的 bearer token 身份与浏览器身份迁移可以在同一项目内逐步收敛。
 
@@ -604,8 +604,8 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 
 正确做法是尽量收敛在：
 
-- `utils/api/session_handler.go`
-- `utils/oauth2/...`
+- `internal/platform/api/session_handler.go`
+- `internal/platform/oauth2/...`
 - `internal/modules/oauth2/...`
 
 ### 12.6 开了 trust proxy 却没限定可信代理
@@ -630,7 +630,7 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 2. 浏览器受保护 API 默认考虑 Oathkeeper/Auth Proxy，而不是让前端直接长期依赖后端本地 session。
 3. OAuth2 能力优先通过 Hydra 编排，不要再新增一套本地 OAuth server。
 4. 本地用户表仍然是业务真相来源，不能把所有业务都直接挂在 Kratos identity JSON 上。
-5. 涉及会话、header、whoami、subject 的修改优先收敛到 `SessionHandler` 和 `utils/oauth2`。
+5. 涉及会话、header、whoami、subject 的修改优先收敛到 `SessionHandler` 和 `internal/platform/oauth2`。
 6. 改动 Ory 相关行为时，优先补充：
    - `session_handler` 测试
    - Hydra middleware 测试

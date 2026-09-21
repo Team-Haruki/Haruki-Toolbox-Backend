@@ -3,7 +3,7 @@ package ios
 import (
 	"regexp"
 
-	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
+	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/ios"
 )
 
 var modulePathPattern = regexp.MustCompile(`^([a-z-]+)-haruki-toolbox-([a-z_-]+)\.(\w+)$`)

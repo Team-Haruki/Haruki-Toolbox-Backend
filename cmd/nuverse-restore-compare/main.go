@@ -7,8 +7,8 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/nuverserestore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,7 +26,7 @@ func main() {
 	flag.StringVar(&baselineSchemaPath, "baseline-schema", "", "optional baseline StructTool/Avro schema for restore diff")
 	flag.StringVar(&configPath, "config", "", "path to haruki config; defaults to env/default config path")
 	flag.StringVar(&schemaPath, "schema", "data/suite_user.avsc", "path to StructTool/Avro schema json")
-	flag.StringVar(&inputFormat, "input-format", nuversestruct.InputFormatMsgpack, "sample format: msgpack or raw-upload")
+	flag.StringVar(&inputFormat, "input-format", nuverserestore.InputFormatMsgpack, "sample format: msgpack or raw-upload")
 	flag.StringVar(&serverRaw, "server", "", "server for raw-upload samples: jp, en, tw, kr, or cn")
 	flag.BoolVar(&generateOnly, "generate-only", false, "print generated suite structures instead of comparing a sample")
 	flag.Parse()
@@ -40,7 +40,7 @@ func main() {
 		if err != nil {
 			fatalf("read schema: %v", err)
 		}
-		out, err := nuversestruct.MarshalGeneratedStructuresFromSchema(schemaBytes)
+		out, err := nuverserestore.MarshalGeneratedStructuresFromSchema(schemaBytes)
 		if err != nil {
 			fatalf("generate structures: %v", err)
 		}
@@ -53,7 +53,7 @@ func main() {
 		fatalf("%v", err)
 	}
 	var serverCryptor sekai.ServerCryptor
-	if inputFormat == nuversestruct.InputFormatRawUpload {
+	if inputFormat == nuverserestore.InputFormatRawUpload {
 		loadedPath, err := loadConfig(configPath)
 		if err != nil {
 			fatalf("%v", err)
@@ -64,7 +64,7 @@ func main() {
 		})
 	}
 
-	report, err := nuversestruct.CompareSuiteRestore(nuversestruct.CompareOptions{
+	report, err := nuverserestore.CompareSuiteRestore(nuverserestore.CompareOptions{
 		SampleMsgpackPath:  samplePath,
 		BaselineSchemaPath: baselineSchemaPath,
 		SchemaPath:         schemaPath,
@@ -88,7 +88,7 @@ func fatalf(format string, args ...any) {
 }
 
 func parseServerForInput(inputFormat string, serverRaw string) (harukiUtils.SupportedDataUploadServer, error) {
-	if inputFormat != nuversestruct.InputFormatRawUpload {
+	if inputFormat != nuverserestore.InputFormatRawUpload {
 		return "", nil
 	}
 	if serverRaw == "" {

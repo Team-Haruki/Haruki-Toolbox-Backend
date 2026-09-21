@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"time"
 
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/data"
 
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/sync/singleflight"

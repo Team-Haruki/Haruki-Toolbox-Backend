@@ -13,62 +13,12 @@ import (
 
 const platformImportPath = "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform"
 
-// utils still contains legacy adapters that consume a few shared platform
-// capabilities. Freeze those edges while the layers are disentangled: files
-// may stop importing platform packages, but no new file or dependency may be
-// added without an explicit architecture decision.
-var legacyUtilsPlatformImports = []string{
-	"utils/api/helper.go -> internal/platform/runtimeconfig",
-	"utils/api/session_auth_proxy.go -> internal/platform/identity",
-	"utils/api/session_kratos_admin.go -> internal/platform/identity",
-	"utils/api/session_kratos_client.go -> internal/platform/identity",
-	"utils/api/session_kratos_identity.go -> internal/platform/identity",
-	"utils/api/session_profile_sync.go -> internal/platform/identity",
-	"utils/api/session_verify.go -> internal/platform/authheader",
-	"utils/oauth2/middleware.go -> internal/platform/authheader",
-}
-
-func TestUtilsDoNotAddPlatformDependencies(t *testing.T) {
-	if !sort.StringsAreSorted(legacyUtilsPlatformImports) {
-		t.Fatal("legacy utils -> platform baseline must be sorted")
+// Infrastructure and protocol packages must not depend on application services.
+func TestUtilsDoNotImportPlatform(t *testing.T) {
+	violations := collectUtilsPlatformImports(t, repositoryRoot(t))
+	if len(violations) > 0 {
+		t.Fatalf("utils must not import internal/platform; move application services to the platform layer:\n%s", strings.Join(violations, "\n"))
 	}
-	for index := 1; index < len(legacyUtilsPlatformImports); index++ {
-		if legacyUtilsPlatformImports[index] == legacyUtilsPlatformImports[index-1] {
-			t.Fatalf("duplicate utils -> platform baseline %q", legacyUtilsPlatformImports[index])
-		}
-	}
-
-	root := repositoryRoot(t)
-	actual := collectUtilsPlatformImports(t, root)
-	want := append([]string(nil), legacyUtilsPlatformImports...)
-	if strings.Join(actual, "\n") == strings.Join(want, "\n") {
-		return
-	}
-
-	actualSet := make(map[string]struct{}, len(actual))
-	wantSet := make(map[string]struct{}, len(want))
-	for _, edge := range actual {
-		actualSet[edge] = struct{}{}
-	}
-	for _, edge := range want {
-		wantSet[edge] = struct{}{}
-	}
-	var added, stale []string
-	for _, edge := range actual {
-		if _, ok := wantSet[edge]; !ok {
-			added = append(added, edge)
-		}
-	}
-	for _, edge := range want {
-		if _, ok := actualSet[edge]; !ok {
-			stale = append(stale, edge)
-		}
-	}
-	t.Fatalf(
-		"utils -> internal/platform dependency baseline drifted\nadded (move the capability or inject a narrow port):\n%s\nstale (shrink the baseline):\n%s",
-		strings.Join(added, "\n"),
-		strings.Join(stale, "\n"),
-	)
 }
 
 func collectUtilsPlatformImports(t *testing.T, repositoryRoot string) []string {

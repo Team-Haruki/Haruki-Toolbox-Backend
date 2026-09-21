@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"

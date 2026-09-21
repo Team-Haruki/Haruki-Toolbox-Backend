@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )

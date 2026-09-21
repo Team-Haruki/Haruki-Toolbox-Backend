@@ -1,6 +1,6 @@
 # MessagePack codec 与 OrderedMap
 
-`utils/msgpackcodec` 统一 MessagePack marker、受检字节游标、结构校验、有序解码和 JSON 输出。生产及测试调用直接使用新包；`utils/orderedmsgpack`、`utils/streamjson` 已删除。`utils/orderedmap` 独立保留连续 entries、8 字段线性查找和大对象索引，并对已知容量的小对象合并分配。
+`utils/codec/msgpackcodec` 统一 MessagePack marker、受检字节游标、结构校验、有序解码和 JSON 输出。生产及测试调用直接使用新包；`utils/orderedmsgpack`、`utils/streamjson` 已删除。`utils/orderedmap` 独立保留连续 entries、8 字段线性查找和大对象索引，并对已知容量的小对象合并分配。
 
 ## 调用与分层
 
@@ -14,7 +14,7 @@
 | `msgpackcodec.DecodeOrderedRead` | 完整读入后解码，调用方负责 Reader 的字节上限 |
 | `data.ProviderJSONOptions()` | 业务层返回 userGamedata/userId/userIdString 规则；调用方直接传给 `msgpackcodec.WriteJSON` |
 
-新核心不依赖游戏字段名、HTTP、数据库或压缩器。provider 规则通过 `JSONOptions.DerivedStringField` 指定；零值 options 不派生字段。具体字段名位于 `utils/api/data`，每次返回独立的配置值。上传 handler 直接调用新包，不再经过旧转换函数。Sekai 的普通值解码也统一从新包进入；外部 MessagePack 库仅保留在 codec 内部作为类型兼容实现。
+新核心不依赖游戏字段名、HTTP、数据库或压缩器。provider 规则通过 `JSONOptions.DerivedStringField` 指定；零值 options 不派生字段。具体字段名位于 `internal/platform/api/data`，每次返回独立的配置值。上传 handler 直接调用新包，不再经过旧转换函数。Sekai 的普通值解码也统一从新包进入；外部 MessagePack 库仅保留在 codec 内部作为类型兼容实现。
 
 游标输入仅在同步调用期间借用，调用结束前不能修改输入。游标切片不会作为 OrderedMap 的持久字符串或二进制值逃逸。没有 unsafe 转换、全局字段名缓存或可变对象池。
 
@@ -45,6 +45,21 @@ JSON 入口继续预校验 256 深度。结构损坏、深度超限和尾部多�
 
 本阶段仍允许多个消费分支分别校验。输入所有权和端到端收益尚未验证前，不增加公开的跳过校验开关。Reader 字节预算仍由现有调用方负责；本轮没有宣称提供增量 Reader 解码。
 
+## Provider 规范化优化（2026-09-21）
+
+`NormalizeProviderResponse` 仅复制新增/修改派生字段或转换 BSON 容器的分支，未变化的普通 map/slice 与输入共享。输入不会被修改；返回值是只读视图，调用方不得修改共享子对象。仍需遍历整棵树，BSON 文档转普通对象时仍需分配，nil 集合的既有空容器表示保持不变。
+
+MessagePack 直接输出与对象规范化通过 `jsonvalue.ScalarString` 共用数字 token 到字符串的规则。非空字符串和合法 JSON 数字可派生；整数不经过 float64，中间不存在大整数精度损失。小数与指数沿用直接输出路径的 JSON 文本，因此对象路径也会为 `1.5` 派生 `"1.5"`，为 `1e25` 派生 `"1e+25"`。原有源字段不改写；float32 的源字段在两条路径中的历史 JSON 表示差异仍保留，派生字符串按 MessagePack 提升后的 float64 表示对齐。不可用源值保留已有目标值。
+
+Apple M4 / Go 1.27.1 / GOMAXPROCS=10，10,000 行合成普通 map 数据，每行包含 cardId、level、skills，另有一个 userGamedata；三次中位数：
+
+| 规范化实现 | 耗时 | 分配字节 | 分配次数 |
+| --- | ---: | ---: | ---: |
+| 修改前整树复制 | 1.690 ms | 4,084,585 B | 40,008 |
+| 仅复制变化分支 | 0.530 ms | 737 B | 8 |
+
+仅测 Normalize，不含解密、复原、JSON 编码、压缩或网络；不能直接换算为生产 API 收益。契约测试覆盖大整数、小数、指数、float32、空字符串、既有目标、非有限数、空容器、输入不变、分支共享和幂等性。相关 codec、上传和 private API 包的 race 回归通过。本轮未优化解包失败回退路径，也未部署。
+
 ## 验证与本机基准
 
 与修改前冻结实现做接受结果和合法 JSON 逐字节比较，包含随机对象树、重复字段、非法 UTF-8、bin/ext、大整数与深度边界。永久测试补充通用字段规则、provider 兼容入口、writer 失败、结构损坏零输出和旧有序 API。
@@ -66,9 +81,9 @@ Apple M4、Go 1.27.1、GOMAXPROCS=4；每组三次中位数，5,000 行合成 Me
 相关测试入口：
 
 ```sh
-go test -race ./utils/msgpackcodec ./utils/orderedmap ./utils/api/data ./utils/sekai ./utils/nuversestruct ./utils/handler
-go test ./utils/msgpackcodec -run '^$' -fuzz '^FuzzWriteJSON$' -fuzztime=30s
-go test ./utils/msgpackcodec -run '^$' -bench BenchmarkWriteJSONRecords -benchmem
+go test -race ./utils/codec/msgpackcodec ./utils/orderedmap ./internal/platform/api/data ./utils/game/sekai ./utils/game/nuverserestore ./internal/platform/upload
+go test ./utils/codec/msgpackcodec -run '^$' -fuzz '^FuzzWriteJSON$' -fuzztime=30s
+go test ./utils/codec/msgpackcodec -run '^$' -bench BenchmarkWriteJSONRecords -benchmem
 ```
 
 OrderedMap 有界字段名复用、只读记录共享 schema、pipeline 内已校验 Document 都尚未启用。它们需要分别解决低重复率退化、可变对象语义和输入所有权问题，避免把未证明的优化捆绑进 codec 迁移。

@@ -3,7 +3,7 @@ package gamedata
 import (
 	"bytes"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/nuverserestore"
 	"testing"
 )
 
@@ -12,9 +12,9 @@ func TestHarvestRestoreAcrossResponseShapes(t *testing.T) {
 	for _, region := range []string{"cn", "tw", "kr"} {
 		r := newTestRow(t, catalog.Mysekai(), map[string]string{"updatedResources.userMysekaiHarvestMaps": raw}, "")
 		r.Server = region
-		r.restorer, _ = mysekairestore.New(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
+		r.restorer, _ = nuverserestore.NewMysekai(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
 		if region == "tw" {
-			r.restorer, _ = mysekairestore.New(map[string]string{"tw": "../../../data/suite_user_cn_6.4.0.avsc"})
+			r.restorer, _ = nuverserestore.NewMysekai(map[string]string{"tw": "../../../data/suite_user_cn_6.4.0.avsc"})
 		}
 		for _, keys := range [][]string{nil, {"updatedResources"}, {"updatedResources.userMysekaiHarvestMaps"}} {
 			body, err := r.MysekaiBody(keys)
@@ -33,7 +33,7 @@ func TestHarvestRestoreAcrossResponseShapes(t *testing.T) {
 	}
 	r := newTestRow(t, catalog.Suite(), map[string]string{"userMysekaiHarvestMaps": raw}, "")
 	r.Server = "cn"
-	r.restorer, _ = mysekairestore.New(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
+	r.restorer, _ = nuverserestore.NewMysekai(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
 	body, err := r.SuiteBody([]string{"userMysekaiHarvestMaps"}, true)
 	if err != nil || !bytes.Contains(body, []byte(`"mysekaiSiteId":5`)) {
 		t.Fatalf("suite: %s %v", body, err)
@@ -42,7 +42,7 @@ func TestHarvestRestoreAcrossResponseShapes(t *testing.T) {
 func TestBadHarvestReadReturnsError(t *testing.T) {
 	r := newTestRow(t, catalog.Mysekai(), map[string]string{"updatedResources.userMysekaiHarvestMaps": `[[5]]`}, "")
 	r.Server = "cn"
-	r.restorer, _ = mysekairestore.New(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
+	r.restorer, _ = nuverserestore.NewMysekai(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
 	for range 2 {
 		if _, err := r.MysekaiBody(nil); err == nil {
 			t.Fatal("bad stored data silently accepted")

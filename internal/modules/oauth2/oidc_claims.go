@@ -3,7 +3,7 @@ package oauth2
 import (
 	"strings"
 
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
 
 func buildHydraOIDCIDTokenClaims(userID, name, email string, emailVerified bool, grantedScopes []string) map[string]any {

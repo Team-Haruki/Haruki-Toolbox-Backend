@@ -1,13 +1,13 @@
 package upload
 
 import (
-	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
+	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
-	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
-	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 )
 
 // Dependencies contains the process-level collaborators consumed by upload.

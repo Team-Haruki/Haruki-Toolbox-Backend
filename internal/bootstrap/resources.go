@@ -14,10 +14,10 @@ import (
 	neopgManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/nuverserestore"
+	harukiSekaiAPIClient "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekaiapi"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 	perfdebug "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfdebug"
-	harukiSekaiAPIClient "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
 	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
 
@@ -29,7 +29,7 @@ import (
 // resources. It deliberately stays private to the composition root and is not
 // passed into business modules as a dependency container.
 type applicationResources struct {
-	mysekaiRestorer *mysekairestore.Restorer
+	mysekaiRestorer *nuverserestore.MysekaiRestorer
 	logger          *harukiLogger.Logger
 	sekaiAPIClient  *harukiSekaiAPIClient.HarukiSekaiAPIClient
 	redisClient     *harukiRedis.HarukiRedisManager
@@ -47,7 +47,7 @@ type applicationResources struct {
 // HTTP/module assembly. Each closer is registered immediately after acquisition
 // so a later Build failure unwinds the exact subset that was opened.
 func acquireApplicationResources(cfg harukiConfig.Config, owner *Application) (*applicationResources, error) {
-	restorer, restoreErr := mysekairestore.New(cfg.MysekaiRestore.StructuresFile)
+	restorer, restoreErr := nuverserestore.NewMysekai(cfg.MysekaiRestore.StructuresFile)
 	if restoreErr != nil {
 		return nil, restoreErr
 	}

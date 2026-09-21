@@ -3,7 +3,7 @@ package usersocial
 import (
 	"testing"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 )
 
 func TestIsSupportedSocialPlatform(t *testing.T) {

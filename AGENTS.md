@@ -44,7 +44,8 @@ Haruki Toolbox Backend 是一个基于 Go 1.27 的后端项目，核心技术栈
 - `internal/bootstrap/` 负责启动装配、依赖初始化、配置校验。
 - `internal/modules/...` 放业务处理逻辑。
 - `internal/platform/...` 放跨模块复用但偏业务的平台能力。
-- `utils/...` 放基础设施、通用 helper、外部系统适配器。
+- `utils/...` 放基础设施、通用 helper、外部系统适配器；`utils/codec/` 放通用编解码，`utils/game/` 放游戏协议和结构复原。
+- `internal/platform/api`、`upload`、`oauth2` 分别承载共享 API/会话能力、上传编排和 OAuth2 集成；`utils` 不得反向依赖平台层。
 
 ## Ory 相关工作准则
 
@@ -94,7 +95,7 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 
 ### 5. SessionHandler 是 Ory 集成核心
 
-与 Kratos / Auth Proxy / 会话验证相关的改动，优先集中在 `utils/api/session_*.go` 这一族文件：
+与 Kratos / Auth Proxy / 会话验证相关的改动，优先集中在 `internal/platform/api/session_*.go` 这一族文件：
 
 - `session_handler.go`（`SessionHandler` 类型与配置）
 - `session_verify.go`、`session_auth_proxy.go`、`session_kratos_*.go`（会话解析与身份解析）
@@ -137,7 +138,7 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 优先跑最小必要验证：
 
 - 触达包测试，例如：
-  - `go test ./internal/modules/userauth ./utils/api`
+  - `go test ./internal/modules/userauth ./internal/platform/api`
 - 涉及 Ory 会话、OAuth2、Auth Proxy 的跨模块改动时：
   - `go test ./...`
 - 涉及 Ent schema 时：
@@ -146,8 +147,8 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 
 Ory 相关改动尤其建议关注：
 
-- `utils/api/session_handler*_test.go`
-- `utils/oauth2/*_test.go`
+- `internal/platform/api/session_handler*_test.go`
+- `internal/platform/oauth2/*_test.go`
 - 对应业务模块的 route / managed identity 测试
 
 ## 文档规则

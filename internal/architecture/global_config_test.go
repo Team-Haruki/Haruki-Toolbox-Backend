@@ -30,11 +30,11 @@ type globalConfigAllowance struct {
 // need to be migrated to constructor-injected dependencies. Keep entries sorted
 // by file and selector so additions and removals remain easy to review.
 var legacyGlobalConfigAllowlist = []globalConfigAllowance{
-	{file: "utils/api/ios/rules.go", selector: "config.Cfg.SekaiClient", count: 1},
-	{file: "utils/handler/uploader.go", selector: "config.Cfg.ThirdPartyDataProvider", count: 1},
-	{file: "utils/sekai/config.go", selector: "config.Cfg.SekaiClient", count: 1},
-	{file: "utils/sekai/proxy.go", selector: "config.Cfg.SekaiClient", count: 1},
-	{file: "utils/sekai/retriever_types.go", selector: "config.Cfg.Proxy", count: 1},
+	{file: "internal/platform/api/ios/rules.go", selector: "config.Cfg.SekaiClient", count: 1},
+	{file: "internal/platform/upload/uploader.go", selector: "config.Cfg.ThirdPartyDataProvider", count: 1},
+	{file: "utils/game/sekai/config.go", selector: "config.Cfg.SekaiClient", count: 1},
+	{file: "utils/game/sekai/proxy.go", selector: "config.Cfg.SekaiClient", count: 1},
+	{file: "utils/game/sekai/retriever_types.go", selector: "config.Cfg.Proxy", count: 1},
 }
 
 func TestProductionPackagesDoNotAddGlobalConfigReferences(t *testing.T) {

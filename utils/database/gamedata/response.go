@@ -8,7 +8,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 )
@@ -18,7 +18,7 @@ import (
 // for a key the projection did not find, and clients depend on it.
 var emptyArray = []byte("[]")
 
-// userGamedataAllowedFields mirrors utils/api/data. The whole userGamedata
+// userGamedataAllowedFields mirrors internal/platform/api/data. The whole userGamedata
 // object is stored, but only these seven fields are ever served: the rest of it
 // is account-identifying. The column is ~200 bytes, so filtering it in Go costs
 // nothing measurable even though every other key moves as raw bytes.

@@ -64,7 +64,7 @@ Apple M4，darwin/arm64，Go 1.27.1；相同解码输入，三轮 ns/op 的中�
 这是合成载荷的本机结果，不代表所有生产负载。复现：
 
 ```sh
-go test ./utils/msgpackcodec -run '^$' -bench=BenchmarkDecodeOrdered -benchmem -count=3
+go test ./utils/codec/msgpackcodec -run '^$' -bench=BenchmarkDecodeOrdered -benchmem -count=3
 ```
 
 ## 验证与维护
@@ -79,7 +79,7 @@ go test ./utils/msgpackcodec -run '^$' -bench=BenchmarkDecodeOrdered -benchmem -
 ```sh
 go generate ./ent/toolbox ./ent/bot
 go test -race -count=1 ./...
-go test ./utils/msgpackcodec -run '^$' -fuzz=FuzzOrderedRoundTrip -fuzztime=10s -parallel=2
+go test ./utils/codec/msgpackcodec -run '^$' -fuzz=FuzzOrderedRoundTrip -fuzztime=10s -parallel=2
 ```
 
 全仓验证在 /tmp 的项目源码副本中执行；本地被忽略的 backfill 工具仍引用已退役 Mongo 包，不属于本轮源码改造，保持原样。Canary 与生产部署记录见下节。
@@ -152,7 +152,7 @@ Canary 从 9 月 5 日 09:37:35 连续运行至切换前约 30 小时，健康�
 1. `gamemerge.Events` 原先在积分相同且双方都带（或都不带）rank 时保留旧记录，导致排名、领奖时间等字段无法刷新。现在相同积分且记录完整程度相同时采用新快照；较低积分仍不能覆盖较高积分，同分但缺少 rank 的快照仍不能覆盖带 rank 的记录。其他历史活动继续保留。
 2. PostgreSQL suite 历史合并原先只开启事务，没有锁住读到的旧记录。两个上传可读到同一旧版本，随后互相覆盖。现在事务内先确保账号行存在，再以 `SELECT ... FOR UPDATE` 读取并合并，覆盖已有账号与首次并发上传两种情况。占位行与最终写入属于同一事务，失败整体回滚。
 
-回归测试先验证旧代码失败：同分排名/领奖更新保留旧值；并发上传在新账号、已有账号两种情况下都会丢失一组历史。修复后 `go test -race -count=1 ./utils/database/gamedata/... ./utils/handler` 通过，gamedata 测试连接本机临时 PostgreSQL 18，实际执行读写及并发阻塞验证。临时数据库已移除。另覆盖同活动积分增长及较低积分不回退；不依赖生产写入构造测试数据。
+回归测试先验证旧代码失败：同分排名/领奖更新保留旧值；并发上传在新账号、已有账号两种情况下都会丢失一组历史。修复后 `go test -race -count=1 ./utils/database/gamedata/... ./internal/platform/upload` 通过，gamedata 测试连接本机临时 PostgreSQL 18，实际执行读写及并发阻塞验证。临时数据库已移除。另覆盖同活动积分增长及较低积分不回退；不依赖生产写入构造测试数据。
 
 修复镜像 `haruki-toolbox-backend:user-events-fix-1acbc5628f57`，镜像 ID `sha256:52a8a173f1f46e46306cc3b17c2dfa053abba4997495b81ecf3152706ee7f408`，二进制 SHA-256 `e336feb0bdee5f92127bea4e8395e8aadc0b4cabe98ce10ddf0ad5d54ffd1b1b`。源码清单标识 `1acbc5628f57` 不是 Git 提交；与上次部署源码清单相比，仅本次四个合并/写入实现及测试文件、部署说明发生变化。
 

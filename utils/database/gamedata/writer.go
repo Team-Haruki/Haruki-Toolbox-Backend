@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 
 	"github.com/jackc/pgx/v5"
 

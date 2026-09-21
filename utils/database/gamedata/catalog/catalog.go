@@ -97,7 +97,7 @@ var CompactPairs = map[string]string{
 	"userMusicResults":               "compactUserMusicResults",
 }
 
-// CompactFieldName mirrors utils/api/data compactFieldName.
+// CompactFieldName mirrors internal/platform/api/data compactFieldName.
 func CompactFieldName(key string) string {
 	if key == "" {
 		return ""

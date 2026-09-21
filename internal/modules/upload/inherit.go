@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 
 	"github.com/gofiber/fiber/v3"
 )

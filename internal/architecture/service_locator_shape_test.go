@@ -15,7 +15,7 @@ import (
 // points. Fields may be removed as consumers receive narrower dependencies,
 // but adding another process service here would deepen service-locator usage.
 var legacyAggregateFields = map[string][]string{
-	"utils/api/helper.go:HarukiToolboxRouterHelpers": {
+	"internal/platform/api/helper.go:HarukiToolboxRouterHelpers": {
 		"AllowedKeys",
 		"BotCredentialSignToken",
 		"BotRegistrationEnabled",

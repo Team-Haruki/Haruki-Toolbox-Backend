@@ -3,7 +3,7 @@ package userprivateapi
 import (
 	"strings"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/data"
 
 	"github.com/gofiber/fiber/v3"
 	"go.mongodb.org/mongo-driver/v2/bson"

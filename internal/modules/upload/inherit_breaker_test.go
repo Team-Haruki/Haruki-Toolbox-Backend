@@ -7,7 +7,7 @@ import (
 	"time"
 
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 )
 
 type timeoutError struct{}

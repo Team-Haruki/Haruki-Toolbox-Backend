@@ -1,8 +1,8 @@
 package upload
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 )
 
 func newUploadDataHandler(helper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) *harukiDataHandler.DataHandler {

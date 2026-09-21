@@ -3,7 +3,7 @@ package adminusers
 import (
 	"time"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 )
 
 type adminUserQueryFilters struct {

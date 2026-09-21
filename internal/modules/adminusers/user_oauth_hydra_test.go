@@ -3,7 +3,7 @@ package adminusers
 import (
 	"testing"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
 
 func TestHydraTokenStatsMarkedInexact(t *testing.T) {

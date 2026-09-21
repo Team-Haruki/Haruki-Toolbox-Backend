@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

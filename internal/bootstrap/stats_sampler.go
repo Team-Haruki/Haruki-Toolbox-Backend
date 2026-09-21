@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	handler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfstats"
 )

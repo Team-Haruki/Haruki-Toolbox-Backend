@@ -9,7 +9,7 @@ import (
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/logger"

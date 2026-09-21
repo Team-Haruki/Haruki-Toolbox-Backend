@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekaiapi"
 
 	"github.com/gofiber/fiber/v3"
 )

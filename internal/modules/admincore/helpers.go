@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 
 	"github.com/gofiber/fiber/v3"
 )

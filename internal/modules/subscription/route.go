@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	userPrivateAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprivateapi"
-	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	dataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
+	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	dataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 
 	"github.com/gofiber/fiber/v3"
 )

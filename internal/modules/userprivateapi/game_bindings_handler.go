@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"

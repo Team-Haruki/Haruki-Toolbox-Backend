@@ -3,8 +3,8 @@ package upload
 import (
 	"testing"
 
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 )
 
 // A delegated write must be distinguishable from one the owner made, or an
