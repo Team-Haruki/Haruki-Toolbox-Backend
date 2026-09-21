@@ -60,12 +60,7 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "nuverse-restore-compare: loaded config %s\n", loadedPath)
 		serverCryptor = sekai.NewServerCryptor(sekai.ServerCryptorConfig{
-			ENServerAESKey:    config.Cfg.SekaiClient.ENServerAESKey,
-			ENServerAESIV:     config.Cfg.SekaiClient.ENServerAESIV,
-			CNServerAESKey:    config.Cfg.SekaiClient.CNServerAESKey,
-			CNServerAESIV:     config.Cfg.SekaiClient.CNServerAESIV,
-			OtherServerAESKey: config.Cfg.SekaiClient.OtherServerAESKey,
-			OtherServerAESIV:  config.Cfg.SekaiClient.OtherServerAESIV,
+			Regions: config.Cfg.CryptoRegions(),
 		})
 	}
 

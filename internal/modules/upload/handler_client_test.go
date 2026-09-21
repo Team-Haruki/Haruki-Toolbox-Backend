@@ -2,7 +2,9 @@ package upload
 
 import (
 	"context"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"io"
+	"reflect"
 	"testing"
 	"time"
 
@@ -67,7 +69,7 @@ func TestNewUploadDataHandlerUsesExplicitDependencies(t *testing.T) {
 	if handler.DataSync != dependencies.DataSync {
 		t.Fatal("data sync configuration was not injected")
 	}
-	if handler.ServerCryptor != dependencies.ServerCryptor {
+	if !reflect.DeepEqual(handler.ServerCryptor, dependencies.ServerCryptor) {
 		t.Fatalf("ServerCryptor = %#v, want explicit dependency %#v", handler.ServerCryptor, dependencies.ServerCryptor)
 	}
 }
@@ -84,12 +86,7 @@ func testUploadDependencies() Dependencies {
 			RequestTimeout:      3 * time.Second,
 		}),
 		SuiteRestoreService: harukiDataHandler.NewSuiteRestoreService(harukiDataHandler.SuiteRestoreServiceOptions{}),
-		ServerCryptor: harukiSekai.NewServerCryptor(harukiSekai.ServerCryptorConfig{
-			ENServerAESKey:    testUploadAESKeyHex,
-			ENServerAESIV:     testUploadAESIVHex,
-			OtherServerAESKey: testUploadAESKeyHex,
-			OtherServerAESIV:  testUploadAESIVHex,
-		}),
+		ServerCryptor:       harukiSekai.NewServerCryptor(harukiSekai.ServerCryptorConfig{Regions: map[string]utils.CryptoMaterial{"jp": {Key: testUploadAESKeyHex, IV: testUploadAESIVHex}, "tw": {Key: testUploadAESKeyHex, IV: testUploadAESIVHex}, "kr": {Key: testUploadAESKeyHex, IV: testUploadAESIVHex}, "cn": {Key: testUploadAESKeyHex, IV: testUploadAESIVHex}, "en": {Key: testUploadAESKeyHex, IV: testUploadAESIVHex}}}),
 	}
 }
 

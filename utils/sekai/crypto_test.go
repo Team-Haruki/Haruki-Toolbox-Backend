@@ -3,6 +3,7 @@ package sekai
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -19,12 +20,7 @@ const (
 )
 
 func testServerCryptor() ServerCryptor {
-	return NewServerCryptor(ServerCryptorConfig{
-		ENServerAESKey:    testAESKeyHex,
-		ENServerAESIV:     testAESIVHex,
-		OtherServerAESKey: testAESKeyHex,
-		OtherServerAESIV:  testAESIVHex,
-	})
+	return NewServerCryptor(ServerCryptorConfig{Regions: map[string]harukiUtils.CryptoMaterial{"jp": {Key: testAESKeyHex, IV: testAESIVHex}, "tw": {Key: testAESKeyHex, IV: testAESIVHex}, "kr": {Key: testAESKeyHex, IV: testAESIVHex}, "cn": {Key: testAESKeyHex, IV: testAESIVHex}, "en": {Key: testAESKeyHex, IV: testAESIVHex}}})
 }
 
 func mustTestCryptor(t *testing.T) *SekaiCryptor {
@@ -183,14 +179,7 @@ func TestDecryptToMsgpack(t *testing.T) {
 }
 
 func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
-	serverCryptor := NewServerCryptor(ServerCryptorConfig{
-		ENServerAESKey:    testAESKeyHex,
-		ENServerAESIV:     testAESIVHex,
-		CNServerAESKey:    testCNAESKey,
-		CNServerAESIV:     testCNAESIV,
-		OtherServerAESKey: testAESKeyHex2,
-		OtherServerAESIV:  testAESIVHex2,
-	})
+	serverCryptor := NewServerCryptor(ServerCryptorConfig{Regions: map[string]harukiUtils.CryptoMaterial{"jp": {Key: testAESKeyHex2, IV: testAESIVHex2}, "tw": {Key: testAESKeyHex2, IV: testAESIVHex2}, "kr": {Key: testAESKeyHex2, IV: testAESIVHex2}, "cn": {Key: testCNAESKey, IV: testCNAESIV}, "en": {Key: testAESKeyHex, IV: testAESIVHex}}})
 	payload := map[string]any{"server": "selection"}
 
 	encryptedEN, err := serverCryptor.Pack(payload, harukiUtils.SupportedDataUploadServerEN)
@@ -255,38 +244,16 @@ func TestServerCryptorSelectsENAndOtherServerMaterial(t *testing.T) {
 	}
 }
 
-func TestServerCryptorCNFallsBackToOtherMaterial(t *testing.T) {
-	serverCryptor := NewServerCryptor(ServerCryptorConfig{
-		OtherServerAESKey: testAESKeyHex2,
-		OtherServerAESIV:  testAESIVHex2,
-	})
-	payload := map[string]any{"server": "cn-fallback"}
-
-	encrypted, err := serverCryptor.Pack(payload, harukiUtils.SupportedDataUploadServerCN)
-	if err != nil {
-		t.Fatalf("Pack CN fallback failed: %v", err)
-	}
-	reference, err := NewSekaiCryptorFromHex(testAESKeyHex2, testAESIVHex2)
-	if err != nil {
-		t.Fatalf("create fallback reference cryptor: %v", err)
-	}
-	want, err := reference.Pack(payload)
-	if err != nil {
-		t.Fatalf("pack fallback reference: %v", err)
-	}
-	if !bytes.Equal(encrypted, want) {
-		t.Fatal("CN payload did not fall back to other-server key and IV")
+func TestServerCryptorMissingCNDoesNotFallback(t *testing.T) {
+	c := NewServerCryptor(ServerCryptorConfig{Regions: map[string]harukiUtils.CryptoMaterial{"jp": {Key: testAESKeyHex, IV: testAESIVHex}}})
+	if _, err := c.Pack(map[string]any{"server": "cn"}, harukiUtils.SupportedDataUploadServerCN); err == nil {
+		t.Fatal("missing CN configuration must not borrow JP material")
 	}
 }
 
 func TestServerCryptorInstancesAreIsolated(t *testing.T) {
 	first := testServerCryptor()
-	second := NewServerCryptor(ServerCryptorConfig{
-		ENServerAESKey:    testAESKeyHex2,
-		ENServerAESIV:     testAESIVHex2,
-		OtherServerAESKey: testAESKeyHex2,
-		OtherServerAESIV:  testAESIVHex2,
-	})
+	second := NewServerCryptor(ServerCryptorConfig{Regions: map[string]harukiUtils.CryptoMaterial{"jp": {Key: testAESKeyHex2, IV: testAESIVHex2}, "tw": {Key: testAESKeyHex2, IV: testAESIVHex2}, "kr": {Key: testAESKeyHex2, IV: testAESIVHex2}, "cn": {Key: testAESKeyHex2, IV: testAESIVHex2}, "en": {Key: testAESKeyHex2, IV: testAESIVHex2}}})
 	payload := map[string]any{"instance": "first"}
 
 	firstCiphertext, err := first.Pack(payload, harukiUtils.SupportedDataUploadServerEN)
@@ -323,5 +290,36 @@ func TestServerCryptorZeroValueFailsClosed(t *testing.T) {
 	}
 	if _, err := serverCryptor.Unpack([]byte("invalid"), harukiUtils.SupportedDataUploadServerEN); err == nil {
 		t.Fatal("zero-value ServerCryptor Unpack should fail")
+	}
+}
+
+func TestServerCryptorUsesEveryExplicitRegionAndCopiesMap(t *testing.T) {
+	regions := map[string]harukiUtils.CryptoMaterial{}
+	for i, region := range []string{"jp", "en", "cn", "tw", "kr"} {
+		regions[region] = harukiUtils.CryptoMaterial{Key: strings.Repeat(fmt.Sprintf("%02x", i+1), 16), IV: testAESIVHex}
+	}
+	c := NewServerCryptor(ServerCryptorConfig{Regions: regions})
+	payload := map[string]any{"sample": true}
+	for region, pair := range regions {
+		ref, err := NewSekaiCryptorFromHex(pair.Key, pair.IV)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encrypted, err := ref.Pack(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server := harukiUtils.SupportedDataUploadServer(region)
+		got, err := c.Pack(payload, server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, encrypted) {
+			t.Fatalf("wrong material selected for %s", region)
+		}
+		regions[region] = harukiUtils.CryptoMaterial{}
+		if _, err = c.Unpack(encrypted, server); err != nil {
+			t.Fatalf("input map mutation affected %s: %v", region, err)
+		}
 	}
 }

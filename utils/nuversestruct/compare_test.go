@@ -19,12 +19,7 @@ const (
 )
 
 func compareTestServerCryptor() sekai.ServerCryptor {
-	return sekai.NewServerCryptor(sekai.ServerCryptorConfig{
-		ENServerAESKey:    compareTestAESKeyHex,
-		ENServerAESIV:     compareTestAESIVHex,
-		OtherServerAESKey: compareTestAESKeyHex,
-		OtherServerAESIV:  compareTestAESIVHex,
-	})
+	return sekai.NewServerCryptor(sekai.ServerCryptorConfig{Regions: map[string]harukiUtils.CryptoMaterial{"jp": {Key: compareTestAESKeyHex, IV: compareTestAESIVHex}, "tw": {Key: compareTestAESKeyHex, IV: compareTestAESIVHex}, "kr": {Key: compareTestAESKeyHex, IV: compareTestAESIVHex}, "cn": {Key: compareTestAESKeyHex, IV: compareTestAESIVHex}, "en": {Key: compareTestAESKeyHex, IV: compareTestAESIVHex}}})
 }
 
 func TestCompareSuiteRestoreReportsShapeChanges(t *testing.T) {

@@ -1,5 +1,7 @@
 package config
 
+import "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+
 type RestoreSuiteConfig struct {
 	EnableRegions  []string          `yaml:"enable_regions"`
 	StructuresFile map[string]string `yaml:"structures_file"`
@@ -172,8 +174,6 @@ type HarukiProxyConfig struct {
 
 type SekaiClientConfig struct {
 	ENServerAPIHost              string            `yaml:"en_server_api_host"`
-	ENServerAESKey               string            `yaml:"en_server_aes_key"`
-	ENServerAESIV                string            `yaml:"en_server_aes_iv"`
 	JPServerAPIHost              string            `yaml:"jp_server_api_host"`
 	TWServerAPIHost              string            `yaml:"tw_server_api_host"`
 	TWServerAPIHost2             string            `yaml:"tw_server_api_host_2"`
@@ -181,10 +181,6 @@ type SekaiClientConfig struct {
 	KRServerAPIHost2             string            `yaml:"kr_server_api_host_2"`
 	CNServerAPIHost              string            `yaml:"cn_server_api_host"`
 	CNServerAPIHost2             string            `yaml:"cn_server_api_host_2"`
-	CNServerAESKey               string            `yaml:"cn_server_aes_key"`
-	CNServerAESIV                string            `yaml:"cn_server_aes_iv"`
-	OtherServerAESKey            string            `yaml:"other_server_aes_key"`
-	OtherServerAESIV             string            `yaml:"other_server_aes_iv"`
 	JPServerInheritToken         string            `yaml:"jp_server_inherit_token"`
 	ENServerInheritToken         string            `yaml:"en_server_inherit_token"`
 	JPServerAppVersionUrl        string            `yaml:"jp_server_app_version_url"`
@@ -229,24 +225,25 @@ type RestoreMysekaiConfig struct {
 }
 
 type Config struct {
-	MysekaiRestore         RestoreMysekaiConfig         `yaml:"restore_mysekai"`
-	Proxy                  string                       `yaml:"proxy"`
-	MongoDB                MongoDBConfig                `yaml:"mongodb"`
-	GameData               GameDataConfig               `yaml:"game_data"`
-	Redis                  RedisConfig                  `yaml:"redis"`
-	Webhook                WebhookConfig                `yaml:"webhook"`
-	Afdian                 AfdianConfig                 `yaml:"afdian"`
-	Backend                BackendConfig                `yaml:"backend"`
-	UserSystem             UserSystemConfig             `yaml:"user_system"`
-	OAuth2                 OAuth2Config                 `yaml:"oauth2"`
-	Others                 OthersConfig                 `yaml:"others"`
-	SekaiClient            SekaiClientConfig            `yaml:"sekai_client"`
-	SekaiAPI               SekaiAPIConfig               `yaml:"sekai_api"`
-	HarukiProxy            HarukiProxyConfig            `yaml:"haruki_proxy"`
-	ThirdPartyDataProvider ThirdPartyDataProviderConfig `yaml:"third_party_data_provider"`
-	RestoreSuite           RestoreSuiteConfig           `yaml:"restore_suite"`
-	HarukiBot              HarukiBotConfig              `yaml:"haruki_bot"`
-	Subscription           SubscriptionConfig           `yaml:"subscription"`
+	Crypto                 map[string]utils.CryptoMaterial `yaml:"crypto"`
+	MysekaiRestore         RestoreMysekaiConfig            `yaml:"restore_mysekai"`
+	Proxy                  string                          `yaml:"proxy"`
+	MongoDB                MongoDBConfig                   `yaml:"mongodb"`
+	GameData               GameDataConfig                  `yaml:"game_data"`
+	Redis                  RedisConfig                     `yaml:"redis"`
+	Webhook                WebhookConfig                   `yaml:"webhook"`
+	Afdian                 AfdianConfig                    `yaml:"afdian"`
+	Backend                BackendConfig                   `yaml:"backend"`
+	UserSystem             UserSystemConfig                `yaml:"user_system"`
+	OAuth2                 OAuth2Config                    `yaml:"oauth2"`
+	Others                 OthersConfig                    `yaml:"others"`
+	SekaiClient            SekaiClientConfig               `yaml:"sekai_client"`
+	SekaiAPI               SekaiAPIConfig                  `yaml:"sekai_api"`
+	HarukiProxy            HarukiProxyConfig               `yaml:"haruki_proxy"`
+	ThirdPartyDataProvider ThirdPartyDataProviderConfig    `yaml:"third_party_data_provider"`
+	RestoreSuite           RestoreSuiteConfig              `yaml:"restore_suite"`
+	HarukiBot              HarukiBotConfig                 `yaml:"haruki_bot"`
+	Subscription           SubscriptionConfig              `yaml:"subscription"`
 }
 
 var Cfg Config

@@ -56,6 +56,9 @@ func defaultConfig() Config {
 }
 
 func normalizeConfigDefaults(cfg *Config) error {
+	if err := validateCryptoConfig(*cfg); err != nil {
+		return err
+	}
 	// `public_api_allowed_keys` was renamed to `allowed_keys` when the list
 	// became the single allowlist for every non-private API. Accept the old
 	// spelling rather than silently serving an empty allowlist, which would turn

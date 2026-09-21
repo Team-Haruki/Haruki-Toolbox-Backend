@@ -2,6 +2,7 @@ package sekai
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
@@ -13,57 +14,21 @@ import (
 // value, so independently assembled application instances cannot observe each
 // other's configuration.
 type ServerCryptorConfig struct {
-	ENServerAESKey    string
-	ENServerAESIV     string
-	CNServerAESKey    string
-	CNServerAESIV     string
-	OtherServerAESKey string
-	OtherServerAESIV  string
+	Regions map[string]utils.CryptoMaterial
 }
 
-// ServerCryptor selects dedicated EN and CN client keys and the shared key for
-// every other supported region. An empty CN pair falls back to the shared key
-// for backward compatibility. Key validation remains lazy so malformed
-// configuration surfaces at the first pack/unpack operation.
+// ServerCryptor owns an immutable copy of each region's client AES material.
+// Validation of hexadecimal key material remains lazy at pack/unpack time.
 type ServerCryptor struct {
-	enServerAESKey    string
-	enServerAESIV     string
-	cnServerAESKey    string
-	cnServerAESIV     string
-	otherServerAESKey string
-	otherServerAESIV  string
+	regions map[string]utils.CryptoMaterial
 }
 
 func NewServerCryptor(cfg ServerCryptorConfig) ServerCryptor {
-	return ServerCryptor{
-		enServerAESKey:    cfg.ENServerAESKey,
-		enServerAESIV:     cfg.ENServerAESIV,
-		cnServerAESKey:    cfg.CNServerAESKey,
-		cnServerAESIV:     cfg.CNServerAESIV,
-		otherServerAESKey: cfg.OtherServerAESKey,
-		otherServerAESIV:  cfg.OtherServerAESIV,
-	}
+	return ServerCryptor{regions: maps.Clone(cfg.Regions)}
 }
-
 func (c ServerCryptor) getCryptor(server utils.SupportedDataUploadServer) (*SekaiCryptor, error) {
-	var keyHex, ivHex string
-	switch server {
-	case utils.SupportedDataUploadServerEN:
-		keyHex = c.enServerAESKey
-		ivHex = c.enServerAESIV
-	case utils.SupportedDataUploadServerCN:
-		keyHex = c.cnServerAESKey
-		ivHex = c.cnServerAESIV
-		if keyHex == "" && ivHex == "" {
-			keyHex = c.otherServerAESKey
-			ivHex = c.otherServerAESIV
-		}
-	default:
-		keyHex = c.otherServerAESKey
-		ivHex = c.otherServerAESIV
-	}
-
-	cryptor, err := NewSekaiCryptorFromHex(keyHex, ivHex)
+	pair := c.regions[string(server)]
+	cryptor, err := NewSekaiCryptorFromHex(pair.Key, pair.IV)
 	if err != nil {
 		return nil, NewCryptoError("getCryptor", fmt.Sprintf("failed to create cryptor for server %s", server), err)
 	}

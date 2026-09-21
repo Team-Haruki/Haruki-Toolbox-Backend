@@ -21,7 +21,7 @@ import (
 )
 
 func syncTestCryptor() sekai.ServerCryptor {
-	return sekai.NewServerCryptor(sekai.ServerCryptorConfig{OtherServerAESKey: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", OtherServerAESIV: "0102030405060708090a0b0c0d0e0f10"})
+	return sekai.NewServerCryptor(sekai.ServerCryptorConfig{Regions: map[string]utils.CryptoMaterial{"jp": {Key: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", IV: "0102030405060708090a0b0c0d0e0f10"}, "tw": {Key: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", IV: "0102030405060708090a0b0c0d0e0f10"}, "kr": {Key: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", IV: "0102030405060708090a0b0c0d0e0f10"}, "cn": {Key: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", IV: "0102030405060708090a0b0c0d0e0f10"}}})
 }
 func syncFixture(rows int) map[string]any {
 	records := make([]any, rows)
