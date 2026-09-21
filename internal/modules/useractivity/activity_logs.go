@@ -1,16 +1,17 @@
 package useractivity
 
 import (
+	"math"
+	"strings"
+	"time"
+	"unicode/utf8"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
-	"math"
-	"strings"
-	"time"
-	"unicode/utf8"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -289,7 +290,7 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		if err != nil {
 			reason = "invalid_query_filters"
 			if fiberErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid query filters")
 		}
@@ -354,7 +355,7 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }
 

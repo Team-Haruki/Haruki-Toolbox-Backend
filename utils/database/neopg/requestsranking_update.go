@@ -6,12 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 )
 
 // RequestsRankingUpdate is the builder for updating RequestsRanking entities.
@@ -82,7 +82,7 @@ func (_u *RequestsRankingUpdate) Mutation() *RequestsRankingMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *RequestsRankingUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -219,7 +219,7 @@ func (_u *RequestsRankingUpdateOne) Select(field string, fields ...string) *Requ
 
 // Save executes the query and returns the updated RequestsRanking entity.
 func (_u *RequestsRankingUpdateOne) Save(ctx context.Context) (*RequestsRanking, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

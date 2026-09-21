@@ -61,7 +61,7 @@ func handleUpdateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
 				reason = "authorized_social_platform_conflict"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "authorized social platform conflict", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "authorized social platform conflict", nil)
 			}
 			harukiLogger.Errorf("Failed to update authorized social platform: %v", err)
 			reason = "update_authorized_social_platform_failed"
@@ -75,7 +75,7 @@ func handleUpdateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "authorized social platform updated", ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform updated", ud)
 	}
 }
 
@@ -140,7 +140,7 @@ func handleCreateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "authorized social platform created", ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform created", ud)
 	}
 }
 
@@ -184,7 +184,7 @@ func handleCreateAuthorizeSocialPlatformAtID(apiHelper *harukiAPIHelper.HarukiTo
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
 				reason = "authorized_social_platform_conflict"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "authorized social platform conflict", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "authorized social platform conflict", nil)
 			}
 			harukiLogger.Errorf("Failed to create authorized social platform: %v", err)
 			reason = "create_authorized_social_platform_failed"
@@ -199,7 +199,7 @@ func handleCreateAuthorizeSocialPlatformAtID(apiHelper *harukiAPIHelper.HarukiTo
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "authorized social platform created", ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform created", ud)
 	}
 }
 
@@ -261,6 +261,6 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "authorized social platform updated", &ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform updated", &ud)
 	}
 }

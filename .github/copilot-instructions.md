@@ -30,7 +30,7 @@
 - **Auth Proxy 身份只信 Oathkeeper 注入的 `X-Kratos-Identity-Id`，不信客户端 `X-User-Id`**；若客户端带了 `X-User-Id` 必须等于解析结果否则拒绝。后端只能经 Oathkeeper 访问，端口别发布到公网；信任密钥用 `subtle.ConstantTimeCompare` 比较且启动校验非占位/≥16 字符。
 - 所有密钥/token/OTP/验证码用 `subtle.ConstantTimeCompare`，禁用 `==`/`!=`。
 - 对象级鉴权防 IDOR：per-user 读写 scope 到本人/属主，不信 body/param id；管理员对目标用户的读取和写入都过 `admincore.EnsureAdminCanManageTargetUser`。
-- 不可信上传：上传体用公开游戏密钥解密，解码前校验深度（`orderedmsgpack.ValidateMaxDepth`），拒绝含 `.`/`$` 的 Mongo 字段名，按剩余长度封顶分配。
+- 不可信上传：上传体用公开游戏密钥解密，解码前校验深度（`msgpackcodec.ValidateMaxDepth`），拒绝含 `.`/`$` 的 Mongo 字段名，按剩余长度封顶分配。
 - 限流/计数用原子 `IncrementWithTTL`，禁用 GetCache 后 SetCache；`c.IP()` 仅在 `EnableIPValidation` + 收窄 `trusted_proxies` 时可信。
 - webhook 等对用户 URL 的出站请求在 dial 时拒绝私网 IP 并 pin 已校验 IP（防 DNS rebinding）。
 - OAuth2：introspection pin `access_token`，拒绝已禁用 client 的 token，禁用 client 时吊销其 token/consent。
@@ -67,14 +67,9 @@ Bot 数据库使用独立 DSN（`haruki_bot.db_url`）。不要随意手改生�
 
 - `docs/ory-suite-usage.zh-CN.md`
 
-涉及 HarukiBot NEO 注册/凭据重置流程变化时，同步更新：
-
-- `docs/haruki-bot-neo-registration.zh-CN.md`
-
 涉及 OAuth2 客户端对接变化时，同步更新：
 
-- `docs/oauth2-client-integration.zh-CN.md`
-- `docs/oauth2-confidential-client-integration.zh-CN.md`
+- `docs/oauth2-integration.zh-CN.md`
 
 涉及 Webhook 对接变化时，同步更新：
 

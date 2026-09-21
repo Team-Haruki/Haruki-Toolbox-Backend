@@ -3,9 +3,8 @@
 package commandmanifest
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
-
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // ID filters vertices based on their ID field.

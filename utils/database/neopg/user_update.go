@@ -6,13 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 )
 
 // UserUpdate is the builder for updating User entities.
@@ -157,7 +157,7 @@ func (_u *UserUpdate) Mutation() *UserMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UserUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -412,7 +412,7 @@ func (_u *UserUpdateOne) Select(field string, fields ...string) *UserUpdateOne {
 
 // Save executes the query and returns the updated User entity.
 func (_u *UserUpdateOne) Save(ctx context.Context) (*User, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

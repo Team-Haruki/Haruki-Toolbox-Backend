@@ -123,6 +123,8 @@ X-Haruki-Suite-Webhook-Token: <token>
 如果全局开关关闭，所有 endpoint 都不会收到回调。  
 如果某个 endpoint 关闭，只有这个 endpoint 不会收到回调。
 
+触发条件不区分上传来源：手动上传、代理上传、iOS 脚本，以及第三方客户端通过 OAuth2 `game-data:write` 发起的代理上传，都会照常触发回调。
+
 ## 7. 回调请求格式
 
 服务端会对 `callbackUrl` 发起：
@@ -209,3 +211,7 @@ https://example.com/apiwebhook/jp/suite/123456789
 
 - `token`: 用于调用 Haruki 的 `/api/webhook/...` 管理订阅接口
 - `bearer`: Haruki 在回调你的 `callbackUrl` 时，附带给你的 Authorization 凭证
+
+## 后台调度与到达时间
+
+上传数据持久化后，普通 Webhook、OAuth2 Webhook 和第三方数据同步由受跟踪的后台父任务执行。后台拥塞时会等待可用容量，通知到达和上传响应可能延后，不会仅因容量满而丢弃本次任务。此机制仍是进程内调度，不提供进程崩溃后的持久重投保证；现有签名、鉴权、事件格式及各投递实现的重试行为不变。

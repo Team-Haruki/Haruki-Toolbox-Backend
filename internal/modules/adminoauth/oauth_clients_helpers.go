@@ -1,12 +1,13 @@
 package adminoauth
 
 import (
-	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
-	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 	"net/url"
 	"strings"
 	"time"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/crypto/bcrypt"
@@ -142,6 +143,14 @@ func sanitizeAdminOAuthClientScopes(values []string) ([]string, error) {
 	}
 	if len(result) == 0 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "scopes is required")
+	}
+	if _, hasOpenID := seen[harukiOAuth2.ScopeOpenID]; !hasOpenID {
+		if _, hasProfile := seen[harukiOAuth2.ScopeProfile]; hasProfile {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "profile scope requires openid")
+		}
+		if _, hasEmail := seen[harukiOAuth2.ScopeEmail]; hasEmail {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "email scope requires openid")
+		}
 	}
 	return result, nil
 }

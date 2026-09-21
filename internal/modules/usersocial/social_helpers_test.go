@@ -1,8 +1,9 @@
 package usersocial
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func TestIsSupportedSocialPlatform(t *testing.T) {

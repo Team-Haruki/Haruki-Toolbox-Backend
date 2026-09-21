@@ -189,8 +189,8 @@ func (_q *GameAccountBindingQuery) All(ctx context.Context) ([]*GameAccountBindi
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*GameAccountBinding, *GameAccountBindingQuery]()
-	return withInterceptors[[]*GameAccountBinding](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*GameAccountBinding, *GameAccountBindingQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*GameAccountBinding](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -229,7 +229,7 @@ func (_q *GameAccountBindingQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*GameAccountBindingQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*GameAccountBindingQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -541,7 +541,7 @@ func (_g *GameAccountBindingGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*GameAccountBindingQuery, *GameAccountBindingGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*GameAccountBindingQuery, *GameAccountBindingGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *GameAccountBindingGroupBy) sqlScan(ctx context.Context, root *GameAccountBindingQuery, v any) error {
@@ -589,7 +589,7 @@ func (_s *GameAccountBindingSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*GameAccountBindingQuery, *GameAccountBindingSelect](ctx, _s.GameAccountBindingQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*GameAccountBindingQuery, *GameAccountBindingSelect](ctx, _s.GameAccountBindingQuery, _s, _s.inters, v)
 }
 
 func (_s *GameAccountBindingSelect) sqlScan(ctx context.Context, root *GameAccountBindingQuery, v any) error {

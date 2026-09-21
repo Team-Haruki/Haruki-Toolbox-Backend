@@ -82,6 +82,6 @@ Oathkeeper 公开规则见 `external/oathkeeper/access-rules.yml` 中的 `haruki
 
 4. **数据库迁移**：新增 `sponsors` 表（`Sponsor` ent schema）。开 `AutoMigrate` 时首次启动自动建表；关了则需手动建表后再启动。
 
-5. **Oathkeeper 规则**：随后端一起部署更新后的 `external/oathkeeper/access-rules.yml`（含 `/api/misc/sponsors`、`/api/sponsor/afdian`、`/api/sponsor/afdian/callback[/<secret>]` 三条公开规则），否则赞助墙与回调路由不到。
+5. **Oathkeeper 规则**：随后端一起部署更新后的 `external/oathkeeper/access-rules.yml`，否则赞助墙与回调路由不到。规则是两条新增的 `haruki-public-afdian-sponsor-list`（`/api/sponsor/afdian`）和 `haruki-public-afdian-sponsor-callback`（`/api/sponsor/afdian/callback[/<secret>]`）；`/api/misc/sponsors` 不需要新规则，它走已有的通用 `haruki-public-misc`（`/api/misc/<.*>`）。
 
 6. **行为提醒**：公开响应不含付费金额（仅等级/名字/留言）；管理端 `afdian_sync_disabled` 开启后该条完全不被同步/webhook 覆盖（便于钉住手动编辑）。

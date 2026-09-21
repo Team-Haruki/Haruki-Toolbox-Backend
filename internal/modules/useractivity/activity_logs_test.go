@@ -1,7 +1,7 @@
 package useractivity
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -224,7 +224,7 @@ func TestHandleListOwnActivityLogsRejectOtherUser(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
 	if payload["message"] != "you can only access your own activity logs" {

@@ -1,26 +1,35 @@
 package adminrisk
 
 import (
+	"slices"
+	"strconv"
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
-	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 func handleListRiskEvents(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
 		filters, err := parseRiskEventFilters(c, adminNow())
 		if err != nil {
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid filters")
 		}
 
 		baseQuery := applyRiskEventFilters(apiHelper.DBManager.DB.RiskEvent.Query(), filters)
+		baseQuery, err = scopeRiskEventsForAdminActor(c.Context(), apiHelper.DBManager.DB, baseQuery, actorRole)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope risk events")
+		}
 		total, err := baseQuery.Clone().Count(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to count risk events")
@@ -46,13 +55,13 @@ func handleListRiskEvents(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			Sort:        filters.Sort,
 			Items:       buildRiskEventItems(rows),
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
 func handleCreateRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		actorUserID, _, err := adminCoreModule.CurrentAdminActor(c)
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
@@ -69,6 +78,18 @@ func handleCreateRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if !slices.Contains(validRiskSeverities, severity) {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid severity")
 		}
+		payload.ActorUserID = strings.TrimSpace(payload.ActorUserID)
+		payload.TargetUserID = strings.TrimSpace(payload.TargetUserID)
+		if err := ensureRiskEventUserReferencesManageable(
+			c.Context(),
+			apiHelper.DBManager.DB,
+			actorUserID,
+			actorRole,
+			payload.ActorUserID,
+			payload.TargetUserID,
+		); err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to validate risk event user references")
+		}
 		source := strings.TrimSpace(payload.Source)
 		if source == "" {
 			source = "manual"
@@ -78,10 +99,10 @@ func handleCreateRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			SetStatus(riskevent.StatusOpen).
 			SetSeverity(riskevent.Severity(severity)).
 			SetSource(source)
-		if v := strings.TrimSpace(payload.ActorUserID); v != "" {
+		if v := payload.ActorUserID; v != "" {
 			builder.SetActorUserID(v)
 		}
-		if v := strings.TrimSpace(payload.TargetUserID); v != "" {
+		if v := payload.TargetUserID; v != "" {
 			builder.SetTargetUserID(v)
 		}
 		if v := strings.TrimSpace(payload.IP); v != "" {
@@ -107,13 +128,13 @@ func handleCreateRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			"severity":    severity,
 		})
 		items := buildRiskEventItems([]*postgresql.RiskEvent{row})
-		return harukiAPIHelper.SuccessResponse(c, "risk event created", &items[0])
+		return harukiAPIHelper.Responses.SuccessResponse(c, "risk event created", &items[0])
 	}
 }
 
 func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		actorUserID, _, err := adminCoreModule.CurrentAdminActor(c)
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
@@ -136,6 +157,16 @@ func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 				return harukiAPIHelper.ErrorNotFound(c, "risk event not found")
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query risk event")
+		}
+		if err := ensureRiskEventUserReferencesManageable(
+			c.Context(),
+			apiHelper.DBManager.DB,
+			actorUserID,
+			actorRole,
+			optionalRiskEventUserID(row.ActorUserID),
+			optionalRiskEventUserID(row.TargetUserID),
+		); err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to validate risk event user references")
 		}
 
 		metadata := row.Metadata
@@ -160,6 +191,6 @@ func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			"status": string(updated.Status),
 		})
 		items := buildRiskEventItems([]*postgresql.RiskEvent{updated})
-		return harukiAPIHelper.SuccessResponse(c, "risk event resolved", &items[0])
+		return harukiAPIHelper.Responses.SuccessResponse(c, "risk event resolved", &items[0])
 	}
 }

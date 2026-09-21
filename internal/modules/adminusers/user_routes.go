@@ -3,23 +3,30 @@ package adminusers
 import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+
+	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterAdminUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+func RegisterAdminUserRoutes(
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	adminGroup fiber.Router,
+	hydraConfig *harukiOAuth2.HydraConfig,
+	userDataBuilder harukiAPIHelper.UserDataBuilder,
+) {
 	users := adminGroup.Group("/users", adminCoreModule.RequireAdmin(apiHelper))
 
 	users.Get("", handleListUsers(apiHelper))
-	users.Post("/batch-ban", handleBatchBanUsers(apiHelper))
+	users.Post("/batch-ban", handleBatchBanUsers(apiHelper, hydraConfig))
 	users.Post("/batch-unban", handleBatchUnbanUsers(apiHelper))
 	users.Post("/batch-force-logout", handleBatchForceLogoutUsers(apiHelper))
 	users.Post("/batch-role", adminCoreModule.RequireSuperAdmin(apiHelper), handleBatchUpdateUserRole(apiHelper))
 	users.Post("/batch-allow-cn-mysekai", handleBatchUpdateUserAllowCNMysekai(apiHelper))
 	users.Get("/ticket-notification-recipients", adminCoreModule.RequireSuperAdmin(apiHelper), handleListAdminTicketNotificationRecipients(apiHelper))
-	users.Get("/:target_user_id/detail", handleGetUserDetail(apiHelper))
+	users.Get("/:target_user_id/detail", handleGetUserDetail(apiHelper, userDataBuilder))
 	users.Get("/:target_user_id/activity", handleGetUserActivity(apiHelper))
-	users.Get("/:target_user_id/oauth-authorizations", handleListUserOAuthAuthorizations(apiHelper))
-	users.Post("/:target_user_id/revoke-oauth", handleRevokeUserOAuth(apiHelper))
+	users.Get("/:target_user_id/oauth-authorizations", handleListUserOAuthAuthorizations(apiHelper, hydraConfig))
+	users.Post("/:target_user_id/revoke-oauth", handleRevokeUserOAuth(apiHelper, hydraConfig))
 	users.Put("/:target_user_id/email", handleUpdateUserEmail(apiHelper))
 	users.Put("/:target_user_id/allow-cn-mysekai", handleUpdateUserAllowCNMysekai(apiHelper))
 	users.Put("/:target_user_id/ticket-notifications", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateUserTicketNotificationPreference(apiHelper))
@@ -34,9 +41,9 @@ func RegisterAdminUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	users.Delete("/:target_user_id/authorized-social-platforms/:platform_id", handleDeleteUserAuthorizedSocialPlatform(apiHelper))
 	users.Post("/:target_user_id/ios-upload-code/regenerate", handleRegenerateUserIOSUploadCode(apiHelper))
 	users.Delete("/:target_user_id/ios-upload-code", handleClearUserIOSUploadCode(apiHelper))
-	users.Put("/:target_user_id/ban", handleBanUser(apiHelper))
+	users.Put("/:target_user_id/ban", handleBanUser(apiHelper, hydraConfig))
 	users.Put("/:target_user_id/unban", handleUnbanUser(apiHelper))
-	users.Delete("/:target_user_id", handleSoftDeleteUser(apiHelper))
+	users.Delete("/:target_user_id", handleSoftDeleteUser(apiHelper, hydraConfig))
 	users.Post("/:target_user_id/restore", handleRestoreUser(apiHelper))
 	users.Post("/:target_user_id/reset-password", handleResetUserPassword(apiHelper))
 	users.Post("/:target_user_id/force-logout", handleForceLogoutUser(apiHelper))

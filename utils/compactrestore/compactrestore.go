@@ -2,8 +2,9 @@
 package compactrestore
 
 import (
-	"encoding/json"
 	"strconv"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
 )
 
 const EnumKey = "__ENUM__"
@@ -136,7 +137,7 @@ func enumIndex(value any, options Options) (int, bool) {
 			idx, err := strconv.Atoi(v)
 			return idx, err == nil
 		}
-	case json.Number:
+	case jsonvalue.Number:
 		if options.ParseStringEnumIndex {
 			idx, err := strconv.Atoi(string(v))
 			return idx, err == nil

@@ -5,14 +5,14 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // DailyRequestsQuery is the builder for querying DailyRequests entities.
@@ -164,8 +164,8 @@ func (_q *DailyRequestsQuery) All(ctx context.Context) ([]*DailyRequests, error)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*DailyRequests, *DailyRequestsQuery]()
-	return withInterceptors[[]*DailyRequests](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*DailyRequests, *DailyRequestsQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*DailyRequests](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *DailyRequestsQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*DailyRequestsQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*DailyRequestsQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *DailyRequestsGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*DailyRequestsQuery, *DailyRequestsGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*DailyRequestsQuery, *DailyRequestsGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *DailyRequestsGroupBy) sqlScan(ctx context.Context, root *DailyRequestsQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *DailyRequestsSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*DailyRequestsQuery, *DailyRequestsSelect](ctx, _s.DailyRequestsQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*DailyRequestsQuery, *DailyRequestsSelect](ctx, _s.DailyRequestsQuery, _s, _s.inters, v)
 }
 
 func (_s *DailyRequestsSelect) sqlScan(ctx context.Context, root *DailyRequestsQuery, v any) error {

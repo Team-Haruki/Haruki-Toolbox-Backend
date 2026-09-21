@@ -6,25 +6,26 @@ import (
 	"strings"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleHydraGetLoginRequest() fiber.Handler {
+func handleHydraGetLoginRequest(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		challenge := strings.TrimSpace(c.Query("login_challenge"))
 		if challenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "login_challenge is required")
 		}
-		resp, err := getHydraLoginRequest(c.Context(), challenge)
+		resp, err := getHydraLoginRequest(c.Context(), hydraConfig, challenge)
 		if err != nil {
 			return respondHydraError(c, err, "failed to query login request")
 		}
-		return harukiAPIHelper.SuccessResponse(c, "ok", resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", resp)
 	}
 }
 
-func handleHydraAcceptLogin() fiber.Handler {
+func handleHydraAcceptLogin(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		hydraSubject, err := CurrentHydraSubject(c)
 		if err != nil {
@@ -52,15 +53,15 @@ func handleHydraAcceptLogin() fiber.Handler {
 			requestBody["acr"] = payload.ACR
 		}
 
-		redirect, err := sendHydraAdminJSON(c.Context(), http.MethodPut, "/admin/oauth2/auth/requests/login/accept", url.Values{"login_challenge": {payload.LoginChallenge}}, requestBody)
+		redirect, err := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/login/accept", url.Values{"login_challenge": {payload.LoginChallenge}}, requestBody)
 		if err != nil {
 			return respondHydraError(c, err, "failed to accept login request")
 		}
-		return harukiAPIHelper.SuccessResponse(c, "login accepted", redirect)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "login accepted", redirect)
 	}
 }
 
-func handleHydraRejectLogin() fiber.Handler {
+func handleHydraRejectLogin(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		var payload hydraLoginRejectPayload
 		if err := bindBodyIfPresent(c, &payload); err != nil {
@@ -80,7 +81,7 @@ func handleHydraRejectLogin() fiber.Handler {
 			payload.StatusCode = fiber.StatusForbidden
 		}
 
-		redirect, err := sendHydraAdminJSON(c.Context(), http.MethodPut, "/admin/oauth2/auth/requests/login/reject", url.Values{"login_challenge": {payload.LoginChallenge}}, map[string]any{
+		redirect, err := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/login/reject", url.Values{"login_challenge": {payload.LoginChallenge}}, map[string]any{
 			"error":             payload.Error,
 			"error_description": payload.ErrorDescription,
 			"status_code":       payload.StatusCode,
@@ -88,6 +89,6 @@ func handleHydraRejectLogin() fiber.Handler {
 		if err != nil {
 			return respondHydraError(c, err, "failed to reject login request")
 		}
-		return harukiAPIHelper.SuccessResponse(c, "login rejected", redirect)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "login rejected", redirect)
 	}
 }

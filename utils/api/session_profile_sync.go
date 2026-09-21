@@ -2,14 +2,15 @@ package api
 
 import (
 	"context"
+	"strings"
+
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strings"
 )
 
-func (s *SessionHandler) syncResolvedUserProfile(ctx context.Context, userID string, identityID string, email string, displayName *string) {
+func (s *SessionHandler) syncResolvedUserProfile(ctx context.Context, userID string, identityID string, email string, displayName *string, currentUser *postgresql.User) {
 	if s == nil || s.DBClient == nil {
 		return
 	}
@@ -21,15 +22,20 @@ func (s *SessionHandler) syncResolvedUserProfile(ctx context.Context, userID str
 	identityID = strings.TrimSpace(identityID)
 	email = platformIdentity.NormalizeEmail(email)
 
-	currentUser, err := s.DBClient.User.Query().
-		Where(userSchema.IDEQ(userID)).
-		Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldKratosIdentityID).
-		Only(ctx)
-	if err != nil {
-		if !postgresql.IsNotFound(err) {
-			harukiLogger.Warnf("Failed to query resolved user profile for sync: user=%s err=%v", userID, err)
+	// Only reuse the snapshot for the same resolved user. This is not an
+	// identity or permission cache; fallback paths still read current data.
+	if currentUser == nil || currentUser.ID != userID {
+		var err error
+		currentUser, err = s.DBClient.User.Query().
+			Where(userSchema.IDEQ(userID)).
+			Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldKratosIdentityID).
+			Only(ctx)
+		if err != nil {
+			if !postgresql.IsNotFound(err) {
+				harukiLogger.Warnf("Failed to query resolved user profile for sync: user=%s err=%v", userID, err)
+			}
+			return
 		}
-		return
 	}
 
 	update := s.DBClient.User.Update().Where(userSchema.IDEQ(userID))

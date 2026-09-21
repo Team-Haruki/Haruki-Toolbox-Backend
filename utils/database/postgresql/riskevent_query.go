@@ -164,8 +164,8 @@ func (_q *RiskEventQuery) All(ctx context.Context) ([]*RiskEvent, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*RiskEvent, *RiskEventQuery]()
-	return withInterceptors[[]*RiskEvent](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*RiskEvent, *RiskEventQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*RiskEvent](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *RiskEventQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*RiskEventQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*RiskEventQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *RiskEventGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RiskEventQuery, *RiskEventGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*RiskEventQuery, *RiskEventGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *RiskEventGroupBy) sqlScan(ctx context.Context, root *RiskEventQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *RiskEventSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RiskEventQuery, *RiskEventSelect](ctx, _s.RiskEventQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*RiskEventQuery, *RiskEventSelect](ctx, _s.RiskEventQuery, _s, _s.inters, v)
 }
 
 func (_s *RiskEventSelect) sqlScan(ctx context.Context, root *RiskEventQuery, v any) error {

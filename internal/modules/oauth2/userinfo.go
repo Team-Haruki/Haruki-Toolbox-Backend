@@ -2,7 +2,7 @@ package oauth2
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -25,7 +25,7 @@ type oauth2BindingResponse struct {
 	Verified bool   `json:"verified"`
 }
 
-func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, avatarBaseURL string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID, err := userCoreModule.CurrentUserID(c)
@@ -45,7 +45,7 @@ func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 
 		var avatarURL *string
 		if u.AvatarPath != nil && *u.AvatarPath != "" {
-			full := fmt.Sprintf("%s/avatars/%s", config.Cfg.UserSystem.AvatarURL, *u.AvatarPath)
+			full := fmt.Sprintf("%s/avatars/%s", avatarBaseURL, *u.AvatarPath)
 			avatarURL = &full
 		}
 
@@ -54,7 +54,7 @@ func handleOAuth2GetUserProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			Name:       u.Name,
 			AvatarPath: avatarURL,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }
 
@@ -82,17 +82,17 @@ func handleOAuth2GetBindings(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			})
 		}
 
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }
 
-func registerOAuth2UserInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerOAuth2UserInfoRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, avatarBaseURL string) {
 	apiHelper.Router.Get("/api/oauth2/user/profile",
-		harukiOAuth2.VerifyOAuth2Token(apiHelper.DBManager.DB, harukiOAuth2.ScopeUserRead),
-		handleOAuth2GetUserProfile(apiHelper),
+		harukiOAuth2.VerifyOAuth2Token(hydraConfig, apiHelper.DBManager.DB, harukiOAuth2.ScopeUserRead, checkHydraOAuth2ClientActive(hydraConfig)),
+		handleOAuth2GetUserProfile(apiHelper, avatarBaseURL),
 	)
 	apiHelper.Router.Get("/api/oauth2/user/bindings",
-		harukiOAuth2.VerifyOAuth2Token(apiHelper.DBManager.DB, harukiOAuth2.ScopeBindingsRead),
+		harukiOAuth2.VerifyOAuth2Token(hydraConfig, apiHelper.DBManager.DB, harukiOAuth2.ScopeBindingsRead, checkHydraOAuth2ClientActive(hydraConfig)),
 		handleOAuth2GetBindings(apiHelper),
 	)
 }

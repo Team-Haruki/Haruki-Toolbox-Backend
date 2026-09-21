@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfstats"
 )
 
 var (
@@ -21,8 +23,16 @@ func (h *DataHandler) PreHandleData(
 	server utils.SupportedDataUploadServer,
 	dataType utils.UploadDataType,
 ) (map[string]any, error) {
+	defer perfstats.Track(perfstats.UploadPreprocess)()
 	if err := validateUserIDMatch(expectedUserID, parsedUserID, dataType); err != nil {
 		return nil, err
+	}
+	if dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty || dataType == utils.UploadDataTypeSuite {
+		restored, err := h.SuiteRestoreService.MysekaiRestorer().Document(string(server), data)
+		if err != nil {
+			return nil, err
+		}
+		data = restored
 	}
 	if dataType == utils.UploadDataTypeMysekai {
 		if err := h.validateMysekaiData(data, expectedUserID, server); err != nil {
@@ -33,7 +43,7 @@ func (h *DataHandler) PreHandleData(
 		if err := validateSuiteData(data); err != nil {
 			return nil, err
 		}
-		restored, _, err := RestoreSuite(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase})
+		restored, _, err := h.SuiteRestoreService.Restore(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeDatabase})
 		if err != nil {
 			return nil, err
 		}

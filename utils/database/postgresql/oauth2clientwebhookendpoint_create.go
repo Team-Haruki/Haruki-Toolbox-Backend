@@ -102,7 +102,7 @@ func (_c *OAuth2ClientWebhookEndpointCreate) Mutation() *OAuth2ClientWebhookEndp
 // Save creates the OAuth2ClientWebhookEndpoint in the database.
 func (_c *OAuth2ClientWebhookEndpointCreate) Save(ctx context.Context) (*OAuth2ClientWebhookEndpoint, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

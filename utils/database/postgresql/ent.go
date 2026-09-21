@@ -525,7 +525,7 @@ func (s *selector) BoolX(ctx context.Context) bool {
 }
 
 // withHooks invokes the builder operation with the given hooks, if any.
-func withHooks[V Value, M any, PM interface {
+func (mutationHookRunner) withHooks[V Value, M any, PM interface {
 	*M
 	Mutation
 }](ctx context.Context, exec func(context.Context) (V, error), mutation PM, hooks []Hook) (value V, err error) {
@@ -567,7 +567,7 @@ func setContextOp(ctx context.Context, qc *QueryContext, op string) context.Cont
 	return ctx
 }
 
-func querierAll[V Value, Q interface {
+func (queryInterceptorRunner) querierAll[V Value, Q interface {
 	sqlAll(context.Context, ...queryHook) (V, error)
 }]() Querier {
 	return QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
@@ -579,7 +579,7 @@ func querierAll[V Value, Q interface {
 	})
 }
 
-func querierCount[Q interface {
+func (queryInterceptorRunner) querierCount[Q interface {
 	sqlCount(context.Context) (int, error)
 }]() Querier {
 	return QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
@@ -591,7 +591,7 @@ func querierCount[Q interface {
 	})
 }
 
-func withInterceptors[V Value](ctx context.Context, q Query, qr Querier, inters []Interceptor) (v V, err error) {
+func (queryInterceptorRunner) withInterceptors[V Value](ctx context.Context, q Query, qr Querier, inters []Interceptor) (v V, err error) {
 	for i := len(inters) - 1; i >= 0; i-- {
 		qr = inters[i].Intercept(qr)
 	}
@@ -606,7 +606,7 @@ func withInterceptors[V Value](ctx context.Context, q Query, qr Querier, inters 
 	return vt, nil
 }
 
-func scanWithInterceptors[Q1 ent.Query, Q2 interface {
+func (queryInterceptorRunner) scanWithInterceptors[Q1 ent.Query, Q2 interface {
 	sqlScan(context.Context, Q1, any) error
 }](ctx context.Context, rootQuery Q1, selectOrGroup Q2, inters []Interceptor, v any) error {
 	rv := reflect.ValueOf(v)
@@ -642,3 +642,7 @@ func scanWithInterceptors[Q1 ent.Query, Q2 interface {
 
 // queryHook describes an internal hook for the different sqlAll methods.
 type queryHook func(context.Context, *sqlgraph.QuerySpec)
+type queryInterceptorRunner struct {
+}
+type mutationHookRunner struct {
+}

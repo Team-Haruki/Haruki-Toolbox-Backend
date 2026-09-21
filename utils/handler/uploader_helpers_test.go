@@ -1,11 +1,12 @@
 package handler
 
 import (
+	"testing"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"testing"
 )
 
 func TestBuildSyncTargetsSuite(t *testing.T) {

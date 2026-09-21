@@ -5,13 +5,13 @@ import (
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
@@ -32,7 +32,7 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorBadRequest(c, "email is required")
 		}
 		clientIP := c.IP()
-		resp, err := cloudflare.ValidateTurnstile(payload.ChallengeToken, clientIP)
+		resp, err := harukiCloudflare.Verify(c.Context(), turnstileVerifier, payload.ChallengeToken, clientIP)
 		if err != nil {
 			reason = "challenge_service_unavailable"
 			return harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
@@ -76,7 +76,7 @@ func handleSendResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		reason = "managed_identity_required"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
 	}
 }
 
@@ -98,5 +98,5 @@ func handleSendResetPasswordViaKratos(
 	}
 	*result = harukiAPIHelper.SystemLogResultSuccess
 	*reason = "ok"
-	return harukiAPIHelper.SuccessResponse[string](c, "Reset password email sent", nil)
+	return harukiAPIHelper.Responses.SuccessResponse[string](c, "Reset password email sent", nil)
 }

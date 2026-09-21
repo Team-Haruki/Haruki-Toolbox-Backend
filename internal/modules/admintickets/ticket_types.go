@@ -1,8 +1,9 @@
 package admintickets
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 )
 
 type adminTicketFilters struct {
@@ -53,11 +54,11 @@ type adminTicketListItem struct {
 	AssigneeAdminName     string     `json:"assigneeAdminName,omitempty"`
 	LastMessageSenderRole string     `json:"lastMessageSenderRole,omitempty"`
 	LastMessagePreview    string     `json:"lastMessagePreview,omitempty"`
-	LastMessageInternal   *bool      `json:"lastMessageInternal,omitempty"`
+	LastMessageInternal   *bool      `json:"lastMessageInternal,omitzero"`
 	CreatedAt             time.Time  `json:"createdAt"`
 	UpdatedAt             time.Time  `json:"updatedAt"`
-	LastMessageAt         *time.Time `json:"lastMessageAt,omitempty"`
-	ClosedAt              *time.Time `json:"closedAt,omitempty"`
+	LastMessageAt         *time.Time `json:"lastMessageAt,omitzero"`
+	ClosedAt              *time.Time `json:"closedAt,omitzero"`
 }
 
 type adminTicketMessageItem struct {

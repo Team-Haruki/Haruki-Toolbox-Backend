@@ -16,7 +16,7 @@ import (
 type IOSScriptCode struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// UserID holds the value of the "user_id" field.
 	UserID string `json:"user_id,omitempty"`
 	// UploadCode holds the value of the "upload_code" field.
@@ -30,7 +30,7 @@ type IOSScriptCode struct {
 // IOSScriptCodeEdges holds the relations/edges for other nodes in the graph.
 type IOSScriptCodeEdges struct {
 	// User holds the value of the user edge.
-	User *User `json:"user,omitempty"`
+	User *User `json:"user,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

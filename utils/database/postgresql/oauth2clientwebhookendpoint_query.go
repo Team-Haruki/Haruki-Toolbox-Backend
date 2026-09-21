@@ -164,8 +164,8 @@ func (_q *OAuth2ClientWebhookEndpointQuery) All(ctx context.Context) ([]*OAuth2C
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*OAuth2ClientWebhookEndpoint, *OAuth2ClientWebhookEndpointQuery]()
-	return withInterceptors[[]*OAuth2ClientWebhookEndpoint](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*OAuth2ClientWebhookEndpoint, *OAuth2ClientWebhookEndpointQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*OAuth2ClientWebhookEndpoint](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *OAuth2ClientWebhookEndpointQuery) Count(ctx context.Context) (int, err
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*OAuth2ClientWebhookEndpointQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*OAuth2ClientWebhookEndpointQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *OAuth2ClientWebhookEndpointGroupBy) Scan(ctx context.Context, v any) e
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*OAuth2ClientWebhookEndpointQuery, *OAuth2ClientWebhookEndpointGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*OAuth2ClientWebhookEndpointQuery, *OAuth2ClientWebhookEndpointGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *OAuth2ClientWebhookEndpointGroupBy) sqlScan(ctx context.Context, root *OAuth2ClientWebhookEndpointQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *OAuth2ClientWebhookEndpointSelect) Scan(ctx context.Context, v any) er
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*OAuth2ClientWebhookEndpointQuery, *OAuth2ClientWebhookEndpointSelect](ctx, _s.OAuth2ClientWebhookEndpointQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*OAuth2ClientWebhookEndpointQuery, *OAuth2ClientWebhookEndpointSelect](ctx, _s.OAuth2ClientWebhookEndpointQuery, _s, _s.inters, v)
 }
 
 func (_s *OAuth2ClientWebhookEndpointSelect) sqlScan(ctx context.Context, root *OAuth2ClientWebhookEndpointQuery, v any) error {

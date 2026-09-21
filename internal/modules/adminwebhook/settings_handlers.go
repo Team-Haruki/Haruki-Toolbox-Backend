@@ -11,7 +11,7 @@ func handleGetAdminWebhookSettings(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	return func(c fiber.Ctx) error {
 		resp := buildAdminWebhookSettingsResponse(apiHelper)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionGetSettings, adminWebhookTargetType, adminWebhookSettingsTargetID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -45,6 +45,6 @@ func handleUpdateAdminWebhookSettings(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			"updatedEnabled":   payload.Enabled != nil,
 			"updatedJWTSecret": jwtSecret != nil,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "webhook settings updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "webhook settings updated", &resp)
 	}
 }

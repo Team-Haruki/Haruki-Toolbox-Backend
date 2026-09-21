@@ -1,11 +1,12 @@
 package userauthorizesocial
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )

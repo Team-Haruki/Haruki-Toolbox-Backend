@@ -1,17 +1,42 @@
 package config
 
+import "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+
 type RestoreSuiteConfig struct {
 	EnableRegions  []string          `yaml:"enable_regions"`
 	StructuresFile map[string]string `yaml:"structures_file"`
 }
 
+// MongoDBConfig retains the legacy YAML namespace for private API credentials only.
+// It no longer configures a database connection.
 type MongoDBConfig struct {
-	URL                 string `yaml:"url"`
-	DB                  string `yaml:"db"`
-	Suite               string `yaml:"suite"`
-	Mysekai             string `yaml:"mysekai"`
 	PrivateApiSecret    string `yaml:"private_api_secret"`
 	PrivateApiUserAgent string `yaml:"private_api_user_agent"`
+}
+
+// GameDataConfig configures the dedicated PostgreSQL store for Project Sekai
+// suite/mysekai game data. It is a SEPARATE pool from the Ent/user-system one:
+// that pool speaks the lib/pq text protocol, and these reads move whole json
+// columns as bytes.
+// GameDataReadSource selects which datastore serves game-data reads.
+type GameDataReadSource string
+
+const (
+	// GameDataReadPostgres is the post-cutover source.
+	GameDataReadPostgres GameDataReadSource = "postgres"
+)
+
+type GameDataConfig struct {
+	URL string `yaml:"url"`
+	// ReadSource accepts only postgres; retained to reject stale Mongo deployments.
+	ReadSource GameDataReadSource `yaml:"read_source"`
+	// MaxConns is the pool ceiling. 0 leaves pgx's default (max(4, NumCPU)).
+	MaxConns int `yaml:"max_conns"`
+	// MinConns is how many connections are opened eagerly. 0 means "same as
+	// MaxConns", which is the intended setting: pgx builds connections lazily,
+	// so an unwarmed pool reports a spurious EmptyAcquireCount equal to the
+	// worker count on the first burst after every restart.
+	MinConns int `yaml:"min_conns"`
 }
 
 type RedisConfig struct {
@@ -111,7 +136,7 @@ type BackendConfig struct {
 	BackendURL       string   `yaml:"backend_url"`
 	BackendCDNURL    string   `yaml:"backend_cdn_url"`
 	// ProfilingEnabled turns on opt-in performance instrumentation: a periodic
-	// Mongo/PG pool + Go GC stats sampler and slow-request autopsies. Off by default;
+	// PG pool + Go GC stats sampler and slow-request autopsies. Off by default;
 	// safe to flip on during an incident to diagnose resource saturation.
 	ProfilingEnabled bool `yaml:"profiling_enabled"`
 	// ProfilingIntervalSeconds is how often the stats sampler logs (default 15s).
@@ -149,8 +174,6 @@ type HarukiProxyConfig struct {
 
 type SekaiClientConfig struct {
 	ENServerAPIHost              string            `yaml:"en_server_api_host"`
-	ENServerAESKey               string            `yaml:"en_server_aes_key"`
-	ENServerAESIV                string            `yaml:"en_server_aes_iv"`
 	JPServerAPIHost              string            `yaml:"jp_server_api_host"`
 	TWServerAPIHost              string            `yaml:"tw_server_api_host"`
 	TWServerAPIHost2             string            `yaml:"tw_server_api_host_2"`
@@ -158,17 +181,15 @@ type SekaiClientConfig struct {
 	KRServerAPIHost2             string            `yaml:"kr_server_api_host_2"`
 	CNServerAPIHost              string            `yaml:"cn_server_api_host"`
 	CNServerAPIHost2             string            `yaml:"cn_server_api_host_2"`
-	CNServerAESKey               string            `yaml:"cn_server_aes_key"`
-	CNServerAESIV                string            `yaml:"cn_server_aes_iv"`
-	OtherServerAESKey            string            `yaml:"other_server_aes_key"`
-	OtherServerAESIV             string            `yaml:"other_server_aes_iv"`
 	JPServerInheritToken         string            `yaml:"jp_server_inherit_token"`
 	ENServerInheritToken         string            `yaml:"en_server_inherit_token"`
 	JPServerAppVersionUrl        string            `yaml:"jp_server_app_version_url"`
 	ENServerAppVersionUrl        string            `yaml:"en_server_app_version_url"`
 	JPServerInheritClientHeaders map[string]string `yaml:"jp_server_inherit_client_headers"`
 	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
-	SuiteRemoveKeys              []string          `yaml:"suite_remove_keys"`
+	// SuiteRemoveKeys optionally discard fields before PostgreSQL persistence.
+	// Keep empty to retain full uploads; API projections control public access.
+	SuiteRemoveKeys []string `yaml:"suite_remove_keys"`
 }
 
 type SekaiAPIConfig struct {
@@ -177,7 +198,16 @@ type SekaiAPIConfig struct {
 }
 
 type OthersConfig struct {
-	PublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
+	// AllowedKeys bounds which top-level game-data keys every NON-PRIVATE API
+	// may serve. One list, shared by the public API, the OAuth2 game-data
+	// endpoint and the owned-account endpoint. The private API is not bound by
+	// it — it is an internal surface with no external callers.
+	//
+	// DeprecatedPublicAPIAllowedKeys is the former name of the same field, still
+	// read so an existing config file keeps working; it is folded into
+	// AllowedKeys during normalisation.
+	AllowedKeys                    []string `yaml:"allowed_keys"`
+	DeprecatedPublicAPIAllowedKeys []string `yaml:"public_api_allowed_keys"`
 }
 
 type OAuth2Config struct {
@@ -190,23 +220,30 @@ type OAuth2Config struct {
 	HydraRequestTimeoutSecond int    `yaml:"hydra_request_timeout_seconds"`
 }
 
+type RestoreMysekaiConfig struct {
+	StructuresFile map[string]string `yaml:"structures_file"`
+}
+
 type Config struct {
-	Proxy                  string                       `yaml:"proxy"`
-	MongoDB                MongoDBConfig                `yaml:"mongodb"`
-	Redis                  RedisConfig                  `yaml:"redis"`
-	Webhook                WebhookConfig                `yaml:"webhook"`
-	Afdian                 AfdianConfig                 `yaml:"afdian"`
-	Backend                BackendConfig                `yaml:"backend"`
-	UserSystem             UserSystemConfig             `yaml:"user_system"`
-	OAuth2                 OAuth2Config                 `yaml:"oauth2"`
-	Others                 OthersConfig                 `yaml:"others"`
-	SekaiClient            SekaiClientConfig            `yaml:"sekai_client"`
-	SekaiAPI               SekaiAPIConfig               `yaml:"sekai_api"`
-	HarukiProxy            HarukiProxyConfig            `yaml:"haruki_proxy"`
-	ThirdPartyDataProvider ThirdPartyDataProviderConfig `yaml:"third_party_data_provider"`
-	RestoreSuite           RestoreSuiteConfig           `yaml:"restore_suite"`
-	HarukiBot              HarukiBotConfig              `yaml:"haruki_bot"`
-	Subscription           SubscriptionConfig           `yaml:"subscription"`
+	Crypto                 map[string]utils.CryptoMaterial `yaml:"crypto"`
+	MysekaiRestore         RestoreMysekaiConfig            `yaml:"restore_mysekai"`
+	Proxy                  string                          `yaml:"proxy"`
+	MongoDB                MongoDBConfig                   `yaml:"mongodb"`
+	GameData               GameDataConfig                  `yaml:"game_data"`
+	Redis                  RedisConfig                     `yaml:"redis"`
+	Webhook                WebhookConfig                   `yaml:"webhook"`
+	Afdian                 AfdianConfig                    `yaml:"afdian"`
+	Backend                BackendConfig                   `yaml:"backend"`
+	UserSystem             UserSystemConfig                `yaml:"user_system"`
+	OAuth2                 OAuth2Config                    `yaml:"oauth2"`
+	Others                 OthersConfig                    `yaml:"others"`
+	SekaiClient            SekaiClientConfig               `yaml:"sekai_client"`
+	SekaiAPI               SekaiAPIConfig                  `yaml:"sekai_api"`
+	HarukiProxy            HarukiProxyConfig               `yaml:"haruki_proxy"`
+	ThirdPartyDataProvider ThirdPartyDataProviderConfig    `yaml:"third_party_data_provider"`
+	RestoreSuite           RestoreSuiteConfig              `yaml:"restore_suite"`
+	HarukiBot              HarukiBotConfig                 `yaml:"haruki_bot"`
+	Subscription           SubscriptionConfig              `yaml:"subscription"`
 }
 
 var Cfg Config

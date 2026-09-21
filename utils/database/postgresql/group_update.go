@@ -106,7 +106,7 @@ func (_u *GroupUpdate) RemoveGroupList(v ...*GroupList) *GroupUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *GroupUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -318,7 +318,7 @@ func (_u *GroupUpdateOne) Select(field string, fields ...string) *GroupUpdateOne
 
 // Save executes the query and returns the updated Group entity.
 func (_u *GroupUpdateOne) Save(ctx context.Context) (*Group, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

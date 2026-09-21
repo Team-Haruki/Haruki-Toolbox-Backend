@@ -6,7 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bytedance/sonic"
+	json "encoding/json/v2"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -153,7 +154,7 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 
 func parseVersionPayload(body []byte) (appVersionPayload, error) {
 	var data appVersionPayload
-	if err := sonic.Unmarshal(body, &data); err != nil {
+	if err := json.Unmarshal(body, &data); err != nil {
 		return appVersionPayload{}, err
 	}
 	return data, nil

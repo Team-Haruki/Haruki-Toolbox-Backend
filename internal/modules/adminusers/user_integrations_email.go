@@ -1,11 +1,12 @@
 package adminusers
 
 import (
+	"strings"
+	"time"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -59,7 +60,7 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		}
 		if userConflict {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, nil))
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
 		}
 		kratosUpdated := false
 		localMirrorFailed := false
@@ -72,7 +73,7 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonEmailConflict, map[string]any{
 						"provider": "kratos",
 					}))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "email already in use", nil)
 				case harukiAPIHelper.IsKratosIdentityUnmappedError(err):
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{
 						"provider": "kratos",
@@ -150,8 +151,8 @@ func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, auditResult, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateUserEmailFailed, metadata))
 		}
 		if status == fiber.StatusOK {
-			return harukiAPIHelper.SuccessResponse(c, message, &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, message, &resp)
 		}
-		return harukiAPIHelper.UpdatedDataResponse[string](c, status, message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, status, message, nil)
 	}
 }

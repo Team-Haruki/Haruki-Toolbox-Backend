@@ -1,9 +1,10 @@
 package api
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 )
 
 func ptrString(v string) *string {

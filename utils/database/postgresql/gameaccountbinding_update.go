@@ -141,7 +141,7 @@ func (_u *GameAccountBindingUpdate) ClearUser() *GameAccountBindingUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *GameAccountBindingUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -373,7 +373,7 @@ func (_u *GameAccountBindingUpdateOne) Select(field string, fields ...string) *G
 
 // Save executes the query and returns the updated GameAccountBinding entity.
 func (_u *GameAccountBindingUpdateOne) Save(ctx context.Context) (*GameAccountBinding, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

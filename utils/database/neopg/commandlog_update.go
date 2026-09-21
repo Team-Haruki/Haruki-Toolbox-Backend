@@ -6,12 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // CommandLogUpdate is the builder for updating CommandLog entities.
@@ -104,7 +104,7 @@ func (_u *CommandLogUpdate) Mutation() *CommandLogMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *CommandLogUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -296,7 +296,7 @@ func (_u *CommandLogUpdateOne) Select(field string, fields ...string) *CommandLo
 
 // Save executes the query and returns the updated CommandLog entity.
 func (_u *CommandLogUpdateOne) Save(ctx context.Context) (*CommandLog, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

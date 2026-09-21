@@ -188,8 +188,8 @@ func (_q *WebhookSubscriptionQuery) All(ctx context.Context) ([]*WebhookSubscrip
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*WebhookSubscription, *WebhookSubscriptionQuery]()
-	return withInterceptors[[]*WebhookSubscription](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*WebhookSubscription, *WebhookSubscriptionQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*WebhookSubscription](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -228,7 +228,7 @@ func (_q *WebhookSubscriptionQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*WebhookSubscriptionQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*WebhookSubscriptionQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -533,7 +533,7 @@ func (_g *WebhookSubscriptionGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WebhookSubscriptionQuery, *WebhookSubscriptionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*WebhookSubscriptionQuery, *WebhookSubscriptionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *WebhookSubscriptionGroupBy) sqlScan(ctx context.Context, root *WebhookSubscriptionQuery, v any) error {
@@ -581,7 +581,7 @@ func (_s *WebhookSubscriptionSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WebhookSubscriptionQuery, *WebhookSubscriptionSelect](ctx, _s.WebhookSubscriptionQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*WebhookSubscriptionQuery, *WebhookSubscriptionSelect](ctx, _s.WebhookSubscriptionQuery, _s, _s.inters, v)
 }
 
 func (_s *WebhookSubscriptionSelect) sqlScan(ctx context.Context, root *WebhookSubscriptionQuery, v any) error {

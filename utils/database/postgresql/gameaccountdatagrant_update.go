@@ -175,7 +175,7 @@ func (_u *GameAccountDataGrantUpdate) ClearGrantee() *GameAccountDataGrantUpdate
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *GameAccountDataGrantUpdate) Save(ctx context.Context) (int, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -511,7 +511,7 @@ func (_u *GameAccountDataGrantUpdateOne) Select(field string, fields ...string) 
 // Save executes the query and returns the updated GameAccountDataGrant entity.
 func (_u *GameAccountDataGrantUpdateOne) Save(ctx context.Context) (*GameAccountDataGrant, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

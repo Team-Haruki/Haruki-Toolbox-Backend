@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -50,7 +50,7 @@ func TestVerifySessionTokenRequiresConfiguredKratosProvider(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if payload["message"] != "identity provider unavailable" {
@@ -132,7 +132,7 @@ func TestVerifySessionTokenUsesTrustedAuthProxyHeaders(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if payload["userID"] != "u-proxy" {
@@ -198,7 +198,7 @@ func TestVerifySessionTokenRequiresTrustedAuthProxyWhenEnabled(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
 	}
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if payload["message"] != "missing auth proxy identity" {
@@ -234,7 +234,7 @@ func TestVerifySessionTokenAuthProxyIgnoresInvalidEmailVerifiedHeader(t *testing
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
 	}
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if value, exists := payload["emailVerified"]; !exists || value != nil {

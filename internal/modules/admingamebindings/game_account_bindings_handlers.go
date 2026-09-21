@@ -2,13 +2,14 @@ package admingamebindings
 
 import (
 	"context"
+	"strconv"
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strconv"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -81,7 +82,7 @@ func handleAdminListGlobalGameAccountBindings(apiHelper *harukiAPIHelper.HarukiT
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalList, adminAuditTargetTypeGameAccount, adminAuditTargetIDAll, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -121,7 +122,7 @@ func handleAdminDeleteGlobalGameAccountBinding(apiHelper *harukiAPIHelper.Haruki
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalDelete, adminAuditTargetTypeGameAccount, server+":"+gameUserID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"sourceUserID": row.Edges.User.ID,
 		})
-		return harukiAPIHelper.SuccessResponse[string](c, "binding deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "binding deleted", nil)
 	}
 }
 
@@ -183,7 +184,7 @@ func handleAdminReassignGlobalGameAccountBinding(apiHelper *harukiAPIHelper.Haru
 			"targetUserID": targetUser.ID,
 			"changed":      resp.Changed,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "binding reassigned", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "binding reassigned", &resp)
 	}
 }
 
@@ -262,7 +263,7 @@ func handleAdminBatchDeleteGlobalGameAccountBindings(apiHelper *harukiAPIHelper.
 			"success": resp.Success,
 			"failed":  resp.Failed,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -362,6 +363,6 @@ func handleAdminBatchReassignGlobalGameAccountBindings(apiHelper *harukiAPIHelpe
 			"success": resp.Success,
 			"failed":  resp.Failed,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }

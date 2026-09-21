@@ -11,7 +11,7 @@ type userTicketListItem struct {
 	AssigneeAdminID string     `json:"assigneeAdminId,omitempty"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
-	ClosedAt        *time.Time `json:"closedAt,omitempty"`
+	ClosedAt        *time.Time `json:"closedAt,omitzero"`
 }
 
 type userTicketListResponse struct {

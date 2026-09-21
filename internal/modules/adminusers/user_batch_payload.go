@@ -1,8 +1,9 @@
 package adminusers
 
 import (
-	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	"strings"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 
 	"github.com/gofiber/fiber/v3"
 )

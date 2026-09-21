@@ -9,6 +9,6 @@ import (
 func handleGetStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		resp := registrationStatusResponse{Enabled: apiHelper.BotRegistrationEnabled}
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }

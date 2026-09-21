@@ -3,12 +3,15 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	json "encoding/json/v2"
 	"runtime"
 	"sync"
 	"time"
 
-	harukiMongo "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/mongo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfstats"
 )
 
 const defaultProfilingInterval = 15 * time.Second
@@ -21,13 +24,11 @@ type sqlPoolSource struct {
 	db   *sql.DB
 }
 
-// startStatsSampler launches a background goroutine that periodically logs Mongo
-// connection-pool telemetry, database/sql pool stats, and Go runtime/GC stats. It
+// startStatsSampler periodically logs database/sql pool and Go runtime/GC stats. It
 // mirrors the afdian scheduler's lifecycle: cancel ctx then call the returned wait
 // before closing the DB handles it samples, so it never touches a closed pool.
-// poolStats may be nil (Mongo telemetry omitted). It is only started when profiling
-// is enabled.
-func startStatsSampler(ctx context.Context, interval time.Duration, poolStats *harukiMongo.PoolStats, sqlPools []sqlPoolSource, logger *harukiLogger.Logger) func() {
+// It is only started when profiling is enabled.
+func startStatsSampler(ctx context.Context, interval time.Duration, sqlPools []sqlPoolSource, gameDataPool *gamedata.Pool, logger *harukiLogger.Logger) func() {
 	if interval <= 0 {
 		interval = defaultProfilingInterval
 	}
@@ -49,21 +50,14 @@ func startStatsSampler(ctx context.Context, interval time.Duration, poolStats *h
 				logger.Infof("profiling stats sampler stopped")
 				return
 			case <-ticker.C:
-				sampleStats(poolStats, sqlPools, logger, &mem, &lastNumGC, &lastPauseTotal)
+				sampleStats(sqlPools, gameDataPool, logger, &mem, &lastNumGC, &lastPauseTotal)
 			}
 		}
 	}()
 	return wg.Wait
 }
 
-func sampleStats(poolStats *harukiMongo.PoolStats, sqlPools []sqlPoolSource, logger *harukiLogger.Logger, mem *runtime.MemStats, lastNumGC *uint32, lastPauseTotal *uint64) {
-	if poolStats != nil {
-		s := poolStats.Snapshot()
-		logger.Infof("mongo pool: checkedOut=%d pending=%d checkouts=%d failures=%d meanWait=%s maxWait=%s created=%d closed=%d",
-			s.CheckedOut, s.Pending, s.Checkouts, s.CheckoutFailures,
-			s.MeanWait.Round(time.Microsecond), s.MaxWait.Round(time.Microsecond), s.Created, s.Closed)
-	}
-
+func sampleStats(sqlPools []sqlPoolSource, gameDataPool *gamedata.Pool, logger *harukiLogger.Logger, mem *runtime.MemStats, lastNumGC *uint32, lastPauseTotal *uint64) {
 	for _, p := range sqlPools {
 		if p.db == nil {
 			continue
@@ -73,6 +67,14 @@ func sampleStats(poolStats *harukiMongo.PoolStats, sqlPools []sqlPoolSource, log
 			p.name, st.OpenConnections, st.MaxOpenConnections, st.InUse, st.Idle,
 			st.WaitCount, st.WaitDuration.Round(time.Millisecond), st.MaxIdleTimeClosed, st.MaxLifetimeClosed)
 	}
+
+	if gameDataPool != nil && gameDataPool.Pool != nil {
+		st := gameDataPool.Stat()
+		logger.Infof("pgx pool[gamedata]: total=%d/%d acquired=%d idle=%d acquireCount=%d acquireDuration=%s emptyAcquireCount=%d canceledAcquireCount=%d", st.TotalConns(), st.MaxConns(), st.AcquiredConns(), st.IdleConns(), st.AcquireCount(), st.AcquireDuration(), st.EmptyAcquireCount(), st.CanceledAcquireCount())
+	}
+	stages, _ := json.Marshal(perfstats.Snapshot())
+	fanout, _ := json.Marshal(handler.UploadFanoutStats())
+	logger.Infof("performance stages_cumulative=%s fanout=%s", stages, fanout)
 
 	runtime.ReadMemStats(mem)
 	gcDelta := mem.NumGC - *lastNumGC

@@ -1,9 +1,10 @@
 package admincore
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"strconv"
 	"strings"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -65,28 +66,28 @@ func AdminFailureMetadata(reason string, extra map[string]any) map[string]any {
 
 func RespondFiberOrBadRequest(c fiber.Ctx, err error, fallbackMessage string) error {
 	if fiberErr, ok := err.(*fiber.Error); ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 	}
 	return harukiAPIHelper.ErrorBadRequest(c, fallbackMessage)
 }
 
 func RespondFiberOrUnauthorized(c fiber.Ctx, err error, fallbackMessage string) error {
 	if fiberErr, ok := err.(*fiber.Error); ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 	}
 	return harukiAPIHelper.ErrorUnauthorized(c, fallbackMessage)
 }
 
 func RespondFiberOrInternal(c fiber.Ctx, err error, fallbackMessage string) error {
 	if fiberErr, ok := err.(*fiber.Error); ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 	}
 	return harukiAPIHelper.ErrorInternal(c, fallbackMessage)
 }
 
 func RespondFiberOrForbidden(c fiber.Ctx, err error, fallbackMessage string) error {
 	if fiberErr, ok := err.(*fiber.Error); ok {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 	}
 	return harukiAPIHelper.ErrorForbidden(c, fallbackMessage)
 }

@@ -4,22 +4,22 @@ package neopg
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 )
 
 // RequestsRanking is the model entity for the RequestsRanking schema.
 type RequestsRanking struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Bot ID, primary key
-	BotID int `json:"bot_id,omitempty"`
+	BotID int `json:"bot_id,omitzero"`
 	// Total request counts (bigint)
-	Counts       int64 `json:"counts,omitempty"`
+	Counts       int64 `json:"counts,omitzero"`
 	selectValues sql.SelectValues
 }
 

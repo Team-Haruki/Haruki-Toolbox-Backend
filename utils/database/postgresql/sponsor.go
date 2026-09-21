@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -19,37 +19,37 @@ type Sponsor struct {
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
 	// AfdianUserID holds the value of the "afdian_user_id" field.
-	AfdianUserID *string `json:"afdian_user_id,omitempty"`
+	AfdianUserID *string `json:"afdian_user_id,omitzero"`
 	// OutTradeNo holds the value of the "out_trade_no" field.
-	OutTradeNo *string `json:"out_trade_no,omitempty"`
+	OutTradeNo *string `json:"out_trade_no,omitzero"`
 	// Name holds the value of the "name" field.
-	Name *string `json:"name,omitempty"`
+	Name *string `json:"name,omitzero"`
 	// Avatar holds the value of the "avatar" field.
-	Avatar *string `json:"avatar,omitempty"`
+	Avatar *string `json:"avatar,omitzero"`
 	// PlanID holds the value of the "plan_id" field.
-	PlanID *string `json:"plan_id,omitempty"`
+	PlanID *string `json:"plan_id,omitzero"`
 	// PlanName holds the value of the "plan_name" field.
-	PlanName *string `json:"plan_name,omitempty"`
+	PlanName *string `json:"plan_name,omitzero"`
 	// PlanRank holds the value of the "plan_rank" field.
-	PlanRank int `json:"plan_rank,omitempty"`
+	PlanRank int `json:"plan_rank,omitzero"`
 	// PlanPayMonths holds the value of the "plan_pay_months" field.
-	PlanPayMonths *int `json:"plan_pay_months,omitempty"`
+	PlanPayMonths *int `json:"plan_pay_months,omitzero"`
 	// Message holds the value of the "message" field.
-	Message *string `json:"message,omitempty"`
+	Message *string `json:"message,omitzero"`
 	// Source holds the value of the "source" field.
 	Source sponsor.Source `json:"source,omitempty"`
 	// IsActive holds the value of the "is_active" field.
-	IsActive bool `json:"is_active,omitempty"`
+	IsActive bool `json:"is_active,omitzero"`
 	// AfdianSyncDisabled holds the value of the "afdian_sync_disabled" field.
-	AfdianSyncDisabled bool `json:"afdian_sync_disabled,omitempty"`
+	AfdianSyncDisabled bool `json:"afdian_sync_disabled,omitzero"`
 	// PaidAt holds the value of the "paid_at" field.
-	PaidAt *time.Time `json:"paid_at,omitempty"`
+	PaidAt *time.Time `json:"paid_at,omitzero"`
 	// PlanExpiresAt holds the value of the "plan_expires_at" field.
-	PlanExpiresAt *time.Time `json:"plan_expires_at,omitempty"`
+	PlanExpiresAt *time.Time `json:"plan_expires_at,omitzero"`
 	// SupportCount holds the value of the "support_count" field.
-	SupportCount int `json:"support_count,omitempty"`
+	SupportCount int `json:"support_count,omitzero"`
 	// TotalAmount holds the value of the "total_amount" field.
-	TotalAmount *string `json:"total_amount,omitempty"`
+	TotalAmount *string `json:"total_amount,omitzero"`
 	// Raw holds the value of the "raw" field.
 	Raw map[string]interface{} `json:"raw,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.

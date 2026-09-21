@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 
@@ -18,19 +18,19 @@ import (
 type GameAccountBinding struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// jp | en | tw | kr | cn
 	Server string `json:"server,omitempty"`
 	// GameUserID holds the value of the "game_user_id" field.
 	GameUserID string `json:"game_user_id,omitempty"`
 	// Verified holds the value of the "verified" field.
-	Verified bool `json:"verified,omitempty"`
+	Verified bool `json:"verified,omitzero"`
 	// IsDefault holds the value of the "is_default" field.
-	IsDefault bool `json:"is_default,omitempty"`
+	IsDefault bool `json:"is_default,omitzero"`
 	// Suite holds the value of the "suite" field.
-	Suite *schema.SuiteDataPrivacySettings `json:"suite,omitempty"`
+	Suite *schema.SuiteDataPrivacySettings `json:"suite,omitzero"`
 	// Mysekai holds the value of the "mysekai" field.
-	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
+	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai,omitzero"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GameAccountBindingQuery when eager-loading is set.
 	Edges                      GameAccountBindingEdges `json:"edges"`
@@ -41,7 +41,7 @@ type GameAccountBinding struct {
 // GameAccountBindingEdges holds the relations/edges for other nodes in the graph.
 type GameAccountBindingEdges struct {
 	// User holds the value of the user edge.
-	User *User `json:"user,omitempty"`
+	User *User `json:"user,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

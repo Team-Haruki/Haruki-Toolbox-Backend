@@ -1,7 +1,7 @@
 package userauth
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -48,7 +48,7 @@ func TestCheckLoginRateLimitByIP(t *testing.T) {
 			t.Fatalf("request %d error: %v", i+1, err)
 		}
 		var probe loginRateLimitProbe
-		if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 			_ = resp.Body.Close()
 			t.Fatalf("decode request %d error: %v", i+1, err)
 		}
@@ -66,7 +66,7 @@ func TestCheckLoginRateLimitByIP(t *testing.T) {
 	}
 
 	var probe loginRateLimitProbe
-	if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 		_ = resp.Body.Close()
 		t.Fatalf("decode limit request error: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestCheckLoginRateLimitByTarget(t *testing.T) {
 			t.Fatalf("request %d error: %v", i+1, err)
 		}
 		var probe loginRateLimitProbe
-		if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 			_ = resp.Body.Close()
 			t.Fatalf("decode request %d error: %v", i+1, err)
 		}
@@ -128,7 +128,7 @@ func TestCheckLoginRateLimitByTarget(t *testing.T) {
 	}
 
 	var probe loginRateLimitProbe
-	if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 		_ = resp.Body.Close()
 		t.Fatalf("decode limit request error: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestReleaseLoginRateLimitReservation(t *testing.T) {
 		t.Fatalf("initial check error: %v", err)
 	}
 	var probe loginRateLimitProbe
-	if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 		_ = resp.Body.Close()
 		t.Fatalf("decode initial check error: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestReleaseLoginRateLimitReservation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("loop check %d error: %v", i+1, err)
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 			_ = resp.Body.Close()
 			t.Fatalf("decode loop check %d error: %v", i+1, err)
 		}
@@ -212,7 +212,7 @@ func TestReleaseLoginRateLimitReservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("limit check error: %v", err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&probe); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &probe); err != nil {
 		_ = resp.Body.Close()
 		t.Fatalf("decode limit check error: %v", err)
 	}

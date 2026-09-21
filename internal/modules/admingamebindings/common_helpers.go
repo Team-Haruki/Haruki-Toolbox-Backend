@@ -1,8 +1,9 @@
 package admingamebindings
 
 import (
-	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	"time"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 )
 
 const (

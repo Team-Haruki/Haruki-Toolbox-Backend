@@ -26,16 +26,6 @@ var (
 )
 
 func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) (string, error) {
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-	var attemptCount int
-	found, err := apiHelper.DBManager.Redis.GetCache(ctx, attemptKey, &attemptCount)
-	if err != nil {
-		return "", errGameAccountVerificationServiceUnstable
-	}
-	if found && attemptCount >= gameAccountVerificationMaxAttempts {
-		return "", errGameAccountVerificationTooManyAttempts
-	}
-
 	storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
 	var code string
 	ok, err := apiHelper.DBManager.Redis.GetCache(ctx, storageKey, &code)
@@ -45,13 +35,25 @@ func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 	if !ok {
 		return "", errGameAccountVerificationCodeExpired
 	}
+	if err := reserveGameAccountVerificationAttempt(ctx, apiHelper, userID, serverStr, gameUserIDStr); err != nil {
+		return "", err
+	}
 	return code, nil
 }
 
-func incrementGameAccountVerificationAttempt(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) error {
+// reserveGameAccountVerificationAttempt atomically claims one of the bounded
+// upstream profile checks. Incrementing before the profile request prevents
+// concurrent callers from all passing a separate read-before-increment gate.
+func reserveGameAccountVerificationAttempt(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) error {
 	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-	_, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, gameAccountVerificationTTL)
-	return err
+	count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, gameAccountVerificationTTL)
+	if err != nil {
+		return errGameAccountVerificationServiceUnstable
+	}
+	if count > gameAccountVerificationMaxAttempts {
+		return errGameAccountVerificationTooManyAttempts
+	}
+	return nil
 }
 
 func consumeGameAccountVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr, expectedCode string) error {
@@ -69,10 +71,6 @@ func consumeGameAccountVerificationCode(ctx context.Context, apiHelper *harukiAP
 		harukiLogger.Warnf("Failed to clear game account verification attempt key: %v", err)
 	}
 	return nil
-}
-
-func shouldIncrementGameAccountVerificationAttempt(err error) bool {
-	return errors.Is(err, errGameAccountVerificationCodeMissing) || errors.Is(err, errGameAccountVerificationCodeMismatch)
 }
 
 func mapGameAccountVerificationCodeLookupError(err error) *fiber.Error {

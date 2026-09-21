@@ -4,12 +4,12 @@ package neopg
 
 import (
 	"context"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // CommandLogDelete is the builder for deleting a CommandLog entity.
@@ -27,7 +27,7 @@ func (_d *CommandLogDelete) Where(ps ...predicate.CommandLog) *CommandLogDelete 
 
 // Exec executes the deletion query and returns how many vertices were deleted.
 func (_d *CommandLogDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.

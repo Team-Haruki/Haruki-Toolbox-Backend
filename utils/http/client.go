@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"io"
 	stdhttp "net/http"
@@ -32,7 +33,7 @@ func (c *Client) init() error {
 	if c.client != nil {
 		return nil
 	}
-	c.client = resty.New()
+	c.client = jsoncodec.ConfigureResty(resty.New())
 	timeout := c.Timeout
 	if timeout == 0 {
 		timeout = defaultRequestTimeout

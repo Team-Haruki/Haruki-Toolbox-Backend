@@ -106,6 +106,6 @@ func handleAdminReauth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 
 		resp := adminReauthResponse{ReauthenticatedAt: adminNowUTC()}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeReauth, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "reauthenticated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "reauthenticated", &resp)
 	}
 }

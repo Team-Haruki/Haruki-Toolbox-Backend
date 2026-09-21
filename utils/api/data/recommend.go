@@ -1,13 +1,15 @@
 package data
 
 import (
+	"bytes"
 	"context"
+	json "encoding/json/v2"
+
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
 
 	"github.com/gofiber/fiber/v3"
-	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 var DeckRecommendSuiteKeys = []string{
@@ -57,66 +59,32 @@ func LoadDeckRecommendSuiteData(
 	userID int64,
 	server harukiUtils.SupportedDataUploadServer,
 ) (map[string]any, error) {
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Mongo == nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "mongo data source is not configured")
-	}
-
-	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(
-		ctx,
-		userID,
-		string(server),
-		harukiUtils.UploadDataTypeSuite,
-		buildSuiteProjection(DeckRecommendSuiteKeys),
-	)
-	if err != nil {
-		harukiLogger.Errorf("Failed to fetch deck recommend suite data: %v", err)
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get suite data")
-	}
-	if len(result) == 0 {
-		return nil, fiber.NewError(fiber.StatusNotFound, "suite data not found")
-	}
-
-	return BSONDToMap(buildSuiteResponse(result, DeckRecommendSuiteKeys)), nil
+	return loadDeckRecommendData(ctx, apiHelper, userID, server, true)
 }
 
-func LoadDeckRecommendMysekaiData(
-	ctx context.Context,
-	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
-	userID int64,
-	server harukiUtils.SupportedDataUploadServer,
-) (map[string]any, error) {
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Mongo == nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "mongo data source is not configured")
-	}
-
-	result, err := apiHelper.DBManager.Mongo.GetDataWithProjection(
-		ctx,
-		userID,
-		string(server),
-		harukiUtils.UploadDataTypeMysekai,
-		buildMysekaiProjection(DeckRecommendMysekaiKeys),
-	)
-	if err != nil {
-		harukiLogger.Errorf("Failed to fetch deck recommend mysekai data: %v", err)
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get mysekai data")
-	}
-	if len(result) == 0 {
-		return nil, fiber.NewError(fiber.StatusNotFound, "mysekai data not found")
-	}
-
-	return BSONDToMap(filterBSOND(result, DeckRecommendMysekaiKeys)), nil
+func LoadDeckRecommendMysekaiData(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer) (map[string]any, error) {
+	return loadDeckRecommendData(ctx, apiHelper, userID, server, false)
 }
 
-func filterBSOND(result bson.D, keys []string) bson.D {
-	keySet := make(map[string]struct{}, len(keys))
-	for _, key := range keys {
-		keySet[key] = struct{}{}
+func loadDeckRecommendData(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, suite bool) (map[string]any, error) {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.GameData == nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "game data source is not configured")
 	}
-	filtered := make(bson.D, 0, len(keys))
-	for _, elem := range result {
-		if _, ok := keySet[elem.Key]; ok {
-			filtered = append(filtered, elem)
-		}
+	gd := apiHelper.DBManager.GameData
+	var body []byte
+	var err error
+	if suite {
+		body, err = suiteBodyFromPostgres(ctx, gd.Suite(), userID, server, DeckRecommendSuiteKeys, false)
+	} else {
+		body, err = mysekaiBodyFromPostgres(ctx, gd.Mysekai(), userID, server, DeckRecommendMysekaiKeys)
 	}
-	return filtered
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+
+	if err := json.UnmarshalRead(bytes.NewReader(body), &result, jsonvalue.Numbers); err != nil {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to decode game data")
+	}
+	return result, nil
 }

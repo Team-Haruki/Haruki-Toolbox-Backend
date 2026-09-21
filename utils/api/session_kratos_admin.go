@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/bytedance/sonic"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+
+	json "encoding/json/v2"
 )
 
 func (s *SessionHandler) VerifyKratosPassword(ctx context.Context, identifier string, password string) error {
@@ -105,7 +106,7 @@ func (s *SessionHandler) ListKratosSessionsByIdentityID(ctx context.Context, ide
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var parsed []kratosAdminSessionRecord
-		if err := sonic.Unmarshal(body, &parsed); err != nil {
+		if err := json.Unmarshal(body, &parsed); err != nil {
 			return nil, fmt.Errorf("%w: decode list sessions response: %v", errIdentityProviderUnavailable, err)
 		}
 		items := make([]KratosSessionInfo, 0, len(parsed))
@@ -205,7 +206,7 @@ func (s *SessionHandler) FindKratosIdentityIDByEmail(ctx context.Context, email 
 	}
 
 	var identities []kratosIdentityRecord
-	if err := sonic.Unmarshal(body, &identities); err != nil {
+	if err := json.Unmarshal(body, &identities); err != nil {
 		return "", fmt.Errorf("%w: decode list identities response: %v", errIdentityProviderUnavailable, err)
 	}
 	if len(identities) == 0 {
@@ -336,7 +337,7 @@ func (s *SessionHandler) fetchKratosIdentityByID(ctx context.Context, identityID
 	}
 
 	var identity kratosIdentityRecord
-	if err := sonic.Unmarshal(body, &identity); err != nil {
+	if err := json.Unmarshal(body, &identity); err != nil {
 		return nil, fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
 	}
 	if strings.TrimSpace(identity.ID) == "" {
@@ -417,7 +418,7 @@ func (s *SessionHandler) updateKratosPasswordViaPatch(ctx context.Context, ident
 			"value": newPassword,
 		},
 	}
-	encoded, err := sonic.Marshal(patchPayload)
+	encoded, err := json.Marshal(patchPayload)
 	if err != nil {
 		return fmt.Errorf("%w: encode patch payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -468,7 +469,7 @@ func (s *SessionHandler) updateKratosEmailViaPatch(ctx context.Context, identity
 			"value": email,
 		},
 	}
-	encoded, err := sonic.Marshal(patchPayload)
+	encoded, err := json.Marshal(patchPayload)
 	if err != nil {
 		return fmt.Errorf("%w: encode patch payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -543,11 +544,11 @@ func (s *SessionHandler) updateKratosPasswordViaPut(ctx context.Context, identit
 	}
 
 	var identity map[string]any
-	if err := sonic.Unmarshal(getBody, &identity); err != nil {
+	if err := json.Unmarshal(getBody, &identity); err != nil {
 		return fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
 	}
 	applyPasswordIntoKratosIdentity(identity, newPassword)
-	encoded, err := sonic.Marshal(identity)
+	encoded, err := json.Marshal(identity)
 	if err != nil {
 		return fmt.Errorf("%w: encode identity update payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -616,11 +617,11 @@ func (s *SessionHandler) updateKratosEmailViaPut(ctx context.Context, identityID
 	}
 
 	var identity map[string]any
-	if err := sonic.Unmarshal(getBody, &identity); err != nil {
+	if err := json.Unmarshal(getBody, &identity); err != nil {
 		return fmt.Errorf("%w: decode identity response: %v", errIdentityProviderUnavailable, err)
 	}
 	applyEmailIntoKratosIdentity(identity, email)
-	encoded, err := sonic.Marshal(identity)
+	encoded, err := json.Marshal(identity)
 	if err != nil {
 		return fmt.Errorf("%w: encode identity update payload: %v", errIdentityProviderUnavailable, err)
 	}

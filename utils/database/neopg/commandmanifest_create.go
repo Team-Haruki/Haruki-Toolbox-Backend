@@ -6,10 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 )
 
 // CommandManifestCreate is the builder for creating a CommandManifest entity.
@@ -71,7 +71,7 @@ func (_c *CommandManifestCreate) Mutation() *CommandManifestMutation {
 // Save creates the CommandManifest in the database.
 func (_c *CommandManifestCreate) Save(ctx context.Context) (*CommandManifest, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

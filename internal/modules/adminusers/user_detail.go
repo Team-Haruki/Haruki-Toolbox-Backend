@@ -1,14 +1,15 @@
 package adminusers
 
 import (
+	"strings"
+	"time"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
-	"time"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -94,7 +95,7 @@ func queryAdminUserDetailActivitySummary(c fiber.Ctx, apiHelper *harukiAPIHelper
 	return summary, nil
 }
 
-func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userDataBuilder harukiAPIHelper.UserDataBuilder) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		targetUserID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetUserID == "" {
@@ -144,14 +145,14 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		}
 
 		resp := adminUserDetailResponse{
-			UserData:        harukiAPIHelper.BuildUserDataFromDBUser(dbUser, nil),
+			UserData:        userDataBuilder.BuildFromDBUser(dbUser, nil),
 			Banned:          dbUser.Banned,
 			AllowCNMysekai:  dbUser.AllowCnMysekai,
 			BanReason:       dbUser.BanReason,
 			CreatedAt:       createdAt,
 			ActivitySummary: activitySummary,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -217,9 +218,9 @@ func handleForceLogoutUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserForceLogout, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 				"sessionClearFailed": true,
 			})
-			return harukiAPIHelper.SuccessResponse(c, "user sessions cleared partially", &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, "user sessions cleared partially", &resp)
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserForceLogout, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "user sessions cleared", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "user sessions cleared", &resp)
 	}
 }

@@ -189,8 +189,8 @@ func (_q *GroupListQuery) All(ctx context.Context) ([]*GroupList, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*GroupList, *GroupListQuery]()
-	return withInterceptors[[]*GroupList](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*GroupList, *GroupListQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*GroupList](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -229,7 +229,7 @@ func (_q *GroupListQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*GroupListQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*GroupListQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -541,7 +541,7 @@ func (_g *GroupListGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*GroupListQuery, *GroupListGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*GroupListQuery, *GroupListGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *GroupListGroupBy) sqlScan(ctx context.Context, root *GroupListQuery, v any) error {
@@ -589,7 +589,7 @@ func (_s *GroupListSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*GroupListQuery, *GroupListSelect](ctx, _s.GroupListQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*GroupListQuery, *GroupListSelect](ctx, _s.GroupListQuery, _s, _s.inters, v)
 }
 
 func (_s *GroupListSelect) sqlScan(ctx context.Context, root *GroupListQuery, v any) error {

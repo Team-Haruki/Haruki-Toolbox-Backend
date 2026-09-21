@@ -379,7 +379,7 @@ func (_u *SponsorUpdate) Mutation() *SponsorMutation {
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *SponsorUpdate) Save(ctx context.Context) (int, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -960,7 +960,7 @@ func (_u *SponsorUpdateOne) Select(field string, fields ...string) *SponsorUpdat
 // Save executes the query and returns the updated Sponsor entity.
 func (_u *SponsorUpdateOne) Save(ctx context.Context) (*Sponsor, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

@@ -3,9 +3,10 @@ package api
 import (
 	"errors"
 	"fmt"
+	"strings"
+
 	platformAuthHeader "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/authheader"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -19,11 +20,11 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	applyResolvedUserIdentity := func(userID string, identityID string, displayName *string, emailVerified *bool) error {
 		userID = strings.TrimSpace(userID)
 		if userID == "" {
-			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+			return Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 		}
 		toolboxUserID := strings.TrimSpace(c.Params("toolbox_user_id"))
 		if toolboxUserID != "" && toolboxUserID != userID {
-			return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "user ID mismatch", nil)
+			return Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "user ID mismatch", nil)
 		}
 		c.Locals("userID", userID)
 		if trimmedIdentityID := strings.TrimSpace(identityID); trimmedIdentityID != "" {
@@ -51,11 +52,11 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified)
 	}
 	if s.UsesAuthProxy() {
-		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing auth proxy identity", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing auth proxy identity", nil)
 	}
 
 	if !hasBearerToken && kratosHeaderToken == "" && cookieHeader == "" {
-		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "missing token", nil)
 	}
 
 	if !s.hasKratosProviderConfigured() {
@@ -73,17 +74,17 @@ func respondSessionVerifyError(c fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, errSessionStoreUnavailable):
 		harukiLogger.Errorf("Session store unavailable: %v", err)
-		return UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "session store unavailable", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "session store unavailable", nil)
 	case errors.Is(err, errIdentityProviderUnavailable):
 		harukiLogger.Errorf("Identity provider unavailable: %v", err)
-		return UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "identity provider unavailable", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "identity provider unavailable", nil)
 	case errors.Is(err, errUserStoreUnavailable):
 		harukiLogger.Errorf("User store unavailable: %v", err)
-		return UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "user store unavailable", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "user store unavailable", nil)
 	case errors.Is(err, errKratosIdentityUnmapped):
-		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 	default:
-		return UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid token", nil)
+		return Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid token", nil)
 	}
 }
 

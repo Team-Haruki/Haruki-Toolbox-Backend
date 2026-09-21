@@ -79,6 +79,10 @@ const (
 	UploadMethodIOSScript   UploadMethod = "ios_script"
 	UploadMethodHarukiProxy UploadMethod = "haruki_proxy"
 	UploadMethodInherit     UploadMethod = "inherit"
+	// UploadMethodOAuth2 is an upload performed by a third-party client holding
+	// a delegated game-data:write token, rather than by the account owner's own
+	// session or proxy.
+	UploadMethodOAuth2 UploadMethod = "oauth2"
 )
 
 const (

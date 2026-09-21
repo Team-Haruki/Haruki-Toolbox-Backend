@@ -11,16 +11,15 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/migrate"
 
+	"entgo.io/ent"
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
-
-	"entgo.io/ent"
-	"entgo.io/ent/dialect"
-	"entgo.io/ent/dialect/sql"
 )
 
 // Client is the client that holds all ent builders.

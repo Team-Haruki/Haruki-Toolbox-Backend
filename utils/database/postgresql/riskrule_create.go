@@ -96,7 +96,7 @@ func (_c *RiskRuleCreate) Mutation() *RiskRuleMutation {
 // Save creates the RiskRule in the database.
 func (_c *RiskRuleCreate) Save(ctx context.Context) (*RiskRule, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
 )
 
 func firstPresent(item map[string]any, keys ...string) any {
@@ -116,7 +117,7 @@ func intFromAny(value any) int {
 		return int(typed)
 	case float64:
 		return int(typed)
-	case json.Number:
+	case jsonvalue.Number:
 		if n, err := typed.Int64(); err == nil {
 			if n > int64(math.MaxInt) || n < int64(math.MinInt) {
 				return 0
@@ -143,7 +144,7 @@ func int64FromAny(value any) int64 {
 		return typed
 	case float64:
 		return int64(typed)
-	case json.Number:
+	case jsonvalue.Number:
 		if n, err := typed.Int64(); err == nil {
 			return n
 		}
@@ -180,7 +181,7 @@ func floatFromAny(value any) float64 {
 		return float64(typed)
 	case float64:
 		return typed
-	case json.Number:
+	case jsonvalue.Number:
 		n, _ := typed.Float64()
 		return n
 	case string:

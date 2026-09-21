@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -15,9 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
+	"github.com/google/uuid"
 
 	sql "entgo.io/ent/dialect/sql"
 )
@@ -211,8 +213,7 @@ func stableSponsorID(afdianUserID string, outTradeNo string) string {
 	if outTradeNo != "" {
 		return "afdian_order_" + outTradeNo
 	}
-	sum := md5.Sum([]byte(time.Now().UTC().Format(time.RFC3339Nano)))
-	return "sponsor_" + hex.EncodeToString(sum[:])
+	return "sponsor_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
 func parseAmountRank(amount string) int {
@@ -237,7 +238,7 @@ func parseUnixTime(raw any) *time.Time {
 		}
 		t := time.Unix(v, 0).UTC()
 		return &t
-	case json.Number:
+	case jsonvalue.Number:
 		i, err := v.Int64()
 		if err != nil || i <= 0 {
 			return nil
@@ -283,7 +284,7 @@ func readString(record map[string]any, keys ...string) string {
 			if trimmed := strings.TrimSpace(v); trimmed != "" {
 				return trimmed
 			}
-		case json.Number:
+		case jsonvalue.Number:
 			return v.String()
 		case float64:
 			if v == float64(int64(v)) {
@@ -534,16 +535,12 @@ func ParseAfdianWebhookPayload(payload map[string]any, now time.Time) (parsedAfd
 // reach the open API (e.g. to verify a webhook order) are missing.
 var ErrAfdianNotConfigured = errors.New("afdian user_id or api token is not configured")
 
-func afdianHTTPClient(cfg config.AfdianConfig) *http.Client {
-	return &http.Client{Timeout: time.Duration(maxInt(cfg.RequestTimeoutSecond, 10)) * time.Second}
+func afdianHTTPClient(cfg AfdianConfig) *http.Client {
+	return &http.Client{Timeout: cfg.timeout()}
 }
 
-func afdianBaseURL(cfg config.AfdianConfig) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.APIBaseURL), "/")
-	if baseURL == "" {
-		baseURL = "https://afdian.com/api/open"
-	}
-	return baseURL
+func afdianBaseURL(cfg AfdianConfig) string {
+	return cfg.baseURL()
 }
 
 // VerifyAfdianOrder re-queries the Afdian open API for the given out_trade_no and
@@ -551,12 +548,12 @@ func afdianBaseURL(cfg config.AfdianConfig) string {
 // callers must use this to confirm an order is real before trusting it. Returns
 // ErrAfdianNotConfigured when API credentials are missing, or found=false when the
 // order does not exist on Afdian's side (likely forged).
-func VerifyAfdianOrder(ctx context.Context, cfg config.AfdianConfig, outTradeNo string, now time.Time) (parsedAfdianSponsor, bool, error) {
+func VerifyAfdianOrder(ctx context.Context, cfg AfdianConfig, outTradeNo string, now time.Time) (parsedAfdianSponsor, bool, error) {
 	outTradeNo = strings.TrimSpace(outTradeNo)
 	if outTradeNo == "" {
 		return parsedAfdianSponsor{}, false, nil
 	}
-	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+	if !cfg.credentialsConfigured() {
 		return parsedAfdianSponsor{}, false, ErrAfdianNotConfigured
 	}
 
@@ -571,7 +568,7 @@ func VerifyAfdianOrder(ctx context.Context, cfg config.AfdianConfig, outTradeNo 
 	return parsed, true, nil
 }
 
-func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL string, cfg config.AfdianConfig, outTradeNo string) (map[string]any, bool, error) {
+func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL string, cfg AfdianConfig, outTradeNo string) (map[string]any, bool, error) {
 	paramsBytes, err := json.Marshal(map[string]any{"out_trade_no": outTradeNo})
 	if err != nil {
 		return nil, false, err
@@ -579,10 +576,10 @@ func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL
 	params := string(paramsBytes)
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	body := map[string]any{
-		"user_id": cfg.UserID,
+		"user_id": cfg.userID,
 		"params":  params,
 		"ts":      ts,
-		"sign":    afdianSign(cfg.APIToken, params, ts, cfg.UserID),
+		"sign":    afdianSign(cfg.apiToken, params, ts, cfg.userID),
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -609,9 +606,8 @@ func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL
 	}
 
 	var payload map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(respBody))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
+
+	if err := json.UnmarshalRead(bytes.NewReader(respBody), &payload, jsonvalue.Numbers); err != nil {
 		return nil, false, err
 	}
 	if ec := readInt(payload, "ec"); ec != 0 && ec != 200 {
@@ -637,8 +633,8 @@ func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL
 	return nil, false, nil
 }
 
-func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg config.AfdianConfig, now time.Time) (AfdianSyncResult, error) {
-	if strings.TrimSpace(cfg.UserID) == "" || strings.TrimSpace(cfg.APIToken) == "" {
+func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg AfdianConfig, now time.Time) (AfdianSyncResult, error) {
+	if !cfg.credentialsConfigured() {
 		return AfdianSyncResult{}, ErrAfdianNotConfigured
 	}
 	client := afdianHTTPClient(cfg)
@@ -668,7 +664,7 @@ func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg config.A
 	return result, nil
 }
 
-func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL string, cfg config.AfdianConfig, page int) ([]map[string]any, int, error) {
+func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL string, cfg AfdianConfig, page int) ([]map[string]any, int, error) {
 	paramsBytes, err := json.Marshal(map[string]any{
 		"page": page,
 	})
@@ -678,10 +674,10 @@ func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL st
 	params := string(paramsBytes)
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	body := map[string]any{
-		"user_id": cfg.UserID,
+		"user_id": cfg.userID,
 		"params":  params,
 		"ts":      ts,
-		"sign":    afdianSign(cfg.APIToken, params, ts, cfg.UserID),
+		"sign":    afdianSign(cfg.apiToken, params, ts, cfg.userID),
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -708,9 +704,8 @@ func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL st
 	}
 
 	var payload map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(respBody))
-	decoder.UseNumber()
-	if err := decoder.Decode(&payload); err != nil {
+
+	if err := json.UnmarshalRead(bytes.NewReader(respBody), &payload, jsonvalue.Numbers); err != nil {
 		return nil, 0, err
 	}
 	if ec := readInt(payload, "ec"); ec != 0 && ec != 200 {
@@ -738,6 +733,9 @@ func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL st
 }
 
 func afdianSign(token string, params string, ts string, userID string) string {
-	sum := md5.Sum([]byte(token + "params" + params + "ts" + ts + "user_id" + userID))
+	// Afdian's published API protocol requires this exact MD5 signature format.
+	// It authenticates a compatibility request and is not used for password
+	// storage, content integrity, or any protocol we control.
+	sum := md5.Sum([]byte(token + "params" + params + "ts" + ts + "user_id" + userID)) // NOSONAR
 	return hex.EncodeToString(sum[:])
 }

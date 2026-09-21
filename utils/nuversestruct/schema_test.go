@@ -2,7 +2,7 @@ package nuversestruct
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
 	"os"
 	"testing"
 )

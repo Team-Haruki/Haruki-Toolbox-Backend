@@ -1,36 +1,37 @@
 package admin
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 type publicAPIKeysPayload struct {
-	PublicAPIAllowedKeys []string `json:"publicApiAllowedKeys"`
+	AllowedKeys []string `json:"publicApiAllowedKeys"`
 }
 
 type publicAPIKeysResponse struct {
-	PublicAPIAllowedKeys []string `json:"publicApiAllowedKeys"`
+	AllowedKeys []string `json:"publicApiAllowedKeys"`
 }
 
 type runtimeConfigPayload struct {
-	PublicAPIAllowedKeys *([]string) `json:"publicApiAllowedKeys,omitempty"`
-	PrivateAPIToken      *string     `json:"privateApiToken,omitempty"`
-	PrivateAPIUserAgent  *string     `json:"privateApiUserAgent,omitempty"`
-	HarukiProxyUserAgent *string     `json:"harukiProxyUserAgent,omitempty"`
-	HarukiProxyVersion   *string     `json:"harukiProxyVersion,omitempty"`
-	HarukiProxySecret    *string     `json:"harukiProxySecret,omitempty"`
-	HarukiProxyUnpackKey *string     `json:"harukiProxyUnpackKey,omitempty"`
-	WebhookJWTSecret     *string     `json:"webhookJwtSecret,omitempty"`
-	WebhookEnabled       *bool       `json:"webhookEnabled,omitempty"`
+	AllowedKeys          *([]string) `json:"publicApiAllowedKeys,omitzero"`
+	PrivateAPIToken      *string     `json:"privateApiToken,omitzero"`
+	PrivateAPIUserAgent  *string     `json:"privateApiUserAgent,omitzero"`
+	HarukiProxyUserAgent *string     `json:"harukiProxyUserAgent,omitzero"`
+	HarukiProxyVersion   *string     `json:"harukiProxyVersion,omitzero"`
+	HarukiProxySecret    *string     `json:"harukiProxySecret,omitzero"`
+	HarukiProxyUnpackKey *string     `json:"harukiProxyUnpackKey,omitzero"`
+	WebhookJWTSecret     *string     `json:"webhookJwtSecret,omitzero"`
+	WebhookEnabled       *bool       `json:"webhookEnabled,omitzero"`
 }
 
 type runtimeConfigResponse struct {
-	PublicAPIAllowedKeys []string `json:"publicApiAllowedKeys"`
+	AllowedKeys []string `json:"publicApiAllowedKeys"`
 
 	PrivateAPITokenConfigured      bool   `json:"privateApiTokenConfigured"`
 	PrivateAPIUserAgent            string `json:"privateApiUserAgent"`
@@ -79,7 +80,7 @@ func buildRuntimeConfigResponse(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	webhookJWTSecret := apiHelper.GetWebhookJWTSecret()
 
 	return runtimeConfigResponse{
-		PublicAPIAllowedKeys: append([]string(nil), apiHelper.GetPublicAPIAllowedKeys()...),
+		AllowedKeys: append([]string(nil), apiHelper.GetAllowedKeys()...),
 
 		PrivateAPITokenConfigured:      strings.TrimSpace(privateAPIToken) != "",
 		PrivateAPIUserAgent:            strings.TrimSpace(privateAPIUserAgent),
@@ -99,11 +100,31 @@ func clearPublicAccessCache(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 	return apiHelper.DBManager.Redis.ClearNamespace(c.Context(), harukiRedis.GameDataNamespace())
 }
 
+// handlePurgeGameDataCache empties the game-data response cache.
+//
+// It exists as its own endpoint because the cutover REQUIRES it: flipping
+// game_data.read_source changes which datastore builds a response body, but no
+// cache key records which one produced the body it holds. Without a purge in the
+// same step, a stamp minted against one store answers 304 for a body built by
+// the other, and the mismatch persists until each entry expires.
+//
+// Before this existed the only way to trigger it was as a side effect of PUTting
+// the key allowlist back unchanged — a trick that works until someone
+// reorganises that handler.
+func handlePurgeGameDataCache(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		if err := clearPublicAccessCache(apiHelper, c); err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to purge game data cache")
+		}
+		return c.JSON(fiber.Map{"purged": true})
+	}
+}
+
 func handleGetPublicAPIAllowedKeys(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		keys := apiHelper.GetPublicAPIAllowedKeys()
-		resp := publicAPIKeysResponse{PublicAPIAllowedKeys: keys}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		keys := apiHelper.GetAllowedKeys()
+		resp := publicAPIKeysResponse{AllowedKeys: keys}
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -115,7 +136,7 @@ func handleUpdatePublicAPIAllowedKeys(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 
-		sanitizedKeys, err := sanitizePublicAPIAllowedKeys(payload.PublicAPIAllowedKeys)
+		sanitizedKeys, err := sanitizePublicAPIAllowedKeys(payload.AllowedKeys)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigPublicAPIKeysUpdate, adminAuditTargetTypeConfig, "public_api_allowed_keys", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidPublicApiKeys, nil))
 			return respondFiberOrBadRequest(c, err, "invalid public api keys")
@@ -126,24 +147,24 @@ func handleUpdatePublicAPIAllowedKeys(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return harukiAPIHelper.ErrorInternal(c, "failed to clear public api cache")
 		}
 		if err := apiHelper.UpdateRuntimeConfig(harukiAPIHelper.RuntimeConfigUpdate{
-			PublicAPIAllowedKeys: &sanitizedKeys,
+			AllowedKeys: &sanitizedKeys,
 		}); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigPublicAPIKeysUpdate, adminAuditTargetTypeConfig, "public_api_allowed_keys", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPersistRuntimeConfigFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to persist runtime config")
 		}
 
-		resp := publicAPIKeysResponse{PublicAPIAllowedKeys: sanitizedKeys}
+		resp := publicAPIKeysResponse{AllowedKeys: sanitizedKeys}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigPublicAPIKeysUpdate, adminAuditTargetTypeConfig, "public_api_allowed_keys", harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"keyCount": len(sanitizedKeys),
 		})
-		return harukiAPIHelper.SuccessResponse(c, "public api keys updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "public api keys updated", &resp)
 	}
 }
 
 func handleGetRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		resp := buildRuntimeConfigResponse(apiHelper)
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -156,13 +177,13 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		}
 
 		update := harukiAPIHelper.RuntimeConfigUpdate{}
-		if payload.PublicAPIAllowedKeys != nil {
-			sanitizedKeys, err := sanitizePublicAPIAllowedKeys(*payload.PublicAPIAllowedKeys)
+		if payload.AllowedKeys != nil {
+			sanitizedKeys, err := sanitizePublicAPIAllowedKeys(*payload.AllowedKeys)
 			if err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidPublicApiKeys, nil))
 				return respondFiberOrBadRequest(c, err, "invalid public api keys")
 			}
-			update.PublicAPIAllowedKeys = &sanitizedKeys
+			update.AllowedKeys = &sanitizedKeys
 		}
 
 		privateAPIToken, err := sanitizeOptionalRuntimeSecret(payload.PrivateAPIToken, "privateApiToken")
@@ -214,7 +235,7 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			update.WebhookEnabled = payload.WebhookEnabled
 		}
 
-		if update.PublicAPIAllowedKeys != nil {
+		if update.AllowedKeys != nil {
 			if err := clearPublicAccessCache(apiHelper, c); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClearPublicCacheFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to clear public api cache")
@@ -227,11 +248,11 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 		resp := buildRuntimeConfigResponse(apiHelper)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"updatedPublicAPIKeys": payload.PublicAPIAllowedKeys != nil,
+			"updatedPublicAPIKeys": payload.AllowedKeys != nil,
 			"updatedPrivateToken":  privateAPIToken != nil,
 			"updatedWebhookSecret": webhookJWTSecret != nil,
 			"updatedWebhookFlag":   payload.WebhookEnabled != nil,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "runtime config updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "runtime config updated", &resp)
 	}
 }

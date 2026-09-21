@@ -1,10 +1,11 @@
 package public
 
 import (
+	"testing"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"testing"
 )
 
 func TestValidatePublicAPIAccessRequiresVerifiedBinding(t *testing.T) {

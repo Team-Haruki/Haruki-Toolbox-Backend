@@ -3,8 +3,8 @@ package adminwebhook
 import "time"
 
 type adminWebhookSettingsPayload struct {
-	Enabled   *bool   `json:"enabled,omitempty"`
-	JWTSecret *string `json:"jwtSecret,omitempty"`
+	Enabled   *bool   `json:"enabled,omitzero"`
+	JWTSecret *string `json:"jwtSecret,omitzero"`
 }
 
 type adminWebhookSettingsResponse struct {
@@ -13,22 +13,22 @@ type adminWebhookSettingsResponse struct {
 }
 
 type adminWebhookPayload struct {
-	ID          *string `json:"id,omitempty"`
-	Credential  *string `json:"credential,omitempty"`
-	CallbackURL *string `json:"callbackUrl,omitempty"`
-	Bearer      *string `json:"bearer,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
-	ClearBearer bool    `json:"clearBearer,omitempty"`
+	ID          *string `json:"id,omitzero"`
+	Credential  *string `json:"credential,omitzero"`
+	CallbackURL *string `json:"callbackUrl,omitzero"`
+	Bearer      *string `json:"bearer,omitzero"`
+	Enabled     *bool   `json:"enabled,omitzero"`
+	ClearBearer bool    `json:"clearBearer,omitzero"`
 }
 
 type adminWebhookItem struct {
 	ID                string     `json:"id"`
 	Credential        string     `json:"credential"`
 	CallbackURL       string     `json:"callbackUrl"`
-	Bearer            *string    `json:"bearer,omitempty"`
+	Bearer            *string    `json:"bearer,omitzero"`
 	Enabled           bool       `json:"enabled"`
 	SubscriptionCount int        `json:"subscriptionCount"`
-	CreatedAt         *time.Time `json:"createdAt,omitempty"`
+	CreatedAt         *time.Time `json:"createdAt,omitzero"`
 }
 
 type adminWebhookListResponse struct {
@@ -41,7 +41,7 @@ type adminWebhookSubscriberItem struct {
 	UserID    string     `json:"userId"`
 	Server    string     `json:"server"`
 	DataType  string     `json:"dataType"`
-	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	CreatedAt *time.Time `json:"createdAt,omitzero"`
 }
 
 type adminWebhookMutationResponse struct {

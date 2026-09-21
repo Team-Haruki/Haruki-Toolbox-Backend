@@ -5,8 +5,9 @@ import (
 	stdsql "database/sql"
 	"errors"
 	"fmt"
-	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"strings"
+
+	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 const (

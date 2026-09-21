@@ -1,17 +1,17 @@
 package adminusers
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 )
 
 func TestHydraTokenStatsMarkedInexact(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
+	hydraConfig := oauth2.NewHydraConfig(oauth2.HydraConfigOptions{Provider: oauth2.ProviderHydra})
+	if !hydraConfig.Enabled() {
+		t.Fatalf("expected hydra provider to be enabled")
+	}
 
-	config.Cfg.OAuth2.Provider = "hydra"
 	stats := adminOAuthTokenStats{Exact: false}
 	if stats.Exact {
 		t.Fatalf("expected hydra token stats to be marked inexact")

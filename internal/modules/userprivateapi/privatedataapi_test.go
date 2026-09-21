@@ -1,12 +1,13 @@
 package userprivateapi
 
 import (
-	"encoding/json"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 
 	"github.com/gofiber/fiber/v3"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -164,7 +165,7 @@ func TestProcessRequestKeys(t *testing.T) {
 		}
 
 		var got map[string]any
-		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &got); err != nil {
 			t.Fatalf("decode response failed: %v", err)
 		}
 		if got["a"] != float64(1) || got["b"] != "two" {
@@ -184,7 +185,7 @@ func TestProcessRequestKeys(t *testing.T) {
 		}
 
 		var got any
-		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &got); err != nil {
 			t.Fatalf("decode response failed: %v", err)
 		}
 		if got != float64(1) {
@@ -204,7 +205,7 @@ func TestProcessRequestKeys(t *testing.T) {
 		}
 
 		var got map[string]any
-		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		if err := json.UnmarshalRead(resp.Body, &got); err != nil {
 			t.Fatalf("decode response failed: %v", err)
 		}
 		if got["a"] != float64(1) {

@@ -2,9 +2,11 @@ package nuversestruct
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"os"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
 )
@@ -39,11 +41,9 @@ func NewRestorerFromBytes(schemaBytes []byte) (*suiterestore.Restorer, error) {
 // IsStructToolSchema reports whether bytes look like a custom Avro record
 // schema emitted by unity-msgpack-schema-exporter.
 func IsStructToolSchema(data []byte) bool {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
 
 	var raw map[string]any
-	if err := decoder.Decode(&raw); err != nil {
+	if err := json.UnmarshalRead(bytes.NewReader(data), &raw, jsonvalue.Numbers); err != nil {
 		return false
 	}
 	if typ, ok := raw["type"].(string); !ok || typ != "record" {

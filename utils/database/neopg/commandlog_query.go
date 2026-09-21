@@ -5,14 +5,14 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // CommandLogQuery is the builder for querying CommandLog entities.
@@ -164,8 +164,8 @@ func (_q *CommandLogQuery) All(ctx context.Context) ([]*CommandLog, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*CommandLog, *CommandLogQuery]()
-	return withInterceptors[[]*CommandLog](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*CommandLog, *CommandLogQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*CommandLog](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *CommandLogQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*CommandLogQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*CommandLogQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *CommandLogGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CommandLogQuery, *CommandLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*CommandLogQuery, *CommandLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *CommandLogGroupBy) sqlScan(ctx context.Context, root *CommandLogQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *CommandLogSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CommandLogQuery, *CommandLogSelect](ctx, _s.CommandLogQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*CommandLogQuery, *CommandLogSelect](ctx, _s.CommandLogQuery, _s, _s.inters, v)
 }
 
 func (_s *CommandLogSelect) sqlScan(ctx context.Context, root *CommandLogQuery, v any) error {

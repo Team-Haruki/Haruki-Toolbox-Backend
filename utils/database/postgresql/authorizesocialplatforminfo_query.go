@@ -188,8 +188,8 @@ func (_q *AuthorizeSocialPlatformInfoQuery) All(ctx context.Context) ([]*Authori
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*AuthorizeSocialPlatformInfo, *AuthorizeSocialPlatformInfoQuery]()
-	return withInterceptors[[]*AuthorizeSocialPlatformInfo](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*AuthorizeSocialPlatformInfo, *AuthorizeSocialPlatformInfoQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*AuthorizeSocialPlatformInfo](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -228,7 +228,7 @@ func (_q *AuthorizeSocialPlatformInfoQuery) Count(ctx context.Context) (int, err
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*AuthorizeSocialPlatformInfoQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*AuthorizeSocialPlatformInfoQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -533,7 +533,7 @@ func (_g *AuthorizeSocialPlatformInfoGroupBy) Scan(ctx context.Context, v any) e
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*AuthorizeSocialPlatformInfoQuery, *AuthorizeSocialPlatformInfoGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*AuthorizeSocialPlatformInfoQuery, *AuthorizeSocialPlatformInfoGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *AuthorizeSocialPlatformInfoGroupBy) sqlScan(ctx context.Context, root *AuthorizeSocialPlatformInfoQuery, v any) error {
@@ -581,7 +581,7 @@ func (_s *AuthorizeSocialPlatformInfoSelect) Scan(ctx context.Context, v any) er
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*AuthorizeSocialPlatformInfoQuery, *AuthorizeSocialPlatformInfoSelect](ctx, _s.AuthorizeSocialPlatformInfoQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*AuthorizeSocialPlatformInfoQuery, *AuthorizeSocialPlatformInfoSelect](ctx, _s.AuthorizeSocialPlatformInfoQuery, _s, _s.inters, v)
 }
 
 func (_s *AuthorizeSocialPlatformInfoSelect) sqlScan(ctx context.Context, root *AuthorizeSocialPlatformInfoQuery, v any) error {

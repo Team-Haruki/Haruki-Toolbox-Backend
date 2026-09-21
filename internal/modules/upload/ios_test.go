@@ -2,10 +2,11 @@ package upload
 
 import (
 	"context"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"strconv"
 	"sync"
 	"testing"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"

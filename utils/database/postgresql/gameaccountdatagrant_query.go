@@ -211,8 +211,8 @@ func (_q *GameAccountDataGrantQuery) All(ctx context.Context) ([]*GameAccountDat
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*GameAccountDataGrant, *GameAccountDataGrantQuery]()
-	return withInterceptors[[]*GameAccountDataGrant](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*GameAccountDataGrant, *GameAccountDataGrantQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*GameAccountDataGrant](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -251,7 +251,7 @@ func (_q *GameAccountDataGrantQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*GameAccountDataGrantQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*GameAccountDataGrantQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -607,7 +607,7 @@ func (_g *GameAccountDataGrantGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*GameAccountDataGrantQuery, *GameAccountDataGrantGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*GameAccountDataGrantQuery, *GameAccountDataGrantGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *GameAccountDataGrantGroupBy) sqlScan(ctx context.Context, root *GameAccountDataGrantQuery, v any) error {
@@ -655,7 +655,7 @@ func (_s *GameAccountDataGrantSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*GameAccountDataGrantQuery, *GameAccountDataGrantSelect](ctx, _s.GameAccountDataGrantQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*GameAccountDataGrantQuery, *GameAccountDataGrantSelect](ctx, _s.GameAccountDataGrantQuery, _s, _s.inters, v)
 }
 
 func (_s *GameAccountDataGrantSelect) sqlScan(ctx context.Context, root *GameAccountDataGrantQuery, v any) error {

@@ -9,7 +9,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
 
-	"github.com/bytedance/sonic"
+	json "encoding/json/v2"
 )
 
 var (
@@ -62,7 +62,7 @@ func verifyGameAccountOwnership(ctx context.Context, apiHelper *harukiAPIHelper.
 	}
 
 	var data map[string]any
-	if err := sonic.Unmarshal(body, &data); err != nil {
+	if err := json.Unmarshal(body, &data); err != nil {
 		return fmt.Errorf("%w: %v", errGameAccountProfileInvalid, err)
 	}
 

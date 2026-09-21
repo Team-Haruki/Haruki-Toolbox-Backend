@@ -1,11 +1,12 @@
 package adminusers
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -43,7 +44,7 @@ func handleGetUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			Role:   adminCoreModule.NormalizeRole(string(dbUser.Role)),
 			Banned: dbUser.Banned,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -135,6 +136,6 @@ func handleUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserRoleUpdate, adminAuditTargetTypeUser, updatedUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"newRole": resp.Role,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "role updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "role updated", &resp)
 	}
 }

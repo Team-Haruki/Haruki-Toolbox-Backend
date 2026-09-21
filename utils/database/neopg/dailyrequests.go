@@ -4,23 +4,23 @@ package neopg
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 )
 
 // DailyRequests is the model entity for the DailyRequests schema.
 type DailyRequests struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Primary key date
 	DateKey time.Time `json:"date_key,omitempty"`
 	// Request count for this date
-	Count        int `json:"count,omitempty"`
+	Count        int `json:"count,omitzero"`
 	selectValues sql.SelectValues
 }
 

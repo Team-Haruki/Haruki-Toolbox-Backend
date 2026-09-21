@@ -63,6 +63,6 @@ func handleListAdminWebhookSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxR
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }

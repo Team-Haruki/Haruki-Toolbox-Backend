@@ -3,23 +3,22 @@ package misc
 import (
 	"context"
 	"fmt"
+	"time"
+
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 const dependencyHealthTimeout = 2 * time.Second
 
-func handleHealth(apiHelpers ...*harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	var apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
-	if len(apiHelpers) > 0 {
-		apiHelper = apiHelpers[0]
-	}
-
+func handleHealth(
+	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
+	suiteRestoreService *harukiHandler.SuiteRestoreService,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		loadedRegions, failedRegions := harukiHandler.GetSuiteRestorerLoadStatus()
+		loadedRegions, failedRegions := suiteRestoreService.LoadStatus()
 		dependencies := buildDependencyHealth(c.Context(), apiHelper)
 
 		status := "ok"
@@ -54,7 +53,7 @@ func buildDependencyHealth(parent context.Context, apiHelper *harukiAPIHelper.Ha
 	return fiber.Map{
 		"postgresql": dependencyHealthEntry(pingPostgreSQL(parent, apiHelper)),
 		"redis":      dependencyHealthEntry(pingRedis(parent, apiHelper)),
-		"mongo":      dependencyHealthEntry(pingMongo(parent, apiHelper)),
+		"game_data":  dependencyHealthEntry(pingGameData(parent, apiHelper)),
 	}
 }
 
@@ -100,11 +99,11 @@ func pingRedis(parent context.Context, apiHelper *harukiAPIHelper.HarukiToolboxR
 	return apiHelper.DBManager.Redis.Redis.Ping(ctx).Err()
 }
 
-func pingMongo(parent context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Mongo == nil {
-		return fmt.Errorf("mongo client is not initialized")
+func pingGameData(parent context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.GameData == nil {
+		return fmt.Errorf("game data client is not initialized")
 	}
 	ctx, cancel := context.WithTimeout(parent, dependencyHealthTimeout)
 	defer cancel()
-	return apiHelper.DBManager.Mongo.Ping(ctx)
+	return apiHelper.DBManager.GameData.Ping(ctx)
 }

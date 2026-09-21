@@ -30,7 +30,7 @@ type DataChunk struct {
 }
 
 type HandleDataResult struct {
-	Status       *int    `json:"status,omitempty"`
-	ErrorMessage *string `json:"error_message,omitempty"`
-	UserID       *int64  `json:"user_id,omitempty"`
+	Status       *int    `json:"status,omitzero"`
+	ErrorMessage *string `json:"error_message,omitzero"`
+	UserID       *int64  `json:"user_id,omitzero"`
 }

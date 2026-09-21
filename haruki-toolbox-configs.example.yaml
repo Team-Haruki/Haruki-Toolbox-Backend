@@ -32,13 +32,23 @@ user_system:
   frontend_url: ""
   social_platform_verify_token: ""
 
-mongodb:
-  url: "mongodb://user:pass@mongo"
-  db: "collections"
-  suite: "suite"
-  mysekai: "mysekai"
+mongodb: # Legacy namespace for private API credentials; no MongoDB connection
   private_api_secret: "Bearer "
   private_api_user_agent: ""
+
+# Dedicated PostgreSQL store for Project Sekai suite/mysekai game data.
+# Separate pool from `user_system` on purpose: that one runs Ent over lib/pq
+# (text protocol), while these reads move whole json columns as bytes.
+game_data:
+  url: "postgres://user:pass@localhost:5432/haruki_gamedata?sslmode=disable"
+  # PostgreSQL is the only supported read and write source.
+  read_source: "postgres"
+  # 0 keeps pgx's default ceiling (max(4, NumCPU)).
+  max_conns: 0
+  # 0 means "same as max_conns". Leave it there: pgx opens connections lazily,
+  # so an unwarmed pool reports a spurious EmptyAcquireCount equal to the worker
+  # count on the first burst after every restart.
+  min_conns: 0
 
 redis:
   host: "localhost"
@@ -89,14 +99,12 @@ backend:
   # Do not set lowercase env vars that collide with these tag names.
   access_log: "[${time}] ${status} - ${latency} ${method} ${path}\n"
   access_log_path: "access.log"
-  enable_trust_proxy: true
-  trusted_proxies:
-    - "127.0.0.0/8"
-    - "::1/128"
-    - "192.168.0.0/16"
-    - "172.16.0.0/12"
-    - "100.64.0.0/10"
-    - "10.0.0.0/8"
+  # Keep disabled until the backend is placed behind a known edge proxy. When
+  # enabled, list only that proxy's exact IP (/32 or /128); trusting a LAN,
+  # Docker, or Tailscale subnet lets any peer spoof X-Forwarded-For and bypass
+  # IP-based rate limits.
+  enable_trust_proxy: false
+  trusted_proxies: []
   proxy_header: "X-Forwarded-For"
   # Opt-in performance instrumentation. When true, the backend attaches a MongoDB
   # pool monitor and periodically logs Mongo pool / PostgreSQL pool / Go GC stats,
@@ -126,24 +134,33 @@ haruki_proxy:
   secret: ""
   unpack_key: ""
 
+# AVSC file paths, loaded once at startup. Omitted/empty regions are disabled.
+restore_mysekai:
+  structures_file:
+    cn: "./data/suite_user_cn_6.4.0.avsc"
+    tw: ""
+    kr: ""
+
 restore_suite:
   enable_regions:
     - "tw"
   structures_file:
     tw: "./data/suite_user.avsc"
 
+# Hex-encoded AES material, configured independently for each region.
+crypto:
+  jp: {key: "", iv: ""}
+  en: {key: "", iv: ""}
+  cn: {key: "", iv: ""}
+  tw: {key: "", iv: ""}
+  kr: {key: "", iv: ""}
+
 sekai_client:
   en_server_api_host: ""
-  en_server_aes_key: ""
-  en_server_aes_iv: ""
   jp_server_api_host: ""
   tw_server_api_host: ""
   kr_server_api_host: ""
   cn_server_api_host: ""
-  cn_server_aes_key: ""
-  cn_server_aes_iv: ""
-  other_server_aes_key: ""
-  other_server_aes_iv: ""
   jp_server_inherit_token: ""
   en_server_inherit_token: ""
   jp_server_app_version_url: ""
@@ -152,28 +169,7 @@ sekai_client:
     Host: ""
   en_server_inherit_client_headers:
     Host: ""
-  suite_remove_keys:
-    - "userInherit"
-    - "userMaterials"
-    - "userActionSets"
-    - "userInformations"
-    - "userProfileHonors"
-    - "userCustomProfiles"
-    - "userEventExchanges"
-    - "userMissionStatuses"
-    - "userBillingShopItems"
-    - "userReleaseConditions"
-    - "userCostume3dStatuses"
-    - "userCostume3dShopItems"
-    - "userCustomProfileCards"
-    - "userUnitEpisodeStatuses"
-    - "userCustomProfileGachas"
-    - "userEventEpisodeStatuses"
-    - "userSpecialEpisodeStatuses"
-    - "userCustomProfileResources"
-    - "userArchiveEventEpisodeStatuses"
-    - "userCustomProfileResourceUsages"
-    - "userCharacterProfileEpisodeStatuses"
+  suite_remove_keys: []
 
 
 haruki_bot:
@@ -188,7 +184,12 @@ subscription:
   request_timeout_seconds: 5
 
 others:
-  public_api_allowed_keys:
+  # One allowlist for EVERY non-private API: the public endpoints, the OAuth2
+  # game-data endpoint and the owned-account endpoint all use this list. The
+  # private API is not bound by it (internal surface, no external callers).
+  #
+  # `public_api_allowed_keys` is the former name and is still accepted.
+  allowed_keys:
     - "userDecks"
     - "userCards"
     - "userAreas"

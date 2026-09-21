@@ -2,16 +2,17 @@ package ios
 
 import (
 	"fmt"
+	"strconv"
+
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
-	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleScriptGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleScriptGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, endpoints EndpointConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		uploadCode := c.Params("upload_code")
@@ -40,7 +41,7 @@ func handleScriptGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		if !ok {
 			return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported endpoint: %s. Supported: direct, cdn", endpointStr))
 		}
-		endpoint := getEndpoint(endpointType)
+		endpoint := endpoints.endpoint(endpointType)
 		script := iosGen.GenerateScript(uploadCode, chunkSizeMB, endpoint)
 		c.Set("Content-Type", "application/javascript; charset=utf-8")
 		return c.SendString(script)

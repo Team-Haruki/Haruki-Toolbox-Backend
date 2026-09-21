@@ -123,7 +123,7 @@ func (_u *WebhookSubscriptionUpdate) ClearEndpoint() *WebhookSubscriptionUpdate 
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *WebhookSubscriptionUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -356,7 +356,7 @@ func (_u *WebhookSubscriptionUpdateOne) Select(field string, fields ...string) *
 
 // Save executes the query and returns the updated WebhookSubscription entity.
 func (_u *WebhookSubscriptionUpdateOne) Save(ctx context.Context) (*WebhookSubscription, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

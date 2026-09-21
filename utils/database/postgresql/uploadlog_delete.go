@@ -27,7 +27,7 @@ func (_d *UploadLogDelete) Where(ps ...predicate.UploadLog) *UploadLogDelete {
 
 // Exec executes the deletion query and returns how many vertices were deleted.
 func (_d *UploadLogDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.

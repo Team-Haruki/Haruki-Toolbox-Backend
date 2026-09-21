@@ -6,11 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 )
 
 // DailyRequestsCreate is the builder for creating a DailyRequests entity.
@@ -48,7 +48,7 @@ func (_c *DailyRequestsCreate) Mutation() *DailyRequestsMutation {
 // Save creates the DailyRequests in the database.
 func (_c *DailyRequestsCreate) Save(ctx context.Context) (*DailyRequests, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

@@ -1,9 +1,10 @@
 package userinfo
 
 import (
-	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	"net/http/httptest"
 	"testing"
+
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 
 	"github.com/gofiber/fiber/v3"
 )

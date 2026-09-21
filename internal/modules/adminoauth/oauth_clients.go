@@ -31,8 +31,8 @@ type adminOAuthClientUsageStats struct {
 	TokenTotal            int        `json:"tokenTotal"`
 	TokenActive           int        `json:"tokenActive"`
 	TokenIssuedInWindow   int        `json:"tokenIssuedInWindow"`
-	LatestAuthorizationAt *time.Time `json:"latestAuthorizationAt,omitempty"`
-	LatestTokenIssuedAt   *time.Time `json:"latestTokenIssuedAt,omitempty"`
+	LatestAuthorizationAt *time.Time `json:"latestAuthorizationAt,omitzero"`
+	LatestTokenIssuedAt   *time.Time `json:"latestTokenIssuedAt,omitzero"`
 }
 
 type adminOAuthClientListItem struct {

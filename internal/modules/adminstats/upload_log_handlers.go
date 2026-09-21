@@ -12,13 +12,20 @@ import (
 
 func handleQueryUploadLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
 		filters, err := parseUploadLogQueryFilters(c, adminNow())
 		if err != nil {
 			return respondFiberOrBadRequest(c, err, "invalid query filters")
 		}
 
 		dbCtx := c.Context()
-		baseQuery := applyUploadLogFilters(apiHelper.DBManager.DB.UploadLog.Query(), filters)
+		baseQuery, err := scopeUploadLogsForAdminActor(dbCtx, apiHelper.DBManager.DB, applyUploadLogFilters(apiHelper.DBManager.DB.UploadLog.Query(), filters), actorRole)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope upload logs")
+		}
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -101,6 +108,6 @@ func handleQueryUploadLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			Items: adminCoreModule.BuildUploadLogItems(rows),
 		}
 
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }

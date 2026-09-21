@@ -3,13 +3,14 @@
 package neopg
 
 import (
+	"time"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/bot/schema"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/dailyrequests"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
-	"time"
 )
 
 // The init function reads all schema descriptors with runtime code

@@ -42,7 +42,7 @@ func handleGetUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"exists": resp.Exists,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -73,7 +73,7 @@ func handleUpsertUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		if conflictExists {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonSocialPlatformConflict, nil))
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "social platform already bound by another user", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "social platform already bound by another user", nil)
 		}
 
 		existing, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
@@ -93,7 +93,7 @@ func handleUpsertUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				Save(c.Context()); err != nil {
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonSocialPlatformConflict, nil))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "social platform conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "social platform conflict", nil)
 				}
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateSocialPlatformFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
@@ -108,7 +108,7 @@ func handleUpsertUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				Save(c.Context()); err != nil {
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonSocialPlatformConflict, nil))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "social platform conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "social platform conflict", nil)
 				}
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateSocialPlatformFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to create social platform info")
@@ -130,7 +130,7 @@ func handleUpsertUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			"created":  created,
 			"verified": *payload.Verified,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "social platform upserted", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform upserted", &resp)
 	}
 }
 
@@ -158,6 +158,6 @@ func handleClearUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"deleted": affected > 0,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "social platform cleared", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform cleared", &resp)
 	}
 }

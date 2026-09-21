@@ -5,14 +5,14 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 )
 
 // UserQuery is the builder for querying User entities.
@@ -164,8 +164,8 @@ func (_q *UserQuery) All(ctx context.Context) ([]*User, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*User, *UserQuery]()
-	return withInterceptors[[]*User](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*User, *UserQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*User](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *UserQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*UserQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*UserQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *UserGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*UserQuery, *UserGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*UserQuery, *UserGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *UserGroupBy) sqlScan(ctx context.Context, root *UserQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *UserSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*UserQuery, *UserSelect](ctx, _s.UserQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*UserQuery, *UserSelect](ctx, _s.UserQuery, _s, _s.inters, v)
 }
 
 func (_s *UserSelect) sqlScan(ctx context.Context, root *UserQuery, v any) error {

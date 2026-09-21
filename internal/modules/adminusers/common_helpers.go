@@ -1,13 +1,14 @@
 package adminusers
 
 import (
+	"strings"
+	"time"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -48,6 +49,14 @@ func applyManagedTargetUserUpdateGuards(query *postgresql.UserUpdate, actorUserI
 		guarded = guarded.Where(userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
 	}
 	return guarded
+}
+
+func scopeAdminUserQueryForActor(query *postgresql.UserQuery, actorUserID, actorRole string) *postgresql.UserQuery {
+	scoped := query.Where(userSchema.IDNEQ(strings.TrimSpace(actorUserID)))
+	if adminCoreModule.NormalizeRole(actorRole) != adminCoreModule.RoleSuperAdmin {
+		scoped = scoped.Where(userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
+	}
+	return scoped
 }
 
 func resolveManagedTargetUserUpdateMiss(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, actorUserID, actorRole, targetUserID string) error {

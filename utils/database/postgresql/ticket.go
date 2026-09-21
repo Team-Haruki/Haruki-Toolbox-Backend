@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -17,7 +17,7 @@ import (
 type Ticket struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// TicketID holds the value of the "ticket_id" field.
 	TicketID string `json:"ticket_id,omitempty"`
 	// CreatorUserID holds the value of the "creator_user_id" field.
@@ -25,19 +25,19 @@ type Ticket struct {
 	// Subject holds the value of the "subject" field.
 	Subject string `json:"subject,omitempty"`
 	// Category holds the value of the "category" field.
-	Category *string `json:"category,omitempty"`
+	Category *string `json:"category,omitzero"`
 	// Priority holds the value of the "priority" field.
 	Priority ticket.Priority `json:"priority,omitempty"`
 	// Status holds the value of the "status" field.
 	Status ticket.Status `json:"status,omitempty"`
 	// AssigneeAdminID holds the value of the "assignee_admin_id" field.
-	AssigneeAdminID *string `json:"assignee_admin_id,omitempty"`
+	AssigneeAdminID *string `json:"assignee_admin_id,omitzero"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// ClosedAt holds the value of the "closed_at" field.
-	ClosedAt *time.Time `json:"closed_at,omitempty"`
+	ClosedAt *time.Time `json:"closed_at,omitzero"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.

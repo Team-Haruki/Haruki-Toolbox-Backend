@@ -317,3 +317,18 @@ func TestSetCachesAtomicallyMarshalFailureDoesNotWrite(t *testing.T) {
 		t.Fatalf("expected no keys to be written on marshal failure, exists=%d", exists)
 	}
 }
+
+func TestDeleteCacheIfValueMatchesLegacyJSONString(t *testing.T) {
+	manager, _ := newTestRedisManager(t)
+	// Native Sonic did not escape HTML or JavaScript separators. Old cached
+	// strings must still match v2's serialization inside the atomic Lua compare.
+	const expected = "<>&\u2028\u2029"
+	raw := "\"" + expected + "\""
+	if err := manager.Redis.Set(t.Context(), "legacy-json", raw, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := manager.DeleteCacheIfValueMatches(t.Context(), "legacy-json", expected)
+	if err != nil || !deleted {
+		t.Fatalf("legacy cache compare: deleted=%v err=%v", deleted, err)
+	}
+}

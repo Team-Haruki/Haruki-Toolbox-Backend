@@ -3,15 +3,16 @@ package usergamebindings
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
+	"time"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiAPIData "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -46,6 +47,17 @@ func parseDeckRecommendDataMode(raw string) (deckRecommendDataMode, *fiber.Error
 	default:
 		return "", fiber.NewError(fiber.StatusBadRequest, "invalid mode")
 	}
+}
+
+// deckRecommendRequiredDataTypes lists the game-account data types
+// recommend-data reads for a mode. It is the single source of truth shared with
+// the accessible-accounts read model (applyDerivedGameAccountCapabilities), so a
+// client can never be offered a mode this handler would then refuse.
+func deckRecommendRequiredDataTypes(mode deckRecommendDataMode) []ownedGameAccountDataType {
+	if mode == deckRecommendDataModeMysekai {
+		return []ownedGameAccountDataType{ownedGameAccountDataTypeSuite, ownedGameAccountDataTypeMysekai}
+	}
+	return []ownedGameAccountDataType{ownedGameAccountDataTypeSuite}
 }
 
 func validateVerifiedOwnedGameAccountBinding(binding *postgresql.GameAccountBinding, userID string) *fiber.Error {
@@ -95,13 +107,22 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorBadRequest(c, modeErr.Message)
 		}
 
-		binding, err := queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
-		if err != nil {
-			harukiLogger.Errorf("Failed to query deck recommend binding: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
-		}
-		if bindingErr := validateVerifiedOwnedGameAccountBinding(binding, userID); bindingErr != nil {
-			return respondVerifiedGameAccountDataError(c, bindingErr)
+		// Deck recommend reads the same per-account data as the generic
+		// game-account endpoint, so it authorizes the same way: owned bindings
+		// and live grants both qualify, one check per data type the mode needs.
+		now := time.Now().UTC()
+		for _, requiredDataType := range deckRecommendRequiredDataTypes(mode) {
+			access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, userID, string(server), gameUserIDStr, string(requiredDataType), now)
+			if err != nil {
+				harukiLogger.Errorf("Failed to verify deck recommend data access: %v", err)
+				return harukiAPIHelper.ErrorInternal(c, "failed to verify game account data access")
+			}
+			if access == nil || !access.Allowed {
+				if access == nil || access.OwnerUserID == "" {
+					return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+				}
+				return harukiAPIHelper.ErrorForbidden(c, "not authorized to access this binding")
+			}
 		}
 
 		userData, err := harukiAPIData.LoadDeckRecommendUserData(
@@ -121,7 +142,7 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			Mode:       mode,
 			UserData:   userData,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }
 
@@ -138,7 +159,7 @@ func respondVerifiedGameAccountDataError(c fiber.Ctx, err error) error {
 		case fiber.StatusNotFound:
 			return harukiAPIHelper.ErrorNotFound(c, fiberErr.Message)
 		case fiber.StatusConflict:
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, fiberErr.Message, nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, fiberErr.Message, nil)
 		default:
 			return harukiAPIHelper.ErrorInternal(c, fiberErr.Message)
 		}

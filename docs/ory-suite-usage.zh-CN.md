@@ -108,7 +108,7 @@ Hydra 在当前项目里负责：
 关键步骤：
 
 1. 加载配置并校验 Ory 必需项
-2. 初始化 PostgreSQL、MongoDB、Redis
+2. 初始化 PostgreSQL（业务库与游戏数据库）、Redis
 3. 创建 `SessionHandler`
 4. 调用 `ConfigureIdentityProvider(...)` 注入 Kratos 配置
 5. 调用 `ConfigureAuthProxy(...)` 注入 Oathkeeper/Auth Proxy 配置
@@ -133,6 +133,8 @@ Hydra 在当前项目里负责：
 - Hydra subject：优先使用 `kratos_identity_id`，兼容旧 `users.id`
 
 这一层映射很关键，因为项目里大量业务表、权限、日志、管理员能力仍然围绕本地 `users.id` 展开。
+
+对于已关联的 identity，SessionHandler 在同一请求内复用映射查询返回的 ID、名称、邮箱和 identity ID，供资料同步比较使用，避免重复读取。新建、按邮箱关联和自定义 resolver 分支仍重新读取资料。这不缓存会话、角色或权限；每次请求继续执行原有的身份和对象范围校验。
 
 因此当前架构不是“完全无本地用户表”，而是：
 
@@ -331,7 +333,7 @@ Hydra 在当前项目里负责：
 - 查询参数 `mode=suite|mysekai`，默认 `suite`
 - `mode=mysekai` 会在 suite 基础数据上合并 MySekai 推荐所需字段，方便前端 wasm 直接作为 `user_data` 使用
 
-游戏账号数据授权接口见 [`docs/game-account-data-grants.zh-CN.md`](/Users/seiun/GolandProjects/Haruki-Toolbox-Backend/docs/game-account-data-grants.zh-CN.md)。
+游戏账号数据授权接口见 [`docs/game-account-data-grants.zh-CN.md`](game-account-data-grants.zh-CN.md)。
 
 ### 9.2 会话级重认证支撑
 
@@ -383,6 +385,37 @@ Hydra 需要 subject。项目里的策略是：
 
 - 新 OAuth2 数据尽量围绕 Kratos identity 稳定下来
 - 老数据、过渡期客户端仍有兼容空间
+
+### 10.2.1 RP-Initiated Logout（2026-08-26 打通）
+
+登出与登录同构，但**三个编排端点是匿名的**：
+
+```text
+GET  /api/oauth2/logout          查询 logout request
+POST /api/oauth2/logout/accept   接受，返回 redirect_to
+POST /api/oauth2/logout/reject   拒绝，Hydra 返回 204 无 body
+```
+
+匿名是刻意的。到达登出挑战的用户正在退出，Kratos 会话可能已经失效 —— 要求登录会让登出恰好
+在最需要的时刻失败。challenge 本身就是凭证：Hydra 签发、一次性、指名要结束的会话。这与
+consent 端点要求登录的取舍不同，因为 consent 是在授予权限，登出是在收回。
+
+完整链条：
+
+```text
+RP 带 id_token_hint 请求 /oauth2/sessions/logout
+  → Oathkeeper 放行（hydra-public-oauth 规则）
+  → Hydra 生成 logout_challenge，跳转 URLS_LOGOUT
+  → 前端 /logout 页面消费上面三个端点
+  → accept 时前端同时注销 Kratos 会话
+  → 浏览器跳回 RP 的 post_logout_redirect_uri
+```
+
+**前端在 accept 时一并注销 Kratos 会话**，这是必需的：只结束 Hydra 会话而保留 Kratos 的话，
+用户下次授权会因 `skip=true` 被静默重新登录，等于没退出。
+
+一个实现细节：`reject` 不能复用 `sendHydraAdminJSON`。Hydra 对它返回 204 空 body，而那个
+helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —— 用户取消登出反而收到 500。
 
 ### 10.3 Token Introspection
 
@@ -441,6 +474,41 @@ Hydra 需要 subject。项目里的策略是：
 - `KRATOS_AUTO_LINK_BY_EMAIL`
 - `KRATOS_AUTO_PROVISION_USER`
 
+#### 11.1.1 Sign in with Apple
+
+Kratos 的 Apple provider 配置位于 `external/kratos/kratos.yml`，claim mapper 位于
+`external/kratos/oidc.apple.jsonnet`。Apple 登录完成后仍由 Kratos 创建会话，Backend 和
+Oathkeeper 的会话验证方式不变。
+
+在 Apple Developer 后台完成以下配置：
+
+1. 创建并启用 **Sign in with Apple** 的 App ID。
+2. 创建 **Services ID**；该 Identifier 是 `KRATOS_OIDC_APPLE_CLIENT_ID`，不是 Bundle ID。
+3. 在 Services ID 的 Web Authentication 配置中登记：
+   - Domain：`KRATOS_PUBLIC_BASE_URL` 的主机名，例如 `toolbox-auth.example.com`
+   - Return URL：`https://<Kratos 公网域名>/self-service/methods/oidc/callback/apple`
+4. 创建启用了 Sign in with Apple 的私钥，并记录 Team ID 和 Key ID。
+
+部署环境需要设置：
+
+- `KRATOS_OIDC_APPLE_CLIENT_ID`
+- `KRATOS_OIDC_APPLE_TEAM_ID`
+- `KRATOS_OIDC_APPLE_PRIVATE_KEY_ID`
+- `KRATOS_OIDC_APPLE_PRIVATE_KEY`（完整 `.p8` PEM，包含首尾标记）
+
+`.env` 支持用单引号保存多行 PEM，例如：
+
+```dotenv
+KRATOS_OIDC_APPLE_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----
+<private key content>
+-----END PRIVATE KEY-----'
+```
+
+真实私钥不得提交到仓库。Apple 浏览器回调使用 `form_post`，因此 provider 的 `id` 必须保持
+为 `apple`，不可改成自定义值。Mapper 只接受 Apple 标记为已验证的邮箱；Apple 的隐藏邮箱
+（Private Relay）也可以正常使用。前端无需硬编码 provider 列表，应渲染 Kratos login /
+registration flow 中 `method=oidc`、`provider=apple` 的 UI node。
+
 ### 11.2 Auth Proxy / Oathkeeper 相关
 
 核心配置项：
@@ -456,6 +524,19 @@ Hydra 需要 subject。项目里的策略是：
 - `user_system.auth_proxy_session_header`
 
 其中 `auth_proxy_session_header` 现在是运行必需项，不再是可选项。
+
+部署层面还有两项与 Auth Proxy 直接相关：
+
+- `BACKEND_ENABLE_TRUST_PROXY`（默认 `false`）
+- `BACKEND_TRUSTED_PROXIES`
+
+backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而不是真实客户端。
+只有在开启 trust proxy **并且**把 `BACKEND_TRUSTED_PROXIES` 精确设为边缘代理地址
+（IPv4 写 `/32`、IPv6 写 `/128`）时，`X-Forwarded-For` 才会被采信。
+
+**不要填 Docker、LAN 或 Tailscale 网段。** 那等于信任该网段内的每个容器和节点，
+其中任何一个都能伪造 `X-Forwarded-For`。不确定边缘代理地址时就保持 `false`：
+限流会退化成按 Oathkeeper 这一个地址计数，粗糙但不会被绕过。
 
 ### 11.3 Hydra 相关
 
@@ -526,6 +607,20 @@ Hydra 需要 subject。项目里的策略是：
 - `utils/api/session_handler.go`
 - `utils/oauth2/...`
 - `internal/modules/oauth2/...`
+
+### 12.6 开了 trust proxy 却没限定可信代理
+
+后果：
+
+- 所有以 IP 为键的限流、尝试计数、验证码次数上限全部失效
+- 表面上一切正常，日志里的来源 IP 也「看起来对」
+
+原因：
+
+- `BACKEND_ENABLE_TRUST_PROXY=true` 而 `BACKEND_TRUSTED_PROXIES` 为空或填了网段时，
+  `X-Forwarded-For` 变成客户端可控输入，攻击者每次请求换一个伪造 IP 即可绕过上限
+
+见 §11.2。
 
 ## 13. 对后续开发的建议
 

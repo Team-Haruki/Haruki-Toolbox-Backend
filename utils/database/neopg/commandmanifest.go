@@ -3,24 +3,24 @@
 package neopg
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 	"strings"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
 )
 
 // CommandManifest is the model entity for the CommandManifest schema.
 type CommandManifest struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// CommandPrefixes holds the value of the "command_prefixes" field.
 	CommandPrefixes []string `json:"command_prefixes,omitempty"`
 	// Higher value is matched first
-	CommandPriority int `json:"command_priority,omitempty"`
+	CommandPriority int `json:"command_priority,omitzero"`
 	// CommandMode holds the value of the "command_mode" field.
 	CommandMode string `json:"command_mode,omitempty"`
 	// CommandModule holds the value of the "command_module" field.

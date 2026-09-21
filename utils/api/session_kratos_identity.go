@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"math/big"
 	"strings"
 	"time"
+
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 func extractKratosIdentityName(identity kratosIdentityRecord) string {
@@ -99,31 +100,40 @@ func extractEmailFromTraitValue(value any) string {
 }
 
 func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID string, email string, emailVerified bool) (string, error) {
+	userID, _, err := s.resolveKratosIdentityWithProfile(ctx, identityID, email, emailVerified)
+	return userID, err
+}
+
+// The profile is request-local and contains only the fields used for profile
+// synchronization, never role or authorization state. Existing identity matches
+// can reuse it; linking, provisioning and custom resolvers retain a fresh read.
+func (s *SessionHandler) resolveKratosIdentityWithProfile(ctx context.Context, identityID string, email string, emailVerified bool) (string, *postgresql.User, error) {
 	if s.KratosIdentityResolver != nil {
-		return s.KratosIdentityResolver(ctx, identityID, email)
+		userID, err := s.KratosIdentityResolver(ctx, identityID, email)
+		return userID, nil, err
 	}
 	if s.DBClient == nil {
-		return "", fmt.Errorf("%w: database client is nil", errUserStoreUnavailable)
+		return "", nil, fmt.Errorf("%w: database client is nil", errUserStoreUnavailable)
 	}
 
 	identityID = strings.TrimSpace(identityID)
 	if identityID == "" {
-		return "", fmt.Errorf("%w: identity id is empty", errSessionUnauthorized)
+		return "", nil, fmt.Errorf("%w: identity id is empty", errSessionUnauthorized)
 	}
 
 	matchedByIdentity, err := s.DBClient.User.Query().
 		Where(userSchema.KratosIdentityIDEQ(identityID)).
-		Select(userSchema.FieldID).
+		Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldKratosIdentityID).
 		Only(ctx)
 	if err == nil {
-		return matchedByIdentity.ID, nil
+		return matchedByIdentity.ID, matchedByIdentity, nil
 	}
 	if err != nil && !postgresql.IsNotFound(err) {
-		return "", fmt.Errorf("%w: query kratos identity map: %v", errUserStoreUnavailable, err)
+		return "", nil, fmt.Errorf("%w: query kratos identity map: %v", errUserStoreUnavailable, err)
 	}
 
 	if email == "" {
-		return "", fmt.Errorf("%w: identity email is empty", errKratosIdentityUnmapped)
+		return "", nil, fmt.Errorf("%w: identity email is empty", errKratosIdentityUnmapped)
 	}
 
 	// Linking or provisioning by email is authorization-relevant: a Kratos identity
@@ -132,7 +142,7 @@ func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID s
 	// over a victim's existing account that shares the address. Identity-ID matches
 	// above are already-linked accounts and are unaffected.
 	if !emailVerified {
-		return "", fmt.Errorf("%w: kratos email is not verified", errKratosIdentityUnmapped)
+		return "", nil, fmt.Errorf("%w: kratos email is not verified", errKratosIdentityUnmapped)
 	}
 
 	targetUser, err := s.DBClient.User.Query().
@@ -142,38 +152,38 @@ func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID s
 	if err != nil {
 		if postgresql.IsNotFound(err) {
 			if !s.KratosAutoProvisionUser {
-				return "", fmt.Errorf("%w: email is not linked", errKratosIdentityUnmapped)
+				return "", nil, fmt.Errorf("%w: email is not linked", errKratosIdentityUnmapped)
 			}
 			provisionedUserID, provisionErr := s.createKratosProvisionedUser(ctx, identityID, email)
 			if provisionErr == nil {
-				return provisionedUserID, nil
+				return provisionedUserID, nil, nil
 			}
 			matchedByIdentity, retryErr := s.DBClient.User.Query().
 				Where(userSchema.KratosIdentityIDEQ(identityID)).
 				Select(userSchema.FieldID).
 				Only(ctx)
 			if retryErr == nil {
-				return matchedByIdentity.ID, nil
+				return matchedByIdentity.ID, nil, nil
 			}
 			if retryErr != nil && !postgresql.IsNotFound(retryErr) {
-				return "", fmt.Errorf("%w: re-query kratos identity map: %v", errUserStoreUnavailable, retryErr)
+				return "", nil, fmt.Errorf("%w: re-query kratos identity map: %v", errUserStoreUnavailable, retryErr)
 			}
-			return "", provisionErr
+			return "", nil, provisionErr
 		}
-		return "", fmt.Errorf("%w: query user by email: %v", errUserStoreUnavailable, err)
+		return "", nil, fmt.Errorf("%w: query user by email: %v", errUserStoreUnavailable, err)
 	}
 
 	if targetUser.KratosIdentityID != nil {
 		boundIdentityID := strings.TrimSpace(*targetUser.KratosIdentityID)
 		if boundIdentityID == identityID {
-			return targetUser.ID, nil
+			return targetUser.ID, nil, nil
 		}
 		if boundIdentityID != "" {
-			return "", fmt.Errorf("%w: email already linked to another identity", errKratosIdentityUnmapped)
+			return "", nil, fmt.Errorf("%w: email already linked to another identity", errKratosIdentityUnmapped)
 		}
 	}
 	if !s.KratosAutoLinkByEmail {
-		return "", fmt.Errorf("%w: auto-link by email is disabled", errKratosIdentityUnmapped)
+		return "", nil, fmt.Errorf("%w: auto-link by email is disabled", errKratosIdentityUnmapped)
 	}
 
 	_, err = s.DBClient.User.Update().
@@ -182,11 +192,11 @@ func (s *SessionHandler) resolveKratosIdentity(ctx context.Context, identityID s
 		Save(ctx)
 	if err != nil {
 		if postgresql.IsConstraintError(err) {
-			return "", fmt.Errorf("%w: identity already linked", errKratosIdentityUnmapped)
+			return "", nil, fmt.Errorf("%w: identity already linked", errKratosIdentityUnmapped)
 		}
-		return "", fmt.Errorf("%w: bind identity to user: %v", errUserStoreUnavailable, err)
+		return "", nil, fmt.Errorf("%w: bind identity to user: %v", errUserStoreUnavailable, err)
 	}
-	return targetUser.ID, nil
+	return targetUser.ID, nil, nil
 }
 
 func (s *SessionHandler) createKratosProvisionedUser(ctx context.Context, identityID string, email string) (string, error) {

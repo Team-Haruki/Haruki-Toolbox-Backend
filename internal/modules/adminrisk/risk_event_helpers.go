@@ -1,12 +1,17 @@
 package adminrisk
 
 import (
-	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
+	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -82,6 +87,99 @@ func applyRiskEventFilters(query *postgresql.RiskEventQuery, filters *riskEventF
 		q = q.Where(riskevent.ActionContainsFold(filters.Action))
 	}
 	return q
+}
+
+// scopeRiskEventsForAdminActor keeps count and pagination on the same role
+// boundary as the returned rows. A plain admin cannot inspect an event that
+// refers to a super admin as either its actor or target.
+func scopeRiskEventsForAdminActor(
+	ctx context.Context,
+	db *postgresql.Client,
+	query *postgresql.RiskEventQuery,
+	actorRole string,
+) (*postgresql.RiskEventQuery, error) {
+	if adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin {
+		return query, nil
+	}
+
+	superAdminIDs, err := db.User.Query().
+		Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).
+		IDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query super admin IDs: %w", err)
+	}
+	if len(superAdminIDs) == 0 {
+		return query, nil
+	}
+
+	return query.Where(
+		riskevent.Or(
+			riskevent.ActorUserIDIsNil(),
+			riskevent.ActorUserIDNotIn(superAdminIDs...),
+		),
+		riskevent.Or(
+			riskevent.TargetUserIDIsNil(),
+			riskevent.TargetUserIDNotIn(superAdminIDs...),
+		),
+	), nil
+}
+
+func ensureRiskEventUserReferencesManageable(
+	ctx context.Context,
+	db *postgresql.Client,
+	adminUserID string,
+	adminRole string,
+	eventActorUserID string,
+	targetUserID string,
+) error {
+	if err := ensureRiskEventUserReferenceManageable(ctx, db, adminUserID, adminRole, eventActorUserID, true); err != nil {
+		return err
+	}
+	return ensureRiskEventUserReferenceManageable(ctx, db, adminUserID, adminRole, targetUserID, false)
+}
+
+func ensureRiskEventUserReferenceManageable(
+	ctx context.Context,
+	db *postgresql.Client,
+	adminUserID string,
+	adminRole string,
+	referencedUserID string,
+	allowSelf bool,
+) error {
+	referencedUserID = strings.TrimSpace(referencedUserID)
+	if referencedUserID == "" || allowSelf && referencedUserID == adminUserID {
+		return nil
+	}
+	if referencedUserID == adminUserID {
+		return adminCoreModule.EnsureAdminCanManageTargetUser(adminUserID, adminRole, referencedUserID, adminRole)
+	}
+
+	referencedUser, err := db.User.Query().
+		Where(userSchema.IDEQ(referencedUserID)).
+		Select(userSchema.FieldID, userSchema.FieldRole).
+		Only(ctx)
+	if err != nil {
+		// Risk events may legitimately retain references to deleted or external
+		// users, so preserve that existing compatibility behavior.
+		if postgresql.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("query referenced user %q: %w", referencedUserID, err)
+	}
+
+	return adminCoreModule.EnsureAdminCanManageTargetUser(
+		adminUserID,
+		adminRole,
+		referencedUser.ID,
+		string(referencedUser.Role),
+	)
+}
+
+func optionalRiskEventUserID(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func applyRiskEventSort(query *postgresql.RiskEventQuery, sortValue string) *postgresql.RiskEventQuery {

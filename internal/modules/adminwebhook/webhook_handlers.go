@@ -1,12 +1,13 @@
 package adminwebhook
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/handler"
-	"strings"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -14,6 +15,15 @@ import (
 
 func handleListAdminWebhooks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+		if adminCoreModule.NormalizeRole(actorRole) != adminCoreModule.RoleSuperAdmin {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionList, adminWebhookTargetType, adminWebhookTargetIDAll, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata("permission_denied", nil))
+			return harukiAPIHelper.ErrorForbidden(c, "super admin access required")
+		}
+
 		rows, err := apiHelper.DBManager.DB.WebhookEndpoint.Query().
 			WithSubscriptions().
 			Order(webhookendpoint.ByCreatedAt(sql.OrderDesc()), webhookendpoint.ByID(sql.OrderAsc())).
@@ -39,7 +49,7 @@ func handleListAdminWebhooks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionList, adminWebhookTargetType, adminWebhookTargetIDAll, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -112,7 +122,7 @@ func handleCreateAdminWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionCreate, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonWebhookConflict, nil))
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "webhook conflict", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "webhook conflict", nil)
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionCreate, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonCreateWebhookFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to create webhook")
@@ -123,7 +133,7 @@ func handleCreateAdminWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			"generatedID":         payload.ID == nil || strings.TrimSpace(*payload.ID) == "",
 			"generatedCredential": payload.Credential == nil || strings.TrimSpace(*payload.Credential) == "",
 		})
-		return harukiAPIHelper.SuccessResponse(c, "webhook created", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "webhook created", &resp)
 	}
 }
 
@@ -191,14 +201,14 @@ func handleUpdateAdminWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdate, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 				"noChange": true,
 			})
-			return harukiAPIHelper.SuccessResponse(c, "webhook updated", &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, "webhook updated", &resp)
 		}
 
 		updated, err := update.Save(c.Context())
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdate, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonWebhookConflict, nil))
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "webhook conflict", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "webhook conflict", nil)
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionUpdate, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonUpdateWebhookFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to update webhook")
@@ -212,7 +222,7 @@ func handleUpdateAdminWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			"updatedEnabled":    payload.Enabled != nil,
 			"updatedBearer":     payload.ClearBearer || payload.Bearer != nil,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "webhook updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "webhook updated", &resp)
 	}
 }
 
@@ -235,6 +245,6 @@ func handleDeleteAdminWebhook(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionDelete, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse[string](c, "webhook deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "webhook deleted", nil)
 	}
 }

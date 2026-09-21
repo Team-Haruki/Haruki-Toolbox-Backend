@@ -16,7 +16,7 @@ import (
 type AuthorizeSocialPlatformInfo struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// UserID holds the value of the "user_id" field.
 	UserID string `json:"user_id,omitempty"`
 	// Platform holds the value of the "platform" field.
@@ -24,11 +24,11 @@ type AuthorizeSocialPlatformInfo struct {
 	// PlatformUserID holds the value of the "platform_user_id" field.
 	PlatformUserID string `json:"platform_user_id,omitempty"`
 	// PlatformID holds the value of the "platform_id" field.
-	PlatformID int `json:"platform_id,omitempty"`
+	PlatformID int `json:"platform_id,omitzero"`
 	// Comment holds the value of the "comment" field.
 	Comment string `json:"comment,omitempty"`
 	// AllowFastVerification holds the value of the "allow_fast_verification" field.
-	AllowFastVerification bool `json:"allow_fast_verification,omitempty"`
+	AllowFastVerification bool `json:"allow_fast_verification,omitzero"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AuthorizeSocialPlatformInfoQuery when eager-loading is set.
 	Edges        AuthorizeSocialPlatformInfoEdges `json:"edges"`
@@ -38,7 +38,7 @@ type AuthorizeSocialPlatformInfo struct {
 // AuthorizeSocialPlatformInfoEdges holds the relations/edges for other nodes in the graph.
 type AuthorizeSocialPlatformInfoEdges struct {
 	// User holds the value of the user edge.
-	User *User `json:"user,omitempty"`
+	User *User `json:"user,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

@@ -118,7 +118,7 @@ func (_u *OAuth2ClientWebhookEndpointUpdate) Mutation() *OAuth2ClientWebhookEndp
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *OAuth2ClientWebhookEndpointUpdate) Save(ctx context.Context) (int, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -322,7 +322,7 @@ func (_u *OAuth2ClientWebhookEndpointUpdateOne) Select(field string, fields ...s
 // Save executes the query and returns the updated OAuth2ClientWebhookEndpoint entity.
 func (_u *OAuth2ClientWebhookEndpointUpdateOne) Save(ctx context.Context) (*OAuth2ClientWebhookEndpoint, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

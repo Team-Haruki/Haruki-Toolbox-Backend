@@ -3,12 +3,13 @@ package upload
 import (
 	"crypto/subtle"
 	"fmt"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"regexp"
 	"strconv"
 	"strings"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"crypto/aes"
 	"crypto/cipher"
@@ -95,7 +96,7 @@ func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	return plaintext, nil
 }
 
-func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		serverStr := c.Params("server")
@@ -128,22 +129,23 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			&gameUserID,
 			nil,
 			apiHelper,
+			dependencies,
 			harukiUtils.UploadMethodHarukiProxy,
 		)
 		if err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to process upload")
 		}
-		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded %s data.", serverStr, gameUserID, dataType), nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded %s data.", serverStr, gameUserID, dataType), nil)
 	}
 }
 
-func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	for _, prefix := range []string{"/harukiproxy/:server/:user_id/:data_type", "/api/harukiproxy/:server/:user_id/:data_type"} {
 		api := apiHelper.Router.Group(prefix, validateHarukiProxyClientHeader(apiHelper))
 
-		api.Post("/upload", handleHarukiProxyUpload(apiHelper))
+		api.Post("/upload", handleHarukiProxyUpload(apiHelper, dependencies))
 	}
 }

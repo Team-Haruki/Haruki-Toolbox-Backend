@@ -1,10 +1,11 @@
 package userprofile
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"os"
 	"path/filepath"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 func TestBuildAvatarFilePathSanitizesName(t *testing.T) {

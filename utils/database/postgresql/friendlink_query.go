@@ -164,8 +164,8 @@ func (_q *FriendLinkQuery) All(ctx context.Context) ([]*FriendLink, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*FriendLink, *FriendLinkQuery]()
-	return withInterceptors[[]*FriendLink](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*FriendLink, *FriendLinkQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*FriendLink](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *FriendLinkQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*FriendLinkQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*FriendLinkQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *FriendLinkGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*FriendLinkQuery, *FriendLinkGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*FriendLinkQuery, *FriendLinkGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *FriendLinkGroupBy) sqlScan(ctx context.Context, root *FriendLinkQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *FriendLinkSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*FriendLinkQuery, *FriendLinkSelect](ctx, _s.FriendLinkQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*FriendLinkQuery, *FriendLinkSelect](ctx, _s.FriendLinkQuery, _s, _s.inters, v)
 }
 
 func (_s *FriendLinkSelect) sqlScan(ctx context.Context, root *FriendLinkQuery, v any) error {

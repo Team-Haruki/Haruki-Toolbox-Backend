@@ -4,11 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"os"
 	"strings"
 
-	"github.com/bytedance/sonic"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -17,8 +18,8 @@ import (
 func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 	app := fiber.New(fiber.Config{
 		BodyLimit:   100 * 1024 * 1024,
-		JSONEncoder: sonic.Marshal,
-		JSONDecoder: sonic.Unmarshal,
+		JSONEncoder: jsoncodec.Marshal,
+		JSONDecoder: jsoncodec.Unmarshal,
 		ProxyHeader: cfg.Backend.ProxyHeader,
 		TrustProxy:  cfg.Backend.EnableTrustProxy,
 		TrustProxyConfig: fiber.TrustProxyConfig{

@@ -1,14 +1,15 @@
 package adminusers
 
 import (
+	"strconv"
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strconv"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -39,7 +40,7 @@ func handleListUserGameAccountBindings(apiHelper *harukiAPIHelper.HarukiToolboxR
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -92,7 +93,7 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 					"server":     string(server),
 					"gameUserID": gameUserID,
 				}))
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding belongs to another user", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding belongs to another user", nil)
 			}
 
 			if _, err := existing.Update().
@@ -116,7 +117,7 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 				Save(c.Context()); err != nil {
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonBindingConflict, nil))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding conflict", nil)
 				}
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateBindingFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to create game account binding")
@@ -141,7 +142,7 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			"gameUserID": gameUserID,
 			"created":    created,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "game account binding upserted", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "game account binding upserted", &resp)
 	}
 }
 
@@ -186,7 +187,7 @@ func handleDeleteUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 				"server":     string(server),
 				"gameUserID": gameUserID,
 			}))
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding belongs to another user", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding belongs to another user", nil)
 		}
 
 		if err := apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(c.Context()); err != nil {
@@ -199,6 +200,6 @@ func handleDeleteUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			"server":     string(server),
 			"gameUserID": gameUserID,
 		})
-		return harukiAPIHelper.SuccessResponse[string](c, "game account binding deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "game account binding deleted", nil)
 	}
 }

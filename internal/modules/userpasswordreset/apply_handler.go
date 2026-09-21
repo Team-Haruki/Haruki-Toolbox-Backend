@@ -57,7 +57,7 @@ func handleResetPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			return handleResetPasswordViaKratos(c, apiHelper, payload, &targetUserID, &result, &reason, &sessionClearFailed)
 		}
 		reason = "managed_identity_required"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
 	}
 }
 
@@ -114,9 +114,9 @@ func handleResetPasswordViaKratos(
 	if *sessionClearFailed {
 		*result = harukiAPIHelper.SystemLogResultSuccess
 		*reason = "ok_session_clear_failed"
-		return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully, but failed to clear existing sessions", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "Password reset successfully, but failed to clear existing sessions", nil)
 	}
 	*result = harukiAPIHelper.SystemLogResultSuccess
 	*reason = "ok"
-	return harukiAPIHelper.SuccessResponse[string](c, "Password reset successfully", nil)
+	return harukiAPIHelper.Responses.SuccessResponse[string](c, "Password reset successfully", nil)
 }

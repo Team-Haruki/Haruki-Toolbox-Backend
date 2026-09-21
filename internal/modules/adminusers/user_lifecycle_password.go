@@ -1,11 +1,12 @@
 package adminusers
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -105,7 +106,7 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		localMirrorFailureReason := ""
 		if !kratosManaged {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, map[string]any{"reason": "managed_identity_required"}))
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
 		}
 		resp := adminResetPasswordResponse{
 			UserID:            targetUser.ID,
@@ -144,14 +145,14 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, metadata)
 		if localMirrorFailed && sessionClearFailed {
-			return harukiAPIHelper.SuccessResponse(c, "password reset, but local mirror sync failed and some sessions were not cleared", &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, "password reset, but local mirror sync failed and some sessions were not cleared", &resp)
 		}
 		if localMirrorFailed {
-			return harukiAPIHelper.SuccessResponse(c, "password reset, but local mirror sync failed", &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, "password reset, but local mirror sync failed", &resp)
 		}
 		if sessionClearFailed {
-			return harukiAPIHelper.SuccessResponse(c, "password reset, but failed to clear user sessions", &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, "password reset, but failed to clear user sessions", &resp)
 		}
-		return harukiAPIHelper.SuccessResponse(c, "password reset", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "password reset", &resp)
 	}
 }

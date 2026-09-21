@@ -188,8 +188,8 @@ func (_q *IOSScriptCodeQuery) All(ctx context.Context) ([]*IOSScriptCode, error)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*IOSScriptCode, *IOSScriptCodeQuery]()
-	return withInterceptors[[]*IOSScriptCode](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*IOSScriptCode, *IOSScriptCodeQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*IOSScriptCode](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -228,7 +228,7 @@ func (_q *IOSScriptCodeQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*IOSScriptCodeQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*IOSScriptCodeQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -533,7 +533,7 @@ func (_g *IOSScriptCodeGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*IOSScriptCodeQuery, *IOSScriptCodeGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*IOSScriptCodeQuery, *IOSScriptCodeGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *IOSScriptCodeGroupBy) sqlScan(ctx context.Context, root *IOSScriptCodeQuery, v any) error {
@@ -581,7 +581,7 @@ func (_s *IOSScriptCodeSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*IOSScriptCodeQuery, *IOSScriptCodeSelect](ctx, _s.IOSScriptCodeQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*IOSScriptCodeQuery, *IOSScriptCodeSelect](ctx, _s.IOSScriptCodeQuery, _s, _s.inters, v)
 }
 
 func (_s *IOSScriptCodeSelect) sqlScan(ctx context.Context, root *IOSScriptCodeQuery, v any) error {

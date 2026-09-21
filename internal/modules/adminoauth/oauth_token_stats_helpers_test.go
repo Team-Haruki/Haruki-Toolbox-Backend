@@ -3,9 +3,10 @@
 package adminoauth
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"testing"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 func TestApplyLatestExpiresAtByUser(t *testing.T) {

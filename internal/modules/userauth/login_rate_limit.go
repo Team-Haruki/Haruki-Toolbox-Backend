@@ -2,10 +2,11 @@ package userauth
 
 import (
 	"fmt"
+	"time"
+
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -64,14 +65,14 @@ func respondLoginRateLimited(c fiber.Ctx, key string, message string, apiHelper 
 		}
 	}
 	c.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, fmt.Sprintf("%s (retry after %ds)", message, retryAfter), nil)
+	return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, fmt.Sprintf("%s (retry after %ds)", message, retryAfter), nil)
 }
 
 func checkLoginRateLimit(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) (limited bool, key string, message string, err error) {
 	ctx := c.Context()
 	normalizedEmail := platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildLoginRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildLoginRateLimitTargetKey(normalizedEmail)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildLoginRateLimitTargetKey(normalizedEmail)
 
 	values, err := apiHelper.DBManager.Redis.Redis.Eval(
 		ctx,
@@ -105,7 +106,7 @@ func releaseLoginRateLimitReservation(c fiber.Ctx, apiHelper *harukiAPIHelper.Ha
 	ctx := c.Context()
 	normalizedEmail := platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildLoginRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildLoginRateLimitTargetKey(normalizedEmail)
+	targetKey := apiHelper.DBManager.Redis.KeyBuilder().BuildLoginRateLimitTargetKey(normalizedEmail)
 	_, err := apiHelper.DBManager.Redis.Redis.Eval(ctx, loginRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
 	return err
 }

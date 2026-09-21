@@ -102,7 +102,7 @@ func (_c *TicketMessageCreate) Mutation() *TicketMessageMutation {
 // Save creates the TicketMessage in the database.
 func (_c *TicketMessageCreate) Save(ctx context.Context) (*TicketMessage, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

@@ -2,8 +2,9 @@ package sekaiapi
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
 	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -28,7 +29,7 @@ type HarukiSekaiAPIResult struct {
 
 func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient {
 	return &HarukiSekaiAPIClient{
-		httpClient:             resty.New().SetTimeout(sekaiAPIRequestTimeout),
+		httpClient:             jsoncodec.ConfigureResty(resty.New()).SetTimeout(sekaiAPIRequestTimeout),
 		harukiSekaiAPIEndpoint: apiEndpoint,
 		harukiSekaiAPIToken:    apiToken,
 	}

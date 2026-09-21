@@ -1,8 +1,9 @@
 package adminstats
 
 import (
-	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	"time"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 )
 
 type uploadLogQueryFilters struct {
@@ -25,7 +26,7 @@ type uploadLogAppliedFilters struct {
 	UploadMethods []string `json:"uploadMethods,omitempty"`
 	DataTypes     []string `json:"dataTypes,omitempty"`
 	Servers       []string `json:"servers,omitempty"`
-	Success       *bool    `json:"success,omitempty"`
+	Success       *bool    `json:"success,omitzero"`
 }
 
 type uploadLogQuerySummary struct {

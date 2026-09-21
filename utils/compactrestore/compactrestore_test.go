@@ -1,8 +1,9 @@
 package compactrestore
 
 import (
-	"encoding/json"
 	"testing"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
 )
 
 func TestRestoreColumnsMapsEnumAndTruncatesToShortestColumn(t *testing.T) {
@@ -33,7 +34,7 @@ func TestRestoreColumnsMapsEnumAndTruncatesToShortestColumn(t *testing.T) {
 func TestRestoreEnumColumnInvalidMode(t *testing.T) {
 	t.Parallel()
 
-	values := []any{0, 99, "1", json.Number("0"), nil}
+	values := []any{0, 99, "1", jsonvalue.Number("0"), nil}
 	enumValues := []any{"inactive", "active"}
 
 	nullInvalid := RestoreEnumColumn(values, enumValues, Options{

@@ -3,10 +3,10 @@
 package commandlog
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // ID filters vertices based on their ID field.

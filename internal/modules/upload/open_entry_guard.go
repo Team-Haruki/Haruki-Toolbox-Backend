@@ -2,13 +2,14 @@ package upload
 
 import (
 	"context"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -98,7 +99,7 @@ func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			}
 		}
 		c.Set("Retry-After", strconv.Itoa(retryAfter))
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
 	}
 }
 

@@ -1,12 +1,13 @@
 package userpasswordreset
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"

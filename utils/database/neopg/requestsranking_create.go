@@ -6,10 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 )
 
 // RequestsRankingCreate is the builder for creating a RequestsRanking entity.
@@ -46,7 +46,7 @@ func (_c *RequestsRankingCreate) Mutation() *RequestsRankingMutation {
 
 // Save creates the RequestsRanking in the database.
 func (_c *RequestsRankingCreate) Save(ctx context.Context) (*RequestsRanking, error) {
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

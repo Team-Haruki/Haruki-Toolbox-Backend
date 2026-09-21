@@ -2,13 +2,14 @@ package admin
 
 import (
 	"bytes"
-	"encoding/json"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 
 	_ "github.com/mattn/go-sqlite3"
 

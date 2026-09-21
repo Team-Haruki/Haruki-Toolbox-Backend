@@ -2,18 +2,20 @@ package usersocial
 
 import (
 	"fmt"
+	"strings"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID, err := userCoreModule.CurrentUserID(c)
@@ -48,7 +50,7 @@ func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fib
 			return respondQQMailRateLimited(c, limitKey, limitMessage, apiHelper)
 		}
 		email := fmt.Sprintf("%s@qq.com", req.QQ)
-		if err := userEmailModule.SendEmailHandler(c, email, req.ChallengeToken, apiHelper); err != nil {
+		if err := userEmailModule.SendEmailHandler(c, email, req.ChallengeToken, apiHelper, turnstileVerifier); err != nil {
 			if releaseErr := releaseQQMailSendRateLimitReservation(c, apiHelper, userID, req.QQ); releaseErr != nil {
 				harukiLogger.Warnf("Failed to release QQ mail send rate limit reservation for %s/%s: %v", userID, req.QQ, releaseErr)
 			}
@@ -106,7 +108,7 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		}
 		if exists {
 			reason = "social_platform_conflict"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
 		}
 		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.
 			Create().
@@ -117,7 +119,7 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			Save(ctx); err != nil {
 			if postgresql.IsConstraintError(err) {
 				reason = "social_platform_conflict"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
 			}
 			harukiLogger.Errorf("Failed to create social platform info: %v", err)
 			reason = "create_social_platform_failed"
@@ -133,6 +135,6 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "social platform verified", &ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform verified", &ud)
 	}
 }

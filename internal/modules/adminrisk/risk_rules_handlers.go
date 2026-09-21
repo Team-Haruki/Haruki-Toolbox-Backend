@@ -1,11 +1,12 @@
 package adminrisk
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
-	"strings"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -43,7 +44,7 @@ func handleListRiskRules(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			GeneratedAt: adminNowUTC(),
 			Items:       items,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -118,6 +119,6 @@ func handleUpsertRiskRules(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			"count": len(updated),
 		})
 		resp := riskRuleListResponse{GeneratedAt: adminNowUTC(), Items: updated}
-		return harukiAPIHelper.SuccessResponse(c, "risk rules updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "risk rules updated", &resp)
 	}
 }

@@ -2,6 +2,7 @@ package sekai
 
 import (
 	"fmt"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
@@ -78,6 +79,7 @@ func GetServerConfig(server harukiUtils.SupportedInheritUploadServer) (*ServerCo
 
 type Client struct {
 	server          harukiUtils.SupportedInheritUploadServer
+	serverCryptor   ServerCryptor
 	api             string
 	versionURL      string
 	inherit         harukiUtils.InheritInformation

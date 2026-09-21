@@ -130,7 +130,7 @@ func (_u *FriendLinkUpdate) Mutation() *FriendLinkMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *FriendLinkUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -356,7 +356,7 @@ func (_u *FriendLinkUpdateOne) Select(field string, fields ...string) *FriendLin
 
 // Save executes the query and returns the updated FriendLink entity.
 func (_u *FriendLinkUpdateOne) Save(ctx context.Context) (*FriendLink, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

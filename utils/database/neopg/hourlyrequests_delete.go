@@ -4,12 +4,12 @@ package neopg
 
 import (
 	"context"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // HourlyRequestsDelete is the builder for deleting a HourlyRequests entity.
@@ -27,7 +27,7 @@ func (_d *HourlyRequestsDelete) Where(ps ...predicate.HourlyRequests) *HourlyReq
 
 // Exec executes the deletion query and returns how many vertices were deleted.
 func (_d *HourlyRequestsDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.

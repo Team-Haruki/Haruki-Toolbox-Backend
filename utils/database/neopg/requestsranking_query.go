@@ -5,14 +5,14 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/requestsranking"
 )
 
 // RequestsRankingQuery is the builder for querying RequestsRanking entities.
@@ -164,8 +164,8 @@ func (_q *RequestsRankingQuery) All(ctx context.Context) ([]*RequestsRanking, er
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*RequestsRanking, *RequestsRankingQuery]()
-	return withInterceptors[[]*RequestsRanking](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*RequestsRanking, *RequestsRankingQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*RequestsRanking](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *RequestsRankingQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*RequestsRankingQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*RequestsRankingQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *RequestsRankingGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RequestsRankingQuery, *RequestsRankingGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*RequestsRankingQuery, *RequestsRankingGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *RequestsRankingGroupBy) sqlScan(ctx context.Context, root *RequestsRankingQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *RequestsRankingSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RequestsRankingQuery, *RequestsRankingSelect](ctx, _s.RequestsRankingQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*RequestsRankingQuery, *RequestsRankingSelect](ctx, _s.RequestsRankingQuery, _s, _s.inters, v)
 }
 
 func (_s *RequestsRankingSelect) sqlScan(ctx context.Context, root *RequestsRankingQuery, v any) error {

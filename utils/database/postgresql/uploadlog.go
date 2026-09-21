@@ -16,7 +16,7 @@ import (
 type UploadLog struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// jp en tw kr cn
 	Server string `json:"server,omitempty"`
 	// GameUserID holds the value of the "game_user_id" field.
@@ -28,9 +28,9 @@ type UploadLog struct {
 	// manual harukiproxy iosproxy inherit
 	UploadMethod string `json:"upload_method,omitempty"`
 	// Success holds the value of the "success" field.
-	Success bool `json:"success,omitempty"`
+	Success bool `json:"success,omitzero"`
 	// ErrorMessage holds the value of the "error_message" field.
-	ErrorMessage *string `json:"error_message,omitempty"`
+	ErrorMessage *string `json:"error_message,omitzero"`
 	// UploadTime holds the value of the "upload_time" field.
 	UploadTime   time.Time `json:"upload_time,omitempty"`
 	selectValues sql.SelectValues

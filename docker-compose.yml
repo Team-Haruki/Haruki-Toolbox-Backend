@@ -1,5 +1,11 @@
 name: ${COMPOSE_PROJECT_NAME:-haruki-toolbox}
 
+# Every published port MUST carry an explicit host IP. A bare "PORT:PORT"
+# binds 0.0.0.0, and Docker's DNAT rules bypass the host firewall's INPUT chain
+# entirely — ufw can report "default deny (incoming)" while the port answers
+# from the public internet. Bind to 127.0.0.1 (host-network consumers such as a
+# local WAF/reverse proxy) plus ${TAILSCALE_IP} (other nodes); public traffic
+# must arrive through the edge proxy, never at a container port.
 services:
   mihomo:
     image: metacubex/mihomo
@@ -8,8 +14,10 @@ services:
     networks:
       - haruki-net
     ports:
-      - "7890:7890"
-      - "9090:9090"
+      - "127.0.0.1:7890:7890"
+      - "127.0.0.1:9090:9090"
+      - "${TAILSCALE_IP}:7890:7890"
+      - "${TAILSCALE_IP}:9090:9090"
     volumes:
       - ${STACK_HOST_ROOT}/mihomo/${MIHOMO_PROFILE_NAME}.yaml:/root/.config/mihomo/config.yaml
     healthcheck:
@@ -37,7 +45,8 @@ services:
       HARUKI_DB_USER: ${HARUKI_DB_USER}
       HARUKI_DB_PASSWORD: ${HARUKI_DB_PASSWORD}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+      - "${TAILSCALE_IP}:${POSTGRES_PORT}:5432"
     volumes:
       - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/18/docker
       - ${STACK_HOST_ROOT}/postgres-init:/docker-entrypoint-initdb.d:ro
@@ -57,32 +66,12 @@ services:
       - haruki-net
     command: redis-server --save 60 1 --requirepass ${REDIS_PASSWORD}
     ports:
-      - "${REDIS_PORT}:6379"
+      - "127.0.0.1:${REDIS_PORT}:6379"
+      - "${TAILSCALE_IP}:${REDIS_PORT}:6379"
     volumes:
       - ${REDIS_DATA_PATH}:/data
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  mongo:
-    image: mongo:7
-    restart: unless-stopped
-    depends_on:
-      mihomo:
-        condition: service_healthy
-    networks:
-      - haruki-net
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
-    volumes:
-      - ${MONGO_DATA_PATH}:/data/db
-    ports:
-      - "27017:27017"
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--username", "${MONGO_ROOT_USERNAME}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -103,6 +92,7 @@ services:
       - ${STACK_HOST_ROOT}/kratos/kratos.yml:/etc/config/kratos/kratos.yml:ro
       - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
       - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
+      - ${STACK_HOST_ROOT}/kratos/oidc.apple.jsonnet:/etc/config/kratos/oidc.apple.jsonnet:ro
 
   kratos:
     image: oryd/kratos:${ORY_VERSION}
@@ -116,8 +106,10 @@ services:
         condition: service_healthy
     command: serve -c /etc/config/kratos/kratos.yml all --watch-courier
     ports:
-      - "${KRATOS_PUBLIC_PORT}:4433"
-      - "${KRATOS_ADMIN_PORT}:4434"
+      - "127.0.0.1:${KRATOS_PUBLIC_PORT}:4433"
+      - "${TAILSCALE_IP}:${KRATOS_PUBLIC_PORT}:4433"
+      - "127.0.0.1:${KRATOS_ADMIN_PORT}:4434"
+      - "${TAILSCALE_IP}:${KRATOS_ADMIN_PORT}:4434"
     environment:
       DSN: postgres://${KRATOS_DB_USER}:${KRATOS_DB_PASSWORD}@postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: info
@@ -146,8 +138,24 @@ services:
       SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ID: ${KRATOS_PASSKEY_RP_ID:-toolbox.example.com}
       SELFSERVICE_METHODS_PASSKEY_CONFIG_RP_ORIGINS_0: ${KRATOS_PASSKEY_RP_ORIGIN:-https://toolbox.example.com}
       SELFSERVICE_METHODS_OIDC_ENABLED: "true"
+      # Setting any indexed provider through environment variables rebuilds the
+      # provider array, so keep every required field explicit for both entries.
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_ID: google
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_PROVIDER: google
       SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_ID: ${KRATOS_OIDC_GOOGLE_CLIENT_ID:-change-me-google-client-id}
       SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_CLIENT_SECRET: ${KRATOS_OIDC_GOOGLE_CLIENT_SECRET:-change-me-google-client-secret}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_MAPPER_URL: file:///etc/config/kratos/oidc.google.jsonnet
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_SCOPE_0: email
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_0_SCOPE_1: profile
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_ID: apple
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_PROVIDER: apple
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_CLIENT_ID: ${KRATOS_OIDC_APPLE_CLIENT_ID:-change-me-apple-services-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_APPLE_TEAM_ID: ${KRATOS_OIDC_APPLE_TEAM_ID:-change-me-apple-team-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_APPLE_PRIVATE_KEY_ID: ${KRATOS_OIDC_APPLE_PRIVATE_KEY_ID:-change-me-apple-private-key-id}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_APPLE_PRIVATE_KEY: ${KRATOS_OIDC_APPLE_PRIVATE_KEY:-change-me-apple-private-key}
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_ISSUER_URL: https://appleid.apple.com
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_MAPPER_URL: file:///etc/config/kratos/oidc.apple.jsonnet
+      SELFSERVICE_METHODS_OIDC_CONFIG_PROVIDERS_1_SCOPE_0: email
       SELFSERVICE_METHODS_TOTP_ENABLED: "true"
       SELFSERVICE_METHODS_TOTP_CONFIG_ISSUER: ${KRATOS_MFA_TOTP_ISSUER:-Haruki Toolbox}
       SELFSERVICE_METHODS_LOOKUP_SECRET_ENABLED: "true"
@@ -170,6 +178,7 @@ services:
       - ${STACK_HOST_ROOT}/kratos/kratos.yml:/etc/config/kratos/kratos.yml:ro
       - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
       - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
+      - ${STACK_HOST_ROOT}/kratos/oidc.apple.jsonnet:/etc/config/kratos/oidc.apple.jsonnet:ro
 
   hydra-migrate:
     image: oryd/hydra:${ORY_VERSION}
@@ -219,8 +228,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mongo:
-        condition: service_healthy
       kratos:
         condition: service_started
       hydra:
@@ -235,10 +242,6 @@ services:
       AUTH_PROXY_SESSION_HEADER: X-Auth-Proxy-Session-Id
       HARUKI_DB_TYPE: postgres
       HARUKI_DB_URL: postgresql://${HARUKI_DB_USER}:${HARUKI_DB_PASSWORD}@postgres:5432/toolbox?sslmode=disable
-      MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
-      MONGODB_DB: ${MONGODB_DB}
-      MONGODB_SUITE_COLLECTION: ${MONGODB_SUITE_COLLECTION}
-      MONGODB_MYSEKAI_COLLECTION: ${MONGODB_MYSEKAI_COLLECTION}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -249,8 +252,14 @@ services:
       HYDRA_ADMIN_URL: http://hydra:4445
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: "16666"
+      BACKEND_PROFILING_ENABLED: ${BACKEND_PROFILING_ENABLED:-false}
+      BACKEND_PROFILING_INTERVAL_SECONDS: ${BACKEND_PROFILING_INTERVAL_SECONDS:-30}
       BACKEND_AUTO_MIGRATE: "${BACKEND_AUTO_MIGRATE:-true}"
-      BACKEND_ENABLE_TRUST_PROXY: "true"
+      # Keep forwarded-IP trust disabled unless this deployment assigns its edge
+      # proxy a stable address and sets BACKEND_TRUSTED_PROXIES to that exact IP.
+      # Broad Docker/LAN/Tailscale networks must never be trusted as proxies.
+      BACKEND_ENABLE_TRUST_PROXY: "${BACKEND_ENABLE_TRUST_PROXY:-false}"
+      BACKEND_TRUSTED_PROXIES: "${BACKEND_TRUSTED_PROXIES:-}"
       BACKEND_PROXY_HEADER: X-Forwarded-For
       BACKEND_URL: ${BACKEND_PUBLIC_BASE_URL}
       BACKEND_CDN_URL: ${ASSET_PUBLIC_BASE_URL}
@@ -261,6 +270,8 @@ services:
       SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-no-reply@example.com}
       SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Haruki Toolbox}"
       SOCIAL_PLATFORM_VERIFY_TOKEN: ${SOCIAL_PLATFORM_VERIFY_TOKEN}
+      GAME_DATA_URL: ${GAME_DATA_URL}
+      GAME_DATA_READ_SOURCE: postgres
       PRIVATE_API_SECRET: ${PRIVATE_API_SECRET}
       PRIVATE_API_USER_AGENT: ${PRIVATE_API_USER_AGENT}
       WEBHOOK_JWT_SECRET: ${WEBHOOK_JWT_SECRET}
@@ -268,6 +279,9 @@ services:
       AFDIAN_API_TOKEN: ${AFDIAN_API_TOKEN}
       AFDIAN_API_BASE_URL: ${AFDIAN_API_BASE_URL:-https://afdian.com/api/open}
       AFDIAN_REQUEST_TIMEOUT_SECONDS: ${AFDIAN_REQUEST_TIMEOUT_SECONDS:-10}
+      AFDIAN_WEBHOOK_SECRET: ${AFDIAN_WEBHOOK_SECRET}
+      AFDIAN_SYNC_ENABLED: ${AFDIAN_SYNC_ENABLED}
+      AFDIAN_SYNC_INTERVAL_SECONDS: ${AFDIAN_SYNC_INTERVAL_SECONDS}
       SEKAI_API_ENDPOINT: ${SEKAI_API_ENDPOINT}
       SEKAI_API_TOKEN: ${SEKAI_API_TOKEN}
       HARUKI_PROXY_USER_AGENT: ${HARUKI_PROXY_USER_AGENT}
@@ -315,7 +329,8 @@ services:
         condition: service_healthy
     command: serve proxy -c /etc/config/oathkeeper/oathkeeper.yml
     ports:
-      - "${OATHKEEPER_PROXY_PORT}:4455"
+      - "127.0.0.1:${OATHKEEPER_PROXY_PORT}:4455"
+      - "${TAILSCALE_IP}:${OATHKEEPER_PROXY_PORT}:4455"
     environment:
       LOG_LEVEL: info
       SERVE_PROXY_CORS_ALLOWED_ORIGINS_0: ${FRONTEND_PUBLIC_URL}
@@ -337,7 +352,8 @@ services:
       mihomo:
         condition: service_healthy
     ports:
-      - "${KRATOS_ADMIN_UI_PORT}:3000"
+      - "127.0.0.1:${KRATOS_ADMIN_UI_PORT}:3000"
+      - "${TAILSCALE_IP}:${KRATOS_ADMIN_UI_PORT}:3000"
     environment:
       KRATOS_ADMIN_URL: http://kratos:4434
       KRATOS_PUBLIC_URL: http://kratos:4433

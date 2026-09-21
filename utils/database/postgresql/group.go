@@ -15,11 +15,11 @@ import (
 type Group struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Group holds the value of the "group" field.
 	Group string `json:"group,omitempty"`
 	// Manual ordering weight; ascending, lower values appear first.
-	SortOrder int `json:"sort_order,omitempty"`
+	SortOrder int `json:"sort_order,omitzero"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GroupQuery when eager-loading is set.
 	Edges        GroupEdges `json:"edges"`

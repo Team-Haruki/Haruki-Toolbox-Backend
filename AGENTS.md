@@ -2,11 +2,11 @@
 
 ## 项目概览
 
-Haruki Toolbox Backend 是一个基于 Go 1.26 的后端项目，核心技术栈包括：
+Haruki Toolbox Backend 是一个基于 Go 1.27 的后端项目，核心技术栈包括：
 
 - Fiber：HTTP 路由与中间件
 - Ent：PostgreSQL schema 与 ORM
-- MongoDB：游戏数据、Webhook 等文档型数据存储
+- 游戏数据：独立 PostgreSQL pool 存储 suite / mysekai；MongoDB 已退役，仅保留 BSON 兼容工具
 - Redis：缓存、验证码状态、限流状态、会话辅助状态
 - Ory Kratos：浏览器身份体系与自助认证流程
 - Ory Hydra：OAuth2 / OIDC
@@ -108,7 +108,7 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - **Auth Proxy 身份只信 Oathkeeper 注入的 subject 头，不信客户端头。** auth-proxy 模式下身份必须经 `resolveKratosIdentity` 从 `X-Kratos-Identity-Id` 解析；**绝不**把客户端自带的 `X-User-Id` 当权威——若存在必须等于解析结果，否则拒绝。后端**只能**经 Oathkeeper 访问（不要把后端端口发布到公网，绑内网/Tailscale 接口可以）。信任密钥是整个身份伪造边界：用 `crypto/subtle.ConstantTimeCompare` 比较；启动时拒绝占位值或 <16 字符；oathkeeper mutator 必须注入全部信任头（含会话 id）并清除 `X-User-Id`。
 - **所有密钥常量时间比较。** 共享密钥、token、OTP、验证码一律 `crypto/subtle.ConstantTimeCompare`，禁用 `==`/`!=`。
 - **对象级鉴权（防 IDOR）。** 每个 per-user 对象的读写都要 scope 到已认证本人或由数据解析出的属主，绝不信 body/param 里的 id。管理员对目标用户的**读取和**写入都必须过 `admincore.EnsureAdminCanManageTargetUser`（角色层级）——读取也要（detail/role/activity/system-logs）。绕过 Oathkeeper 的 token 网关端点（`/api/private/*`、harukiproxy、社交验证、`/internal/*`）每请求自鉴权，是最高价值攻击面。
-- **不可信上传解析。** 上传体用**公开**的 Project Sekai 客户端密钥解密，解出的内容即攻击者可控：解码前校验嵌套深度（`orderedmsgpack.ValidateMaxDepth`），拒绝含 `.`/`$` 的 Mongo 字段名，按剩余长度封顶分配。Go 栈溢出是 fatal，`recover()` 救不了。
+- **不可信上传解析。** 上传体用**公开**的 Project Sekai 客户端密钥解密，解出的内容即攻击者可控：解码前校验嵌套深度（`msgpackcodec.ValidateMaxDepth`），拒绝含 `.`/`$` 的 Mongo 字段名，按剩余长度封顶分配。Go 栈溢出是 fatal，`recover()` 救不了。
 - **限流/计数原子化。** attempt 计数与限流用原子 `IncrementWithTTL`，禁用 GetCache 后 SetCache（竞态会绕过上限）。`c.IP()` 只在 `EnableIPValidation` 开启且 `trusted_proxies` 收窄到真实边缘代理时才可信。
 - **SSRF。** 对用户提供 URL 的出站请求（webhook 回调）必须在 **dial 时**重新解析并拒绝私网/链路本地 IP、pin 已校验 IP，而不只是事前校验 DNS（防 rebinding）。
 - **OAuth2 bearer。** introspection 固定 `access_token` 类型，拒绝已禁用 client 的 token，禁用 client 时要真正吊销其 token/consent（不只改 metadata）。
@@ -159,17 +159,15 @@ Ory 相关改动尤其建议关注：
 - OAuth2 行为
 - 受保护 API 接入方式
 - Auth Proxy header 约定
-- HarukiBot NEO 注册/凭据重置流程
 - OAuth2 客户端对接
 - Webhook 对接
 - 新增或移除公开/受保护端点
 
 当前文档：
 
+- `docs/README.md` — 文档索引，按读者分组；新增文档在这里登记
 - `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明
-- `docs/haruki-bot-neo-registration.zh-CN.md` — HarukiBot NEO 注册与凭据重置 API 对接
-- `docs/oauth2-client-integration.zh-CN.md` — OAuth2 公开客户端对接
-- `docs/oauth2-confidential-client-integration.zh-CN.md` — OAuth2 机密客户端对接
+- `docs/oauth2-integration.zh-CN.md` — OAuth2 / OIDC 接入(公开 + 保密客户端 + Webhook)
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
 - `docs/afdian-sponsor-integration.zh-CN.md` — 爱发电赞助 webhook/同步对接
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则

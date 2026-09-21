@@ -17,17 +17,17 @@ import (
 type TicketMessage struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// TicketID holds the value of the "ticket_id" field.
-	TicketID int `json:"ticket_id,omitempty"`
+	TicketID int `json:"ticket_id,omitzero"`
 	// SenderUserID holds the value of the "sender_user_id" field.
-	SenderUserID *string `json:"sender_user_id,omitempty"`
+	SenderUserID *string `json:"sender_user_id,omitzero"`
 	// SenderRole holds the value of the "sender_role" field.
 	SenderRole ticketmessage.SenderRole `json:"sender_role,omitempty"`
 	// Message holds the value of the "message" field.
 	Message string `json:"message,omitempty"`
 	// Internal holds the value of the "internal" field.
-	Internal bool `json:"internal,omitempty"`
+	Internal bool `json:"internal,omitzero"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -39,7 +39,7 @@ type TicketMessage struct {
 // TicketMessageEdges holds the relations/edges for other nodes in the graph.
 type TicketMessageEdges struct {
 	// Ticket holds the value of the ticket edge.
-	Ticket *Ticket `json:"ticket,omitempty"`
+	Ticket *Ticket `json:"ticket,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

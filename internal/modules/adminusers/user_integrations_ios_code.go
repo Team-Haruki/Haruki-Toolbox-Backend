@@ -43,7 +43,7 @@ func handleRegenerateUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxR
 				Save(c.Context()); err != nil {
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonIosUploadCodeConflict, nil))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "upload code conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "upload code conflict", nil)
 				}
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateIosUploadCodeFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to create upload code")
@@ -52,7 +52,7 @@ func handleRegenerateUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxR
 
 		resp := adminUserIOSUploadCodeResponse{UserID: targetUser.ID, UploadCode: code}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "ios upload code regenerated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ios upload code regenerated", &resp)
 	}
 }
 
@@ -79,6 +79,6 @@ func handleClearUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"cleared": resp.Cleared,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "ios upload code cleared", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ios upload code cleared", &resp)
 	}
 }

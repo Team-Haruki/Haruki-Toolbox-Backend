@@ -188,8 +188,8 @@ func (_q *SocialPlatformInfoQuery) All(ctx context.Context) ([]*SocialPlatformIn
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*SocialPlatformInfo, *SocialPlatformInfoQuery]()
-	return withInterceptors[[]*SocialPlatformInfo](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*SocialPlatformInfo, *SocialPlatformInfoQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*SocialPlatformInfo](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -228,7 +228,7 @@ func (_q *SocialPlatformInfoQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*SocialPlatformInfoQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*SocialPlatformInfoQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -533,7 +533,7 @@ func (_g *SocialPlatformInfoGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SocialPlatformInfoQuery, *SocialPlatformInfoGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*SocialPlatformInfoQuery, *SocialPlatformInfoGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *SocialPlatformInfoGroupBy) sqlScan(ctx context.Context, root *SocialPlatformInfoQuery, v any) error {
@@ -581,7 +581,7 @@ func (_s *SocialPlatformInfoSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SocialPlatformInfoQuery, *SocialPlatformInfoSelect](ctx, _s.SocialPlatformInfoQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*SocialPlatformInfoQuery, *SocialPlatformInfoSelect](ctx, _s.SocialPlatformInfoQuery, _s, _s.inters, v)
 }
 
 func (_s *SocialPlatformInfoSelect) sqlScan(ctx context.Context, root *SocialPlatformInfoQuery, v any) error {

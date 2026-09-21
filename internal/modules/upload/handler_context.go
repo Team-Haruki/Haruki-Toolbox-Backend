@@ -2,10 +2,11 @@ package upload
 
 import (
 	"fmt"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"strconv"
 	"strings"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 type uploadContext struct {

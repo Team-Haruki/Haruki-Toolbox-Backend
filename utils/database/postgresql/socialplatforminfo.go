@@ -16,13 +16,13 @@ import (
 type SocialPlatformInfo struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Platform holds the value of the "platform" field.
 	Platform string `json:"platform,omitempty"`
 	// PlatformUserID holds the value of the "platform_user_id" field.
 	PlatformUserID string `json:"platform_user_id,omitempty"`
 	// Verified holds the value of the "verified" field.
-	Verified bool `json:"verified,omitempty"`
+	Verified bool `json:"verified,omitzero"`
 	// UserSocialPlatformInfo holds the value of the "user_social_platform_info" field.
 	UserSocialPlatformInfo string `json:"user_social_platform_info,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -34,7 +34,7 @@ type SocialPlatformInfo struct {
 // SocialPlatformInfoEdges holds the relations/edges for other nodes in the graph.
 type SocialPlatformInfoEdges struct {
 	// User holds the value of the user edge.
-	User *User `json:"user,omitempty"`
+	User *User `json:"user,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

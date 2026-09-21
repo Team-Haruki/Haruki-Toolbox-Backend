@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -17,33 +17,33 @@ import (
 type SystemLog struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// EventTime holds the value of the "event_time" field.
 	EventTime time.Time `json:"event_time,omitempty"`
 	// ActorUserID holds the value of the "actor_user_id" field.
-	ActorUserID *string `json:"actor_user_id,omitempty"`
+	ActorUserID *string `json:"actor_user_id,omitzero"`
 	// ActorRole holds the value of the "actor_role" field.
-	ActorRole *string `json:"actor_role,omitempty"`
+	ActorRole *string `json:"actor_role,omitzero"`
 	// ActorType holds the value of the "actor_type" field.
 	ActorType systemlog.ActorType `json:"actor_type,omitempty"`
 	// Action holds the value of the "action" field.
 	Action string `json:"action,omitempty"`
 	// TargetType holds the value of the "target_type" field.
-	TargetType *string `json:"target_type,omitempty"`
+	TargetType *string `json:"target_type,omitzero"`
 	// TargetID holds the value of the "target_id" field.
-	TargetID *string `json:"target_id,omitempty"`
+	TargetID *string `json:"target_id,omitzero"`
 	// Result holds the value of the "result" field.
 	Result systemlog.Result `json:"result,omitempty"`
 	// IP holds the value of the "ip" field.
-	IP *string `json:"ip,omitempty"`
+	IP *string `json:"ip,omitzero"`
 	// UserAgent holds the value of the "user_agent" field.
-	UserAgent *string `json:"user_agent,omitempty"`
+	UserAgent *string `json:"user_agent,omitzero"`
 	// Method holds the value of the "method" field.
-	Method *string `json:"method,omitempty"`
+	Method *string `json:"method,omitzero"`
 	// Path holds the value of the "path" field.
-	Path *string `json:"path,omitempty"`
+	Path *string `json:"path,omitzero"`
 	// RequestID holds the value of the "request_id" field.
-	RequestID *string `json:"request_id,omitempty"`
+	RequestID *string `json:"request_id,omitzero"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	selectValues sql.SelectValues

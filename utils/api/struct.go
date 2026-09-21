@@ -107,17 +107,17 @@ type RegisterOrLoginSuccessResponse struct {
 }
 
 type HarukiToolboxUserData struct {
-	Name                        *string                        `json:"name,omitempty"`
-	UserID                      *string                        `json:"userId,omitempty"`
-	Role                        *string                        `json:"role,omitempty"`
-	AvatarPath                  *string                        `json:"avatarPath,omitempty"`
-	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitempty"`
-	IOSUploadCode               *string                        `json:"iosUploadCode,omitempty"`
-	EmailInfo                   *EmailInfo                     `json:"emailInfo,omitempty"`
-	SocialPlatformInfo          *SocialPlatformInfo            `json:"socialPlatformInfo,omitempty"`
-	AuthorizeSocialPlatformInfo *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitempty"`
-	GameAccountBindings         *[]GameAccountBinding          `json:"gameAccountBindings,omitempty"`
-	SessionToken                *string                        `json:"sessionToken,omitempty"`
+	Name                        *string                        `json:"name,omitzero"`
+	UserID                      *string                        `json:"userId,omitzero"`
+	Role                        *string                        `json:"role,omitzero"`
+	AvatarPath                  *string                        `json:"avatarPath,omitzero"`
+	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitzero"`
+	IOSUploadCode               *string                        `json:"iosUploadCode,omitzero"`
+	EmailInfo                   *EmailInfo                     `json:"emailInfo,omitzero"`
+	SocialPlatformInfo          *SocialPlatformInfo            `json:"socialPlatformInfo,omitzero"`
+	AuthorizeSocialPlatformInfo *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitzero"`
+	GameAccountBindings         *[]GameAccountBinding          `json:"gameAccountBindings,omitzero"`
+	SessionToken                *string                        `json:"sessionToken,omitzero"`
 }
 
 type EmailInfo struct {
@@ -150,8 +150,8 @@ type GameAccountBinding struct {
 	UserID    string                             `json:"userId"`
 	Verified  bool                               `json:"verified"`
 	IsDefault bool                               `json:"isDefault"`
-	Suite     *schema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
-	Mysekai   *schema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
+	Suite     *schema.SuiteDataPrivacySettings   `json:"suite,omitzero"`
+	Mysekai   *schema.MysekaiDataPrivacySettings `json:"mysekai,omitzero"`
 }
 
 type GenerateSocialPlatformCodeResponse struct {

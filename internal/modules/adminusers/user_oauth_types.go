@@ -7,8 +7,8 @@ type adminOAuthTokenStats struct {
 	Total           int        `json:"total"`
 	Active          int        `json:"active"`
 	Revoked         int        `json:"revoked"`
-	LatestIssuedAt  *time.Time `json:"latestIssuedAt,omitempty"`
-	LatestExpiresAt *time.Time `json:"latestExpiresAt,omitempty"`
+	LatestIssuedAt  *time.Time `json:"latestIssuedAt,omitzero"`
+	LatestExpiresAt *time.Time `json:"latestExpiresAt,omitzero"`
 }
 
 type adminOAuthAuthorizationListItem struct {
@@ -34,9 +34,9 @@ type adminOAuthAuthorizationListResponse struct {
 
 type adminRevokeOAuthResponse struct {
 	UserID                     string  `json:"userId"`
-	ClientID                   *string `json:"clientId,omitempty"`
+	ClientID                   *string `json:"clientId,omitzero"`
 	RevokedAuthorizations      int     `json:"revokedAuthorizations"`
-	RevokedAuthorizationsExact *bool   `json:"revokedAuthorizationsExact,omitempty"`
+	RevokedAuthorizationsExact *bool   `json:"revokedAuthorizationsExact,omitzero"`
 	RevokedTokens              int     `json:"revokedTokens"`
-	RevokedTokensExact         *bool   `json:"revokedTokensExact,omitempty"`
+	RevokedTokensExact         *bool   `json:"revokedTokensExact,omitzero"`
 }

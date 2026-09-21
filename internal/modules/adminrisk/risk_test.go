@@ -1,12 +1,13 @@
 package adminrisk
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 
 	"github.com/gofiber/fiber/v3"
 )

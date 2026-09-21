@@ -3,13 +3,14 @@ package sekai
 import (
 	"context"
 	"fmt"
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
 	"maps"
 	urlParse "net/url"
 	"strings"
 	"time"
+
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
 )
 
 var proxyPathByUploadType = map[harukiUtils.UploadDataType]string{
@@ -32,6 +33,7 @@ var proxyAllowedHeaderSet = map[string]struct{}{
 	"x-app-version":     {},
 	"x-platform":        {},
 	"x-session-token":   {},
+	"device_id":         {},
 	"x-asset-version":   {},
 	"x-request-id":      {},
 	"x-data-version":    {},

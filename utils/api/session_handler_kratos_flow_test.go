@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,7 +24,7 @@ func TestLoginWithKratosPasswordSuccess(t *testing.T) {
 				t.Fatalf("flow query = %q, want %q", flow, "flow-login-1")
 			}
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 				t.Fatalf("Decode payload failed: %v", err)
 			}
 			if payload["method"] != "password" {
@@ -208,7 +208,7 @@ func TestVerifyKratosPasswordByIdentityIDSuccess(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"verify-by-id-flow-1"}`))
 		case r.Method == http.MethodPost && r.URL.Path == "/self-service/login":
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 				t.Fatalf("Decode payload failed: %v", err)
 			}
 			if payload["identifier"] != "verify-id@example.com" {
@@ -337,7 +337,7 @@ func TestUpdateKratosPasswordByIdentityIDFallbackToPut(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"identity-2","schema_id":"default","state":"active","traits":{"email":"u@example.com"}}`))
 		case http.MethodPut:
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 				t.Fatalf("Decode payload failed: %v", err)
 			}
 			credentials, ok := payload["credentials"].(map[string]any)
@@ -384,7 +384,7 @@ func TestStartKratosRecoveryByEmailCodeSuccess(t *testing.T) {
 				t.Fatalf("flow query = %q, want %q", flow, "flow-recovery-1")
 			}
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 				t.Fatalf("Decode payload failed: %v", err)
 			}
 			method, _ := payload["method"].(string)
@@ -458,7 +458,7 @@ func TestResetKratosPasswordByRecoveryCodeSuccess(t *testing.T) {
 				t.Fatalf("flow query = %q, want %q", flow, "flow-recovery-reset-1")
 			}
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 				t.Fatalf("Decode payload failed: %v", err)
 			}
 			if payload["method"] != "code" {
@@ -477,7 +477,7 @@ func TestResetKratosPasswordByRecoveryCodeSuccess(t *testing.T) {
 			_, _ = w.Write([]byte(`{"active":true,"identity":{"id":"identity-reset-1","traits":{"email":"recover@example.com"}}}`))
 		case r.Method == http.MethodPatch && r.URL.Path == "/admin/identities/identity-reset-1":
 			var patchPayload []map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&patchPayload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &patchPayload); err != nil {
 				t.Fatalf("Decode patch payload failed: %v", err)
 			}
 			if len(patchPayload) != 1 {
@@ -774,7 +774,7 @@ func TestUpdateKratosEmailByIdentityIDFallbackToPut(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"identity-email-1","schema_id":"default","state":"active","traits":{"email":"old@example.com"}}`))
 		case http.MethodPut:
 			var payload map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 				t.Fatalf("Decode payload failed: %v", err)
 			}
 			traits, ok := payload["traits"].(map[string]any)

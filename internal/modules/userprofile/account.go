@@ -4,14 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
-	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
-	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -21,6 +13,14 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	userModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/user"
+	userauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauth"
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -60,7 +60,7 @@ func hasProfileUpdatePayload(payload harukiAPIHelper.UpdateProfilePayload) bool 
 	return payload.AvatarBase64 != nil
 }
 
-func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, profileConfig Config) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -80,11 +80,11 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		var payload harukiAPIHelper.UpdateProfilePayload
 		if err := c.Bind().Body(&payload); err != nil {
 			reason = "invalid_payload"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
 		if !hasProfileUpdatePayload(payload) {
 			reason = "empty_payload"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "No profile fields to update", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "No profile fields to update", nil)
 		}
 
 		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
@@ -95,11 +95,11 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				reason = "user_not_found"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 			}
 			harukiLogger.Errorf("Failed to query current user profile: %v", err)
 			reason = "query_user_failed"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
 		}
 		oldAvatarPath := ""
 		if currentUser.AvatarPath != nil {
@@ -120,12 +120,12 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			decodedAvatar, err := base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {
 				reason = "invalid_avatar_base64"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
 			}
 
 			if len(decodedAvatar) > 2*1024*1024 {
 				reason = "avatar_too_large"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image is too large (max 2MB)", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image is too large (max 2MB)", nil)
 			}
 			detectedMIME := http.DetectContentType(decodedAvatar)
 			allowedMIMEs := map[string]string{
@@ -137,29 +137,29 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			ext, ok := allowedMIMEs[detectedMIME]
 			if !ok {
 				reason = "unsupported_avatar_format"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Unsupported image format. Allowed: PNG, JPEG, GIF, WebP", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Unsupported image format. Allowed: PNG, JPEG, GIF, WebP", nil)
 			}
 			cfg, _, err := image.DecodeConfig(bytes.NewReader(decodedAvatar))
 			if err != nil {
 				harukiLogger.Warnf("Invalid image data from user %s: %v", userID, err)
 				reason = "invalid_avatar_image"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid or corrupted image data", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid or corrupted image data", nil)
 			}
 			if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxAvatarPixels {
 				reason = "avatar_too_large"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image dimensions are too large", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image dimensions are too large", nil)
 			}
 			avatarFileName = uuid.NewString() + ext
-			if err := ensureAvatarSaveDir(config.Cfg.UserSystem.AvatarSaveDir); err != nil {
+			if err := ensureAvatarSaveDir(profileConfig.AvatarSaveDir()); err != nil {
 				harukiLogger.Errorf("Failed to prepare avatar directory: %v", err)
 				reason = "save_avatar_failed"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
 			}
-			savePath := buildAvatarFilePath(config.Cfg.UserSystem.AvatarSaveDir, avatarFileName)
+			savePath := buildAvatarFilePath(profileConfig.AvatarSaveDir(), avatarFileName)
 			if err := os.WriteFile(savePath, decodedAvatar, 0644); err != nil {
 				harukiLogger.Errorf("Failed to save avatar file: %v", err)
 				reason = "save_avatar_failed"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to save avatar", nil)
 			}
 			newAvatarSavePath = savePath
 			ub = ub.SetAvatarPath(avatarFileName)
@@ -174,22 +174,22 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 			}
 			harukiLogger.Errorf("Failed to update user profile: %v", err)
 			reason = "update_profile_failed"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
 		}
 		if updatedAvatar && oldAvatarPath != "" && oldAvatarPath != avatarFileName {
-			oldAvatarFullPath := buildAvatarFilePath(config.Cfg.UserSystem.AvatarSaveDir, oldAvatarPath)
+			oldAvatarFullPath := buildAvatarFilePath(profileConfig.AvatarSaveDir(), oldAvatarPath)
 			if err := removeAvatarFileIfExists(oldAvatarFullPath); err != nil {
 				harukiLogger.Warnf("Failed to cleanup old avatar file for user %s: %v", userID, err)
 			}
 		}
 		ud := harukiAPIHelper.HarukiToolboxUserData{}
 		if payload.AvatarBase64 != nil {
-			url := fmt.Sprintf("%s/avatars/%s", strings.TrimRight(config.Cfg.UserSystem.AvatarURL, "/"), avatarFileName)
+			url := profileConfig.AvatarURL(avatarFileName)
 			ud.AvatarPath = &url
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.UpdatedDataResponse(c, fiber.StatusOK, "profile updated", &ud)
+		return harukiAPIHelper.Responses.UpdatedDataResponse(c, fiber.StatusOK, "profile updated", &ud)
 	}
 }
 
@@ -212,24 +212,24 @@ func handleChangePassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		var payload harukiAPIHelper.ChangePasswordPayload
 		if err := c.Bind().Body(&payload); err != nil {
 			reason = "invalid_payload"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid request payload", nil)
 		}
 		ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 		u, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.IDEQ(userID)).Only(ctx)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				reason = "user_not_found"
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 			}
 			harukiLogger.Errorf("Failed to query user %s: %v", userID, err)
 			reason = "query_user_failed"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to verify user", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to verify user", nil)
 		}
 		if apiHelper != nil && apiHelper.SessionHandler != nil && apiHelper.SessionHandler.UsesKratosProvider() {
 			return handleChangePasswordViaKratos(c, apiHelper, u, payload, &result, &reason, &sessionClearFailed)
 		}
 		reason = "managed_identity_required"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, userauth.ManagedIdentityMessage, nil)
 	}
 }
 
@@ -245,19 +245,19 @@ func handleChangePasswordViaKratos(
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	if user == nil {
 		*reason = "invalid_user"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 	}
 	if userModule.IsPasswordTooShort(payload.NewPassword) {
 		*reason = "new_password_too_short"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooShortMessage, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooShortMessage, nil)
 	}
 	if userModule.IsPasswordTooLong(payload.NewPassword) {
 		*reason = "new_password_too_long"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooLongMessage, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, userModule.PasswordTooLongMessage, nil)
 	}
 	if user.KratosIdentityID == nil || strings.TrimSpace(*user.KratosIdentityID) == "" {
 		*reason = "identity_not_linked"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 	}
 	kratosIdentityID := strings.TrimSpace(*user.KratosIdentityID)
 
@@ -265,33 +265,33 @@ func handleChangePasswordViaKratos(
 	if err != nil {
 		if harukiAPIHelper.IsKratosInvalidCredentialsError(err) || harukiAPIHelper.IsKratosInvalidInputError(err) {
 			*reason = "old_password_invalid"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Old password is incorrect", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Old password is incorrect", nil)
 		}
 		if harukiAPIHelper.IsKratosIdentityUnmappedError(err) {
 			*reason = "identity_not_found"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 		}
 		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
 			*reason = "identity_provider_unavailable"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
 		}
 		harukiLogger.Errorf("Kratos old password verification failed for user %s: %v", user.ID, err)
 		*reason = "verify_old_password_failed"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
 	}
 
 	if err := apiHelper.SessionHandler.UpdateKratosPasswordByIdentityID(ctx, kratosIdentityID, payload.NewPassword); err != nil {
 		if harukiAPIHelper.IsKratosIdentityUnmappedError(err) {
 			*reason = "identity_not_found"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusUnauthorized, "invalid user session", nil)
 		}
 		if harukiAPIHelper.IsIdentityProviderUnavailableError(err) {
 			*reason = "identity_provider_unavailable"
-			return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to process request", nil)
 		}
 		harukiLogger.Errorf("Kratos password update failed for user %s: %v", user.ID, err)
 		*reason = "update_kratos_password_failed"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update password", nil)
 	}
 
 	if err := apiHelper.SessionHandler.RevokeKratosSessionsByIdentityID(ctx, kratosIdentityID); err != nil {
@@ -306,21 +306,21 @@ func handleChangePasswordViaKratos(
 	if *sessionClearFailed {
 		*result = harukiAPIHelper.SystemLogResultSuccess
 		*reason = "ok_session_clear_failed"
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated, but failed to clear existing sessions", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated, but failed to clear existing sessions", nil)
 	}
 	*result = harukiAPIHelper.SystemLogResultSuccess
 	*reason = "ok"
-	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
+	return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusOK, "password updated", nil)
 }
 
-func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, profileConfig Config) {
 	if apiHelper == nil || apiHelper.Router == nil || apiHelper.SessionHandler == nil {
 		return
 	}
 
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
-	profileHandler, profileRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleUpdateProfile(apiHelper))
+	profileHandler, profileRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleUpdateProfile(apiHelper, profileConfig))
 	r.Put("/profile", profileHandler, profileRest...)
 	if apiHelper.SessionHandler.UsesManagedBrowserAuth() {
 		r.Put("/change-password", userauth.LegacyAuthDisabledHandler())

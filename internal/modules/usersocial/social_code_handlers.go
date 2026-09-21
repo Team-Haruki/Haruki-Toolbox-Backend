@@ -1,6 +1,8 @@
 package usersocial
 
 import (
+	"strings"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -9,7 +11,6 @@ import (
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -77,7 +78,7 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, resp)
+		return harukiAPIHelper.Responses.ResponseWithStruct(c, fiber.StatusOK, resp)
 	}
 }
 
@@ -142,7 +143,7 @@ func handleVerificationStatus(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 					Verified: info.Verified,
 				},
 			}
-			return harukiAPIHelper.SuccessResponse(c, "verification completed", &ud)
+			return harukiAPIHelper.Responses.SuccessResponse(c, "verification completed", &ud)
 		}
 		return harukiAPIHelper.ErrorInternal(c, "get status failed")
 	}

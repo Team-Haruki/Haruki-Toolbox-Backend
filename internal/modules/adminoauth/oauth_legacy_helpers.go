@@ -4,8 +4,9 @@ package adminoauth
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 func buildAdminOAuthBucketExpressionSQL(bucket, createdAtColumn string) (string, error) {

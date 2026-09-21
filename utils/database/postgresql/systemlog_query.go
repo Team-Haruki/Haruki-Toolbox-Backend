@@ -164,8 +164,8 @@ func (_q *SystemLogQuery) All(ctx context.Context) ([]*SystemLog, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*SystemLog, *SystemLogQuery]()
-	return withInterceptors[[]*SystemLog](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*SystemLog, *SystemLogQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*SystemLog](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *SystemLogQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*SystemLogQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*SystemLogQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *SystemLogGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SystemLogQuery, *SystemLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*SystemLogQuery, *SystemLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *SystemLogGroupBy) sqlScan(ctx context.Context, root *SystemLogQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *SystemLogSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SystemLogQuery, *SystemLogSelect](ctx, _s.SystemLogQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*SystemLogQuery, *SystemLogSelect](ctx, _s.SystemLogQuery, _s, _s.inters, v)
 }
 
 func (_s *SystemLogSelect) sqlScan(ctx context.Context, root *SystemLogQuery, v any) error {

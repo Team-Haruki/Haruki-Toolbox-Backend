@@ -22,9 +22,9 @@ type OAuth2ClientWebhookEndpoint struct {
 	// CallbackURL holds the value of the "callback_url" field.
 	CallbackURL string `json:"callback_url,omitempty"`
 	// Bearer holds the value of the "bearer" field.
-	Bearer *string `json:"bearer,omitempty"`
+	Bearer *string `json:"bearer,omitzero"`
 	// Enabled holds the value of the "enabled" field.
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitzero"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.

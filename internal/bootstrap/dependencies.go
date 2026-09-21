@@ -3,8 +3,9 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"time"
+
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 )
 
 const startupDependencyTimeout = 15 * time.Second

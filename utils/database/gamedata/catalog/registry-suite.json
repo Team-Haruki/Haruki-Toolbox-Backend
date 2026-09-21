@@ -1,0 +1,1254 @@
+{
+ "collection": "suite",
+ "table": "game_suite",
+ "entries": [
+  {
+   "key": "appVersion",
+   "column": "app_version_j",
+   "storage": "json"
+  },
+  {
+   "key": "appVersionStatus",
+   "column": "app_version_status_j",
+   "storage": "json"
+  },
+  {
+   "key": "assetHash",
+   "column": "asset_hash_j",
+   "storage": "json"
+  },
+  {
+   "key": "assetVersion",
+   "column": "asset_version_j",
+   "storage": "json"
+  },
+  {
+   "key": "bgipRedDotCount",
+   "column": "bgip_red_dot_count_j",
+   "storage": "json"
+  },
+  {
+   "key": "bundles",
+   "column": "bundles_j",
+   "storage": "json"
+  },
+  {
+   "key": "cdnVersion",
+   "column": "cdn_version_j",
+   "storage": "json"
+  },
+  {
+   "key": "configs",
+   "column": "configs_j",
+   "storage": "json"
+  },
+  {
+   "key": "dataVersion",
+   "column": "data_version_j",
+   "storage": "json"
+  },
+  {
+   "key": "errorCode",
+   "column": "error_code_j",
+   "storage": "json"
+  },
+  {
+   "key": "errorMessage",
+   "column": "error_message_j",
+   "storage": "json"
+  },
+  {
+   "key": "eventShowDialogueTabs",
+   "column": "event_show_dialogue_tabs_j",
+   "storage": "json"
+  },
+  {
+   "key": "eventShowDialogues",
+   "column": "event_show_dialogues_j",
+   "storage": "json"
+  },
+  {
+   "key": "firstRecharge",
+   "column": "first_recharge_j",
+   "storage": "json"
+  },
+  {
+   "key": "friendShare",
+   "column": "friend_share_j",
+   "storage": "json"
+  },
+  {
+   "key": "httpStatus",
+   "column": "http_status_j",
+   "storage": "json"
+  },
+  {
+   "key": "isExpireMysekaiSiteHousingPresetExtendSlot",
+   "column": "is_expire_mysekai_site_housing_preset_extend_slot_j",
+   "storage": "json"
+  },
+  {
+   "key": "isMysekaiGateRefreshed",
+   "column": "is_mysekai_gate_refreshed_j",
+   "storage": "json"
+  },
+  {
+   "key": "isRefreshed",
+   "column": "is_refreshed_j",
+   "storage": "json"
+  },
+  {
+   "key": "isStreamingVirtualLiveForceOpenUser",
+   "column": "is_streaming_virtual_live_force_open_user_j",
+   "storage": "json"
+  },
+  {
+   "key": "local_source",
+   "column": "local_source_j",
+   "storage": "json"
+  },
+  {
+   "key": "multiPlayVersion",
+   "column": "multi_play_version_j",
+   "storage": "json"
+  },
+  {
+   "key": "mysekaiPhenomenaSchedules",
+   "column": "mysekai_phenomena_schedules_j",
+   "storage": "json"
+  },
+  {
+   "key": "newReleaseConditions",
+   "column": "new_release_conditions_j",
+   "storage": "json"
+  },
+  {
+   "key": "now",
+   "column": "now_j",
+   "storage": "json"
+  },
+  {
+   "key": "obtainedBondsRewardIds",
+   "column": "obtained_bonds_reward_ids_j",
+   "storage": "json"
+  },
+  {
+   "key": "policy",
+   "column": "policy_j",
+   "storage": "json"
+  },
+  {
+   "key": "refreshableTypes",
+   "column": "refreshable_types_j",
+   "storage": "json"
+  },
+  {
+   "key": "removeAssetVersion",
+   "column": "remove_asset_version_j",
+   "storage": "json"
+  },
+  {
+   "key": "source",
+   "column": "source_j",
+   "storage": "json"
+  },
+  {
+   "key": "suiteMasterSplitPath",
+   "column": "suite_master_split_path_j",
+   "storage": "json"
+  },
+  {
+   "key": "token",
+   "column": "token_j",
+   "storage": "json"
+  },
+  {
+   "key": "unreadUserTopics",
+   "column": "unread_user_topics_j",
+   "storage": "json"
+  },
+  {
+   "key": "user",
+   "column": "user_j",
+   "storage": "json"
+  },
+  {
+   "key": "userActionSets",
+   "column": "user_action_sets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAdRewardGls",
+   "column": "user_ad_reward_gls_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAdRewards",
+   "column": "user_ad_rewards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAppeals",
+   "column": "user_appeals_j",
+   "storage": "json"
+  },
+  {
+   "key": "userArchiveEventEpisodeStatuses",
+   "column": "user_archive_event_episode_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userArchiveVirtualLiveReleaseStatuses",
+   "column": "user_archive_virtual_live_release_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userArchiveVirtualLiveStatuses",
+   "column": "user_archive_virtual_live_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAreas",
+   "column": "user_areas_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAutoLive",
+   "column": "user_auto_live_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatar",
+   "column": "user_avatar_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatarAccessories",
+   "column": "user_avatar_accessories_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatarCoordinates",
+   "column": "user_avatar_coordinates_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatarCostumes",
+   "column": "user_avatar_costumes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatarMotionFavorites",
+   "column": "user_avatar_motion_favorites_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatarMotions",
+   "column": "user_avatar_motions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userAvatarSkinColors",
+   "column": "user_avatar_skin_colors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBeginnerMissionBehavior",
+   "column": "user_beginner_mission_behavior_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBeginnerMissionV2s",
+   "column": "user_beginner_mission_v2s_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBeginnerMissions",
+   "column": "user_beginner_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBillingRefundPenalty",
+   "column": "user_billing_refund_penalty_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBillingRefunds",
+   "column": "user_billing_refunds_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBillingShopItems",
+   "column": "user_billing_shop_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBirthdayParties",
+   "column": "user_birthday_parties_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBlocks",
+   "column": "user_blocks_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBonds",
+   "column": "user_bonds_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBondsHonorWords",
+   "column": "user_bonds_honor_words_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBondsHonors",
+   "column": "user_bonds_honors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBondsRewards",
+   "column": "user_bonds_rewards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBookmarkedEventStory",
+   "column": "user_bookmarked_event_story_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBookmarkedStories",
+   "column": "user_bookmarked_stories_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBoost",
+   "column": "user_boost_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBoostGranteds",
+   "column": "user_boost_granteds_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBoostItems",
+   "column": "user_boost_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBoostReceivables",
+   "column": "user_boost_receivables_j",
+   "storage": "json"
+  },
+  {
+   "key": "userBoostReceived",
+   "column": "user_boost_received_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCards",
+   "column": "user_cards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCategorizedGachaWishes",
+   "column": "user_categorized_gacha_wishes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChallengeLivePlayDay",
+   "column": "user_challenge_live_play_day_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChallengeLivePlayStatuses",
+   "column": "user_challenge_live_play_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChallengeLiveSoloDecks",
+   "column": "user_challenge_live_solo_decks_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChallengeLiveSoloHighScoreRewards",
+   "column": "user_challenge_live_solo_high_score_rewards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChallengeLiveSoloResults",
+   "column": "user_challenge_live_solo_results_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChallengeLiveSoloStages",
+   "column": "user_challenge_live_solo_stages_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCharacterCostume3ds",
+   "column": "user_character_costume3ds_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCharacterLiveUsageCounts",
+   "column": "user_character_live_usage_counts_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCharacterMissionV2Statuses",
+   "column": "user_character_mission_v2_statuses_j",
+   "storage": "compact-json",
+   "aliases": [
+    "compactUserCharacterMissionV2Statuses"
+   ]
+  },
+  {
+   "key": "userCharacterMissionV2s",
+   "column": "user_character_mission_v2s_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCharacterProfileEpisodeStatuses",
+   "column": "user_character_profile_episode_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCharacters",
+   "column": "user_characters_j",
+   "storage": "json"
+  },
+  {
+   "key": "userChargedCurrency",
+   "column": "user_charged_currency_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCheerfulCarnivalBehaviors",
+   "column": "user_cheerful_carnival_behaviors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCheerfulCarnivalResultRewards",
+   "column": "user_cheerful_carnival_result_rewards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCheerfulCarnivals",
+   "column": "user_cheerful_carnivals_j",
+   "storage": "json"
+  },
+  {
+   "key": "userColorfulPass",
+   "column": "user_colorful_pass_j",
+   "storage": "json"
+  },
+  {
+   "key": "userColorfulPassV2",
+   "column": "user_colorful_pass_v2_j",
+   "storage": "json"
+  },
+  {
+   "key": "userConfig",
+   "column": "user_config_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCostume3dShopItems",
+   "column": "user_costume3d_shop_items_j",
+   "storage": "compact-json",
+   "aliases": [
+    "compactUserCostume3dShopItems"
+   ]
+  },
+  {
+   "key": "userCostume3dStatuses",
+   "column": "user_costume3d_statuses_j",
+   "storage": "compact-json",
+   "aliases": [
+    "compactUserCostume3dStatuses"
+   ]
+  },
+  {
+   "key": "userCustomMusicScoreBookmarks",
+   "column": "user_custom_music_score_bookmarks_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCustomMusicScorePublisheds",
+   "column": "user_custom_music_score_publisheds_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCustomProfileCards",
+   "column": "user_custom_profile_cards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCustomProfileGachas",
+   "column": "user_custom_profile_gachas_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCustomProfileResourceUsages",
+   "column": "user_custom_profile_resource_usages_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCustomProfileResources",
+   "column": "user_custom_profile_resources_j",
+   "storage": "json"
+  },
+  {
+   "key": "userCustomProfiles",
+   "column": "user_custom_profiles_j",
+   "storage": "json"
+  },
+  {
+   "key": "userDailyProgressMissionGls",
+   "column": "user_daily_progress_mission_gls_j",
+   "storage": "json"
+  },
+  {
+   "key": "userDecks",
+   "column": "user_decks_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventArchiveCompleteReadRewards",
+   "column": "user_event_archive_complete_read_rewards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventBreakTime",
+   "column": "user_event_break_time_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventEpisodeStatuses",
+   "column": "user_event_episode_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventExchanges",
+   "column": "user_event_exchanges_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventItems",
+   "column": "user_event_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventMissionStatuses",
+   "column": "user_event_mission_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEventMissions",
+   "column": "user_event_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userEvents",
+   "column": "user_events_j",
+   "storage": "json"
+  },
+  {
+   "key": "userFixCostumes",
+   "column": "user_fix_costumes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userFriendInvitationCampaignMissionRewardCounts",
+   "column": "user_friend_invitation_campaign_mission_reward_counts_j",
+   "storage": "json"
+  },
+  {
+   "key": "userFriendInvitationCampaigns",
+   "column": "user_friend_invitation_campaigns_j",
+   "storage": "json"
+  },
+  {
+   "key": "userFriends",
+   "column": "user_friends_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaBonusPoints",
+   "column": "user_gacha_bonus_points_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaCeilExchangeSubstituteCosts",
+   "column": "user_gacha_ceil_exchange_substitute_costs_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaCeilExchanges",
+   "column": "user_gacha_ceil_exchanges_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaCeilItems",
+   "column": "user_gacha_ceil_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaFreeResources",
+   "column": "user_gacha_free_resources_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaSelectCharacters",
+   "column": "user_gacha_select_characters_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaTickets",
+   "column": "user_gacha_tickets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachaWishes",
+   "column": "user_gacha_wishes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGachas",
+   "column": "user_gachas_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGamedata",
+   "column": "user_gamedata_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGiftGachaWishes",
+   "column": "user_gift_gacha_wishes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGoldTicketPeriodLivePlays",
+   "column": "user_gold_ticket_period_live_plays_j",
+   "storage": "json"
+  },
+  {
+   "key": "userGoldTicketStatuses",
+   "column": "user_gold_ticket_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userHomeBanners",
+   "column": "user_home_banners_j",
+   "storage": "json"
+  },
+  {
+   "key": "userHonorMissions",
+   "column": "user_honor_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userHonors",
+   "column": "user_honors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userInformations",
+   "column": "user_informations_j",
+   "storage": "json"
+  },
+  {
+   "key": "userInvitations",
+   "column": "user_invitations_j",
+   "storage": "json"
+  },
+  {
+   "key": "userLimitMissions",
+   "column": "user_limit_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userLiveCharacterArchiveVoice",
+   "column": "user_live_character_archive_voice_j",
+   "storage": "json"
+  },
+  {
+   "key": "userLiveMissions",
+   "column": "user_live_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userLoginBonuses",
+   "column": "user_login_bonuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMaterialExchanges",
+   "column": "user_material_exchanges_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMaterials",
+   "column": "user_materials_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMissionStatuses",
+   "column": "user_mission_statuses_j",
+   "storage": "compact-json",
+   "aliases": [
+    "compactUserMissionStatuses"
+   ]
+  },
+  {
+   "key": "userMultiLivePenalty",
+   "column": "user_multi_live_penalty_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMusicAchievements",
+   "column": "user_music_achievements_j",
+   "storage": "compact-json",
+   "aliases": [
+    "compactUserMusicAchievements"
+   ]
+  },
+  {
+   "key": "userMusicResults",
+   "column": "user_music_results_j",
+   "storage": "compact-json",
+   "aliases": [
+    "compactUserMusicResults"
+   ]
+  },
+  {
+   "key": "userMusicVocals",
+   "column": "user_music_vocals_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMusics",
+   "column": "user_musics_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMyLists",
+   "column": "user_my_lists_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiBlueprintShopItems",
+   "column": "user_mysekai_blueprint_shop_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiBlueprints",
+   "column": "user_mysekai_blueprints_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiCanvases",
+   "column": "user_mysekai_canvases_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiCharacterTalks",
+   "column": "user_mysekai_character_talks_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiColorfulPass",
+   "column": "user_mysekai_colorful_pass_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiConvertItemHistories",
+   "column": "user_mysekai_convert_item_histories_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiConvertSlots",
+   "column": "user_mysekai_convert_slots_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiFixtureGameCharacterPerformanceBonuses",
+   "column": "user_mysekai_fixture_game_character_performance_bonuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiFixturePossession",
+   "column": "user_mysekai_fixture_possession_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiFixtures",
+   "column": "user_mysekai_fixtures_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGamedata",
+   "column": "user_mysekai_gamedata_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGateCharacterVisit",
+   "column": "user_mysekai_gate_character_visit_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGateCharacters",
+   "column": "user_mysekai_gate_characters_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGateCommonInfo",
+   "column": "user_mysekai_gate_common_info_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGateSkin",
+   "column": "user_mysekai_gate_skin_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiGates",
+   "column": "user_mysekai_gates_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiHarvestMaps",
+   "column": "user_mysekai_harvest_maps_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiHousingCompetitions",
+   "column": "user_mysekai_housing_competitions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiItems",
+   "column": "user_mysekai_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiMaterialPossession",
+   "column": "user_mysekai_material_possession_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiMaterials",
+   "column": "user_mysekai_materials_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiMusicPlayFixtureSettings",
+   "column": "user_mysekai_music_play_fixture_settings_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiMusicRecords",
+   "column": "user_mysekai_music_records_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiNormalMissionSheet",
+   "column": "user_mysekai_normal_mission_sheet_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiNormalMissions",
+   "column": "user_mysekai_normal_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiPhenomenas",
+   "column": "user_mysekai_phenomenas_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiPhotoDecorations",
+   "column": "user_mysekai_photo_decorations_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiPhotos",
+   "column": "user_mysekai_photos_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiReleaseElements",
+   "column": "user_mysekai_release_elements_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiSiteHousingLayouts",
+   "column": "user_mysekai_site_housing_layouts_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiSiteHousingPresetSlots",
+   "column": "user_mysekai_site_housing_preset_slots_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiStamina",
+   "column": "user_mysekai_stamina_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiSystemFixtureActions",
+   "column": "user_mysekai_system_fixture_actions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiTools",
+   "column": "user_mysekai_tools_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiTreasureBoxes",
+   "column": "user_mysekai_treasure_boxes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userMysekaiVisitSetting",
+   "column": "user_mysekai_visit_setting_j",
+   "storage": "json"
+  },
+  {
+   "key": "userNormalMissions",
+   "column": "user_normal_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userNoticePopups",
+   "column": "user_notice_popups_j",
+   "storage": "json"
+  },
+  {
+   "key": "userNotificationGls",
+   "column": "user_notification_gls_j",
+   "storage": "json"
+  },
+  {
+   "key": "userOffers",
+   "column": "user_offers_j",
+   "storage": "json"
+  },
+  {
+   "key": "userOfflineEvents",
+   "column": "user_offline_events_j",
+   "storage": "json"
+  },
+  {
+   "key": "userOmikujis",
+   "column": "user_omikujis_j",
+   "storage": "json"
+  },
+  {
+   "key": "userOneTimeBehaviors",
+   "column": "user_one_time_behaviors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userOngoingMissions",
+   "column": "user_ongoing_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPaidVirtualLiveShopItems",
+   "column": "user_paid_virtual_live_shop_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPaidVirtualLiveStatuses",
+   "column": "user_paid_virtual_live_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPaidVirtualLives",
+   "column": "user_paid_virtual_lives_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPanelMissionAchievedElements",
+   "column": "user_panel_mission_achieved_elements_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPanelMissionCampaigns",
+   "column": "user_panel_mission_campaigns_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPanelMissionSheets",
+   "column": "user_panel_mission_sheets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPanelMissions",
+   "column": "user_panel_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPenlights",
+   "column": "user_penlights_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPlayerFrames",
+   "column": "user_player_frames_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPracticeTickets",
+   "column": "user_practice_tickets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPreliminaryTournamentLiveResults",
+   "column": "user_preliminary_tournament_live_results_j",
+   "storage": "json"
+  },
+  {
+   "key": "userPresents",
+   "column": "user_presents_j",
+   "storage": "json"
+  },
+  {
+   "key": "userProfile",
+   "column": "user_profile_j",
+   "storage": "json"
+  },
+  {
+   "key": "userProfileHonors",
+   "column": "user_profile_honors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userRankMatchResult",
+   "column": "user_rank_match_result_j",
+   "storage": "json"
+  },
+  {
+   "key": "userRankMatchSeasons",
+   "column": "user_rank_match_seasons_j",
+   "storage": "json"
+  },
+  {
+   "key": "userRateChoiceGachaWishes",
+   "column": "user_rate_choice_gacha_wishes_j",
+   "storage": "json"
+  },
+  {
+   "key": "userRecommendgls",
+   "column": "user_recommendgls_j",
+   "storage": "json"
+  },
+  {
+   "key": "userReleaseConditions",
+   "column": "user_release_conditions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userReturnMissionGroupId",
+   "column": "user_return_mission_group_id_j",
+   "storage": "json"
+  },
+  {
+   "key": "userReturnMissions",
+   "column": "user_return_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSekaiEchoCardMissions",
+   "column": "user_sekai_echo_card_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSekaiEchoCards",
+   "column": "user_sekai_echo_cards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSekaiEchoHonorMissions",
+   "column": "user_sekai_echo_honor_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSekaiEchoHonors",
+   "column": "user_sekai_echo_honors_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSekaiEchoMissions",
+   "column": "user_sekai_echo_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSerialCodeItems",
+   "column": "user_serial_code_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userShiningExchanges",
+   "column": "user_shining_exchanges_j",
+   "storage": "json"
+  },
+  {
+   "key": "userShops",
+   "column": "user_shops_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSkillPracticeTickets",
+   "column": "user_skill_practice_tickets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSpecialEpisodeStatuses",
+   "column": "user_special_episode_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSpecialMissionGls",
+   "column": "user_special_mission_gls_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSpringEvent",
+   "column": "user_spring_event_j",
+   "storage": "json"
+  },
+  {
+   "key": "userStampFavoriteTabs",
+   "column": "user_stamp_favorite_tabs_j",
+   "storage": "json"
+  },
+  {
+   "key": "userStampFavorites",
+   "column": "user_stamp_favorites_j",
+   "storage": "json"
+  },
+  {
+   "key": "userStamps",
+   "column": "user_stamps_j",
+   "storage": "json"
+  },
+  {
+   "key": "userStoryFavorites",
+   "column": "user_story_favorites_j",
+   "storage": "json"
+  },
+  {
+   "key": "userStoryMission",
+   "column": "user_story_mission_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSubscriptions",
+   "column": "user_subscriptions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSudokuMissionTurns",
+   "column": "user_sudoku_mission_turns_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSudokuMissions",
+   "column": "user_sudoku_missions_j",
+   "storage": "json"
+  },
+  {
+   "key": "userSupportEvent",
+   "column": "user_support_event_j",
+   "storage": "json"
+  },
+  {
+   "key": "userTutorial",
+   "column": "user_tutorial_j",
+   "storage": "json"
+  },
+  {
+   "key": "userUnitEpisodeStatuses",
+   "column": "user_unit_episode_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userUnits",
+   "column": "user_units_j",
+   "storage": "json"
+  },
+  {
+   "key": "userUnprocessedOrders",
+   "column": "user_unprocessed_orders_j",
+   "storage": "json"
+  },
+  {
+   "key": "userUsedVirtualLiveTickets",
+   "column": "user_used_virtual_live_tickets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userViewableAppeal",
+   "column": "user_viewable_appeal_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualLiveBeginnerScheduleStatuses",
+   "column": "user_virtual_live_beginner_schedule_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualLivePamphlets",
+   "column": "user_virtual_live_pamphlets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualLiveRewards",
+   "column": "user_virtual_live_rewards_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualLiveScheduleStatuses",
+   "column": "user_virtual_live_schedule_statuses_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualLiveTickets",
+   "column": "user_virtual_live_tickets_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualLiveTransitionItems",
+   "column": "user_virtual_live_transition_items_j",
+   "storage": "json"
+  },
+  {
+   "key": "userVirtualShops",
+   "column": "user_virtual_shops_j",
+   "storage": "json"
+  },
+  {
+   "key": "userWorldBloomSupportDecks",
+   "column": "user_world_bloom_support_decks_j",
+   "storage": "json"
+  },
+  {
+   "key": "userWorldBlooms",
+   "column": "user_world_blooms_j",
+   "storage": "json"
+  },
+  {
+   "key": "version",
+   "column": "version_j",
+   "storage": "json"
+  }
+ ]
+}

@@ -2,21 +2,22 @@ package nuversestruct
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
 )
 
 // GenerateSuiteStructures converts a StructTool/Avro schema into the light
 // suite structure format consumed by utils/suiterestore.
 func GenerateSuiteStructures(schemaJSON []byte) (map[string][]any, error) {
-	decoder := json.NewDecoder(bytes.NewReader(schemaJSON))
-	decoder.UseNumber()
 
 	var raw any
-	if err := decoder.Decode(&raw); err != nil {
+	if err := json.UnmarshalRead(bytes.NewReader(schemaJSON), &raw, jsonvalue.Numbers); err != nil {
 		return nil, fmt.Errorf("parse schema json: %w", err)
 	}
 
@@ -47,7 +48,7 @@ func MarshalSuiteStructures(structures map[string][]any) ([]byte, error) {
 			b.WriteString(",\n")
 		}
 		keyJSON, _ := json.Marshal(key)
-		valJSON, err := json.MarshalIndent(structures[key], "    ", "    ")
+		valJSON, err := json.Marshal(structures[key], jsontext.WithIndentPrefix("    "), jsontext.WithIndent("    "), json.Deterministic(true))
 		if err != nil {
 			return nil, fmt.Errorf("marshal structure %s: %w", key, err)
 		}
@@ -219,7 +220,7 @@ func msgpackKey(field map[string]any) (int, bool) {
 			continue
 		}
 		switch v := raw.(type) {
-		case json.Number:
+		case jsonvalue.Number:
 			n, err := v.Int64()
 			return int(n), err == nil
 		case float64:

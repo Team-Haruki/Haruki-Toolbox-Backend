@@ -10,6 +10,6 @@ const ManagedIdentityMessage = "browser identity is managed by Ory Kratos; use K
 
 func LegacyAuthDisabledHandler() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusGone, ManagedIdentityMessage, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, ManagedIdentityMessage, nil)
 	}
 }

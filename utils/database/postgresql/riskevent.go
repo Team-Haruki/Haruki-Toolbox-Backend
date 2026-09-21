@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -17,7 +17,7 @@ import (
 type RiskEvent struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// EventTime holds the value of the "event_time" field.
 	EventTime time.Time `json:"event_time,omitempty"`
 	// Status holds the value of the "status" field.
@@ -27,19 +27,19 @@ type RiskEvent struct {
 	// Source holds the value of the "source" field.
 	Source string `json:"source,omitempty"`
 	// ActorUserID holds the value of the "actor_user_id" field.
-	ActorUserID *string `json:"actor_user_id,omitempty"`
+	ActorUserID *string `json:"actor_user_id,omitzero"`
 	// TargetUserID holds the value of the "target_user_id" field.
-	TargetUserID *string `json:"target_user_id,omitempty"`
+	TargetUserID *string `json:"target_user_id,omitzero"`
 	// IP holds the value of the "ip" field.
-	IP *string `json:"ip,omitempty"`
+	IP *string `json:"ip,omitzero"`
 	// Action holds the value of the "action" field.
-	Action *string `json:"action,omitempty"`
+	Action *string `json:"action,omitzero"`
 	// Reason holds the value of the "reason" field.
-	Reason *string `json:"reason,omitempty"`
+	Reason *string `json:"reason,omitzero"`
 	// ResolvedAt holds the value of the "resolved_at" field.
-	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+	ResolvedAt *time.Time `json:"resolved_at,omitzero"`
 	// ResolvedBy holds the value of the "resolved_by" field.
-	ResolvedBy *string `json:"resolved_by,omitempty"`
+	ResolvedBy *string `json:"resolved_by,omitzero"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	selectValues sql.SelectValues

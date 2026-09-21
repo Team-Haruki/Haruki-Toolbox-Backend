@@ -1,12 +1,13 @@
 package admincontent
 
 import (
+	"strconv"
+	"time"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
-	"strconv"
-	"time"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -62,8 +63,8 @@ type adminFriendGroupItemPayload struct {
 type adminFriendGroupItem struct {
 	ID        int     `json:"id"`
 	Name      string  `json:"name"`
-	Avatar    *string `json:"avatar,omitempty"`
-	Bg        *string `json:"bg,omitempty"`
+	Avatar    *string `json:"avatar,omitzero"`
+	Bg        *string `json:"bg,omitzero"`
 	GroupInfo string  `json:"groupInfo"`
 	Detail    string  `json:"detail"`
 	SortOrder int     `json:"sortOrder"`
@@ -122,7 +123,7 @@ func handleAdminListFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, adminAuditTargetIDAll, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -155,11 +156,11 @@ func handleAdminCreateFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, strconv.Itoa(created.ID), harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 						"fallbackBySetID": true,
 					})
-					return harukiAPIHelper.SuccessResponse(c, "friend link created", &resp)
+					return harukiAPIHelper.Responses.SuccessResponse(c, "friend link created", &resp)
 				}
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendLinkConflict, nil))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend link conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend link conflict", nil)
 				}
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateFriendLinkFailed, nil))
@@ -168,7 +169,7 @@ func handleAdminCreateFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 		resp := buildAdminFriendLinkItem(created)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, strconv.Itoa(created.ID), harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "friend link created", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "friend link created", &resp)
 	}
 }
 
@@ -202,7 +203,7 @@ func handleAdminUpdateFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			}
 			if postgresql.IsConstraintError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, strconv.Itoa(friendLinkID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendLinkConflict, nil))
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend link conflict", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend link conflict", nil)
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, strconv.Itoa(friendLinkID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateFriendLinkFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to update friend link")
@@ -210,7 +211,7 @@ func handleAdminUpdateFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 		resp := buildAdminFriendLinkItem(updated)
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, strconv.Itoa(friendLinkID), harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "friend link updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "friend link updated", &resp)
 	}
 }
 
@@ -234,12 +235,11 @@ func handleAdminDeleteFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, strconv.Itoa(friendLinkID), harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse[string](c, "friend link deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "friend link deleted", nil)
 	}
 }
 
-func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	content := adminGroup.Group("/content", adminCoreModule.RequireAdmin(apiHelper))
 
 	friendLinks := content.Group("/friend-links")

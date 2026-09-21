@@ -1,11 +1,12 @@
 package adminusers
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -81,6 +82,6 @@ func handleRestoreUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			BanReason: updated.BanReason,
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserRestore, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "user restored", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "user restored", &resp)
 	}
 }

@@ -108,7 +108,7 @@ func (_u *SocialPlatformInfoUpdate) ClearUser() *SocialPlatformInfoUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *SocialPlatformInfoUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -304,7 +304,7 @@ func (_u *SocialPlatformInfoUpdateOne) Select(field string, fields ...string) *S
 
 // Save executes the query and returns the updated SocialPlatformInfo entity.
 func (_u *SocialPlatformInfoUpdateOne) Save(ctx context.Context) (*SocialPlatformInfo, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

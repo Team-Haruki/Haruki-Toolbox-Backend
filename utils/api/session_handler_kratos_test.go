@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -144,7 +144,7 @@ func TestVerifySessionTokenKratosModePropagatesEmailVerified(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if payload["userID"] != "u1" {
@@ -232,7 +232,7 @@ func TestVerifySessionTokenKratosModeRejectsUnmappedIdentity(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if payload["message"] != "invalid user session" {
@@ -263,7 +263,7 @@ func TestVerifySessionTokenKratosModeProviderUnavailable(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
 	if payload["message"] != "identity provider unavailable" {

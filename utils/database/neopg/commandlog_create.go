@@ -6,11 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
 	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
 )
 
 // CommandLogCreate is the builder for creating a CommandLog entity.
@@ -112,7 +112,7 @@ func (_c *CommandLogCreate) Mutation() *CommandLogMutation {
 // Save creates the CommandLog in the database.
 func (_c *CommandLogCreate) Save(ctx context.Context) (*CommandLog, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

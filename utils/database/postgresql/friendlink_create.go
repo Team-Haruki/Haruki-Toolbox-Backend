@@ -77,7 +77,7 @@ func (_c *FriendLinkCreate) Mutation() *FriendLinkMutation {
 // Save creates the FriendLink in the database.
 func (_c *FriendLinkCreate) Save(ctx context.Context) (*FriendLink, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

@@ -11,47 +11,59 @@ import (
 
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
-	"github.com/bytedance/sonic"
+	json "encoding/json/v2"
 )
 
-func getHydraLoginRequest(ctx context.Context, challenge string) (*hydraLoginRequestResponse, error) {
-	response, err := sendHydraAdminRequest(ctx, http.MethodGet, "/admin/oauth2/auth/requests/login", url.Values{"login_challenge": {challenge}}, nil)
+func getHydraLoginRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, challenge string) (*hydraLoginRequestResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodGet, "/admin/oauth2/auth/requests/login", url.Values{"login_challenge": {challenge}}, nil)
 	if err != nil {
 		return nil, err
 	}
 	var parsed hydraLoginRequestResponse
-	if err := sonic.Unmarshal(response, &parsed); err != nil {
+	if err := json.Unmarshal(response, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra login request: %w", err)
 	}
 	return &parsed, nil
 }
 
-func getHydraConsentRequest(ctx context.Context, challenge string) (*hydraConsentRequestResponse, error) {
-	response, err := sendHydraAdminRequest(ctx, http.MethodGet, "/admin/oauth2/auth/requests/consent", url.Values{"consent_challenge": {challenge}}, nil)
+func getHydraConsentRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, challenge string) (*hydraConsentRequestResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodGet, "/admin/oauth2/auth/requests/consent", url.Values{"consent_challenge": {challenge}}, nil)
 	if err != nil {
 		return nil, err
 	}
 	var parsed hydraConsentRequestResponse
-	if err := sonic.Unmarshal(response, &parsed); err != nil {
+	if err := json.Unmarshal(response, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra consent request: %w", err)
 	}
 	return &parsed, nil
 }
 
-func sendHydraAdminJSON(ctx context.Context, method string, endpointPath string, query url.Values, payload map[string]any) (*hydraRedirectResponse, error) {
-	response, err := sendHydraAdminRequest(ctx, method, endpointPath, query, payload)
+func getHydraLogoutRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, challenge string) (*hydraLogoutRequestResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodGet, "/admin/oauth2/auth/requests/logout", url.Values{"logout_challenge": {challenge}}, nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed hydraLogoutRequestResponse
+	if err := json.Unmarshal(response, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to decode hydra logout request: %w", err)
+	}
+	return &parsed, nil
+}
+
+func sendHydraAdminJSON(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, query url.Values, payload map[string]any) (*hydraRedirectResponse, error) {
+	response, err := sendHydraAdminRequest(ctx, hydraConfig, method, endpointPath, query, payload)
 	if err != nil {
 		return nil, err
 	}
 	var parsed hydraRedirectResponse
-	if err := sonic.Unmarshal(response, &parsed); err != nil {
+	if err := json.Unmarshal(response, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra redirect response: %w", err)
 	}
 	return &parsed, nil
 }
 
-func sendHydraAdminRequest(ctx context.Context, method string, endpointPath string, query url.Values, payload map[string]any) ([]byte, error) {
-	targetURL, err := harukiOAuth2.HydraAdminEndpoint(endpointPath)
+func sendHydraAdminRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, query url.Values, payload map[string]any) ([]byte, error) {
+	targetURL, err := hydraConfig.AdminEndpoint(endpointPath)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +73,7 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 
 	var requestBody []byte
 	if payload != nil {
-		requestBody, err = sonic.Marshal(payload)
+		requestBody, err = json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode hydra request body: %w", err)
 		}
@@ -75,11 +87,11 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if clientID, clientSecret := harukiOAuth2.HydraClientCredentials(); clientID != "" {
+	if clientID, clientSecret := hydraConfig.ClientCredentials(); clientID != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 
-	resp, err := hydraHTTPClient().Do(req)
+	resp, err := hydraConfig.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call hydra: %w", err)
 	}
@@ -95,7 +107,7 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message := http.StatusText(resp.StatusCode)
 		var hydraErr hydraErrorResponse
-		if err := sonic.Unmarshal(body, &hydraErr); err == nil {
+		if err := json.Unmarshal(body, &hydraErr); err == nil {
 			for _, candidate := range []string{hydraErr.ErrorDescription, hydraErr.Message, hydraErr.Error} {
 				if strings.TrimSpace(candidate) != "" {
 					message = candidate
@@ -107,21 +119,4 @@ func sendHydraAdminRequest(ctx context.Context, method string, endpointPath stri
 	}
 
 	return body, nil
-}
-
-func hydraHTTPClient() *http.Client {
-	timeout := harukiOAuth2.HydraRequestTimeout()
-	timeoutNano := timeout.Nanoseconds()
-
-	hydraHTTPClientMu.Lock()
-	defer hydraHTTPClientMu.Unlock()
-
-	if hydraSharedHTTPClient != nil && hydraSharedTimeoutNano == timeoutNano {
-		return hydraSharedHTTPClient
-	}
-
-	client := &http.Client{Timeout: timeout}
-	hydraSharedHTTPClient = client
-	hydraSharedTimeoutNano = timeoutNano
-	return hydraSharedHTTPClient
 }

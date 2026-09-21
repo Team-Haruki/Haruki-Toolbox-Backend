@@ -3,10 +3,8 @@ package sekai
 import (
 	"fmt"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
-
-	"github.com/iancoleman/orderedmap"
-	"github.com/shamaton/msgpack/v3"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/msgpackcodec"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmap"
 )
 
 func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
@@ -22,14 +20,13 @@ func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
 
 	switch dst := out.(type) {
 	case *orderedmap.OrderedMap:
-		om, err := orderedmsgpack.MsgpackToOrderedMap(unpadded)
+		om, err := msgpackcodec.DecodeOrdered(unpadded)
 		if err != nil {
 			return fmt.Errorf("ordered decode: %w", err)
 		}
-		om.SetEscapeHTML(false)
 		*dst = *om
 	case **orderedmap.OrderedMap:
-		om, err := orderedmsgpack.MsgpackToOrderedMap(unpadded)
+		om, err := msgpackcodec.DecodeOrdered(unpadded)
 		if err != nil {
 			return fmt.Errorf("ordered (**ptr) decode: %w", err)
 		}
@@ -38,10 +35,10 @@ func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
 		// shamaton's decoder recurses per nesting level with no depth limit, so a
 		// deeply nested payload would trigger an unrecoverable stack overflow.
 		// Pre-validate structure/depth before handing untrusted bytes to it.
-		if err := orderedmsgpack.ValidateMaxDepth(unpadded, orderedmsgpack.DefaultMaxUploadDepth); err != nil {
+		if err := msgpackcodec.ValidateMaxDepth(unpadded, msgpackcodec.DefaultMaxUploadDepth); err != nil {
 			return fmt.Errorf("msgpack validation (len=%d, target=%T): %w", len(unpadded), out, err)
 		}
-		if err := msgpack.Unmarshal(unpadded, out); err != nil {
+		if err := msgpackcodec.Unmarshal(unpadded, out); err != nil {
 			preview := unpadded
 			if len(preview) > 200 {
 				preview = preview[:200]
@@ -77,6 +74,29 @@ func (c *SekaiCryptor) Unpack(content []byte) (any, error) {
 		return nil, err
 	}
 	return convertUnpackResult(anyResult), nil
+}
+
+// UnpackMsgpack decodes already-decrypted, caller-owned bytes with the same
+// value conversion as Unpack. Validate before any recursive decoder invocation.
+func UnpackMsgpack(content []byte) (any, error) {
+	if err := msgpackcodec.ValidateMaxDepth(content, msgpackcodec.DefaultMaxUploadDepth); err != nil {
+		return nil, fmt.Errorf("msgpack validation: %w", err)
+	}
+	var mapResult map[string]any
+	if err := msgpackcodec.Unmarshal(content, &mapResult); err == nil {
+		sanitizeMapValues(mapResult)
+		return mapResult, nil
+	}
+	var sliceResult []any
+	if err := msgpackcodec.Unmarshal(content, &sliceResult); err == nil {
+		sanitizeSliceValues(sliceResult)
+		return sliceResult, nil
+	}
+	var result any
+	if err := msgpackcodec.Unmarshal(content, &result); err != nil {
+		return nil, err
+	}
+	return convertUnpackResult(result), nil
 }
 
 func sanitizeMapValues(m map[string]any) {
@@ -129,9 +149,10 @@ func convertUnpackResult(v any) any {
 }
 
 func (c *SekaiCryptor) UnpackOrdered(content []byte) (*orderedmap.OrderedMap, error) {
-	result := orderedmap.New()
-	result.SetEscapeHTML(false)
-	if err := c.UnpackInto(content, result); err != nil {
+	// Keep the decoded allocation directly instead of allocating and copying a
+	// second map header around its entry storage.
+	var result *orderedmap.OrderedMap
+	if err := c.UnpackInto(content, &result); err != nil {
 		return nil, err
 	}
 	return result, nil

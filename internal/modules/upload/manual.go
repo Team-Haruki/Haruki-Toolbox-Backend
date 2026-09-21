@@ -2,15 +2,16 @@ package upload
 
 import (
 	"fmt"
+	"strconv"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		userID, err := userCoreModule.CurrentUserID(c)
@@ -40,20 +41,21 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			&gameUserID,
 			&userID,
 			apiHelper,
+			dependencies,
 			harukiUtils.UploadMethodManual,
 		)
 		if err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to process upload")
 		}
-		return harukiAPIHelper.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded %s data.", serverStr, gameUserID, dataType), nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded %s data.", serverStr, gameUserID, dataType), nil)
 	}
 }
 
-func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerManualUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	api := apiHelper.Router.Group("/api/manual/:server/:user_id/:data_type", userCoreModule.RouteHandlers(userCoreModule.RequireAuthenticatedUser(apiHelper))...)
 
-	api.Post("/upload", handleManualUpload(apiHelper))
+	api.Post("/upload", handleManualUpload(apiHelper, dependencies))
 }

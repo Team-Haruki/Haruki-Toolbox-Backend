@@ -1,16 +1,18 @@
 package adminusers
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		targetUserID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetUserID == "" {
@@ -97,7 +99,7 @@ func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		clearedSessions := true
 		resp.ClearedSessions = &clearedSessions
 		revokedOAuthTokens := true
-		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, hydraConfig, targetUser.ID, targetUser.KratosIdentityID)
 		if sessionClearFailed {
 			clearedSessions = false
 			resp.ClearedSessions = &clearedSessions
@@ -114,13 +116,13 @@ func handleSoftDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 				"revokedOAuthTokens": revokedOAuthTokens,
 			})
 			message, _ := resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed)
-			return harukiAPIHelper.SuccessResponse(c, strings.Replace(message, "user banned", "user soft deleted", 1), &resp)
+			return harukiAPIHelper.Responses.SuccessResponse(c, strings.Replace(message, "user banned", "user soft deleted", 1), &resp)
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserSoftDelete, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"hasReason":       reason != nil,
 			"clearedSessions": true,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "user soft deleted", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "user soft deleted", &resp)
 	}
 }

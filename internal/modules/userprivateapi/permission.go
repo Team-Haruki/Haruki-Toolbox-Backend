@@ -2,9 +2,10 @@ package userprivateapi
 
 import (
 	"crypto/subtle"
+	"strings"
+
 	harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )

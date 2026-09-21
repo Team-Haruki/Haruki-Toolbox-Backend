@@ -18,7 +18,7 @@ func handleGetDashboardStatistics(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorInternal(c, "failed to query dashboard statistics")
 		}
 
-		return harukiAPIHelper.SuccessResponse(c, "success", stats)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", stats)
 	}
 }
 
@@ -43,6 +43,6 @@ func handleGetStatisticsTimeseries(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to build statistics timeseries")
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", resp)
 	}
 }

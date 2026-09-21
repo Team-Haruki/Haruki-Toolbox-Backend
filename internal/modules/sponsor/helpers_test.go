@@ -2,7 +2,8 @@ package sponsor
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 	"testing"
@@ -202,7 +203,7 @@ func TestSponsorPageResponseHidesPaymentAmount(t *testing.T) {
 	}
 
 	var decoded struct {
-		Supporters []map[string]json.RawMessage `json:"supporters"`
+		Supporters []map[string]jsontext.Value `json:"supporters"`
 	}
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatalf("unmarshal response: %v", err)

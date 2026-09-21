@@ -6,12 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // HourlyRequestsUpdate is the builder for updating HourlyRequests entities.
@@ -55,7 +55,7 @@ func (_u *HourlyRequestsUpdate) Mutation() *HourlyRequestsMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *HourlyRequestsUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -156,7 +156,7 @@ func (_u *HourlyRequestsUpdateOne) Select(field string, fields ...string) *Hourl
 
 // Save executes the query and returns the updated HourlyRequests entity.
 func (_u *HourlyRequestsUpdateOne) Save(ctx context.Context) (*HourlyRequests, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

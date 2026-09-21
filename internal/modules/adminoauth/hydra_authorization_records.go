@@ -7,10 +7,12 @@ import (
 	"sync"
 	"time"
 
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -23,7 +25,21 @@ type hydraClientAuthorizationRecord struct {
 
 const hydraClientAuthorizationScanWorkers = 8
 
-func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientID string) ([]hydraClientAuthorizationRecord, error) {
+func scopeHydraClientAuthorizationRecordsForActor(records []hydraClientAuthorizationRecord, actorUserID, actorRole string) []hydraClientAuthorizationRecord {
+	visible := make([]hydraClientAuthorizationRecord, 0, len(records))
+	for _, record := range records {
+		if record.User == nil {
+			continue
+		}
+		if err := adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, record.User.ID, string(record.User.Role)); err != nil {
+			continue
+		}
+		visible = append(visible, record)
+	}
+	return visible
+}
+
+func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, clientID string) ([]hydraClientAuthorizationRecord, error) {
 	users, err := apiHelper.DBManager.DB.User.Query().
 		Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldKratosIdentityID).
 		All(ctx)
@@ -52,7 +68,7 @@ func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *haru
 				if len(subjects) == 0 {
 					continue
 				}
-				sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(groupCtx, subjects)
+				sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(groupCtx, hydraConfig, subjects)
 				if err != nil {
 					return err
 				}

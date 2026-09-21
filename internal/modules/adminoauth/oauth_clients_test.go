@@ -118,6 +118,9 @@ func TestSanitizeAdminOAuthClientRedirectURIs(t *testing.T) {
 
 func TestSanitizeAdminOAuthClientScopes(t *testing.T) {
 	scopes, err := sanitizeAdminOAuthClientScopes([]string{
+		harukiOAuth2.ScopeOpenID,
+		harukiOAuth2.ScopeProfile,
+		harukiOAuth2.ScopeEmail,
 		harukiOAuth2.ScopeOfflineAccess,
 		harukiOAuth2.ScopeUserRead,
 		harukiOAuth2.ScopeGameDataRead,
@@ -126,12 +129,18 @@ func TestSanitizeAdminOAuthClientScopes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sanitizeAdminOAuthClientScopes returned error: %v", err)
 	}
-	if len(scopes) != 3 {
-		t.Fatalf("len(scopes) = %d, want 3", len(scopes))
+	if len(scopes) != 6 {
+		t.Fatalf("len(scopes) = %d, want 6", len(scopes))
 	}
 
 	if _, err := sanitizeAdminOAuthClientScopes([]string{"admin:all"}); err == nil {
 		t.Fatalf("expected invalid scope to fail")
+	}
+	if _, err := sanitizeAdminOAuthClientScopes([]string{harukiOAuth2.ScopeProfile}); err == nil {
+		t.Fatalf("expected profile without openid to fail")
+	}
+	if _, err := sanitizeAdminOAuthClientScopes([]string{harukiOAuth2.ScopeEmail}); err == nil {
+		t.Fatalf("expected email without openid to fail")
 	}
 }
 

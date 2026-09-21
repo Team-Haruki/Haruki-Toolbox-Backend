@@ -2,23 +2,25 @@ package usertickets
 
 import (
 	"context"
+	"errors"
+	"math"
+	"strings"
+	"time"
+
+	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
-	platformTicketNotifications "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/ticketnotifications"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
-	"math"
-	"strings"
-	"time"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, notificationConfig ticketsModule.NotificationConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -54,7 +56,7 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if err != nil {
 			reason = "invalid_priority"
 			if fiberErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid priority")
 		}
@@ -62,7 +64,7 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if err != nil {
 			reason = "invalid_category"
 			if fiberErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid category")
 		}
@@ -123,12 +125,12 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		// (log-only), so the response should not wait on the SMTP conversation.
 		// BuildEvent clones every request-derived string, so the event is safe
 		// to read after this handler returns.
-		event := platformTicketNotifications.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient)
+		event := ticketsModule.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient, notificationConfig)
 		platformMailNotify.Dispatch(func(ctx context.Context) {
-			platformTicketNotifications.NotifyAdminsOfNewTicket(ctx, apiHelper.DBManager.DB, event)
+			ticketsModule.NotifyAdminsOfNewTicket(ctx, apiHelper.DBManager.DB, event)
 		})
 		resp := createUserTicketResponse{TicketID: ticketID}
-		return harukiAPIHelper.SuccessResponse(c, "ticket created", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ticket created", &resp)
 	}
 }
 
@@ -141,21 +143,21 @@ func handleListOwnTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		statusFilter, err := parseUserTicketStatus(c.Query("status"))
 		if err != nil {
 			if fiberErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid status")
 		}
 		page, err := platformPagination.ParsePositiveInt(c.Query("page"), defaultUserTicketPage, "page")
 		if err != nil {
 			if fiberErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid page")
 		}
 		pageSize, err := platformPagination.ParsePositiveInt(c.Query("page_size"), defaultUserTicketPageSize, "page_size")
 		if err != nil {
 			if fiberErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid page_size")
 		}
@@ -199,7 +201,7 @@ func handleListOwnTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			HasMore:     page < totalPages,
 			Items:       items,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -234,11 +236,11 @@ func handleGetOwnTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			Ticket:   buildUserTicketListItem(row),
 			Messages: buildUserTicketMessageItems(row.Edges.Messages),
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
-func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, notificationConfig ticketsModule.NotificationConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
@@ -269,45 +271,25 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket is closed")
 		}
 
-		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
+		createdMessage, err := ticketsModule.NewService(apiHelper.DBManager.DB, time.Now).
+			AppendUserMessage(c.Context(), row, userID, message)
 		if err != nil {
+			if errors.Is(err, ticketsModule.ErrTicketClosed) {
+				return harukiAPIHelper.ErrorBadRequest(c, "ticket is closed")
+			}
+			if errors.Is(err, ticketsModule.ErrPersistTicketStatus) {
+				return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
+			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
 		}
 
-		createdMessage, err := tx.TicketMessage.Create().
-			SetTicketID(row.ID).
-			SetSenderUserID(userID).
-			SetSenderRole(ticketmessage.SenderRoleUser).
-			SetInternal(false).
-			SetMessage(message).
-			Save(c.Context())
-		if err != nil {
-			_ = tx.Rollback()
-			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
-		}
-
-		update := tx.Ticket.UpdateOneID(row.ID).
-			SetStatus(ticket.StatusPendingAdmin)
-		if row.ClosedAt != nil {
-			update.ClearClosedAt()
-		}
-		if _, err := update.Save(c.Context()); err != nil {
-			_ = tx.Rollback()
-			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
-		}
-
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
-			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
-		}
-
-		event := platformTicketNotifications.BuildEvent(row, userID, message, apiHelper.SMTPClient)
+		event := ticketsModule.BuildEvent(row, userID, message, apiHelper.SMTPClient, notificationConfig)
 		event.Ticket.Status = ticket.StatusPendingAdmin
 		platformMailNotify.Dispatch(func(ctx context.Context) {
-			platformTicketNotifications.NotifyAdminsOfUserReply(ctx, apiHelper.DBManager.DB, event)
+			ticketsModule.NotifyAdminsOfUserReply(ctx, apiHelper.DBManager.DB, event)
 		})
 		items := buildUserTicketMessageItems([]*postgresql.TicketMessage{createdMessage})
-		return harukiAPIHelper.SuccessResponse(c, "message added", &items[0])
+		return harukiAPIHelper.Responses.SuccessResponse(c, "message added", &items[0])
 	}
 }
 
@@ -330,15 +312,11 @@ func handleCloseOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket")
 		}
 
-		update := row.Update().SetStatus(ticket.StatusClosed)
-		if row.ClosedAt == nil {
-			update.SetClosedAt(time.Now().UTC())
-		}
-		updated, err := update.Save(c.Context())
+		updated, err := ticketsModule.NewService(apiHelper.DBManager.DB, time.Now).Close(c.Context(), row)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to close ticket")
 		}
 		resp := buildUserTicketListItem(updated)
-		return harukiAPIHelper.SuccessResponse(c, "ticket closed", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ticket closed", &resp)
 	}
 }

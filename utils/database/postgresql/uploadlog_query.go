@@ -164,8 +164,8 @@ func (_q *UploadLogQuery) All(ctx context.Context) ([]*UploadLog, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*UploadLog, *UploadLogQuery]()
-	return withInterceptors[[]*UploadLog](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*UploadLog, *UploadLogQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*UploadLog](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *UploadLogQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*UploadLogQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*UploadLogQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *UploadLogGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*UploadLogQuery, *UploadLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*UploadLogQuery, *UploadLogGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *UploadLogGroupBy) sqlScan(ctx context.Context, root *UploadLogQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *UploadLogSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*UploadLogQuery, *UploadLogSelect](ctx, _s.UploadLogQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*UploadLogQuery, *UploadLogSelect](ctx, _s.UploadLogQuery, _s, _s.inters, v)
 }
 
 func (_s *UploadLogSelect) sqlScan(ctx context.Context, root *UploadLogQuery, v any) error {

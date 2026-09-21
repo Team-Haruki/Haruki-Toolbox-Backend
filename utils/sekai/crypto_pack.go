@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"fmt"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/msgpackcodec"
 
 	"github.com/vgorin/cryptogo/pad"
 )
@@ -26,7 +26,7 @@ func (c *SekaiCryptor) Pack(content any) ([]byte, error) {
 			}
 			raw = b
 		} else {
-			b, err := orderedmsgpack.Marshal(v)
+			b, err := msgpackcodec.Marshal(v)
 			if err != nil {
 				return nil, fmt.Errorf("msgpack marshal: %w", err)
 			}

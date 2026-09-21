@@ -235,7 +235,7 @@ func (_u *TicketUpdate) RemoveMessages(v ...*TicketMessage) *TicketUpdate {
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *TicketUpdate) Save(ctx context.Context) (int, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -649,7 +649,7 @@ func (_u *TicketUpdateOne) Select(field string, fields ...string) *TicketUpdateO
 // Save executes the query and returns the updated Ticket entity.
 func (_u *TicketUpdateOne) Save(ctx context.Context) (*Ticket, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

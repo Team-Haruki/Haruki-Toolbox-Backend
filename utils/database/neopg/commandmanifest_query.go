@@ -5,14 +5,14 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandmanifest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // CommandManifestQuery is the builder for querying CommandManifest entities.
@@ -164,8 +164,8 @@ func (_q *CommandManifestQuery) All(ctx context.Context) ([]*CommandManifest, er
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*CommandManifest, *CommandManifestQuery]()
-	return withInterceptors[[]*CommandManifest](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*CommandManifest, *CommandManifestQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*CommandManifest](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *CommandManifestQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*CommandManifestQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*CommandManifestQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *CommandManifestGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CommandManifestQuery, *CommandManifestGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*CommandManifestQuery, *CommandManifestGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *CommandManifestGroupBy) sqlScan(ctx context.Context, root *CommandManifestQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *CommandManifestSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CommandManifestQuery, *CommandManifestSelect](ctx, _s.CommandManifestQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*CommandManifestQuery, *CommandManifestSelect](ctx, _s.CommandManifestQuery, _s, _s.inters, v)
 }
 
 func (_s *CommandManifestSelect) sqlScan(ctx context.Context, root *CommandManifestQuery, v any) error {

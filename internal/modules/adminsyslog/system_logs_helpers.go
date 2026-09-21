@@ -3,15 +3,16 @@ package adminsyslog
 import (
 	"bytes"
 	"encoding/csv"
-	"encoding/json"
-	platformFiltering "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/filtering"
-	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
+	json "encoding/json/v2"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	platformFiltering "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/filtering"
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"

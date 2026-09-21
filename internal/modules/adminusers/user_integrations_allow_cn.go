@@ -66,6 +66,6 @@ func handleUpdateUserAllowCNMysekai(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"allowCNMysekai": updated.AllowCnMysekai,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "allow_cn_mysekai updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "allow_cn_mysekai updated", &resp)
 	}
 }

@@ -3,10 +3,11 @@ package adminrisk
 import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+
+	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterAdminRiskRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+func RegisterAdminRiskRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	risk := adminGroup.Group("/risk", adminCoreModule.RequireAdmin(apiHelper))
 
 	events := risk.Group("/events")

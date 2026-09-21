@@ -6,6 +6,6 @@ type adminOAuthTokenStats struct {
 	Total           int        `json:"total"`
 	Active          int        `json:"active"`
 	Revoked         int        `json:"revoked"`
-	LatestIssuedAt  *time.Time `json:"latestIssuedAt,omitempty"`
-	LatestExpiresAt *time.Time `json:"latestExpiresAt,omitempty"`
+	LatestIssuedAt  *time.Time `json:"latestIssuedAt,omitzero"`
+	LatestExpiresAt *time.Time `json:"latestExpiresAt,omitzero"`
 }

@@ -2,6 +2,9 @@ package oauth2
 
 import (
 	"context"
+	"strconv"
+	"time"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
@@ -9,10 +12,7 @@ import (
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
-	"strconv"
-	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -79,14 +79,14 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// trip, and both the conditional gate and the read-key digest need it.
 		var suiteAllowedKeys []string
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			suiteAllowedKeys = apiHelper.GetPublicAPIAllowedKeys()
+			suiteAllowedKeys = apiHelper.GetAllowedKeys()
 		}
 		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
 		var cacheKey string
 		if stamp > 0 {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp)
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
 			// Suite bodies are shaped by the public key allowlist, so entries
 			// are keyed by it too — an allowlist edit moves readers to fresh
 			// entries even when the stamp is unchanged. The write side appends
@@ -110,7 +110,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		body, err := loadOAuth2GameData(apiHelper, cacheKey, server, dataType, gameUserID, requestKey, stamp)
 		if err != nil {
 			if fErr, ok := err.(*fiber.Error); ok {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fErr.Code, fErr.Message, nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fErr.Code, fErr.Message, nil)
 			}
 			harukiLogger.Errorf("Failed to load OAuth2 game data: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
@@ -146,22 +146,22 @@ func loadOAuth2GameData(
 		// Detached from any single caller's request lifetime; still bounded.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), oauth2GameDataReadTimeout)
 		defer cancel()
-		publicAPIAllowedKeys := apiHelper.GetPublicAPIAllowedKeys()
-		allowedKeySet := make(map[string]struct{}, len(publicAPIAllowedKeys))
-		for _, k := range publicAPIAllowedKeys {
+		allowedKeys := apiHelper.GetAllowedKeys()
+		allowedKeySet := make(map[string]struct{}, len(allowedKeys))
+		for _, k := range allowedKeys {
 			allowedKeySet[k] = struct{}{}
 		}
 		var resp any
 		var loadErr error
 		if dataType == harukiUtils.UploadDataTypeSuite {
-			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, gameUserID, server, requestKey, allowedKeySet, publicAPIAllowedKeys)
+			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, gameUserID, server, requestKey, allowedKeySet, allowedKeys)
 		} else {
 			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, gameUserID, server, requestKey)
 		}
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		encoded, mErr := sonic.Marshal(resp)
+		encoded, mErr := data.EncodeGameDataBody(resp)
 		if mErr != nil {
 			return nil, mErr
 		}
@@ -176,7 +176,7 @@ func loadOAuth2GameData(
 				// Digest from the same slice that shaped this body, so an
 				// allowlist edit mid-flight cannot pair a new-config key with
 				// an old-config body (or vice versa).
-				writeKey += ":a=" + data.PublicAllowlistDigest(publicAPIAllowedKeys)
+				writeKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			}
 			// Detach the cache write from the read deadline so a near-deadline
 			// but successful read still populates the cache for subsequent
@@ -199,10 +199,10 @@ func loadOAuth2GameData(
 	return v.(string), nil
 }
 
-func registerOAuth2GameDataRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
+func registerOAuth2GameDataRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) {
 	o := apiHelper.Router.Group("/api/oauth2/game-data")
 	o.Get("/:server/:data_type/:user_id",
-		harukiOAuth2.VerifyOAuth2Token(apiHelper.DBManager.DB, harukiOAuth2.ScopeGameDataRead),
+		harukiOAuth2.VerifyOAuth2Token(hydraConfig, apiHelper.DBManager.DB, harukiOAuth2.ScopeGameDataRead, checkHydraOAuth2ClientActive(hydraConfig)),
 		handleOAuth2GetGameData(apiHelper),
 	)
 }

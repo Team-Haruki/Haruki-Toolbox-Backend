@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
-	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"strconv"
 	"strings"
+
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -60,7 +61,7 @@ func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx
 	if identityID == "" {
 		return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: missing auth proxy subject header", errSessionUnauthorized)
 	}
-	userID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
+	userID, profile, err := s.resolveKratosIdentityWithProfile(ctx, identityID, email, emailVerified != nil && *emailVerified)
 	if err != nil {
 		return "", "", displayNamePtr, emailVerified, true, err
 	}
@@ -69,6 +70,6 @@ func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx
 	if claimed := strings.TrimSpace(c.Get(s.AuthProxyUserIDHeader)); claimed != "" && claimed != userID {
 		return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: auth proxy user id header mismatch", errSessionUnauthorized)
 	}
-	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr)
+	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr, profile)
 	return userID, identityID, displayNamePtr, emailVerified, true, nil
 }

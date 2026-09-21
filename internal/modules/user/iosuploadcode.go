@@ -3,6 +3,7 @@ package user
 import (
 	"crypto/rand"
 	"encoding/hex"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -75,7 +76,7 @@ func handleGenerateIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse(c, "upload code generated successfully", &newCode)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "upload code generated successfully", &newCode)
 	}
 }
 

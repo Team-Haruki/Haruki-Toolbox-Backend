@@ -2,8 +2,9 @@ package sekai
 
 import (
 	"errors"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"testing"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 func TestCloneHeaders(t *testing.T) {

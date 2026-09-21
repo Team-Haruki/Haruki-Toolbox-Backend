@@ -2,21 +2,22 @@ package ios
 
 import (
 	"fmt"
+	"math/rand/v2"
+	"strconv"
+	"strings"
+	"time"
+
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/ios"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"math/rand/v2"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, endpoints EndpointConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		uploadCode := c.Params("upload_code")
@@ -140,7 +141,7 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			Mode:        mode,
 			ChunkSizeMB: chunkSizeMB,
 		}
-		endpoint := getEndpoint(endpointType)
+		endpoint := endpoints.endpoint(endpointType)
 		content, err := iosGen.GenerateModule(req, endpoint, endpointStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate module")

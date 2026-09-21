@@ -1,10 +1,11 @@
 package adminwebhook
 
 import (
+	"strings"
+
 	webhookModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/webhook"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"strings"
 )
 
 func buildAdminWebhookSettingsResponse(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) adminWebhookSettingsResponse {

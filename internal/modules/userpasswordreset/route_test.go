@@ -1,11 +1,12 @@
 package userpasswordreset
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -15,7 +16,7 @@ func TestRegisterUserResetPasswordRoutesDisablesLegacyEndpointsWhenManagedIdenti
 	sessionHandler := harukiAPIHelper.NewSessionHandler(nil, "")
 	sessionHandler.ConfigureIdentityProvider("kratos", "http://kratos.example", "http://kratos-admin.example", "", "", true, true, time.Second, nil)
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, SessionHandler: sessionHandler}
-	RegisterUserResetPasswordRoutes(helper)
+	RegisterUserResetPasswordRoutes(helper, nil)
 
 	for _, path := range []string{"/api/user/reset-password/send", "/api/user/reset-password"} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)

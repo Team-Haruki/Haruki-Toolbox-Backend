@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 
-	"github.com/bytedance/sonic"
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+
+	json "encoding/json/v2"
 )
 
 func (s *SessionHandler) ResolveUserIDFromKratosSession(ctx context.Context, sessionToken string, cookieHeader string) (string, error) {
@@ -142,11 +143,11 @@ func (s *SessionHandler) resolveKratosSession(ctx context.Context, sessionToken 
 	}
 	email := platformIdentity.NormalizeEmail(extractKratosIdentityEmail(whoami.Identity))
 	emailVerified := extractKratosIdentityEmailVerification(whoami.Identity)
-	userID, err := s.resolveKratosIdentity(ctx, identityID, email, emailVerified != nil && *emailVerified)
+	userID, profile, err := s.resolveKratosIdentityWithProfile(ctx, identityID, email, emailVerified != nil && *emailVerified)
 	if err != nil {
 		return nil, err
 	}
-	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr)
+	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr, profile)
 	return &resolvedKratosSession{
 		UserID:        userID,
 		IdentityID:    identityID,
@@ -189,7 +190,7 @@ func (s *SessionHandler) fetchKratosWhoami(ctx context.Context, sessionToken str
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var parsed kratosSessionWhoamiResponse
-		if err := sonic.Unmarshal(body, &parsed); err != nil {
+		if err := json.Unmarshal(body, &parsed); err != nil {
 			return nil, fmt.Errorf("%w: decode whoami payload: %v", errIdentityProviderUnavailable, err)
 		}
 		return &parsed, nil
@@ -237,7 +238,7 @@ func (s *SessionHandler) initKratosSelfServiceFlow(ctx context.Context, initPath
 	}
 
 	var parsed kratosFlowResponse
-	if err := sonic.Unmarshal(body, &parsed); err != nil {
+	if err := json.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("%w: decode init flow response: %v", errIdentityProviderUnavailable, err)
 	}
 	flowID := strings.TrimSpace(parsed.ID)
@@ -264,7 +265,7 @@ func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submit
 	query.Set("flow", strings.TrimSpace(flowID))
 	endpoint.RawQuery = query.Encode()
 
-	encoded, err := sonic.Marshal(payload)
+	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("%w: encode payload: %v", errIdentityProviderUnavailable, err)
 	}
@@ -293,7 +294,7 @@ func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submit
 	}
 
 	var parsed kratosAuthSubmitResponse
-	if err := sonic.Unmarshal(body, &parsed); err != nil {
+	if err := json.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("%w: decode submit response: %v", errIdentityProviderUnavailable, err)
 	}
 	sessionToken := strings.TrimSpace(parsed.SessionToken)
@@ -319,7 +320,7 @@ func (s *SessionHandler) submitKratosRecoveryFlow(ctx context.Context, flowID st
 	query.Set("flow", strings.TrimSpace(flowID))
 	endpoint.RawQuery = query.Encode()
 
-	encoded, err := sonic.Marshal(map[string]any{
+	encoded, err := json.Marshal(map[string]any{
 		"method": method,
 		"email":  email,
 	})
@@ -377,7 +378,7 @@ func (s *SessionHandler) verifyKratosRecoveryCode(ctx context.Context, recoveryC
 	query.Set("flow", strings.TrimSpace(flowID))
 	endpoint.RawQuery = query.Encode()
 
-	encoded, err := sonic.Marshal(map[string]any{
+	encoded, err := json.Marshal(map[string]any{
 		"method": "code",
 		"code":   strings.TrimSpace(recoveryCode),
 	})
@@ -407,7 +408,7 @@ func (s *SessionHandler) verifyKratosRecoveryCode(ctx context.Context, recoveryC
 	}
 
 	var parsed kratosRecoveryFlowSubmitResponse
-	if err := sonic.Unmarshal(body, &parsed); err != nil {
+	if err := json.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("%w: decode recovery response: %v", errIdentityProviderUnavailable, err)
 	}
 	sessionToken := strings.TrimSpace(extractSessionTokenFromRecoveryPayload(body, parsed))
@@ -420,7 +421,7 @@ func (s *SessionHandler) verifyKratosRecoveryCode(ctx context.Context, recoveryC
 func classifyKratosFlowError(statusCode int, body []byte) error {
 	bodyText := strings.TrimSpace(string(body))
 	var payload kratosErrorPayload
-	_ = sonic.Unmarshal(body, &payload)
+	_ = json.Unmarshal(body, &payload)
 	reason := strings.TrimSpace(extractKratosErrorReason(payload, bodyText))
 	reasonLower := strings.ToLower(reason)
 
@@ -488,7 +489,7 @@ func extractSessionTokenFromRecoveryPayload(rawBody []byte, parsed kratosRecover
 	}
 
 	var raw any
-	if err := sonic.Unmarshal(rawBody, &raw); err != nil {
+	if err := json.Unmarshal(rawBody, &raw); err != nil {
 		return ""
 	}
 	return extractSessionTokenFromAny(raw)

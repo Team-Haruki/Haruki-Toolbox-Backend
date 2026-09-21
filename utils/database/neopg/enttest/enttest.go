@@ -9,9 +9,8 @@ import (
 	// required by schema hooks.
 	_ "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/runtime"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/migrate"
-
 	"entgo.io/ent/dialect/sql/schema"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/migrate"
 )
 
 type (

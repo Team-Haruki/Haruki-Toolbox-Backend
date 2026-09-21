@@ -1,9 +1,11 @@
 package api
 
 import (
+	"testing"
+
+	platformRuntimeConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	"testing"
 
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -12,45 +14,52 @@ func TestPublicAPIAllowedKeysCopySemantics(t *testing.T) {
 	helper := &HarukiToolboxRouterHelpers{}
 
 	input := []string{"a", "b"}
-	helper.SetPublicAPIAllowedKeys(input)
+	helper.SetAllowedKeys(input)
 	input[0] = "mutated"
 
-	stored := helper.GetPublicAPIAllowedKeys()
+	stored := helper.GetAllowedKeys()
 	if len(stored) != 2 || stored[0] != "a" || stored[1] != "b" {
 		t.Fatalf("stored keys mismatch: %#v", stored)
 	}
 
 	stored[1] = "changed"
-	again := helper.GetPublicAPIAllowedKeys()
+	again := helper.GetAllowedKeys()
 	if len(again) != 2 || again[0] != "a" || again[1] != "b" {
-		t.Fatalf("GetPublicAPIAllowedKeys leaked internal slice: %#v", again)
+		t.Fatalf("GetAllowedKeys leaked internal slice: %#v", again)
 	}
 }
 
 func TestNewHarukiToolboxRouterHelpersCopiesPublicKeys(t *testing.T) {
 	input := []string{"a", "b"}
+	runtimeConfig := platformRuntimeConfig.New(platformRuntimeConfig.Snapshot{
+		AllowedKeys:          input,
+		PrivateAPIToken:      "private-token",
+		PrivateAPIUserAgent:  "private-agent",
+		HarukiProxyUserAgent: "proxy-agent",
+		HarukiProxyVersion:   "v1",
+		HarukiProxySecret:    "proxy-secret",
+		HarukiProxyUnpackKey: "proxy-unpack-key",
+		WebhookJWTSecret:     "webhook-secret",
+		WebhookEnabled:       boolPointer(true),
+	}, nil)
 	helper := NewHarukiToolboxRouterHelpers(
 		nil,
 		nil,
 		nil,
 		nil,
 		nil,
-		input,
-		"private-token",
-		"private-agent",
-		"proxy-agent",
-		"v1",
-		"proxy-secret",
-		"proxy-unpack-key",
-		"webhook-secret",
-		true,
+		runtimeConfig,
 	)
 
 	input[0] = "mutated"
-	keys := helper.GetPublicAPIAllowedKeys()
+	keys := helper.GetAllowedKeys()
 	if len(keys) != 2 || keys[0] != "a" || keys[1] != "b" {
 		t.Fatalf("constructor did not copy public keys: %#v", keys)
 	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func TestRuntimeConfigGettersAndSetters(t *testing.T) {

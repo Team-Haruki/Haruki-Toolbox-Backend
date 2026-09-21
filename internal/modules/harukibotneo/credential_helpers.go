@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"math/big"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 	botUser "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
-	"math/big"
 
 	"github.com/golang-jwt/jwt/v5"
 )

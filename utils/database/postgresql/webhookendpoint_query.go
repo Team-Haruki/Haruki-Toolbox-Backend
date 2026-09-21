@@ -189,8 +189,8 @@ func (_q *WebhookEndpointQuery) All(ctx context.Context) ([]*WebhookEndpoint, er
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*WebhookEndpoint, *WebhookEndpointQuery]()
-	return withInterceptors[[]*WebhookEndpoint](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*WebhookEndpoint, *WebhookEndpointQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*WebhookEndpoint](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -229,7 +229,7 @@ func (_q *WebhookEndpointQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*WebhookEndpointQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*WebhookEndpointQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -535,7 +535,7 @@ func (_g *WebhookEndpointGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WebhookEndpointQuery, *WebhookEndpointGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*WebhookEndpointQuery, *WebhookEndpointGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *WebhookEndpointGroupBy) sqlScan(ctx context.Context, root *WebhookEndpointQuery, v any) error {
@@ -583,7 +583,7 @@ func (_s *WebhookEndpointSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WebhookEndpointQuery, *WebhookEndpointSelect](ctx, _s.WebhookEndpointQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*WebhookEndpointQuery, *WebhookEndpointSelect](ctx, _s.WebhookEndpointQuery, _s, _s.inters, v)
 }
 
 func (_s *WebhookEndpointSelect) sqlScan(ctx context.Context, root *WebhookEndpointQuery, v any) error {

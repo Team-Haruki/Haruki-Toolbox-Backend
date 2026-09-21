@@ -1,11 +1,12 @@
 package ios
 
 import (
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"regexp"
 	"strings"
 	"testing"
+
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 func TestGetHostnamesReadsLatestConfig(t *testing.T) {

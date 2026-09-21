@@ -90,7 +90,7 @@ func handleBatchUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			"success": resp.Success,
 			"failed":  resp.Failed,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -176,6 +176,6 @@ func handleBatchUpdateUserAllowCNMysekai(apiHelper *harukiAPIHelper.HarukiToolbo
 			"success":        resp.Success,
 			"failed":         resp.Failed,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }

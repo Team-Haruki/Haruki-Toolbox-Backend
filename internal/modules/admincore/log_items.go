@@ -1,8 +1,9 @@
 package admincore
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 type SystemLogListItem struct {
@@ -31,7 +32,7 @@ type UploadLogListItem struct {
 	DataType      string    `json:"dataType"`
 	UploadMethod  string    `json:"uploadMethod"`
 	Success       bool      `json:"success"`
-	ErrorMessage  *string   `json:"errorMessage,omitempty"`
+	ErrorMessage  *string   `json:"errorMessage,omitzero"`
 	UploadTime    time.Time `json:"uploadTime"`
 }
 

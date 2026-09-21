@@ -2,7 +2,7 @@ package adminwebhook
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,6 +39,26 @@ func newAdminWebhookTestApp() *fiber.App {
 		return c.Next()
 	})
 	return app
+}
+
+func TestAdminWebhookListRejectsPlainAdminBeforeReadingSecrets(t *testing.T) {
+	helper := newAdminWebhookTestHelper(t)
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "admin-1")
+		c.Locals("userRole", "admin")
+		return c.Next()
+	})
+	app.Get("/webhooks", handleListAdminWebhooks(helper))
+
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/webhooks", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("status code = %d, want %d", response.StatusCode, fiber.StatusForbidden)
+	}
 }
 
 func TestAdminWebhookSettingsHandlers(t *testing.T) {
@@ -95,7 +115,7 @@ func TestAdminWebhookCRUDHandlers(t *testing.T) {
 	var createBody struct {
 		UpdatedData adminWebhookMutationResponse `json:"updatedData"`
 	}
-	if err := json.NewDecoder(createResp.Body).Decode(&createBody); err != nil {
+	if err := json.UnmarshalRead(createResp.Body, &createBody); err != nil {
 		t.Fatalf("decode create response returned error: %v", err)
 	}
 	if createBody.UpdatedData.Webhook.ID != "1" {
@@ -148,7 +168,7 @@ func TestAdminWebhookCRUDHandlers(t *testing.T) {
 	var updateBody struct {
 		UpdatedData adminWebhookMutationResponse `json:"updatedData"`
 	}
-	if err := json.NewDecoder(updateResp.Body).Decode(&updateBody); err != nil {
+	if err := json.UnmarshalRead(updateResp.Body, &updateBody); err != nil {
 		t.Fatalf("decode update response returned error: %v", err)
 	}
 	if updateBody.UpdatedData.Token == "" {

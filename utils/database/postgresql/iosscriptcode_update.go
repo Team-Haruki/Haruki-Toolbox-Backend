@@ -74,7 +74,7 @@ func (_u *IOSScriptCodeUpdate) ClearUser() *IOSScriptCodeUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *IOSScriptCodeUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -235,7 +235,7 @@ func (_u *IOSScriptCodeUpdateOne) Select(field string, fields ...string) *IOSScr
 
 // Save executes the query and returns the updated IOSScriptCode entity.
 func (_u *IOSScriptCodeUpdateOne) Save(ctx context.Context) (*IOSScriptCode, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

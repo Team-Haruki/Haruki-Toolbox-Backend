@@ -164,8 +164,8 @@ func (_q *RiskRuleQuery) All(ctx context.Context) ([]*RiskRule, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*RiskRule, *RiskRuleQuery]()
-	return withInterceptors[[]*RiskRule](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*RiskRule, *RiskRuleQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*RiskRule](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *RiskRuleQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*RiskRuleQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*RiskRuleQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *RiskRuleGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RiskRuleQuery, *RiskRuleGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*RiskRuleQuery, *RiskRuleGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *RiskRuleGroupBy) sqlScan(ctx context.Context, root *RiskRuleQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *RiskRuleSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RiskRuleQuery, *RiskRuleSelect](ctx, _s.RiskRuleQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*RiskRuleQuery, *RiskRuleSelect](ctx, _s.RiskRuleQuery, _s, _s.inters, v)
 }
 
 func (_s *RiskRuleSelect) sqlScan(ctx context.Context, root *RiskRuleQuery, v any) error {

@@ -5,14 +5,14 @@ package neopg
 import (
 	"context"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 	"math"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/predicate"
 )
 
 // HourlyRequestsQuery is the builder for querying HourlyRequests entities.
@@ -164,8 +164,8 @@ func (_q *HourlyRequestsQuery) All(ctx context.Context) ([]*HourlyRequests, erro
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*HourlyRequests, *HourlyRequestsQuery]()
-	return withInterceptors[[]*HourlyRequests](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*HourlyRequests, *HourlyRequestsQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*HourlyRequests](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *HourlyRequestsQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*HourlyRequestsQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*HourlyRequestsQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *HourlyRequestsGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*HourlyRequestsQuery, *HourlyRequestsGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*HourlyRequestsQuery, *HourlyRequestsGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *HourlyRequestsGroupBy) sqlScan(ctx context.Context, root *HourlyRequestsQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *HourlyRequestsSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*HourlyRequestsQuery, *HourlyRequestsSelect](ctx, _s.HourlyRequestsQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*HourlyRequestsQuery, *HourlyRequestsSelect](ctx, _s.HourlyRequestsQuery, _s, _s.inters, v)
 }
 
 func (_s *HourlyRequestsSelect) sqlScan(ctx context.Context, root *HourlyRequestsQuery, v any) error {

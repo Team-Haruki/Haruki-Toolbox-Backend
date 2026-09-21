@@ -24,21 +24,21 @@ type User struct {
 	// Email holds the value of the "email" field.
 	Email string `json:"email,omitempty"`
 	// AvatarPath holds the value of the "avatar_path" field.
-	AvatarPath *string `json:"avatar_path,omitempty"`
+	AvatarPath *string `json:"avatar_path,omitzero"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
-	AllowCnMysekai bool `json:"allow_cn_mysekai,omitempty"`
+	AllowCnMysekai bool `json:"allow_cn_mysekai,omitzero"`
 	// TicketEmailNotificationsEnabled holds the value of the "ticket_email_notifications_enabled" field.
-	TicketEmailNotificationsEnabled bool `json:"ticket_email_notifications_enabled,omitempty"`
+	TicketEmailNotificationsEnabled bool `json:"ticket_email_notifications_enabled,omitzero"`
 	// Role holds the value of the "role" field.
 	Role user.Role `json:"role,omitempty"`
 	// Banned holds the value of the "banned" field.
-	Banned bool `json:"banned,omitempty"`
+	Banned bool `json:"banned,omitzero"`
 	// BanReason holds the value of the "ban_reason" field.
-	BanReason *string `json:"ban_reason,omitempty"`
+	BanReason *string `json:"ban_reason,omitzero"`
 	// KratosIdentityID holds the value of the "kratos_identity_id" field.
-	KratosIdentityID *string `json:"kratos_identity_id,omitempty"`
+	KratosIdentityID *string `json:"kratos_identity_id,omitzero"`
 	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt *time.Time `json:"created_at,omitempty"`
+	CreatedAt *time.Time `json:"created_at,omitzero"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges        UserEdges `json:"edges"`
@@ -48,7 +48,7 @@ type User struct {
 // UserEdges holds the relations/edges for other nodes in the graph.
 type UserEdges struct {
 	// SocialPlatformInfo holds the value of the social_platform_info edge.
-	SocialPlatformInfo *SocialPlatformInfo `json:"social_platform_info,omitempty"`
+	SocialPlatformInfo *SocialPlatformInfo `json:"social_platform_info,omitzero"`
 	// AuthorizedSocialPlatforms holds the value of the authorized_social_platforms edge.
 	AuthorizedSocialPlatforms []*AuthorizeSocialPlatformInfo `json:"authorized_social_platforms,omitempty"`
 	// GameAccountBindings holds the value of the game_account_bindings edge.
@@ -58,7 +58,7 @@ type UserEdges struct {
 	// GameAccountDataGrantsReceived holds the value of the game_account_data_grants_received edge.
 	GameAccountDataGrantsReceived []*GameAccountDataGrant `json:"game_account_data_grants_received,omitempty"`
 	// IosScriptCode holds the value of the ios_script_code edge.
-	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitempty"`
+	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [6]bool

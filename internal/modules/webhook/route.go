@@ -1,10 +1,11 @@
 package webhook
 
 import (
+	"strings"
+
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -72,7 +73,7 @@ func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			harukiLogger.Errorf("Failed to get subscribers for webhook %s: %v", webhookID, err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to get subscribers")
 		}
-		return harukiAPIHelper.ResponseWithStruct(c, fiber.StatusOK, &users)
+		return harukiAPIHelper.Responses.ResponseWithStruct(c, fiber.StatusOK, &users)
 	}
 }
 
@@ -99,7 +100,7 @@ func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			harukiLogger.Errorf("Failed to add webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to register webhook push user")
 		}
-		return harukiAPIHelper.SuccessResponse[string](c, "Registered webhook push user successfully.", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "Registered webhook push user successfully.", nil)
 	}
 }
 
@@ -126,7 +127,7 @@ func handleDeleteWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Errorf("Failed to remove webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to unregister webhook push user")
 		}
-		return harukiAPIHelper.SuccessResponse[string](c, "Unregistered webhook push user successfully.", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "Unregistered webhook push user successfully.", nil)
 	}
 }
 

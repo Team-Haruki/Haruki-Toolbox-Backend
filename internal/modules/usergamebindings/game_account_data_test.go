@@ -2,10 +2,11 @@ package usergamebindings
 
 import (
 	"context"
-	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"net/http/httptest"
 	"testing"
+
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"github.com/gofiber/fiber/v3"
 )

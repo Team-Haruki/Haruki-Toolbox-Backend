@@ -2,14 +2,15 @@ package usergamebindings
 
 import (
 	"context"
+	"strconv"
+	"strings"
+	"time"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -36,8 +37,8 @@ func parseOwnedGameAccountDataType(raw string) (ownedGameAccountDataType, *fiber
 	}
 }
 
-func buildPublicAPIAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (map[string]struct{}, []string) {
-	allowedKeys := apiHelper.GetPublicAPIAllowedKeys()
+func buildAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (map[string]struct{}, []string) {
+	allowedKeys := apiHelper.GetAllowedKeys()
 	allowedKeySet := make(map[string]struct{}, len(allowedKeys))
 	for _, key := range allowedKeys {
 		allowedKeySet[key] = struct{}{}
@@ -90,7 +91,7 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		requestKey := c.Query("key")
 		switch dataType {
 		case ownedGameAccountDataTypeSuite:
-			allowedKeySet, allowedKeys := buildPublicAPIAllowedKeySet(apiHelper)
+			allowedKeySet, allowedKeys := buildAllowedKeySet(apiHelper)
 			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeSuite, requestKey, true, allowedKeys) {
 				return c.SendStatus(fiber.StatusNotModified)
 			}
@@ -98,7 +99,7 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
-			return c.JSON(resp)
+			return data.SendGameDataResponse(c, resp)
 		case ownedGameAccountDataTypeMysekai:
 			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeMysekai, requestKey, false, nil) {
 				return c.SendStatus(fiber.StatusNotModified)
@@ -107,11 +108,10 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}
-			return c.JSON(resp)
+			return data.SendGameDataResponse(c, resp)
 		case ownedGameAccountDataTypeProfile:
-			if access.ViaGrant {
-				return harukiAPIHelper.ErrorForbidden(c, "profile access cannot be granted")
-			}
+			// Reached only after CanAccessGameAccountData allowed it, which for a
+			// grantee means the owner granted this data type explicitly.
 			return sendOwnedGameAccountProfile(c, apiHelper, gameUserIDStr, server)
 		default:
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
@@ -150,27 +150,27 @@ func sendOwnedGameAccountProfile(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 	if err != nil {
 		if resultInfo != nil {
 			if !resultInfo.ServerAvailable {
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "game server unavailable", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "game server unavailable", nil)
 			}
 			if !resultInfo.AccountExists {
 				return harukiAPIHelper.ErrorNotFound(c, "game account not found")
 			}
 		}
 		harukiLogger.Errorf("Failed to query game account profile: %v", err)
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "failed to query game account profile", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "failed to query game account profile", nil)
 	}
 	if resultInfo == nil {
 		harukiLogger.Errorf("Sekai API profile response missing result info")
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "failed to query game account profile", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "failed to query game account profile", nil)
 	}
 	if !resultInfo.ServerAvailable {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "game server unavailable", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "game server unavailable", nil)
 	}
 	if !resultInfo.AccountExists {
 		return harukiAPIHelper.ErrorNotFound(c, "game account not found")
 	}
 	if !resultInfo.Body || len(body) == 0 {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "empty game account profile response", nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "empty game account profile response", nil)
 	}
 
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)

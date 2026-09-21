@@ -26,7 +26,7 @@ type riskEventItem struct {
 	IP           string         `json:"ip,omitempty"`
 	Action       string         `json:"action,omitempty"`
 	Reason       string         `json:"reason,omitempty"`
-	ResolvedAt   *time.Time     `json:"resolvedAt,omitempty"`
+	ResolvedAt   *time.Time     `json:"resolvedAt,omitzero"`
 	ResolvedBy   string         `json:"resolvedBy,omitempty"`
 	Metadata     map[string]any `json:"metadata,omitempty"`
 }

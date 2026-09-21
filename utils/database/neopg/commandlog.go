@@ -4,19 +4,19 @@ package neopg
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/commandlog"
 )
 
 // CommandLog is the model entity for the CommandLog schema.
 type CommandLog struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// IM platform, e.g. qq
 	Platform string `json:"platform,omitempty"`
 	// Bot platform instance identifier

@@ -74,6 +74,6 @@ func handleDeleteAdminSession(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			"affected":       1,
 			"provider":       "kratos",
 		})
-		return harukiAPIHelper.SuccessResponse[string](c, "session deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "session deleted", nil)
 	}
 }

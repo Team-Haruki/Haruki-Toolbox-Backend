@@ -1,10 +1,11 @@
 package data
 
 import (
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"strconv"
 	"strings"
 	"time"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"github.com/gofiber/fiber/v3"
 )

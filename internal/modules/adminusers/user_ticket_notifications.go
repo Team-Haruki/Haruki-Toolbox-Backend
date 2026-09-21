@@ -1,11 +1,12 @@
 package adminusers
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -128,7 +129,7 @@ func handleListAdminTicketNotificationRecipients(apiHelper *harukiAPIHelper.Haru
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -195,6 +196,6 @@ func handleUpdateUserTicketNotificationPreference(apiHelper *harukiAPIHelper.Har
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"ticketEmailNotificationsEnabled": resp.TicketEmailNotificationsEnabled,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "ticket notification preference updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ticket notification preference updated", &resp)
 	}
 }

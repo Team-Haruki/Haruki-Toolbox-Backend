@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"strconv"
 	"strings"
 	"time"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 var retrieverSleep = time.Sleep
@@ -94,8 +95,8 @@ func decodeGeneralRequestData() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(RequestDataGeneral)
 }
 
-func unpackResponseToMap(body []byte, server harukiUtils.SupportedInheritUploadServer) (map[string]any, error) {
-	unpacked, err := Unpack(body, harukiUtils.SupportedDataUploadServer(server))
+func unpackResponseToMap(serverCryptor ServerCryptor, body []byte, server harukiUtils.SupportedInheritUploadServer) (map[string]any, error) {
+	unpacked, err := serverCryptor.Unpack(body, harukiUtils.SupportedDataUploadServer(server))
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +107,8 @@ func unpackResponseToMap(body []byte, server harukiUtils.SupportedInheritUploadS
 	return unpackedMap, nil
 }
 
-func checkMaintenanceFromBody(body []byte, server harukiUtils.SupportedInheritUploadServer) (bool, error) {
-	unpacked, err := unpackResponseToMap(body, server)
+func checkMaintenanceFromBody(serverCryptor ServerCryptor, body []byte, server harukiUtils.SupportedInheritUploadServer) (bool, error) {
+	unpacked, err := unpackResponseToMap(serverCryptor, body, server)
 	if err != nil {
 		return false, err
 	}

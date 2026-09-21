@@ -6,7 +6,7 @@ type FriendGroupItem struct {
 	Bg        *string `json:"bg"`
 	GroupInfo string  `json:"groupInfo"`
 	Detail    string  `json:"detail"`
-	Url       *string `json:"url,omitempty"`
+	Url       *string `json:"url,omitzero"`
 }
 
 type FriendGroupData struct {

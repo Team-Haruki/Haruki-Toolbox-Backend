@@ -78,7 +78,7 @@ func (_c *WebhookSubscriptionCreate) Mutation() *WebhookSubscriptionMutation {
 // Save creates the WebhookSubscription in the database.
 func (_c *WebhookSubscriptionCreate) Save(ctx context.Context) (*WebhookSubscription, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

@@ -2,19 +2,24 @@ package handler
 
 import (
 	"bytes"
+	"context"
+	json "encoding/json/v2"
 	"fmt"
+	"io"
+	"sync"
+	"time"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	harukiAPIData "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/msgpackcodec"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfstats"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/streamjson"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
-	"sync"
-	"time"
-
-	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
 	"github.com/klauspost/compress/zstd"
 )
@@ -25,7 +30,7 @@ var (
 )
 
 func init() {
-	httpClient = resty.New()
+	httpClient = jsoncodec.ConfigureResty(resty.New())
 	httpClient.SetTimeout(dataSyncerTimeoutSeconds * time.Second)
 	httpClient.SetHeader("User-Agent", fmt.Sprintf(defaultUserAgentName, harukiVersion.Version))
 	httpClient.SetHeader("Accept", defaultAcceptOctetStream)
@@ -44,90 +49,64 @@ var bytesBufferPool = sync.Pool{
 	},
 }
 
-func processDataOnce(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
-
-	msgpackBytes, err := sekai.DecryptToMsgpack(rawData, server)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt data: %w", err)
-	}
-
-	buf := bytesBufferPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
-	encoder.Reset(buf)
-
-	if err := streamjson.Convert(msgpackBytes, encoder); err != nil {
-		encoder.Close()
-		zstdEncoderPool.Put(encoder)
-		bytesBufferPool.Put(buf)
-		return nil, fmt.Errorf("failed to stream convert msgpack to json+zstd: %w", err)
-	}
-
-	msgpackBytes = nil
-
-	if err := encoder.Close(); err != nil {
-		zstdEncoderPool.Put(encoder)
-		bytesBufferPool.Put(buf)
-		return nil, fmt.Errorf("failed to close zstd writer: %w", err)
-	}
-	zstdEncoderPool.Put(encoder)
-
-	// Copy result before returning buffer to pool
-	result := make([]byte, buf.Len())
-	copy(result, buf.Bytes())
-	bytesBufferPool.Put(buf)
-	return result, nil
+func processMsgpackOnce(msgpackBytes []byte) ([]byte, error) {
+	defer perfstats.Track(perfstats.SyncProcessed)()
+	return compressSyncJSON(func(w io.Writer) error {
+		return msgpackcodec.WriteJSON(w, msgpackBytes, harukiAPIData.ProviderJSONOptions())
+	})
 }
 
-func processDataWithRestore(rawData []byte, server utils.SupportedDataUploadServer) ([]byte, error) {
-	unpacked, err := sekai.Unpack(rawData, server)
+func processRestoredMsgpack(msgpackBytes []byte, server utils.SupportedDataUploadServer, service *SuiteRestoreService) ([]byte, error) {
+	defer perfstats.Track(perfstats.SyncRestored)()
+	unpacked, err := sekai.UnpackMsgpack(msgpackBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack data: %w", err)
 	}
-	unpackedMap, ok := unpacked.(map[string]any)
+	data, ok := unpacked.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("unpacked data is not a map")
 	}
-
-	restored, _, err := RestoreSuite(server, unpackedMap, SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync})
+	data, err = service.MysekaiRestorer().Document(string(server), data)
+	if err != nil {
+		return nil, err
+	}
+	restored, _, err := service.Restore(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync})
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore suite data: %w", err)
 	}
+	return compressSyncJSON(func(w io.Writer) error {
+		return json.MarshalWrite(w, harukiAPIData.NormalizeProviderResponse(restored))
+	})
+}
 
-	jsonBytes, err := sonic.Marshal(harukiAPIData.NormalizeProviderResponse(restored))
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal restored data to json: %w", err)
-	}
-
+// Keep pooled output storage bounded, and detach the encoder from the buffer.
+// The normalization contract is unchanged; only the intermediate JSON is removed.
+func compressSyncJSON(write func(io.Writer) error) ([]byte, error) {
 	buf := bytesBufferPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
 	encoder.Reset(buf)
-
-	if _, err := encoder.Write(jsonBytes); err != nil {
-		encoder.Close()
+	defer func() {
+		encoder.Reset(io.Discard)
 		zstdEncoderPool.Put(encoder)
-		bytesBufferPool.Put(buf)
-		return nil, fmt.Errorf("failed to write json to zstd encoder: %w", err)
+		if buf.Cap() <= 1<<20 {
+			buf.Reset()
+			bytesBufferPool.Put(buf)
+		}
+	}()
+	writeErr := write(encoder)
+	closeErr := encoder.Close()
+	if writeErr != nil {
+		return nil, fmt.Errorf("failed to encode json+zstd: %w", writeErr)
 	}
-
-	jsonBytes = nil
-
-	if err := encoder.Close(); err != nil {
-		zstdEncoderPool.Put(encoder)
-		bytesBufferPool.Put(buf)
-		return nil, fmt.Errorf("failed to close zstd writer: %w", err)
+	if closeErr != nil {
+		return nil, fmt.Errorf("failed to close zstd writer: %w", closeErr)
 	}
-	zstdEncoderPool.Put(encoder)
-
-	// Copy result before returning buffer to pool
-	result := make([]byte, buf.Len())
-	copy(result, buf.Bytes())
-	bytesBufferPool.Put(buf)
-	return result, nil
+	return bytes.Clone(buf.Bytes()), nil
 }
 
 func sendData(url string, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, data []byte, encoding string, headers map[string]string) {
+	defer perfstats.Track(perfstats.SyncDelivery)()
 	if url == "" {
 		logger.Warnf("Upload endpoint url is empty, skipped syncing data.")
 		return
@@ -155,14 +134,15 @@ func sendData(url string, userID int64, server utils.SupportedDataUploadServer, 
 	}
 }
 
-func checkUserExists(t syncTarget, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) bool {
+func checkUserExists(ctx context.Context, t syncTarget, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) bool {
+	defer perfstats.Track(perfstats.SyncCheck)()
 	if !t.checkEnabled || t.checkURL == "" {
 		return true
 	}
 
 	url := replaceSyncURLPlaceholders(t.checkURL, userID, server, dataType)
 
-	req := httpClient.R().SetHeaders(buildCheckHeaders(t))
+	req := httpClient.R().SetContext(ctx).SetHeaders(buildCheckHeaders(t))
 
 	resp, err := req.Get(url)
 	if err != nil {
@@ -180,49 +160,97 @@ func checkUserExists(t syncTarget, userID int64, server utils.SupportedDataUploa
 	return false
 }
 
-func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, settings apiHelper.HarukiToolboxGameAccountPrivacySettings) {
+func DataSyncer(
+	userID int64,
+	server utils.SupportedDataUploadServer,
+	dataType utils.UploadDataType,
+	rawData []byte,
+	settings apiHelper.HarukiToolboxGameAccountPrivacySettings,
+	serverCryptor sekai.ServerCryptor,
+	suiteRestoreService *SuiteRestoreService,
+) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("DataSyncer panicked: %v", r)
 		}
 	}()
 
-	cfg := harukiConfig.Cfg.ThirdPartyDataProvider
-	targets := buildSyncTargets(cfg, dataType, settings)
+	runDataSyncer(
+		harukiConfig.Cfg.ThirdPartyDataProvider,
+		userID,
+		server,
+		dataType,
+		rawData,
+		settings,
+		serverCryptor,
+		suiteRestoreService,
+		sendData,
+	)
+}
 
+type syncDataSender func(string, int64, utils.SupportedDataUploadServer, utils.UploadDataType, []byte, string, map[string]string)
+
+func runDataSyncer(
+	cfg harukiConfig.ThirdPartyDataProviderConfig,
+	userID int64,
+	server utils.SupportedDataUploadServer,
+	dataType utils.UploadDataType,
+	rawData []byte,
+	settings apiHelper.HarukiToolboxGameAccountPrivacySettings,
+	serverCryptor sekai.ServerCryptor,
+	suiteRestoreService *SuiteRestoreService,
+	sender syncDataSender,
+) {
+	runDataSyncerTargets(buildSyncTargets(cfg, dataType, settings), userID, server, dataType, rawData, serverCryptor, suiteRestoreService, sender)
+}
+
+var syncEncodingSlots = make(chan struct{}, 2)
+
+func runDataSyncerTargets(targets []syncTarget, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, serverCryptor sekai.ServerCryptor, suiteRestoreService *SuiteRestoreService, sender syncDataSender) {
+	targets = eligibleSyncTargets(targets, userID, server, dataType)
 	if len(targets) == 0 {
 		return
 	}
-
 	needsProcessed, needsRestored := computeProcessingNeeds(targets, dataType)
-
-	var processedData []byte
-	if needsProcessed {
-		var err error
-		processedData, err = processDataOnce(rawData, server)
-		if err != nil {
-			logger.Warnf("Failed to pre-process data: %v", err)
-			needsProcessed = false
-		}
+	var processedData, restoredData []byte
+	if needsProcessed || needsRestored {
+		func() {
+			stopWait := perfstats.Track(perfstats.SyncEncodeWait)
+			syncEncodingSlots <- struct{}{}
+			stopWait()
+			defer func() { <-syncEncodingSlots }()
+			// This owned byte slice is shared only between synchronous format encoders.
+			// Never reuse the DB-preprocessed map or a released cryptor buffer.
+			msgpackBytes, err := serverCryptor.DecryptToMsgpack(rawData, server)
+			if err != nil {
+				logger.Warnf("Failed to decrypt sync data: %v", err)
+				needsProcessed, needsRestored = false, false
+				return
+			}
+			if needsProcessed {
+				if suiteRestoreService.MysekaiRestorer().Fingerprint(string(server)) != "" && (dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty) {
+					processedData, err = processMysekaiMsgpack(msgpackBytes, string(server), suiteRestoreService.MysekaiRestorer())
+				} else {
+					processedData, err = processMsgpackOnce(msgpackBytes)
+				}
+				if err != nil {
+					logger.Warnf("Failed to pre-process data: %v", err)
+					needsProcessed = false
+				}
+			}
+			if needsRestored {
+				restoredData, err = processRestoredMsgpack(msgpackBytes, server, suiteRestoreService)
+				if err != nil {
+					logger.Warnf("Failed to process data with restore: %v", err)
+					needsRestored = false
+				}
+			}
+		}()
 	}
 
-	var restoredData []byte
-	if needsRestored {
-		var err error
-		restoredData, err = processDataWithRestore(rawData, server)
-		if err != nil {
-			logger.Warnf("Failed to process data with restore: %v", err)
-			needsRestored = false
-		}
-	}
-
+	var sendTasks sync.WaitGroup
 	for _, t := range targets {
 		t := t
-
-		if !checkUserExists(t, userID, server, dataType) {
-			logger.Infof("Skipping sync to %s: user %d not found", t.url, userID)
-			continue
-		}
 
 		data, encoding := chooseSyncPayload(
 			t,
@@ -236,6 +264,50 @@ func DataSyncer(userID int64, server utils.SupportedDataUploadServer, dataType u
 		headers := buildSyncHeaders(t, userID, server, dataType)
 
 		logger.Infof("Syncing %s data to %s...", dataType, t.url)
-		go sendData(t.url, userID, server, dataType, data, encoding, headers)
+		sendTasks.Add(1)
+		go func() {
+			defer sendTasks.Done()
+			sender(t.url, userID, server, dataType, data, encoding, headers)
+		}()
 	}
+	sendTasks.Wait()
+}
+
+// At most four configured targets, with one shared deadline. A recipient rejected
+// by its existence check never triggers decryption or format construction.
+func eligibleSyncTargets(targets []syncTarget, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) []syncTarget {
+	ctx, cancel := context.WithTimeout(context.Background(), dataSyncerTimeoutSeconds*time.Second)
+	defer cancel()
+	allowed := make([]bool, len(targets))
+	var wg sync.WaitGroup
+	for i, target := range targets {
+		wg.Go(func() { allowed[i] = checkUserExists(ctx, target, userID, server, dataType) })
+	}
+	wg.Wait()
+	out := make([]syncTarget, 0, len(targets))
+	for i, target := range targets {
+		if allowed[i] {
+			out = append(out, target)
+		}
+	}
+	return out
+}
+
+// Enabled MYSEKAI JSON consumers receive the same shape as database API consumers.
+func processMysekaiMsgpack(payload []byte, server string, restorer *mysekairestore.Restorer) ([]byte, error) {
+	unpacked, err := sekai.UnpackMsgpack(payload)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := unpacked.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unpacked mysekai data is not a map")
+	}
+	restored, err := restorer.Document(server, data)
+	if err != nil {
+		return nil, err
+	}
+	return compressSyncJSON(func(w io.Writer) error {
+		return json.MarshalWrite(w, harukiAPIData.NormalizeProviderResponse(restored))
+	})
 }

@@ -1,11 +1,12 @@
 package adminusers
 
 import (
-	"encoding/json"
-	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	json "encoding/json/v2"
 	"mime"
 	"net/url"
 	"strings"
+
+	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 
 	"github.com/gofiber/fiber/v3"
 )

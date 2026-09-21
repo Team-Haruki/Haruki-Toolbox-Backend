@@ -1,11 +1,12 @@
 package usercore
 
 import (
+	"strconv"
+	"strings"
+
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strconv"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )

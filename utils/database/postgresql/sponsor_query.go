@@ -164,8 +164,8 @@ func (_q *SponsorQuery) All(ctx context.Context) ([]*Sponsor, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*Sponsor, *SponsorQuery]()
-	return withInterceptors[[]*Sponsor](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*Sponsor, *SponsorQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*Sponsor](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -204,7 +204,7 @@ func (_q *SponsorQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*SponsorQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*SponsorQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -454,7 +454,7 @@ func (_g *SponsorGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SponsorQuery, *SponsorGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*SponsorQuery, *SponsorGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *SponsorGroupBy) sqlScan(ctx context.Context, root *SponsorQuery, v any) error {
@@ -502,7 +502,7 @@ func (_s *SponsorSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SponsorQuery, *SponsorSelect](ctx, _s.SponsorQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*SponsorQuery, *SponsorSelect](ctx, _s.SponsorQuery, _s, _s.inters, v)
 }
 
 func (_s *SponsorSelect) sqlScan(ctx context.Context, root *SponsorQuery, v any) error {

@@ -4,15 +4,16 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"fmt"
-	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	"math/big"
 	"strings"
 	"time"
+
+	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -93,14 +94,14 @@ func respondEmailSendRateLimited(c fiber.Ctx, key string, message string, helper
 		}
 	}
 	c.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-	return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, fmt.Sprintf("%s (retry after %ds)", message, retryAfter), nil)
+	return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, fmt.Sprintf("%s (retry after %ds)", message, retryAfter), nil)
 }
 
 func checkSendEmailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientIP, email string) (limited bool, key string, message string, err error) {
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildEmailVerifySendRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildEmailVerifySendRateLimitTargetKey(email)
+	targetKey := helper.DBManager.Redis.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email)
 	values, err := helper.DBManager.Redis.Redis.Eval(
 		ctx,
 		emailSendRateLimitReserveScript,
@@ -133,14 +134,14 @@ func releaseSendEmailRateLimitReservation(c fiber.Ctx, helper *harukiAPIHelper.H
 	ctx := harukiAPIHelper.WithHTTPRequestMetadata(c.Context(), c.Get("User-Agent"), c.IP())
 	email = platformIdentity.NormalizeEmail(email)
 	ipKey := harukiRedis.BuildEmailVerifySendRateLimitIPKey(clientIP)
-	targetKey := harukiRedis.BuildEmailVerifySendRateLimitTargetKey(email)
+	targetKey := helper.DBManager.Redis.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email)
 	_, err := helper.DBManager.Redis.Redis.Eval(ctx, emailSendRateLimitReleaseScript, []string{ipKey, targetKey}).Result()
 	return err
 }
 
-func validateAndReserveEmailSend(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (string, error) {
+func validateAndReserveEmailSend(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) (string, error) {
 	clientIP := c.IP()
-	resp, err := cloudflare.ValidateTurnstile(challengeToken, clientIP)
+	resp, err := harukiCloudflare.Verify(c.Context(), turnstileVerifier, challengeToken, clientIP)
 	if err != nil {
 		return "", harukiAPIHelper.ErrorInternal(c, "captcha service unavailable")
 	}
@@ -164,7 +165,7 @@ func sendVerificationCode(c fiber.Ctx, email string, helper *harukiAPIHelper.Har
 		harukiLogger.Errorf("Failed to generate code: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
 	}
-	redisKey := harukiRedis.BuildEmailVerifyKey(email)
+	redisKey := helper.DBManager.Redis.KeyBuilder().BuildEmailVerifyKey(email)
 	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, 5*time.Minute); err != nil {
 		harukiLogger.Errorf("Failed to set redis cache: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to save code")
@@ -180,12 +181,12 @@ func sendVerificationCode(c fiber.Ctx, email string, helper *harukiAPIHelper.Har
 	return nil
 }
 
-func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) error {
 	email = platformIdentity.NormalizeEmail(email)
 	if email == "" {
 		return harukiAPIHelper.ErrorBadRequest(c, "email is required")
 	}
-	clientIP, err := validateAndReserveEmailSend(c, email, challengeToken, helper)
+	clientIP, err := validateAndReserveEmailSend(c, email, challengeToken, helper, turnstileVerifier)
 	if err != nil {
 		return err
 	}
@@ -195,7 +196,7 @@ func SendEmailHandler(c fiber.Ctx, email, challengeToken string, helper *harukiA
 		}
 		return err
 	}
-	return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
+	return harukiAPIHelper.Responses.SuccessResponse[string](c, "verification code sent", nil)
 }
 
 func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) (bool, error) {
@@ -217,7 +218,7 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	// Per-code attempt cap. Increment atomically BEFORE comparing so concurrent
 	// guesses cannot all read a stale count and bypass the cap (the previous
 	// GetCache-then-SetCache was a non-atomic read-modify-write).
-	attemptKey := harukiRedis.BuildOTPAttemptKey(email)
+	attemptKey := helper.DBManager.Redis.KeyBuilder().BuildOTPAttemptKey(email)
 	attemptCount, err := helper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, otpVerifyPerCodeWindow)
 	if err != nil {
 		harukiLogger.Errorf("Failed to update OTP attempt count: %v", err)
@@ -226,7 +227,7 @@ func VerifyEmailHandler(c fiber.Ctx, email, oneTimePassword string, helper *haru
 	if attemptCount > otpVerifyPerCodeLimit {
 		return false, harukiAPIHelper.ErrorBadRequest(c, "Too many verification attempts. Please request a new code.")
 	}
-	redisKey := harukiRedis.BuildEmailVerifyKey(email)
+	redisKey := helper.DBManager.Redis.KeyBuilder().BuildEmailVerifyKey(email)
 	var code string
 	found, err := helper.DBManager.Redis.GetCache(ctx, redisKey, &code)
 	if err != nil {

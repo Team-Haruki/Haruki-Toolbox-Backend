@@ -3,10 +3,11 @@ package adminusers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
+
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )

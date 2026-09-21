@@ -8,6 +8,7 @@ import (
 
 type ClientConfig struct {
 	Server          harukiUtils.SupportedInheritUploadServer
+	ServerCryptor   ServerCryptor
 	API             string
 	VersionURL      string
 	Inherit         harukiUtils.InheritInformation
@@ -18,6 +19,7 @@ type ClientConfig struct {
 
 func NewSekaiClient(cfg struct {
 	Server          harukiUtils.SupportedInheritUploadServer
+	ServerCryptor   ServerCryptor
 	API             string
 	VersionURL      string
 	Inherit         harukiUtils.InheritInformation
@@ -27,6 +29,7 @@ func NewSekaiClient(cfg struct {
 }) *HarukiSekaiClient {
 	return NewSekaiClientWithConfig(ClientConfig{
 		Server:          cfg.Server,
+		ServerCryptor:   cfg.ServerCryptor,
 		API:             cfg.API,
 		VersionURL:      cfg.VersionURL,
 		Inherit:         cfg.Inherit,
@@ -41,6 +44,7 @@ func NewSekaiClientWithConfig(cfg ClientConfig) *HarukiSekaiClient {
 
 	return &HarukiSekaiClient{
 		server:          cfg.Server,
+		serverCryptor:   cfg.ServerCryptor,
 		api:             cfg.API,
 		versionURL:      cfg.VersionURL,
 		inherit:         cfg.Inherit,

@@ -4,9 +4,9 @@ import "time"
 
 type adminOAuthClientWebhookPayload struct {
 	CallbackURL string  `json:"callbackUrl"`
-	Bearer      *string `json:"bearer,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
-	ClearBearer bool    `json:"clearBearer,omitempty"`
+	Bearer      *string `json:"bearer,omitzero"`
+	Enabled     *bool   `json:"enabled,omitzero"`
+	ClearBearer bool    `json:"clearBearer,omitzero"`
 }
 
 type adminOAuthClientWebhookItem struct {

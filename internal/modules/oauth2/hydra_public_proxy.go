@@ -13,9 +13,9 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func handleHydraAuthorizeRedirect() fiber.Handler {
+func handleHydraAuthorizeRedirect(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		targetURL, err := harukiOAuth2.HydraBrowserEndpoint("/oauth2/auth")
+		targetURL, err := hydraConfig.BrowserEndpoint("/oauth2/auth")
 		if err != nil {
 			harukiLogger.Errorf("Hydra authorize endpoint is not configured: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "oauth2 provider is not configured")
@@ -28,9 +28,9 @@ func handleHydraAuthorizeRedirect() fiber.Handler {
 	}
 }
 
-func handleHydraPublicProxy(endpointPath string) fiber.Handler {
+func handleHydraPublicProxy(hydraConfig *harukiOAuth2.HydraConfig, endpointPath string) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		targetURL, err := harukiOAuth2.HydraPublicEndpoint(endpointPath)
+		targetURL, err := hydraConfig.PublicEndpoint(endpointPath)
 		if err != nil {
 			harukiLogger.Errorf("Hydra public endpoint is not configured: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "oauth2 provider is not configured")
@@ -50,7 +50,7 @@ func handleHydraPublicProxy(endpointPath string) fiber.Handler {
 		copyRequestHeaderIfPresent(c, req, "Content-Type")
 		copyRequestHeaderIfPresent(c, req, "Accept")
 
-		resp, err := hydraHTTPClient().Do(req)
+		resp, err := hydraConfig.Do(req)
 		if err != nil {
 			harukiLogger.Errorf("Hydra proxy request failed: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "oauth2 provider unavailable")

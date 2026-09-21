@@ -1,8 +1,6 @@
 package oauth2
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,18 +9,19 @@ import (
 	"testing"
 	"time"
 
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
+
 	"github.com/gofiber/fiber/v3"
 )
 
 func TestHandleHydraAuthorizeRedirect(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		PublicURL: "https://hydra.example.com",
 	})
-	config.Cfg.OAuth2.HydraPublicURL = "https://hydra.example.com"
 
 	app := fiber.New()
-	app.Get("/api/oauth2/authorize", handleHydraAuthorizeRedirect())
+	app.Get("/api/oauth2/authorize", handleHydraAuthorizeRedirect(hydraConfig))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/oauth2/authorize?client_id=test-client&state=abc", nil)
 	resp, err := app.Test(req)
@@ -38,11 +37,6 @@ func TestHandleHydraAuthorizeRedirect(t *testing.T) {
 }
 
 func TestHandleHydraPublicProxy(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	var gotPath string
 	var gotAuth string
 	var gotBody string
@@ -56,10 +50,12 @@ func TestHandleHydraPublicProxy(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	config.Cfg.OAuth2.HydraPublicURL = server.URL
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		PublicURL: server.URL,
+	})
 
 	app := fiber.New()
-	app.Post("/api/oauth2/token", handleHydraPublicProxy("/oauth2/token"))
+	app.Post("/api/oauth2/token", handleHydraPublicProxy(hydraConfig, "/oauth2/token"))
 
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
@@ -106,13 +102,13 @@ func TestNormalizeGrantedValues(t *testing.T) {
 }
 
 func TestHandleHydraGetConsentRequestSubjectMismatch(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/admin/oauth2/auth/requests/consent" {
+			clientID, clientSecret, ok := r.BasicAuth()
+			if !ok || clientID != "hydra-client" || clientSecret != "hydra-secret" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"challenge":"test","subject":"u2","requested_scope":["user:read"],"requested_access_token_audience":[]}`))
 			return
@@ -120,14 +116,19 @@ func TestHandleHydraGetConsentRequestSubjectMismatch(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(server.Close)
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		ClientID:       "hydra-client",
+		ClientSecret:   "hydra-secret",
+		RequestTimeout: 5 * time.Second,
+	})
 
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
 		c.Locals("userID", "u1")
 		return c.Next()
 	})
-	app.Get("/", handleHydraGetConsentRequest())
+	app.Get("/", handleHydraGetConsentRequest(hydraConfig))
 
 	req := httptest.NewRequest(http.MethodGet, "/?consent_challenge=test", nil)
 	resp, err := app.Test(req)
@@ -140,11 +141,6 @@ func TestHandleHydraGetConsentRequestSubjectMismatch(t *testing.T) {
 }
 
 func TestHandleHydraRejectConsentSubjectMismatch(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	rejectCalled := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -162,14 +158,17 @@ func TestHandleHydraRejectConsentSubjectMismatch(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		RequestTimeout: 5 * time.Second,
+	})
 
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
 		c.Locals("userID", "u1")
 		return c.Next()
 	})
-	app.Post("/", handleHydraRejectConsent())
+	app.Post("/", handleHydraRejectConsent(hydraConfig))
 
 	req := httptest.NewRequest(http.MethodPost, "/?consent_challenge=test", nil)
 	resp, err := app.Test(req)
@@ -185,11 +184,6 @@ func TestHandleHydraRejectConsentSubjectMismatch(t *testing.T) {
 }
 
 func TestRegisterHydraRoutesLoginRejectRequiresSession(t *testing.T) {
-	original := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = original
-	})
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/admin/oauth2/auth/requests/login/reject" {
 			w.Header().Set("Content-Type", "application/json")
@@ -199,14 +193,17 @@ func TestRegisterHydraRoutesLoginRejectRequiresSession(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	t.Cleanup(server.Close)
-	config.Cfg.OAuth2.HydraAdminURL = server.URL
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL:       server.URL,
+		RequestTimeout: 5 * time.Second,
+	})
 
 	app := fiber.New()
 	apiHelper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
 		Router:         app,
 		SessionHandler: harukiAPIHelper.NewSessionHandler(nil, "test-sign-key"),
 	}
-	registerHydraOAuth2Routes(apiHelper)
+	registerHydraOAuth2Routes(apiHelper, hydraConfig)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/oauth2/login/reject?login_challenge=test", nil)
 	resp, err := app.Test(req)
@@ -218,41 +215,17 @@ func TestRegisterHydraRoutesLoginRejectRequiresSession(t *testing.T) {
 	}
 }
 
-func TestHydraHTTPClientReuseByTimeout(t *testing.T) {
-	originalCfg := config.Cfg
-	t.Cleanup(func() {
-		config.Cfg = originalCfg
-	})
+func TestHydraConfigRequestTimeoutIsScopedPerInstance(t *testing.T) {
+	configA := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{RequestTimeout: 8 * time.Second})
+	configB := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{RequestTimeout: 19 * time.Second})
 
-	hydraHTTPClientMu.Lock()
-	originalClient := hydraSharedHTTPClient
-	originalTimeout := hydraSharedTimeoutNano
-	hydraSharedHTTPClient = nil
-	hydraSharedTimeoutNano = 0
-	hydraHTTPClientMu.Unlock()
-	t.Cleanup(func() {
-		hydraHTTPClientMu.Lock()
-		hydraSharedHTTPClient = originalClient
-		hydraSharedTimeoutNano = originalTimeout
-		hydraHTTPClientMu.Unlock()
-	})
-
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 8
-	clientA := hydraHTTPClient()
-	clientB := hydraHTTPClient()
-	if clientA != clientB {
-		t.Fatalf("expected same hydra HTTP client for unchanged timeout")
+	if got := configA.RequestTimeout(); got != 8*time.Second {
+		t.Fatalf("config A timeout = %s, want %s", got, 8*time.Second)
 	}
-	if clientA.Timeout != 8*time.Second {
-		t.Fatalf("timeout = %s, want %s", clientA.Timeout, 8*time.Second)
+	if got := configB.RequestTimeout(); got != 19*time.Second {
+		t.Fatalf("config B timeout = %s, want %s", got, 19*time.Second)
 	}
-
-	config.Cfg.OAuth2.HydraRequestTimeoutSecond = 19
-	clientC := hydraHTTPClient()
-	if clientC == clientA {
-		t.Fatalf("expected new hydra HTTP client after timeout change")
-	}
-	if clientC.Timeout != 19*time.Second {
-		t.Fatalf("timeout = %s, want %s", clientC.Timeout, 19*time.Second)
+	if got := configA.RequestTimeout(); got != 8*time.Second {
+		t.Fatalf("config A timeout changed to %s after constructing config B", got)
 	}
 }

@@ -51,6 +51,6 @@ func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.SuccessResponse[string](c, "social platform info cleared successfully", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "social platform info cleared successfully", nil)
 	}
 }

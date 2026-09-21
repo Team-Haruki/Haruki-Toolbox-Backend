@@ -155,7 +155,7 @@ func (_u *GroupListUpdate) ClearGroup() *GroupListUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *GroupListUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -441,7 +441,7 @@ func (_u *GroupListUpdateOne) Select(field string, fields ...string) *GroupListU
 
 // Save executes the query and returns the updated GroupList entity.
 func (_u *GroupListUpdateOne) Save(ctx context.Context) (*GroupList, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

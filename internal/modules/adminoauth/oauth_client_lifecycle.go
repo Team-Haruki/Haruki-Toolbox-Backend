@@ -1,13 +1,14 @@
 package adminoauth
 
 import (
-	"encoding/json"
-	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	json "encoding/json/v2"
 	"mime"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -62,7 +63,7 @@ type adminOAuthClientRevokeOptions struct {
 
 type adminOAuthClientRevokeResponse struct {
 	ClientID              string  `json:"clientId"`
-	TargetUserID          *string `json:"targetUserId,omitempty"`
+	TargetUserID          *string `json:"targetUserId,omitzero"`
 	RevokeAuthorizations  bool    `json:"revokeAuthorizations"`
 	RevokeTokens          bool    `json:"revokeTokens"`
 	RevokedAuthorizations int     `json:"revokedAuthorizations"`

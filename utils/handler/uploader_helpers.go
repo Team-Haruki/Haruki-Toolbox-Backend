@@ -2,11 +2,12 @@ package handler
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -26,6 +27,16 @@ const (
 	defaultAcceptOctetStream = "application/octet-stream"
 	defaultUserAgentName     = "Haruki-Toolbox-Backend/%s"
 )
+
+// DataSyncConfig is an immutable per-application copy of provider settings.
+// All provider fields are strings and booleans; no shared mutable maps exist.
+type DataSyncConfig struct {
+	providers harukiConfig.ThirdPartyDataProviderConfig
+}
+
+func NewDataSyncConfig(providers harukiConfig.ThirdPartyDataProviderConfig) DataSyncConfig {
+	return DataSyncConfig{providers: providers}
+}
 
 type syncTarget struct {
 	url               string
@@ -119,7 +130,13 @@ func buildSyncTargets(
 		}
 	}
 
-	return targets
+	configured := targets[:0]
+	for _, target := range targets {
+		if strings.TrimSpace(target.url) != "" {
+			configured = append(configured, target)
+		}
+	}
+	return configured
 }
 
 func computeProcessingNeeds(targets []syncTarget, dataType utils.UploadDataType) (bool, bool) {

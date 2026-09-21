@@ -17,7 +17,7 @@ import (
 type GameAccountDataGrant struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// OwnerUserID holds the value of the "owner_user_id" field.
 	OwnerUserID string `json:"owner_user_id,omitempty"`
 	// GranteeUserID holds the value of the "grantee_user_id" field.
@@ -43,9 +43,9 @@ type GameAccountDataGrant struct {
 // GameAccountDataGrantEdges holds the relations/edges for other nodes in the graph.
 type GameAccountDataGrantEdges struct {
 	// Owner holds the value of the owner edge.
-	Owner *User `json:"owner,omitempty"`
+	Owner *User `json:"owner,omitzero"`
 	// Grantee holds the value of the grantee edge.
-	Grantee *User `json:"grantee,omitempty"`
+	Grantee *User `json:"grantee,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [2]bool

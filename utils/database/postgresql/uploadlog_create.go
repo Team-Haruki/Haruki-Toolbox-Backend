@@ -91,7 +91,7 @@ func (_c *UploadLogCreate) Mutation() *UploadLogMutation {
 
 // Save creates the UploadLog in the database.
 func (_c *UploadLogCreate) Save(ctx context.Context) (*UploadLog, error) {
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

@@ -1,13 +1,105 @@
 package data
 
 import (
+	"bytes"
+	stdgzip "compress/gzip"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/klauspost/compress/gzip"
 )
+
+func TestCompressGameDataBodyConcurrentReuse(t *testing.T) {
+	const workers = 16
+	const iterations = 16
+	type result struct {
+		plain  string
+		stored string
+	}
+	results := make([]result, workers*iterations)
+	var work sync.WaitGroup
+	for worker := range workers {
+		work.Go(func() {
+			for iteration := range iterations {
+				index := worker*iterations + iteration
+				plain := fmt.Sprintf(`{"upload_time":%d,"name":"%s"}`, index, strings.Repeat(fmt.Sprintf("user-%d-", index), 1024))
+				stored, err := CompressGameDataBody([]byte(plain))
+				if err != nil {
+					t.Errorf("compression %d: %v", index, err)
+					return
+				}
+				results[index] = result{plain: plain, stored: stored}
+			}
+		})
+	}
+	work.Wait()
+	if t.Failed() {
+		return
+	}
+	// Keep all returned strings until later calls have reused pooled buffers,
+	// then decode with the standard library to verify ownership and gzip format.
+	for index, result := range results {
+		reader, err := stdgzip.NewReader(strings.NewReader(result.stored))
+		if err != nil {
+			t.Fatalf("gzip reader %d: %v", index, err)
+		}
+		plain, err := io.ReadAll(reader)
+		closeErr := reader.Close()
+		if err != nil || closeErr != nil {
+			t.Fatalf("gzip decode %d: read=%v close=%v", index, err, closeErr)
+		}
+		if string(plain) != result.plain {
+			t.Fatalf("compression %d changed after another call reused the pool", index)
+		}
+	}
+}
+
+func TestGameDataBodyCompressorBufferRetention(t *testing.T) {
+	for _, size := range []int{64, maxPooledGameDataBodyBuffer, maxPooledGameDataBodyBuffer + 1} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			writer, err := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			compressor := gameDataBodyCompressor{
+				buffer: *bytes.NewBuffer(make([]byte, size)),
+				writer: writer,
+			}
+			compressor.writer.Reset(&compressor.buffer)
+			compressor.resetForPool()
+			if compressor.buffer.Len() != 0 {
+				t.Fatalf("pooled buffer retains %d bytes of output", compressor.buffer.Len())
+			}
+			wantCap := size
+			if size > maxPooledGameDataBodyBuffer {
+				wantCap = 0
+			}
+			if got := compressor.buffer.Cap(); got != wantCap {
+				t.Fatalf("retained capacity = %d, want %d", got, wantCap)
+			}
+		})
+	}
+}
+
+func TestCompressGameDataBodyEmptyAfterReuse(t *testing.T) {
+	if _, err := CompressGameDataBody(bytes.Repeat([]byte("previous snapshot"), 1024)); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := CompressGameDataBody(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, encoding, err := negotiateStoredBody(stored, "")
+	if err != nil || encoding != "" || len(body) != 0 {
+		t.Fatalf("empty round trip: bytes=%d encoding=%q err=%v", len(body), encoding, err)
+	}
+}
 
 func TestAcceptsGzip(t *testing.T) {
 	cases := []struct {

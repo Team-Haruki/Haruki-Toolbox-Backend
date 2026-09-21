@@ -159,7 +159,7 @@ func (_u *UploadLogUpdate) Mutation() *UploadLogMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UploadLogUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -415,7 +415,7 @@ func (_u *UploadLogUpdateOne) Select(field string, fields ...string) *UploadLogU
 
 // Save executes the query and returns the updated UploadLog entity.
 func (_u *UploadLogUpdateOne) Save(ctx context.Context) (*UploadLog, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

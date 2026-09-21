@@ -69,7 +69,7 @@ func (_c *GroupCreate) Mutation() *GroupMutation {
 // Save creates the Group in the database.
 func (_c *GroupCreate) Save(ctx context.Context) (*Group, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

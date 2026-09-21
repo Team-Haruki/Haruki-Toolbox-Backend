@@ -2,12 +2,12 @@ package harukibotneo
 
 import (
 	"fmt"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	"strconv"
 	"strings"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -50,10 +50,21 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
 		}
-		redisKey := harukiRedis.BuildBotVerifyCodeKey(qqStr)
+		redisKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyCodeKey(qqStr)
 		if err := apiHelper.DBManager.Redis.SetCache(ctx, redisKey, code, verifyCodeTTL); err != nil {
 			harukiLogger.Errorf("Failed to store verification code: %v", err)
 			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
+			return harukiAPIHelper.ErrorInternal(c, "failed to save verification code")
+		}
+		// A newly issued code starts a new bounded verification window. The
+		// over-limit counter is deliberately retained when a code is invalidated
+		// so concurrent stale guesses cannot recreate it below the limit; reset it
+		// only here, while issuing the replacement code requested by the user.
+		attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(qqStr)
+		if err := apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey); err != nil {
+			_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)
+			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
+			harukiLogger.Errorf("Failed to reset verification attempts: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save verification code")
 		}
 
@@ -69,6 +80,6 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorInternal(c, "failed to send verification email")
 		}
 
-		return harukiAPIHelper.SuccessResponse[string](c, "verification code sent", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "verification code sent", nil)
 	}
 }

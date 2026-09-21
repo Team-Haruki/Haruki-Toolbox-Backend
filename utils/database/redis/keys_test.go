@@ -1,12 +1,12 @@
 package redis
 
 import (
-	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"testing"
 )
 
 func TestBuildKeys(t *testing.T) {
 	t.Parallel()
+	keys := NewKeyBuilder("")
 
 	tests := []struct {
 		name string
@@ -15,13 +15,13 @@ func TestBuildKeys(t *testing.T) {
 	}{
 		{
 			name: "email verify",
-			got:  BuildEmailVerifyKey(" A@Example.Com "),
-			want: "haruki:email:verify:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildEmailVerifyKey(" A@Example.Com "),
+			want: "haruki:email:verify:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "reset password",
-			got:  BuildResetPasswordKey(" A@Example.Com "),
-			want: "haruki:email:reset-password:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildResetPasswordKey(" A@Example.Com "),
+			want: "haruki:email:reset-password:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "game account verify",
@@ -55,8 +55,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "qq mail send rate limit target",
-			got:  BuildQQMailSendRateLimitTargetKey(" 123456 "),
-			want: "haruki:social:qq-mail:send:target:" + hashNormalizedIdentifier(" 123456 "),
+			got:  keys.BuildQQMailSendRateLimitTargetKey(" 123456 "),
+			want: "haruki:social:qq-mail:send:target:" + keys.hashNormalizedIdentifier(" 123456 "),
 		},
 		{
 			name: "status token",
@@ -75,8 +75,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "otp attempt",
-			got:  BuildOTPAttemptKey(" A@Example.Com "),
-			want: "haruki:email:attempt:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildOTPAttemptKey(" A@Example.Com "),
+			want: "haruki:email:attempt:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "email verify send rate limit ip",
@@ -85,8 +85,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "email verify send rate limit target",
-			got:  BuildEmailVerifySendRateLimitTargetKey(" A@Example.Com "),
-			want: "haruki:email:verify:send:target:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildEmailVerifySendRateLimitTargetKey(" A@Example.Com "),
+			want: "haruki:email:verify:send:target:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "reset password send rate limit ip",
@@ -95,8 +95,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "reset password send rate limit target",
-			got:  BuildResetPasswordSendRateLimitTargetKey(" A@Example.Com "),
-			want: "haruki:email:reset-password:send:target:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildResetPasswordSendRateLimitTargetKey(" A@Example.Com "),
+			want: "haruki:email:reset-password:send:target:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "reset password apply rate limit ip",
@@ -105,8 +105,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "reset password apply rate limit target",
-			got:  BuildResetPasswordApplyRateLimitTargetKey(" A@Example.Com "),
-			want: "haruki:email:reset-password:attempt:target:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildResetPasswordApplyRateLimitTargetKey(" A@Example.Com "),
+			want: "haruki:email:reset-password:attempt:target:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "login rate limit ip",
@@ -115,8 +115,8 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "login rate limit target",
-			got:  BuildLoginRateLimitTargetKey(" A@Example.Com "),
-			want: "haruki:email:login:attempt:target:" + hashNormalizedIdentifier(" A@Example.Com "),
+			got:  keys.BuildLoginRateLimitTargetKey(" A@Example.Com "),
+			want: "haruki:email:login:attempt:target:" + keys.hashNormalizedIdentifier(" A@Example.Com "),
 		},
 		{
 			name: "upload ingress rate limit",
@@ -165,8 +165,9 @@ func TestBuildKeyHelper(t *testing.T) {
 func TestHashNormalizedIdentifier(t *testing.T) {
 	t.Parallel()
 
-	a := hashNormalizedIdentifier(" A@Example.Com ")
-	b := hashNormalizedIdentifier("a@example.com")
+	keys := NewKeyBuilder("")
+	a := keys.hashNormalizedIdentifier(" A@Example.Com ")
+	b := keys.hashNormalizedIdentifier("a@example.com")
 	if a == "" {
 		t.Fatalf("hashNormalizedIdentifier should not return empty string")
 	}
@@ -179,14 +180,27 @@ func TestHashNormalizedIdentifier(t *testing.T) {
 }
 
 func TestHashNormalizedIdentifierUsesSecret(t *testing.T) {
-	prevCfg := harukiConfig.Cfg
-	t.Cleanup(func() { harukiConfig.Cfg = prevCfg })
-
-	harukiConfig.Cfg.UserSystem.SessionSignToken = "secret-a"
-	a := hashNormalizedIdentifier("sensitive@example.com")
-	harukiConfig.Cfg.UserSystem.SessionSignToken = "secret-b"
-	b := hashNormalizedIdentifier("sensitive@example.com")
+	a := NewKeyBuilder("secret-a").hashNormalizedIdentifier("sensitive@example.com")
+	b := NewKeyBuilder("secret-b").hashNormalizedIdentifier("sensitive@example.com")
+	if want := "804980c27f960e34d6bc09706c2e176c1f0d00824ed82bad3247506c82aa58f4"; a != want {
+		t.Fatalf("secret-a hash = %q, want historical HMAC-SHA256 %q", a, want)
+	}
 	if a == b {
 		t.Fatalf("hash should differ when session_sign_token changes")
+	}
+}
+
+func TestKeyBuilderKeepsSecretsInstanceScoped(t *testing.T) {
+	t.Parallel()
+
+	first := NewKeyBuilder("secret-a")
+	second := NewKeyBuilder("secret-b")
+	firstKey := first.BuildEmailVerifyKey(" Sensitive@Example.com ")
+	secondKey := second.BuildEmailVerifyKey(" Sensitive@Example.com ")
+	if firstKey == secondKey {
+		t.Fatalf("keys should differ across independently configured builders")
+	}
+	if got := first.BuildEmailVerifyKey("sensitive@example.COM"); got != firstKey {
+		t.Fatalf("normalization changed: %q != %q", got, firstKey)
 	}
 }

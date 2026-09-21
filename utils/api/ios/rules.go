@@ -2,9 +2,10 @@ package ios
 
 import (
 	"fmt"
+	"strings"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	"strings"
 )
 
 func getHarukiIOSMitMHostnameMapping() map[harukiUtils.SupportedDataUploadServer][]string {

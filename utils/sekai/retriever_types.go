@@ -2,6 +2,7 @@ package sekai
 
 import (
 	"fmt"
+
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -21,8 +22,9 @@ func NewSekaiDataRetriever(
 	server harukiUtils.SupportedInheritUploadServer,
 	inherit harukiUtils.InheritInformation,
 	uploadType harukiUtils.UploadDataType,
+	serverCryptor ServerCryptor,
 ) *HarukiSekaiDataRetriever {
-	client, err := newRetrieverClient(server, inherit)
+	client, err := newRetrieverClient(server, inherit, serverCryptor)
 	if err != nil {
 		logger := harukiLogger.NewLoggerFromGlobal("SekaiDataRetriever")
 		msg := fmt.Sprintf("failed to build retriever client: %v", err)
@@ -47,6 +49,7 @@ func NewSekaiDataRetriever(
 func newRetrieverClient(
 	server harukiUtils.SupportedInheritUploadServer,
 	inherit harukiUtils.InheritInformation,
+	serverCryptor ServerCryptor,
 ) (*HarukiSekaiClient, error) {
 	serverConfig, err := GetServerConfig(server)
 	if err != nil {
@@ -55,6 +58,7 @@ func newRetrieverClient(
 
 	return NewSekaiClientWithConfig(ClientConfig{
 		Server:          server,
+		ServerCryptor:   serverCryptor,
 		API:             serverConfig.APIEndpoint,
 		VersionURL:      serverConfig.AppVersionURL,
 		Inherit:         inherit,

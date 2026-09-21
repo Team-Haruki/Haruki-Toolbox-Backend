@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"math"
 	"strconv"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
 const maxSafeIntegerFloat64 = 1<<53 - 1
@@ -34,7 +35,7 @@ func convertToStatusCode(status any, logger *harukiLogger.Logger) int {
 		return int(v)
 	case uint64:
 		return int(v)
-	case json.Number:
+	case jsonvalue.Number:
 		if i64, err := v.Int64(); err == nil {
 			return int(i64)
 		}
@@ -69,7 +70,7 @@ func extractUserIDFromGameDataWithExpected(unpackedMap map[string]any, expectedU
 
 func convertToInt64Pointer(value any, logger *harukiLogger.Logger) (*int64, error) {
 	switch v := value.(type) {
-	case json.Number:
+	case jsonvalue.Number:
 		if id64, err := v.Int64(); err == nil {
 			if id64 < 0 {
 				return nil, nil

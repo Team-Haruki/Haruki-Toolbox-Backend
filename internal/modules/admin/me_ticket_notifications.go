@@ -52,7 +52,7 @@ func handleGetAdminTicketNotificationPreference(apiHelper *harukiAPIHelper.Haruk
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeTicketNotificationsGet, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"ticketEmailNotificationsEnabled": resp.TicketEmailNotificationsEnabled,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -108,6 +108,6 @@ func handleUpdateAdminTicketNotificationPreference(apiHelper *harukiAPIHelper.Ha
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionMeTicketNotificationsSet, adminAuditTargetTypeUser, userID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"ticketEmailNotificationsEnabled": resp.TicketEmailNotificationsEnabled,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "ticket notification preference updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ticket notification preference updated", &resp)
 	}
 }

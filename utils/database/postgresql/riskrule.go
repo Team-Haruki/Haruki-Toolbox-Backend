@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -17,11 +17,11 @@ import (
 type RiskRule struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// RuleKey holds the value of the "rule_key" field.
 	RuleKey string `json:"rule_key,omitempty"`
 	// Description holds the value of the "description" field.
-	Description *string `json:"description,omitempty"`
+	Description *string `json:"description,omitzero"`
 	// Config holds the value of the "config" field.
 	Config map[string]interface{} `json:"config,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -29,7 +29,7 @@ type RiskRule struct {
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// UpdatedBy holds the value of the "updated_by" field.
-	UpdatedBy    *string `json:"updated_by,omitempty"`
+	UpdatedBy    *string `json:"updated_by,omitzero"`
 	selectValues sql.SelectValues
 }
 

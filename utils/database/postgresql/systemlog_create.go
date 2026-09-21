@@ -208,7 +208,7 @@ func (_c *SystemLogCreate) Mutation() *SystemLogMutation {
 // Save creates the SystemLog in the database.
 func (_c *SystemLogCreate) Save(ctx context.Context) (*SystemLog, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

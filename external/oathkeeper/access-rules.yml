@@ -13,7 +13,13 @@
 
 - id: hydra-public-oauth
   match:
-    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/jwks.json|userinfo>
+    # oauth2/sessions/logout is the OIDC end_session_endpoint. Hydra serves it
+    # (302 when reached directly) and Discovery advertises it, so any RP that
+    # auto-discovers logout hits it — without this rule they got Oathkeeper's
+    # 404, not Hydra's response.
+    # jwks lives at /.well-known/jwks.json (covered by the well-known rule);
+    # Hydra returns 404 for /oauth2/jwks.json, so that alternative is dropped.
+    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/sessions/logout|userinfo>
     methods: [GET, POST]
   upstream:
     url: http://hydra:4444
@@ -238,7 +244,11 @@
 
 - id: haruki-public-oauth-proxy
   match:
-    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login>
+    # logout/* is anonymous alongside login and token: a user reaching a
+    # logout challenge is on their way out and their Kratos session may
+    # already be gone. The challenge is the credential — Hydra minted it,
+    # it is single-use, and it names the session being ended.
+    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login|logout|logout/accept|logout/reject>
     methods: [GET, POST]
   upstream:
     url: http://backend:16666
@@ -290,7 +300,7 @@
 
 - id: haruki-protected-user-get
   match:
-    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
+    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|accessible-game-accounts/?|game-account-grants/received/?|game-account-grants/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
     methods: [GET]
   upstream:
     url: http://backend:16666

@@ -6,11 +6,12 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )

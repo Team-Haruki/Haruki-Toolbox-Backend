@@ -1,0 +1,589 @@
+package gamedata
+
+import (
+	"context"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsonvalue"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/gamemerge"
+)
+
+// WriteMode selects one of the four write semantics.
+//
+// They are four separate implementations on purpose. The MongoDB path expressed
+// them as three different `$set` documents plus a full-document replace, and no
+// single rule covers them: collapsing any two loses data.
+type WriteMode int
+
+const (
+	// WriteSuite is an upload of suite data. `$set` on MongoDB is a TOP-LEVEL
+	// MERGE, so a key the upload omits keeps its stored value; and the three
+	// history keys accumulate rather than being replaced.
+	WriteSuite WriteMode = iota
+	// WriteMysekai is an upload of mysekai data. Top-level fields merge like
+	// suite, but `updatedResources` is ONE field on MongoDB, so `$set` swaps the
+	// whole sub-document: every flattened child the upload omits is cleared
+	// here too. No history accumulation.
+	WriteMysekai
+	// WriteBirthdayParty writes only the harvest map, upload time and server.
+	// It is a partial write of a mysekai row, not a mysekai upload.
+	WriteBirthdayParty
+	// WriteMigrate replaces the whole row. Only the migration CLI uses it: the
+	// source is a complete document, so a merge would be meaningless and would
+	// preserve rows a re-run is meant to rebuild.
+	WriteMigrate
+)
+
+// WriteStats reports what one write did.
+type WriteStats struct {
+	// DeniedDropped counts, per key, values discarded because the key is on the
+	// denied list. A SECURITY counter: these keys are tiny, so no size metric
+	// will ever reveal whether the drop is working.
+	DeniedDropped map[string]int
+	// ExtraKeys are the unknown top-level keys parked in `extra`.
+	ExtraKeys []string
+	// AliasConflicts counts documents keys that arrived in BOTH spellings —
+	// `userX` and `compactUserX` — for the same column. Production data contains
+	// these; the row form wins and the loser is preserved in `extra`.
+	AliasConflicts map[string]int
+	// Columns is how many data columns the statement wrote.
+	Columns int
+	// Bytes is the encoded size of everything written.
+	Bytes int
+}
+
+// Write persists one upload.
+func (s *Store) Write(ctx context.Context, userID int64, server string, data map[string]any, mode WriteMode, limits Limits) (WriteStats, error) {
+	var stats WriteStats
+	if s == nil || s.pool == nil {
+		return stats, fmt.Errorf("gamedata: nil store")
+	}
+	code, ok := catalog.ServerCode(server)
+	if !ok {
+		if server != "" {
+			return stats, fmt.Errorf("gamedata: unknown server %q", server)
+		}
+		// Production contains documents with no `server` field at all. They are
+		// parked under a reserved code so the NOT NULL primary key is satisfied
+		// and the row is preserved; no read can reach them, because every read
+		// filters on a real region.
+		code = catalog.ServerUnknown
+	}
+	if err := ValidateUploadFieldNames(data); err != nil {
+		return stats, err
+	}
+
+	enc, err := s.encode(data, mode, &stats)
+	if err != nil {
+		return stats, err
+	}
+	if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes); err != nil {
+		return stats, err
+	}
+
+	switch mode {
+	case WriteSuite:
+		return stats, s.writeSuite(ctx, userID, code, enc, &stats)
+	case WriteMigrate:
+		return stats, s.writeReplace(ctx, userID, code, enc)
+	case WriteBirthdayParty:
+		return stats, s.writeBirthdayParty(ctx, userID, code, enc)
+	default:
+		return stats, s.writeMysekai(ctx, userID, code, enc)
+	}
+}
+
+// encoded is one upload rendered into column values.
+type encoded struct {
+	// columns maps column name -> encoded json bytes, for columns the upload
+	// actually carried.
+	columns map[string][]byte
+	// order tracks first-seen columns; upsertStatement canonicalizes the final
+	// SQL order after adding any columns the write scope clears.
+	order []string
+	// mergedRaw holds the decoded values of the three history keys, kept as Go
+	// values because merging happens against the stored side.
+	mergedRaw map[string]any
+	// extra is the encoded `extra` object, or nil.
+	extra       []byte
+	extraBytes  int
+	perKeyBytes map[string]int
+	uploadTime  *int64
+	hasUpload   bool
+}
+
+func (s *Store) encode(data map[string]any, mode WriteMode, stats *WriteStats) (*encoded, error) {
+	enc := &encoded{
+		columns:     make(map[string][]byte, len(data)),
+		mergedRaw:   map[string]any{},
+		perKeyBytes: make(map[string]int, len(data)),
+	}
+	stats.DeniedDropped = map[string]int{}
+	stats.AliasConflicts = map[string]int{}
+	// writtenBy records which document key currently owns each column, so a key
+	// arriving in both spellings resolves DETERMINISTICALLY instead of by Go map
+	// iteration order.
+	writtenBy := make(map[string]string, len(data))
+
+	extraMembers := make(map[string]jsontext.Value)
+	flattenExtra := make(map[string]jsontext.Value)
+
+	for key, value := range data {
+		// DENIED: dropped before the value is encoded, so it never reaches a
+		// column, never reaches `extra`, and is never even rendered to bytes.
+		if catalog.IsDenied(key) {
+			stats.DeniedDropped[key]++
+			continue
+		}
+		if key == catalog.ColUploadTime {
+			if n, ok := gamemerge.ToInt64(value); ok {
+				enc.uploadTime, enc.hasUpload = &n, true
+			}
+			continue
+		}
+		if key == "_id" || key == catalog.ColServer {
+			// Identity is carried by the primary key, never by a json column.
+			continue
+		}
+
+		// The flattened parent is split into per-child columns.
+		if s.cat.FlattenKey != "" && key == s.cat.FlattenKey {
+			sub, ok := value.(map[string]any)
+			if !ok {
+				b, err := encodeJSON(value)
+				if err != nil {
+					return nil, err
+				}
+				extraMembers[key] = b
+				continue
+			}
+			for child, cv := range sub {
+				if catalog.IsDenied(child) {
+					stats.DeniedDropped[s.cat.FlattenKey+"."+child]++
+					continue
+				}
+				b, err := encodeJSON(cv)
+				if err != nil {
+					return nil, err
+				}
+				e, place := s.cat.Resolve(s.cat.FlattenKey + "." + child)
+				if place != catalog.PlaceColumn {
+					flattenExtra[child] = b
+					continue
+				}
+				enc.setColumn(e.Column, b)
+				enc.perKeyBytes[e.Key] = len(b)
+			}
+			continue
+		}
+
+		e, place := s.cat.Resolve(key)
+		if place != catalog.PlaceColumn {
+			b, err := encodeJSON(value)
+			if err != nil {
+				return nil, err
+			}
+			extraMembers[key] = b
+			stats.ExtraKeys = append(stats.ExtraKeys, key)
+			continue
+		}
+
+		if mode == WriteSuite && gamemerge.IsMergedKey(e.Key) {
+			// Held back: the merge needs the stored side, which is read inside
+			// the transaction.
+			enc.mergedRaw[e.Key] = value
+			continue
+		}
+
+		b, err := encodeJSON(value)
+		if err != nil {
+			return nil, err
+		}
+		// Both spellings of a compact key map to one column. Production resolves
+		// this in favour of the ROW form: GetValueFromResult scans for the exact
+		// key first and only falls back to compact<Key>. Without an explicit
+		// rule the winner would depend on Go map iteration order, so the same
+		// document could migrate differently on two runs.
+		if prev, taken := writtenBy[e.Column]; taken {
+			stats.AliasConflicts[e.Key]++
+			if e.IsAlias(key) && !e.IsAlias(prev) {
+				// The incumbent is the row form; keep it and park this one.
+				extraMembers[key] = b
+				continue
+			}
+			// This one is the row form; the incumbent was the compact alias.
+			extraMembers[prev] = enc.columns[e.Column]
+		}
+		writtenBy[e.Column] = key
+		enc.setColumn(e.Column, b)
+		enc.perKeyBytes[e.Key] = len(b)
+	}
+
+	if len(flattenExtra) > 0 {
+		b, err := json.Marshal(flattenExtra)
+		if err != nil {
+			return nil, err
+		}
+		extraMembers[s.cat.FlattenKey] = b
+	}
+	if len(extraMembers) > 0 {
+		b, err := json.Marshal(extraMembers)
+		if err != nil {
+			return nil, err
+		}
+		enc.extra = b
+		enc.extraBytes = len(b)
+	}
+
+	for _, n := range enc.perKeyBytes {
+		stats.Bytes += n
+	}
+	stats.Bytes += enc.extraBytes
+	stats.Columns = len(enc.columns)
+	return enc, nil
+}
+
+func (e *encoded) setColumn(col string, b []byte) {
+	if _, seen := e.columns[col]; !seen {
+		e.order = append(e.order, col)
+	}
+	e.columns[col] = b
+}
+
+// writeMysekai upserts a mysekai upload.
+//
+// Top-level fields merge — this is `$set`'s top-level merge, expressed in SQL,
+// and writing every column with NULL for the absent ones would clear stored
+// data on every partial upload. The flattened parent is the exception: it is a
+// single field on MongoDB, so `$set` swaps the whole sub-document and a child
+// the upload stopped carrying is gone there. Merging those children here made
+// the row a union over every upload the player ever sent, which showed up as
+// PostgreSQL reporting resources MongoDB had already dropped.
+func (s *Store) writeMysekai(ctx context.Context, userID int64, code int16, enc *encoded) error {
+	sql, args := s.upsertStatement(userID, code, enc, clearFlattened)
+	_, err := s.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
+	}
+	return nil
+}
+
+// writeReplace overwrites every data column, clearing the ones the source did
+// not carry. Migration only.
+func (s *Store) writeReplace(ctx context.Context, userID int64, code int16, enc *encoded) error {
+	sql, args := s.upsertStatement(userID, code, enc, clearAll)
+	_, err := s.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return fmt.Errorf("gamedata: replace %s: %w", s.cat.Table, err)
+	}
+	return nil
+}
+
+// writeBirthdayParty writes the three columns a birthday-party payload owns.
+func (s *Store) writeBirthdayParty(ctx context.Context, userID int64, code int16, enc *encoded) error {
+	e, place := s.cat.Resolve(s.cat.FlattenKey + ".userMysekaiHarvestMaps")
+	if place != catalog.PlaceColumn {
+		return fmt.Errorf("gamedata: no column for the birthday-party harvest map")
+	}
+	harvest := enc.columns[e.Column]
+	sql := fmt.Sprintf(
+		`INSERT INTO %s (%s, %s, %s, %s) VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (%s, %s) DO UPDATE SET %s = EXCLUDED.%s, %s = EXCLUDED.%s`,
+		catalog.QuoteIdent(s.cat.Table),
+		catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer),
+		catalog.QuoteIdent(catalog.ColUploadTime), catalog.QuoteIdent(e.Column),
+		catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer),
+		catalog.QuoteIdent(catalog.ColUploadTime), catalog.QuoteIdent(catalog.ColUploadTime),
+		catalog.QuoteIdent(e.Column), catalog.QuoteIdent(e.Column),
+	)
+	var ut any
+	if enc.hasUpload {
+		ut = *enc.uploadTime
+	}
+	if _, err := s.pool.Exec(ctx, sql, userID, code, ut, harvest); err != nil {
+		return fmt.Errorf("gamedata: birthday party write: %w", err)
+	}
+	return nil
+}
+
+// writeSuite performs the merge upload inside ONE transaction, because the three
+// history keys are a read-modify-write against the stored row.
+func (s *Store) writeSuite(ctx context.Context, userID int64, code int16, enc *encoded, stats *WriteStats) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("gamedata: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if len(enc.mergedRaw) > 0 {
+		// Materialize the identity before locking: FOR UPDATE alone cannot lock
+		// a missing row. Concurrent first uploads must serialize as well.
+		ensureRow := fmt.Sprintf(`INSERT INTO %s (%s, %s) VALUES ($1, $2) ON CONFLICT (%s, %s) DO NOTHING`,
+			catalog.QuoteIdent(s.cat.Table), catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer),
+			catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer))
+		if _, err := tx.Exec(ctx, ensureRow, userID, code); err != nil {
+			return fmt.Errorf("gamedata: ensure history row: %w", err)
+		}
+		stored, err := s.readMergedColumns(ctx, tx, userID, code, enc.mergedRaw)
+		if err != nil {
+			return err
+		}
+		for key, uploaded := range enc.mergedRaw {
+			merged := mergeHistory(key, stored[key], uploaded)
+			if merged == nil {
+				// nil means "leave the stored value alone" — writing [] here
+				// would delete a player's history whenever an upload carried
+				// none of that key.
+				continue
+			}
+			b, err := encodeJSON(merged)
+			if err != nil {
+				return err
+			}
+			e, _ := s.cat.Resolve(key)
+			enc.setColumn(e.Column, b)
+			enc.perKeyBytes[key] = len(b)
+			stats.Bytes += len(b)
+		}
+		stats.Columns = len(enc.columns)
+	}
+
+	sql, args := s.upsertStatement(userID, code, enc, clearNone)
+	if _, err := tx.Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
+	}
+	return tx.Commit(ctx)
+}
+
+func mergeHistory(key string, stored, uploaded any) []any {
+	n := gamemerge.JSONNormalizer{}
+	switch key {
+	case gamemerge.KeyUserEvents:
+		return gamemerge.Events(n, stored, uploaded)
+	case gamemerge.KeyUserWorldBlooms:
+		return gamemerge.WorldBlooms(n, stored, uploaded)
+	case gamemerge.KeyUserGachas:
+		return gamemerge.Gachas(n, stored, uploaded)
+	}
+	return nil
+}
+
+// readMergedColumns reads only the histories this upload merges, in canonical
+// key order. It retains the transaction row lock and decodes with jsonvalue.Numbers so
+// a game user id above 2^53 is not corrupted on the way in.
+func (s *Store) readMergedColumns(ctx context.Context, tx pgx.Tx, userID int64, code int16, uploaded map[string]any) (map[string]any, error) {
+	keys := gamemerge.Keys()
+	cols := make([]string, 0, len(keys))
+	present := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if _, requested := uploaded[k]; !requested {
+			continue
+		}
+		e, place := s.cat.Resolve(k)
+		if place != catalog.PlaceColumn {
+			continue
+		}
+		cols = append(cols, catalog.QuoteIdent(e.Column))
+		present = append(present, k)
+	}
+	if len(cols) == 0 {
+		return map[string]any{}, nil
+	}
+	sql := fmt.Sprintf(`SELECT %s FROM %s WHERE %s = $1 AND %s = $2 FOR UPDATE`,
+		strings.Join(cols, ", "), catalog.QuoteIdent(s.cat.Table),
+		catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer))
+
+	raw := make([][]byte, len(cols))
+	dest := make([]any, len(cols))
+	for i := range raw {
+		dest[i] = &raw[i]
+	}
+	out := make(map[string]any, len(cols))
+	if err := tx.QueryRow(ctx, sql, userID, code).Scan(dest...); err != nil {
+		if err == pgx.ErrNoRows {
+			return out, nil
+		}
+		return nil, fmt.Errorf("gamedata: read history columns: %w", err)
+	}
+	for i, k := range present {
+		if raw[i] == nil {
+			continue
+		}
+		v, err := decodeJSONNumbers(raw[i])
+		if err != nil {
+			return nil, fmt.Errorf("gamedata: decode stored %s: %w", k, err)
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// clearScope says which stored columns a write is allowed to erase. It exists
+// because "what MongoDB's `$set` replaces" is not the same set of columns for
+// every upload: the flattened parent is ONE document field there, so `$set`
+// swaps the whole sub-document, while a real top-level key is merged.
+type clearScope int
+
+const (
+	// clearNone leaves every column the upload did not carry alone. This is
+	// `$set`'s top-level merge.
+	clearNone clearScope = iota
+	// clearFlattened additionally clears the flattened children — MongoDB
+	// replaces the flattened parent atomically, so a child that vanished from
+	// the upload must vanish here too. Catalogs without a flattened parent are
+	// unaffected, which keeps suite on a pure merge.
+	clearFlattened
+	// clearAll rebuilds the row. Migration only.
+	clearAll
+)
+
+// replacedColumns returns the data columns the scope hard-assigns from EXCLUDED
+// instead of merging, and the order they must be written in.
+func (s *Store) replacedColumns(scope clearScope, order []string) (map[string]bool, []string) {
+	switch scope {
+	case clearAll:
+		out := make([]string, 0, s.cat.Len())
+		replace := make(map[string]bool, s.cat.Len()+2)
+		// upload_time and extra are rebuilt too: a re-run that merged them
+		// would keep a timestamp and unknown keys the source no longer has.
+		replace[catalog.ColUploadTime] = true
+		replace[catalog.ExtraColumn] = true
+		for i := range s.cat.Entries {
+			out = append(out, s.cat.Entries[i].Column)
+			replace[s.cat.Entries[i].Column] = true
+		}
+		return replace, out
+	case clearFlattened:
+		children := s.cat.FlattenChildren()
+		if len(children) == 0 {
+			return nil, order
+		}
+		present := make(map[string]bool, len(order))
+		for _, c := range order {
+			present[c] = true
+		}
+		out := append(make([]string, 0, len(order)+len(children)), order...)
+		// `extra` carries the flattened children the catalog does not name, so
+		// it belongs to the parent MongoDB swaps out. It is hard-assigned for
+		// the same reason the named children are.
+		replace := map[string]bool{catalog.ExtraColumn: true}
+		for _, e := range children {
+			replace[e.Column] = true
+			if !present[e.Column] {
+				out = append(out, e.Column)
+			}
+		}
+		return replace, out
+	default:
+		return nil, order
+	}
+}
+
+// upsertStatement builds the INSERT ... ON CONFLICT for the columns present,
+// plus whatever `scope` says must be cleared even though the upload omitted it.
+func (s *Store) upsertStatement(userID int64, code int16, enc *encoded, scope clearScope) (string, []any) {
+	cols := []string{catalog.ColUserID, catalog.ColServer, catalog.ColUploadTime, catalog.ExtraColumn}
+	args := []any{userID, code, nullableInt(enc), nullableBytes(enc.extra)}
+
+	replace, writeOrder := s.replacedColumns(scope, enc.order)
+	cols = append(cols, writeOrder...)
+	// Map iteration during encoding and history merging must not create a new
+	// prepared statement for every permutation of the same written columns.
+	// Sort our own final list, leaving enc.order unchanged for subsequent uses.
+	slices.Sort(cols[4:])
+	for _, col := range cols[4:] {
+		args = append(args, nullableBytes(enc.columns[col]))
+	}
+
+	quoted := make([]string, len(cols))
+	placeholders := make([]string, len(cols))
+	for i, c := range cols {
+		quoted[i] = catalog.QuoteIdent(c)
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+
+	sets := make([]string, 0, len(cols))
+	for _, c := range cols[2:] { // skip the primary key columns
+		q := catalog.QuoteIdent(c)
+		if replace[c] {
+			sets = append(sets, fmt.Sprintf("%s = EXCLUDED.%s", q, q))
+			continue
+		}
+		// COALESCE is the `$set` merge: a column the upload did not carry keeps
+		// whatever is stored, instead of being cleared to NULL.
+		sets = append(sets, fmt.Sprintf("%s = COALESCE(EXCLUDED.%s, %s.%s)",
+			q, q, catalog.QuoteIdent(s.cat.Table), q))
+	}
+
+	sql := fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s, %s) DO UPDATE SET %s",
+		catalog.QuoteIdent(s.cat.Table),
+		strings.Join(quoted, ", "),
+		strings.Join(placeholders, ", "),
+		catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer),
+		strings.Join(sets, ", "),
+	)
+	return sql, args
+}
+
+func nullableInt(enc *encoded) any {
+	if !enc.hasUpload {
+		return nil
+	}
+	return *enc.uploadTime
+}
+
+func nullableBytes(b []byte) any {
+	if b == nil {
+		return nil
+	}
+	return b
+}
+
+// encodeJSON renders one upload value. encoding/json emits int64 and uint64 as
+// exact integer literals, which is what keeps a game user id above 2^53 intact.
+func encodeJSON(v any) ([]byte, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("gamedata: encode value: %w", err)
+	}
+	return b, nil
+}
+
+// decodeJSONNumbers decodes with jsonvalue.Numbers. Without it every number becomes a
+// float64 and an identity above 2^53 is silently corrupted before the merge even
+// compares it.
+func decodeJSONNumbers(b []byte) (any, error) {
+
+	var v any
+	if err := json.Unmarshal(b, &v, jsonvalue.Numbers); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// EncodeOnly runs the encode-and-limit half of a write without touching the
+// database.
+//
+// The migration CLI uses it for its dry run: an upload that cannot be
+// represented — a value that will not encode, a key over the size cap — then
+// surfaces BEFORE the maintenance window instead of inside it.
+func (s *Store) EncodeOnly(data map[string]any, mode WriteMode, limits Limits) (WriteStats, error) {
+	var stats WriteStats
+	if err := ValidateUploadFieldNames(data); err != nil {
+		return stats, err
+	}
+	enc, err := s.encode(data, mode, &stats)
+	if err != nil {
+		return stats, err
+	}
+	return stats, checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes)
+}

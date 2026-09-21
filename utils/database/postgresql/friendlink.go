@@ -3,7 +3,7 @@
 package postgresql
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 
@@ -16,7 +16,7 @@ import (
 type FriendLink struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
@@ -28,7 +28,7 @@ type FriendLink struct {
 	// Tags holds the value of the "tags" field.
 	Tags []string `json:"tags,omitempty"`
 	// Manual ordering weight; ascending, lower values appear first.
-	SortOrder    int `json:"sort_order,omitempty"`
+	SortOrder    int `json:"sort_order,omitzero"`
 	selectValues sql.SelectValues
 }
 

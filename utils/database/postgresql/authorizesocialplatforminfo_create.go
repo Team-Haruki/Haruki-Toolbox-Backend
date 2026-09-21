@@ -85,7 +85,7 @@ func (_c *AuthorizeSocialPlatformInfoCreate) Mutation() *AuthorizeSocialPlatform
 // Save creates the AuthorizeSocialPlatformInfo in the database.
 func (_c *AuthorizeSocialPlatformInfoCreate) Save(ctx context.Context) (*AuthorizeSocialPlatformInfo, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

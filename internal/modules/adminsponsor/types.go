@@ -11,10 +11,10 @@ type adminSponsorItem struct {
 	Source             string     `json:"source"`
 	IsActive           bool       `json:"isActive"`
 	AfdianSyncDisabled bool       `json:"afdianSyncDisabled"`
-	TotalAmount        *float64   `json:"totalAmount,omitempty"`
-	Month              *int       `json:"month,omitempty"`
-	PaidAt             *time.Time `json:"paidAt,omitempty"`
-	PlanExpiresAt      *time.Time `json:"planExpiresAt,omitempty"`
+	TotalAmount        *float64   `json:"totalAmount,omitzero"`
+	Month              *int       `json:"month,omitzero"`
+	PaidAt             *time.Time `json:"paidAt,omitzero"`
+	PlanExpiresAt      *time.Time `json:"planExpiresAt,omitzero"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
@@ -26,15 +26,15 @@ type adminSponsorListResponse struct {
 }
 
 type adminSponsorUpdatePayload struct {
-	Name               *string `json:"name,omitempty"`
-	Avatar             *string `json:"avatar,omitempty"`
-	PlanName           *string `json:"planName,omitempty"`
-	Message            *string `json:"message,omitempty"`
-	Source             *string `json:"source,omitempty"`
-	IsActive           *bool   `json:"isActive,omitempty"`
-	AfdianSyncDisabled *bool   `json:"afdianSyncDisabled,omitempty"`
-	PaidAt             *string `json:"paidAt,omitempty"`
-	PlanExpiresAt      *string `json:"planExpiresAt,omitempty"`
+	Name               *string `json:"name,omitzero"`
+	Avatar             *string `json:"avatar,omitzero"`
+	PlanName           *string `json:"planName,omitzero"`
+	Message            *string `json:"message,omitzero"`
+	Source             *string `json:"source,omitzero"`
+	IsActive           *bool   `json:"isActive,omitzero"`
+	AfdianSyncDisabled *bool   `json:"afdianSyncDisabled,omitzero"`
+	PaidAt             *string `json:"paidAt,omitzero"`
+	PlanExpiresAt      *string `json:"planExpiresAt,omitzero"`
 }
 
 type adminSponsorMutationResponse struct {

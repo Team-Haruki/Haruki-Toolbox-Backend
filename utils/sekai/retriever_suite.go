@@ -29,7 +29,7 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 
 	r.runSuiteFollowupCalls(ctx)
 
-	unpackedMap, err := unpackResponseToMap(suite, r.client.server)
+	unpackedMap, err := unpackResponseToMap(r.client.serverCryptor, suite, r.client.server)
 	if err != nil {
 		r.logger.Errorf("Failed to unpack suite response: %v", err)
 		return nil, NewDataRetrievalError("suite", "unpack", "failed to unpack response", err)

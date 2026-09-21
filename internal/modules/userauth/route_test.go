@@ -1,11 +1,12 @@
 package userauth
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -20,7 +21,7 @@ func TestRegisterUserAuthRoutesDisablesLegacyEndpointsWhenManagedIdentityEnabled
 	app := fiber.New()
 	helper := newManagedIdentityHelper()
 	helper.Router = app
-	RegisterUserAuthRoutes(helper)
+	RegisterUserAuthRoutes(helper, nil, harukiAPIHelper.UserDataBuilder{})
 
 	for _, path := range []string{"/api/user/login", "/api/user/register"} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)

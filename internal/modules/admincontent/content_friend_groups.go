@@ -1,12 +1,13 @@
 package admincontent
 
 import (
+	"strconv"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
-	"strconv"
 
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
@@ -55,7 +56,7 @@ func handleAdminListFriendGroups(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 			"groups": resp.TotalGroups,
 			"items":  resp.TotalItems,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -75,7 +76,7 @@ func handleAdminCreateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		if err != nil {
 			if postgresql.IsConstraintError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, payload.Group, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendGroupConflict, nil))
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group already exists", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group already exists", nil)
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, payload.Group, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateFriendGroupFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to create friend group")
@@ -83,7 +84,7 @@ func handleAdminCreateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 
 		resp := adminFriendGroupCreateResponse{ID: created.ID, Group: created.Group, SortOrder: created.SortOrder}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(created.ID), harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "friend group created", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "friend group created", &resp)
 	}
 }
 
@@ -113,7 +114,7 @@ func handleAdminUpdateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			}
 			if postgresql.IsConstraintError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendGroupConflict, nil))
-				return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group already exists", nil)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group already exists", nil)
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateFriendGroupFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to update friend group")
@@ -121,7 +122,7 @@ func handleAdminUpdateFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 
 		resp := adminFriendGroupCreateResponse{ID: updated.ID, Group: updated.Group, SortOrder: updated.SortOrder}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "friend group updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "friend group updated", &resp)
 	}
 }
 
@@ -159,7 +160,7 @@ func handleAdminDeleteFriendGroup(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroup, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse[string](c, "friend group deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "friend group deleted", nil)
 	}
 }
 
@@ -214,13 +215,13 @@ func handleAdminCreateFriendGroupItem(apiHelper *harukiAPIHelper.HarukiToolboxRo
 						"groupID":         groupID,
 						"fallbackBySetID": true,
 					})
-					return harukiAPIHelper.SuccessResponse(c, "friend group item created", &resp)
+					return harukiAPIHelper.Responses.SuccessResponse(c, "friend group item created", &resp)
 				}
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroupItem, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonFriendGroupItemConflict, map[string]any{
 						"error": err.Error(),
 					}))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group item conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "friend group item conflict", nil)
 				}
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroupItem, strconv.Itoa(groupID), harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateFriendGroupItemFailed, nil))
@@ -236,7 +237,7 @@ func handleAdminCreateFriendGroupItem(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroupItem, strconv.Itoa(created.ID), harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"groupID": groupID,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "friend group item created", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "friend group item created", &resp)
 	}
 }
 
@@ -309,7 +310,7 @@ func handleAdminUpdateFriendGroupItem(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroupItem, strconv.Itoa(itemID), harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"groupID": groupID,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "friend group item updated", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "friend group item updated", &resp)
 	}
 }
 
@@ -345,6 +346,6 @@ func handleAdminDeleteFriendGroupItem(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendGroupItem, strconv.Itoa(itemID), harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"groupID": groupID,
 		})
-		return harukiAPIHelper.SuccessResponse[string](c, "friend group item deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "friend group item deleted", nil)
 	}
 }

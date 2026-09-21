@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
+	json "encoding/json/v2"
+
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
-	"github.com/bytedance/sonic"
 )
 
 const (
@@ -30,7 +31,7 @@ type HydraOAuthClient struct {
 	ResponseTypes           []string       `json:"response_types,omitempty"`
 	Scope                   string         `json:"scope,omitempty"`
 	Metadata                map[string]any `json:"metadata,omitempty"`
-	CreatedAt               *time.Time     `json:"created_at,omitempty"`
+	CreatedAt               *time.Time     `json:"created_at,omitzero"`
 }
 
 type HydraOAuthClientUpsertInput struct {
@@ -90,12 +91,12 @@ func HydraOAuthClientActive(client *HydraOAuthClient) bool {
 	return active
 }
 
-func ListHydraOAuthClients(ctx context.Context) ([]HydraOAuthClient, error) {
+func ListHydraOAuthClients(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig) ([]HydraOAuthClient, error) {
 	pageToken := ""
 	seenPageTokens := make(map[string]struct{})
 	clients := make([]HydraOAuthClient, 0)
 	for {
-		page, nextPageToken, err := listHydraOAuthClientsPage(ctx, pageToken)
+		page, nextPageToken, err := listHydraOAuthClientsPage(ctx, hydraConfig, pageToken)
 		if err != nil {
 			return nil, err
 		}
@@ -111,32 +112,32 @@ func ListHydraOAuthClients(ctx context.Context) ([]HydraOAuthClient, error) {
 	}
 }
 
-func GetHydraOAuthClient(ctx context.Context, clientID string) (*HydraOAuthClient, error) {
+func GetHydraOAuthClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) (*HydraOAuthClient, error) {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {
 		return nil, fmt.Errorf("client id is required")
 	}
-	return sendHydraClientRequest(ctx, http.MethodGet, "/admin/clients/"+url.PathEscape(clientID), nil)
+	return sendHydraClientRequest(ctx, hydraConfig, http.MethodGet, "/admin/clients/"+url.PathEscape(clientID), nil)
 }
 
-func CreateHydraOAuthClient(ctx context.Context, input HydraOAuthClientUpsertInput) (*HydraOAuthClient, error) {
+func CreateHydraOAuthClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, input HydraOAuthClientUpsertInput) (*HydraOAuthClient, error) {
 	payload := buildHydraOAuthClientPayload(input)
-	return sendHydraClientRequest(ctx, http.MethodPost, "/admin/clients", payload)
+	return sendHydraClientRequest(ctx, hydraConfig, http.MethodPost, "/admin/clients", payload)
 }
 
-func UpdateHydraOAuthClient(ctx context.Context, clientID string, input HydraOAuthClientUpsertInput) (*HydraOAuthClient, error) {
+func UpdateHydraOAuthClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, input HydraOAuthClientUpsertInput) (*HydraOAuthClient, error) {
 	payload := buildHydraOAuthClientPayload(input)
-	return sendHydraClientRequest(ctx, http.MethodPut, "/admin/clients/"+url.PathEscape(strings.TrimSpace(clientID)), payload)
+	return sendHydraClientRequest(ctx, hydraConfig, http.MethodPut, "/admin/clients/"+url.PathEscape(strings.TrimSpace(clientID)), payload)
 }
 
-func SetHydraOAuthClientActive(ctx context.Context, clientID string, active bool) (*HydraOAuthClient, error) {
-	current, err := GetHydraOAuthClient(ctx, clientID)
+func SetHydraOAuthClientActive(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, active bool) (*HydraOAuthClient, error) {
+	current, err := GetHydraOAuthClient(ctx, hydraConfig, clientID)
 	if err != nil {
 		return nil, err
 	}
 	input := hydraOAuthClientToUpsertInput(current)
 	input.Active = active
-	updated, err := UpdateHydraOAuthClient(ctx, clientID, input)
+	updated, err := UpdateHydraOAuthClient(ctx, hydraConfig, clientID, input)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +145,7 @@ func SetHydraOAuthClientActive(ctx context.Context, clientID string, active bool
 	// consent sessions so existing/refreshed tokens stop working immediately,
 	// rather than only flipping the metadata flag.
 	if !active {
-		if err := revokeHydraOAuthClientGrants(ctx, clientID); err != nil {
+		if err := revokeHydraOAuthClientGrants(ctx, hydraConfig, clientID); err != nil {
 			return nil, fmt.Errorf("client deactivated but token revocation failed: %w", err)
 		}
 	}
@@ -153,48 +154,48 @@ func SetHydraOAuthClientActive(ctx context.Context, clientID string, active bool
 
 // revokeHydraOAuthClientGrants deletes all access/refresh tokens and consent
 // sessions Hydra holds for the given client.
-func revokeHydraOAuthClientGrants(ctx context.Context, clientID string) error {
+func revokeHydraOAuthClientGrants(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {
 		return nil
 	}
 	tokenQuery := url.Values{}
 	tokenQuery.Set("client_id", clientID)
-	if _, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/tokens", tokenQuery, nil); err != nil {
+	if _, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/tokens", tokenQuery, nil); err != nil {
 		return fmt.Errorf("delete client tokens: %w", err)
 	}
 	consentQuery := url.Values{}
 	consentQuery.Set("client", clientID)
 	consentQuery.Set("all", "true")
-	if _, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", consentQuery, nil); err != nil {
+	if _, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", consentQuery, nil); err != nil {
 		return fmt.Errorf("delete client consent sessions: %w", err)
 	}
 	return nil
 }
 
-func RotateHydraOAuthClientSecret(ctx context.Context, clientID string, newSecret string) (*HydraOAuthClient, error) {
-	current, err := GetHydraOAuthClient(ctx, clientID)
+func RotateHydraOAuthClientSecret(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, newSecret string) (*HydraOAuthClient, error) {
+	current, err := GetHydraOAuthClient(ctx, hydraConfig, clientID)
 	if err != nil {
 		return nil, err
 	}
 	input := hydraOAuthClientToUpsertInput(current)
 	input.ClientSecret = strings.TrimSpace(newSecret)
-	return UpdateHydraOAuthClient(ctx, clientID, input)
+	return UpdateHydraOAuthClient(ctx, hydraConfig, clientID, input)
 }
 
-func DeleteHydraOAuthClient(ctx context.Context, clientID string) error {
-	_, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/clients/"+url.PathEscape(strings.TrimSpace(clientID)), nil, nil)
+func DeleteHydraOAuthClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
+	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/clients/"+url.PathEscape(strings.TrimSpace(clientID)), nil, nil)
 	return err
 }
 
-func DeleteHydraOAuthTokensByClientID(ctx context.Context, clientID string) error {
+func DeleteHydraOAuthTokensByClientID(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
 	query := url.Values{}
 	query.Set("client_id", strings.TrimSpace(clientID))
-	_, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/tokens", query, nil)
+	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/tokens", query, nil)
 	return err
 }
 
-func RevokeHydraConsentSessionsByClient(ctx context.Context, clientID string) error {
+func RevokeHydraConsentSessionsByClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {
 		return fmt.Errorf("client id is required")
@@ -202,12 +203,12 @@ func RevokeHydraConsentSessionsByClient(ctx context.Context, clientID string) er
 	query := url.Values{}
 	query.Set("client", clientID)
 	query.Set("all", "true")
-	_, err := sendHydraAdminRequest(ctx, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", query, nil)
+	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", query, nil)
 	return err
 }
 
-func listHydraOAuthClientsPage(ctx context.Context, pageToken string) ([]HydraOAuthClient, string, error) {
-	targetURL, err := harukiOAuth2.HydraAdminEndpoint("/admin/clients")
+func listHydraOAuthClientsPage(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, pageToken string) ([]HydraOAuthClient, string, error) {
+	targetURL, err := hydraConfig.AdminEndpoint("/admin/clients")
 	if err != nil {
 		return nil, "", err
 	}
@@ -225,11 +226,11 @@ func listHydraOAuthClientsPage(ctx context.Context, pageToken string) ([]HydraOA
 		return nil, "", fmt.Errorf("failed to create hydra oauth client list request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	if clientID, clientSecret := harukiOAuth2.HydraClientCredentials(); clientID != "" {
+	if clientID, clientSecret := hydraConfig.ClientCredentials(); clientID != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
 
-	resp, err := hydraHTTPClient().Do(req)
+	resp, err := hydraConfig.Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to call hydra oauth client list: %w", err)
 	}
@@ -245,33 +246,33 @@ func listHydraOAuthClientsPage(ctx context.Context, pageToken string) ([]HydraOA
 
 	var clients []HydraOAuthClient
 	if len(body) > 0 {
-		if err := sonic.Unmarshal(body, &clients); err != nil {
+		if err := json.Unmarshal(body, &clients); err != nil {
 			return nil, "", fmt.Errorf("failed to decode hydra oauth clients: %w", err)
 		}
 	}
 	return clients, extractHydraNextPageToken(resp.Header.Values("Link")), nil
 }
 
-func sendHydraClientRequest(ctx context.Context, method string, endpointPath string, payload map[string]any) (*HydraOAuthClient, error) {
-	responseBody, err := sendHydraClientRequestRaw(ctx, method, endpointPath, payload)
+func sendHydraClientRequest(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, payload map[string]any) (*HydraOAuthClient, error) {
+	responseBody, err := sendHydraClientRequestRaw(ctx, hydraConfig, method, endpointPath, payload)
 	if err != nil {
 		return nil, err
 	}
 	var client HydraOAuthClient
-	if err := sonic.Unmarshal(responseBody, &client); err != nil {
+	if err := json.Unmarshal(responseBody, &client); err != nil {
 		return nil, fmt.Errorf("failed to decode hydra oauth client response: %w", err)
 	}
 	return &client, nil
 }
 
-func sendHydraClientRequestRaw(ctx context.Context, method string, endpointPath string, payload map[string]any) ([]byte, error) {
-	targetURL, err := harukiOAuth2.HydraAdminEndpoint(endpointPath)
+func sendHydraClientRequestRaw(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, method string, endpointPath string, payload map[string]any) ([]byte, error) {
+	targetURL, err := hydraConfig.AdminEndpoint(endpointPath)
 	if err != nil {
 		return nil, err
 	}
 	var requestBody []byte
 	if payload != nil {
-		requestBody, err = sonic.Marshal(payload)
+		requestBody, err = json.Marshal(payload)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode hydra oauth client payload: %w", err)
 		}
@@ -284,10 +285,10 @@ func sendHydraClientRequestRaw(ctx context.Context, method string, endpointPath 
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if clientID, clientSecret := harukiOAuth2.HydraClientCredentials(); clientID != "" {
+	if clientID, clientSecret := hydraConfig.ClientCredentials(); clientID != "" {
 		req.SetBasicAuth(clientID, clientSecret)
 	}
-	resp, err := hydraHTTPClient().Do(req)
+	resp, err := hydraConfig.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call hydra oauth client endpoint: %w", err)
 	}
@@ -305,7 +306,7 @@ func sendHydraClientRequestRaw(ctx context.Context, method string, endpointPath 
 func parseHydraRequestError(status int, body []byte) error {
 	message := http.StatusText(status)
 	var hydraErr hydraErrorResponse
-	if err := sonic.Unmarshal(body, &hydraErr); err == nil {
+	if err := json.Unmarshal(body, &hydraErr); err == nil {
 		for _, candidate := range []string{hydraErr.ErrorDescription, hydraErr.Message, hydraErr.Error} {
 			if strings.TrimSpace(candidate) != "" {
 				message = candidate

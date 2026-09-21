@@ -17,7 +17,7 @@ import (
 type WebhookSubscription struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// UserID holds the value of the "user_id" field.
 	UserID string `json:"user_id,omitempty"`
 	// Server holds the value of the "server" field.
@@ -37,7 +37,7 @@ type WebhookSubscription struct {
 // WebhookSubscriptionEdges holds the relations/edges for other nodes in the graph.
 type WebhookSubscriptionEdges struct {
 	// Endpoint holds the value of the endpoint edge.
-	Endpoint *WebhookEndpoint `json:"endpoint,omitempty"`
+	Endpoint *WebhookEndpoint `json:"endpoint,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

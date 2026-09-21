@@ -2,14 +2,15 @@ package adminusers
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -130,7 +131,7 @@ func TestHandleListAdminTicketNotificationRecipients(t *testing.T) {
 		Message     string                                    `json:"message"`
 		UpdatedData adminTicketNotificationRecipientsResponse `json:"updatedData"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &decoded); err != nil {
 		t.Fatalf("json decode returned error: %v", err)
 	}
 	if decoded.UpdatedData.Total != 2 {

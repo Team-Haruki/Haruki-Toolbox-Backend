@@ -1,13 +1,14 @@
 package adminsyslog
 
 import (
+	"strconv"
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
-	"strconv"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -25,7 +26,10 @@ func handleQuerySystemLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		}
 
 		dbCtx := c.Context()
-		baseQuery := scopeSystemLogsForActor(applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
+		baseQuery, err := scopeSystemLogsForActor(dbCtx, apiHelper.DBManager.DB, applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope system logs")
+		}
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -64,7 +68,7 @@ func handleQuerySystemLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			Items: adminCoreModule.BuildSystemLogItems(rows),
 		}
 
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -81,7 +85,10 @@ func handleGetSystemLogSummary(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		}
 
 		dbCtx := c.Context()
-		baseQuery := scopeSystemLogsForActor(applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
+		baseQuery, err := scopeSystemLogsForActor(dbCtx, apiHelper.DBManager.DB, applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope system logs")
+		}
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -161,7 +168,7 @@ func handleGetSystemLogSummary(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			ByResult:    normalizeCategoryCounts(byResultCounts),
 			ByReason:    buildSystemLogFailureReasonCounts(failureReasonRows),
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -182,9 +189,16 @@ func handleGetSystemLogDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		row, err := apiHelper.DBManager.DB.SystemLog.Query().
-			Where(systemlog.IDEQ(id)).
-			Only(c.Context())
+		detailQuery, err := scopeSystemLogsForActor(
+			c.Context(),
+			apiHelper.DBManager.DB,
+			apiHelper.DBManager.DB.SystemLog.Query().Where(systemlog.IDEQ(id)),
+			isSuperAdmin,
+		)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope system log detail")
+		}
+		row, err := detailQuery.Only(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "system log not found")
@@ -192,16 +206,11 @@ func handleGetSystemLogDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorInternal(c, "failed to query system log detail")
 		}
 
-		// A plain admin must not read a super_admin's audit entry.
-		if !isSuperAdmin && row.ActorRole != nil && adminCoreModule.NormalizeRole(*row.ActorRole) == adminCoreModule.RoleSuperAdmin {
-			return harukiAPIHelper.ErrorNotFound(c, "system log not found")
-		}
-
 		items := adminCoreModule.BuildSystemLogItems([]*postgresql.SystemLog{row})
 		if len(items) == 0 {
 			return harukiAPIHelper.ErrorNotFound(c, "system log not found")
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &items[0])
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &items[0])
 	}
 }
 
@@ -230,7 +239,10 @@ func handleExportSystemLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		baseQuery := scopeSystemLogsForActor(applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
+		baseQuery, err := scopeSystemLogsForActor(c.Context(), apiHelper.DBManager.DB, applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope system logs")
+		}
 		rows, err := applySystemLogSorting(baseQuery.Clone(), filters.Sort).
 			Limit(limit).
 			All(c.Context())
@@ -270,6 +282,6 @@ func handleExportSystemLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			},
 			Items: items,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }

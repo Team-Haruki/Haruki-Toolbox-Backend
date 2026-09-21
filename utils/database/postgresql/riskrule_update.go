@@ -116,7 +116,7 @@ func (_u *RiskRuleUpdate) Mutation() *RiskRuleMutation {
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *RiskRuleUpdate) Save(ctx context.Context) (int, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -326,7 +326,7 @@ func (_u *RiskRuleUpdateOne) Select(field string, fields ...string) *RiskRuleUpd
 // Save executes the query and returns the updated RiskRule entity.
 func (_u *RiskRuleUpdateOne) Save(ctx context.Context) (*RiskRule, error) {
 	_u.defaults()
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

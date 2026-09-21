@@ -100,7 +100,7 @@ func (_c *GameAccountBindingCreate) Mutation() *GameAccountBindingMutation {
 // Save creates the GameAccountBinding in the database.
 func (_c *GameAccountBindingCreate) Save(ctx context.Context) (*GameAccountBinding, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

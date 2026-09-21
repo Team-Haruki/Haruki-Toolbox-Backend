@@ -243,7 +243,7 @@ func (_u *RiskEventUpdate) Mutation() *RiskEventMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *RiskEventUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -638,7 +638,7 @@ func (_u *RiskEventUpdateOne) Select(field string, fields ...string) *RiskEventU
 
 // Save executes the query and returns the updated RiskEvent entity.
 func (_u *RiskEventUpdateOne) Save(ctx context.Context) (*RiskEvent, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

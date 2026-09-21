@@ -1,9 +1,10 @@
 package usersocial
 
 import (
+	"strings"
+
 	platformAuthHeader "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/authheader"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
-	"strings"
 )
 
 func statusTokenOwnedByUser(ownerUserID, currentUserID string) bool {

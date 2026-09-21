@@ -1,8 +1,9 @@
 package oauth2
 
 import (
-	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	"strings"
+
+	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 
 	"github.com/gofiber/fiber/v3"
 )

@@ -189,8 +189,8 @@ func (_q *TicketQuery) All(ctx context.Context) ([]*Ticket, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*Ticket, *TicketQuery]()
-	return withInterceptors[[]*Ticket](ctx, _q, qr, _q.inters)
+	qr := queryInterceptorRunner{}.querierAll[[]*Ticket, *TicketQuery]()
+	return queryInterceptorRunner{}.withInterceptors[[]*Ticket](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -229,7 +229,7 @@ func (_q *TicketQuery) Count(ctx context.Context) (int, error) {
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*TicketQuery](), _q.inters)
+	return queryInterceptorRunner{}.withInterceptors[int](ctx, _q, queryInterceptorRunner{}.querierCount[*TicketQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -533,7 +533,7 @@ func (_g *TicketGroupBy) Scan(ctx context.Context, v any) error {
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*TicketQuery, *TicketGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*TicketQuery, *TicketGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
 func (_g *TicketGroupBy) sqlScan(ctx context.Context, root *TicketQuery, v any) error {
@@ -581,7 +581,7 @@ func (_s *TicketSelect) Scan(ctx context.Context, v any) error {
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*TicketQuery, *TicketSelect](ctx, _s.TicketQuery, _s, _s.inters, v)
+	return queryInterceptorRunner{}.scanWithInterceptors[*TicketQuery, *TicketSelect](ctx, _s.TicketQuery, _s, _s.inters, v)
 }
 
 func (_s *TicketSelect) sqlScan(ctx context.Context, root *TicketQuery, v any) error {

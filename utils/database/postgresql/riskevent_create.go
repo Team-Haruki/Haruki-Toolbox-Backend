@@ -188,7 +188,7 @@ func (_c *RiskEventCreate) Mutation() *RiskEventMutation {
 // Save creates the RiskEvent in the database.
 func (_c *RiskEventCreate) Save(ctx context.Context) (*RiskEvent, error) {
 	_c.defaults()
-	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.

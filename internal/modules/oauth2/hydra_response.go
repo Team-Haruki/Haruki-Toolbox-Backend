@@ -21,12 +21,12 @@ func respondHydraError(c fiber.Ctx, err error, fallback string) error {
 		if message == "" {
 			message = fallback
 		}
-		return harukiAPIHelper.UpdatedDataResponse[string](c, status, message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, status, message, nil)
 	}
 
 	var fiberErr *fiber.Error
 	if errors.As(err, &fiberErr) {
-		return harukiAPIHelper.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 	}
 
 	harukiLogger.Errorf("Hydra request failed: %v", err)

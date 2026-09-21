@@ -4,23 +4,23 @@ package neopg
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/hourlyrequests"
 )
 
 // HourlyRequests is the model entity for the HourlyRequests schema.
 type HourlyRequests struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Primary key datetime (hour key)
 	HourKey time.Time `json:"hour_key,omitempty"`
 	// Request count for this hour
-	Count        int `json:"count,omitempty"`
+	Count        int `json:"count,omitzero"`
 	selectValues sql.SelectValues
 }
 

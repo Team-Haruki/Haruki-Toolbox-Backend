@@ -1,25 +1,35 @@
 package adminusers
 
 import (
+	"strings"
+
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
-	"strings"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/oauth2"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 func handleListUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
 		filters, err := parseAdminUserQueryFilters(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid query filters")
 		}
 
 		dbCtx := c.Context()
-		baseQuery := applyAdminUserQueryFilters(apiHelper.DBManager.DB.User.Query(), filters)
+		baseQuery := scopeAdminUserQueryForActor(
+			applyAdminUserQueryFilters(apiHelper.DBManager.DB.User.Query(), filters),
+			actorUserID,
+			actorRole,
+		)
 
 		total, err := baseQuery.Clone().Count(dbCtx)
 		if err != nil {
@@ -67,11 +77,11 @@ func handleListUsers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			Items: buildAdminUserListItems(rows),
 		}
 
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
-func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		targetUserID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetUserID == "" {
@@ -170,7 +180,7 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			Banned:    updatedUser.Banned,
 			BanReason: updatedUser.BanReason,
 		}
-		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, targetUser.ID, targetUser.KratosIdentityID)
+		sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, hydraConfig, targetUser.ID, targetUser.KratosIdentityID)
 		clearedSessions := !sessionClearFailed
 		revokedOAuthTokens := !oauthRevokeFailed
 		resp.ClearedSessions = &clearedSessions
@@ -189,7 +199,7 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.
 			resultState = harukiAPIHelper.SystemLogResultFailure
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBan, adminAuditTargetTypeUser, updatedUser.ID, resultState, metadata)
-		return harukiAPIHelper.SuccessResponse(c, message, &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, message, &resp)
 	}
 }
 
@@ -267,6 +277,6 @@ func handleUnbanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			Banned: updatedUser.Banned,
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserUnban, adminAuditTargetTypeUser, updatedUser.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return harukiAPIHelper.SuccessResponse(c, "user unbanned", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "user unbanned", &resp)
 	}
 }

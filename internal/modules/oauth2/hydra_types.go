@@ -2,8 +2,6 @@ package oauth2
 
 import (
 	"fmt"
-	"net/http"
-	"sync"
 )
 
 type hydraOAuthClientDetails struct {
@@ -31,6 +29,26 @@ type hydraConsentRequestResponse struct {
 	RequestedScope               []string                `json:"requested_scope"`
 	RequestedAccessTokenAudience []string                `json:"requested_access_token_audience"`
 	Client                       hydraOAuthClientDetails `json:"client"`
+}
+
+// hydraLogoutRequestResponse is what Hydra returns for a logout challenge.
+//
+// Client is a pointer because Hydra omits it for a logout the user started on
+// the OP itself rather than one an RP initiated — the frontend uses its presence
+// to decide between naming the application and using generic wording.
+type hydraLogoutRequestResponse struct {
+	Challenge   string                   `json:"challenge"`
+	Subject     string                   `json:"subject"`
+	SessionID   string                   `json:"sid"`
+	RequestURL  string                   `json:"request_url"`
+	RPInitiated bool                     `json:"rp_initiated"`
+	Client      *hydraOAuthClientDetails `json:"client,omitzero"`
+}
+
+// hydraLogoutPayload carries the challenge for accept and reject alike; neither
+// takes any other field.
+type hydraLogoutPayload struct {
+	LogoutChallenge string `json:"logoutChallenge"`
 }
 
 type hydraRedirectResponse struct {
@@ -86,12 +104,6 @@ type hydraRequestError struct {
 	Status  int
 	Message string
 }
-
-var (
-	hydraHTTPClientMu      sync.RWMutex
-	hydraSharedHTTPClient  *http.Client
-	hydraSharedTimeoutNano int64
-)
 
 func (e *hydraRequestError) Error() string {
 	return fmt.Sprintf("hydra request failed with status %d: %s", e.Status, e.Message)

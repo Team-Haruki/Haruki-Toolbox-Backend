@@ -2,15 +2,16 @@ package usergamebindings
 
 import (
 	"errors"
+	"strconv"
+	"strings"
+	"time"
+
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -83,7 +84,7 @@ func handleListOwnedGameAccountDataGrants(apiHelper *harukiAPIHelper.HarukiToolb
 			Total:       len(items),
 			Items:       items,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }
 
@@ -105,7 +106,7 @@ func handleListReceivedGameAccountDataGrants(apiHelper *harukiAPIHelper.HarukiTo
 			Total:       len(items),
 			Items:       items,
 		}
-		return harukiAPIHelper.SuccessResponse(c, "ok", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }
 
@@ -159,7 +160,7 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			"granteeUserID": granteeUserID,
 			"expiresAt":     expiresAt.Format(time.RFC3339),
 		})
-		return harukiAPIHelper.SuccessResponse(c, "game account data grant saved", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "game account data grant saved", &resp)
 	}
 }
 
@@ -187,6 +188,6 @@ func handleDeleteGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			"dataType":      dataType,
 			"granteeUserID": granteeUserID,
 		})
-		return harukiAPIHelper.SuccessResponse[string](c, "game account data grant deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "game account data grant deleted", nil)
 	}
 }

@@ -16,19 +16,19 @@ import (
 type GroupList struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Avatar holds the value of the "avatar" field.
-	Avatar *string `json:"avatar,omitempty"`
+	Avatar *string `json:"avatar,omitzero"`
 	// Bg holds the value of the "bg" field.
-	Bg *string `json:"bg,omitempty"`
+	Bg *string `json:"bg,omitzero"`
 	// GroupInfo holds the value of the "group_info" field.
 	GroupInfo string `json:"group_info,omitempty"`
 	// Detail holds the value of the "detail" field.
 	Detail string `json:"detail,omitempty"`
 	// Manual ordering weight; ascending, lower values appear first.
-	SortOrder int `json:"sort_order,omitempty"`
+	SortOrder int `json:"sort_order,omitzero"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GroupListQuery when eager-loading is set.
 	Edges            GroupListEdges `json:"edges"`
@@ -39,7 +39,7 @@ type GroupList struct {
 // GroupListEdges holds the relations/edges for other nodes in the graph.
 type GroupListEdges struct {
 	// Group holds the value of the group edge.
-	Group *Group `json:"group,omitempty"`
+	Group *Group `json:"group,omitzero"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
 	loadedTypes [1]bool

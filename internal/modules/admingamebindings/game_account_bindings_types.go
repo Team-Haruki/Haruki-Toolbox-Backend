@@ -1,8 +1,9 @@
 package admingamebindings
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 )
 
 type adminGlobalGameBindingQueryFilters struct {
@@ -28,8 +29,8 @@ type adminGlobalGameBindingItem struct {
 	Server     string                             `json:"server"`
 	GameUserID string                             `json:"gameUserId"`
 	Verified   bool                               `json:"verified"`
-	Suite      *schema.SuiteDataPrivacySettings   `json:"suite,omitempty"`
-	Mysekai    *schema.MysekaiDataPrivacySettings `json:"mysekai,omitempty"`
+	Suite      *schema.SuiteDataPrivacySettings   `json:"suite,omitzero"`
+	Mysekai    *schema.MysekaiDataPrivacySettings `json:"mysekai,omitzero"`
 	Owner      adminGlobalGameBindingOwner        `json:"owner"`
 }
 
@@ -38,7 +39,7 @@ type adminGlobalGameBindingAppliedFilters struct {
 	Server     string `json:"server,omitempty"`
 	GameUserID string `json:"gameUserId,omitempty"`
 	UserID     string `json:"userId,omitempty"`
-	Verified   *bool  `json:"verified,omitempty"`
+	Verified   *bool  `json:"verified,omitzero"`
 }
 
 type adminGlobalGameBindingListResponse struct {
@@ -108,7 +109,7 @@ type adminGlobalGameBindingBatchReassignItemResult struct {
 	GameUserID   string `json:"gameUserId"`
 	FromUserID   string `json:"fromUserId,omitempty"`
 	TargetUserID string `json:"targetUserId,omitempty"`
-	Changed      bool   `json:"changed,omitempty"`
+	Changed      bool   `json:"changed,omitzero"`
 	Success      bool   `json:"success"`
 	Code         string `json:"code,omitempty"`
 	Message      string `json:"message,omitempty"`

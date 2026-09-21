@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	"sync"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/klauspost/compress/gzip"
@@ -18,24 +19,53 @@ import (
 // plain entries from before this scheme (and the plain fallback below) stay
 // servable without a key migration.
 
+const maxPooledGameDataBodyBuffer = 1 << 20
+
+type gameDataBodyCompressor struct {
+	buffer bytes.Buffer
+	writer *gzip.Writer
+}
+
+var gameDataBodyCompressorPool = sync.Pool{
+	New: func() any {
+		// BestSpeed is a valid constant, so this constructor cannot fail.
+		writer, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+		return &gameDataBodyCompressor{writer: writer}
+	},
+}
+
+func (compressor *gameDataBodyCompressor) resetForPool() {
+	compressor.writer.Reset(io.Discard)
+	if compressor.buffer.Cap() > maxPooledGameDataBodyBuffer {
+		// An unusually large or incompressible snapshot must not keep its
+		// output allocation alive for subsequent small cache misses.
+		compressor.buffer = bytes.Buffer{}
+	} else {
+		compressor.buffer.Reset()
+	}
+}
+
 // CompressGameDataBody gzips a marshaled response body for cache storage.
 // BestSpeed matches the level the compress middleware already used per
 // request, so the miss path pays the same CPU as before while every hit pays
 // none.
 func CompressGameDataBody(encoded []byte) (string, error) {
-	var buf bytes.Buffer
-	buf.Grow(len(encoded)/4 + 64)
-	w, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
-	if err != nil {
+	compressor := gameDataBodyCompressorPool.Get().(*gameDataBodyCompressor)
+	defer func() {
+		compressor.resetForPool()
+		gameDataBodyCompressorPool.Put(compressor)
+	}()
+	compressor.buffer.Grow(len(encoded)/4 + 64)
+	compressor.writer.Reset(&compressor.buffer)
+	if _, err := compressor.writer.Write(encoded); err != nil {
 		return "", err
 	}
-	if _, err := w.Write(encoded); err != nil {
+	if err := compressor.writer.Close(); err != nil {
 		return "", err
 	}
-	if err := w.Close(); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
+	// Buffer.String copies the bytes: cache entries remain valid after the
+	// compressor and its backing buffer are reused by another goroutine.
+	return compressor.buffer.String(), nil
 }
 
 // ServeGameDataBody writes a stored cache entry as the JSON response,

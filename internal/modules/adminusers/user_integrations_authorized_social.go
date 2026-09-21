@@ -37,7 +37,7 @@ func handleListUserAuthorizedSocialPlatforms(apiHelper *harukiAPIHelper.HarukiTo
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "success", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
 }
 
@@ -94,7 +94,7 @@ func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 				Save(c.Context()); err != nil {
 				if postgresql.IsConstraintError(err) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonAuthorizedSocialPlatformConflict, nil))
-					return harukiAPIHelper.UpdatedDataResponse[string](c, fiber.StatusConflict, "authorized social platform conflict", nil)
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "authorized social platform conflict", nil)
 				}
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateAuthorizedSocialPlatformFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to create authorized social platform")
@@ -116,7 +116,7 @@ func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 			"platformID": platformID,
 			"created":    created,
 		})
-		return harukiAPIHelper.SuccessResponse(c, "authorized social platform upserted", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform upserted", &resp)
 	}
 }
 
@@ -153,6 +153,6 @@ func handleDeleteUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"platformID": platformID,
 		})
-		return harukiAPIHelper.SuccessResponse[string](c, "authorized social platform deleted", nil)
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "authorized social platform deleted", nil)
 	}
 }

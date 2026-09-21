@@ -1,8 +1,9 @@
 package adminusers
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 	"time"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/api"
 )
 
 type adminUserQueryFilters struct {
@@ -25,17 +26,17 @@ type adminUserListItem struct {
 	Banned                          bool       `json:"banned"`
 	AllowCNMysekai                  bool       `json:"allowCNMysekai"`
 	TicketEmailNotificationsEnabled bool       `json:"ticketEmailNotificationsEnabled"`
-	BanReason                       *string    `json:"banReason,omitempty"`
-	CreatedAt                       *time.Time `json:"createdAt,omitempty"`
+	BanReason                       *string    `json:"banReason,omitzero"`
+	CreatedAt                       *time.Time `json:"createdAt,omitzero"`
 }
 
 type adminUserAppliedFilters struct {
 	Query          string     `json:"q,omitempty"`
 	Role           string     `json:"role,omitempty"`
-	Banned         *bool      `json:"banned,omitempty"`
-	AllowCNMysekai *bool      `json:"allowCNMysekai,omitempty"`
-	CreatedFrom    *time.Time `json:"createdFrom,omitempty"`
-	CreatedTo      *time.Time `json:"createdTo,omitempty"`
+	Banned         *bool      `json:"banned,omitzero"`
+	AllowCNMysekai *bool      `json:"allowCNMysekai,omitzero"`
+	CreatedFrom    *time.Time `json:"createdFrom,omitzero"`
+	CreatedTo      *time.Time `json:"createdTo,omitzero"`
 }
 
 type adminUserListResponse struct {
@@ -58,14 +59,14 @@ type userBanStatusResponse struct {
 	UserID             string  `json:"userId"`
 	Role               string  `json:"role"`
 	Banned             bool    `json:"banned"`
-	BanReason          *string `json:"banReason,omitempty"`
-	ClearedSessions    *bool   `json:"clearedSessions,omitempty"`
-	RevokedOAuthTokens *bool   `json:"revokedOAuthTokens,omitempty"`
+	BanReason          *string `json:"banReason,omitzero"`
+	ClearedSessions    *bool   `json:"clearedSessions,omitzero"`
+	RevokedOAuthTokens *bool   `json:"revokedOAuthTokens,omitzero"`
 }
 
 type batchUserOperationPayload struct {
 	UserIDs []string `json:"userIds"`
-	Reason  *string  `json:"reason,omitempty"`
+	Reason  *string  `json:"reason,omitzero"`
 }
 
 type batchUserRoleUpdatePayload struct {
@@ -128,17 +129,17 @@ type adminUserDetailActivitySummary struct {
 	UploadLogTotal int        `json:"uploadLogTotal"`
 	UploadSuccess  int        `json:"uploadSuccess"`
 	UploadFailure  int        `json:"uploadFailure"`
-	LastSystemLog  *time.Time `json:"lastSystemLog,omitempty"`
-	LastUploadLog  *time.Time `json:"lastUploadLog,omitempty"`
+	LastSystemLog  *time.Time `json:"lastSystemLog,omitzero"`
+	LastUploadLog  *time.Time `json:"lastUploadLog,omitzero"`
 }
 
 type adminUserDetailResponse struct {
 	UserData        harukiAPIHelper.HarukiToolboxUserData `json:"userData"`
 	Banned          bool                                  `json:"banned"`
 	AllowCNMysekai  bool                                  `json:"allowCNMysekai"`
-	BanReason       *string                               `json:"banReason,omitempty"`
-	CreatedAt       *time.Time                            `json:"createdAt,omitempty"`
-	ActivitySummary *adminUserDetailActivitySummary       `json:"activitySummary,omitempty"`
+	BanReason       *string                               `json:"banReason,omitzero"`
+	CreatedAt       *time.Time                            `json:"createdAt,omitzero"`
+	ActivitySummary *adminUserDetailActivitySummary       `json:"activitySummary,omitzero"`
 }
 
 type adminForceLogoutResponse struct {
@@ -181,7 +182,7 @@ type adminUserSocialPlatformResponse struct {
 	GeneratedAt    time.Time                           `json:"generatedAt"`
 	UserID         string                              `json:"userId"`
 	Exists         bool                                `json:"exists"`
-	SocialPlatform *harukiAPIHelper.SocialPlatformInfo `json:"socialPlatform,omitempty"`
+	SocialPlatform *harukiAPIHelper.SocialPlatformInfo `json:"socialPlatform,omitzero"`
 }
 
 type adminUserAuthorizedSocialListResponse struct {
@@ -249,26 +250,26 @@ type adminUserAllowCNMysekaiResponse struct {
 }
 
 type adminSoftDeletePayload struct {
-	Reason *string `json:"reason,omitempty"`
+	Reason *string `json:"reason,omitzero"`
 }
 
 type adminResetPasswordPayload struct {
-	NewPassword *string `json:"newPassword,omitempty"`
-	ForceLogout *bool   `json:"forceLogout,omitempty"`
+	NewPassword *string `json:"newPassword,omitzero"`
+	ForceLogout *bool   `json:"forceLogout,omitzero"`
 }
 
 type adminLifecycleResponse struct {
 	UserID          string  `json:"userId"`
 	Banned          bool    `json:"banned"`
-	BanReason       *string `json:"banReason,omitempty"`
-	ClearedSessions *bool   `json:"clearedSessions,omitempty"`
+	BanReason       *string `json:"banReason,omitzero"`
+	ClearedSessions *bool   `json:"clearedSessions,omitzero"`
 }
 
 type adminResetPasswordResponse struct {
 	UserID            string `json:"userId"`
 	TemporaryPassword string `json:"temporaryPassword,omitempty"`
 	ForceLogout       bool   `json:"forceLogout"`
-	ClearedSessions   *bool  `json:"clearedSessions,omitempty"`
+	ClearedSessions   *bool  `json:"clearedSessions,omitzero"`
 }
 
 type updateUserRolePayload struct {

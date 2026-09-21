@@ -4,23 +4,23 @@ package neopg
 
 import (
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 	"strings"
 	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
 )
 
 // User is the model entity for the User schema.
 type User struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitzero"`
 	// Owner user ID
-	OwnerUserID int64 `json:"owner_user_id,omitempty"`
+	OwnerUserID int64 `json:"owner_user_id,omitzero"`
 	// Bot ID, primary key
-	BotID int `json:"bot_id,omitempty"`
+	BotID int `json:"bot_id,omitzero"`
 	// Bot credential
 	Credential string `json:"credential,omitempty"`
 	// Client self-reported IP from myip.ipip.net
@@ -28,7 +28,7 @@ type User struct {
 	// Client self-reported location from myip.ipip.net
 	LastLoginLocation string `json:"last_login_location,omitempty"`
 	// Last successful login time
-	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitzero"`
 	selectValues sql.SelectValues
 }
 

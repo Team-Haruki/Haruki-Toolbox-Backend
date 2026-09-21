@@ -283,7 +283,7 @@ func (_u *SystemLogUpdate) Mutation() *SystemLogMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *SystemLogUpdate) Save(ctx context.Context) (int, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -745,7 +745,7 @@ func (_u *SystemLogUpdateOne) Select(field string, fields ...string) *SystemLogU
 
 // Save executes the query and returns the updated SystemLog entity.
 func (_u *SystemLogUpdateOne) Save(ctx context.Context) (*SystemLog, error) {
-	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
+	return mutationHookRunner{}.withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.

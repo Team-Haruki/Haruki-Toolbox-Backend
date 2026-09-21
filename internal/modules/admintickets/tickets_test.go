@@ -1,15 +1,16 @@
 package admintickets
 
 import (
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 
 	"github.com/gofiber/fiber/v3"
 )

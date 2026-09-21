@@ -1,10 +1,11 @@
 package upload
 
 import (
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"regexp"
 	"strconv"
 	"strings"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
 
 var userIDSuffixRegex = regexp.MustCompile(`user/(\d+)`)

@@ -3,8 +3,9 @@ package usertickets
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 )
 
 func generateTicketPublicID() (string, error) {

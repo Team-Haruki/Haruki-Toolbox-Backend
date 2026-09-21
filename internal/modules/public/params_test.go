@@ -1,10 +1,11 @@
 package public
 
 import (
-	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 
 	"github.com/gofiber/fiber/v3"
 )

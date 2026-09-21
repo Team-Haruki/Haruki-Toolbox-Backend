@@ -19,45 +19,57 @@ type statisticsUploadBucketCount struct {
 	Failure int
 }
 
-// buildStatisticsBucketExpressionSQL builds a bucket-start expression aligned to
-// the given timezone. The column (a timestamptz) is converted to local wall time,
-// truncated to the bucket unit, then re-anchored to an absolute instant via the
-// second AT TIME ZONE so EXTRACT(EPOCH ...) matches truncateStatisticsTimeByBucket.
-// tzPlaceholder is a bound-parameter placeholder (e.g. "$3") to avoid injecting
-// the timezone string into the query text.
-func buildStatisticsBucketExpressionSQL(bucket, columnName, tzPlaceholder string) (string, error) {
-	var unit string
+// The queries are deliberately complete constants rather than dynamically
+// formatted SQL. The selected bucket is still allow-listed, while the timezone
+// remains a bound parameter. A timestamptz is converted to local wall time,
+// truncated, then re-anchored so its epoch matches truncateStatisticsTimeByBucket.
+const (
+	registrationCountsHourSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('hour', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
+	registrationCountsDaySQL   = "SELECT EXTRACT(EPOCH FROM date_trunc('day', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
+	registrationCountsWeekSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('week', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
+	registrationCountsMonthSQL = "SELECT EXTRACT(EPOCH FROM date_trunc('month', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
+
+	uploadCountsHourSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('hour', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
+	uploadCountsDaySQL   = "SELECT EXTRACT(EPOCH FROM date_trunc('day', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
+	uploadCountsWeekSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('week', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
+	uploadCountsMonthSQL = "SELECT EXTRACT(EPOCH FROM date_trunc('month', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
+)
+
+func registrationCountsSQL(bucket string) (string, error) {
 	switch bucket {
 	case timeseriesBucketHour:
-		unit = "hour"
+		return registrationCountsHourSQL, nil
 	case timeseriesBucketDay:
-		unit = "day"
+		return registrationCountsDaySQL, nil
 	case timeseriesBucketWeek:
-		unit = "week"
+		return registrationCountsWeekSQL, nil
 	case timeseriesBucketMonth:
-		unit = "month"
+		return registrationCountsMonthSQL, nil
 	default:
-		return "", fmt.Errorf("invalid bucket")
+		return "", fmt.Errorf("invalid statistics bucket %q", bucket)
 	}
-	return fmt.Sprintf(
-		"date_trunc('%s', %s AT TIME ZONE %s) AT TIME ZONE %s",
-		unit, columnName, tzPlaceholder, tzPlaceholder,
-	), nil
+}
+
+func uploadCountsSQL(bucket string) (string, error) {
+	switch bucket {
+	case timeseriesBucketHour:
+		return uploadCountsHourSQL, nil
+	case timeseriesBucketDay:
+		return uploadCountsDaySQL, nil
+	case timeseriesBucketWeek:
+		return uploadCountsWeekSQL, nil
+	case timeseriesBucketMonth:
+		return uploadCountsMonthSQL, nil
+	default:
+		return "", fmt.Errorf("invalid statistics bucket %q", bucket)
+	}
 }
 
 func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz string) (map[int64]int, error) {
-	bucketExpr, err := buildStatisticsBucketExpressionSQL(bucket, userSchema.FieldCreatedAt, "$3")
+	query, err := registrationCountsSQL(bucket)
 	if err != nil {
 		return nil, err
 	}
-
-	query := fmt.Sprintf(
-		"SELECT EXTRACT(EPOCH FROM %s)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE %s IS NOT NULL AND %s >= $1 AND %s <= $2 GROUP BY bucket_unix",
-		bucketExpr,
-		userSchema.FieldCreatedAt,
-		userSchema.FieldCreatedAt,
-		userSchema.FieldCreatedAt,
-	)
 	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), tz)
 	if err != nil {
 		return nil, err
@@ -82,18 +94,10 @@ func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, f
 }
 
 func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz string) (map[int64]statisticsUploadBucketCount, error) {
-	bucketExpr, err := buildStatisticsBucketExpressionSQL(bucket, uploadlog.FieldUploadTime, "$3")
+	query, err := uploadCountsSQL(bucket)
 	if err != nil {
 		return nil, err
 	}
-
-	query := fmt.Sprintf(
-		"SELECT EXTRACT(EPOCH FROM %s)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN %s THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE %s >= $1 AND %s <= $2 GROUP BY bucket_unix",
-		bucketExpr,
-		uploadlog.FieldSuccess,
-		uploadlog.FieldUploadTime,
-		uploadlog.FieldUploadTime,
-	)
 	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), tz)
 	if err != nil {
 		return nil, err

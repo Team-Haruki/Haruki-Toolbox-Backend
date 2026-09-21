@@ -1,17 +1,18 @@
 package nuversestruct
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"os"
 	"sort"
 
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmsgpack"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/msgpackcodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
 
-	"github.com/iancoleman/orderedmap"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/orderedmap"
 )
 
 type CompareOptions struct {
@@ -20,6 +21,7 @@ type CompareOptions struct {
 	SchemaPath         string
 	InputFormat        string
 	Server             harukiUtils.SupportedDataUploadServer
+	ServerCryptor      sekai.ServerCryptor
 }
 
 type CompareReport struct {
@@ -33,7 +35,7 @@ type CompareReport struct {
 	RowCountChanged         []FieldChange `json:"rowCountChanged,omitempty"`
 	RestoreFailed           []FieldError  `json:"fieldRestoreFailed,omitempty"`
 	GeneratedStructureCount int           `json:"generatedStructureCount"`
-	BaselineStructureCount  int           `json:"baselineStructureCount,omitempty"`
+	BaselineStructureCount  int           `json:"baselineStructureCount,omitzero"`
 }
 
 type FieldChange struct {
@@ -77,7 +79,7 @@ func CompareSuiteRestore(options CompareOptions) (*CompareReport, error) {
 	if err != nil {
 		return nil, err
 	}
-	decoded, err := orderedmsgpack.MsgpackToOrderedMap(sampleBytes)
+	decoded, err := msgpackcodec.DecodeOrdered(sampleBytes)
 	if err != nil {
 		return nil, fmt.Errorf("decode sample msgpack: %w", err)
 	}
@@ -134,7 +136,7 @@ func decodeSampleMsgpack(options CompareOptions) ([]byte, error) {
 		if options.Server == "" {
 			return nil, fmt.Errorf("server is required when input format is raw-upload")
 		}
-		msgpackBytes, err := sekai.DecryptToMsgpack(sampleBytes, options.Server)
+		msgpackBytes, err := options.ServerCryptor.DecryptToMsgpack(sampleBytes, options.Server)
 		if err != nil {
 			return nil, fmt.Errorf("decrypt raw upload sample: %w", err)
 		}
@@ -231,13 +233,12 @@ func joinPath(parent string, child string) string {
 
 func (r *CompareReport) MarshalJSONDeterministic() ([]byte, error) {
 	normalizeReport(r)
-	return json.MarshalIndent(r, "", "  ")
+	return json.Marshal(r, jsontext.WithIndentPrefix(""), jsontext.WithIndent("  "), json.Deterministic(true))
 }
 
 func orderedMapToPlainMap(om *orderedmap.OrderedMap) map[string]any {
-	out := make(map[string]any, len(om.Keys()))
-	for _, key := range om.Keys() {
-		val, _ := om.Get(key)
+	out := make(map[string]any, om.Len())
+	for key, val := range om.All() {
 		out[key] = clonePlainValue(val)
 	}
 	return out
