@@ -26,6 +26,7 @@
 | [Go 1.27 与 JSON v2 迁移](go127-jsonv2-migration.zh-CN.md) | Go 1.27.1、泛型方法、全面 JSON v2 和自有 MessagePack 有序容器；行为变化及验证记录 |
 | [性能优化调研（2026-09-08）](performance-review-2026-09-08.zh-CN.md) | 生产延迟分布、SQL/compact/压缩对照实验、优化优先级与验收边界；排除引继耗时 |
 | [MessagePack codec 与 OrderedMap](msgpack-codec.zh-CN.md) | 共同字节游标、旧包退役、provider 字段规则、小对象合并分配和本机基准 |
+| [MYSEKAI 采集数据复原](mysekai-restore.zh-CN.md) | CN 6.4.0 schema、上传与历史读取、TW/KR 按区服切换及缓存发布要求 |
 | [数据 revision 与缓存失效设计](game-data-revision-design.zh-CN.md) | 同秒旧缓存复现、数据库版本原型、条件读取和分阶段发布约束；尚未接入生产 |
 | [Ory 套件使用说明](ory-suite-usage.zh-CN.md) | Kratos / Hydra / Oathkeeper 各自的职责、登录态验证方式、社交登录（Google / Apple）接入、可信代理与转发 IP 的取值规则、为什么大量旧接口返回 410 |
 | [爱发电赞助集成](afdian-sponsor-integration.zh-CN.md) | 赞助墙的 webhook 与同步行为 |

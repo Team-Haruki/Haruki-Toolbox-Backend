@@ -20,3 +20,8 @@ haruki-suite-configs*.yaml
 !haruki-suite-configs.example.yaml
 *.env
 .env.*
+
+# Current configuration name and private local upload samples
+haruki-toolbox-configs*.yaml
+!haruki-toolbox-configs.example.yaml
+suite_snapshot

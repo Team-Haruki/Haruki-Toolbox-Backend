@@ -224,7 +224,12 @@ type OAuth2Config struct {
 	HydraRequestTimeoutSecond int    `yaml:"hydra_request_timeout_seconds"`
 }
 
+type RestoreMysekaiConfig struct {
+	StructuresFile map[string]string `yaml:"structures_file"`
+}
+
 type Config struct {
+	MysekaiRestore         RestoreMysekaiConfig         `yaml:"restore_mysekai"`
 	Proxy                  string                       `yaml:"proxy"`
 	MongoDB                MongoDBConfig                `yaml:"mongodb"`
 	GameData               GameDataConfig               `yaml:"game_data"`

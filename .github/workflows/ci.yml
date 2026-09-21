@@ -25,14 +25,14 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           # SonarQube reads git history to attribute issues to the change that
           # introduced them; a shallow clone makes "new code" meaningless.
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true

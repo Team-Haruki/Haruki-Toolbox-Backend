@@ -16,6 +16,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/jsoncodec"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/msgpackcodec"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfstats"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekai"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
@@ -64,6 +65,10 @@ func processRestoredMsgpack(msgpackBytes []byte, server utils.SupportedDataUploa
 	data, ok := unpacked.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("unpacked data is not a map")
+	}
+	data, err = service.MysekaiRestorer().Document(string(server), data)
+	if err != nil {
+		return nil, err
 	}
 	restored, _, err := service.Restore(server, data, SuiteRestoreOptions{Purpose: SuiteRestorePurposeSync})
 	if err != nil {
@@ -223,7 +228,11 @@ func runDataSyncerTargets(targets []syncTarget, userID int64, server utils.Suppo
 				return
 			}
 			if needsProcessed {
-				processedData, err = processMsgpackOnce(msgpackBytes)
+				if suiteRestoreService.MysekaiRestorer().Fingerprint(string(server)) != "" && (dataType == utils.UploadDataTypeMysekai || dataType == utils.UploadDataTypeMysekaiBirthdayParty) {
+					processedData, err = processMysekaiMsgpack(msgpackBytes, string(server), suiteRestoreService.MysekaiRestorer())
+				} else {
+					processedData, err = processMsgpackOnce(msgpackBytes)
+				}
 				if err != nil {
 					logger.Warnf("Failed to pre-process data: %v", err)
 					needsProcessed = false
@@ -282,4 +291,23 @@ func eligibleSyncTargets(targets []syncTarget, userID int64, server utils.Suppor
 		}
 	}
 	return out
+}
+
+// Enabled MYSEKAI JSON consumers receive the same shape as database API consumers.
+func processMysekaiMsgpack(payload []byte, server string, restorer *mysekairestore.Restorer) ([]byte, error) {
+	unpacked, err := sekai.UnpackMsgpack(payload)
+	if err != nil {
+		return nil, err
+	}
+	data, ok := unpacked.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unpacked mysekai data is not a map")
+	}
+	restored, err := restorer.Document(server, data)
+	if err != nil {
+		return nil, err
+	}
+	return compressSyncJSON(func(w io.Writer) error {
+		return json.MarshalWrite(w, harukiAPIData.NormalizeProviderResponse(restored))
+	})
 }

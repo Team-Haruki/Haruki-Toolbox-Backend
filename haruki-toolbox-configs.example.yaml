@@ -134,6 +134,13 @@ haruki_proxy:
   secret: ""
   unpack_key: ""
 
+# AVSC file paths, loaded once at startup. Omitted/empty regions are disabled.
+restore_mysekai:
+  structures_file:
+    cn: "./data/suite_user_cn_6.4.0.avsc"
+    tw: ""
+    kr: ""
+
 restore_suite:
   enable_regions:
     - "tw"

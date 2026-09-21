@@ -108,8 +108,16 @@ func BuildGameDataCacheKey(surface, server, dataType string, userID int64, reque
 // that produced it (the stored upload_time). The version segment sits after
 // query=, so the per-user clear pattern in ClearCache still matches every
 // generation.
-func BuildVersionedGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string, uploadTime int64) string {
-	return BuildGameDataCacheKey(surface, server, dataType, userID, requestKey) + ":v=" + strconv.FormatInt(uploadTime, 10)
+func BuildVersionedGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string, uploadTime int64, harvestFingerprint ...string) string {
+	profile := ""
+	if len(harvestFingerprint) > 0 {
+		profile = harvestFingerprint[0]
+	}
+	suffix := ""
+	if profile != "" {
+		suffix = ":harvest=" + profile + "-1"
+	}
+	return BuildGameDataCacheKey(surface, server, dataType, userID, requestKey) + ":v=" + strconv.FormatInt(uploadTime, 10) + suffix
 }
 
 // BuildGameDataStampMemoKey addresses the short-lived upload_time memo for one

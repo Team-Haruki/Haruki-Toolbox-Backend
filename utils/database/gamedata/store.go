@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 )
 
 // ErrNoRow is returned when (user_id, server) has no row at all.
@@ -24,8 +25,9 @@ var ErrNoRow = errors.New("gamedata: no row")
 
 // Store reads and writes one game-data table.
 type Store struct {
-	pool *Pool
-	cat  *catalog.Catalog
+	restorer *mysekairestore.Restorer
+	pool     *Pool
+	cat      *catalog.Catalog
 }
 
 // NewStore binds a pool to a pinned catalog.
@@ -40,6 +42,7 @@ func (s *Store) Catalog() *catalog.Catalog { return s.cat }
 // A Row belongs to one request and must not be mutated or used concurrently.
 // Derived bytes are reused between the presence check and response rendering.
 type Row struct {
+	restorer   *mysekairestore.Restorer
 	UserID     int64
 	Server     string
 	UploadTime int64
@@ -114,6 +117,7 @@ func (s *Store) Fetch(ctx context.Context, userID int64, server string, keys []s
 
 	row := &Row{
 		UserID:   userID,
+		restorer: s.restorer,
 		Server:   server,
 		cat:      s.cat,
 		byColumn: make(map[string][]byte, len(cols)),
@@ -235,6 +239,17 @@ func (r *Row) columnValue(e *catalog.Entry) ([]byte, bool, error) {
 	v, present := r.byColumn[e.Column]
 	if !present {
 		return nil, false, nil
+	}
+	if r.restorer.Fingerprint(r.Server) != "" && (e.Key == mysekairestore.HarvestMaps || e.Child == mysekairestore.HarvestMaps) {
+		if cached, ok := r.expanded[e.Column]; ok {
+			return cached.raw, cached.ok, cached.err
+		}
+		raw, err := r.restorer.JSON(r.Server, v)
+		if r.expanded == nil {
+			r.expanded = make(map[string]rowValue)
+		}
+		r.expanded[e.Column] = rowValue{raw: raw, ok: err == nil, err: err}
+		return raw, err == nil, err
 	}
 	if e.Storage != catalog.StorageCompactJSON {
 		return v, true, nil

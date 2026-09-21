@@ -39,6 +39,7 @@ RUN apk --no-cache add ca-certificates tzdata \
     && chown haruki:haruki logs
 
 COPY --from=builder --chown=haruki:haruki /app/haruki-toolbox-backend .
+COPY --from=builder --chown=haruki:haruki /app/data ./data
 
 EXPOSE 6666
 USER haruki

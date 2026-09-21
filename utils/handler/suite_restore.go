@@ -6,6 +6,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/nuversestruct"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/suiterestore"
 )
@@ -36,6 +37,7 @@ type SuiteRestoreReport struct {
 // collection, so later mutation of the source Config cannot affect a running
 // application instance.
 type SuiteRestoreServiceOptions struct {
+	MysekaiRestorer *mysekairestore.Restorer
 	StructuresFile  map[string]string
 	EnableRegions   []string
 	SuiteRemoveKeys []string
@@ -46,6 +48,7 @@ type SuiteRestoreServiceOptions struct {
 // construction and remain read-only afterwards, making Restore safe for
 // concurrent upload and data-sync requests.
 type SuiteRestoreService struct {
+	mysekaiRestorer *mysekairestore.Restorer
 	initialized     bool
 	structuresFile  map[string]string
 	enableRegions   []string
@@ -59,6 +62,7 @@ type SuiteRestoreService struct {
 func NewSuiteRestoreService(options SuiteRestoreServiceOptions) *SuiteRestoreService {
 	service := &SuiteRestoreService{
 		initialized:     true,
+		mysekaiRestorer: options.MysekaiRestorer,
 		structuresFile:  copyStringMap(options.StructuresFile),
 		enableRegions:   append([]string(nil), options.EnableRegions...),
 		suiteRemoveKeys: withCompactSpellings(options.SuiteRemoveKeys),
@@ -201,4 +205,11 @@ func (s *SuiteRestoreService) LoadStatus() (int, map[string]string) {
 		return 0, map[string]string{"service": "suite restore service is not initialized"}
 	}
 	return len(s.restorers), copyStringMap(s.loadFailures)
+}
+
+func (s *SuiteRestoreService) MysekaiRestorer() *mysekairestore.Restorer {
+	if s == nil {
+		return nil
+	}
+	return s.mysekaiRestorer
 }

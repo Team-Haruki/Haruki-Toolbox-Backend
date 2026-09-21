@@ -92,3 +92,14 @@ func TestClearCacheDeletesStampMemo(t *testing.T) {
 		t.Fatalf("stamp memo key survived ClearCache")
 	}
 }
+
+func TestGameDataCacheSeparatesHarvestProfiles(t *testing.T) {
+	off := BuildVersionedGameDataCacheKey("private", "tw", "mysekai", 42, "updatedResources", 123, "")
+	on := BuildVersionedGameDataCacheKey("private", "tw", "mysekai", 42, "updatedResources", 123, "cn-6.4.0")
+	if off == on {
+		t.Fatal("profile switch reused old response cache")
+	}
+	if off != BuildGameDataCacheKey("private", "tw", "mysekai", 42, "updatedResources")+":v=123" {
+		t.Fatal("disabled profile changed cache contract")
+	}
+}

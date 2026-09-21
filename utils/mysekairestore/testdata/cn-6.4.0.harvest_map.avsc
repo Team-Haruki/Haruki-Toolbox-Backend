@@ -1,0 +1,118 @@
+{
+  "type": "record",
+  "name": "Sekai.ApiData.UserMysekaiHarvestMap",
+  "fields": [
+    {
+      "name": "mysekaiSiteId",
+      "type": "int",
+      "msgpack_key": 0
+    },
+    {
+      "name": "userMysekaiSiteHarvestFixtures",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Sekai.ApiData.UserMysekaiSiteHarvestFixture",
+          "fields": [
+            {
+              "name": "mysekaiSiteHarvestFixtureId",
+              "type": "int",
+              "msgpack_key": 0
+            },
+            {
+              "name": "positionX",
+              "type": "int",
+              "msgpack_key": 1
+            },
+            {
+              "name": "positionZ",
+              "type": "int",
+              "msgpack_key": 2
+            },
+            {
+              "name": "hp",
+              "type": "int",
+              "msgpack_key": 3
+            },
+            {
+              "name": "userMysekaiSiteHarvestFixtureStatus",
+              "type": "string",
+              "msgpack_key": 4
+            },
+            {
+              "name": "mysekaiSiteHarvestSpawnLimitedRelationGroupId",
+              "type": [
+                "null",
+                "int"
+              ],
+              "msgpack_key": 5
+            }
+          ]
+        }
+      },
+      "msgpack_key": 1
+    },
+    {
+      "name": "userMysekaiSiteHarvestResourceDrops",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Sekai.ApiData.UserMysekaiSiteHarvestResourceDrop",
+          "fields": [
+            {
+              "name": "resourceType",
+              "type": "string",
+              "msgpack_key": 0
+            },
+            {
+              "name": "resourceId",
+              "type": "int",
+              "msgpack_key": 1
+            },
+            {
+              "name": "positionX",
+              "type": "int",
+              "msgpack_key": 2
+            },
+            {
+              "name": "positionZ",
+              "type": "int",
+              "msgpack_key": 3
+            },
+            {
+              "name": "hp",
+              "type": "int",
+              "msgpack_key": 4
+            },
+            {
+              "name": "seq",
+              "type": "int",
+              "msgpack_key": 5
+            },
+            {
+              "name": "mysekaiSiteHarvestResourceDropStatus",
+              "type": "string",
+              "msgpack_key": 6
+            },
+            {
+              "name": "quantity",
+              "type": "int",
+              "msgpack_key": 7
+            },
+            {
+              "name": "mysekaiSiteHarvestSpawnLimitedRelationGroupId",
+              "type": [
+                "null",
+                "int"
+              ],
+              "msgpack_key": 8
+            }
+          ]
+        }
+      },
+      "msgpack_key": 2
+    }
+  ]
+}

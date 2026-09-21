@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 )
 
 // Service owns the dedicated PostgreSQL pool and game-data stores.
@@ -91,4 +92,19 @@ func (s *Service) Close() error {
 		return nil
 	}
 	return s.pool.Close()
+}
+
+// NewServiceWithRestore shares one immutable policy with upload processing.
+func NewServiceWithRestore(p *Pool, restorer *mysekairestore.Restorer) *Service {
+	s := NewService(p)
+	s.suite.restorer = restorer
+	s.mysekai.restorer = restorer
+	return s
+}
+func (s *Service) HarvestSchemaFingerprint(server string) string {
+	var r *mysekairestore.Restorer
+	if s != nil && s.mysekai != nil {
+		r = s.mysekai.restorer
+	}
+	return r.Fingerprint(server)
 }

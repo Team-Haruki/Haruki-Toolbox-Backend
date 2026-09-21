@@ -118,6 +118,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		Timeout: 5 * time.Second,
 	})
 	suiteRestoreService := harukiHandler.NewSuiteRestoreService(harukiHandler.SuiteRestoreServiceOptions{
+		MysekaiRestorer: resources.mysekaiRestorer,
 		StructuresFile:  cfg.RestoreSuite.StructuresFile,
 		EnableRegions:   cfg.RestoreSuite.EnableRegions,
 		SuiteRemoveKeys: cfg.SekaiClient.SuiteRemoveKeys,

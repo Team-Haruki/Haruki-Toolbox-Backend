@@ -166,7 +166,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		}
 		var cacheKey string
 		if stamp > 0 {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("private", string(server), string(dataType), userID, requestKey, stamp)
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("private", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
 			cacheStart := time.Now()
 			cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey)
 			dCache = time.Since(cacheStart)

@@ -15,6 +15,7 @@ import (
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/mysekairestore"
 	perfdebug "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfdebug"
 	harukiSekaiAPIClient "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/sekaiapi"
 	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
@@ -28,6 +29,7 @@ import (
 // resources. It deliberately stays private to the composition root and is not
 // passed into business modules as a dependency container.
 type applicationResources struct {
+	mysekaiRestorer *mysekairestore.Restorer
 	logger          *harukiLogger.Logger
 	sekaiAPIClient  *harukiSekaiAPIClient.HarukiSekaiAPIClient
 	redisClient     *harukiRedis.HarukiRedisManager
@@ -45,7 +47,11 @@ type applicationResources struct {
 // HTTP/module assembly. Each closer is registered immediately after acquisition
 // so a later Build failure unwinds the exact subset that was opened.
 func acquireApplicationResources(cfg harukiConfig.Config, owner *Application) (*applicationResources, error) {
-	resources := &applicationResources{}
+	restorer, restoreErr := mysekairestore.New(cfg.MysekaiRestore.StructuresFile)
+	if restoreErr != nil {
+		return nil, restoreErr
+	}
+	resources := &applicationResources{mysekaiRestorer: restorer}
 
 	loggerWriter, closeMainLogFile, err := openMainLogWriter(cfg.Backend.MainLogFile)
 	if err != nil {
@@ -99,8 +105,8 @@ func acquireApplicationResources(cfg harukiConfig.Config, owner *Application) (*
 		return nil, fmt.Errorf("init game data PostgreSQL: %w", err)
 	}
 	owner.addResourceCloser("Game Data PostgreSQL", resources.gameDataPool.Close)
-	resources.gameDataService = harukiGameData.NewService(
-		resources.gameDataPool,
+	resources.gameDataService = harukiGameData.NewServiceWithRestore(
+		resources.gameDataPool, resources.mysekaiRestorer,
 	)
 
 	schemaCtx, cancelGameDataSchema := startupContext()

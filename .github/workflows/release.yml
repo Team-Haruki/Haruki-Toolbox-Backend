@@ -32,12 +32,12 @@ jobs:
             name: linux-arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -57,7 +57,9 @@ jobs:
             -X ${MODULE}/version.Version=${VERSION} \
             -X ${MODULE}/version.Commit=${GIT_SHA} \
             -X ${MODULE}/version.BuildDate=${BUILD_DATE}" -o "dist/${{ env.BINARY_NAME }}" .
-          tar -czf "dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz" -C dist "${{ env.BINARY_NAME }}"
+          cp -R data dist/data
+          cp haruki-toolbox-configs.example.yaml dist/
+          tar -czf "dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz" -C dist "${{ env.BINARY_NAME }}" data haruki-toolbox-configs.example.yaml
 
       - name: Upload packaged artifact
         uses: actions/upload-artifact@v7
@@ -91,3 +93,5 @@ jobs:
             artifacts/**/*.tar.gz
             artifacts/SHA256SUMS-${{ github.ref_name }}.txt
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
