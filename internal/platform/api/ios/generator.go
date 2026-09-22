@@ -66,11 +66,8 @@ func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("\n")
 	sb.WriteString("[URL Rewrite]\n")
 	for _, rule := range rs.RewriteRules {
-		switch rule.RuleType {
-		case "redirect":
-			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
-		case "rewrite":
-			sb.WriteString(fmt.Sprintf("%s %s 307\n", rule.Pattern, rule.Target))
+		if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
+			sb.WriteString(fmt.Sprintf("%s %s header\n", rule.Pattern, rule.Target))
 		}
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
@@ -96,11 +93,8 @@ func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("\n")
 	sb.WriteString("[Rewrite]\n")
 	for _, rule := range rs.RewriteRules {
-		switch rule.RuleType {
-		case "redirect":
-			sb.WriteString(fmt.Sprintf("%s %s\n", rule.Pattern, rule.Target))
-		case "rewrite":
-			sb.WriteString(fmt.Sprintf("%s %s 307\n", rule.Pattern, rule.Target))
+		if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
+			sb.WriteString(fmt.Sprintf("%s header %s\n", rule.Pattern, rule.Target))
 		}
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
@@ -127,7 +121,6 @@ func generateQuantumultXModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("\n")
 	for _, rule := range rs.RewriteRules {
 		target := rule.Target
-		target = strings.TrimSuffix(target, " 307")
 		if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
 			sb.WriteString(fmt.Sprintf("%s url 307 %s\n", rule.Pattern, target))
 		}
@@ -147,12 +140,11 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("\n")
 	sb.WriteString("http:\n")
 	if len(rs.RewriteRules) > 0 || len(rs.ScriptRules) > 0 {
-		sb.WriteString("  rewrite:\n")
+		sb.WriteString("  url-rewrite:\n")
 		for _, rule := range rs.RewriteRules {
 			target := rule.Target
-			target = strings.TrimSuffix(target, " 307")
 			if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
-				sb.WriteString(fmt.Sprintf("    - %s %s 307\n", rule.Pattern, target))
+				sb.WriteString(fmt.Sprintf("    - %s %s transparent\n", rule.Pattern, target))
 			}
 		}
 		sb.WriteString("    - ^https:\\/\\/submit\\.backtrace\\.io\\/ - reject\n")

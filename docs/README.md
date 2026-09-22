@@ -27,6 +27,7 @@
 | [性能优化调研（2026-09-08）](performance-review-2026-09-08.zh-CN.md) | 生产延迟分布、SQL/compact/压缩对照实验、优化优先级与验收边界；排除引继耗时 |
 | [MessagePack codec 与 OrderedMap](msgpack-codec.zh-CN.md) | 共同字节游标、旧包退役、provider 字段规则、小对象合并分配和本机基准 |
 | [游戏数据加密配置](game-data-crypto.zh-CN.md) | 按区服配置 crypto key/iv；9.0.0 配置迁移要求 |
+| [iOS 模块 URL 重写](ios-url-rewrite.zh-CN.md) | Surge/Loon/Stash 透明转发与 Quantumult X 307 兼容策略 |
 | [MYSEKAI 采集数据复原](mysekai-restore.zh-CN.md) | CN 6.4.0 schema、上传与历史读取、TW/KR 按区服切换及缓存发布要求 |
 | [数据 revision 与缓存失效设计](game-data-revision-design.zh-CN.md) | 同秒旧缓存复现、数据库版本原型、条件读取和分阶段发布约束；尚未接入生产 |
 | [Ory 套件使用说明](ory-suite-usage.zh-CN.md) | Kratos / Hydra / Oathkeeper 各自的职责、登录态验证方式、社交登录（Google / Apple）接入、可信代理与转发 IP 的取值规则、为什么大量旧接口返回 410 |

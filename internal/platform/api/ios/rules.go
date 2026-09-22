@@ -82,7 +82,7 @@ func generateRulesForDataType(host, region string, dt DataType, mode UploadMode,
 	case DataTypeSuite:
 		pattern := fmt.Sprintf(`^https://%s/api/suite/user/(\d+)(\?isLogin=true)?$`, escapedHost)
 		if mode == UploadModeProxy {
-			target := fmt.Sprintf("%s/ios/proxy/%s/suite/user/$1$2 307", endpoint, region)
+			target := fmt.Sprintf("%s/ios/proxy/%s/suite/user/$1$2", endpoint, region)
 			rs.RewriteRules = append(rs.RewriteRules, Rule{
 				Pattern:  pattern,
 				Target:   target,
@@ -98,7 +98,7 @@ func generateRulesForDataType(host, region string, dt DataType, mode UploadMode,
 	case DataTypeMysekai:
 		pattern := fmt.Sprintf(`^https://%s/api/user/(\d+)/mysekai\?isForceAllReloadOnlyMysekai=(True|False)`, escapedHost)
 		if mode == UploadModeProxy {
-			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai?isForceAllReloadOnlyMysekai=$2 307", endpoint, region)
+			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai?isForceAllReloadOnlyMysekai=$2", endpoint, region)
 			rs.RewriteRules = append(rs.RewriteRules, Rule{
 				Pattern:  pattern,
 				Target:   target,
@@ -116,7 +116,7 @@ func generateRulesForDataType(host, region string, dt DataType, mode UploadMode,
 		targetTrue := fmt.Sprintf("https://%s/api/user/$1/mysekai?isForceAllReloadOnlyMysekai=True", host)
 		if mode == UploadModeProxy {
 			pattern := fmt.Sprintf(`^https://%s/api/user/(\d+)/mysekai\?isForceAllReloadOnlyMysekai=(True|False)`, escapedHost)
-			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai?isForceAllReloadOnlyMysekai=True 307", endpoint, region)
+			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai?isForceAllReloadOnlyMysekai=True", endpoint, region)
 			rs.RewriteRules = append(rs.RewriteRules, Rule{
 				Pattern:     pattern,
 				Target:      target,
@@ -141,7 +141,7 @@ func generateRulesForDataType(host, region string, dt DataType, mode UploadMode,
 	case DataTypeMysekaiBirthdayParty:
 		pattern := fmt.Sprintf(`^https://%s/api/user/(\d+)/mysekai/birthday-party/(\d+)/delivery`, escapedHost)
 		if mode == UploadModeProxy {
-			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai/birthday-party/$2/delivery 307", endpoint, region)
+			target := fmt.Sprintf("%s/ios/proxy/%s/user/$1/mysekai/birthday-party/$2/delivery", endpoint, region)
 			rs.RewriteRules = append(rs.RewriteRules, Rule{
 				Pattern:  pattern,
 				Target:   target,

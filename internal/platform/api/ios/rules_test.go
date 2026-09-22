@@ -81,7 +81,7 @@ func TestGenerateSuiteRulesMatchOptionalLoginQuery(t *testing.T) {
 	if re.MatchString("https://jp.example.com/api/suite/user/123?foo=bar") {
 		t.Fatalf("suite pattern %q should not match unsupported query", rule.Pattern)
 	}
-	if !strings.Contains(rule.Target, "/suite/user/$1$2 ") {
+	if !strings.HasSuffix(rule.Target, "/suite/user/$1$2") {
 		t.Fatalf("suite proxy target should preserve optional query capture, got %q", rule.Target)
 	}
 }
