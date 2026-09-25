@@ -139,7 +139,7 @@
 
 - id: haruki-public-tracker-web-v2-prefixed
   match:
-    url: <http|https>://<[^/]+>/event-tracker/api/v2/web/events/<[^/]+>/<[^/]+>/leaderboards/<total/(overview|replay/overview|details/rank/[^/]+|details/user/[^/]+|users/search|check-room|top100|borders|growth)|world-bloom/[^/]+/(overview|replay/overview|details/rank/[^/]+|details/user/[^/]+|users/search|check-room|top100|borders|growth)>
+    url: <http|https>://<[^/]+>/event-tracker/api/v2/web/events/<[^/]+>/<[^/]+>/leaderboards/<total/(overview|replay/overview|details/rank/[^/]+|details/user/[^/]+|users/search|check-room|top100|borders|growth|status)|world-bloom/[^/]+/(overview|replay/overview|details/rank/[^/]+|details/user/[^/]+|users/search|check-room|top100|borders|growth|status)>
     methods: [GET]
   upstream:
     url: http://haruki-toolbox-event-tracker:8777
