@@ -97,6 +97,16 @@ main -> bootstrap -> api -> modules -> platform
 - `owner_user_id` 等名字相似的字段不构成跨数据库外键，禁止据此合库。
 - schema 或数据语义变化独立于结构重构，使用 expand、backfill、switch、contract 的数据库演进流程。
 
+### 游戏数据存储约束
+
+Suite / MYSEKAI 由独立 PostgreSQL pool 读写；`game_data.url`（或 `GAME_DATA_URL`）为必填，`game_data.read_source` 仅接受 `postgres`。MongoDB 已退役，残留 BSON 工具及 `mongodb.private_api_*` 配置命名仅用于兼容，不建立 Mongo 连接。
+
+游戏字段以 `utils/database/gamedata/catalog` 为准。`userInherit`、`userPlatformInheritIos`、`userPlatformInheritAndroid`、`userPlatforms`、`userRegistration` 包含继承凭据或个人信息，必须维持拒绝存储规则；不得因删除旧的字段置空配置而重新纳入。API 的投影与授权另行生效。
+
+历史 Mongo 冷备份不包含迁移后写入 PostgreSQL 的数据，不能直接恢复为当前读源或视为无损回滚。未落地的数据版本与缓存一致性改造见 [revision 设计](game-data-revision-design.zh-CN.md)。
+
+性能工作优先减少重复解析、展开、查询和复制；引继等待及代理上游耗时不计入后处理优化收益。对照测试应保持投影、压缩协商、缓存状态和响应体积一致，分别记录延迟分位与分配量，不能将微基准结果直接当作生产 API 收益。
+
 ## 7. 契约与安全边界
 
 结构重构默认不改变：

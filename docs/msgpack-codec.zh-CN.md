@@ -64,7 +64,7 @@ Apple M4 / Go 1.27.1 / GOMAXPROCS=10，10,000 行合成普通 map 数据，每�
 
 与修改前冻结实现做接受结果和合法 JSON 逐字节比较，包含随机对象树、重复字段、非法 UTF-8、bin/ext、大整数与深度边界。永久测试补充通用字段规则、provider 兼容入口、writer 失败、结构损坏零输出和旧有序 API。
 
-共同 codec 首次落地时，全项目 build、vet、staticcheck、`go test -race -count=1 ./...` 已通过（71 个有测试包、50 个无测试包）。全项目检查使用源码快照，排除工作区原有的已忽略临时 cmd 工具与运行数据。旧实现差分 fuzz 30 秒通过约 123 万次执行，通用 JSON fuzz 20 秒通过约 127 万次执行；这些测试不等于覆盖所有可能输入。当时尚未部署；后续部署见文末记录。
+共同 codec 首次落地时，全项目 build、vet、staticcheck、`go test -race -count=1 ./...` 已通过（71 个有测试包、50 个无测试包）。全项目检查使用源码快照，排除工作区原有的已忽略临时 cmd 工具与运行数据。旧实现差分 fuzz 30 秒通过约 123 万次执行，通用 JSON fuzz 20 秒通过约 127 万次执行；这些测试不等于覆盖所有可能输入。该段为实现验证记录，不描述当前生产状态。
 
 Apple M4、Go 1.27.1、GOMAXPROCS=4；每组三次中位数，5,000 行合成 MessagePack：
 
@@ -110,28 +110,3 @@ Apple M4、Go 1.27.1、GOMAXPROCS=4，三次中位数，构造函数基准：
 `SekaiCryptor.UnpackOrdered` 直接接收解码返回的 map 指针，省去先构造空 map 再复制头部的步骤。provider 规则与 `NormalizeProviderResponse` 复用已有字段常量；没有新增 utils → platform 的反向依赖，也没有修改架构检查基线。
 
 差分验证还确认了旧有边界：嵌套对象作为 map key 时，旧 `fmt` 字符串化可能包含内存地址，同一输入的旧输出也可能不同。JSON 路径继续拒绝此类 key；有序解码保留旧接受行为。差分 fuzz 对这些旧输出不稳定的样例比较接受结果，对稳定样例比较编码字节，不把它们误报为此次存储回归。
-
-
-## 2026-09-08 真实数据验收与生产部署
-
-本轮发布源码快照为 `eaad60051603`，对应镜像 `haruki-toolbox-backend:perf-codec-eaad60051603`。它包含共同 codec、小型 OrderedMap 合并分配、旧包退役，以及 `UnpackOrdered` 直接接收解码指针。全量 gofmt、build、vet、staticcheck、race 测试通过；测试源码快照排除了原有被忽略的临时工具和运行数据。
-
-用户此前指定的原始样本解密后为 11,819,903 字节 MessagePack，转换后为 15,011,651 字节 JSON。以生产上一版 batch4 的冻结源码为对照，在本机 macOS race 测试、本机无网络 Linux amd64 容器和原生 Linux arm64 容器中，JSON 输出、OrderedMap 重新编码以及 zstd 解压后内容均逐字节一致。JSON 也与此前保留的转换结果一致。用户数据没有上传远端；临时解密副本在验收后删除。
-
-本机 Apple M4 / OrbStack Linux arm64 / Go 1.27.1 / GOMAXPROCS=4，容器限 4 CPU、3 GiB。amd64 容器只作兼容性验证，不用于性能结论。计时排除解密和文件读取。
-
-| 实际 MessagePack 路径 | 旧版 | 新版 | 口径 |
-| --- | ---: | ---: | --- |
-| JSON → zstd 后处理 | 100.52 ms | 87.06 ms | 同一进程逐次交替 24 对；各自耗时中位数 |
-| JSON 输出分配次数 | 1,889,087 | 668,936 | 三轮基准中位数，约减少 64.6% |
-| JSON 输出分配字节 | 21,864,277 B | 8,862,473 B | 三轮基准中位数，约减少 59.5% |
-| OrderedMap 解码分配次数 | 1,986,831 | 1,745,169 | 三轮基准中位数，约减少 12.2% |
-| OrderedMap 解码分配字节 | 53,943,275 B | 53,943,277 B | 基本不变，不代表峰值 RSS 减少 |
-
-24 对后处理测试的“新版 / 旧版”配对比中位数为 0.8746。初次顺序测量曾出现新版 zstd 变慢，独立进程交替测试也有较大时间漂移；记录全部保留，没有将其删除或混入上述配对结果。配对测试没有复现持续回退，但没有确定先前波动的具体原因。这不是生产 API p95 的前后对照，也不能作为全站加速率。
-
-Canary 于北京时间 12:05 部署，完成 185 项公开/私有读取对照（39 项 200、146 项双方一致的 404）、9 项完整响应、12 项热缓存对照，差异为零；鉴权伪造、信任密钥和属主拒绝测试通过。抽样用户行未被验证过程修改。
-
-生产于北京时间 12:10 切换，仅替换 backend 镜像，展开后的其余 compose 配置完全一致。生产和 canary 容器内二进制 SHA-256 均为 `1ad1b0910d189ce5c100d39f7f00ab37276e1d2d443191e1aecb610b2248b2c0`。截至 12:14 观测窗口，健康为 healthy、HTTP health 为 200，无错误、重启或 OOM；已记录 24 次上传持久化、23 次 processed、10 次 restored，后台等待数为零。这是短窗口上线验收，不能代替长期稳定性结论。
-
-CN02 回滚入口为 `/data2/backups/toolbox-perf-codec-eaad60051603/rollback.sh`，恢复上一版 `perf-batch4-48e17e3795d8` 并仅重建 backend。该目录含受限配置备份，不应公开打包。新发布没有数据库 schema 变更；独立 revision 的候选设计和 dummy 验证另见 [revision 方案](game-data-revision-design.zh-CN.md)。

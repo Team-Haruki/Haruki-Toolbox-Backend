@@ -76,7 +76,7 @@ var MetadataKeys = map[string]bool{
 //     material.
 //
 // None of the five is referenced by non-test Go code, and none is on the public
-// key allowlist. See docs/database-consolidation-plan.zh-CN.md §4.7.3.
+// key allowlist. See docs/backend-architecture.zh-CN.md (game-data storage constraints).
 var DeniedKeys = map[string]bool{
 	"userInherit":                true,
 	"userPlatformInheritIos":     true,
