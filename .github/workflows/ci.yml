@@ -25,7 +25,7 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # SonarQube reads git history to attribute issues to the change that
           # introduced them; a shallow clone makes "new code" meaningless.
