@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/redact"
 )
 
 const (
@@ -209,7 +211,10 @@ func (l *Logger) logf(level logLevel, format string, args ...any) {
 	if level < effectiveLevel {
 		return
 	}
-	msg := fmt.Sprintf(format, args...)
+	// Redact here as well as at the call sites that know the exact secret, so a
+	// credential that reaches a log line through an unexpected error chain is
+	// still masked.
+	msg := redact.Text(fmt.Sprintf(format, args...))
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 
 	var ts string
