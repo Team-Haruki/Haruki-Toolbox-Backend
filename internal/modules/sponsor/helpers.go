@@ -42,7 +42,6 @@ type parsedAfdianSponsor struct {
 	PlanPayMonths *int
 	Message       string
 	Source        string
-	IsActive      bool
 	PaidAt        *time.Time
 	PlanExpiresAt *time.Time
 	SupportCount  int
@@ -262,6 +261,14 @@ func parseUnixTime(raw any) *time.Time {
 	return nil
 }
 
+// activeForExpiry is the single activity rule shared by the webhook parser, the
+// query-sponsor parser and the upsert: a sponsor without an expiry (one-time
+// order or no plan) stays active permanently; a sponsor with an expiry is active
+// only while that expiry lies in the future.
+func activeForExpiry(expiresAt *time.Time, now time.Time) bool {
+	return expiresAt == nil || expiresAt.After(now)
+}
+
 func calculateExpiresAt(paidAt *time.Time, months *int) *time.Time {
 	if paidAt == nil || months == nil || *months <= 0 {
 		return nil
@@ -324,9 +331,13 @@ func readMap(record map[string]any, keys ...string) map[string]any {
 	return nil
 }
 
+// afdianOrderStatusPaid is the only order status Afdian documents as a
+// completed payment (交易成功). Anything else (0 = unpaid, 1 = pending) must not
+// create or refresh a sponsor.
+const afdianOrderStatusPaid = 2
+
 func parseAfdianOrder(order map[string]any, now time.Time) (parsedAfdianSponsor, bool) {
-	status := readInt(order, "status")
-	if status != 0 && status != 2 {
+	if readInt(order, "status") != afdianOrderStatusPaid {
 		return parsedAfdianSponsor{}, false
 	}
 
@@ -348,10 +359,6 @@ func parseAfdianOrder(order map[string]any, now time.Time) (parsedAfdianSponsor,
 	planName := readString(order, "plan_name", "planName", "title")
 	totalAmount := readString(order, "total_amount", "totalAmount", "show_amount", "showAmount", "amount")
 	expiresAt := calculateExpiresAt(paidAt, month)
-	isActive := true
-	if expiresAt != nil && expiresAt.Before(now) {
-		isActive = false
-	}
 	if planID == "" {
 		month = nil
 		expiresAt = nil
@@ -368,7 +375,6 @@ func parseAfdianOrder(order map[string]any, now time.Time) (parsedAfdianSponsor,
 		PlanPayMonths: month,
 		Message:       readString(order, "remark", "message", "memo"),
 		Source:        "afdian",
-		IsActive:      isActive,
 		PaidAt:        paidAt,
 		PlanExpiresAt: expiresAt,
 		SupportCount:  1,
@@ -396,11 +402,13 @@ func parseAfdianSponsorItem(item map[string]any, now time.Time) (parsedAfdianSpo
 	if paidAt == nil {
 		paidAt = parseUnixTime(item["create_time"])
 	}
+	// query-sponsor only reports an expiry while the plan is current; once it
+	// lapses the item carries none, so activity cannot be judged here alone.
+	// upsertParsedSponsor combines this with the stored expiry.
 	expiresAt := parseUnixTime(plan["expire_time"])
 	if expiresAt == nil {
 		expiresAt = parseUnixTime(plan["expires_at"])
 	}
-	isActive := plan != nil && (expiresAt == nil || expiresAt.After(now))
 	totalAmount := readString(item, "all_sum_amount", "total_amount", "totalAmount", "show_amount", "showAmount", "amount")
 	planPrice := readString(plan, "price", "show_price", "showPrice")
 	planRank := parseAmountRank(planPrice)
@@ -420,7 +428,6 @@ func parseAfdianSponsorItem(item map[string]any, now time.Time) (parsedAfdianSpo
 		PlanPayMonths: month,
 		Message:       readString(item, "remark", "message", "memo"),
 		Source:        "afdian",
-		IsActive:      isActive,
 		PaidAt:        paidAt,
 		PlanExpiresAt: expiresAt,
 		SupportCount:  readInt(item, "support_count", "supportCount"),
@@ -429,11 +436,15 @@ func parseAfdianSponsorItem(item map[string]any, now time.Time) (parsedAfdianSpo
 	}, true
 }
 
-func UpsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, incrementCount bool) (*postgresql.Sponsor, error) {
-	return upsertParsedSponsor(ctx, db, item, incrementCount, true)
+// UpsertParsedSponsor creates or refreshes the sponsor row for item. is_active is
+// always derived from the expiry that ends up stored (see activeForExpiry), so a
+// sync pass deactivates a lapsed plan and a later payment that pushes the expiry
+// forward reactivates it. now is the instant the expiry is judged against.
+func UpsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, now time.Time, incrementCount bool) (*postgresql.Sponsor, error) {
+	return upsertParsedSponsor(ctx, db, item, now, incrementCount, true)
 }
 
-func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, incrementCount bool, allowRetry bool) (*postgresql.Sponsor, error) {
+func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, now time.Time, incrementCount bool, allowRetry bool) (*postgresql.Sponsor, error) {
 	existing, err := db.Sponsor.Query().Where(sponsorSchema.IDEQ(item.ID)).Only(ctx)
 	if err != nil && postgresql.IsNotFound(err) && item.OutTradeNo != "" {
 		existing, err = db.Sponsor.Query().Where(sponsorSchema.OutTradeNoEQ(item.OutTradeNo)).Only(ctx)
@@ -446,7 +457,7 @@ func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 		create := db.Sponsor.Create().
 			SetID(item.ID).
 			SetSource(sponsorSchema.Source(item.Source)).
-			SetIsActive(item.IsActive).
+			SetIsActive(activeForExpiry(item.PlanExpiresAt, now)).
 			SetAfdianSyncDisabled(false).
 			SetPlanRank(item.PlanRank).
 			SetSupportCount(maxInt(item.SupportCount, 1)).
@@ -456,7 +467,7 @@ func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 		if createErr != nil && allowRetry && postgresql.IsConstraintError(createErr) {
 			// A concurrent sync/webhook created the same record between our lookup
 			// and insert; re-resolve and fall through to the update path.
-			return upsertParsedSponsor(ctx, db, item, incrementCount, false)
+			return upsertParsedSponsor(ctx, db, item, now, incrementCount, false)
 		}
 		return saved, createErr
 	}
@@ -467,8 +478,17 @@ func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 		return existing, nil
 	}
 
+	// SetNillablePlanExpiresAt(nil) below leaves the stored expiry in place, so
+	// judge activity against the expiry that will actually remain on the row:
+	// the incoming one when Afdian reports it, otherwise the stored one. Trusting
+	// only the incoming item would keep a lapsed plan active forever because
+	// query-sponsor stops reporting expire_time once the plan has ended.
+	effectiveExpiresAt := item.PlanExpiresAt
+	if effectiveExpiresAt == nil {
+		effectiveExpiresAt = existing.PlanExpiresAt
+	}
 	update := existing.Update().
-		SetIsActive(item.IsActive).
+		SetIsActive(activeForExpiry(effectiveExpiresAt, now)).
 		SetPlanRank(item.PlanRank).
 		SetRaw(item.Raw)
 	setSponsorUpdateFields(update, item)
@@ -652,7 +672,7 @@ func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg AfdianCo
 				result.Skipped++
 				continue
 			}
-			if _, err := UpsertParsedSponsor(ctx, db, parsed, false); err != nil {
+			if _, err := UpsertParsedSponsor(ctx, db, parsed, now, false); err != nil {
 				return result, err
 			}
 			result.Imported++

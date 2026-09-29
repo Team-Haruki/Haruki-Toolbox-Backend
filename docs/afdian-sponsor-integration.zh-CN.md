@@ -84,4 +84,4 @@ Oathkeeper 公开规则见 `external/oathkeeper/access-rules.yml` 中的 `haruki
 
 5. **Oathkeeper 规则**：随后端一起部署更新后的 `external/oathkeeper/access-rules.yml`，否则赞助墙与回调路由不到。规则是两条新增的 `haruki-public-afdian-sponsor-list`（`/api/sponsor/afdian`）和 `haruki-public-afdian-sponsor-callback`（`/api/sponsor/afdian/callback[/<secret>]`）；`/api/misc/sponsors` 不需要新规则，它走已有的通用 `haruki-public-misc`（`/api/misc/<.*>`）。
 
-6. **行为提醒**：公开响应不含付费金额（仅等级/名字/留言）；管理端 `afdian_sync_disabled` 开启后该条完全不被同步/webhook 覆盖（便于钉住手动编辑）。
+6. **行为提醒**：公开响应不含付费金额（仅等级/名字/留言）；管理端 `afdian_sync_disabled` 开启后该条完全不被同步/webhook 覆盖（便于钉住手动编辑）；`is_active` 由同步/webhook 按 `plan_expires_at` 推导——无到期时间（一次性/无方案）视为长期有效，有到期时间则仅在未到期时为 true，续费把到期时间推后会自动重新激活；webhook 与 `query-order` 只接受 `status = 2`（交易成功）的订单。
