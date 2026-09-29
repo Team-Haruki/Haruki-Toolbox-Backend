@@ -7,6 +7,9 @@ log:
 
 serve:
   proxy:
+    # Oathkeeper sits behind SafeLine/Caddy; take the client address and scheme from
+    # X-Forwarded-* (production has run with this since before it was tracked here).
+    trust_forwarded_headers: true
     cors:
       enabled: true
       allowed_origins:
