@@ -10,6 +10,7 @@ import (
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/redact"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -88,6 +89,10 @@ func configureAccessLog(app *fiber.App, cfg harukiConfig.Config) (func() error, 
 		},
 	}
 
+	// Route paths can carry credentials (iOS upload codes, the Afdian callback
+	// secret) and ${url}/${queryParams} tags would add query strings, so every
+	// access log entry passes through the redacting writer.
+	loggerConfig.Stream = redact.Writer(os.Stdout)
 	closeAccessLogFile := func() error { return nil }
 	if cfg.Backend.AccessLogPath != "" {
 		accessLogFile, err := os.OpenFile(cfg.Backend.AccessLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -95,7 +100,7 @@ func configureAccessLog(app *fiber.App, cfg harukiConfig.Config) (func() error, 
 			return nil, fmt.Errorf("open access log file: %w", err)
 		}
 		closeAccessLogFile = accessLogFile.Close
-		loggerConfig.Stream = accessLogFile
+		loggerConfig.Stream = redact.Writer(accessLogFile)
 	}
 	app.Use(logger.New(loggerConfig))
 	return closeAccessLogFile, nil
