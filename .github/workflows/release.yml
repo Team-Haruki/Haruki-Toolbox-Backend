@@ -1,97 +1,69 @@
 name: Release
+# Bump version.Version in version/version.go in a PR first: the gate refuses a tag that differs
+# from it ("v9.0.0-rc3" <-> tag v9.0.0-rc3). Pre-release tags (-rcN) publish a pre-release and never move :latest.
 
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+    tags: ['v*']
+  workflow_dispatch: # dry run: builds everything, publishes nothing
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  BINARY_NAME: HarukiToolboxBackend
-
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            name: linux-amd64
-          - goos: linux
-            goarch: arm64
-            name: linux-arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+  gate:
+    name: Gate
+    permissions:
+      contents: read
+      checks: read
+    uses: seiunx-dev/ci-templates/.github/workflows/release-gate.yml@v1
+    with:
+      version-source: go
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
+  binaries:
+    name: Binaries
+    needs: gate
+    uses: seiunx-dev/ci-templates/.github/workflows/go-release.yml@v1
+    with:
+      version: ${{ needs.gate.outputs.version }}
+      tag: ${{ needs.gate.outputs.tag }}
+      binaries: HarukiToolboxBackend=.
+      ldflags: -s -w -X {module}/version.Version={tag} -X {module}/version.Commit={commit} -X {module}/version.BuildDate={date}
+      extra-files: |
+        data
+        haruki-toolbox-configs.example.yaml
 
-      - name: Build binary
-        env:
-          CGO_ENABLED: 0
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          mkdir -p dist
-          MODULE=$(go list -m)
-          VERSION="${{ github.ref_name }}"
-          GIT_SHA="${{ github.sha }}"
-          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          go build -trimpath -ldflags "-s -w \
-            -X ${MODULE}/version.Version=${VERSION} \
-            -X ${MODULE}/version.Commit=${GIT_SHA} \
-            -X ${MODULE}/version.BuildDate=${BUILD_DATE}" -o "dist/${{ env.BINARY_NAME }}" .
-          cp -R data dist/data
-          cp haruki-toolbox-configs.example.yaml dist/
-          tar -czf "dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz" -C dist "${{ env.BINARY_NAME }}" data haruki-toolbox-configs.example.yaml
-
-      - name: Upload packaged artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.BINARY_NAME }}-${{ matrix.name }}
-          path: dist/${{ env.BINARY_NAME }}-${{ matrix.name }}.tar.gz
-          if-no-files-found: error
+  docker:
+    name: Docker
+    needs: gate
+    if: needs.gate.outputs.is-tag == 'true' # dry runs never push images
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+    uses: seiunx-dev/ci-templates/.github/workflows/docker.yml@v1
+    with:
+      # Built, not promoted: the version is compiled into the binary. VERSION is the full tag
+      # (v9.0.0-rc3, as before: it ends up in the User-Agent), not the template's version-build-arg
+      # value without "v". Image tags: :9.0.0-rc3 (plus :X.Y and :latest for stable tags only).
+      build-args: |
+        VERSION=${{ needs.gate.outputs.tag }}
+        GIT_SHA=${{ github.sha }}
+        BUILD_DATE=${{ github.event.head_commit.timestamp || 'unknown' }}
+      cache-backend: registry
+      cache-mode: max
 
   publish:
-    name: Publish GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    name: GitHub Release
+    needs: [gate, binaries, docker]
+    if: needs.gate.outputs.is-tag == 'true'
     permissions:
       contents: write
-    steps:
-      - name: Download packaged artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-
-      - name: Generate checksums
-        run: |
-          cd artifacts
-          find . -type f -name "*.tar.gz" -exec sha256sum {} \; > "SHA256SUMS-${{ github.ref_name }}.txt"
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
-        with:
-          files: |
-            artifacts/**/*.tar.gz
-            artifacts/SHA256SUMS-${{ github.ref_name }}.txt
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
+    uses: seiunx-dev/ci-templates/.github/workflows/gh-release.yml@v1
+    with:
+      tag: ${{ needs.gate.outputs.tag }}
+      prerelease: ${{ needs.gate.outputs.prerelease }}
