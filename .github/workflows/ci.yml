@@ -10,49 +10,89 @@ on:
 permissions:
   contents: read
 
+# PRs: one group per PR, newer pushes cancel older runs. Everything else: one group per
+# event and commit, so a queued main run is never replaced by a newer one (every commit keeps
+# its "CI OK" and :sha-<sha> image for the release gate and promote-on-tag).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.event_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   go:
-    name: Go checks
-    runs-on: ubuntu-latest
-    env:
-      # Read once here so the scan step can skip itself when the secret is not
-      # configured (forks, and this repo before the token is added) instead of
-      # failing every build.
+    name: Go
+    uses: seiunx-dev/ci-templates/.github/workflows/go-ci.yml@v1
+    with:
+      coverage: true # staticcheck comes from the go.mod tool directive
+
+  sonar:
+    name: Sonar
+    needs: [go]
+    uses: seiunx-dev/ci-templates/.github/workflows/sonar.yml@v1
+    secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  docker:
+    name: Docker
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+    uses: seiunx-dev/ci-templates/.github/workflows/docker.yml@v1
+    with:
+      defer-moving-tags: true # push :sha-* right away; :main moves after CI OK (docker-tags)
+      version-build-arg: VERSION # main-<sha7>, as before
+      # BUILD_DATE = commit time (was the build time): stable per commit, and the Dockerfile
+      # declares the args right before `go build`, so they no longer bust the earlier layers.
+      build-args: |
+        GIT_SHA=${{ github.sha }}
+        BUILD_DATE=${{ github.event.head_commit.timestamp || 'unknown' }}
+      cache-backend: registry # :buildcache; every PR used to store a 574 MB gha cache
+      cache-mode: max # keeps the builder stage (go mod download layer)
+      # amd64 only (owner's choice); the Dockerfile cross-compiles with TARGETARCH, so arm64 is
+      # just `platforms: linux/amd64,linux/arm64` here and in release.yml.
+      pr-paths: |
+        api/**
+        cmd/**
+        config/**
+        data/**
+        ent/**
+        external/**
+        internal/**
+        utils/**
+        version/**
+        main.go
+        go.mod
+        go.sum
+        Dockerfile
+        .dockerignore
+        haruki-toolbox-configs.example.yaml
+        .github/workflows/**
+
+  workflows:
+    name: Workflow lint
+    uses: seiunx-dev/ci-templates/.github/workflows/actionlint.yml@v1
+
+  ci-ok:
+    name: CI OK # the only required status check
+    if: always()
+    needs: [go, sonar, docker, workflows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          # SonarQube reads git history to attribute issues to the change that
-          # introduced them; a shallow clone makes "new code" meaningless.
-          fetch-depth: 0
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Check formatting
-        run: |
-          test -z "$(gofmt -l .)"
-
-      - name: Build
-        run: go build ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Run staticcheck
-        run: go tool staticcheck ./...
-
-      - name: Test
-        run: go test -race -count=1 -coverprofile=coverage.out ./...
-
-      - name: SonarQube Scan
-        if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+  docker-tags:
+    name: Docker tags # :main follows only commits whose CI OK passed
+    needs: [docker, ci-ok]
+    # Explicit result check: the implicit success() also fails when any job upstream of ci-ok was
+    # skipped (e.g. a PR-only job), which silently skipped this job on main.
+    if: ${{ !cancelled() && needs.ci-ok.result == 'success' && needs.docker.outputs.deferred-tags != '' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: seiunx-dev/ci-templates/.github/workflows/docker-retag.yml@v1
+    with:
+      image: ${{ needs.docker.outputs.image }}
+      digest: ${{ needs.docker.outputs.digest }}
+      tags: ${{ needs.docker.outputs.deferred-tags }}
