@@ -25,34 +25,12 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 		drops := anySlice(siteMap["userMysekaiSiteHarvestResourceDrops"])
 		fixtures := anySlice(siteMap["userMysekaiSiteHarvestFixtures"])
 
-		fixtureIDsByPosition := make(map[string]map[int]struct{})
-		positionsByFixtureID := make(map[int]map[string]struct{})
-		for _, rawFixture := range fixtures {
-			fixture, ok := mapStringAny(rawFixture)
-			if !ok {
-				continue
-			}
-			fixtureID := birthdayFixtureID(fixture)
-			if fixtureID <= 0 {
-				continue
-			}
-			posKey := birthdayPosKey(fixture)
-			if posKey == "" {
-				continue
-			}
-			if fixtureIDsByPosition[posKey] == nil {
-				fixtureIDsByPosition[posKey] = make(map[int]struct{})
-			}
-			fixtureIDsByPosition[posKey][fixtureID] = struct{}{}
-			if positionsByFixtureID[fixtureID] == nil {
-				positionsByFixtureID[fixtureID] = make(map[string]struct{})
-			}
-			positionsByFixtureID[fixtureID][posKey] = struct{}{}
-		}
-
+		// Keep only the subscribed drops and the harvest points that hold
+		// them. mysekaiSiteHarvestFixtureId is a fixture type (every birthday
+		// plant of one party shares it), so it must not widen the match: doing
+		// so drew every same-type point with all of its unrelated drops.
+		keptDrops := make([]any, 0)
 		matchedPositions := make(map[string]struct{})
-		matchedFixtureIDs := make(map[int]struct{})
-		siteMatched := false
 		for _, rawDrop := range drops {
 			drop, ok := mapStringAny(rawDrop)
 			if !ok {
@@ -66,60 +44,17 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 			if _, ok := targets[resourceID]; !ok {
 				continue
 			}
-			siteMatched = true
 			if _, ok := matchedSet[resourceID]; !ok {
 				matchedSet[resourceID] = struct{}{}
 				matchedIDs = append(matchedIDs, resourceID)
 			}
 			if key := birthdayPosKey(drop); key != "" {
 				matchedPositions[key] = struct{}{}
-				for fixtureID := range fixtureIDsByPosition[key] {
-					matchedFixtureIDs[fixtureID] = struct{}{}
-				}
 			}
-			if fixtureID := birthdayFixtureID(drop); fixtureID > 0 {
-				matchedFixtureIDs[fixtureID] = struct{}{}
-			}
+			keptDrops = append(keptDrops, cloneMap(drop))
 		}
-		if !siteMatched {
+		if len(keptDrops) == 0 {
 			continue
-		}
-
-		keptPositions := make(map[string]struct{}, len(matchedPositions))
-		for posKey := range matchedPositions {
-			keptPositions[posKey] = struct{}{}
-		}
-		for fixtureID := range matchedFixtureIDs {
-			for posKey := range positionsByFixtureID[fixtureID] {
-				keptPositions[posKey] = struct{}{}
-			}
-		}
-
-		keptDrops := make([]any, 0)
-		for _, rawDrop := range drops {
-			drop, ok := mapStringAny(rawDrop)
-			if !ok {
-				continue
-			}
-			keep := false
-			resourceType := normalizeBirthdayResourceType(stringFromAny(firstPresent(drop, "resourceType", "type")))
-			resourceID := intFromAny(firstPresent(drop, "resourceId", "id"))
-			if resourceType == "mysekai_material" {
-				_, keep = targets[resourceID]
-			}
-			if !keep {
-				if _, ok := keptPositions[birthdayPosKey(drop)]; ok {
-					keep = true
-				}
-			}
-			if !keep {
-				if fixtureID := birthdayFixtureID(drop); fixtureID > 0 {
-					_, keep = matchedFixtureIDs[fixtureID]
-				}
-			}
-			if keep {
-				keptDrops = append(keptDrops, cloneMap(drop))
-			}
 		}
 
 		keptFixtures := make([]any, 0)
@@ -128,14 +63,8 @@ func FilterBirthdayPartyPayload(data map[string]any, materialIDs []int) (map[str
 			if !ok {
 				continue
 			}
-			if _, ok := keptPositions[birthdayPosKey(fixture)]; ok {
+			if _, ok := matchedPositions[birthdayPosKey(fixture)]; ok {
 				keptFixtures = append(keptFixtures, cloneMap(fixture))
-				continue
-			}
-			if fixtureID := birthdayFixtureID(fixture); fixtureID > 0 {
-				if _, ok := matchedFixtureIDs[fixtureID]; ok {
-					keptFixtures = append(keptFixtures, cloneMap(fixture))
-				}
 			}
 		}
 
@@ -221,16 +150,4 @@ func birthdayPosKey(item map[string]any) string {
 	x := floatFromAny(xRaw)
 	z := floatFromAny(zRaw)
 	return fmt.Sprintf("%.3f_%.3f", x, z)
-}
-
-func birthdayFixtureID(item map[string]any) int {
-	return intFromAny(firstPresent(
-		item,
-		"mysekaiSiteHarvestFixtureId",
-		"mysekaiSiteHarvestFixtureID",
-		"mysekai_site_harvest_fixture_id",
-		"mysekaiFixtureId",
-		"mysekaiFixtureID",
-		"mysekai_fixture_id",
-	))
 }
