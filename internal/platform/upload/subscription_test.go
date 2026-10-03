@@ -1,6 +1,9 @@
 package upload
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestFilterBirthdayPartyPayloadKeepsMatchedDropsAndSamePositionFixtures(t *testing.T) {
 	data := map[string]any{
@@ -231,5 +234,28 @@ func TestFilterBirthdayPartyPayloadHandlesMsgpackNumericTypes(t *testing.T) {
 	fixtures := site["userMysekaiSiteHarvestFixtures"].([]any)
 	if len(fixtures) != 1 {
 		t.Fatalf("expected 1 fixture, got %d", len(fixtures))
+	}
+}
+
+func TestBirthdayBatteryAndAmethystFiltering(t *testing.T) {
+	ids := materialIDsFromNames([]string{"battery", " amethyst ", "mysekai_material_17", "quartz", "mysekai_material_11"})
+	if !slices.Equal(ids, []int{11, 17}) {
+		t.Fatalf("material ids = %v", ids)
+	}
+	data := map[string]any{"updatedResources": map[string]any{"userMysekaiHarvestMaps": []any{
+		map[string]any{"mysekaiSiteId": 5, "userMysekaiSiteHarvestResourceDrops": []any{
+			map[string]any{"resourceType": "mysekai_material", "resourceId": 17, "positionX": 1, "positionZ": 1},
+			map[string]any{"resourceType": "mysekai_material", "resourceId": 11, "positionX": 2, "positionZ": 2},
+			map[string]any{"resourceType": "mysekai_material", "resourceId": 12, "positionX": 3, "positionZ": 3},
+		}},
+	}}}
+	filtered, matched, empty := FilterBirthdayPartyPayload(data, ids)
+	if empty || !slices.Equal(matched, ids) {
+		t.Fatalf("matched = %v, empty = %t", matched, empty)
+	}
+	maps := birthdayHarvestMaps(filtered)
+	site, _ := mapStringAny(maps[0])
+	if drops := anySlice(site["userMysekaiSiteHarvestResourceDrops"]); len(drops) != 2 {
+		t.Fatalf("drops = %v", drops)
 	}
 }

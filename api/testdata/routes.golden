@@ -123,6 +123,7 @@ POST /api/admin/webhooks
 POST /api/haruki-bot-neo/register
 POST /api/haruki-bot-neo/send-mail
 POST /api/harukiproxy/:server/:user_id/:data_type/upload
+POST /api/harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /api/inherit/:server/:upload_type/submit
 POST /api/ios/proxy/:server/user/:user_id/mysekai
 POST /api/ios/script/:upload_code/upload
@@ -155,6 +156,7 @@ POST /api/user/reset-password
 POST /api/user/reset-password/send
 POST /api/verify-social-platform
 POST /harukiproxy/:server/:user_id/:data_type/upload
+POST /harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /internal/mysekai-birthday-events/:event_id/ack
 POST /ios/proxy/:server/user/:user_id/mysekai
 POST /ios/script/:upload_code/upload

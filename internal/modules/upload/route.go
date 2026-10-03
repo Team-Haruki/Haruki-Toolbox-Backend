@@ -14,6 +14,8 @@ import (
 // They are supplied by the composition root instead of being hidden on the
 // compatibility RouterHelpers service locator.
 type Dependencies struct {
+	HarukiProxyV3Secret     string
+	HarukiProxyV3UnpackKey  string
 	DataSync                harukiDataHandler.DataSyncConfig
 	BackgroundTasks         harukiBackground.Runner
 	OAuth2WebhookAuthorizer harukiDataHandler.OAuth2WebhookAuthorizer

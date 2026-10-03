@@ -167,6 +167,10 @@ func materialIDsFromNames(materials []string) []int {
 			id = 12
 		case "yuugiri", "yugiri", "mysekai_material_5":
 			id = 5
+		case "battery", "mysekai_material_17":
+			id = 17
+		case "amethyst", "quartz", "mysekai_material_11":
+			id = 11
 		case "clover", "mysekai_material_20":
 			id = 20
 		}
