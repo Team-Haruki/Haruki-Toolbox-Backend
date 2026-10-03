@@ -10,6 +10,7 @@
 | --- | --- |
 | [用 Haruki 账号登录](oidc-provider.zh-CN.md) | **想让用户用 Haruki 账号登录自己站点的外部服务商看这篇。**issuer、client 申请、ID Token 校验、登出，以及一处必须绕开的 Discovery 偏差 |
 | [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) | OAuth2 客户端接入：公开与保密两种客户端、授权码流程、token 与刷新、用户信息与绑定、游戏数据读取与**代理上传**、数据更新 Webhook、可申请的 scope |
+| [HarukiProxy 上传](harukiproxy-upload.zh-CN.md) | v3 上传协议、独立密钥、旧路径停用时间及生日材料监听 |
 | [Public API Webhook 接入](webhook-integration.zh-CN.md) | 基于 token 自行订阅具体游戏账号的旧版 webhook |
 
 ## 给站内前端

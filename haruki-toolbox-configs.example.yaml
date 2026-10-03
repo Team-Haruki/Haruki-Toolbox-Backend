@@ -129,6 +129,9 @@ sekai_api:
   api_token: ""
 
 haruki_proxy:
+  # Independent v3 credentials; environment overrides these values. Requires restart.
+  v3_secret: ""
+  v3_unpack_key: ""
   user_agent: "HarukiProxy"
   version: "v1.7.0"
   secret: ""

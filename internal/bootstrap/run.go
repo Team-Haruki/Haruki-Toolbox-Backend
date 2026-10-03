@@ -134,11 +134,13 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
 	})
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
-		DataSync:          harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
-		BackgroundTasks:   application.backgroundTasks,
-		TurnstileVerifier: turnstileVerifier,
-		UserDataBuilder:   harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
-		AfdianConfig:      afdianConfig,
+		HarukiProxyV3Secret:    cfg.HarukiProxy.V3Secret,
+		HarukiProxyV3UnpackKey: cfg.HarukiProxy.V3UnpackKey,
+		DataSync:               harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
+		BackgroundTasks:        application.backgroundTasks,
+		TurnstileVerifier:      turnstileVerifier,
+		UserDataBuilder:        harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
+		AfdianConfig:           afdianConfig,
 		MiscAssets: miscModule.NewAssetsConfig(miscModule.AssetsConfigOptions{
 			AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		}),

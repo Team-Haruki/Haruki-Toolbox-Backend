@@ -3,9 +3,11 @@ package upload
 import (
 	"crypto/subtle"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -22,6 +24,10 @@ import (
 
 func unpackKeyFromHelper(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) ([]byte, error) {
 	_, _, _, unpackKey := apiHelper.GetHarukiProxyConfig()
+	return deriveHarukiProxyKey(unpackKey)
+}
+
+func deriveHarukiProxyKey(unpackKey string) ([]byte, error) {
 	k := strings.TrimSpace(unpackKey)
 	if k == "" {
 		return nil, errors.New("missing HarukiProxyUnpackKey")
@@ -33,8 +39,18 @@ func unpackKeyFromHelper(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 var userAgentRegex = regexp.MustCompile(`^([A-Za-z0-9\-]+)/([vV][0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9]+)?)$`)
 
 func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+	return validateHarukiProxyClientHeaderVersion(apiHelper, Dependencies{}, false)
+}
+
+func validateHarukiProxyClientHeaderVersion(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, v3 bool) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		expectedUserAgent, minVersion, expectedSecret, _ := apiHelper.GetHarukiProxyConfig()
+		if v3 {
+			expectedSecret = dependencies.HarukiProxyV3Secret
+			if strings.TrimSpace(dependencies.HarukiProxyV3UnpackKey) == "" {
+				return harukiAPIHelper.ErrorInternal(c, "HarukiProxy v3 encryption is not configured")
+			}
+		}
 		if strings.TrimSpace(expectedUserAgent) == "" || strings.TrimSpace(minVersion) == "" || strings.TrimSpace(expectedSecret) == "" {
 			return harukiAPIHelper.ErrorInternal(c, "HarukiProxy auth is not configured")
 		}
@@ -71,6 +87,10 @@ func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRou
 	if err != nil {
 		return nil, err
 	}
+	return unpackHarukiProxyBody(body, aad, key)
+}
+
+func unpackHarukiProxyBody(body []byte, aad string, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -97,6 +117,10 @@ func Unpack(body []byte, aad string, apiHelper *harukiAPIHelper.HarukiToolboxRou
 }
 
 func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
+	return handleHarukiProxyUploadVersion(apiHelper, dependencies, false)
+}
+
+func handleHarukiProxyUploadVersion(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, v3 bool) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		serverStr := c.Params("server")
@@ -116,7 +140,17 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		rawBody := c.Request().Body()
 		aad := fmt.Sprintf("%s|%s|%s", serverStr, gameUserIDStr, dataTypeStr)
-		decryptedBody, dErr := Unpack(rawBody, aad, apiHelper)
+		var decryptedBody []byte
+		var dErr error
+		if v3 {
+			var key []byte
+			key, dErr = deriveHarukiProxyKey(dependencies.HarukiProxyV3UnpackKey)
+			if dErr == nil {
+				decryptedBody, dErr = unpackHarukiProxyBody(rawBody, aad, key)
+			}
+		} else {
+			decryptedBody, dErr = Unpack(rawBody, aad, apiHelper)
+		}
 		if dErr != nil {
 			harukiLogger.Warnf("HarukiProxy decrypt failed for %s/%s/%s: %v", serverStr, gameUserIDStr, dataTypeStr, dErr)
 			return harukiAPIHelper.ErrorBadRequest(c, "failed to decrypt request body")
@@ -142,10 +176,24 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	}
 }
 
-func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
-	for _, prefix := range []string{"/harukiproxy/:server/:user_id/:data_type", "/api/harukiproxy/:server/:user_id/:data_type"} {
-		api := apiHelper.Router.Group(prefix, validateHarukiProxyClientHeader(apiHelper))
+// The cutoff is an absolute UTC+8 instant, independent of the server timezone.
+var harukiProxyLegacySunset = time.Date(2026, time.November, 1, 0, 0, 0, 0, time.FixedZone("UTC+8", 8*60*60))
 
-		api.Post("/upload", handleHarukiProxyUpload(apiHelper, dependencies))
+func harukiProxyLegacyGate(now func() time.Time) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		c.Set("Sunset", harukiProxyLegacySunset.UTC().Format(http.TimeFormat))
+		if !now().Before(harukiProxyLegacySunset) {
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, "Legacy HarukiProxy upload has been retired; use /harukiproxy/v3", nil)
+		}
+		return c.Next()
+	}
+}
+
+func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
+	for _, prefix := range []string{"/harukiproxy", "/api/harukiproxy"} {
+		apiHelper.Router.Post(prefix+"/v3/:server/:user_id/:data_type/upload",
+			validateHarukiProxyClientHeaderVersion(apiHelper, dependencies, true), handleHarukiProxyUploadVersion(apiHelper, dependencies, true))
+		apiHelper.Router.Post(prefix+"/:server/:user_id/:data_type/upload",
+			harukiProxyLegacyGate(time.Now), validateHarukiProxyClientHeader(apiHelper), handleHarukiProxyUpload(apiHelper, dependencies))
 	}
 }
