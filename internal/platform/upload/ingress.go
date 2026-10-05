@@ -13,7 +13,7 @@ import (
 
 const IngressRetention = 35 * 24 * time.Hour
 
-var ingressResults = []string{"accepted", "invalid_client_metadata", "client_version_unsupported", "client_channel_disabled", "invalid_client_credentials", "invalid_upload_payload", "protocol_retired", "rate_limited", "internal_error", "temporarily_unavailable"}
+var ingressResults = []string{"accepted", "invalid_client_metadata", "client_version_unsupported", "client_channel_disabled", "invalid_client_credentials", "invalid_token", "insufficient_scope", "invalid_upload_payload", "protocol_retired", "rate_limited", "internal_error", "temporarily_unavailable"}
 var ingressLastFailure atomic.Int64
 var ingressLastWarning atomic.Int64
 
