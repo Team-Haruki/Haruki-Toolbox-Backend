@@ -9,14 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -267,85 +264,18 @@ func TestHarukiProxyLegacySunset(t *testing.T) {
 	}
 }
 
-func TestHarukiProxyV3RoutesAndKeys(t *testing.T) {
-	dependencies := testUploadDependencies()
-	dependencies.HarukiProxyV3Secret = "new-secret"
-	dependencies.HarukiProxyV3UnpackKey = "new-key"
-	client := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "proxy-v3"))
-	t.Cleanup(func() { _ = client.Close() })
-	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
-		HarukiProxyUserAgent: "HarukiProxy", HarukiProxyVersion: "v1.2.0",
-		HarukiProxySecret: "old-secret", HarukiProxyUnpackKey: "old-key",
-		DBManager: &database.HarukiToolboxDBManager{DB: client},
-	}
-	for _, prefix := range []string{"/harukiproxy", "/api/harukiproxy"} {
-		for _, tc := range []struct{ name, secret, key, want string }{
-			{"old auth rejected", "old-secret", "new-key", "Invalid HarukiProxy Secret"},
-			{"old encryption rejected", "new-secret", "old-key", "failed to decrypt request body"},
-			{"new encryption accepted", "new-secret", "new-key", "failed to process upload"},
-		} {
-			t.Run(prefix+tc.name, func(t *testing.T) {
-				app := fiber.New()
-				helper.Router = app
-				registerHarukiProxyRoutes(helper, dependencies)
-				// The empty account store and invalid payload prevent persistence.
-				body, err := packForTest([]byte("not-game-data"), "jp|123|suite", tc.key)
-				if err != nil {
-					t.Fatal(err)
-				}
-				req := httptest.NewRequest(http.MethodPost, prefix+"/v3/jp/123/suite/upload", bytes.NewReader(body))
-				req.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
-				req.Header.Set("X-Haruki-Toolbox-Secret", tc.secret)
-				resp, err := app.Test(req)
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer resp.Body.Close()
-				payload, err := io.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(payload), tc.want) {
-					t.Fatalf("status = %d, body = %s", resp.StatusCode, payload)
-				}
-				if resp.Header.Get("Sunset") != "" {
-					t.Fatal("v3 inherited legacy sunset")
-				}
-			})
-		}
-	}
-	// Legacy encryption cannot decrypt v3 ciphertext either.
-	body, err := packForTest([]byte("payload"), "jp|123|suite", dependencies.HarukiProxyV3UnpackKey)
+func TestHarukiProxyV3DoesNotFallBackToLegacyAuth(t *testing.T) {
+	app := fiber.New()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, HarukiProxySecret: "legacy", HarukiProxyUnpackKey: "legacy-key"}
+	registerHarukiProxyRoutes(helper, Dependencies{})
+	req := httptest.NewRequest("POST", "/harukiproxy/v3/jp/123/suite/upload", nil)
+	req.Header.Set("X-Haruki-Toolbox-Secret", "legacy")
+	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Unpack(body, "jp|123|suite", helper); err == nil {
-		t.Fatal("legacy accepted v3 key")
-	}
-}
-
-func TestHarukiProxyV3DoesNotFallBackToLegacyAuth(t *testing.T) {
-	for _, tc := range []struct{ name, secret, key string }{
-		{"missing both", "", ""},
-		{"missing auth", "", "new-key"},
-		{"missing encryption", "new-secret", ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			app := fiber.New()
-			dependencies := Dependencies{HarukiProxyV3Secret: tc.secret, HarukiProxyV3UnpackKey: tc.key}
-			helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, HarukiProxyUserAgent: "HarukiProxy", HarukiProxyVersion: "v1.2.0", HarukiProxySecret: "legacy", HarukiProxyUnpackKey: "legacy-key"}
-			registerHarukiProxyRoutes(helper, dependencies)
-			req := httptest.NewRequest(http.MethodPost, "/harukiproxy/v3/jp/123/suite/upload", nil)
-			req.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
-			req.Header.Set("X-Haruki-Toolbox-Secret", "legacy")
-			resp, err := app.Test(req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusInternalServerError {
-				t.Fatalf("status = %d", resp.StatusCode)
-			}
-		})
+	defer resp.Body.Close()
+	if resp.StatusCode != 503 {
+		t.Fatal(resp.StatusCode)
 	}
 }

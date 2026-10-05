@@ -363,30 +363,24 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 请求体是**原始游戏负载** —— 你从游戏抓到的、未解密的原文，与 `manual` / proxy / 脚本上传接口收的是同一种东西。`Content-Type` 不限，服务端读原始 body。成功返回与手动上传一致。
 
-#### 为什么必须是原始负载
+#### 账号读写授权
 
-服务端解密之后，会要求**游戏自己写在负载里的** game user id 与 URL 里的 `:user_id` 一致，不一致直接拒绝。
+原始载荷仍是不可信输入；可解密不代表真实，服务端保留有界解析和账号一致性校验。
 
-这是这个接口的防伪基础：拿到某个账号的 token，并不等于可以往那个账号里写任意内容 —— 你还得拿得出游戏为该账号生成的真实负载。如果接口收已解码的 JSON，那个 id 就变成了客户端自己填的字段，这条防线就没了。
+| 权限 | 本人 verified binding | read grant | write grant | read+write grant |
+| --- | --- | --- | --- | --- |
+| 读取（另需读取 scope） | 允许 | 允许 | 拒绝 | 允许 |
+| 上传（另需 game-data:write） | 允许 | 拒绝 | 允许 | 允许 |
 
-因此**不会**提供"提交已解码 JSON"的变体。
+写授权按区服、账号及 suite/mysekai 独立判定，不隐含读取或 webhook 订阅权限。OAuth2 用户是实际上传者，数据所属用户从目标绑定解析。历史授权保持只读。
 
-#### 授权比读取更严
-
-读取允许通过 **grant**（其他用户把自己的数据共享给你）访问；上传**不允许**：
-
-| | 自己拥有的绑定 | 通过 grant 获得的访问 |
-|---|---|---|
-| `GET`（读取） | ✅ | ✅ |
-| `POST`（上传） | ✅ | ❌ `403` |
-
-别人授权你**查看**他的数据，不等于授权你**覆盖**他的数据。
+`GET /api/oauth2/game-data/upload-targets` 提供可写目标，要求 `bindings:read` 和 `game-data:write`。响应与客户端处理见 [HarukiProxy OAuth2 对接](harukiproxy-v3-client-integration.zh-CN.md)。
 
 #### 其余校验
 
 这个接口走的是与其他上传方式完全相同的处理链路，因此同样会：
 
-- 校验该 token 对应的用户拥有这个绑定，且绑定已验证通过
+- 校验 token 对应用户拥有该 verified binding，或持有当前所有者授予的有效 write grant
 - 校验账号所有者未被封禁
 - 应用该账号的上传策略（例如公开 API 可见性、cn 服 mysekai 限制）
 - 写入审计日志，上传方式记为 `oauth2`，可与账号所有者本人的上传区分开

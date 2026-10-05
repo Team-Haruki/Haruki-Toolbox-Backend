@@ -154,7 +154,7 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 		row, queryErr := client.UploadLog.Query().
 			Where(
 				uploadlog.ServerEQ("cn"),
-				uploadlog.GameUserIDEQ("7486311609544252170"),
+				uploadlog.ClaimedGameUserIDEQ("7486311609544252170"),
 				uploadlog.DataTypeEQ(string(harukiUtils.UploadDataTypeMysekai)),
 				uploadlog.UploadMethodEQ(string(harukiUtils.UploadMethodIOSProxy)),
 			).
@@ -166,34 +166,15 @@ func TestHandleUploadWritesFailureAuditLogForCNMysekaiPrecheck(t *testing.T) {
 			if row.ErrorMessage == nil || *row.ErrorMessage != errUploadCNMysekaiDenied.Error() {
 				t.Fatalf("upload log error_message = %v, want %q", row.ErrorMessage, errUploadCNMysekaiDenied.Error())
 			}
-			syslog, syslogErr := client.SystemLog.Query().
-				Where(
-					systemlog.ActionEQ("user.upload."+string(harukiUtils.UploadMethodIOSProxy)),
-					systemlog.TargetIDEQ("cn:7486311609544252170"),
-					systemlog.ResultEQ(systemlog.ResultFailure),
-				).
-				Only(ctx)
-			if syslogErr != nil {
-				// The system log is written after the upload log by the same
-				// async audit goroutine, so it may not be visible yet (or the
-				// SQLite table may be mid-write) — keep polling until deadline.
-				if postgresql.IsNotFound(syslogErr) || strings.Contains(strings.ToLower(syslogErr.Error()), "database table is locked") {
-					if time.Now().After(deadline) {
-						t.Fatalf("timed out waiting for system log to be written")
-					}
-					time.Sleep(20 * time.Millisecond)
-					continue
-				}
-				t.Fatalf("query system log returned error: %v", syslogErr)
+			if row.GameUserID != "" || row.ToolboxUserID != "" || row.IdentityVerified == nil || *row.IdentityVerified {
+				t.Fatal("unverified claim attributed to account")
 			}
-			if syslog.Metadata["failureStage"] != uploadStageAccountPolicy {
-				t.Fatalf("system log failureStage = %v, want %q", syslog.Metadata["failureStage"], uploadStageAccountPolicy)
+			if row.FailureStage == nil || *row.FailureStage != uploadStageAccountPolicy {
+				t.Fatal("missing failure stage")
 			}
-			if syslog.Metadata["expectedGameUserId"] != "7486311609544252170" {
-				t.Fatalf("system log expectedGameUserId = %v", syslog.Metadata["expectedGameUserId"])
-			}
-			if syslog.Metadata["uploadMethod"] != string(harukiUtils.UploadMethodIOSProxy) {
-				t.Fatalf("system log uploadMethod = %v", syslog.Metadata["uploadMethod"])
+			count, err := client.SystemLog.Query().Count(ctx)
+			if err != nil || count != 0 {
+				t.Fatalf("unverified account leaked into system log: %d %v", count, err)
 			}
 			return
 		}

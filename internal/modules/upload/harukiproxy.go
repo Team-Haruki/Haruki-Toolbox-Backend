@@ -11,7 +11,6 @@ import (
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"crypto/aes"
 	"crypto/cipher"
@@ -43,40 +42,37 @@ func validateHarukiProxyClientHeader(apiHelper *harukiAPIHelper.HarukiToolboxRou
 }
 
 func validateHarukiProxyClientHeaderVersion(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, v3 bool) fiber.Handler {
+	if v3 {
+		return validateProxyV3Client(apiHelper, dependencies)
+	}
 	return func(c fiber.Ctx) error {
 		expectedUserAgent, minVersion, expectedSecret, _ := apiHelper.GetHarukiProxyConfig()
-		if v3 {
-			expectedSecret = dependencies.HarukiProxyV3Secret
-			if strings.TrimSpace(dependencies.HarukiProxyV3UnpackKey) == "" {
-				return harukiAPIHelper.ErrorInternal(c, "HarukiProxy v3 encryption is not configured")
-			}
-		}
 		if strings.TrimSpace(expectedUserAgent) == "" || strings.TrimSpace(minVersion) == "" || strings.TrimSpace(expectedSecret) == "" {
-			return harukiAPIHelper.ErrorInternal(c, "HarukiProxy auth is not configured")
+			return proxyResponse(c, 500, "internal_error", "HarukiProxy auth is not configured", false, nil)
 		}
 
 		requestUserAgent := c.Get("User-Agent")
 		requestSecret := c.Get("X-Haruki-Toolbox-Secret")
 		if subtle.ConstantTimeCompare([]byte(requestSecret), []byte(expectedSecret)) != 1 {
-			return harukiAPIHelper.ErrorBadRequest(c, "Invalid HarukiProxy Secret")
+			return proxyResponse(c, 400, "invalid_client_credentials", "Invalid HarukiProxy Secret", false, nil)
 		}
 		matches := userAgentRegex.FindStringSubmatch(requestUserAgent)
 		if len(matches) < 3 {
-			return harukiAPIHelper.ErrorBadRequest(c, "Invalid User-Agent format")
+			return proxyResponse(c, 400, "invalid_client_metadata", "Invalid User-Agent format", false, nil)
 		}
 		uaName := matches[1]
 		if expectedUserAgent != uaName {
-			return harukiAPIHelper.ErrorBadRequest(c, "Invalid User-Agent name")
+			return proxyResponse(c, 400, "invalid_client_metadata", "Invalid User-Agent name", false, nil)
 		}
 		clientVerStr := strings.TrimPrefix(matches[2], "v")
 		minVerStr := strings.TrimPrefix(minVersion, "v")
 		clientVer, err1 := version.NewVersion(clientVerStr)
 		minVer, err2 := version.NewVersion(minVerStr)
 		if err1 != nil || err2 != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "Invalid version string")
+			return proxyResponse(c, 400, "invalid_client_metadata", "Invalid version string", false, nil)
 		}
 		if clientVer.LessThan(minVer) {
-			return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("Client version %s is below minimum required %s", clientVerStr, minVersion))
+			return proxyResponse(c, 400, "client_version_unsupported", fmt.Sprintf("Client version %s is below minimum required %s", clientVerStr, minVersion), false, nil)
 		}
 		return c.Next()
 	}
@@ -122,57 +118,73 @@ func handleHarukiProxyUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 
 func handleHarukiProxyUploadVersion(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, v3 bool) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
-		serverStr := c.Params("server")
-		gameUserIDStr := c.Params("user_id")
-		dataTypeStr := c.Params("data_type")
+		a := proxyAttempt(c)
+		invalid := func(message string) error {
+			return proxyResponse(c, 400, "invalid_upload_payload", message, false, nil)
+		}
+		serverStr, gameUserIDStr, dataTypeStr := c.Params("server"), c.Params("user_id"), c.Params("data_type")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
+			return invalid("invalid server")
 		}
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
 		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
+			return invalid("invalid data_type")
 		}
 		gameUserID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
-		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "invalid user_id")
+		if err != nil || gameUserID <= 0 {
+			return invalid("invalid user_id")
+		}
+		c.Locals(proxyIngressKey{}, "accepted")
+		if !v3 {
+			a.Client.Protocol = "2"
+			a.Client.Name = "HarukiProxy"
+			a.Client.Format = "legacy"
+			if matches := userAgentRegex.FindStringSubmatch(c.Get("User-Agent")); len(matches) == 3 {
+				a.Client.Version = strings.Clone(strings.TrimPrefix(matches[2], "v"))
+			}
 		}
 		rawBody := c.Request().Body()
 		aad := fmt.Sprintf("%s|%s|%s", serverStr, gameUserIDStr, dataTypeStr)
 		var decryptedBody []byte
 		var dErr error
+		var actor *string
+		requestDependencies := dependencies
 		if v3 {
-			var key []byte
-			key, dErr = deriveHarukiProxyKey(dependencies.HarukiProxyV3UnpackKey)
-			if dErr == nil {
-				decryptedBody, dErr = unpackHarukiProxyBody(rawBody, aad, key)
+			id, ok := c.Locals("userID").(string)
+			if !ok || id == "" {
+				return proxyResponse(c, 401, "invalid_token", "OAuth2 authentication required", false, nil)
 			}
+			actor = &id
+			requestDependencies = oauthUploadDependencies(c, apiHelper, dependencies)
+			decryptedBody = rawBody
 		} else {
 			decryptedBody, dErr = Unpack(rawBody, aad, apiHelper)
 		}
 		if dErr != nil {
-			harukiLogger.Warnf("HarukiProxy decrypt failed for %s/%s/%s: %v", serverStr, gameUserIDStr, dataTypeStr, dErr)
-			return harukiAPIHelper.ErrorBadRequest(c, "failed to decrypt request body")
+			a.FailureStage = "decrypt"
+			a.ErrorCode = "payload_decryption_failed"
+			a.HTTPStatus = 400
+			uc, _ := buildUploadContext(server, dataType, &gameUserID, nil, harukiUtils.UploadMethodHarukiProxy)
+			uc.Attempt = a
+			uc.FailureStage = "decrypt"
+			finishAttempt(uc, false)
+			message := "failed to decrypt request body"
+			dispatchUploadAuditLog(apiHelper, dependencies.DataHandlerLogger, dependencies.BackgroundTasks, uc, false, &message)
+			return proxyResponse(c, 400, a.ErrorCode, message, false, nil)
 		}
-		_, err = HandleUpload(
-			ctx,
-			decryptedBody,
-			server,
-			dataType,
-			&gameUserID,
-			nil,
-			apiHelper,
-			dependencies,
-			harukiUtils.UploadMethodHarukiProxy,
-		)
+		_, err = HandleUpload(c.Context(), decryptedBody, server, dataType, &gameUserID, actor, apiHelper, requestDependencies, harukiUtils.UploadMethodHarukiProxy, a)
 		if err != nil {
-			if mapped := mapUploadProcessingError(err); mapped != nil {
-				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
+			if a.ErrorCode == "" {
+				classifyAttemptFailure(a, uploadStageBuildContext, err)
 			}
-			return harukiAPIHelper.ErrorBadRequest(c, "failed to process upload")
+			message := "failed to process upload"
+			if a.HTTPStatus == 403 {
+				message = "upload not allowed"
+			}
+			return proxyResponse(c, a.HTTPStatus, a.ErrorCode, message, a.Retryable, nil)
 		}
-		return harukiAPIHelper.Responses.SuccessResponse[string](c, fmt.Sprintf("%s server user %d successfully uploaded %s data.", serverStr, gameUserID, dataType), nil)
+		return proxyResponse(c, 200, "", "Upload successful", false, nil)
 	}
 }
 
@@ -183,7 +195,7 @@ func harukiProxyLegacyGate(now func() time.Time) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		c.Set("Sunset", harukiProxyLegacySunset.UTC().Format(http.TimeFormat))
 		if !now().Before(harukiProxyLegacySunset) {
-			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusGone, "Legacy HarukiProxy upload has been retired; use /harukiproxy/v3", nil)
+			return proxyResponse(c, fiber.StatusGone, "protocol_retired", "Legacy HarukiProxy upload has been retired; use /harukiproxy/v3", false, nil)
 		}
 		return c.Next()
 	}
@@ -192,8 +204,8 @@ func harukiProxyLegacyGate(now func() time.Time) fiber.Handler {
 func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	for _, prefix := range []string{"/harukiproxy", "/api/harukiproxy"} {
 		apiHelper.Router.Post(prefix+"/v3/:server/:user_id/:data_type/upload",
-			validateHarukiProxyClientHeaderVersion(apiHelper, dependencies, true), handleHarukiProxyUploadVersion(apiHelper, dependencies, true))
+			proxyIngress(apiHelper, "3"), proxyOAuthAuthentication(apiHelper, dependencies), validateHarukiProxyClientHeaderVersion(apiHelper, dependencies, true), handleHarukiProxyUploadVersion(apiHelper, dependencies, true))
 		apiHelper.Router.Post(prefix+"/:server/:user_id/:data_type/upload",
-			harukiProxyLegacyGate(time.Now), validateHarukiProxyClientHeader(apiHelper), handleHarukiProxyUpload(apiHelper, dependencies))
+			proxyIngress(apiHelper, "2"), harukiProxyLegacyGate(time.Now), validateHarukiProxyClientHeader(apiHelper), handleHarukiProxyUpload(apiHelper, dependencies))
 	}
 }

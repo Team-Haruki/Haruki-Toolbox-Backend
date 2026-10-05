@@ -7,11 +7,13 @@ import (
 )
 
 type gameAccountDataGrantPayload struct {
-	ExpiresAt time.Time `json:"expiresAt"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	Permissions *[]string `json:"permissions"`
 }
 
 type gameAccountDataGrantItem struct {
 	ID            int       `json:"id"`
+	Permissions   []string  `json:"permissions"`
 	OwnerUserID   string    `json:"ownerUserId"`
 	GranteeUserID string    `json:"granteeUserId"`
 	Server        string    `json:"server"`
@@ -36,6 +38,7 @@ type gameAccountDataGrantMutationResponse struct {
 func buildGameAccountDataGrantItem(record dbManager.GameAccountDataGrantRecord) gameAccountDataGrantItem {
 	return gameAccountDataGrantItem{
 		ID:            record.ID,
+		Permissions:   record.Permissions,
 		OwnerUserID:   record.OwnerUserID,
 		GranteeUserID: record.GranteeUserID,
 		Server:        record.Server,
@@ -53,6 +56,7 @@ func buildGameAccountDataGrantItemFromRow(row *dbManager.GameAccountDataGrant) g
 	}
 	return gameAccountDataGrantItem{
 		ID:            row.ID,
+		Permissions:   dbManager.GrantPermissions(row.CanRead, row.CanWrite),
 		OwnerUserID:   row.OwnerUserID,
 		GranteeUserID: row.GranteeUserID,
 		Server:        row.Server,

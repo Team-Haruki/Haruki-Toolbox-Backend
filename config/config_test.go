@@ -408,29 +408,3 @@ func TestUnknownReadSourceIsRejected(t *testing.T) {
 		t.Fatal("unknown read source accepted")
 	}
 }
-
-func TestHarukiProxyV3CredentialsConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("haruki_proxy:\n  secret: legacy-secret\n  unpack_key: legacy-key\n  v3_secret: yaml-v3-secret\n  v3_unpack_key: yaml-v3-key\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.HarukiProxy.V3Secret != "yaml-v3-secret" || cfg.HarukiProxy.V3UnpackKey != "yaml-v3-key" {
-		t.Fatal("v3 YAML credentials not loaded")
-	}
-	t.Setenv("HARUKI_PROXY_V3_SECRET", "env-v3-secret")
-	t.Setenv("HARUKI_PROXY_V3_UNPACK_KEY", "env-v3-key")
-	cfg, err = Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.HarukiProxy.V3Secret != "env-v3-secret" || cfg.HarukiProxy.V3UnpackKey != "env-v3-key" {
-		t.Fatal("v3 environment override not applied")
-	}
-	if cfg.HarukiProxy.Secret != "legacy-secret" || cfg.HarukiProxy.UnpackKey != "legacy-key" {
-		t.Fatal("v3 override changed legacy credentials")
-	}
-}

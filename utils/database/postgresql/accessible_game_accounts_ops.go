@@ -53,7 +53,7 @@ type accessibleGameAccountKey struct {
 // data for. It runs a bounded number of queries regardless of grant count: one
 // for owned bindings, one for received grants (joining the owner's display
 // fields), and one for the bindings backing those grants.
-func (c *Client) ListAccessibleGameAccounts(ctx context.Context, requesterUserID string, now time.Time) (*AccessibleGameAccounts, error) {
+func (c *Client) ListAccessibleGameAccounts(ctx context.Context, requesterUserID string, now time.Time, actions ...string) (*AccessibleGameAccounts, error) {
 	if c == nil {
 		return nil, fmt.Errorf("postgresql client is nil")
 	}
@@ -76,7 +76,8 @@ func (c *Client) ListAccessibleGameAccounts(ctx context.Context, requesterUserID
 		ownedKeys[accessibleGameAccountKey{server: binding.Server, gameUserID: binding.GameUserID}] = struct{}{}
 	}
 
-	grants, err := c.GameAccountDataGrant.Query().
+	write := len(actions) > 0 && actions[0] == "write"
+	grantsQuery := c.GameAccountDataGrant.Query().
 		Where(
 			gameaccountdatagrant.GranteeUserIDEQ(requesterUserID),
 			gameaccountdatagrant.ExpiresAtGT(now),
@@ -85,8 +86,13 @@ func (c *Client) ListAccessibleGameAccounts(ctx context.Context, requesterUserID
 		WithOwner(func(q *UserQuery) {
 			q.Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldAvatarPath)
 		}).
-		Order(gameaccountdatagrant.ByID()).
-		All(ctx)
+		Order(gameaccountdatagrant.ByID())
+	if write {
+		grantsQuery.Where(gameaccountdatagrant.CanWriteEQ(true), gameaccountdatagrant.DataTypeIn("suite", "mysekai"))
+	} else {
+		grantsQuery.Where(gameaccountdatagrant.CanReadEQ(true))
+	}
+	grants, err := grantsQuery.All(ctx)
 	if err != nil {
 		return nil, err
 	}

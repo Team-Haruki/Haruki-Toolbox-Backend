@@ -10,19 +10,23 @@
 | --- | --- |
 | [用 Haruki 账号登录](oidc-provider.zh-CN.md) | **想让用户用 Haruki 账号登录自己站点的外部服务商看这篇。**issuer、client 申请、ID Token 校验、登出，以及一处必须绕开的 Discovery 偏差 |
 | [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) | OAuth2 客户端接入：公开与保密两种客户端、授权码流程、token 与刷新、用户信息与绑定、游戏数据读取与**代理上传**、数据更新 Webhook、可申请的 scope |
-| [HarukiProxy 上传](harukiproxy-upload.zh-CN.md) | v3 上传协议、独立密钥、旧路径停用时间及生日材料监听 |
+| [HarukiProxy v3 客户端对接](harukiproxy-v3-client-integration.zh-CN.md) | 给获授权客户端开发者：OAuth2、原始载荷、UA、updatedData 响应、重试、客户端改造及联调验收 |
+| [HarukiProxy 上传维护](harukiproxy-upload.zh-CN.md) | 后端配置、数据库迁移、管理统计、旧路径停用时间及生日材料监听 |
 | [Public API Webhook 接入](webhook-integration.zh-CN.md) | 基于 token 自行订阅具体游戏账号的旧版 webhook |
 
 ## 给站内前端
 
 | 文档 | 回答什么问题 |
 | --- | --- |
+| [上传读写授权前端对接](toolbox-upload-grants-frontend.zh-CN.md) | 授权编辑、可写账号选择器、委托上传、OAuth2 同意页面及审计展示 |
 | [游戏账号数据授权](game-account-data-grants.zh-CN.md) | 把自己的账号数据授权给其他 Toolbox 用户；可访问账号聚合接口的字段与语义 |
 
 ## 给本项目开发者
 
 | 文档 | 回答什么问题 |
 | --- | --- |
+| [上传 OAuth2 与账号读写授权](upload-oauth2-write-grants-design.zh-CN.md) | 已实现的权限设计、身份来源与部署边界；生产待切换 |
+| [HarukiProxy v3 后端设计与实施](harukiproxy-v3-backend-design.zh-CN.md) | 严格平台 UA、版本策略、上传统计、数据库迁移与客户端联调 |
 | [后端架构与渐进重构约定](backend-architecture.zh-CN.md) | 目标目录结构、依赖方向、模块边界。代码评审的架构基线 |
 | [JSON 与数字精度约定](json-conventions.zh-CN.md) | JSON v2 的字段匹配、nil 表示、大整数精度及生成代码维护 |
 | [MessagePack codec 与 OrderedMap](msgpack-codec.zh-CN.md) | 共同字节游标、旧包退役、provider 字段规则、小对象合并分配和本机基准 |

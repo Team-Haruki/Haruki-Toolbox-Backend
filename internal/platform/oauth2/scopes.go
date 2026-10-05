@@ -19,7 +19,7 @@ var AllScopes = map[string]string{
 	ScopeUserRead:      "Read your profile (name and avatar)",
 	ScopeBindingsRead:  "Read your bound game accounts",
 	ScopeGameDataRead:  "Read your uploaded game data",
-	ScopeGameDataWrite: "Upload game data on your behalf",
+	ScopeGameDataWrite: "Upload game data for accounts you own or have write permission for",
 }
 
 func HasScope(scopes []string, required string) bool {

@@ -12,7 +12,7 @@ import (
 
 func handleQueryUploadLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
+		actorID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
@@ -22,7 +22,7 @@ func handleQueryUploadLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		}
 
 		dbCtx := c.Context()
-		baseQuery, err := scopeUploadLogsForAdminActor(dbCtx, apiHelper.DBManager.DB, applyUploadLogFilters(apiHelper.DBManager.DB.UploadLog.Query(), filters), actorRole)
+		baseQuery, err := scopeUploadLogsForAdminActor(dbCtx, apiHelper.DBManager.DB, applyUploadLogFilters(apiHelper.DBManager.DB.UploadLog.Query(), filters), actorRole, actorID)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to scope upload logs")
 		}
@@ -93,6 +93,7 @@ func handleQueryUploadLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			HasMore:     platformPagination.HasMoreByOffset(filters.Page, filters.PageSize, total),
 			Sort:        filters.Sort,
 			Filters: uploadLogAppliedFilters{
+				Metadata:      filters.Metadata,
 				GameUserIDs:   filters.GameUserIDs,
 				UploadMethods: filters.UploadMethods,
 				DataTypes:     filters.DataTypes,
@@ -105,7 +106,7 @@ func handleQueryUploadLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 				ByMethod:   normalizeCategoryCounts(methodCounts),
 				ByDataType: normalizeCategoryCounts(dataTypeCounts),
 			},
-			Items: adminCoreModule.BuildUploadLogItems(rows),
+			Items: adminCoreModule.BuildUploadLogItems(rows, adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin),
 		}
 
 		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)

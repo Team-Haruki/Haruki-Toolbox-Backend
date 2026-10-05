@@ -30,6 +30,10 @@ import (
 // If assembly fails, every resource acquired so far is released before Build
 // returns. The returned Application owns all successfully assembled resources.
 func Build(cfg harukiConfig.Config) (*Application, error) {
+	proxyPolicy, err := compileHarukiProxyPolicy(cfg)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateOAuth2ProviderConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -134,13 +138,12 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
 	})
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
-		HarukiProxyV3Secret:    cfg.HarukiProxy.V3Secret,
-		HarukiProxyV3UnpackKey: cfg.HarukiProxy.V3UnpackKey,
-		DataSync:               harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
-		BackgroundTasks:        application.backgroundTasks,
-		TurnstileVerifier:      turnstileVerifier,
-		UserDataBuilder:        harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
-		AfdianConfig:           afdianConfig,
+		HarukiProxyV3ClientPolicy: proxyPolicy,
+		DataSync:                  harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
+		BackgroundTasks:           application.backgroundTasks,
+		TurnstileVerifier:         turnstileVerifier,
+		UserDataBuilder:           harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
+		AfdianConfig:              afdianConfig,
 		MiscAssets: miscModule.NewAssetsConfig(miscModule.AssetsConfigOptions{
 			AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		}),

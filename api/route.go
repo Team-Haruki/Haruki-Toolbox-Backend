@@ -54,26 +54,25 @@ type TurnstileVerifier interface {
 // to the modules that consume them. Keep this structure narrow; database and
 // session access remain on the compatibility helper during their own migrations.
 type Dependencies struct {
-	HarukiProxyV3Secret    string
-	HarukiProxyV3UnpackKey string
-	DataSync               harukiHandler.DataSyncConfig
-	BackgroundTasks        harukiBackground.Runner
-	TurnstileVerifier      TurnstileVerifier
-	UserDataBuilder        harukiAPIHelper.UserDataBuilder
-	AfdianConfig           sponsorModule.AfdianConfig
-	MiscAssets             miscModule.AssetsConfig
-	TicketNotifications    ticketsModule.NotificationConfig
-	HydraConfig            *harukiOAuth2.HydraConfig
-	IOSEndpoints           iosModule.EndpointConfig
-	OAuth2AvatarBaseURL    string
-	UserProfileConfig      userProfileModule.Config
-	SocialBotVerify        userSocialModule.BotVerifyConfig
-	UploadHTTPClient       *harukiHttp.Client
-	UploadLogger           *harukiLogger.Logger
-	BirthdaySubscription   harukiHandler.BirthdaySubscriptionConfig
-	SuiteRestoreService    *harukiHandler.SuiteRestoreService
-	ServerCryptor          harukiSekai.ServerCryptor
-	UploadProxy            string
+	HarukiProxyV3ClientPolicy *harukiHandler.ClientPolicy
+	DataSync                  harukiHandler.DataSyncConfig
+	BackgroundTasks           harukiBackground.Runner
+	TurnstileVerifier         TurnstileVerifier
+	UserDataBuilder           harukiAPIHelper.UserDataBuilder
+	AfdianConfig              sponsorModule.AfdianConfig
+	MiscAssets                miscModule.AssetsConfig
+	TicketNotifications       ticketsModule.NotificationConfig
+	HydraConfig               *harukiOAuth2.HydraConfig
+	IOSEndpoints              iosModule.EndpointConfig
+	OAuth2AvatarBaseURL       string
+	UserProfileConfig         userProfileModule.Config
+	SocialBotVerify           userSocialModule.BotVerifyConfig
+	UploadHTTPClient          *harukiHttp.Client
+	UploadLogger              *harukiLogger.Logger
+	BirthdaySubscription      harukiHandler.BirthdaySubscriptionConfig
+	SuiteRestoreService       *harukiHandler.SuiteRestoreService
+	ServerCryptor             harukiSekai.ServerCryptor
+	UploadProxy               string
 }
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -86,8 +85,7 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 	publicModule.RegisterPublicRoutes(apiHelper)
 	subscriptionModule.RegisterSubscriptionRoutes(apiHelper)
 	uploadModule.RegisterUploadRoutes(apiHelper, uploadModule.Dependencies{
-		HarukiProxyV3Secret:       dependencies.HarukiProxyV3Secret,
-		HarukiProxyV3UnpackKey:    dependencies.HarukiProxyV3UnpackKey,
+		HarukiProxyV3ClientPolicy: dependencies.HarukiProxyV3ClientPolicy,
 		BackgroundTasks:           dependencies.BackgroundTasks,
 		OAuth2WebhookAuthorizer:   oauth2Module.WebhookAuthorizer{HydraConfig: dependencies.HydraConfig},
 		HydraConfig:               dependencies.HydraConfig,

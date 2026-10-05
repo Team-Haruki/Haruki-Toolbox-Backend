@@ -1,33 +1,32 @@
-# HarukiProxy 上传
+# HarukiProxy 上传维护
 
-v3 上传入口（POST）：
+当前分支的 v3 使用 OAuth2 game-data:write，接收原始游戏载荷；不再读取 v3_secret/v3_unpack_key，不接受共享密钥作为 v3 身份。
 
-- `/harukiproxy/v3/:server/:user_id/:data_type/upload`
-- `/api/harukiproxy/v3/:server/:user_id/:data_type/upload`
+- [客户端协议与联调](harukiproxy-v3-client-integration.zh-CN.md)
+- [Toolbox 前端读写授权对接](toolbox-upload-grants-frontend.zh-CN.md)
+- [方案与权限边界](upload-oauth2-write-grants-design.zh-CN.md)
 
-`User-Agent` 格式及最低客户端版本仍由 `haruki_proxy.user_agent` 和
-`haruki_proxy.version` 控制。`X-Haruki-Toolbox-Secret` 必须使用 v3 认证密钥。
+## 配置与部署
 
-v3 使用独立配置，不回退到旧密钥：
+启用 Hydra 并配置现有客户端禁用检查。HarukiProxy 使用已登记的公开 OAuth2 client，需 game-data:write；上传目标查询另需 bindings:read，自动刷新另需 offline_access。原生回调必须先登记并联调。
 
-| YAML 配置（`haruki_proxy` 下） | 环境变量 |
-| --- | --- |
-| `v3_secret` | `HARUKI_PROXY_V3_SECRET` |
-| `v3_unpack_key` | `HARUKI_PROXY_V3_UNPACK_KEY` |
+haruki_proxy.v3_client_policy 保留渠道与最低版本设置；v3 必须携带平台 UA，默认允许 stable/preview/beta/rc/dev 的 3.0.0 对应版本。旧 secret/unpack_key 仅服务过渡期 v2，不能作为 OAuth2 故障降级。
 
-环境变量优先；配置变更需要重启后端。管理员运行时配置中的旧版
-`harukiProxySecret` / `harukiProxyUnpackKey` 不影响 v3。两项 v3 密钥均需配置。
-密钥应放在部署端配置中，不提交到仓库。
+部署前依次执行 `harukiproxy-v3-schema.sql`、`upload-write-grants-schema.sql`，或使用受控 Ent 自动迁移。后端启动会校验新增权限字段和上传审计字段。历史授权迁移为 can_read=true/can_write=false。
 
-请求体协议保持 AES-GCM：解包密钥去除首尾空白后做 SHA-256，得到 AES-256
-密钥；请求体依次为 12 字节 nonce、密文及 16 字节认证标签。AAD 保持
-`:server|:user_id|:data_type`，各部分使用 URL 参数原始文本，v3 不改变 AAD。
+先前生产仅完成统计字段迁移；不能据此认为读写授权迁移、OAuth2 v3 部署或设备联调已完成。回滚镜像必须理解 can_read/can_write，禁止回滚到把 write-only grant 当成读权限的旧程序。
 
-旧入口 `/harukiproxy/:server/:user_id/:data_type/upload` 及对应 `/api/` 别名，
-在北京时间 **2026-11-01 00:00:00（UTC+8）** 起返回 HTTP 410 Gone，
-包括截止时刻本身。停用判断在每次请求时执行，不依赖定时任务或服务器时区。
-截止前继续使用旧 `secret` / `unpack_key`；旧入口响应携带 `Sunset` 头。
-v3 不受该截止时间影响。现有 Oathkeeper HarukiProxy 通配规则已覆盖 v3。
+Oathkeeper 现有 direct-auth 规则覆盖 HarukiProxy 及 `/api/oauth2/game-data/*`；这些入口在后端自行校验 bearer。手动上传继续使用浏览器可信会话，iOS 脚本保留用户码，iOS 模块代理保持原有游戏账号验证。
+
+v2 在 **2026-11-01 00:00（UTC+8）** 返回 410，Sunset 头为 `Sat, 31 Oct 2026 16:00:00 GMT`。v3 没有旧固定密钥兼容模式。
+
+## 上传日志与管理分析
+
+上传日志按 uploadMethod、版本、平台、协议记录，并区分 toolboxUserId（数据所属用户）、actorUserId（实际操作者）、authMethod、authorizationSource、grantId。未经验证的目标声明不归属到用户；历史记录不回填猜测值。
+
+`GET /api/admin/statistics/upload-analytics` 提供最多 31 天、最多两个白名单维度、可选 hour/day UTC 分桶的统计，包含成功率、已验证活跃账号、延迟、元数据覆盖率和 v2/v3 迁移指标。Redis 入口指标仅为最佳努力总量，不保证完整。普通管理员查询同时排除涉及超级管理员的 owner/actor 记录。
+
+新客户端须先完成后端部署确认，再构建 OAuth2 启用版；原固定密钥 APK 不能直接开启新 UA 后用于新版 v3。
 
 # 生日材料监听
 
