@@ -25,6 +25,10 @@ type SystemLogListItem struct {
 }
 
 type UploadLogListItem struct {
+	ActorUserID          *string    `json:"actorUserId,omitempty"`
+	AuthMethod           *string    `json:"authMethod,omitempty"`
+	GrantID              *int       `json:"grantId,omitempty"`
+	AuthorizationSource  *string    `json:"authorizationSource,omitempty"`
 	ClientName           *string    `json:"clientName,omitzero"`
 	ClientVersion        *string    `json:"clientVersion,omitzero"`
 	ClientChannel        *string    `json:"clientChannel,omitzero"`
@@ -103,6 +107,7 @@ func BuildUploadLogItems(rows []*postgresql.UploadLog, includeClaims ...bool) []
 	items := make([]UploadLogListItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, UploadLogListItem{
+			ActorUserID: row.ActorUserID, AuthMethod: row.AuthMethod, GrantID: row.GrantID, AuthorizationSource: row.AuthorizationSource,
 			ClientName:           row.ClientName,
 			ClientVersion:        row.ClientVersion,
 			ClientChannel:        row.ClientChannel,

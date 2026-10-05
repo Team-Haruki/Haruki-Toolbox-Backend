@@ -178,6 +178,10 @@ func prepareToolboxDatabase(cfg harukiConfig.Config, entClient *dbManager.Client
 	cancelWebhookSchema()
 
 	uploadSchemaCtx, cancelUploadSchema := startupContext()
+	if err := validateUploadGrantSchema(uploadSchemaCtx, entClient); err != nil {
+		cancelUploadSchema()
+		return fmt.Errorf("validate upload grant schema: %w", err)
+	}
 	if err := validateUploadLogSchema(uploadSchemaCtx, entClient); err != nil {
 		cancelUploadSchema()
 		return err

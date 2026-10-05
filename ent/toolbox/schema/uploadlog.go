@@ -17,6 +17,10 @@ func (UploadLog) Fields() []ent.Field {
 	validServers := []string{"jp", "en", "tw", "kr", "cn"}
 	validDataTypes := []string{"suite", "mysekai", "mysekai_birthday_party"}
 	return []ent.Field{
+		field.String("actor_user_id").Optional().Nillable(),
+		field.String("auth_method").Optional().Nillable(),
+		field.Int("grant_id").Optional().Nillable(),
+		field.String("authorization_source").Optional().Nillable(),
 		field.String("server").
 			Comment("jp en tw kr cn").
 			Validate(func(s string) error {

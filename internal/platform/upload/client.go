@@ -26,16 +26,20 @@ type ClientMetadata struct {
 
 // Attempt is owned by one upload operation. Copy it before asynchronous use.
 type Attempt struct {
-	Client           ClientMetadata
-	RequestID        string
-	ReceivedAt       time.Time
-	RequestBytes     int64
-	DurationMS       int64
-	IdentityVerified bool
-	ErrorCode        string
-	FailureStage     string
-	Retryable        bool
-	HTTPStatus       int
+	ActorUserID         string
+	AuthMethod          string
+	AuthorizationSource string
+	GrantID             int
+	Client              ClientMetadata
+	RequestID           string
+	ReceivedAt          time.Time
+	RequestBytes        int64
+	DurationMS          int64
+	IdentityVerified    bool
+	ErrorCode           string
+	FailureStage        string
+	Retryable           bool
+	HTTPStatus          int
 }
 
 var strictVersionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$`)

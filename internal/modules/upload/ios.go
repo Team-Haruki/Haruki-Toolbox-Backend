@@ -2,6 +2,8 @@ package upload
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"fmt"
 	"sort"
 	"strconv"
@@ -12,9 +14,7 @@ import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -187,24 +187,12 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if server == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "Unknown game server")
 		}
-		bindings, err := apiHelper.DBManager.DB.GameAccountBinding.Query().
-			Where(gameaccountbinding.HasUserWith(user.IDEQ(toolboxUserID))).
-			Where(gameaccountbinding.ServerEQ(string(server))).
-			Where(gameaccountbinding.VerifiedEQ(true)).
-			All(ctx)
-		if err != nil || len(bindings) == 0 {
-			return harukiAPIHelper.ErrorBadRequest(c, "No verified game account binding found for this server")
+		access, err := apiHelper.DBManager.DB.CanWriteGameAccountData(ctx, toolboxUserID, string(server), strconv.FormatInt(gameUserId, 10), string(uploadType), time.Now().UTC())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to check upload permission")
 		}
-		gameUserIdStr := strconv.FormatInt(gameUserId, 10)
-		matched := false
-		for _, binding := range bindings {
-			if binding.GameUserID == gameUserIdStr {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return harukiAPIHelper.ErrorBadRequest(c, "Game user ID does not match your bound accounts")
+		if !access.Allowed {
+			return harukiAPIHelper.ErrorForbidden(c, "upload not allowed")
 		}
 		body := c.Request().Body()
 		if len(body) == 0 {
@@ -214,7 +202,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorInternal(c, "upload store unavailable")
 		}
 		redisClient := apiHelper.DBManager.Redis.Redis
-		uploadKey := buildChunkUploadKey(toolboxUserID, server, gameUserId, header.UploadId)
+		uploadKey := buildChunkUploadKey(toolboxUserID, server, gameUserId, fmt.Sprintf("%d:%x:%s:%s", record.ID, sha256.Sum256([]byte(record.UploadCode)), uploadType, header.UploadId))
 		persistResult, err := persistIOSUploadChunk(ctx, redisClient, uploadKey, header.TotalChunks, header.ChunkIndex, body)
 		if err != nil {
 			logger.Errorf("Failed to persist upload chunk for %s: %v", uploadKey, err)
@@ -241,6 +229,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			logger.Warnf("Failed to clear completed upload chunks for %s: %v", uploadKey, err)
 		}
 
+		codeID, codeValue := record.ID, strings.Clone(record.UploadCode)
 		toolboxUserIDCopy := toolboxUserID
 		attempt := newAttempt(harukiUtils.UploadMethodIOSScript, 0)
 		accepted := startBackgroundTask(dependencies.BackgroundTasks, logger, "ios-upload-assembly", func() {
@@ -265,6 +254,19 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			// race task-group shutdown by attempting nested admission later.
 			innerDependencies := dependencies
 			innerDependencies.BackgroundTasks = harukiBackground.InlineRunner{}
+			innerDependencies.ValidateUploadIdentity = func(ctx context.Context) error {
+				current, err := apiHelper.DBManager.DB.IOSScriptCode.Get(ctx, codeID)
+				if postgresql.IsNotFound(err) {
+					return errUploadOwnershipMismatch
+				}
+				if err != nil {
+					return err
+				}
+				if current.UserID != toolboxUserIDCopy || subtle.ConstantTimeCompare([]byte(current.UploadCode), []byte(codeValue)) != 1 {
+					return errUploadOwnershipMismatch
+				}
+				return nil
+			}
 			attempt.RequestBytes = int64(len(payload))
 			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
 			if err != nil {

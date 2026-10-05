@@ -166,8 +166,6 @@ type SubscriptionConfig struct {
 
 type HarukiProxyConfig struct {
 	V3ClientPolicy *HarukiProxyClientPolicy `yaml:"v3_client_policy"`
-	V3Secret       string                   `yaml:"v3_secret"`
-	V3UnpackKey    string                   `yaml:"v3_unpack_key"`
 	UserAgent      string                   `yaml:"user_agent"`
 	Version        string                   `yaml:"version"`
 	Secret         string                   `yaml:"secret"`

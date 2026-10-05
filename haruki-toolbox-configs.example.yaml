@@ -129,9 +129,7 @@ sekai_api:
   api_token: ""
 
 haruki_proxy:
-  # Independent v3 credentials; environment overrides these values. Requires restart.
-  v3_secret: ""
-  v3_unpack_key: ""
+  # v3 uses OAuth2 game-data:write; no shared client/encryption key.
   # v3 always requires structured UA with platform. Independent from legacy version.
   v3_client_policy:
     allowed_channels: [stable, preview, beta, rc, dev]

@@ -20,6 +20,62 @@ type UploadLogCreate struct {
 	hooks    []Hook
 }
 
+// SetActorUserID sets the "actor_user_id" field.
+func (_c *UploadLogCreate) SetActorUserID(v string) *UploadLogCreate {
+	_c.mutation.SetActorUserID(v)
+	return _c
+}
+
+// SetNillableActorUserID sets the "actor_user_id" field if the given value is not nil.
+func (_c *UploadLogCreate) SetNillableActorUserID(v *string) *UploadLogCreate {
+	if v != nil {
+		_c.SetActorUserID(*v)
+	}
+	return _c
+}
+
+// SetAuthMethod sets the "auth_method" field.
+func (_c *UploadLogCreate) SetAuthMethod(v string) *UploadLogCreate {
+	_c.mutation.SetAuthMethod(v)
+	return _c
+}
+
+// SetNillableAuthMethod sets the "auth_method" field if the given value is not nil.
+func (_c *UploadLogCreate) SetNillableAuthMethod(v *string) *UploadLogCreate {
+	if v != nil {
+		_c.SetAuthMethod(*v)
+	}
+	return _c
+}
+
+// SetGrantID sets the "grant_id" field.
+func (_c *UploadLogCreate) SetGrantID(v int) *UploadLogCreate {
+	_c.mutation.SetGrantID(v)
+	return _c
+}
+
+// SetNillableGrantID sets the "grant_id" field if the given value is not nil.
+func (_c *UploadLogCreate) SetNillableGrantID(v *int) *UploadLogCreate {
+	if v != nil {
+		_c.SetGrantID(*v)
+	}
+	return _c
+}
+
+// SetAuthorizationSource sets the "authorization_source" field.
+func (_c *UploadLogCreate) SetAuthorizationSource(v string) *UploadLogCreate {
+	_c.mutation.SetAuthorizationSource(v)
+	return _c
+}
+
+// SetNillableAuthorizationSource sets the "authorization_source" field if the given value is not nil.
+func (_c *UploadLogCreate) SetNillableAuthorizationSource(v *string) *UploadLogCreate {
+	if v != nil {
+		_c.SetAuthorizationSource(*v)
+	}
+	return _c
+}
+
 // SetServer sets the "server" field.
 func (_c *UploadLogCreate) SetServer(v string) *UploadLogCreate {
 	_c.mutation.SetServer(v)
@@ -538,6 +594,22 @@ func (_c *UploadLogCreate) createSpec() (*UploadLog, *sqlgraph.CreateSpec) {
 		_node = &UploadLog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(uploadlog.Table, sqlgraph.NewFieldSpec(uploadlog.FieldID, field.TypeInt))
 	)
+	if value, ok := _c.mutation.ActorUserID(); ok {
+		_spec.SetField(uploadlog.FieldActorUserID, field.TypeString, value)
+		_node.ActorUserID = &value
+	}
+	if value, ok := _c.mutation.AuthMethod(); ok {
+		_spec.SetField(uploadlog.FieldAuthMethod, field.TypeString, value)
+		_node.AuthMethod = &value
+	}
+	if value, ok := _c.mutation.GrantID(); ok {
+		_spec.SetField(uploadlog.FieldGrantID, field.TypeInt, value)
+		_node.GrantID = &value
+	}
+	if value, ok := _c.mutation.AuthorizationSource(); ok {
+		_spec.SetField(uploadlog.FieldAuthorizationSource, field.TypeString, value)
+		_node.AuthorizationSource = &value
+	}
 	if value, ok := _c.mutation.Server(); ok {
 		_spec.SetField(uploadlog.FieldServer, field.TypeString, value)
 		_node.Server = value

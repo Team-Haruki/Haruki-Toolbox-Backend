@@ -42,3 +42,18 @@ func TestIngressCounters(t *testing.T) {
 		t.Fatal("invalid protocol label")
 	}
 }
+
+func TestIngressUnavailableRecordsFailure(t *testing.T) {
+	oldFailure, oldWarning := ingressLastFailure.Load(), ingressLastWarning.Load()
+	t.Cleanup(func() { ingressLastFailure.Store(oldFailure); ingressLastWarning.Store(oldWarning) })
+	ingressLastWarning.Store(0)
+	start := time.Now().Add(-time.Second)
+	RecordProxyIngress(nil, time.Now(), "3", "accepted")
+	if IngressLastFailure().Before(start) {
+		t.Fatal("lost failure signal")
+	}
+	RecordProxyIngress(nil, time.Now(), "3", "accepted")
+	if ingressLastWarning.Load() == 0 {
+		t.Fatal("missing warning throttle timestamp")
+	}
+}

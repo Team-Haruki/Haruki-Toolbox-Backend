@@ -151,6 +151,7 @@ func TestPrepareToolboxDatabaseValidatesAndCleansUpManualSchema(t *testing.T) {
 	for _, column := range uploadlog.Columns {
 		uploadRows.AddRow(column, "YES")
 	}
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM information_schema.columns").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 	mock.ExpectQuery(regexp.QuoteMeta(uploadLogColumnsSQL)).WillReturnRows(uploadRows)
 	mock.ExpectExec("DELETE FROM").WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 2))
 

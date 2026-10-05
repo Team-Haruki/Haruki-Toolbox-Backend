@@ -148,12 +148,16 @@ func handleHarukiProxyUploadVersion(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		aad := fmt.Sprintf("%s|%s|%s", serverStr, gameUserIDStr, dataTypeStr)
 		var decryptedBody []byte
 		var dErr error
+		var actor *string
+		requestDependencies := dependencies
 		if v3 {
-			var key []byte
-			key, dErr = deriveHarukiProxyKey(dependencies.HarukiProxyV3UnpackKey)
-			if dErr == nil {
-				decryptedBody, dErr = unpackHarukiProxyBody(rawBody, aad, key)
+			id, ok := c.Locals("userID").(string)
+			if !ok || id == "" {
+				return proxyResponse(c, 401, "invalid_token", "OAuth2 authentication required", false, nil)
 			}
+			actor = &id
+			requestDependencies = oauthUploadDependencies(c, apiHelper, dependencies)
+			decryptedBody = rawBody
 		} else {
 			decryptedBody, dErr = Unpack(rawBody, aad, apiHelper)
 		}
@@ -169,7 +173,7 @@ func handleHarukiProxyUploadVersion(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			dispatchUploadAuditLog(apiHelper, dependencies.DataHandlerLogger, dependencies.BackgroundTasks, uc, false, &message)
 			return proxyResponse(c, 400, a.ErrorCode, message, false, nil)
 		}
-		_, err = HandleUpload(c.Context(), decryptedBody, server, dataType, &gameUserID, nil, apiHelper, dependencies, harukiUtils.UploadMethodHarukiProxy, a)
+		_, err = HandleUpload(c.Context(), decryptedBody, server, dataType, &gameUserID, actor, apiHelper, requestDependencies, harukiUtils.UploadMethodHarukiProxy, a)
 		if err != nil {
 			if a.ErrorCode == "" {
 				classifyAttemptFailure(a, uploadStageBuildContext, err)
@@ -200,7 +204,7 @@ func harukiProxyLegacyGate(now func() time.Time) fiber.Handler {
 func registerHarukiProxyRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	for _, prefix := range []string{"/harukiproxy", "/api/harukiproxy"} {
 		apiHelper.Router.Post(prefix+"/v3/:server/:user_id/:data_type/upload",
-			proxyIngress(apiHelper, "3"), validateHarukiProxyClientHeaderVersion(apiHelper, dependencies, true), handleHarukiProxyUploadVersion(apiHelper, dependencies, true))
+			proxyIngress(apiHelper, "3"), proxyOAuthAuthentication(apiHelper, dependencies), validateHarukiProxyClientHeaderVersion(apiHelper, dependencies, true), handleHarukiProxyUploadVersion(apiHelper, dependencies, true))
 		apiHelper.Router.Post(prefix+"/:server/:user_id/:data_type/upload",
 			proxyIngress(apiHelper, "2"), harukiProxyLegacyGate(time.Now), validateHarukiProxyClientHeader(apiHelper), handleHarukiProxyUpload(apiHelper, dependencies))
 	}

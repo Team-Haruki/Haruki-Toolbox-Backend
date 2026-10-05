@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
@@ -14,9 +15,8 @@ import (
 // They are supplied by the composition root instead of being hidden on the
 // compatibility RouterHelpers service locator.
 type Dependencies struct {
+	ValidateUploadIdentity    func(context.Context) error
 	HarukiProxyV3ClientPolicy *harukiDataHandler.ClientPolicy
-	HarukiProxyV3Secret       string
-	HarukiProxyV3UnpackKey    string
 	DataSync                  harukiDataHandler.DataSyncConfig
 	BackgroundTasks           harukiBackground.Runner
 	OAuth2WebhookAuthorizer   harukiDataHandler.OAuth2WebhookAuthorizer

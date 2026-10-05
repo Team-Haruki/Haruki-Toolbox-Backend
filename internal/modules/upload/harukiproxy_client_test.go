@@ -1,18 +1,13 @@
 package upload
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	platform "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
-	background "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
@@ -48,14 +43,14 @@ func TestProxyV3ResponseContract(t *testing.T) {
 		ua, secret, code string
 		status           int
 	}{
-		{"garbage", "wrong", "invalid_client_credentials", 401},
+		{"garbage", "wrong", "invalid_client_metadata", 400},
 		{"HarukiProxy/v3.0.0", "secret", "invalid_client_metadata", 400},
 		{"HarukiProxy/v3.0.0-preview.1 (platform=Android)", "secret", "client_version_unsupported", 400},
 		{"HarukiProxy/v3.0.0-dev.1 (platform=Android)", "secret", "client_channel_disabled", 400},
 		{"HarukiProxy/v3.0.0-preview.2+build.1 (platform=Android)", "secret", "", 200},
 	} {
 		app := fiber.New()
-		app.Post("/", validateProxyV3Client(nil, Dependencies{HarukiProxyV3Secret: "secret", HarukiProxyV3UnpackKey: "key", HarukiProxyV3ClientPolicy: policy}), func(c fiber.Ctx) error { return proxyResponse(c, 200, "", "success", false, nil) })
+		app.Post("/", validateProxyV3Client(nil, Dependencies{HarukiProxyV3ClientPolicy: policy}), func(c fiber.Ctx) error { return proxyResponse(c, 200, "", "success", false, nil) })
 		req := httptest.NewRequest(http.MethodPost, "/", nil)
 		req.Header.Set("User-Agent", tc.ua)
 		req.Header.Set("X-Haruki-Toolbox-Secret", tc.secret)
@@ -82,40 +77,5 @@ func TestProxyV3ResponseContract(t *testing.T) {
 		if tc.status == 401 && body.UpdatedData.ClientPolicy != nil {
 			t.Fatal("auth leaks policy")
 		}
-	}
-}
-
-func TestProxyDecryptFailureAuditedWithoutAttribution(t *testing.T) {
-	db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "decrypt-metadata"))
-	defer db.Close()
-	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
-	d := testUploadDependencies()
-	d.HarukiProxyV3Secret = "secret"
-	d.HarukiProxyV3UnpackKey = "key"
-	// Audit writes synchronously for deterministic assertions.
-	d.BackgroundTasks = background.InlineRunner{}
-	app := fiber.New()
-	helper.Router = app
-	registerHarukiProxyRoutes(helper, d)
-	req := httptest.NewRequest(http.MethodPost, "/harukiproxy/v3/jp/123/suite/upload", strings.NewReader("bad ciphertext"))
-	req.Header.Set("User-Agent", "HarukiProxy/v3.0.0 (platform=Android; app_arch=arm64)")
-	req.Header.Set("X-Haruki-Toolbox-Secret", "secret")
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 400 {
-		t.Fatal(resp.StatusCode)
-	}
-	row, err := db.UploadLog.Query().Only(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if row.GameUserID != "" || row.ToolboxUserID != "" || row.ClaimedGameUserID == nil || *row.ClaimedGameUserID != "123" {
-		t.Fatalf("unsafe attribution: %+v", row)
-	}
-	if row.ErrorCode == nil || *row.ErrorCode != "payload_decryption_failed" || row.Platform == nil || *row.Platform != "android" || row.RequestID == nil || *row.RequestID != resp.Header.Get("X-Request-ID") {
-		t.Fatalf("missing metadata: %+v", row)
 	}
 }

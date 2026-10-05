@@ -163,8 +163,6 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")
 
-	overrideString(&cfg.HarukiProxy.V3Secret, "HARUKI_PROXY_V3_SECRET")
-	overrideString(&cfg.HarukiProxy.V3UnpackKey, "HARUKI_PROXY_V3_UNPACK_KEY")
 	overrideString(&cfg.HarukiProxy.UserAgent, "HARUKI_PROXY_USER_AGENT")
 	overrideString(&cfg.HarukiProxy.Version, "HARUKI_PROXY_VERSION")
 	overrideString(&cfg.HarukiProxy.Secret, "HARUKI_PROXY_SECRET")

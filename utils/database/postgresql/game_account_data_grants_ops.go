@@ -16,11 +16,13 @@ type GameAccountDataAccess struct {
 	Allowed     bool
 	OwnerUserID string
 	ViaGrant    bool
+	GrantID     int
 	ExpiresAt   *time.Time
 }
 
 type GameAccountDataGrantRecord struct {
 	ID            int       `json:"id"`
+	Permissions   []string  `json:"permissions"`
 	OwnerUserID   string    `json:"ownerUserId"`
 	GranteeUserID string    `json:"granteeUserId"`
 	Server        string    `json:"server"`
@@ -94,6 +96,7 @@ func buildGameAccountDataGrantRecord(row *GameAccountDataGrant) GameAccountDataG
 	}
 	return GameAccountDataGrantRecord{
 		ID:            row.ID,
+		Permissions:   GrantPermissions(row.CanRead, row.CanWrite),
 		OwnerUserID:   row.OwnerUserID,
 		GranteeUserID: row.GranteeUserID,
 		Server:        row.Server,
@@ -106,6 +109,14 @@ func buildGameAccountDataGrantRecord(row *GameAccountDataGrant) GameAccountDataG
 }
 
 func (c *Client) CanAccessGameAccountData(ctx context.Context, requesterUserID, server, gameUserID, dataType string, now time.Time) (*GameAccountDataAccess, error) {
+	return c.gameAccountDataAccess(ctx, requesterUserID, server, gameUserID, dataType, now, false)
+}
+
+func (c *Client) CanWriteGameAccountData(ctx context.Context, requesterUserID, server, gameUserID, dataType string, now time.Time) (*GameAccountDataAccess, error) {
+	return c.gameAccountDataAccess(ctx, requesterUserID, server, gameUserID, dataType, now, true)
+}
+
+func (c *Client) gameAccountDataAccess(ctx context.Context, requesterUserID, server, gameUserID, dataType string, now time.Time, write bool) (*GameAccountDataAccess, error) {
 	if c == nil {
 		return nil, fmt.Errorf("postgresql client is nil")
 	}
@@ -113,6 +124,9 @@ func (c *Client) CanAccessGameAccountData(ctx context.Context, requesterUserID, 
 	server = strings.TrimSpace(server)
 	gameUserID = strings.TrimSpace(gameUserID)
 	dataType = strings.ToLower(strings.TrimSpace(dataType))
+	if write && dataType == "mysekai_birthday_party" {
+		dataType = "mysekai"
+	}
 	if requesterUserID == "" || server == "" || gameUserID == "" || dataType == "" {
 		return &GameAccountDataAccess{}, nil
 	}
@@ -139,6 +153,9 @@ func (c *Client) CanAccessGameAccountData(ctx context.Context, requesterUserID, 
 
 	ownerUser := binding.Edges.User
 	access := &GameAccountDataAccess{OwnerUserID: strings.TrimSpace(ownerUser.ID)}
+	if write && (ownerUser.Banned || (dataType != "suite" && dataType != "mysekai")) {
+		return access, nil
+	}
 	if access.OwnerUserID == requesterUserID {
 		access.Allowed = true
 		return access, nil
@@ -147,7 +164,7 @@ func (c *Client) CanAccessGameAccountData(ctx context.Context, requesterUserID, 
 		return access, nil
 	}
 
-	grant, err := c.GameAccountDataGrant.Query().
+	query := c.GameAccountDataGrant.Query().
 		Where(
 			gameaccountdatagrant.OwnerUserIDEQ(access.OwnerUserID),
 			gameaccountdatagrant.GranteeUserIDEQ(requesterUserID),
@@ -156,8 +173,13 @@ func (c *Client) CanAccessGameAccountData(ctx context.Context, requesterUserID, 
 			gameaccountdatagrant.DataTypeEQ(dataType),
 			gameaccountdatagrant.ExpiresAtGT(now),
 			gameaccountdatagrant.HasGranteeWith(userSchema.BannedEQ(false)),
-		).
-		Only(ctx)
+		)
+	if write {
+		query.Where(gameaccountdatagrant.CanWriteEQ(true))
+	} else {
+		query.Where(gameaccountdatagrant.CanReadEQ(true))
+	}
+	grant, err := query.Only(ctx)
 	if err != nil {
 		if IsNotFound(err) {
 			return access, nil
@@ -167,11 +189,12 @@ func (c *Client) CanAccessGameAccountData(ctx context.Context, requesterUserID, 
 	expiresAt := grant.ExpiresAt.UTC()
 	access.Allowed = true
 	access.ViaGrant = true
+	access.GrantID = grant.ID
 	access.ExpiresAt = &expiresAt
 	return access, nil
 }
 
-func (c *Client) UpsertGameAccountDataGrant(ctx context.Context, ownerUserID, granteeUserID, server, gameUserID, dataType string, expiresAt time.Time) (*GameAccountDataGrant, error) {
+func (c *Client) UpsertGameAccountDataGrant(ctx context.Context, ownerUserID, granteeUserID, server, gameUserID, dataType string, expiresAt time.Time, permissions ...[]string) (*GameAccountDataGrant, error) {
 	if c == nil {
 		return nil, fmt.Errorf("postgresql client is nil")
 	}
@@ -199,10 +222,25 @@ func (c *Client) UpsertGameAccountDataGrant(ctx context.Context, ownerUserID, gr
 	if err != nil && !IsNotFound(err) {
 		return nil, err
 	}
+	canRead, canWrite := true, false
 	if existing != nil {
-		return existing.Update().SetExpiresAt(expiresAt).Save(ctx)
+		canRead, canWrite = existing.CanRead, existing.CanWrite
 	}
-	return c.GameAccountDataGrant.Create().
+	if len(permissions) > 0 {
+		var err error
+		canRead, canWrite, err = ParseGrantPermissions(dataType, permissions[0])
+		if err != nil {
+			return nil, err
+		}
+	}
+	if existing != nil {
+		update := existing.Update().SetExpiresAt(expiresAt)
+		if len(permissions) > 0 {
+			update.SetCanRead(canRead).SetCanWrite(canWrite)
+		}
+		return update.Save(ctx)
+	}
+	return c.GameAccountDataGrant.Create().SetCanRead(canRead).SetCanWrite(canWrite).
 		SetOwnerUserID(ownerUserID).
 		SetGranteeUserID(granteeUserID).
 		SetServer(server).
@@ -280,4 +318,32 @@ func (c *Client) CleanupExpiredGameAccountDataGrants(ctx context.Context, now ti
 	return c.GameAccountDataGrant.Delete().
 		Where(gameaccountdatagrant.ExpiresAtLTE(now)).
 		Exec(ctx)
+}
+
+func GrantPermissions(read, write bool) []string {
+	p := []string{}
+	if read {
+		p = append(p, "read")
+	}
+	if write {
+		p = append(p, "write")
+	}
+	return p
+}
+func ParseGrantPermissions(dataType string, permissions []string) (bool, bool, error) {
+	var read, write bool
+	for _, p := range permissions {
+		switch p {
+		case "read":
+			read = true
+		case "write":
+			write = true
+		default:
+			return false, false, fmt.Errorf("invalid permission")
+		}
+	}
+	if !read && !write || write && dataType != "suite" && dataType != "mysekai" {
+		return false, false, fmt.Errorf("invalid permissions for data type")
+	}
+	return read, write, nil
 }

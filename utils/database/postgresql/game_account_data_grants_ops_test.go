@@ -117,3 +117,93 @@ func TestGameAccountDataGrantAccessAndCleanup(t *testing.T) {
 		t.Fatalf("deleted = %d, want 1", deleted)
 	}
 }
+
+func TestReadWriteGrantIsolation(t *testing.T) {
+	c := enttest.Open(t, "sqlite3", "file:read-write-grants?mode=memory&cache=shared&_fk=1")
+	defer c.Close()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, id := range []string{"owner", "grantee", "other"} {
+		createGrantTestUser(t, c, id, false)
+	}
+	binding, err := c.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetVerified(true).SetUserID("owner").Save(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		permissions []string
+		read, write bool
+	}{{[]string{"read"}, true, false}, {[]string{"write"}, false, true}, {[]string{"read", "write"}, true, true}} {
+		_, err := c.UpsertGameAccountDataGrant(ctx, "owner", "grantee", "jp", "123", "suite", now.Add(time.Hour), tc.permissions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := c.CanAccessGameAccountData(ctx, "grantee", "jp", "123", "suite", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, err := c.CanWriteGameAccountData(ctx, "grantee", "jp", "123", "suite", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Allowed != tc.read || w.Allowed != tc.write {
+			t.Fatalf("permissions %v: read=%v write=%v", tc.permissions, r.Allowed, w.Allowed)
+		}
+		row, err := c.UpsertGameAccountDataGrant(ctx, "owner", "grantee", "jp", "123", "suite", now.Add(2*time.Hour))
+		if err != nil || row.CanRead != tc.read || row.CanWrite != tc.write {
+			t.Fatal("legacy update changed permissions", err)
+		}
+		for _, action := range []string{"read", "write"} {
+			list, err := c.ListAccessibleGameAccounts(ctx, "grantee", now, action)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := tc.read
+			if action == "write" {
+				want = tc.write
+			}
+			if (len(list.Grants) > 0) != want {
+				t.Fatal("discovery leaked permissions", action)
+			}
+		}
+		for _, target := range []struct{ server, id, kind string }{{"en", "123", "suite"}, {"jp", "999", "suite"}, {"jp", "123", "mysekai"}} {
+			a, err := c.CanWriteGameAccountData(ctx, "grantee", target.server, target.id, target.kind, now)
+			if err != nil || a.Allowed {
+				t.Fatal("cross-target write allowed", err)
+			}
+		}
+	}
+	if _, err := c.UpsertGameAccountDataGrant(ctx, "owner", "grantee", "jp", "123", "profile", now.Add(time.Hour), []string{"write"}); err == nil {
+		t.Fatal("profile write accepted")
+	}
+	for _, permissions := range [][]string{{}, {"unknown"}} {
+		if _, _, err := dbManager.ParseGrantPermissions("suite", permissions); err == nil {
+			t.Fatal("invalid permissions accepted")
+		}
+	}
+	assertDenied := func() {
+		t.Helper()
+		a, err := c.CanWriteGameAccountData(ctx, "grantee", "jp", "123", "suite", now)
+		if err != nil || a.Allowed {
+			t.Fatalf("write should be denied: %+v %v", a, err)
+		}
+	}
+	if _, err = c.User.UpdateOneID("grantee").SetBanned(true).Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertDenied()
+	if _, err = c.User.UpdateOneID("grantee").SetBanned(false).Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = binding.Update().SetUserID("other").Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertDenied()
+	if _, err = binding.Update().SetUserID("owner").Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.UpsertGameAccountDataGrant(ctx, "owner", "grantee", "jp", "123", "suite", now.Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	assertDenied()
+}

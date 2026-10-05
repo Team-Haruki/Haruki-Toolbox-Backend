@@ -28,6 +28,93 @@ func (_u *UploadLogUpdate) Where(ps ...predicate.UploadLog) *UploadLogUpdate {
 	return _u
 }
 
+// SetActorUserID sets the "actor_user_id" field.
+func (_u *UploadLogUpdate) SetActorUserID(v string) *UploadLogUpdate {
+	_u.mutation.SetActorUserID(v)
+	return _u
+}
+
+// SetNillableActorUserID sets the "actor_user_id" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableActorUserID(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetActorUserID(*v)
+	}
+	return _u
+}
+
+// ClearActorUserID clears the value of the "actor_user_id" field.
+func (_u *UploadLogUpdate) ClearActorUserID() *UploadLogUpdate {
+	_u.mutation.ClearActorUserID()
+	return _u
+}
+
+// SetAuthMethod sets the "auth_method" field.
+func (_u *UploadLogUpdate) SetAuthMethod(v string) *UploadLogUpdate {
+	_u.mutation.SetAuthMethod(v)
+	return _u
+}
+
+// SetNillableAuthMethod sets the "auth_method" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableAuthMethod(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetAuthMethod(*v)
+	}
+	return _u
+}
+
+// ClearAuthMethod clears the value of the "auth_method" field.
+func (_u *UploadLogUpdate) ClearAuthMethod() *UploadLogUpdate {
+	_u.mutation.ClearAuthMethod()
+	return _u
+}
+
+// SetGrantID sets the "grant_id" field.
+func (_u *UploadLogUpdate) SetGrantID(v int) *UploadLogUpdate {
+	_u.mutation.ResetGrantID()
+	_u.mutation.SetGrantID(v)
+	return _u
+}
+
+// SetNillableGrantID sets the "grant_id" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableGrantID(v *int) *UploadLogUpdate {
+	if v != nil {
+		_u.SetGrantID(*v)
+	}
+	return _u
+}
+
+// AddGrantID adds value to the "grant_id" field.
+func (_u *UploadLogUpdate) AddGrantID(v int) *UploadLogUpdate {
+	_u.mutation.AddGrantID(v)
+	return _u
+}
+
+// ClearGrantID clears the value of the "grant_id" field.
+func (_u *UploadLogUpdate) ClearGrantID() *UploadLogUpdate {
+	_u.mutation.ClearGrantID()
+	return _u
+}
+
+// SetAuthorizationSource sets the "authorization_source" field.
+func (_u *UploadLogUpdate) SetAuthorizationSource(v string) *UploadLogUpdate {
+	_u.mutation.SetAuthorizationSource(v)
+	return _u
+}
+
+// SetNillableAuthorizationSource sets the "authorization_source" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableAuthorizationSource(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetAuthorizationSource(*v)
+	}
+	return _u
+}
+
+// ClearAuthorizationSource clears the value of the "authorization_source" field.
+func (_u *UploadLogUpdate) ClearAuthorizationSource() *UploadLogUpdate {
+	_u.mutation.ClearAuthorizationSource()
+	return _u
+}
+
 // SetServer sets the "server" field.
 func (_u *UploadLogUpdate) SetServer(v string) *UploadLogUpdate {
 	_u.mutation.SetServer(v)
@@ -706,6 +793,33 @@ func (_u *UploadLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.ActorUserID(); ok {
+		_spec.SetField(uploadlog.FieldActorUserID, field.TypeString, value)
+	}
+	if _u.mutation.ActorUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldActorUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AuthMethod(); ok {
+		_spec.SetField(uploadlog.FieldAuthMethod, field.TypeString, value)
+	}
+	if _u.mutation.AuthMethodCleared() {
+		_spec.ClearField(uploadlog.FieldAuthMethod, field.TypeString)
+	}
+	if value, ok := _u.mutation.GrantID(); ok {
+		_spec.SetField(uploadlog.FieldGrantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedGrantID(); ok {
+		_spec.AddField(uploadlog.FieldGrantID, field.TypeInt, value)
+	}
+	if _u.mutation.GrantIDCleared() {
+		_spec.ClearField(uploadlog.FieldGrantID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AuthorizationSource(); ok {
+		_spec.SetField(uploadlog.FieldAuthorizationSource, field.TypeString, value)
+	}
+	if _u.mutation.AuthorizationSourceCleared() {
+		_spec.ClearField(uploadlog.FieldAuthorizationSource, field.TypeString)
+	}
 	if value, ok := _u.mutation.Server(); ok {
 		_spec.SetField(uploadlog.FieldServer, field.TypeString, value)
 	}
@@ -877,6 +991,93 @@ type UploadLogUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *UploadLogMutation
+}
+
+// SetActorUserID sets the "actor_user_id" field.
+func (_u *UploadLogUpdateOne) SetActorUserID(v string) *UploadLogUpdateOne {
+	_u.mutation.SetActorUserID(v)
+	return _u
+}
+
+// SetNillableActorUserID sets the "actor_user_id" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableActorUserID(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetActorUserID(*v)
+	}
+	return _u
+}
+
+// ClearActorUserID clears the value of the "actor_user_id" field.
+func (_u *UploadLogUpdateOne) ClearActorUserID() *UploadLogUpdateOne {
+	_u.mutation.ClearActorUserID()
+	return _u
+}
+
+// SetAuthMethod sets the "auth_method" field.
+func (_u *UploadLogUpdateOne) SetAuthMethod(v string) *UploadLogUpdateOne {
+	_u.mutation.SetAuthMethod(v)
+	return _u
+}
+
+// SetNillableAuthMethod sets the "auth_method" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableAuthMethod(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetAuthMethod(*v)
+	}
+	return _u
+}
+
+// ClearAuthMethod clears the value of the "auth_method" field.
+func (_u *UploadLogUpdateOne) ClearAuthMethod() *UploadLogUpdateOne {
+	_u.mutation.ClearAuthMethod()
+	return _u
+}
+
+// SetGrantID sets the "grant_id" field.
+func (_u *UploadLogUpdateOne) SetGrantID(v int) *UploadLogUpdateOne {
+	_u.mutation.ResetGrantID()
+	_u.mutation.SetGrantID(v)
+	return _u
+}
+
+// SetNillableGrantID sets the "grant_id" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableGrantID(v *int) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetGrantID(*v)
+	}
+	return _u
+}
+
+// AddGrantID adds value to the "grant_id" field.
+func (_u *UploadLogUpdateOne) AddGrantID(v int) *UploadLogUpdateOne {
+	_u.mutation.AddGrantID(v)
+	return _u
+}
+
+// ClearGrantID clears the value of the "grant_id" field.
+func (_u *UploadLogUpdateOne) ClearGrantID() *UploadLogUpdateOne {
+	_u.mutation.ClearGrantID()
+	return _u
+}
+
+// SetAuthorizationSource sets the "authorization_source" field.
+func (_u *UploadLogUpdateOne) SetAuthorizationSource(v string) *UploadLogUpdateOne {
+	_u.mutation.SetAuthorizationSource(v)
+	return _u
+}
+
+// SetNillableAuthorizationSource sets the "authorization_source" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableAuthorizationSource(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetAuthorizationSource(*v)
+	}
+	return _u
+}
+
+// ClearAuthorizationSource clears the value of the "authorization_source" field.
+func (_u *UploadLogUpdateOne) ClearAuthorizationSource() *UploadLogUpdateOne {
+	_u.mutation.ClearAuthorizationSource()
+	return _u
 }
 
 // SetServer sets the "server" field.
@@ -1586,6 +1787,33 @@ func (_u *UploadLogUpdateOne) sqlSave(ctx context.Context) (_node *UploadLog, er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.ActorUserID(); ok {
+		_spec.SetField(uploadlog.FieldActorUserID, field.TypeString, value)
+	}
+	if _u.mutation.ActorUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldActorUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AuthMethod(); ok {
+		_spec.SetField(uploadlog.FieldAuthMethod, field.TypeString, value)
+	}
+	if _u.mutation.AuthMethodCleared() {
+		_spec.ClearField(uploadlog.FieldAuthMethod, field.TypeString)
+	}
+	if value, ok := _u.mutation.GrantID(); ok {
+		_spec.SetField(uploadlog.FieldGrantID, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedGrantID(); ok {
+		_spec.AddField(uploadlog.FieldGrantID, field.TypeInt, value)
+	}
+	if _u.mutation.GrantIDCleared() {
+		_spec.ClearField(uploadlog.FieldGrantID, field.TypeInt)
+	}
+	if value, ok := _u.mutation.AuthorizationSource(); ok {
+		_spec.SetField(uploadlog.FieldAuthorizationSource, field.TypeString, value)
+	}
+	if _u.mutation.AuthorizationSourceCleared() {
+		_spec.ClearField(uploadlog.FieldAuthorizationSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.Server(); ok {
 		_spec.SetField(uploadlog.FieldServer, field.TypeString, value)

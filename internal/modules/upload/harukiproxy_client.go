@@ -1,7 +1,6 @@
 package upload
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"regexp"
 	"strings"
@@ -139,12 +138,6 @@ func validateProxyV3Client(helper *api.HarukiToolboxRouterHelpers, d Dependencie
 		policy = platform.DefaultClientPolicy()
 	}
 	return func(c fiber.Ctx) error {
-		if strings.TrimSpace(d.HarukiProxyV3Secret) == "" || strings.TrimSpace(d.HarukiProxyV3UnpackKey) == "" {
-			return proxyResponse(c, 500, "internal_error", "HarukiProxy v3 is not configured", false, nil)
-		}
-		if subtle.ConstantTimeCompare([]byte(c.Get("X-Haruki-Toolbox-Secret")), []byte(d.HarukiProxyV3Secret)) != 1 {
-			return proxyResponse(c, 401, "invalid_client_credentials", "Invalid HarukiProxy Secret", false, nil)
-		}
 		m, err := parseProxyUserAgent(c.Get("User-Agent"))
 		if err != nil {
 			return proxyResponse(c, 400, "invalid_client_metadata", "Invalid User-Agent format", false, nil)
@@ -162,6 +155,8 @@ func validateProxyV3Client(helper *api.HarukiToolboxRouterHelpers, d Dependencie
 		if v.LessThan(minimum) {
 			return proxyResponse(c, 400, "client_version_unsupported", "Client version is below minimum required", false, &proxyClientPolicyResponse{Channel: m.Channel, MinimumVersion: minimum.String()})
 		}
+		m.OAuthClientID, _ = c.Locals("oauth2ClientID").(string)
+		proxyAttempt(c).AuthMethod = "oauth2"
 		proxyAttempt(c).Client = m
 		return c.Next()
 	}

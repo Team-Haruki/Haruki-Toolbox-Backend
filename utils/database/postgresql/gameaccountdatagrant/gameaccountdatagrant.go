@@ -24,6 +24,10 @@ const (
 	FieldGameUserID = "game_user_id"
 	// FieldDataType holds the string denoting the data_type field in the database.
 	FieldDataType = "data_type"
+	// FieldCanRead holds the string denoting the can_read field in the database.
+	FieldCanRead = "can_read"
+	// FieldCanWrite holds the string denoting the can_write field in the database.
+	FieldCanWrite = "can_write"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -60,6 +64,8 @@ var Columns = []string{
 	FieldServer,
 	FieldGameUserID,
 	FieldDataType,
+	FieldCanRead,
+	FieldCanWrite,
 	FieldExpiresAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -86,6 +92,10 @@ var (
 	GameUserIDValidator func(string) error
 	// DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
 	DataTypeValidator func(string) error
+	// DefaultCanRead holds the default value on creation for the "can_read" field.
+	DefaultCanRead bool
+	// DefaultCanWrite holds the default value on creation for the "can_write" field.
+	DefaultCanWrite bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -125,6 +135,16 @@ func ByGameUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByDataType orders the results by the data_type field.
 func ByDataType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDataType, opts...).ToFunc()
+}
+
+// ByCanRead orders the results by the can_read field.
+func ByCanRead(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCanRead, opts...).ToFunc()
+}
+
+// ByCanWrite orders the results by the can_write field.
+func ByCanWrite(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCanWrite, opts...).ToFunc()
 }
 
 // ByExpiresAt orders the results by the expires_at field.

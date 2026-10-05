@@ -55,8 +55,6 @@ type TurnstileVerifier interface {
 // session access remain on the compatibility helper during their own migrations.
 type Dependencies struct {
 	HarukiProxyV3ClientPolicy *harukiHandler.ClientPolicy
-	HarukiProxyV3Secret       string
-	HarukiProxyV3UnpackKey    string
 	DataSync                  harukiHandler.DataSyncConfig
 	BackgroundTasks           harukiBackground.Runner
 	TurnstileVerifier         TurnstileVerifier
@@ -88,8 +86,6 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 	subscriptionModule.RegisterSubscriptionRoutes(apiHelper)
 	uploadModule.RegisterUploadRoutes(apiHelper, uploadModule.Dependencies{
 		HarukiProxyV3ClientPolicy: dependencies.HarukiProxyV3ClientPolicy,
-		HarukiProxyV3Secret:       dependencies.HarukiProxyV3Secret,
-		HarukiProxyV3UnpackKey:    dependencies.HarukiProxyV3UnpackKey,
 		BackgroundTasks:           dependencies.BackgroundTasks,
 		OAuth2WebhookAuthorizer:   oauth2Module.WebhookAuthorizer{HydraConfig: dependencies.HydraConfig},
 		HydraConfig:               dependencies.HydraConfig,

@@ -1,3 +1,7 @@
+# 历史方案说明
+
+本文保留前一阶段设计背景；其中固定密钥 v3 鉴权和外层加密已被 OAuth2 方案替代，不作为当前客户端协议。当前契约见 [客户端对接](harukiproxy-v3-client-integration.zh-CN.md) 与 [读写授权方案](upload-oauth2-write-grants-design.zh-CN.md)。
+
 # HarukiProxy v3 后端对接与上传分析设计
 
 - 状态：后端已按本文实现，待部署及真实客户端联调；不代表生产已上线。

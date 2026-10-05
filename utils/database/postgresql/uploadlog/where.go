@@ -54,6 +54,26 @@ func IDLTE(id int) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldLTE(FieldID, id))
 }
 
+// ActorUserID applies equality check predicate on the "actor_user_id" field. It's identical to ActorUserIDEQ.
+func ActorUserID(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldActorUserID, v))
+}
+
+// AuthMethod applies equality check predicate on the "auth_method" field. It's identical to AuthMethodEQ.
+func AuthMethod(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthMethod, v))
+}
+
+// GrantID applies equality check predicate on the "grant_id" field. It's identical to GrantIDEQ.
+func GrantID(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldGrantID, v))
+}
+
+// AuthorizationSource applies equality check predicate on the "authorization_source" field. It's identical to AuthorizationSourceEQ.
+func AuthorizationSource(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthorizationSource, v))
+}
+
 // Server applies equality check predicate on the "server" field. It's identical to ServerEQ.
 func Server(v string) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldEQ(FieldServer, v))
@@ -187,6 +207,281 @@ func IdentityVerified(v bool) predicate.UploadLog {
 // ReceivedAt applies equality check predicate on the "received_at" field. It's identical to ReceivedAtEQ.
 func ReceivedAt(v time.Time) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldEQ(FieldReceivedAt, v))
+}
+
+// ActorUserIDEQ applies the EQ predicate on the "actor_user_id" field.
+func ActorUserIDEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldActorUserID, v))
+}
+
+// ActorUserIDNEQ applies the NEQ predicate on the "actor_user_id" field.
+func ActorUserIDNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldActorUserID, v))
+}
+
+// ActorUserIDIn applies the In predicate on the "actor_user_id" field.
+func ActorUserIDIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldActorUserID, vs...))
+}
+
+// ActorUserIDNotIn applies the NotIn predicate on the "actor_user_id" field.
+func ActorUserIDNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldActorUserID, vs...))
+}
+
+// ActorUserIDGT applies the GT predicate on the "actor_user_id" field.
+func ActorUserIDGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldActorUserID, v))
+}
+
+// ActorUserIDGTE applies the GTE predicate on the "actor_user_id" field.
+func ActorUserIDGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldActorUserID, v))
+}
+
+// ActorUserIDLT applies the LT predicate on the "actor_user_id" field.
+func ActorUserIDLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldActorUserID, v))
+}
+
+// ActorUserIDLTE applies the LTE predicate on the "actor_user_id" field.
+func ActorUserIDLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldActorUserID, v))
+}
+
+// ActorUserIDContains applies the Contains predicate on the "actor_user_id" field.
+func ActorUserIDContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldActorUserID, v))
+}
+
+// ActorUserIDHasPrefix applies the HasPrefix predicate on the "actor_user_id" field.
+func ActorUserIDHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldActorUserID, v))
+}
+
+// ActorUserIDHasSuffix applies the HasSuffix predicate on the "actor_user_id" field.
+func ActorUserIDHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldActorUserID, v))
+}
+
+// ActorUserIDIsNil applies the IsNil predicate on the "actor_user_id" field.
+func ActorUserIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldActorUserID))
+}
+
+// ActorUserIDNotNil applies the NotNil predicate on the "actor_user_id" field.
+func ActorUserIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldActorUserID))
+}
+
+// ActorUserIDEqualFold applies the EqualFold predicate on the "actor_user_id" field.
+func ActorUserIDEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldActorUserID, v))
+}
+
+// ActorUserIDContainsFold applies the ContainsFold predicate on the "actor_user_id" field.
+func ActorUserIDContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldActorUserID, v))
+}
+
+// AuthMethodEQ applies the EQ predicate on the "auth_method" field.
+func AuthMethodEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthMethod, v))
+}
+
+// AuthMethodNEQ applies the NEQ predicate on the "auth_method" field.
+func AuthMethodNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldAuthMethod, v))
+}
+
+// AuthMethodIn applies the In predicate on the "auth_method" field.
+func AuthMethodIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldAuthMethod, vs...))
+}
+
+// AuthMethodNotIn applies the NotIn predicate on the "auth_method" field.
+func AuthMethodNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldAuthMethod, vs...))
+}
+
+// AuthMethodGT applies the GT predicate on the "auth_method" field.
+func AuthMethodGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldAuthMethod, v))
+}
+
+// AuthMethodGTE applies the GTE predicate on the "auth_method" field.
+func AuthMethodGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldAuthMethod, v))
+}
+
+// AuthMethodLT applies the LT predicate on the "auth_method" field.
+func AuthMethodLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldAuthMethod, v))
+}
+
+// AuthMethodLTE applies the LTE predicate on the "auth_method" field.
+func AuthMethodLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldAuthMethod, v))
+}
+
+// AuthMethodContains applies the Contains predicate on the "auth_method" field.
+func AuthMethodContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldAuthMethod, v))
+}
+
+// AuthMethodHasPrefix applies the HasPrefix predicate on the "auth_method" field.
+func AuthMethodHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldAuthMethod, v))
+}
+
+// AuthMethodHasSuffix applies the HasSuffix predicate on the "auth_method" field.
+func AuthMethodHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldAuthMethod, v))
+}
+
+// AuthMethodIsNil applies the IsNil predicate on the "auth_method" field.
+func AuthMethodIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldAuthMethod))
+}
+
+// AuthMethodNotNil applies the NotNil predicate on the "auth_method" field.
+func AuthMethodNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldAuthMethod))
+}
+
+// AuthMethodEqualFold applies the EqualFold predicate on the "auth_method" field.
+func AuthMethodEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldAuthMethod, v))
+}
+
+// AuthMethodContainsFold applies the ContainsFold predicate on the "auth_method" field.
+func AuthMethodContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldAuthMethod, v))
+}
+
+// GrantIDEQ applies the EQ predicate on the "grant_id" field.
+func GrantIDEQ(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldGrantID, v))
+}
+
+// GrantIDNEQ applies the NEQ predicate on the "grant_id" field.
+func GrantIDNEQ(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldGrantID, v))
+}
+
+// GrantIDIn applies the In predicate on the "grant_id" field.
+func GrantIDIn(vs ...int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldGrantID, vs...))
+}
+
+// GrantIDNotIn applies the NotIn predicate on the "grant_id" field.
+func GrantIDNotIn(vs ...int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldGrantID, vs...))
+}
+
+// GrantIDGT applies the GT predicate on the "grant_id" field.
+func GrantIDGT(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldGrantID, v))
+}
+
+// GrantIDGTE applies the GTE predicate on the "grant_id" field.
+func GrantIDGTE(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldGrantID, v))
+}
+
+// GrantIDLT applies the LT predicate on the "grant_id" field.
+func GrantIDLT(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldGrantID, v))
+}
+
+// GrantIDLTE applies the LTE predicate on the "grant_id" field.
+func GrantIDLTE(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldGrantID, v))
+}
+
+// GrantIDIsNil applies the IsNil predicate on the "grant_id" field.
+func GrantIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldGrantID))
+}
+
+// GrantIDNotNil applies the NotNil predicate on the "grant_id" field.
+func GrantIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldGrantID))
+}
+
+// AuthorizationSourceEQ applies the EQ predicate on the "authorization_source" field.
+func AuthorizationSourceEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceNEQ applies the NEQ predicate on the "authorization_source" field.
+func AuthorizationSourceNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceIn applies the In predicate on the "authorization_source" field.
+func AuthorizationSourceIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldAuthorizationSource, vs...))
+}
+
+// AuthorizationSourceNotIn applies the NotIn predicate on the "authorization_source" field.
+func AuthorizationSourceNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldAuthorizationSource, vs...))
+}
+
+// AuthorizationSourceGT applies the GT predicate on the "authorization_source" field.
+func AuthorizationSourceGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceGTE applies the GTE predicate on the "authorization_source" field.
+func AuthorizationSourceGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceLT applies the LT predicate on the "authorization_source" field.
+func AuthorizationSourceLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceLTE applies the LTE predicate on the "authorization_source" field.
+func AuthorizationSourceLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceContains applies the Contains predicate on the "authorization_source" field.
+func AuthorizationSourceContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceHasPrefix applies the HasPrefix predicate on the "authorization_source" field.
+func AuthorizationSourceHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceHasSuffix applies the HasSuffix predicate on the "authorization_source" field.
+func AuthorizationSourceHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceIsNil applies the IsNil predicate on the "authorization_source" field.
+func AuthorizationSourceIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldAuthorizationSource))
+}
+
+// AuthorizationSourceNotNil applies the NotNil predicate on the "authorization_source" field.
+func AuthorizationSourceNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldAuthorizationSource))
+}
+
+// AuthorizationSourceEqualFold applies the EqualFold predicate on the "authorization_source" field.
+func AuthorizationSourceEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceContainsFold applies the ContainsFold predicate on the "authorization_source" field.
+func AuthorizationSourceContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldAuthorizationSource, v))
 }
 
 // ServerEQ applies the EQ predicate on the "server" field.

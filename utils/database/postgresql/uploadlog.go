@@ -17,6 +17,14 @@ type UploadLog struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitzero"`
+	// ActorUserID holds the value of the "actor_user_id" field.
+	ActorUserID *string `json:"actor_user_id,omitzero"`
+	// AuthMethod holds the value of the "auth_method" field.
+	AuthMethod *string `json:"auth_method,omitzero"`
+	// GrantID holds the value of the "grant_id" field.
+	GrantID *int `json:"grant_id,omitzero"`
+	// AuthorizationSource holds the value of the "authorization_source" field.
+	AuthorizationSource *string `json:"authorization_source,omitzero"`
 	// jp en tw kr cn
 	Server string `json:"server,omitempty"`
 	// GameUserID holds the value of the "game_user_id" field.
@@ -81,9 +89,9 @@ func (*UploadLog) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case uploadlog.FieldSuccess, uploadlog.FieldIdentityVerified:
 			values[i] = new(sql.NullBool)
-		case uploadlog.FieldID, uploadlog.FieldProcessingDurationMs, uploadlog.FieldRequestBytes:
+		case uploadlog.FieldID, uploadlog.FieldGrantID, uploadlog.FieldProcessingDurationMs, uploadlog.FieldRequestBytes:
 			values[i] = new(sql.NullInt64)
-		case uploadlog.FieldServer, uploadlog.FieldGameUserID, uploadlog.FieldToolboxUserID, uploadlog.FieldDataType, uploadlog.FieldUploadMethod, uploadlog.FieldErrorMessage, uploadlog.FieldClientName, uploadlog.FieldClientVersion, uploadlog.FieldClientChannel, uploadlog.FieldClientMetadataFormat, uploadlog.FieldProtocolVersion, uploadlog.FieldPlatform, uploadlog.FieldOsVersion, uploadlog.FieldOsBuild, uploadlog.FieldOsArch, uploadlog.FieldAppArch, uploadlog.FieldFailureStage, uploadlog.FieldErrorCode, uploadlog.FieldRequestID, uploadlog.FieldClaimedGameUserID, uploadlog.FieldOauthClientID:
+		case uploadlog.FieldActorUserID, uploadlog.FieldAuthMethod, uploadlog.FieldAuthorizationSource, uploadlog.FieldServer, uploadlog.FieldGameUserID, uploadlog.FieldToolboxUserID, uploadlog.FieldDataType, uploadlog.FieldUploadMethod, uploadlog.FieldErrorMessage, uploadlog.FieldClientName, uploadlog.FieldClientVersion, uploadlog.FieldClientChannel, uploadlog.FieldClientMetadataFormat, uploadlog.FieldProtocolVersion, uploadlog.FieldPlatform, uploadlog.FieldOsVersion, uploadlog.FieldOsBuild, uploadlog.FieldOsArch, uploadlog.FieldAppArch, uploadlog.FieldFailureStage, uploadlog.FieldErrorCode, uploadlog.FieldRequestID, uploadlog.FieldClaimedGameUserID, uploadlog.FieldOauthClientID:
 			values[i] = new(sql.NullString)
 		case uploadlog.FieldUploadTime, uploadlog.FieldReceivedAt:
 			values[i] = new(sql.NullTime)
@@ -108,6 +116,34 @@ func (_m *UploadLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case uploadlog.FieldActorUserID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_user_id", values[i])
+			} else if value.Valid {
+				_m.ActorUserID = new(string)
+				*_m.ActorUserID = value.String
+			}
+		case uploadlog.FieldAuthMethod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field auth_method", values[i])
+			} else if value.Valid {
+				_m.AuthMethod = new(string)
+				*_m.AuthMethod = value.String
+			}
+		case uploadlog.FieldGrantID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_id", values[i])
+			} else if value.Valid {
+				_m.GrantID = new(int)
+				*_m.GrantID = int(value.Int64)
+			}
+		case uploadlog.FieldAuthorizationSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field authorization_source", values[i])
+			} else if value.Valid {
+				_m.AuthorizationSource = new(string)
+				*_m.AuthorizationSource = value.String
+			}
 		case uploadlog.FieldServer:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field server", values[i])
@@ -326,6 +362,26 @@ func (_m *UploadLog) String() string {
 	var builder strings.Builder
 	builder.WriteString("UploadLog(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.ActorUserID; v != nil {
+		builder.WriteString("actor_user_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AuthMethod; v != nil {
+		builder.WriteString("auth_method=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.GrantID; v != nil {
+		builder.WriteString("grant_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AuthorizationSource; v != nil {
+		builder.WriteString("authorization_source=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	builder.WriteString("server=")
 	builder.WriteString(_m.Server)
 	builder.WriteString(", ")

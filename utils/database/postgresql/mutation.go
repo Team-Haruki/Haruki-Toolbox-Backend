@@ -2162,6 +2162,8 @@ type GameAccountDataGrantMutation struct {
 	server         *string
 	game_user_id   *string
 	data_type      *string
+	can_read       *bool
+	can_write      *bool
 	expires_at     *time.Time
 	created_at     *time.Time
 	updated_at     *time.Time
@@ -2453,6 +2455,78 @@ func (m *GameAccountDataGrantMutation) ResetDataType() {
 	m.data_type = nil
 }
 
+// SetCanRead sets the "can_read" field.
+func (m *GameAccountDataGrantMutation) SetCanRead(b bool) {
+	m.can_read = &b
+}
+
+// CanRead returns the value of the "can_read" field in the mutation.
+func (m *GameAccountDataGrantMutation) CanRead() (r bool, exists bool) {
+	v := m.can_read
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCanRead returns the old "can_read" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldCanRead(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCanRead is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCanRead requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCanRead: %w", err)
+	}
+	return oldValue.CanRead, nil
+}
+
+// ResetCanRead resets all changes to the "can_read" field.
+func (m *GameAccountDataGrantMutation) ResetCanRead() {
+	m.can_read = nil
+}
+
+// SetCanWrite sets the "can_write" field.
+func (m *GameAccountDataGrantMutation) SetCanWrite(b bool) {
+	m.can_write = &b
+}
+
+// CanWrite returns the value of the "can_write" field in the mutation.
+func (m *GameAccountDataGrantMutation) CanWrite() (r bool, exists bool) {
+	v := m.can_write
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCanWrite returns the old "can_write" field's value of the GameAccountDataGrant entity.
+// If the GameAccountDataGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountDataGrantMutation) OldCanWrite(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCanWrite is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCanWrite requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCanWrite: %w", err)
+	}
+	return oldValue.CanWrite, nil
+}
+
+// ResetCanWrite resets all changes to the "can_write" field.
+func (m *GameAccountDataGrantMutation) ResetCanWrite() {
+	m.can_write = nil
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (m *GameAccountDataGrantMutation) SetExpiresAt(t time.Time) {
 	m.expires_at = &t
@@ -2675,7 +2749,7 @@ func (m *GameAccountDataGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameAccountDataGrantMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 10)
 	if m.owner != nil {
 		fields = append(fields, gameaccountdatagrant.FieldOwnerUserID)
 	}
@@ -2690,6 +2764,12 @@ func (m *GameAccountDataGrantMutation) Fields() []string {
 	}
 	if m.data_type != nil {
 		fields = append(fields, gameaccountdatagrant.FieldDataType)
+	}
+	if m.can_read != nil {
+		fields = append(fields, gameaccountdatagrant.FieldCanRead)
+	}
+	if m.can_write != nil {
+		fields = append(fields, gameaccountdatagrant.FieldCanWrite)
 	}
 	if m.expires_at != nil {
 		fields = append(fields, gameaccountdatagrant.FieldExpiresAt)
@@ -2718,6 +2798,10 @@ func (m *GameAccountDataGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.GameUserID()
 	case gameaccountdatagrant.FieldDataType:
 		return m.DataType()
+	case gameaccountdatagrant.FieldCanRead:
+		return m.CanRead()
+	case gameaccountdatagrant.FieldCanWrite:
+		return m.CanWrite()
 	case gameaccountdatagrant.FieldExpiresAt:
 		return m.ExpiresAt()
 	case gameaccountdatagrant.FieldCreatedAt:
@@ -2743,6 +2827,10 @@ func (m *GameAccountDataGrantMutation) OldField(ctx context.Context, name string
 		return m.OldGameUserID(ctx)
 	case gameaccountdatagrant.FieldDataType:
 		return m.OldDataType(ctx)
+	case gameaccountdatagrant.FieldCanRead:
+		return m.OldCanRead(ctx)
+	case gameaccountdatagrant.FieldCanWrite:
+		return m.OldCanWrite(ctx)
 	case gameaccountdatagrant.FieldExpiresAt:
 		return m.OldExpiresAt(ctx)
 	case gameaccountdatagrant.FieldCreatedAt:
@@ -2792,6 +2880,20 @@ func (m *GameAccountDataGrantMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDataType(v)
+		return nil
+	case gameaccountdatagrant.FieldCanRead:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCanRead(v)
+		return nil
+	case gameaccountdatagrant.FieldCanWrite:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCanWrite(v)
 		return nil
 	case gameaccountdatagrant.FieldExpiresAt:
 		v, ok := value.(time.Time)
@@ -2877,6 +2979,12 @@ func (m *GameAccountDataGrantMutation) ResetField(name string) error {
 		return nil
 	case gameaccountdatagrant.FieldDataType:
 		m.ResetDataType()
+		return nil
+	case gameaccountdatagrant.FieldCanRead:
+		m.ResetCanRead()
+		return nil
+	case gameaccountdatagrant.FieldCanWrite:
+		m.ResetCanWrite()
 		return nil
 	case gameaccountdatagrant.FieldExpiresAt:
 		m.ResetExpiresAt()
@@ -12147,6 +12255,11 @@ type UploadLogMutation struct {
 	op                        Op
 	typ                       string
 	id                        *int
+	actor_user_id             *string
+	auth_method               *string
+	grant_id                  *int
+	addgrant_id               *int
+	authorization_source      *string
 	server                    *string
 	game_user_id              *string
 	toolbox_user_id           *string
@@ -12278,6 +12391,223 @@ func (m *UploadLogMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetActorUserID sets the "actor_user_id" field.
+func (m *UploadLogMutation) SetActorUserID(s string) {
+	m.actor_user_id = &s
+}
+
+// ActorUserID returns the value of the "actor_user_id" field in the mutation.
+func (m *UploadLogMutation) ActorUserID() (r string, exists bool) {
+	v := m.actor_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorUserID returns the old "actor_user_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldActorUserID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorUserID: %w", err)
+	}
+	return oldValue.ActorUserID, nil
+}
+
+// ClearActorUserID clears the value of the "actor_user_id" field.
+func (m *UploadLogMutation) ClearActorUserID() {
+	m.actor_user_id = nil
+	m.clearedFields[uploadlog.FieldActorUserID] = struct{}{}
+}
+
+// ActorUserIDCleared returns if the "actor_user_id" field was cleared in this mutation.
+func (m *UploadLogMutation) ActorUserIDCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldActorUserID]
+	return ok
+}
+
+// ResetActorUserID resets all changes to the "actor_user_id" field.
+func (m *UploadLogMutation) ResetActorUserID() {
+	m.actor_user_id = nil
+	delete(m.clearedFields, uploadlog.FieldActorUserID)
+}
+
+// SetAuthMethod sets the "auth_method" field.
+func (m *UploadLogMutation) SetAuthMethod(s string) {
+	m.auth_method = &s
+}
+
+// AuthMethod returns the value of the "auth_method" field in the mutation.
+func (m *UploadLogMutation) AuthMethod() (r string, exists bool) {
+	v := m.auth_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthMethod returns the old "auth_method" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldAuthMethod(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthMethod: %w", err)
+	}
+	return oldValue.AuthMethod, nil
+}
+
+// ClearAuthMethod clears the value of the "auth_method" field.
+func (m *UploadLogMutation) ClearAuthMethod() {
+	m.auth_method = nil
+	m.clearedFields[uploadlog.FieldAuthMethod] = struct{}{}
+}
+
+// AuthMethodCleared returns if the "auth_method" field was cleared in this mutation.
+func (m *UploadLogMutation) AuthMethodCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldAuthMethod]
+	return ok
+}
+
+// ResetAuthMethod resets all changes to the "auth_method" field.
+func (m *UploadLogMutation) ResetAuthMethod() {
+	m.auth_method = nil
+	delete(m.clearedFields, uploadlog.FieldAuthMethod)
+}
+
+// SetGrantID sets the "grant_id" field.
+func (m *UploadLogMutation) SetGrantID(i int) {
+	m.grant_id = &i
+	m.addgrant_id = nil
+}
+
+// GrantID returns the value of the "grant_id" field in the mutation.
+func (m *UploadLogMutation) GrantID() (r int, exists bool) {
+	v := m.grant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantID returns the old "grant_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldGrantID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantID: %w", err)
+	}
+	return oldValue.GrantID, nil
+}
+
+// AddGrantID adds i to the "grant_id" field.
+func (m *UploadLogMutation) AddGrantID(i int) {
+	if m.addgrant_id != nil {
+		*m.addgrant_id += i
+	} else {
+		m.addgrant_id = &i
+	}
+}
+
+// AddedGrantID returns the value that was added to the "grant_id" field in this mutation.
+func (m *UploadLogMutation) AddedGrantID() (r int, exists bool) {
+	v := m.addgrant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearGrantID clears the value of the "grant_id" field.
+func (m *UploadLogMutation) ClearGrantID() {
+	m.grant_id = nil
+	m.addgrant_id = nil
+	m.clearedFields[uploadlog.FieldGrantID] = struct{}{}
+}
+
+// GrantIDCleared returns if the "grant_id" field was cleared in this mutation.
+func (m *UploadLogMutation) GrantIDCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldGrantID]
+	return ok
+}
+
+// ResetGrantID resets all changes to the "grant_id" field.
+func (m *UploadLogMutation) ResetGrantID() {
+	m.grant_id = nil
+	m.addgrant_id = nil
+	delete(m.clearedFields, uploadlog.FieldGrantID)
+}
+
+// SetAuthorizationSource sets the "authorization_source" field.
+func (m *UploadLogMutation) SetAuthorizationSource(s string) {
+	m.authorization_source = &s
+}
+
+// AuthorizationSource returns the value of the "authorization_source" field in the mutation.
+func (m *UploadLogMutation) AuthorizationSource() (r string, exists bool) {
+	v := m.authorization_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthorizationSource returns the old "authorization_source" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldAuthorizationSource(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthorizationSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthorizationSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthorizationSource: %w", err)
+	}
+	return oldValue.AuthorizationSource, nil
+}
+
+// ClearAuthorizationSource clears the value of the "authorization_source" field.
+func (m *UploadLogMutation) ClearAuthorizationSource() {
+	m.authorization_source = nil
+	m.clearedFields[uploadlog.FieldAuthorizationSource] = struct{}{}
+}
+
+// AuthorizationSourceCleared returns if the "authorization_source" field was cleared in this mutation.
+func (m *UploadLogMutation) AuthorizationSourceCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldAuthorizationSource]
+	return ok
+}
+
+// ResetAuthorizationSource resets all changes to the "authorization_source" field.
+func (m *UploadLogMutation) ResetAuthorizationSource() {
+	m.authorization_source = nil
+	delete(m.clearedFields, uploadlog.FieldAuthorizationSource)
 }
 
 // SetServer sets the "server" field.
@@ -13614,7 +13944,19 @@ func (m *UploadLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UploadLogMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 31)
+	if m.actor_user_id != nil {
+		fields = append(fields, uploadlog.FieldActorUserID)
+	}
+	if m.auth_method != nil {
+		fields = append(fields, uploadlog.FieldAuthMethod)
+	}
+	if m.grant_id != nil {
+		fields = append(fields, uploadlog.FieldGrantID)
+	}
+	if m.authorization_source != nil {
+		fields = append(fields, uploadlog.FieldAuthorizationSource)
+	}
 	if m.server != nil {
 		fields = append(fields, uploadlog.FieldServer)
 	}
@@ -13704,6 +14046,14 @@ func (m *UploadLogMutation) Fields() []string {
 // schema.
 func (m *UploadLogMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case uploadlog.FieldActorUserID:
+		return m.ActorUserID()
+	case uploadlog.FieldAuthMethod:
+		return m.AuthMethod()
+	case uploadlog.FieldGrantID:
+		return m.GrantID()
+	case uploadlog.FieldAuthorizationSource:
+		return m.AuthorizationSource()
 	case uploadlog.FieldServer:
 		return m.Server()
 	case uploadlog.FieldGameUserID:
@@ -13767,6 +14117,14 @@ func (m *UploadLogMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *UploadLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case uploadlog.FieldActorUserID:
+		return m.OldActorUserID(ctx)
+	case uploadlog.FieldAuthMethod:
+		return m.OldAuthMethod(ctx)
+	case uploadlog.FieldGrantID:
+		return m.OldGrantID(ctx)
+	case uploadlog.FieldAuthorizationSource:
+		return m.OldAuthorizationSource(ctx)
 	case uploadlog.FieldServer:
 		return m.OldServer(ctx)
 	case uploadlog.FieldGameUserID:
@@ -13830,6 +14188,34 @@ func (m *UploadLogMutation) OldField(ctx context.Context, name string) (ent.Valu
 // type.
 func (m *UploadLogMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case uploadlog.FieldActorUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorUserID(v)
+		return nil
+	case uploadlog.FieldAuthMethod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthMethod(v)
+		return nil
+	case uploadlog.FieldGrantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantID(v)
+		return nil
+	case uploadlog.FieldAuthorizationSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthorizationSource(v)
+		return nil
 	case uploadlog.FieldServer:
 		v, ok := value.(string)
 		if !ok {
@@ -14027,6 +14413,9 @@ func (m *UploadLogMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *UploadLogMutation) AddedFields() []string {
 	var fields []string
+	if m.addgrant_id != nil {
+		fields = append(fields, uploadlog.FieldGrantID)
+	}
 	if m.addprocessing_duration_ms != nil {
 		fields = append(fields, uploadlog.FieldProcessingDurationMs)
 	}
@@ -14041,6 +14430,8 @@ func (m *UploadLogMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *UploadLogMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case uploadlog.FieldGrantID:
+		return m.AddedGrantID()
 	case uploadlog.FieldProcessingDurationMs:
 		return m.AddedProcessingDurationMs()
 	case uploadlog.FieldRequestBytes:
@@ -14054,6 +14445,13 @@ func (m *UploadLogMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *UploadLogMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case uploadlog.FieldGrantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGrantID(v)
+		return nil
 	case uploadlog.FieldProcessingDurationMs:
 		v, ok := value.(int64)
 		if !ok {
@@ -14076,6 +14474,18 @@ func (m *UploadLogMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *UploadLogMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(uploadlog.FieldActorUserID) {
+		fields = append(fields, uploadlog.FieldActorUserID)
+	}
+	if m.FieldCleared(uploadlog.FieldAuthMethod) {
+		fields = append(fields, uploadlog.FieldAuthMethod)
+	}
+	if m.FieldCleared(uploadlog.FieldGrantID) {
+		fields = append(fields, uploadlog.FieldGrantID)
+	}
+	if m.FieldCleared(uploadlog.FieldAuthorizationSource) {
+		fields = append(fields, uploadlog.FieldAuthorizationSource)
+	}
 	if m.FieldCleared(uploadlog.FieldGameUserID) {
 		fields = append(fields, uploadlog.FieldGameUserID)
 	}
@@ -14156,6 +14566,18 @@ func (m *UploadLogMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *UploadLogMutation) ClearField(name string) error {
 	switch name {
+	case uploadlog.FieldActorUserID:
+		m.ClearActorUserID()
+		return nil
+	case uploadlog.FieldAuthMethod:
+		m.ClearAuthMethod()
+		return nil
+	case uploadlog.FieldGrantID:
+		m.ClearGrantID()
+		return nil
+	case uploadlog.FieldAuthorizationSource:
+		m.ClearAuthorizationSource()
+		return nil
 	case uploadlog.FieldGameUserID:
 		m.ClearGameUserID()
 		return nil
@@ -14230,6 +14652,18 @@ func (m *UploadLogMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *UploadLogMutation) ResetField(name string) error {
 	switch name {
+	case uploadlog.FieldActorUserID:
+		m.ResetActorUserID()
+		return nil
+	case uploadlog.FieldAuthMethod:
+		m.ResetAuthMethod()
+		return nil
+	case uploadlog.FieldGrantID:
+		m.ResetGrantID()
+		return nil
+	case uploadlog.FieldAuthorizationSource:
+		m.ResetAuthorizationSource()
+		return nil
 	case uploadlog.FieldServer:
 		m.ResetServer()
 		return nil

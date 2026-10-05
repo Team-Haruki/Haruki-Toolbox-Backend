@@ -139,8 +139,6 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	})
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
 		HarukiProxyV3ClientPolicy: proxyPolicy,
-		HarukiProxyV3Secret:       cfg.HarukiProxy.V3Secret,
-		HarukiProxyV3UnpackKey:    cfg.HarukiProxy.V3UnpackKey,
 		DataSync:                  harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
 		BackgroundTasks:           application.backgroundTasks,
 		TurnstileVerifier:         turnstileVerifier,

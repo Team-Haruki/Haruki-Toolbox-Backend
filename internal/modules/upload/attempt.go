@@ -16,6 +16,16 @@ import (
 
 func newAttempt(method utils.UploadMethod, size int) *platform.Attempt {
 	a := &platform.Attempt{RequestID: uuid.NewString(), ReceivedAt: time.Now().UTC(), RequestBytes: int64(size)}
+	switch method {
+	case utils.UploadMethodManual:
+		a.AuthMethod = "browser_session"
+	case utils.UploadMethodOAuth2:
+		a.AuthMethod = "oauth2"
+	case utils.UploadMethodIOSScript:
+		a.AuthMethod = "ios_user_code"
+	case utils.UploadMethodIOSProxy:
+		a.AuthMethod = "game_session_proxy"
+	}
 	if method == utils.UploadMethodInherit {
 		a.Client.Platform = "not_applicable"
 	}
@@ -93,6 +103,18 @@ func applyAttemptLogFields(create *postgresql.UploadLogCreate, uc *uploadContext
 	create.SetReceivedAt(a.ReceivedAt).SetRequestID(a.RequestID).SetRequestBytes(a.RequestBytes).
 		SetProcessingDurationMs(a.DurationMS).SetIdentityVerified(a.IdentityVerified).
 		SetClaimedGameUserID(uc.expectedGameUserIDString())
+	if a.ActorUserID != "" {
+		create.SetActorUserID(a.ActorUserID)
+	}
+	if a.AuthMethod != "" {
+		create.SetAuthMethod(a.AuthMethod)
+	}
+	if a.AuthorizationSource != "" {
+		create.SetAuthorizationSource(a.AuthorizationSource)
+	}
+	if a.GrantID != 0 {
+		create.SetGrantID(a.GrantID)
+	}
 	m := a.Client
 	setters := []struct {
 		value string

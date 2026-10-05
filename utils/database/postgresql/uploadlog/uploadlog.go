@@ -11,6 +11,14 @@ const (
 	Label = "upload_log"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldActorUserID holds the string denoting the actor_user_id field in the database.
+	FieldActorUserID = "actor_user_id"
+	// FieldAuthMethod holds the string denoting the auth_method field in the database.
+	FieldAuthMethod = "auth_method"
+	// FieldGrantID holds the string denoting the grant_id field in the database.
+	FieldGrantID = "grant_id"
+	// FieldAuthorizationSource holds the string denoting the authorization_source field in the database.
+	FieldAuthorizationSource = "authorization_source"
 	// FieldServer holds the string denoting the server field in the database.
 	FieldServer = "server"
 	// FieldGameUserID holds the string denoting the game_user_id field in the database.
@@ -72,6 +80,10 @@ const (
 // Columns holds all SQL columns for uploadlog fields.
 var Columns = []string{
 	FieldID,
+	FieldActorUserID,
+	FieldAuthMethod,
+	FieldGrantID,
+	FieldAuthorizationSource,
 	FieldServer,
 	FieldGameUserID,
 	FieldToolboxUserID,
@@ -162,6 +174,26 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByActorUserID orders the results by the actor_user_id field.
+func ByActorUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorUserID, opts...).ToFunc()
+}
+
+// ByAuthMethod orders the results by the auth_method field.
+func ByAuthMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthMethod, opts...).ToFunc()
+}
+
+// ByGrantID orders the results by the grant_id field.
+func ByGrantID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantID, opts...).ToFunc()
+}
+
+// ByAuthorizationSource orders the results by the authorization_source field.
+func ByAuthorizationSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorizationSource, opts...).ToFunc()
 }
 
 // ByServer orders the results by the server field.

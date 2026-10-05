@@ -3,6 +3,7 @@ package adminstats
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -40,7 +41,8 @@ func TestAnalyticsFiltersAndDimensions(t *testing.T) {
 	if strings.Contains(where, "OR TRUE") || !strings.Contains(where, "identity_verified = TRUE") || !strings.Contains(where, "u.role <> 'super_admin'") || !strings.Contains(where, "u.id <>") {
 		t.Fatal(where)
 	}
-	if len(args) != 4 || args[3] != "x' OR TRUE --" {
+	value, err := args[10].(driver.Valuer).Value()
+	if err != nil || !strings.Contains(value.(string), "x' OR TRUE --") {
 		t.Fatal(args)
 	}
 }
@@ -65,13 +67,14 @@ func TestUploadAnalyticsPostgres(t *testing.T) {
 	defer func() { _ = tx.Rollback() }()
 	_, err = tx.ExecContext(ctx, `CREATE TEMP TABLE users(id text,role text) ON COMMIT DROP;
  CREATE TEMP TABLE upload_logs(server text,game_user_id text,toolbox_user_id text,data_type text,upload_method text,success boolean,upload_time timestamptz,received_at timestamptz,identity_verified boolean,client_metadata_format text,platform text,protocol_version text,processing_duration_ms bigint,oauth_client_id text,failure_stage text) ON COMMIT DROP;
+ ALTER TABLE upload_logs ADD COLUMN client_version text, ADD COLUMN client_channel text, ADD COLUMN os_version text, ADD COLUMN os_arch text, ADD COLUMN app_arch text, ADD COLUMN client_name text, ADD COLUMN actor_user_id text;
  INSERT INTO users VALUES ('u','user'),('s','super_admin'),('a','admin');`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	start := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
 	insert := func(owner, game, protocol, platform string, success, verified bool, ms int, day int) {
-		_, err := tx.ExecContext(ctx, `INSERT INTO upload_logs VALUES ('jp',$1,$2,'suite','haruki_proxy',$3,$4,$4,$5,'structured',$6,$7,$8,NULL,NULL)`, game, owner, success, start.Add(time.Duration(day)*24*time.Hour), verified, platform, protocol, ms)
+		_, err := tx.ExecContext(ctx, `INSERT INTO upload_logs(server,game_user_id,toolbox_user_id,data_type,upload_method,success,upload_time,received_at,identity_verified,client_metadata_format,platform,protocol_version,processing_duration_ms,oauth_client_id,failure_stage) VALUES ('jp',$1,$2,'suite','haruki_proxy',$3,$4,$4,$5,'structured',$6,$7,$8,NULL,NULL)`, game, owner, success, start.Add(time.Duration(day)*24*time.Hour), verified, platform, protocol, ms)
 		if err != nil {
 			t.Fatal(err)
 		}

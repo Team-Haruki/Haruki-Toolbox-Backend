@@ -139,9 +139,9 @@ func persistUploadAuditLog(
 	action := "user.upload." + strings.ToLower(string(uploadCtx.UploadMethod))
 	actorType := harukiAPIHelper.SystemLogActorTypeSystem
 	var actorUserID *string
-	if strings.TrimSpace(uploadCtx.ToolboxUserID) != "" {
+	if uploadCtx.Attempt != nil && strings.TrimSpace(uploadCtx.Attempt.ActorUserID) != "" {
 		actorType = harukiAPIHelper.SystemLogActorTypeUser
-		userIDCopy := uploadCtx.ToolboxUserID
+		userIDCopy := uploadCtx.Attempt.ActorUserID
 		actorUserID = &userIDCopy
 	}
 

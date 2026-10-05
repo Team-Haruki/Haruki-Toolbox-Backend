@@ -66,6 +66,7 @@ GET /api/misc/sponsors
 GET /api/oauth2/authorize
 GET /api/oauth2/consent
 GET /api/oauth2/game-data/:server/:data_type/:user_id
+GET /api/oauth2/game-data/upload-targets
 GET /api/oauth2/login
 GET /api/oauth2/logout
 GET /api/oauth2/user/bindings
