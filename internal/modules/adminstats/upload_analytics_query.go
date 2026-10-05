@@ -144,7 +144,7 @@ func queryUploadMigration(ctx context.Context, tx *sql.Tx, _ string, args []any)
 	const q = `WITH scoped AS (SELECT * FROM upload_logs l WHERE ` + analyticsWhereSQL + ` AND upload_method='haruki_proxy' AND success),
  accounts AS (SELECT server,game_user_id FROM scoped WHERE identity_verified AND game_user_id IS NOT NULL GROUP BY server,game_user_id HAVING bool_or(protocol_version='2') AND NOT bool_or(COALESCE(protocol_version='3',FALSE)))
  SELECT COUNT(*) FILTER (WHERE protocol_version='2'), COUNT(*) FILTER (WHERE protocol_version='3'), COUNT(*) FILTER (WHERE protocol_version IS NULL), (SELECT COUNT(*) FROM accounts) FROM scoped`
-	err := tx.QueryRowContext(ctx, q, args...).Scan(&m.V2Success, &m.V3Success, &m.UnknownProtocolSuccess, &m.V2OnlyAccounts)
+	err := tx.QueryRowContext(ctx, q, args...).Scan(&m.V2Success, &m.V3Success, &m.UnknownProtocolSuccess, &m.V2OnlyAccounts) // NOSONAR: S2077 false positive: q is a Go compile-time constant; all request values are bound parameters.
 	if sum := m.V2Success + m.V3Success; sum > 0 {
 		share := float64(m.V3Success) / float64(sum)
 		m.V3Share = &share

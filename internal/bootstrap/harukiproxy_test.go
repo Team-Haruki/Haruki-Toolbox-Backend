@@ -51,3 +51,17 @@ func TestUploadSchemaValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteGrantSchemaRequiresBothPermissions(t *testing.T) {
+	for _, count := range []int{0, 1, 2} {
+		client, mock := newBootstrapSQLMockClient(t)
+		mock.ExpectQuery("SELECT count").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(count))
+		err := validateUploadGrantSchema(context.Background(), client)
+		if (err == nil) != (count == 2) {
+			t.Fatalf("columns %d: %v", count, err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	oauth "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
@@ -96,5 +97,47 @@ func TestProxyOAuthWriteGrant(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("missing delegate audit")
+	}
+}
+
+func TestOAuthUploadTargetDiscovery(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "target-discovery"))
+	defer db.Close()
+	ctx := context.Background()
+	for _, id := range []string{"owner", "actor"} {
+		if _, err := db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.com").Save(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for id, owner := range map[string]string{"123": "owner", "456": "actor"} {
+		if _, err := db.GameAccountBinding.Create().SetServer("jp").SetGameUserID(id).SetVerified(true).SetUserID(owner).Save(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.UpsertGameAccountDataGrant(ctx, "owner", "actor", "jp", "123", "suite", time.Now().Add(time.Hour), []string{"write"}); err != nil {
+		t.Fatal(err)
+	}
+	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() })
+	app.Get("/", handleOAuthUploadTargets(helper))
+	resp, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Data []uploadTarget `json:"updatedData"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Data) != 3 {
+		t.Fatal(body)
+	}
+	for _, target := range body.Data {
+		if target.GameUserID == "123" && (target.DataType != "suite" || target.ExpiresAt == nil) {
+			t.Fatal(target)
+		}
 	}
 }
