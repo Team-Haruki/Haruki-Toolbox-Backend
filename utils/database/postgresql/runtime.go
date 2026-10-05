@@ -443,6 +443,74 @@ func init() {
 	uploadlogDescDataType := uploadlogFields[3].Descriptor()
 	// uploadlog.DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
 	uploadlog.DataTypeValidator = uploadlogDescDataType.Validators[0].(func(string) error)
+	// uploadlogDescClientName is the schema descriptor for client_name field.
+	uploadlogDescClientName := uploadlogFields[8].Descriptor()
+	// uploadlog.ClientNameValidator is a validator for the "client_name" field. It is called by the builders before save.
+	uploadlog.ClientNameValidator = uploadlogDescClientName.Validators[0].(func(string) error)
+	// uploadlogDescClientVersion is the schema descriptor for client_version field.
+	uploadlogDescClientVersion := uploadlogFields[9].Descriptor()
+	// uploadlog.ClientVersionValidator is a validator for the "client_version" field. It is called by the builders before save.
+	uploadlog.ClientVersionValidator = uploadlogDescClientVersion.Validators[0].(func(string) error)
+	// uploadlogDescClientChannel is the schema descriptor for client_channel field.
+	uploadlogDescClientChannel := uploadlogFields[10].Descriptor()
+	// uploadlog.ClientChannelValidator is a validator for the "client_channel" field. It is called by the builders before save.
+	uploadlog.ClientChannelValidator = uploadlogDescClientChannel.Validators[0].(func(string) error)
+	// uploadlogDescClientMetadataFormat is the schema descriptor for client_metadata_format field.
+	uploadlogDescClientMetadataFormat := uploadlogFields[11].Descriptor()
+	// uploadlog.ClientMetadataFormatValidator is a validator for the "client_metadata_format" field. It is called by the builders before save.
+	uploadlog.ClientMetadataFormatValidator = uploadlogDescClientMetadataFormat.Validators[0].(func(string) error)
+	// uploadlogDescProtocolVersion is the schema descriptor for protocol_version field.
+	uploadlogDescProtocolVersion := uploadlogFields[12].Descriptor()
+	// uploadlog.ProtocolVersionValidator is a validator for the "protocol_version" field. It is called by the builders before save.
+	uploadlog.ProtocolVersionValidator = uploadlogDescProtocolVersion.Validators[0].(func(string) error)
+	// uploadlogDescPlatform is the schema descriptor for platform field.
+	uploadlogDescPlatform := uploadlogFields[13].Descriptor()
+	// uploadlog.PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
+	uploadlog.PlatformValidator = uploadlogDescPlatform.Validators[0].(func(string) error)
+	// uploadlogDescOsVersion is the schema descriptor for os_version field.
+	uploadlogDescOsVersion := uploadlogFields[14].Descriptor()
+	// uploadlog.OsVersionValidator is a validator for the "os_version" field. It is called by the builders before save.
+	uploadlog.OsVersionValidator = uploadlogDescOsVersion.Validators[0].(func(string) error)
+	// uploadlogDescOsBuild is the schema descriptor for os_build field.
+	uploadlogDescOsBuild := uploadlogFields[15].Descriptor()
+	// uploadlog.OsBuildValidator is a validator for the "os_build" field. It is called by the builders before save.
+	uploadlog.OsBuildValidator = uploadlogDescOsBuild.Validators[0].(func(string) error)
+	// uploadlogDescOsArch is the schema descriptor for os_arch field.
+	uploadlogDescOsArch := uploadlogFields[16].Descriptor()
+	// uploadlog.OsArchValidator is a validator for the "os_arch" field. It is called by the builders before save.
+	uploadlog.OsArchValidator = uploadlogDescOsArch.Validators[0].(func(string) error)
+	// uploadlogDescAppArch is the schema descriptor for app_arch field.
+	uploadlogDescAppArch := uploadlogFields[17].Descriptor()
+	// uploadlog.AppArchValidator is a validator for the "app_arch" field. It is called by the builders before save.
+	uploadlog.AppArchValidator = uploadlogDescAppArch.Validators[0].(func(string) error)
+	// uploadlogDescFailureStage is the schema descriptor for failure_stage field.
+	uploadlogDescFailureStage := uploadlogFields[18].Descriptor()
+	// uploadlog.FailureStageValidator is a validator for the "failure_stage" field. It is called by the builders before save.
+	uploadlog.FailureStageValidator = uploadlogDescFailureStage.Validators[0].(func(string) error)
+	// uploadlogDescErrorCode is the schema descriptor for error_code field.
+	uploadlogDescErrorCode := uploadlogFields[19].Descriptor()
+	// uploadlog.ErrorCodeValidator is a validator for the "error_code" field. It is called by the builders before save.
+	uploadlog.ErrorCodeValidator = uploadlogDescErrorCode.Validators[0].(func(string) error)
+	// uploadlogDescRequestID is the schema descriptor for request_id field.
+	uploadlogDescRequestID := uploadlogFields[20].Descriptor()
+	// uploadlog.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	uploadlog.RequestIDValidator = uploadlogDescRequestID.Validators[0].(func(string) error)
+	// uploadlogDescClaimedGameUserID is the schema descriptor for claimed_game_user_id field.
+	uploadlogDescClaimedGameUserID := uploadlogFields[21].Descriptor()
+	// uploadlog.ClaimedGameUserIDValidator is a validator for the "claimed_game_user_id" field. It is called by the builders before save.
+	uploadlog.ClaimedGameUserIDValidator = uploadlogDescClaimedGameUserID.Validators[0].(func(string) error)
+	// uploadlogDescOauthClientID is the schema descriptor for oauth_client_id field.
+	uploadlogDescOauthClientID := uploadlogFields[22].Descriptor()
+	// uploadlog.OauthClientIDValidator is a validator for the "oauth_client_id" field. It is called by the builders before save.
+	uploadlog.OauthClientIDValidator = uploadlogDescOauthClientID.Validators[0].(func(string) error)
+	// uploadlogDescProcessingDurationMs is the schema descriptor for processing_duration_ms field.
+	uploadlogDescProcessingDurationMs := uploadlogFields[23].Descriptor()
+	// uploadlog.ProcessingDurationMsValidator is a validator for the "processing_duration_ms" field. It is called by the builders before save.
+	uploadlog.ProcessingDurationMsValidator = uploadlogDescProcessingDurationMs.Validators[0].(func(int64) error)
+	// uploadlogDescRequestBytes is the schema descriptor for request_bytes field.
+	uploadlogDescRequestBytes := uploadlogFields[24].Descriptor()
+	// uploadlog.RequestBytesValidator is a validator for the "request_bytes" field. It is called by the builders before save.
+	uploadlog.RequestBytesValidator = uploadlogDescRequestBytes.Validators[0].(func(int64) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.

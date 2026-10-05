@@ -25,6 +25,26 @@ type SystemLogListItem struct {
 }
 
 type UploadLogListItem struct {
+	ClientName           *string    `json:"clientName,omitzero"`
+	ClientVersion        *string    `json:"clientVersion,omitzero"`
+	ClientChannel        *string    `json:"clientChannel,omitzero"`
+	ClientMetadataFormat *string    `json:"clientMetadataFormat,omitzero"`
+	ProtocolVersion      *string    `json:"protocolVersion,omitzero"`
+	Platform             *string    `json:"platform,omitzero"`
+	OsVersion            *string    `json:"osVersion,omitzero"`
+	OsBuild              *string    `json:"osBuild,omitzero"`
+	OsArch               *string    `json:"osArch,omitzero"`
+	AppArch              *string    `json:"appArch,omitzero"`
+	FailureStage         *string    `json:"failureStage,omitzero"`
+	ErrorCode            *string    `json:"errorCode,omitzero"`
+	RequestID            *string    `json:"requestId,omitzero"`
+	OauthClientID        *string    `json:"oauthClientId,omitzero"`
+	ProcessingDurationMs *int64     `json:"processingDurationMs,omitzero"`
+	RequestBytes         *int64     `json:"requestBytes,omitzero"`
+	IdentityVerified     *bool      `json:"identityVerified,omitzero"`
+	ReceivedAt           *time.Time `json:"receivedAt,omitzero"`
+	ClaimedGameUserID    *string    `json:"claimedGameUserId,omitzero"`
+
 	ID            int       `json:"id"`
 	Server        string    `json:"server"`
 	GameUserID    string    `json:"gameUserId"`
@@ -79,20 +99,43 @@ func BuildSystemLogItems(rows []*postgresql.SystemLog) []SystemLogListItem {
 	return items
 }
 
-func BuildUploadLogItems(rows []*postgresql.UploadLog) []UploadLogListItem {
+func BuildUploadLogItems(rows []*postgresql.UploadLog, includeClaims ...bool) []UploadLogListItem {
 	items := make([]UploadLogListItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, UploadLogListItem{
-			ID:            row.ID,
-			Server:        row.Server,
-			GameUserID:    row.GameUserID,
-			ToolboxUserID: row.ToolboxUserID,
-			DataType:      row.DataType,
-			UploadMethod:  row.UploadMethod,
-			Success:       row.Success,
-			ErrorMessage:  row.ErrorMessage,
-			UploadTime:    row.UploadTime.UTC(),
+			ClientName:           row.ClientName,
+			ClientVersion:        row.ClientVersion,
+			ClientChannel:        row.ClientChannel,
+			ClientMetadataFormat: row.ClientMetadataFormat,
+			ProtocolVersion:      row.ProtocolVersion,
+			Platform:             row.Platform,
+			OsVersion:            row.OsVersion,
+			OsBuild:              row.OsBuild,
+			OsArch:               row.OsArch,
+			AppArch:              row.AppArch,
+			FailureStage:         row.FailureStage,
+			ErrorCode:            row.ErrorCode,
+			RequestID:            row.RequestID,
+			OauthClientID:        row.OauthClientID,
+			ProcessingDurationMs: row.ProcessingDurationMs,
+			RequestBytes:         row.RequestBytes,
+			IdentityVerified:     row.IdentityVerified,
+			ReceivedAt:           row.ReceivedAt,
+			ID:                   row.ID,
+			Server:               row.Server,
+			GameUserID:           row.GameUserID,
+			ToolboxUserID:        row.ToolboxUserID,
+			DataType:             row.DataType,
+			UploadMethod:         row.UploadMethod,
+			Success:              row.Success,
+			ErrorMessage:         row.ErrorMessage,
+			UploadTime:           row.UploadTime.UTC(),
 		})
+	}
+	if len(includeClaims) > 0 && includeClaims[0] {
+		for i, row := range rows {
+			items[i].ClaimedGameUserID = row.ClaimedGameUserID
+		}
 	}
 	return items
 }

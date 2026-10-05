@@ -294,7 +294,7 @@ func TestHarukiProxyV3RoutesAndKeys(t *testing.T) {
 					t.Fatal(err)
 				}
 				req := httptest.NewRequest(http.MethodPost, prefix+"/v3/jp/123/suite/upload", bytes.NewReader(body))
-				req.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
+				req.Header.Set("User-Agent", "HarukiProxy/v3.0.0 (platform=Android; app_arch=arm64)")
 				req.Header.Set("X-Haruki-Toolbox-Secret", tc.secret)
 				resp, err := app.Test(req)
 				if err != nil {
@@ -305,7 +305,11 @@ func TestHarukiProxyV3RoutesAndKeys(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(payload), tc.want) {
+				wantStatus := http.StatusBadRequest
+				if tc.secret == "old-secret" {
+					wantStatus = http.StatusUnauthorized
+				}
+				if resp.StatusCode != wantStatus || !strings.Contains(string(payload), tc.want) {
 					t.Fatalf("status = %d, body = %s", resp.StatusCode, payload)
 				}
 				if resp.Header.Get("Sunset") != "" {
@@ -336,7 +340,7 @@ func TestHarukiProxyV3DoesNotFallBackToLegacyAuth(t *testing.T) {
 			helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, HarukiProxyUserAgent: "HarukiProxy", HarukiProxyVersion: "v1.2.0", HarukiProxySecret: "legacy", HarukiProxyUnpackKey: "legacy-key"}
 			registerHarukiProxyRoutes(helper, dependencies)
 			req := httptest.NewRequest(http.MethodPost, "/harukiproxy/v3/jp/123/suite/upload", nil)
-			req.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
+			req.Header.Set("User-Agent", "HarukiProxy/v3.0.0 (platform=Android; app_arch=arm64)")
 			req.Header.Set("X-Haruki-Toolbox-Secret", "legacy")
 			resp, err := app.Test(req)
 			if err != nil {

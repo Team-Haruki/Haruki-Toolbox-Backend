@@ -35,6 +35,7 @@ GET /api/admin/risk/rules
 GET /api/admin/sponsors
 GET /api/admin/statistics/dashboard
 GET /api/admin/statistics/timeseries
+GET /api/admin/statistics/upload-analytics
 GET /api/admin/statistics/upload-logs
 GET /api/admin/system-logs
 GET /api/admin/system-logs/:id

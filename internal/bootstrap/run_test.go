@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
 	"io"
 	"os"
 	"path/filepath"
@@ -146,6 +147,11 @@ func TestPrepareToolboxDatabaseValidatesAndCleansUpManualSchema(t *testing.T) {
 	rows = sqlmock.NewRows([]string{"to_regclass"}).AddRow("webhook_subscriptions")
 	mock.ExpectQuery(regexp.QuoteMeta(checkWebhookSubscriptionsTableExistsSQL)).WillReturnRows(rows)
 	expectSchemaExistsQuery(mock, checkWebhookEndpointsEnabledColumnExistsSQL, true)
+	uploadRows := sqlmock.NewRows([]string{"column_name", "is_nullable"})
+	for _, column := range uploadlog.Columns {
+		uploadRows.AddRow(column, "YES")
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(uploadLogColumnsSQL)).WillReturnRows(uploadRows)
 	mock.ExpectExec("DELETE FROM").WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 2))
 
 	if err := prepareToolboxDatabase(cfg, client, logger); err != nil {

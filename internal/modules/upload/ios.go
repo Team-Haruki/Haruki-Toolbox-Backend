@@ -242,6 +242,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 
 		toolboxUserIDCopy := toolboxUserID
+		attempt := newAttempt(harukiUtils.UploadMethodIOSScript, 0)
 		accepted := startBackgroundTask(dependencies.BackgroundTasks, logger, "ios-upload-assembly", func() {
 			chunks := completedChunks
 			sort.Slice(chunks, func(x, y int) bool {
@@ -264,7 +265,8 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			// race task-group shutdown by attempting nested admission later.
 			innerDependencies := dependencies
 			innerDependencies.BackgroundTasks = harukiBackground.InlineRunner{}
-			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript)
+			attempt.RequestBytes = int64(len(payload))
+			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
 			if err != nil {
 				// HandleUpload already logs every failure with full context at
 				// WARNING inside its fail() helper. This async fire-and-forget

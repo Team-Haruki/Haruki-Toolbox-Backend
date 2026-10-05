@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"fmt"
+	platform "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -30,26 +31,32 @@ func HandleUpload(
 	helper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	dependencies Dependencies,
 	uploadMethod harukiUtils.UploadMethod,
+	attempts ...*platform.Attempt,
 ) (*harukiUtils.HandleDataResult, error) {
 
-	uploadSemaphore <- struct{}{}
-	defer func() { <-uploadSemaphore }()
+	attempt := newAttempt(uploadMethod, len(data))
+	if len(attempts) > 0 && attempts[0] != nil {
+		attempt = attempts[0]
+	}
 
 	uploadCtx, err := buildUploadContext(server, dataType, gameUserID, userID, uploadMethod)
 	if err != nil {
 		return nil, err
 	}
+	uploadCtx.Attempt = attempt
 	handler := newUploadDataHandler(helper, dependencies)
 	auditWritten := false
 	writeUploadAudit := func(success bool, errorMessage *string) {
 		if auditWritten {
 			return
 		}
+		finishAttempt(uploadCtx, success)
 		dispatchUploadAuditLog(helper, handler.Logger, dependencies.BackgroundTasks, uploadCtx, success, errorMessage)
 		auditWritten = true
 	}
 	fail := func(stage string, result *harukiUtils.HandleDataResult, err error) (*harukiUtils.HandleDataResult, error) {
 		uploadCtx.FailureStage = stage
+		classifyAttemptFailure(attempt, stage, err)
 		if err != nil && handler.Logger != nil {
 			handler.Logger.Warnf(
 				"Upload failed stage=%s method=%s server=%s dataType=%s expectedGameUserId=%s parsedGameUserId=%s parsedGameUserIdType=%s err=%v",
@@ -65,6 +72,13 @@ func HandleUpload(
 		}
 		writeUploadAudit(false, buildUploadAuditErrorMessage(err, result))
 		return result, err
+	}
+
+	select {
+	case uploadSemaphore <- struct{}{}:
+		defer func() { <-uploadSemaphore }()
+	case <-ctx.Done():
+		return fail(uploadStageAccountPolicy, nil, ctx.Err())
 	}
 
 	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(uploadCtx.Server), uploadCtx.expectedGameUserIDString(), uploadCtx.UploadMethod, userID)
@@ -101,6 +115,11 @@ func HandleUpload(
 	processedData, err := handler.PreHandleData(unpackedMap, &uploadCtx.ExpectedGameUserID, uploadCtx.ParsedGameUserID, uploadCtx.Server, uploadCtx.DataType)
 	if err != nil {
 		return fail(uploadStagePreprocess, nil, err)
+	}
+	// Only attribute an identity corroborated by the payload or authenticated ownership.
+	attempt.IdentityVerified = (uploadCtx.ParsedGameUserID != nil && *uploadCtx.ParsedGameUserID == uploadCtx.ExpectedGameUserID) || (userID != nil && belongs != nil && *belongs)
+	if err := resolveAttemptOwner(ctx, helper, uploadCtx); err != nil {
+		return fail(uploadStageAccountPolicy, nil, err)
 	}
 	if err := handler.PersistUploadData(ctx, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID); err != nil {
 		return fail(uploadStagePersist, nil, err)

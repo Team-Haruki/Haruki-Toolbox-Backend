@@ -56,6 +56,12 @@ func (_u *UploadLogUpdate) SetNillableGameUserID(v *string) *UploadLogUpdate {
 	return _u
 }
 
+// ClearGameUserID clears the value of the "game_user_id" field.
+func (_u *UploadLogUpdate) ClearGameUserID() *UploadLogUpdate {
+	_u.mutation.ClearGameUserID()
+	return _u
+}
+
 // SetToolboxUserID sets the "toolbox_user_id" field.
 func (_u *UploadLogUpdate) SetToolboxUserID(v string) *UploadLogUpdate {
 	_u.mutation.SetToolboxUserID(v)
@@ -152,6 +158,400 @@ func (_u *UploadLogUpdate) SetNillableUploadTime(v *time.Time) *UploadLogUpdate 
 	return _u
 }
 
+// SetClientName sets the "client_name" field.
+func (_u *UploadLogUpdate) SetClientName(v string) *UploadLogUpdate {
+	_u.mutation.SetClientName(v)
+	return _u
+}
+
+// SetNillableClientName sets the "client_name" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableClientName(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetClientName(*v)
+	}
+	return _u
+}
+
+// ClearClientName clears the value of the "client_name" field.
+func (_u *UploadLogUpdate) ClearClientName() *UploadLogUpdate {
+	_u.mutation.ClearClientName()
+	return _u
+}
+
+// SetClientVersion sets the "client_version" field.
+func (_u *UploadLogUpdate) SetClientVersion(v string) *UploadLogUpdate {
+	_u.mutation.SetClientVersion(v)
+	return _u
+}
+
+// SetNillableClientVersion sets the "client_version" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableClientVersion(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetClientVersion(*v)
+	}
+	return _u
+}
+
+// ClearClientVersion clears the value of the "client_version" field.
+func (_u *UploadLogUpdate) ClearClientVersion() *UploadLogUpdate {
+	_u.mutation.ClearClientVersion()
+	return _u
+}
+
+// SetClientChannel sets the "client_channel" field.
+func (_u *UploadLogUpdate) SetClientChannel(v string) *UploadLogUpdate {
+	_u.mutation.SetClientChannel(v)
+	return _u
+}
+
+// SetNillableClientChannel sets the "client_channel" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableClientChannel(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetClientChannel(*v)
+	}
+	return _u
+}
+
+// ClearClientChannel clears the value of the "client_channel" field.
+func (_u *UploadLogUpdate) ClearClientChannel() *UploadLogUpdate {
+	_u.mutation.ClearClientChannel()
+	return _u
+}
+
+// SetClientMetadataFormat sets the "client_metadata_format" field.
+func (_u *UploadLogUpdate) SetClientMetadataFormat(v string) *UploadLogUpdate {
+	_u.mutation.SetClientMetadataFormat(v)
+	return _u
+}
+
+// SetNillableClientMetadataFormat sets the "client_metadata_format" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableClientMetadataFormat(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetClientMetadataFormat(*v)
+	}
+	return _u
+}
+
+// ClearClientMetadataFormat clears the value of the "client_metadata_format" field.
+func (_u *UploadLogUpdate) ClearClientMetadataFormat() *UploadLogUpdate {
+	_u.mutation.ClearClientMetadataFormat()
+	return _u
+}
+
+// SetProtocolVersion sets the "protocol_version" field.
+func (_u *UploadLogUpdate) SetProtocolVersion(v string) *UploadLogUpdate {
+	_u.mutation.SetProtocolVersion(v)
+	return _u
+}
+
+// SetNillableProtocolVersion sets the "protocol_version" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableProtocolVersion(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetProtocolVersion(*v)
+	}
+	return _u
+}
+
+// ClearProtocolVersion clears the value of the "protocol_version" field.
+func (_u *UploadLogUpdate) ClearProtocolVersion() *UploadLogUpdate {
+	_u.mutation.ClearProtocolVersion()
+	return _u
+}
+
+// SetPlatform sets the "platform" field.
+func (_u *UploadLogUpdate) SetPlatform(v string) *UploadLogUpdate {
+	_u.mutation.SetPlatform(v)
+	return _u
+}
+
+// SetNillablePlatform sets the "platform" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillablePlatform(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetPlatform(*v)
+	}
+	return _u
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (_u *UploadLogUpdate) ClearPlatform() *UploadLogUpdate {
+	_u.mutation.ClearPlatform()
+	return _u
+}
+
+// SetOsVersion sets the "os_version" field.
+func (_u *UploadLogUpdate) SetOsVersion(v string) *UploadLogUpdate {
+	_u.mutation.SetOsVersion(v)
+	return _u
+}
+
+// SetNillableOsVersion sets the "os_version" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableOsVersion(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetOsVersion(*v)
+	}
+	return _u
+}
+
+// ClearOsVersion clears the value of the "os_version" field.
+func (_u *UploadLogUpdate) ClearOsVersion() *UploadLogUpdate {
+	_u.mutation.ClearOsVersion()
+	return _u
+}
+
+// SetOsBuild sets the "os_build" field.
+func (_u *UploadLogUpdate) SetOsBuild(v string) *UploadLogUpdate {
+	_u.mutation.SetOsBuild(v)
+	return _u
+}
+
+// SetNillableOsBuild sets the "os_build" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableOsBuild(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetOsBuild(*v)
+	}
+	return _u
+}
+
+// ClearOsBuild clears the value of the "os_build" field.
+func (_u *UploadLogUpdate) ClearOsBuild() *UploadLogUpdate {
+	_u.mutation.ClearOsBuild()
+	return _u
+}
+
+// SetOsArch sets the "os_arch" field.
+func (_u *UploadLogUpdate) SetOsArch(v string) *UploadLogUpdate {
+	_u.mutation.SetOsArch(v)
+	return _u
+}
+
+// SetNillableOsArch sets the "os_arch" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableOsArch(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetOsArch(*v)
+	}
+	return _u
+}
+
+// ClearOsArch clears the value of the "os_arch" field.
+func (_u *UploadLogUpdate) ClearOsArch() *UploadLogUpdate {
+	_u.mutation.ClearOsArch()
+	return _u
+}
+
+// SetAppArch sets the "app_arch" field.
+func (_u *UploadLogUpdate) SetAppArch(v string) *UploadLogUpdate {
+	_u.mutation.SetAppArch(v)
+	return _u
+}
+
+// SetNillableAppArch sets the "app_arch" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableAppArch(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetAppArch(*v)
+	}
+	return _u
+}
+
+// ClearAppArch clears the value of the "app_arch" field.
+func (_u *UploadLogUpdate) ClearAppArch() *UploadLogUpdate {
+	_u.mutation.ClearAppArch()
+	return _u
+}
+
+// SetFailureStage sets the "failure_stage" field.
+func (_u *UploadLogUpdate) SetFailureStage(v string) *UploadLogUpdate {
+	_u.mutation.SetFailureStage(v)
+	return _u
+}
+
+// SetNillableFailureStage sets the "failure_stage" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableFailureStage(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetFailureStage(*v)
+	}
+	return _u
+}
+
+// ClearFailureStage clears the value of the "failure_stage" field.
+func (_u *UploadLogUpdate) ClearFailureStage() *UploadLogUpdate {
+	_u.mutation.ClearFailureStage()
+	return _u
+}
+
+// SetErrorCode sets the "error_code" field.
+func (_u *UploadLogUpdate) SetErrorCode(v string) *UploadLogUpdate {
+	_u.mutation.SetErrorCode(v)
+	return _u
+}
+
+// SetNillableErrorCode sets the "error_code" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableErrorCode(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetErrorCode(*v)
+	}
+	return _u
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (_u *UploadLogUpdate) ClearErrorCode() *UploadLogUpdate {
+	_u.mutation.ClearErrorCode()
+	return _u
+}
+
+// SetRequestID sets the "request_id" field.
+func (_u *UploadLogUpdate) SetRequestID(v string) *UploadLogUpdate {
+	_u.mutation.SetRequestID(v)
+	return _u
+}
+
+// SetNillableRequestID sets the "request_id" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableRequestID(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetRequestID(*v)
+	}
+	return _u
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (_u *UploadLogUpdate) ClearRequestID() *UploadLogUpdate {
+	_u.mutation.ClearRequestID()
+	return _u
+}
+
+// SetClaimedGameUserID sets the "claimed_game_user_id" field.
+func (_u *UploadLogUpdate) SetClaimedGameUserID(v string) *UploadLogUpdate {
+	_u.mutation.SetClaimedGameUserID(v)
+	return _u
+}
+
+// SetNillableClaimedGameUserID sets the "claimed_game_user_id" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableClaimedGameUserID(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetClaimedGameUserID(*v)
+	}
+	return _u
+}
+
+// ClearClaimedGameUserID clears the value of the "claimed_game_user_id" field.
+func (_u *UploadLogUpdate) ClearClaimedGameUserID() *UploadLogUpdate {
+	_u.mutation.ClearClaimedGameUserID()
+	return _u
+}
+
+// SetOauthClientID sets the "oauth_client_id" field.
+func (_u *UploadLogUpdate) SetOauthClientID(v string) *UploadLogUpdate {
+	_u.mutation.SetOauthClientID(v)
+	return _u
+}
+
+// SetNillableOauthClientID sets the "oauth_client_id" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableOauthClientID(v *string) *UploadLogUpdate {
+	if v != nil {
+		_u.SetOauthClientID(*v)
+	}
+	return _u
+}
+
+// ClearOauthClientID clears the value of the "oauth_client_id" field.
+func (_u *UploadLogUpdate) ClearOauthClientID() *UploadLogUpdate {
+	_u.mutation.ClearOauthClientID()
+	return _u
+}
+
+// SetProcessingDurationMs sets the "processing_duration_ms" field.
+func (_u *UploadLogUpdate) SetProcessingDurationMs(v int64) *UploadLogUpdate {
+	_u.mutation.ResetProcessingDurationMs()
+	_u.mutation.SetProcessingDurationMs(v)
+	return _u
+}
+
+// SetNillableProcessingDurationMs sets the "processing_duration_ms" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableProcessingDurationMs(v *int64) *UploadLogUpdate {
+	if v != nil {
+		_u.SetProcessingDurationMs(*v)
+	}
+	return _u
+}
+
+// AddProcessingDurationMs adds value to the "processing_duration_ms" field.
+func (_u *UploadLogUpdate) AddProcessingDurationMs(v int64) *UploadLogUpdate {
+	_u.mutation.AddProcessingDurationMs(v)
+	return _u
+}
+
+// ClearProcessingDurationMs clears the value of the "processing_duration_ms" field.
+func (_u *UploadLogUpdate) ClearProcessingDurationMs() *UploadLogUpdate {
+	_u.mutation.ClearProcessingDurationMs()
+	return _u
+}
+
+// SetRequestBytes sets the "request_bytes" field.
+func (_u *UploadLogUpdate) SetRequestBytes(v int64) *UploadLogUpdate {
+	_u.mutation.ResetRequestBytes()
+	_u.mutation.SetRequestBytes(v)
+	return _u
+}
+
+// SetNillableRequestBytes sets the "request_bytes" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableRequestBytes(v *int64) *UploadLogUpdate {
+	if v != nil {
+		_u.SetRequestBytes(*v)
+	}
+	return _u
+}
+
+// AddRequestBytes adds value to the "request_bytes" field.
+func (_u *UploadLogUpdate) AddRequestBytes(v int64) *UploadLogUpdate {
+	_u.mutation.AddRequestBytes(v)
+	return _u
+}
+
+// ClearRequestBytes clears the value of the "request_bytes" field.
+func (_u *UploadLogUpdate) ClearRequestBytes() *UploadLogUpdate {
+	_u.mutation.ClearRequestBytes()
+	return _u
+}
+
+// SetIdentityVerified sets the "identity_verified" field.
+func (_u *UploadLogUpdate) SetIdentityVerified(v bool) *UploadLogUpdate {
+	_u.mutation.SetIdentityVerified(v)
+	return _u
+}
+
+// SetNillableIdentityVerified sets the "identity_verified" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableIdentityVerified(v *bool) *UploadLogUpdate {
+	if v != nil {
+		_u.SetIdentityVerified(*v)
+	}
+	return _u
+}
+
+// ClearIdentityVerified clears the value of the "identity_verified" field.
+func (_u *UploadLogUpdate) ClearIdentityVerified() *UploadLogUpdate {
+	_u.mutation.ClearIdentityVerified()
+	return _u
+}
+
+// SetReceivedAt sets the "received_at" field.
+func (_u *UploadLogUpdate) SetReceivedAt(v time.Time) *UploadLogUpdate {
+	_u.mutation.SetReceivedAt(v)
+	return _u
+}
+
+// SetNillableReceivedAt sets the "received_at" field if the given value is not nil.
+func (_u *UploadLogUpdate) SetNillableReceivedAt(v *time.Time) *UploadLogUpdate {
+	if v != nil {
+		_u.SetReceivedAt(*v)
+	}
+	return _u
+}
+
+// ClearReceivedAt clears the value of the "received_at" field.
+func (_u *UploadLogUpdate) ClearReceivedAt() *UploadLogUpdate {
+	_u.mutation.ClearReceivedAt()
+	return _u
+}
+
 // Mutation returns the UploadLogMutation object of the builder.
 func (_u *UploadLogUpdate) Mutation() *UploadLogMutation {
 	return _u.mutation
@@ -206,6 +606,91 @@ func (_u *UploadLogUpdate) check() error {
 			return &ValidationError{Name: "data_type", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.data_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClientName(); ok {
+		if err := uploadlog.ClientNameValidator(v); err != nil {
+			return &ValidationError{Name: "client_name", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClientVersion(); ok {
+		if err := uploadlog.ClientVersionValidator(v); err != nil {
+			return &ValidationError{Name: "client_version", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_version": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClientChannel(); ok {
+		if err := uploadlog.ClientChannelValidator(v); err != nil {
+			return &ValidationError{Name: "client_channel", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_channel": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClientMetadataFormat(); ok {
+		if err := uploadlog.ClientMetadataFormatValidator(v); err != nil {
+			return &ValidationError{Name: "client_metadata_format", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_metadata_format": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProtocolVersion(); ok {
+		if err := uploadlog.ProtocolVersionValidator(v); err != nil {
+			return &ValidationError{Name: "protocol_version", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.protocol_version": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Platform(); ok {
+		if err := uploadlog.PlatformValidator(v); err != nil {
+			return &ValidationError{Name: "platform", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.platform": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OsVersion(); ok {
+		if err := uploadlog.OsVersionValidator(v); err != nil {
+			return &ValidationError{Name: "os_version", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.os_version": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OsBuild(); ok {
+		if err := uploadlog.OsBuildValidator(v); err != nil {
+			return &ValidationError{Name: "os_build", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.os_build": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OsArch(); ok {
+		if err := uploadlog.OsArchValidator(v); err != nil {
+			return &ValidationError{Name: "os_arch", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.os_arch": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AppArch(); ok {
+		if err := uploadlog.AppArchValidator(v); err != nil {
+			return &ValidationError{Name: "app_arch", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.app_arch": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.FailureStage(); ok {
+		if err := uploadlog.FailureStageValidator(v); err != nil {
+			return &ValidationError{Name: "failure_stage", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.failure_stage": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ErrorCode(); ok {
+		if err := uploadlog.ErrorCodeValidator(v); err != nil {
+			return &ValidationError{Name: "error_code", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.error_code": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RequestID(); ok {
+		if err := uploadlog.RequestIDValidator(v); err != nil {
+			return &ValidationError{Name: "request_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.request_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClaimedGameUserID(); ok {
+		if err := uploadlog.ClaimedGameUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "claimed_game_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.claimed_game_user_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OauthClientID(); ok {
+		if err := uploadlog.OauthClientIDValidator(v); err != nil {
+			return &ValidationError{Name: "oauth_client_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.oauth_client_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProcessingDurationMs(); ok {
+		if err := uploadlog.ProcessingDurationMsValidator(v); err != nil {
+			return &ValidationError{Name: "processing_duration_ms", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.processing_duration_ms": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RequestBytes(); ok {
+		if err := uploadlog.RequestBytesValidator(v); err != nil {
+			return &ValidationError{Name: "request_bytes", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.request_bytes": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -226,6 +711,9 @@ func (_u *UploadLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.GameUserID(); ok {
 		_spec.SetField(uploadlog.FieldGameUserID, field.TypeString, value)
+	}
+	if _u.mutation.GameUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldGameUserID, field.TypeString)
 	}
 	if value, ok := _u.mutation.ToolboxUserID(); ok {
 		_spec.SetField(uploadlog.FieldToolboxUserID, field.TypeString, value)
@@ -250,6 +738,126 @@ func (_u *UploadLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UploadTime(); ok {
 		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ClientName(); ok {
+		_spec.SetField(uploadlog.FieldClientName, field.TypeString, value)
+	}
+	if _u.mutation.ClientNameCleared() {
+		_spec.ClearField(uploadlog.FieldClientName, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientVersion(); ok {
+		_spec.SetField(uploadlog.FieldClientVersion, field.TypeString, value)
+	}
+	if _u.mutation.ClientVersionCleared() {
+		_spec.ClearField(uploadlog.FieldClientVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientChannel(); ok {
+		_spec.SetField(uploadlog.FieldClientChannel, field.TypeString, value)
+	}
+	if _u.mutation.ClientChannelCleared() {
+		_spec.ClearField(uploadlog.FieldClientChannel, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientMetadataFormat(); ok {
+		_spec.SetField(uploadlog.FieldClientMetadataFormat, field.TypeString, value)
+	}
+	if _u.mutation.ClientMetadataFormatCleared() {
+		_spec.ClearField(uploadlog.FieldClientMetadataFormat, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProtocolVersion(); ok {
+		_spec.SetField(uploadlog.FieldProtocolVersion, field.TypeString, value)
+	}
+	if _u.mutation.ProtocolVersionCleared() {
+		_spec.ClearField(uploadlog.FieldProtocolVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.Platform(); ok {
+		_spec.SetField(uploadlog.FieldPlatform, field.TypeString, value)
+	}
+	if _u.mutation.PlatformCleared() {
+		_spec.ClearField(uploadlog.FieldPlatform, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsVersion(); ok {
+		_spec.SetField(uploadlog.FieldOsVersion, field.TypeString, value)
+	}
+	if _u.mutation.OsVersionCleared() {
+		_spec.ClearField(uploadlog.FieldOsVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsBuild(); ok {
+		_spec.SetField(uploadlog.FieldOsBuild, field.TypeString, value)
+	}
+	if _u.mutation.OsBuildCleared() {
+		_spec.ClearField(uploadlog.FieldOsBuild, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsArch(); ok {
+		_spec.SetField(uploadlog.FieldOsArch, field.TypeString, value)
+	}
+	if _u.mutation.OsArchCleared() {
+		_spec.ClearField(uploadlog.FieldOsArch, field.TypeString)
+	}
+	if value, ok := _u.mutation.AppArch(); ok {
+		_spec.SetField(uploadlog.FieldAppArch, field.TypeString, value)
+	}
+	if _u.mutation.AppArchCleared() {
+		_spec.ClearField(uploadlog.FieldAppArch, field.TypeString)
+	}
+	if value, ok := _u.mutation.FailureStage(); ok {
+		_spec.SetField(uploadlog.FieldFailureStage, field.TypeString, value)
+	}
+	if _u.mutation.FailureStageCleared() {
+		_spec.ClearField(uploadlog.FieldFailureStage, field.TypeString)
+	}
+	if value, ok := _u.mutation.ErrorCode(); ok {
+		_spec.SetField(uploadlog.FieldErrorCode, field.TypeString, value)
+	}
+	if _u.mutation.ErrorCodeCleared() {
+		_spec.ClearField(uploadlog.FieldErrorCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestID(); ok {
+		_spec.SetField(uploadlog.FieldRequestID, field.TypeString, value)
+	}
+	if _u.mutation.RequestIDCleared() {
+		_spec.ClearField(uploadlog.FieldRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClaimedGameUserID(); ok {
+		_spec.SetField(uploadlog.FieldClaimedGameUserID, field.TypeString, value)
+	}
+	if _u.mutation.ClaimedGameUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldClaimedGameUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.OauthClientID(); ok {
+		_spec.SetField(uploadlog.FieldOauthClientID, field.TypeString, value)
+	}
+	if _u.mutation.OauthClientIDCleared() {
+		_spec.ClearField(uploadlog.FieldOauthClientID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProcessingDurationMs(); ok {
+		_spec.SetField(uploadlog.FieldProcessingDurationMs, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedProcessingDurationMs(); ok {
+		_spec.AddField(uploadlog.FieldProcessingDurationMs, field.TypeInt64, value)
+	}
+	if _u.mutation.ProcessingDurationMsCleared() {
+		_spec.ClearField(uploadlog.FieldProcessingDurationMs, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.RequestBytes(); ok {
+		_spec.SetField(uploadlog.FieldRequestBytes, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRequestBytes(); ok {
+		_spec.AddField(uploadlog.FieldRequestBytes, field.TypeInt64, value)
+	}
+	if _u.mutation.RequestBytesCleared() {
+		_spec.ClearField(uploadlog.FieldRequestBytes, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.IdentityVerified(); ok {
+		_spec.SetField(uploadlog.FieldIdentityVerified, field.TypeBool, value)
+	}
+	if _u.mutation.IdentityVerifiedCleared() {
+		_spec.ClearField(uploadlog.FieldIdentityVerified, field.TypeBool)
+	}
+	if value, ok := _u.mutation.ReceivedAt(); ok {
+		_spec.SetField(uploadlog.FieldReceivedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReceivedAtCleared() {
+		_spec.ClearField(uploadlog.FieldReceivedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -296,6 +904,12 @@ func (_u *UploadLogUpdateOne) SetNillableGameUserID(v *string) *UploadLogUpdateO
 	if v != nil {
 		_u.SetGameUserID(*v)
 	}
+	return _u
+}
+
+// ClearGameUserID clears the value of the "game_user_id" field.
+func (_u *UploadLogUpdateOne) ClearGameUserID() *UploadLogUpdateOne {
+	_u.mutation.ClearGameUserID()
 	return _u
 }
 
@@ -395,6 +1009,400 @@ func (_u *UploadLogUpdateOne) SetNillableUploadTime(v *time.Time) *UploadLogUpda
 	return _u
 }
 
+// SetClientName sets the "client_name" field.
+func (_u *UploadLogUpdateOne) SetClientName(v string) *UploadLogUpdateOne {
+	_u.mutation.SetClientName(v)
+	return _u
+}
+
+// SetNillableClientName sets the "client_name" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableClientName(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetClientName(*v)
+	}
+	return _u
+}
+
+// ClearClientName clears the value of the "client_name" field.
+func (_u *UploadLogUpdateOne) ClearClientName() *UploadLogUpdateOne {
+	_u.mutation.ClearClientName()
+	return _u
+}
+
+// SetClientVersion sets the "client_version" field.
+func (_u *UploadLogUpdateOne) SetClientVersion(v string) *UploadLogUpdateOne {
+	_u.mutation.SetClientVersion(v)
+	return _u
+}
+
+// SetNillableClientVersion sets the "client_version" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableClientVersion(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetClientVersion(*v)
+	}
+	return _u
+}
+
+// ClearClientVersion clears the value of the "client_version" field.
+func (_u *UploadLogUpdateOne) ClearClientVersion() *UploadLogUpdateOne {
+	_u.mutation.ClearClientVersion()
+	return _u
+}
+
+// SetClientChannel sets the "client_channel" field.
+func (_u *UploadLogUpdateOne) SetClientChannel(v string) *UploadLogUpdateOne {
+	_u.mutation.SetClientChannel(v)
+	return _u
+}
+
+// SetNillableClientChannel sets the "client_channel" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableClientChannel(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetClientChannel(*v)
+	}
+	return _u
+}
+
+// ClearClientChannel clears the value of the "client_channel" field.
+func (_u *UploadLogUpdateOne) ClearClientChannel() *UploadLogUpdateOne {
+	_u.mutation.ClearClientChannel()
+	return _u
+}
+
+// SetClientMetadataFormat sets the "client_metadata_format" field.
+func (_u *UploadLogUpdateOne) SetClientMetadataFormat(v string) *UploadLogUpdateOne {
+	_u.mutation.SetClientMetadataFormat(v)
+	return _u
+}
+
+// SetNillableClientMetadataFormat sets the "client_metadata_format" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableClientMetadataFormat(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetClientMetadataFormat(*v)
+	}
+	return _u
+}
+
+// ClearClientMetadataFormat clears the value of the "client_metadata_format" field.
+func (_u *UploadLogUpdateOne) ClearClientMetadataFormat() *UploadLogUpdateOne {
+	_u.mutation.ClearClientMetadataFormat()
+	return _u
+}
+
+// SetProtocolVersion sets the "protocol_version" field.
+func (_u *UploadLogUpdateOne) SetProtocolVersion(v string) *UploadLogUpdateOne {
+	_u.mutation.SetProtocolVersion(v)
+	return _u
+}
+
+// SetNillableProtocolVersion sets the "protocol_version" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableProtocolVersion(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetProtocolVersion(*v)
+	}
+	return _u
+}
+
+// ClearProtocolVersion clears the value of the "protocol_version" field.
+func (_u *UploadLogUpdateOne) ClearProtocolVersion() *UploadLogUpdateOne {
+	_u.mutation.ClearProtocolVersion()
+	return _u
+}
+
+// SetPlatform sets the "platform" field.
+func (_u *UploadLogUpdateOne) SetPlatform(v string) *UploadLogUpdateOne {
+	_u.mutation.SetPlatform(v)
+	return _u
+}
+
+// SetNillablePlatform sets the "platform" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillablePlatform(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetPlatform(*v)
+	}
+	return _u
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (_u *UploadLogUpdateOne) ClearPlatform() *UploadLogUpdateOne {
+	_u.mutation.ClearPlatform()
+	return _u
+}
+
+// SetOsVersion sets the "os_version" field.
+func (_u *UploadLogUpdateOne) SetOsVersion(v string) *UploadLogUpdateOne {
+	_u.mutation.SetOsVersion(v)
+	return _u
+}
+
+// SetNillableOsVersion sets the "os_version" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableOsVersion(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetOsVersion(*v)
+	}
+	return _u
+}
+
+// ClearOsVersion clears the value of the "os_version" field.
+func (_u *UploadLogUpdateOne) ClearOsVersion() *UploadLogUpdateOne {
+	_u.mutation.ClearOsVersion()
+	return _u
+}
+
+// SetOsBuild sets the "os_build" field.
+func (_u *UploadLogUpdateOne) SetOsBuild(v string) *UploadLogUpdateOne {
+	_u.mutation.SetOsBuild(v)
+	return _u
+}
+
+// SetNillableOsBuild sets the "os_build" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableOsBuild(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetOsBuild(*v)
+	}
+	return _u
+}
+
+// ClearOsBuild clears the value of the "os_build" field.
+func (_u *UploadLogUpdateOne) ClearOsBuild() *UploadLogUpdateOne {
+	_u.mutation.ClearOsBuild()
+	return _u
+}
+
+// SetOsArch sets the "os_arch" field.
+func (_u *UploadLogUpdateOne) SetOsArch(v string) *UploadLogUpdateOne {
+	_u.mutation.SetOsArch(v)
+	return _u
+}
+
+// SetNillableOsArch sets the "os_arch" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableOsArch(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetOsArch(*v)
+	}
+	return _u
+}
+
+// ClearOsArch clears the value of the "os_arch" field.
+func (_u *UploadLogUpdateOne) ClearOsArch() *UploadLogUpdateOne {
+	_u.mutation.ClearOsArch()
+	return _u
+}
+
+// SetAppArch sets the "app_arch" field.
+func (_u *UploadLogUpdateOne) SetAppArch(v string) *UploadLogUpdateOne {
+	_u.mutation.SetAppArch(v)
+	return _u
+}
+
+// SetNillableAppArch sets the "app_arch" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableAppArch(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetAppArch(*v)
+	}
+	return _u
+}
+
+// ClearAppArch clears the value of the "app_arch" field.
+func (_u *UploadLogUpdateOne) ClearAppArch() *UploadLogUpdateOne {
+	_u.mutation.ClearAppArch()
+	return _u
+}
+
+// SetFailureStage sets the "failure_stage" field.
+func (_u *UploadLogUpdateOne) SetFailureStage(v string) *UploadLogUpdateOne {
+	_u.mutation.SetFailureStage(v)
+	return _u
+}
+
+// SetNillableFailureStage sets the "failure_stage" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableFailureStage(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetFailureStage(*v)
+	}
+	return _u
+}
+
+// ClearFailureStage clears the value of the "failure_stage" field.
+func (_u *UploadLogUpdateOne) ClearFailureStage() *UploadLogUpdateOne {
+	_u.mutation.ClearFailureStage()
+	return _u
+}
+
+// SetErrorCode sets the "error_code" field.
+func (_u *UploadLogUpdateOne) SetErrorCode(v string) *UploadLogUpdateOne {
+	_u.mutation.SetErrorCode(v)
+	return _u
+}
+
+// SetNillableErrorCode sets the "error_code" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableErrorCode(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetErrorCode(*v)
+	}
+	return _u
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (_u *UploadLogUpdateOne) ClearErrorCode() *UploadLogUpdateOne {
+	_u.mutation.ClearErrorCode()
+	return _u
+}
+
+// SetRequestID sets the "request_id" field.
+func (_u *UploadLogUpdateOne) SetRequestID(v string) *UploadLogUpdateOne {
+	_u.mutation.SetRequestID(v)
+	return _u
+}
+
+// SetNillableRequestID sets the "request_id" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableRequestID(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetRequestID(*v)
+	}
+	return _u
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (_u *UploadLogUpdateOne) ClearRequestID() *UploadLogUpdateOne {
+	_u.mutation.ClearRequestID()
+	return _u
+}
+
+// SetClaimedGameUserID sets the "claimed_game_user_id" field.
+func (_u *UploadLogUpdateOne) SetClaimedGameUserID(v string) *UploadLogUpdateOne {
+	_u.mutation.SetClaimedGameUserID(v)
+	return _u
+}
+
+// SetNillableClaimedGameUserID sets the "claimed_game_user_id" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableClaimedGameUserID(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetClaimedGameUserID(*v)
+	}
+	return _u
+}
+
+// ClearClaimedGameUserID clears the value of the "claimed_game_user_id" field.
+func (_u *UploadLogUpdateOne) ClearClaimedGameUserID() *UploadLogUpdateOne {
+	_u.mutation.ClearClaimedGameUserID()
+	return _u
+}
+
+// SetOauthClientID sets the "oauth_client_id" field.
+func (_u *UploadLogUpdateOne) SetOauthClientID(v string) *UploadLogUpdateOne {
+	_u.mutation.SetOauthClientID(v)
+	return _u
+}
+
+// SetNillableOauthClientID sets the "oauth_client_id" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableOauthClientID(v *string) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetOauthClientID(*v)
+	}
+	return _u
+}
+
+// ClearOauthClientID clears the value of the "oauth_client_id" field.
+func (_u *UploadLogUpdateOne) ClearOauthClientID() *UploadLogUpdateOne {
+	_u.mutation.ClearOauthClientID()
+	return _u
+}
+
+// SetProcessingDurationMs sets the "processing_duration_ms" field.
+func (_u *UploadLogUpdateOne) SetProcessingDurationMs(v int64) *UploadLogUpdateOne {
+	_u.mutation.ResetProcessingDurationMs()
+	_u.mutation.SetProcessingDurationMs(v)
+	return _u
+}
+
+// SetNillableProcessingDurationMs sets the "processing_duration_ms" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableProcessingDurationMs(v *int64) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetProcessingDurationMs(*v)
+	}
+	return _u
+}
+
+// AddProcessingDurationMs adds value to the "processing_duration_ms" field.
+func (_u *UploadLogUpdateOne) AddProcessingDurationMs(v int64) *UploadLogUpdateOne {
+	_u.mutation.AddProcessingDurationMs(v)
+	return _u
+}
+
+// ClearProcessingDurationMs clears the value of the "processing_duration_ms" field.
+func (_u *UploadLogUpdateOne) ClearProcessingDurationMs() *UploadLogUpdateOne {
+	_u.mutation.ClearProcessingDurationMs()
+	return _u
+}
+
+// SetRequestBytes sets the "request_bytes" field.
+func (_u *UploadLogUpdateOne) SetRequestBytes(v int64) *UploadLogUpdateOne {
+	_u.mutation.ResetRequestBytes()
+	_u.mutation.SetRequestBytes(v)
+	return _u
+}
+
+// SetNillableRequestBytes sets the "request_bytes" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableRequestBytes(v *int64) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetRequestBytes(*v)
+	}
+	return _u
+}
+
+// AddRequestBytes adds value to the "request_bytes" field.
+func (_u *UploadLogUpdateOne) AddRequestBytes(v int64) *UploadLogUpdateOne {
+	_u.mutation.AddRequestBytes(v)
+	return _u
+}
+
+// ClearRequestBytes clears the value of the "request_bytes" field.
+func (_u *UploadLogUpdateOne) ClearRequestBytes() *UploadLogUpdateOne {
+	_u.mutation.ClearRequestBytes()
+	return _u
+}
+
+// SetIdentityVerified sets the "identity_verified" field.
+func (_u *UploadLogUpdateOne) SetIdentityVerified(v bool) *UploadLogUpdateOne {
+	_u.mutation.SetIdentityVerified(v)
+	return _u
+}
+
+// SetNillableIdentityVerified sets the "identity_verified" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableIdentityVerified(v *bool) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetIdentityVerified(*v)
+	}
+	return _u
+}
+
+// ClearIdentityVerified clears the value of the "identity_verified" field.
+func (_u *UploadLogUpdateOne) ClearIdentityVerified() *UploadLogUpdateOne {
+	_u.mutation.ClearIdentityVerified()
+	return _u
+}
+
+// SetReceivedAt sets the "received_at" field.
+func (_u *UploadLogUpdateOne) SetReceivedAt(v time.Time) *UploadLogUpdateOne {
+	_u.mutation.SetReceivedAt(v)
+	return _u
+}
+
+// SetNillableReceivedAt sets the "received_at" field if the given value is not nil.
+func (_u *UploadLogUpdateOne) SetNillableReceivedAt(v *time.Time) *UploadLogUpdateOne {
+	if v != nil {
+		_u.SetReceivedAt(*v)
+	}
+	return _u
+}
+
+// ClearReceivedAt clears the value of the "received_at" field.
+func (_u *UploadLogUpdateOne) ClearReceivedAt() *UploadLogUpdateOne {
+	_u.mutation.ClearReceivedAt()
+	return _u
+}
+
 // Mutation returns the UploadLogMutation object of the builder.
 func (_u *UploadLogUpdateOne) Mutation() *UploadLogMutation {
 	return _u.mutation
@@ -462,6 +1470,91 @@ func (_u *UploadLogUpdateOne) check() error {
 			return &ValidationError{Name: "data_type", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.data_type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ClientName(); ok {
+		if err := uploadlog.ClientNameValidator(v); err != nil {
+			return &ValidationError{Name: "client_name", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_name": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClientVersion(); ok {
+		if err := uploadlog.ClientVersionValidator(v); err != nil {
+			return &ValidationError{Name: "client_version", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_version": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClientChannel(); ok {
+		if err := uploadlog.ClientChannelValidator(v); err != nil {
+			return &ValidationError{Name: "client_channel", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_channel": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClientMetadataFormat(); ok {
+		if err := uploadlog.ClientMetadataFormatValidator(v); err != nil {
+			return &ValidationError{Name: "client_metadata_format", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.client_metadata_format": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProtocolVersion(); ok {
+		if err := uploadlog.ProtocolVersionValidator(v); err != nil {
+			return &ValidationError{Name: "protocol_version", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.protocol_version": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Platform(); ok {
+		if err := uploadlog.PlatformValidator(v); err != nil {
+			return &ValidationError{Name: "platform", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.platform": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OsVersion(); ok {
+		if err := uploadlog.OsVersionValidator(v); err != nil {
+			return &ValidationError{Name: "os_version", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.os_version": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OsBuild(); ok {
+		if err := uploadlog.OsBuildValidator(v); err != nil {
+			return &ValidationError{Name: "os_build", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.os_build": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OsArch(); ok {
+		if err := uploadlog.OsArchValidator(v); err != nil {
+			return &ValidationError{Name: "os_arch", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.os_arch": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AppArch(); ok {
+		if err := uploadlog.AppArchValidator(v); err != nil {
+			return &ValidationError{Name: "app_arch", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.app_arch": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.FailureStage(); ok {
+		if err := uploadlog.FailureStageValidator(v); err != nil {
+			return &ValidationError{Name: "failure_stage", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.failure_stage": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ErrorCode(); ok {
+		if err := uploadlog.ErrorCodeValidator(v); err != nil {
+			return &ValidationError{Name: "error_code", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.error_code": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RequestID(); ok {
+		if err := uploadlog.RequestIDValidator(v); err != nil {
+			return &ValidationError{Name: "request_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.request_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ClaimedGameUserID(); ok {
+		if err := uploadlog.ClaimedGameUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "claimed_game_user_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.claimed_game_user_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OauthClientID(); ok {
+		if err := uploadlog.OauthClientIDValidator(v); err != nil {
+			return &ValidationError{Name: "oauth_client_id", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.oauth_client_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.ProcessingDurationMs(); ok {
+		if err := uploadlog.ProcessingDurationMsValidator(v); err != nil {
+			return &ValidationError{Name: "processing_duration_ms", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.processing_duration_ms": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.RequestBytes(); ok {
+		if err := uploadlog.RequestBytesValidator(v); err != nil {
+			return &ValidationError{Name: "request_bytes", err: fmt.Errorf(`postgresql: validator failed for field "UploadLog.request_bytes": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -500,6 +1593,9 @@ func (_u *UploadLogUpdateOne) sqlSave(ctx context.Context) (_node *UploadLog, er
 	if value, ok := _u.mutation.GameUserID(); ok {
 		_spec.SetField(uploadlog.FieldGameUserID, field.TypeString, value)
 	}
+	if _u.mutation.GameUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldGameUserID, field.TypeString)
+	}
 	if value, ok := _u.mutation.ToolboxUserID(); ok {
 		_spec.SetField(uploadlog.FieldToolboxUserID, field.TypeString, value)
 	}
@@ -523,6 +1619,126 @@ func (_u *UploadLogUpdateOne) sqlSave(ctx context.Context) (_node *UploadLog, er
 	}
 	if value, ok := _u.mutation.UploadTime(); ok {
 		_spec.SetField(uploadlog.FieldUploadTime, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.ClientName(); ok {
+		_spec.SetField(uploadlog.FieldClientName, field.TypeString, value)
+	}
+	if _u.mutation.ClientNameCleared() {
+		_spec.ClearField(uploadlog.FieldClientName, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientVersion(); ok {
+		_spec.SetField(uploadlog.FieldClientVersion, field.TypeString, value)
+	}
+	if _u.mutation.ClientVersionCleared() {
+		_spec.ClearField(uploadlog.FieldClientVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientChannel(); ok {
+		_spec.SetField(uploadlog.FieldClientChannel, field.TypeString, value)
+	}
+	if _u.mutation.ClientChannelCleared() {
+		_spec.ClearField(uploadlog.FieldClientChannel, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientMetadataFormat(); ok {
+		_spec.SetField(uploadlog.FieldClientMetadataFormat, field.TypeString, value)
+	}
+	if _u.mutation.ClientMetadataFormatCleared() {
+		_spec.ClearField(uploadlog.FieldClientMetadataFormat, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProtocolVersion(); ok {
+		_spec.SetField(uploadlog.FieldProtocolVersion, field.TypeString, value)
+	}
+	if _u.mutation.ProtocolVersionCleared() {
+		_spec.ClearField(uploadlog.FieldProtocolVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.Platform(); ok {
+		_spec.SetField(uploadlog.FieldPlatform, field.TypeString, value)
+	}
+	if _u.mutation.PlatformCleared() {
+		_spec.ClearField(uploadlog.FieldPlatform, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsVersion(); ok {
+		_spec.SetField(uploadlog.FieldOsVersion, field.TypeString, value)
+	}
+	if _u.mutation.OsVersionCleared() {
+		_spec.ClearField(uploadlog.FieldOsVersion, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsBuild(); ok {
+		_spec.SetField(uploadlog.FieldOsBuild, field.TypeString, value)
+	}
+	if _u.mutation.OsBuildCleared() {
+		_spec.ClearField(uploadlog.FieldOsBuild, field.TypeString)
+	}
+	if value, ok := _u.mutation.OsArch(); ok {
+		_spec.SetField(uploadlog.FieldOsArch, field.TypeString, value)
+	}
+	if _u.mutation.OsArchCleared() {
+		_spec.ClearField(uploadlog.FieldOsArch, field.TypeString)
+	}
+	if value, ok := _u.mutation.AppArch(); ok {
+		_spec.SetField(uploadlog.FieldAppArch, field.TypeString, value)
+	}
+	if _u.mutation.AppArchCleared() {
+		_spec.ClearField(uploadlog.FieldAppArch, field.TypeString)
+	}
+	if value, ok := _u.mutation.FailureStage(); ok {
+		_spec.SetField(uploadlog.FieldFailureStage, field.TypeString, value)
+	}
+	if _u.mutation.FailureStageCleared() {
+		_spec.ClearField(uploadlog.FieldFailureStage, field.TypeString)
+	}
+	if value, ok := _u.mutation.ErrorCode(); ok {
+		_spec.SetField(uploadlog.FieldErrorCode, field.TypeString, value)
+	}
+	if _u.mutation.ErrorCodeCleared() {
+		_spec.ClearField(uploadlog.FieldErrorCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.RequestID(); ok {
+		_spec.SetField(uploadlog.FieldRequestID, field.TypeString, value)
+	}
+	if _u.mutation.RequestIDCleared() {
+		_spec.ClearField(uploadlog.FieldRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClaimedGameUserID(); ok {
+		_spec.SetField(uploadlog.FieldClaimedGameUserID, field.TypeString, value)
+	}
+	if _u.mutation.ClaimedGameUserIDCleared() {
+		_spec.ClearField(uploadlog.FieldClaimedGameUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.OauthClientID(); ok {
+		_spec.SetField(uploadlog.FieldOauthClientID, field.TypeString, value)
+	}
+	if _u.mutation.OauthClientIDCleared() {
+		_spec.ClearField(uploadlog.FieldOauthClientID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProcessingDurationMs(); ok {
+		_spec.SetField(uploadlog.FieldProcessingDurationMs, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedProcessingDurationMs(); ok {
+		_spec.AddField(uploadlog.FieldProcessingDurationMs, field.TypeInt64, value)
+	}
+	if _u.mutation.ProcessingDurationMsCleared() {
+		_spec.ClearField(uploadlog.FieldProcessingDurationMs, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.RequestBytes(); ok {
+		_spec.SetField(uploadlog.FieldRequestBytes, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRequestBytes(); ok {
+		_spec.AddField(uploadlog.FieldRequestBytes, field.TypeInt64, value)
+	}
+	if _u.mutation.RequestBytesCleared() {
+		_spec.ClearField(uploadlog.FieldRequestBytes, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.IdentityVerified(); ok {
+		_spec.SetField(uploadlog.FieldIdentityVerified, field.TypeBool, value)
+	}
+	if _u.mutation.IdentityVerifiedCleared() {
+		_spec.ClearField(uploadlog.FieldIdentityVerified, field.TypeBool)
+	}
+	if value, ok := _u.mutation.ReceivedAt(); ok {
+		_spec.SetField(uploadlog.FieldReceivedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReceivedAtCleared() {
+		_spec.ClearField(uploadlog.FieldReceivedAt, field.TypeTime)
 	}
 	_node = &UploadLog{config: _u.config}
 	_spec.Assign = _node.assignValues

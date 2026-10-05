@@ -12144,21 +12144,42 @@ func (m *TicketMessageMutation) ResetEdge(name string) error {
 // UploadLogMutation represents an operation that mutates the UploadLog nodes in the graph.
 type UploadLogMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int
-	server          *string
-	game_user_id    *string
-	toolbox_user_id *string
-	data_type       *string
-	upload_method   *string
-	success         *bool
-	error_message   *string
-	upload_time     *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*UploadLog, error)
-	predicates      []predicate.UploadLog
+	op                        Op
+	typ                       string
+	id                        *int
+	server                    *string
+	game_user_id              *string
+	toolbox_user_id           *string
+	data_type                 *string
+	upload_method             *string
+	success                   *bool
+	error_message             *string
+	upload_time               *time.Time
+	client_name               *string
+	client_version            *string
+	client_channel            *string
+	client_metadata_format    *string
+	protocol_version          *string
+	platform                  *string
+	os_version                *string
+	os_build                  *string
+	os_arch                   *string
+	app_arch                  *string
+	failure_stage             *string
+	error_code                *string
+	request_id                *string
+	claimed_game_user_id      *string
+	oauth_client_id           *string
+	processing_duration_ms    *int64
+	addprocessing_duration_ms *int64
+	request_bytes             *int64
+	addrequest_bytes          *int64
+	identity_verified         *bool
+	received_at               *time.Time
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*UploadLog, error)
+	predicates                []predicate.UploadLog
 }
 
 var _ ent.Mutation = (*UploadLogMutation)(nil)
@@ -12326,9 +12347,22 @@ func (m *UploadLogMutation) OldGameUserID(ctx context.Context) (v string, err er
 	return oldValue.GameUserID, nil
 }
 
+// ClearGameUserID clears the value of the "game_user_id" field.
+func (m *UploadLogMutation) ClearGameUserID() {
+	m.game_user_id = nil
+	m.clearedFields[uploadlog.FieldGameUserID] = struct{}{}
+}
+
+// GameUserIDCleared returns if the "game_user_id" field was cleared in this mutation.
+func (m *UploadLogMutation) GameUserIDCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldGameUserID]
+	return ok
+}
+
 // ResetGameUserID resets all changes to the "game_user_id" field.
 func (m *UploadLogMutation) ResetGameUserID() {
 	m.game_user_id = nil
+	delete(m.clearedFields, uploadlog.FieldGameUserID)
 }
 
 // SetToolboxUserID sets the "toolbox_user_id" field.
@@ -12573,6 +12607,979 @@ func (m *UploadLogMutation) ResetUploadTime() {
 	m.upload_time = nil
 }
 
+// SetClientName sets the "client_name" field.
+func (m *UploadLogMutation) SetClientName(s string) {
+	m.client_name = &s
+}
+
+// ClientName returns the value of the "client_name" field in the mutation.
+func (m *UploadLogMutation) ClientName() (r string, exists bool) {
+	v := m.client_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientName returns the old "client_name" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldClientName(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientName: %w", err)
+	}
+	return oldValue.ClientName, nil
+}
+
+// ClearClientName clears the value of the "client_name" field.
+func (m *UploadLogMutation) ClearClientName() {
+	m.client_name = nil
+	m.clearedFields[uploadlog.FieldClientName] = struct{}{}
+}
+
+// ClientNameCleared returns if the "client_name" field was cleared in this mutation.
+func (m *UploadLogMutation) ClientNameCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldClientName]
+	return ok
+}
+
+// ResetClientName resets all changes to the "client_name" field.
+func (m *UploadLogMutation) ResetClientName() {
+	m.client_name = nil
+	delete(m.clearedFields, uploadlog.FieldClientName)
+}
+
+// SetClientVersion sets the "client_version" field.
+func (m *UploadLogMutation) SetClientVersion(s string) {
+	m.client_version = &s
+}
+
+// ClientVersion returns the value of the "client_version" field in the mutation.
+func (m *UploadLogMutation) ClientVersion() (r string, exists bool) {
+	v := m.client_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientVersion returns the old "client_version" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldClientVersion(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientVersion: %w", err)
+	}
+	return oldValue.ClientVersion, nil
+}
+
+// ClearClientVersion clears the value of the "client_version" field.
+func (m *UploadLogMutation) ClearClientVersion() {
+	m.client_version = nil
+	m.clearedFields[uploadlog.FieldClientVersion] = struct{}{}
+}
+
+// ClientVersionCleared returns if the "client_version" field was cleared in this mutation.
+func (m *UploadLogMutation) ClientVersionCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldClientVersion]
+	return ok
+}
+
+// ResetClientVersion resets all changes to the "client_version" field.
+func (m *UploadLogMutation) ResetClientVersion() {
+	m.client_version = nil
+	delete(m.clearedFields, uploadlog.FieldClientVersion)
+}
+
+// SetClientChannel sets the "client_channel" field.
+func (m *UploadLogMutation) SetClientChannel(s string) {
+	m.client_channel = &s
+}
+
+// ClientChannel returns the value of the "client_channel" field in the mutation.
+func (m *UploadLogMutation) ClientChannel() (r string, exists bool) {
+	v := m.client_channel
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientChannel returns the old "client_channel" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldClientChannel(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientChannel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientChannel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientChannel: %w", err)
+	}
+	return oldValue.ClientChannel, nil
+}
+
+// ClearClientChannel clears the value of the "client_channel" field.
+func (m *UploadLogMutation) ClearClientChannel() {
+	m.client_channel = nil
+	m.clearedFields[uploadlog.FieldClientChannel] = struct{}{}
+}
+
+// ClientChannelCleared returns if the "client_channel" field was cleared in this mutation.
+func (m *UploadLogMutation) ClientChannelCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldClientChannel]
+	return ok
+}
+
+// ResetClientChannel resets all changes to the "client_channel" field.
+func (m *UploadLogMutation) ResetClientChannel() {
+	m.client_channel = nil
+	delete(m.clearedFields, uploadlog.FieldClientChannel)
+}
+
+// SetClientMetadataFormat sets the "client_metadata_format" field.
+func (m *UploadLogMutation) SetClientMetadataFormat(s string) {
+	m.client_metadata_format = &s
+}
+
+// ClientMetadataFormat returns the value of the "client_metadata_format" field in the mutation.
+func (m *UploadLogMutation) ClientMetadataFormat() (r string, exists bool) {
+	v := m.client_metadata_format
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientMetadataFormat returns the old "client_metadata_format" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldClientMetadataFormat(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientMetadataFormat is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientMetadataFormat requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientMetadataFormat: %w", err)
+	}
+	return oldValue.ClientMetadataFormat, nil
+}
+
+// ClearClientMetadataFormat clears the value of the "client_metadata_format" field.
+func (m *UploadLogMutation) ClearClientMetadataFormat() {
+	m.client_metadata_format = nil
+	m.clearedFields[uploadlog.FieldClientMetadataFormat] = struct{}{}
+}
+
+// ClientMetadataFormatCleared returns if the "client_metadata_format" field was cleared in this mutation.
+func (m *UploadLogMutation) ClientMetadataFormatCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldClientMetadataFormat]
+	return ok
+}
+
+// ResetClientMetadataFormat resets all changes to the "client_metadata_format" field.
+func (m *UploadLogMutation) ResetClientMetadataFormat() {
+	m.client_metadata_format = nil
+	delete(m.clearedFields, uploadlog.FieldClientMetadataFormat)
+}
+
+// SetProtocolVersion sets the "protocol_version" field.
+func (m *UploadLogMutation) SetProtocolVersion(s string) {
+	m.protocol_version = &s
+}
+
+// ProtocolVersion returns the value of the "protocol_version" field in the mutation.
+func (m *UploadLogMutation) ProtocolVersion() (r string, exists bool) {
+	v := m.protocol_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProtocolVersion returns the old "protocol_version" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldProtocolVersion(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProtocolVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProtocolVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProtocolVersion: %w", err)
+	}
+	return oldValue.ProtocolVersion, nil
+}
+
+// ClearProtocolVersion clears the value of the "protocol_version" field.
+func (m *UploadLogMutation) ClearProtocolVersion() {
+	m.protocol_version = nil
+	m.clearedFields[uploadlog.FieldProtocolVersion] = struct{}{}
+}
+
+// ProtocolVersionCleared returns if the "protocol_version" field was cleared in this mutation.
+func (m *UploadLogMutation) ProtocolVersionCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldProtocolVersion]
+	return ok
+}
+
+// ResetProtocolVersion resets all changes to the "protocol_version" field.
+func (m *UploadLogMutation) ResetProtocolVersion() {
+	m.protocol_version = nil
+	delete(m.clearedFields, uploadlog.FieldProtocolVersion)
+}
+
+// SetPlatform sets the "platform" field.
+func (m *UploadLogMutation) SetPlatform(s string) {
+	m.platform = &s
+}
+
+// Platform returns the value of the "platform" field in the mutation.
+func (m *UploadLogMutation) Platform() (r string, exists bool) {
+	v := m.platform
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlatform returns the old "platform" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldPlatform(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlatform is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlatform requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlatform: %w", err)
+	}
+	return oldValue.Platform, nil
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (m *UploadLogMutation) ClearPlatform() {
+	m.platform = nil
+	m.clearedFields[uploadlog.FieldPlatform] = struct{}{}
+}
+
+// PlatformCleared returns if the "platform" field was cleared in this mutation.
+func (m *UploadLogMutation) PlatformCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldPlatform]
+	return ok
+}
+
+// ResetPlatform resets all changes to the "platform" field.
+func (m *UploadLogMutation) ResetPlatform() {
+	m.platform = nil
+	delete(m.clearedFields, uploadlog.FieldPlatform)
+}
+
+// SetOsVersion sets the "os_version" field.
+func (m *UploadLogMutation) SetOsVersion(s string) {
+	m.os_version = &s
+}
+
+// OsVersion returns the value of the "os_version" field in the mutation.
+func (m *UploadLogMutation) OsVersion() (r string, exists bool) {
+	v := m.os_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOsVersion returns the old "os_version" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldOsVersion(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOsVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOsVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOsVersion: %w", err)
+	}
+	return oldValue.OsVersion, nil
+}
+
+// ClearOsVersion clears the value of the "os_version" field.
+func (m *UploadLogMutation) ClearOsVersion() {
+	m.os_version = nil
+	m.clearedFields[uploadlog.FieldOsVersion] = struct{}{}
+}
+
+// OsVersionCleared returns if the "os_version" field was cleared in this mutation.
+func (m *UploadLogMutation) OsVersionCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldOsVersion]
+	return ok
+}
+
+// ResetOsVersion resets all changes to the "os_version" field.
+func (m *UploadLogMutation) ResetOsVersion() {
+	m.os_version = nil
+	delete(m.clearedFields, uploadlog.FieldOsVersion)
+}
+
+// SetOsBuild sets the "os_build" field.
+func (m *UploadLogMutation) SetOsBuild(s string) {
+	m.os_build = &s
+}
+
+// OsBuild returns the value of the "os_build" field in the mutation.
+func (m *UploadLogMutation) OsBuild() (r string, exists bool) {
+	v := m.os_build
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOsBuild returns the old "os_build" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldOsBuild(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOsBuild is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOsBuild requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOsBuild: %w", err)
+	}
+	return oldValue.OsBuild, nil
+}
+
+// ClearOsBuild clears the value of the "os_build" field.
+func (m *UploadLogMutation) ClearOsBuild() {
+	m.os_build = nil
+	m.clearedFields[uploadlog.FieldOsBuild] = struct{}{}
+}
+
+// OsBuildCleared returns if the "os_build" field was cleared in this mutation.
+func (m *UploadLogMutation) OsBuildCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldOsBuild]
+	return ok
+}
+
+// ResetOsBuild resets all changes to the "os_build" field.
+func (m *UploadLogMutation) ResetOsBuild() {
+	m.os_build = nil
+	delete(m.clearedFields, uploadlog.FieldOsBuild)
+}
+
+// SetOsArch sets the "os_arch" field.
+func (m *UploadLogMutation) SetOsArch(s string) {
+	m.os_arch = &s
+}
+
+// OsArch returns the value of the "os_arch" field in the mutation.
+func (m *UploadLogMutation) OsArch() (r string, exists bool) {
+	v := m.os_arch
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOsArch returns the old "os_arch" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldOsArch(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOsArch is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOsArch requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOsArch: %w", err)
+	}
+	return oldValue.OsArch, nil
+}
+
+// ClearOsArch clears the value of the "os_arch" field.
+func (m *UploadLogMutation) ClearOsArch() {
+	m.os_arch = nil
+	m.clearedFields[uploadlog.FieldOsArch] = struct{}{}
+}
+
+// OsArchCleared returns if the "os_arch" field was cleared in this mutation.
+func (m *UploadLogMutation) OsArchCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldOsArch]
+	return ok
+}
+
+// ResetOsArch resets all changes to the "os_arch" field.
+func (m *UploadLogMutation) ResetOsArch() {
+	m.os_arch = nil
+	delete(m.clearedFields, uploadlog.FieldOsArch)
+}
+
+// SetAppArch sets the "app_arch" field.
+func (m *UploadLogMutation) SetAppArch(s string) {
+	m.app_arch = &s
+}
+
+// AppArch returns the value of the "app_arch" field in the mutation.
+func (m *UploadLogMutation) AppArch() (r string, exists bool) {
+	v := m.app_arch
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAppArch returns the old "app_arch" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldAppArch(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAppArch is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAppArch requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAppArch: %w", err)
+	}
+	return oldValue.AppArch, nil
+}
+
+// ClearAppArch clears the value of the "app_arch" field.
+func (m *UploadLogMutation) ClearAppArch() {
+	m.app_arch = nil
+	m.clearedFields[uploadlog.FieldAppArch] = struct{}{}
+}
+
+// AppArchCleared returns if the "app_arch" field was cleared in this mutation.
+func (m *UploadLogMutation) AppArchCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldAppArch]
+	return ok
+}
+
+// ResetAppArch resets all changes to the "app_arch" field.
+func (m *UploadLogMutation) ResetAppArch() {
+	m.app_arch = nil
+	delete(m.clearedFields, uploadlog.FieldAppArch)
+}
+
+// SetFailureStage sets the "failure_stage" field.
+func (m *UploadLogMutation) SetFailureStage(s string) {
+	m.failure_stage = &s
+}
+
+// FailureStage returns the value of the "failure_stage" field in the mutation.
+func (m *UploadLogMutation) FailureStage() (r string, exists bool) {
+	v := m.failure_stage
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailureStage returns the old "failure_stage" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldFailureStage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailureStage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailureStage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailureStage: %w", err)
+	}
+	return oldValue.FailureStage, nil
+}
+
+// ClearFailureStage clears the value of the "failure_stage" field.
+func (m *UploadLogMutation) ClearFailureStage() {
+	m.failure_stage = nil
+	m.clearedFields[uploadlog.FieldFailureStage] = struct{}{}
+}
+
+// FailureStageCleared returns if the "failure_stage" field was cleared in this mutation.
+func (m *UploadLogMutation) FailureStageCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldFailureStage]
+	return ok
+}
+
+// ResetFailureStage resets all changes to the "failure_stage" field.
+func (m *UploadLogMutation) ResetFailureStage() {
+	m.failure_stage = nil
+	delete(m.clearedFields, uploadlog.FieldFailureStage)
+}
+
+// SetErrorCode sets the "error_code" field.
+func (m *UploadLogMutation) SetErrorCode(s string) {
+	m.error_code = &s
+}
+
+// ErrorCode returns the value of the "error_code" field in the mutation.
+func (m *UploadLogMutation) ErrorCode() (r string, exists bool) {
+	v := m.error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorCode returns the old "error_code" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldErrorCode(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorCode: %w", err)
+	}
+	return oldValue.ErrorCode, nil
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (m *UploadLogMutation) ClearErrorCode() {
+	m.error_code = nil
+	m.clearedFields[uploadlog.FieldErrorCode] = struct{}{}
+}
+
+// ErrorCodeCleared returns if the "error_code" field was cleared in this mutation.
+func (m *UploadLogMutation) ErrorCodeCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldErrorCode]
+	return ok
+}
+
+// ResetErrorCode resets all changes to the "error_code" field.
+func (m *UploadLogMutation) ResetErrorCode() {
+	m.error_code = nil
+	delete(m.clearedFields, uploadlog.FieldErrorCode)
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *UploadLogMutation) SetRequestID(s string) {
+	m.request_id = &s
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *UploadLogMutation) RequestID() (r string, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldRequestID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ClearRequestID clears the value of the "request_id" field.
+func (m *UploadLogMutation) ClearRequestID() {
+	m.request_id = nil
+	m.clearedFields[uploadlog.FieldRequestID] = struct{}{}
+}
+
+// RequestIDCleared returns if the "request_id" field was cleared in this mutation.
+func (m *UploadLogMutation) RequestIDCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldRequestID]
+	return ok
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *UploadLogMutation) ResetRequestID() {
+	m.request_id = nil
+	delete(m.clearedFields, uploadlog.FieldRequestID)
+}
+
+// SetClaimedGameUserID sets the "claimed_game_user_id" field.
+func (m *UploadLogMutation) SetClaimedGameUserID(s string) {
+	m.claimed_game_user_id = &s
+}
+
+// ClaimedGameUserID returns the value of the "claimed_game_user_id" field in the mutation.
+func (m *UploadLogMutation) ClaimedGameUserID() (r string, exists bool) {
+	v := m.claimed_game_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaimedGameUserID returns the old "claimed_game_user_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldClaimedGameUserID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaimedGameUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaimedGameUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaimedGameUserID: %w", err)
+	}
+	return oldValue.ClaimedGameUserID, nil
+}
+
+// ClearClaimedGameUserID clears the value of the "claimed_game_user_id" field.
+func (m *UploadLogMutation) ClearClaimedGameUserID() {
+	m.claimed_game_user_id = nil
+	m.clearedFields[uploadlog.FieldClaimedGameUserID] = struct{}{}
+}
+
+// ClaimedGameUserIDCleared returns if the "claimed_game_user_id" field was cleared in this mutation.
+func (m *UploadLogMutation) ClaimedGameUserIDCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldClaimedGameUserID]
+	return ok
+}
+
+// ResetClaimedGameUserID resets all changes to the "claimed_game_user_id" field.
+func (m *UploadLogMutation) ResetClaimedGameUserID() {
+	m.claimed_game_user_id = nil
+	delete(m.clearedFields, uploadlog.FieldClaimedGameUserID)
+}
+
+// SetOauthClientID sets the "oauth_client_id" field.
+func (m *UploadLogMutation) SetOauthClientID(s string) {
+	m.oauth_client_id = &s
+}
+
+// OauthClientID returns the value of the "oauth_client_id" field in the mutation.
+func (m *UploadLogMutation) OauthClientID() (r string, exists bool) {
+	v := m.oauth_client_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOauthClientID returns the old "oauth_client_id" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldOauthClientID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOauthClientID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOauthClientID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOauthClientID: %w", err)
+	}
+	return oldValue.OauthClientID, nil
+}
+
+// ClearOauthClientID clears the value of the "oauth_client_id" field.
+func (m *UploadLogMutation) ClearOauthClientID() {
+	m.oauth_client_id = nil
+	m.clearedFields[uploadlog.FieldOauthClientID] = struct{}{}
+}
+
+// OauthClientIDCleared returns if the "oauth_client_id" field was cleared in this mutation.
+func (m *UploadLogMutation) OauthClientIDCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldOauthClientID]
+	return ok
+}
+
+// ResetOauthClientID resets all changes to the "oauth_client_id" field.
+func (m *UploadLogMutation) ResetOauthClientID() {
+	m.oauth_client_id = nil
+	delete(m.clearedFields, uploadlog.FieldOauthClientID)
+}
+
+// SetProcessingDurationMs sets the "processing_duration_ms" field.
+func (m *UploadLogMutation) SetProcessingDurationMs(i int64) {
+	m.processing_duration_ms = &i
+	m.addprocessing_duration_ms = nil
+}
+
+// ProcessingDurationMs returns the value of the "processing_duration_ms" field in the mutation.
+func (m *UploadLogMutation) ProcessingDurationMs() (r int64, exists bool) {
+	v := m.processing_duration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessingDurationMs returns the old "processing_duration_ms" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldProcessingDurationMs(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessingDurationMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessingDurationMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessingDurationMs: %w", err)
+	}
+	return oldValue.ProcessingDurationMs, nil
+}
+
+// AddProcessingDurationMs adds i to the "processing_duration_ms" field.
+func (m *UploadLogMutation) AddProcessingDurationMs(i int64) {
+	if m.addprocessing_duration_ms != nil {
+		*m.addprocessing_duration_ms += i
+	} else {
+		m.addprocessing_duration_ms = &i
+	}
+}
+
+// AddedProcessingDurationMs returns the value that was added to the "processing_duration_ms" field in this mutation.
+func (m *UploadLogMutation) AddedProcessingDurationMs() (r int64, exists bool) {
+	v := m.addprocessing_duration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearProcessingDurationMs clears the value of the "processing_duration_ms" field.
+func (m *UploadLogMutation) ClearProcessingDurationMs() {
+	m.processing_duration_ms = nil
+	m.addprocessing_duration_ms = nil
+	m.clearedFields[uploadlog.FieldProcessingDurationMs] = struct{}{}
+}
+
+// ProcessingDurationMsCleared returns if the "processing_duration_ms" field was cleared in this mutation.
+func (m *UploadLogMutation) ProcessingDurationMsCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldProcessingDurationMs]
+	return ok
+}
+
+// ResetProcessingDurationMs resets all changes to the "processing_duration_ms" field.
+func (m *UploadLogMutation) ResetProcessingDurationMs() {
+	m.processing_duration_ms = nil
+	m.addprocessing_duration_ms = nil
+	delete(m.clearedFields, uploadlog.FieldProcessingDurationMs)
+}
+
+// SetRequestBytes sets the "request_bytes" field.
+func (m *UploadLogMutation) SetRequestBytes(i int64) {
+	m.request_bytes = &i
+	m.addrequest_bytes = nil
+}
+
+// RequestBytes returns the value of the "request_bytes" field in the mutation.
+func (m *UploadLogMutation) RequestBytes() (r int64, exists bool) {
+	v := m.request_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestBytes returns the old "request_bytes" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldRequestBytes(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestBytes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestBytes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestBytes: %w", err)
+	}
+	return oldValue.RequestBytes, nil
+}
+
+// AddRequestBytes adds i to the "request_bytes" field.
+func (m *UploadLogMutation) AddRequestBytes(i int64) {
+	if m.addrequest_bytes != nil {
+		*m.addrequest_bytes += i
+	} else {
+		m.addrequest_bytes = &i
+	}
+}
+
+// AddedRequestBytes returns the value that was added to the "request_bytes" field in this mutation.
+func (m *UploadLogMutation) AddedRequestBytes() (r int64, exists bool) {
+	v := m.addrequest_bytes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRequestBytes clears the value of the "request_bytes" field.
+func (m *UploadLogMutation) ClearRequestBytes() {
+	m.request_bytes = nil
+	m.addrequest_bytes = nil
+	m.clearedFields[uploadlog.FieldRequestBytes] = struct{}{}
+}
+
+// RequestBytesCleared returns if the "request_bytes" field was cleared in this mutation.
+func (m *UploadLogMutation) RequestBytesCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldRequestBytes]
+	return ok
+}
+
+// ResetRequestBytes resets all changes to the "request_bytes" field.
+func (m *UploadLogMutation) ResetRequestBytes() {
+	m.request_bytes = nil
+	m.addrequest_bytes = nil
+	delete(m.clearedFields, uploadlog.FieldRequestBytes)
+}
+
+// SetIdentityVerified sets the "identity_verified" field.
+func (m *UploadLogMutation) SetIdentityVerified(b bool) {
+	m.identity_verified = &b
+}
+
+// IdentityVerified returns the value of the "identity_verified" field in the mutation.
+func (m *UploadLogMutation) IdentityVerified() (r bool, exists bool) {
+	v := m.identity_verified
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdentityVerified returns the old "identity_verified" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldIdentityVerified(ctx context.Context) (v *bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdentityVerified is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdentityVerified requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdentityVerified: %w", err)
+	}
+	return oldValue.IdentityVerified, nil
+}
+
+// ClearIdentityVerified clears the value of the "identity_verified" field.
+func (m *UploadLogMutation) ClearIdentityVerified() {
+	m.identity_verified = nil
+	m.clearedFields[uploadlog.FieldIdentityVerified] = struct{}{}
+}
+
+// IdentityVerifiedCleared returns if the "identity_verified" field was cleared in this mutation.
+func (m *UploadLogMutation) IdentityVerifiedCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldIdentityVerified]
+	return ok
+}
+
+// ResetIdentityVerified resets all changes to the "identity_verified" field.
+func (m *UploadLogMutation) ResetIdentityVerified() {
+	m.identity_verified = nil
+	delete(m.clearedFields, uploadlog.FieldIdentityVerified)
+}
+
+// SetReceivedAt sets the "received_at" field.
+func (m *UploadLogMutation) SetReceivedAt(t time.Time) {
+	m.received_at = &t
+}
+
+// ReceivedAt returns the value of the "received_at" field in the mutation.
+func (m *UploadLogMutation) ReceivedAt() (r time.Time, exists bool) {
+	v := m.received_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReceivedAt returns the old "received_at" field's value of the UploadLog entity.
+// If the UploadLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UploadLogMutation) OldReceivedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReceivedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReceivedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReceivedAt: %w", err)
+	}
+	return oldValue.ReceivedAt, nil
+}
+
+// ClearReceivedAt clears the value of the "received_at" field.
+func (m *UploadLogMutation) ClearReceivedAt() {
+	m.received_at = nil
+	m.clearedFields[uploadlog.FieldReceivedAt] = struct{}{}
+}
+
+// ReceivedAtCleared returns if the "received_at" field was cleared in this mutation.
+func (m *UploadLogMutation) ReceivedAtCleared() bool {
+	_, ok := m.clearedFields[uploadlog.FieldReceivedAt]
+	return ok
+}
+
+// ResetReceivedAt resets all changes to the "received_at" field.
+func (m *UploadLogMutation) ResetReceivedAt() {
+	m.received_at = nil
+	delete(m.clearedFields, uploadlog.FieldReceivedAt)
+}
+
 // Where appends a list predicates to the UploadLogMutation builder.
 func (m *UploadLogMutation) Where(ps ...predicate.UploadLog) {
 	m.predicates = append(m.predicates, ps...)
@@ -12607,7 +13614,7 @@ func (m *UploadLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UploadLogMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 27)
 	if m.server != nil {
 		fields = append(fields, uploadlog.FieldServer)
 	}
@@ -12631,6 +13638,63 @@ func (m *UploadLogMutation) Fields() []string {
 	}
 	if m.upload_time != nil {
 		fields = append(fields, uploadlog.FieldUploadTime)
+	}
+	if m.client_name != nil {
+		fields = append(fields, uploadlog.FieldClientName)
+	}
+	if m.client_version != nil {
+		fields = append(fields, uploadlog.FieldClientVersion)
+	}
+	if m.client_channel != nil {
+		fields = append(fields, uploadlog.FieldClientChannel)
+	}
+	if m.client_metadata_format != nil {
+		fields = append(fields, uploadlog.FieldClientMetadataFormat)
+	}
+	if m.protocol_version != nil {
+		fields = append(fields, uploadlog.FieldProtocolVersion)
+	}
+	if m.platform != nil {
+		fields = append(fields, uploadlog.FieldPlatform)
+	}
+	if m.os_version != nil {
+		fields = append(fields, uploadlog.FieldOsVersion)
+	}
+	if m.os_build != nil {
+		fields = append(fields, uploadlog.FieldOsBuild)
+	}
+	if m.os_arch != nil {
+		fields = append(fields, uploadlog.FieldOsArch)
+	}
+	if m.app_arch != nil {
+		fields = append(fields, uploadlog.FieldAppArch)
+	}
+	if m.failure_stage != nil {
+		fields = append(fields, uploadlog.FieldFailureStage)
+	}
+	if m.error_code != nil {
+		fields = append(fields, uploadlog.FieldErrorCode)
+	}
+	if m.request_id != nil {
+		fields = append(fields, uploadlog.FieldRequestID)
+	}
+	if m.claimed_game_user_id != nil {
+		fields = append(fields, uploadlog.FieldClaimedGameUserID)
+	}
+	if m.oauth_client_id != nil {
+		fields = append(fields, uploadlog.FieldOauthClientID)
+	}
+	if m.processing_duration_ms != nil {
+		fields = append(fields, uploadlog.FieldProcessingDurationMs)
+	}
+	if m.request_bytes != nil {
+		fields = append(fields, uploadlog.FieldRequestBytes)
+	}
+	if m.identity_verified != nil {
+		fields = append(fields, uploadlog.FieldIdentityVerified)
+	}
+	if m.received_at != nil {
+		fields = append(fields, uploadlog.FieldReceivedAt)
 	}
 	return fields
 }
@@ -12656,6 +13720,44 @@ func (m *UploadLogMutation) Field(name string) (ent.Value, bool) {
 		return m.ErrorMessage()
 	case uploadlog.FieldUploadTime:
 		return m.UploadTime()
+	case uploadlog.FieldClientName:
+		return m.ClientName()
+	case uploadlog.FieldClientVersion:
+		return m.ClientVersion()
+	case uploadlog.FieldClientChannel:
+		return m.ClientChannel()
+	case uploadlog.FieldClientMetadataFormat:
+		return m.ClientMetadataFormat()
+	case uploadlog.FieldProtocolVersion:
+		return m.ProtocolVersion()
+	case uploadlog.FieldPlatform:
+		return m.Platform()
+	case uploadlog.FieldOsVersion:
+		return m.OsVersion()
+	case uploadlog.FieldOsBuild:
+		return m.OsBuild()
+	case uploadlog.FieldOsArch:
+		return m.OsArch()
+	case uploadlog.FieldAppArch:
+		return m.AppArch()
+	case uploadlog.FieldFailureStage:
+		return m.FailureStage()
+	case uploadlog.FieldErrorCode:
+		return m.ErrorCode()
+	case uploadlog.FieldRequestID:
+		return m.RequestID()
+	case uploadlog.FieldClaimedGameUserID:
+		return m.ClaimedGameUserID()
+	case uploadlog.FieldOauthClientID:
+		return m.OauthClientID()
+	case uploadlog.FieldProcessingDurationMs:
+		return m.ProcessingDurationMs()
+	case uploadlog.FieldRequestBytes:
+		return m.RequestBytes()
+	case uploadlog.FieldIdentityVerified:
+		return m.IdentityVerified()
+	case uploadlog.FieldReceivedAt:
+		return m.ReceivedAt()
 	}
 	return nil, false
 }
@@ -12681,6 +13783,44 @@ func (m *UploadLogMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldErrorMessage(ctx)
 	case uploadlog.FieldUploadTime:
 		return m.OldUploadTime(ctx)
+	case uploadlog.FieldClientName:
+		return m.OldClientName(ctx)
+	case uploadlog.FieldClientVersion:
+		return m.OldClientVersion(ctx)
+	case uploadlog.FieldClientChannel:
+		return m.OldClientChannel(ctx)
+	case uploadlog.FieldClientMetadataFormat:
+		return m.OldClientMetadataFormat(ctx)
+	case uploadlog.FieldProtocolVersion:
+		return m.OldProtocolVersion(ctx)
+	case uploadlog.FieldPlatform:
+		return m.OldPlatform(ctx)
+	case uploadlog.FieldOsVersion:
+		return m.OldOsVersion(ctx)
+	case uploadlog.FieldOsBuild:
+		return m.OldOsBuild(ctx)
+	case uploadlog.FieldOsArch:
+		return m.OldOsArch(ctx)
+	case uploadlog.FieldAppArch:
+		return m.OldAppArch(ctx)
+	case uploadlog.FieldFailureStage:
+		return m.OldFailureStage(ctx)
+	case uploadlog.FieldErrorCode:
+		return m.OldErrorCode(ctx)
+	case uploadlog.FieldRequestID:
+		return m.OldRequestID(ctx)
+	case uploadlog.FieldClaimedGameUserID:
+		return m.OldClaimedGameUserID(ctx)
+	case uploadlog.FieldOauthClientID:
+		return m.OldOauthClientID(ctx)
+	case uploadlog.FieldProcessingDurationMs:
+		return m.OldProcessingDurationMs(ctx)
+	case uploadlog.FieldRequestBytes:
+		return m.OldRequestBytes(ctx)
+	case uploadlog.FieldIdentityVerified:
+		return m.OldIdentityVerified(ctx)
+	case uploadlog.FieldReceivedAt:
+		return m.OldReceivedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown UploadLog field %s", name)
 }
@@ -12746,6 +13886,139 @@ func (m *UploadLogMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUploadTime(v)
 		return nil
+	case uploadlog.FieldClientName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientName(v)
+		return nil
+	case uploadlog.FieldClientVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientVersion(v)
+		return nil
+	case uploadlog.FieldClientChannel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientChannel(v)
+		return nil
+	case uploadlog.FieldClientMetadataFormat:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientMetadataFormat(v)
+		return nil
+	case uploadlog.FieldProtocolVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProtocolVersion(v)
+		return nil
+	case uploadlog.FieldPlatform:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlatform(v)
+		return nil
+	case uploadlog.FieldOsVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOsVersion(v)
+		return nil
+	case uploadlog.FieldOsBuild:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOsBuild(v)
+		return nil
+	case uploadlog.FieldOsArch:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOsArch(v)
+		return nil
+	case uploadlog.FieldAppArch:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAppArch(v)
+		return nil
+	case uploadlog.FieldFailureStage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailureStage(v)
+		return nil
+	case uploadlog.FieldErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorCode(v)
+		return nil
+	case uploadlog.FieldRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
+	case uploadlog.FieldClaimedGameUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaimedGameUserID(v)
+		return nil
+	case uploadlog.FieldOauthClientID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOauthClientID(v)
+		return nil
+	case uploadlog.FieldProcessingDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessingDurationMs(v)
+		return nil
+	case uploadlog.FieldRequestBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestBytes(v)
+		return nil
+	case uploadlog.FieldIdentityVerified:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdentityVerified(v)
+		return nil
+	case uploadlog.FieldReceivedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReceivedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown UploadLog field %s", name)
 }
@@ -12753,13 +14026,26 @@ func (m *UploadLogMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *UploadLogMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addprocessing_duration_ms != nil {
+		fields = append(fields, uploadlog.FieldProcessingDurationMs)
+	}
+	if m.addrequest_bytes != nil {
+		fields = append(fields, uploadlog.FieldRequestBytes)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *UploadLogMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case uploadlog.FieldProcessingDurationMs:
+		return m.AddedProcessingDurationMs()
+	case uploadlog.FieldRequestBytes:
+		return m.AddedRequestBytes()
+	}
 	return nil, false
 }
 
@@ -12768,6 +14054,20 @@ func (m *UploadLogMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *UploadLogMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case uploadlog.FieldProcessingDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProcessingDurationMs(v)
+		return nil
+	case uploadlog.FieldRequestBytes:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRequestBytes(v)
+		return nil
 	}
 	return fmt.Errorf("unknown UploadLog numeric field %s", name)
 }
@@ -12776,11 +14076,71 @@ func (m *UploadLogMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *UploadLogMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(uploadlog.FieldGameUserID) {
+		fields = append(fields, uploadlog.FieldGameUserID)
+	}
 	if m.FieldCleared(uploadlog.FieldToolboxUserID) {
 		fields = append(fields, uploadlog.FieldToolboxUserID)
 	}
 	if m.FieldCleared(uploadlog.FieldErrorMessage) {
 		fields = append(fields, uploadlog.FieldErrorMessage)
+	}
+	if m.FieldCleared(uploadlog.FieldClientName) {
+		fields = append(fields, uploadlog.FieldClientName)
+	}
+	if m.FieldCleared(uploadlog.FieldClientVersion) {
+		fields = append(fields, uploadlog.FieldClientVersion)
+	}
+	if m.FieldCleared(uploadlog.FieldClientChannel) {
+		fields = append(fields, uploadlog.FieldClientChannel)
+	}
+	if m.FieldCleared(uploadlog.FieldClientMetadataFormat) {
+		fields = append(fields, uploadlog.FieldClientMetadataFormat)
+	}
+	if m.FieldCleared(uploadlog.FieldProtocolVersion) {
+		fields = append(fields, uploadlog.FieldProtocolVersion)
+	}
+	if m.FieldCleared(uploadlog.FieldPlatform) {
+		fields = append(fields, uploadlog.FieldPlatform)
+	}
+	if m.FieldCleared(uploadlog.FieldOsVersion) {
+		fields = append(fields, uploadlog.FieldOsVersion)
+	}
+	if m.FieldCleared(uploadlog.FieldOsBuild) {
+		fields = append(fields, uploadlog.FieldOsBuild)
+	}
+	if m.FieldCleared(uploadlog.FieldOsArch) {
+		fields = append(fields, uploadlog.FieldOsArch)
+	}
+	if m.FieldCleared(uploadlog.FieldAppArch) {
+		fields = append(fields, uploadlog.FieldAppArch)
+	}
+	if m.FieldCleared(uploadlog.FieldFailureStage) {
+		fields = append(fields, uploadlog.FieldFailureStage)
+	}
+	if m.FieldCleared(uploadlog.FieldErrorCode) {
+		fields = append(fields, uploadlog.FieldErrorCode)
+	}
+	if m.FieldCleared(uploadlog.FieldRequestID) {
+		fields = append(fields, uploadlog.FieldRequestID)
+	}
+	if m.FieldCleared(uploadlog.FieldClaimedGameUserID) {
+		fields = append(fields, uploadlog.FieldClaimedGameUserID)
+	}
+	if m.FieldCleared(uploadlog.FieldOauthClientID) {
+		fields = append(fields, uploadlog.FieldOauthClientID)
+	}
+	if m.FieldCleared(uploadlog.FieldProcessingDurationMs) {
+		fields = append(fields, uploadlog.FieldProcessingDurationMs)
+	}
+	if m.FieldCleared(uploadlog.FieldRequestBytes) {
+		fields = append(fields, uploadlog.FieldRequestBytes)
+	}
+	if m.FieldCleared(uploadlog.FieldIdentityVerified) {
+		fields = append(fields, uploadlog.FieldIdentityVerified)
+	}
+	if m.FieldCleared(uploadlog.FieldReceivedAt) {
+		fields = append(fields, uploadlog.FieldReceivedAt)
 	}
 	return fields
 }
@@ -12796,11 +14156,71 @@ func (m *UploadLogMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *UploadLogMutation) ClearField(name string) error {
 	switch name {
+	case uploadlog.FieldGameUserID:
+		m.ClearGameUserID()
+		return nil
 	case uploadlog.FieldToolboxUserID:
 		m.ClearToolboxUserID()
 		return nil
 	case uploadlog.FieldErrorMessage:
 		m.ClearErrorMessage()
+		return nil
+	case uploadlog.FieldClientName:
+		m.ClearClientName()
+		return nil
+	case uploadlog.FieldClientVersion:
+		m.ClearClientVersion()
+		return nil
+	case uploadlog.FieldClientChannel:
+		m.ClearClientChannel()
+		return nil
+	case uploadlog.FieldClientMetadataFormat:
+		m.ClearClientMetadataFormat()
+		return nil
+	case uploadlog.FieldProtocolVersion:
+		m.ClearProtocolVersion()
+		return nil
+	case uploadlog.FieldPlatform:
+		m.ClearPlatform()
+		return nil
+	case uploadlog.FieldOsVersion:
+		m.ClearOsVersion()
+		return nil
+	case uploadlog.FieldOsBuild:
+		m.ClearOsBuild()
+		return nil
+	case uploadlog.FieldOsArch:
+		m.ClearOsArch()
+		return nil
+	case uploadlog.FieldAppArch:
+		m.ClearAppArch()
+		return nil
+	case uploadlog.FieldFailureStage:
+		m.ClearFailureStage()
+		return nil
+	case uploadlog.FieldErrorCode:
+		m.ClearErrorCode()
+		return nil
+	case uploadlog.FieldRequestID:
+		m.ClearRequestID()
+		return nil
+	case uploadlog.FieldClaimedGameUserID:
+		m.ClearClaimedGameUserID()
+		return nil
+	case uploadlog.FieldOauthClientID:
+		m.ClearOauthClientID()
+		return nil
+	case uploadlog.FieldProcessingDurationMs:
+		m.ClearProcessingDurationMs()
+		return nil
+	case uploadlog.FieldRequestBytes:
+		m.ClearRequestBytes()
+		return nil
+	case uploadlog.FieldIdentityVerified:
+		m.ClearIdentityVerified()
+		return nil
+	case uploadlog.FieldReceivedAt:
+		m.ClearReceivedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown UploadLog nullable field %s", name)
@@ -12833,6 +14253,63 @@ func (m *UploadLogMutation) ResetField(name string) error {
 		return nil
 	case uploadlog.FieldUploadTime:
 		m.ResetUploadTime()
+		return nil
+	case uploadlog.FieldClientName:
+		m.ResetClientName()
+		return nil
+	case uploadlog.FieldClientVersion:
+		m.ResetClientVersion()
+		return nil
+	case uploadlog.FieldClientChannel:
+		m.ResetClientChannel()
+		return nil
+	case uploadlog.FieldClientMetadataFormat:
+		m.ResetClientMetadataFormat()
+		return nil
+	case uploadlog.FieldProtocolVersion:
+		m.ResetProtocolVersion()
+		return nil
+	case uploadlog.FieldPlatform:
+		m.ResetPlatform()
+		return nil
+	case uploadlog.FieldOsVersion:
+		m.ResetOsVersion()
+		return nil
+	case uploadlog.FieldOsBuild:
+		m.ResetOsBuild()
+		return nil
+	case uploadlog.FieldOsArch:
+		m.ResetOsArch()
+		return nil
+	case uploadlog.FieldAppArch:
+		m.ResetAppArch()
+		return nil
+	case uploadlog.FieldFailureStage:
+		m.ResetFailureStage()
+		return nil
+	case uploadlog.FieldErrorCode:
+		m.ResetErrorCode()
+		return nil
+	case uploadlog.FieldRequestID:
+		m.ResetRequestID()
+		return nil
+	case uploadlog.FieldClaimedGameUserID:
+		m.ResetClaimedGameUserID()
+		return nil
+	case uploadlog.FieldOauthClientID:
+		m.ResetOauthClientID()
+		return nil
+	case uploadlog.FieldProcessingDurationMs:
+		m.ResetProcessingDurationMs()
+		return nil
+	case uploadlog.FieldRequestBytes:
+		m.ResetRequestBytes()
+		return nil
+	case uploadlog.FieldIdentityVerified:
+		m.ResetIdentityVerified()
+		return nil
+	case uploadlog.FieldReceivedAt:
+		m.ResetReceivedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown UploadLog field %s", name)

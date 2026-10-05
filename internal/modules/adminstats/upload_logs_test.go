@@ -24,8 +24,11 @@ func TestScopeUploadLogsForAdminActorHidesSuperAdminOwners(t *testing.T) {
 	if _, err := client.User.Create().SetID("super").SetName("super").SetEmail("super@example.com").SetRole(userSchema.RoleSuperAdmin).Save(ctx); err != nil {
 		t.Fatalf("seed super admin: %v", err)
 	}
+	if _, err := client.User.Create().SetID("user").SetName("user").SetEmail("user@example.com").Save(ctx); err != nil {
+		t.Fatal(err)
+	}
 	seed := func(owner string) {
-		builder := client.UploadLog.Create().SetServer("jp").SetGameUserID("123").SetDataType("suite").SetUploadMethod("manual").SetSuccess(true).SetUploadTime(time.Now())
+		builder := client.UploadLog.Create().SetServer("jp").SetGameUserID("123").SetDataType("suite").SetUploadMethod("manual").SetSuccess(true).SetUploadTime(time.Now()).SetIdentityVerified(true)
 		if owner != "" {
 			builder.SetToolboxUserID(owner)
 		}
@@ -45,8 +48,8 @@ func TestScopeUploadLogsForAdminActorHidesSuperAdminOwners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query admin upload logs: %v", err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("admin visible upload logs = %d, want 2", len(rows))
+	if len(rows) != 1 {
+		t.Fatalf("admin visible upload logs = %d, want 1", len(rows))
 	}
 
 	query, err = scopeUploadLogsForAdminActor(ctx, client, client.UploadLog.Query(), adminCoreModule.RoleSuperAdmin)

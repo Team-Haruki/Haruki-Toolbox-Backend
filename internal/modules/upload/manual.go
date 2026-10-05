@@ -42,7 +42,7 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 			&userID,
 			apiHelper,
 			dependencies,
-			harukiUtils.UploadMethodManual,
+			harukiUtils.UploadMethodManual, browserUploadAttempt(c),
 		)
 		if err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {

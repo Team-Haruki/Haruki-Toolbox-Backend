@@ -10,6 +10,7 @@ import (
 func RegisterAdminStatisticsRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	statistics := adminGroup.Group("/statistics", adminCoreModule.RequireAdmin(apiHelper))
 	statistics.Get("/dashboard", handleGetDashboardStatistics(apiHelper))
+	statistics.Get("/upload-analytics", handleUploadAnalytics(apiHelper))
 	statistics.Get("/upload-logs", handleQueryUploadLogs(apiHelper))
 	statistics.Get("/timeseries", handleGetStatisticsTimeseries(apiHelper))
 }

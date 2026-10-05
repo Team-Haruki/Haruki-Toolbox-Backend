@@ -49,6 +49,13 @@ func dispatchUploadAuditLog(
 	success bool,
 	errorMessage *string,
 ) {
+	// Detach request-owned mutable state before handing work to a background task.
+	snapshot := *uploadCtx
+	if uploadCtx.Attempt != nil {
+		a := *uploadCtx.Attempt
+		snapshot.Attempt = &a
+	}
+	uploadCtx = &snapshot
 	dispatchUploadAuditLogWithSemaphore(uploadAuditSemaphore, helper, logger, backgroundTasks, uploadCtx, success, errorMessage)
 }
 
@@ -102,12 +109,17 @@ func persistUploadAuditLog(
 
 	create := helper.DBManager.DB.UploadLog.Create().
 		SetServer(string(uploadCtx.Server)).
-		SetGameUserID(uploadCtx.expectedGameUserIDString()).
-		SetToolboxUserID(uploadCtx.ToolboxUserID).
 		SetDataType(string(uploadCtx.DataType)).
 		SetUploadMethod(string(uploadCtx.UploadMethod)).
 		SetSuccess(success).
 		SetUploadTime(time.Now())
+	if uploadCtx.Attempt == nil || uploadCtx.Attempt.IdentityVerified {
+		create.SetGameUserID(uploadCtx.expectedGameUserIDString())
+		if uploadCtx.ToolboxUserID != "" {
+			create.SetToolboxUserID(uploadCtx.ToolboxUserID)
+		}
+	}
+	applyAttemptLogFields(create, uploadCtx)
 	if errorMessage != nil {
 		create.SetErrorMessage(*errorMessage)
 	}
@@ -118,6 +130,10 @@ func persistUploadAuditLog(
 		}
 	}
 
+	// Unverified route claims must not become per-user SystemLog targets.
+	if uploadCtx.Attempt != nil && !uploadCtx.Attempt.IdentityVerified {
+		return
+	}
 	targetType := "game_account"
 	targetID := fmt.Sprintf("%s:%d", uploadCtx.Server, uploadCtx.ExpectedGameUserID)
 	action := "user.upload." + strings.ToLower(string(uploadCtx.UploadMethod))
@@ -139,6 +155,7 @@ func persistUploadAuditLog(
 			true:  harukiAPIHelper.SystemLogResultSuccess,
 			false: harukiAPIHelper.SystemLogResultFailure,
 		}[success],
+		RequestID: uploadAttemptRequestID(uploadCtx),
 		Metadata: map[string]any{
 			"server":               string(uploadCtx.Server),
 			"gameUserId":           uploadCtx.expectedGameUserIDString(),

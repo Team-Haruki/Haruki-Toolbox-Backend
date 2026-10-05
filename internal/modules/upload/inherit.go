@@ -1,9 +1,11 @@
 package upload
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -91,6 +93,17 @@ func recordInheritRetrievalFailure(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		UploadMethod:       harukiUtils.UploadMethodInherit,
 		FailureStage:       "retrieve_" + string(dataType),
 	}
+	uploadCtx.Attempt = newAttempt(harukiUtils.UploadMethodInherit, 0)
+	// The retriever's ID comes from the authenticated game response, not a URL claim.
+	uploadCtx.Attempt.IdentityVerified = true
+	uploadCtx.Attempt.FailureStage = uploadCtx.FailureStage
+	uploadCtx.Attempt.ErrorCode = "temporarily_unavailable"
+	ownerCtx, cancelOwner := context.WithTimeout(context.Background(), 5*time.Second)
+	if ownerErr := resolveAttemptOwner(ownerCtx, apiHelper, uploadCtx); ownerErr != nil {
+		logger.Warnf("Failed to resolve inherit audit owner: %v", ownerErr)
+	}
+	cancelOwner()
+	finishAttempt(uploadCtx, false)
 	dispatchUploadAuditLog(apiHelper, logger, dependencies.BackgroundTasks, uploadCtx, false, buildUploadAuditErrorMessage(err, nil))
 }
 

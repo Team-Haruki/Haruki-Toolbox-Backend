@@ -14,17 +14,18 @@ import (
 // They are supplied by the composition root instead of being hidden on the
 // compatibility RouterHelpers service locator.
 type Dependencies struct {
-	HarukiProxyV3Secret     string
-	HarukiProxyV3UnpackKey  string
-	DataSync                harukiDataHandler.DataSyncConfig
-	BackgroundTasks         harukiBackground.Runner
-	OAuth2WebhookAuthorizer harukiDataHandler.OAuth2WebhookAuthorizer
-	HTTPClient              *harukiHttp.Client
-	DataHandlerLogger       *harukiLogger.Logger
-	BirthdaySubscription    harukiDataHandler.BirthdaySubscriptionConfig
-	SuiteRestoreService     *harukiDataHandler.SuiteRestoreService
-	ServerCryptor           harukiSekai.ServerCryptor
-	Proxy                   string
+	HarukiProxyV3ClientPolicy *harukiDataHandler.ClientPolicy
+	HarukiProxyV3Secret       string
+	HarukiProxyV3UnpackKey    string
+	DataSync                  harukiDataHandler.DataSyncConfig
+	BackgroundTasks           harukiBackground.Runner
+	OAuth2WebhookAuthorizer   harukiDataHandler.OAuth2WebhookAuthorizer
+	HTTPClient                *harukiHttp.Client
+	DataHandlerLogger         *harukiLogger.Logger
+	BirthdaySubscription      harukiDataHandler.BirthdaySubscriptionConfig
+	SuiteRestoreService       *harukiDataHandler.SuiteRestoreService
+	ServerCryptor             harukiSekai.ServerCryptor
+	Proxy                     string
 	// HydraConfig gates the delegated OAuth2 upload route. When nil that route
 	// is not registered at all, so a deployment without Hydra simply does not
 	// expose it.

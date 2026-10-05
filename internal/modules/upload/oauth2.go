@@ -87,7 +87,7 @@ func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 		// write from one the owner made.
 		if _, err := HandleUpload(
 			ctx, body, server, dataType, &gameUserID, &authUserID,
-			apiHelper, dependencies, harukiUtils.UploadMethodOAuth2,
+			apiHelper, dependencies, harukiUtils.UploadMethodOAuth2, oauthUploadAttempt(c),
 		); err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
