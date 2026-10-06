@@ -173,3 +173,18 @@ func valueFromD(d bson.D, key string) any {
 	}
 	return nil
 }
+
+// See nuverserestore.EnumKeyAlias: an object-valued "enums" is the enum table.
+func TestRestoreCompactDataAcceptsEnumsAlias(t *testing.T) {
+	rows := RestoreCompactData(bson.D{
+		{Key: "enums", Value: bson.D{{Key: "musicDifficultyType", Value: bson.A{"easy", "normal"}}}},
+		{Key: "musicDifficultyType", Value: bson.A{int32(1)}},
+		{Key: "musicId", Value: bson.A{int32(7)}},
+	})
+	if len(rows) != 1 {
+		t.Fatalf("rows = %v, want one row", rows)
+	}
+	if got := GetValueFromResult(rows[0], "musicDifficultyType"); got != "normal" {
+		t.Fatalf("musicDifficultyType = %v, want normal", got)
+	}
+}

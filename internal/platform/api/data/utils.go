@@ -12,9 +12,15 @@ import (
 var userGamedataAllowedFields = []string{"userId", "name", "deck", "exp", "totalExp", "coin", "rank"}
 
 func RestoreCompactData(data bson.D) []bson.D {
+	enumKey := nuverserestore.EnumKey
+	if _, ok := valueFromBSOND(data, nuverserestore.EnumKey); !ok {
+		if value, ok := valueFromBSOND(data, nuverserestore.EnumKeyAlias); ok && isBSONObject(value) {
+			enumKey = nuverserestore.EnumKeyAlias
+		}
+	}
 	var enumRaw bson.D
 	for _, elem := range data {
-		if elem.Key == nuverserestore.EnumKey {
+		if elem.Key == enumKey {
 			switch m := elem.Value.(type) {
 			case bson.D:
 				enumRaw = m
@@ -28,7 +34,7 @@ func RestoreCompactData(data bson.D) []bson.D {
 			break
 		}
 	}
-	columns, enumColumns := extractColumnsAndLabels(data, enumRaw)
+	columns, enumColumns := extractColumnsAndLabels(data, enumRaw, enumKey)
 	rows := nuverserestore.RestoreColumns(columns, enumColumns, nuverserestore.CompactOptions{
 		InvalidEnumValue:    nuverserestore.NullInvalidEnumValue,
 		ParseFloatEnumIndex: true,
@@ -36,11 +42,11 @@ func RestoreCompactData(data bson.D) []bson.D {
 	return buildResultEntries(rows)
 }
 
-func extractColumnsAndLabels(data bson.D, enumRaw bson.D) ([]nuverserestore.CompactColumn, map[string][]any) {
+func extractColumnsAndLabels(data bson.D, enumRaw bson.D, enumKey string) ([]nuverserestore.CompactColumn, map[string][]any) {
 	columns := make([]nuverserestore.CompactColumn, 0, len(data))
 	enumColumns := make(map[string][]any)
 	for _, elem := range data {
-		if elem.Key == nuverserestore.EnumKey {
+		if elem.Key == nuverserestore.EnumKey || elem.Key == enumKey {
 			continue
 		}
 		dataColumn := convertToInterfaceSlice(elem.Value)
@@ -174,4 +180,14 @@ func mapToD(m map[string]any) bson.D {
 		d = append(d, bson.E{Key: k, Value: v})
 	}
 	return d
+}
+
+// isBSONObject reports whether a value is a document rather than a column.
+func isBSONObject(value any) bool {
+	switch value.(type) {
+	case bson.D, bson.M, map[string]any:
+		return true
+	default:
+		return false
+	}
 }

@@ -8,6 +8,14 @@ import (
 
 const EnumKey = "__ENUM__"
 
+// EnumKeyAlias is the same enum table under its Avro schema name. SekaiColo's
+// suite restorer emitted compact tables with "enums" instead of "__ENUM__" for
+// CN 6.4 uploads between 2026-10-03 and 2026-10-06 (fixed in SekaiColo 4.5.21).
+// A column is always an array, so an object-valued "enums" can only be that
+// table; readers accept it when "__ENUM__" is absent instead of treating it as
+// an empty column, which truncated every row away.
+const EnumKeyAlias = "enums"
+
 type InvalidEnumValueMode int
 
 const (

@@ -167,3 +167,29 @@ func TestExpandedOutputIsValidJSON(t *testing.T) {
 		t.Fatalf("\n got %v\nwant %v", got, want)
 	}
 }
+
+// ★ CN suites uploaded by SekaiColo between 2026-10-03 and 2026-10-06 carry
+// the enum table as "enums" (its Avro schema name). Read as a column it is an
+// object, so length zero, and every row was truncated away — CN song results
+// and mission progress read back empty.
+func TestExpandAcceptsEnumsAlias(t *testing.T) {
+	got, err := ExpandCompactJSON([]byte(`{"enums":{"musicDifficultyType":["easy","normal"]},"musicDifficultyType":[1,0],"musicId":[7,8]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `[{"musicDifficultyType":"normal","musicId":7},{"musicDifficultyType":"easy","musicId":8}]`
+	if string(got) != want {
+		t.Fatalf("ExpandCompactJSON() = %s, want %s", got, want)
+	}
+}
+
+// An array named "enums" is an ordinary column, not the enum table.
+func TestExpandKeepsArrayEnumsColumn(t *testing.T) {
+	got, err := ExpandCompactJSON([]byte(`{"enums":[1,2],"id":[3,4]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `[{"enums":1,"id":3},{"enums":2,"id":4}]`; string(got) != want {
+		t.Fatalf("ExpandCompactJSON() = %s, want %s", got, want)
+	}
+}
