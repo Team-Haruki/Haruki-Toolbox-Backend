@@ -5,6 +5,8 @@ import (
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -108,7 +110,7 @@ func TestUpsertParsedSponsorIncrementsSupportCountForNewOrders(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected first order to parse")
 	}
-	if _, err := UpsertParsedSponsor(ctx, client, first, true); err != nil {
+	if _, err := UpsertParsedSponsor(ctx, client, first, now, true); err != nil {
 		t.Fatalf("upsert first order: %v", err)
 	}
 
@@ -124,7 +126,7 @@ func TestUpsertParsedSponsorIncrementsSupportCountForNewOrders(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected second order to parse")
 	}
-	row, err := UpsertParsedSponsor(ctx, client, second, true)
+	row, err := UpsertParsedSponsor(ctx, client, second, now, true)
 	if err != nil {
 		t.Fatalf("upsert second order: %v", err)
 	}
@@ -154,7 +156,7 @@ func TestUpsertParsedSponsorSkipsSyncDisabledRecords(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected order to parse")
 	}
-	created, err := UpsertParsedSponsor(ctx, client, order, true)
+	created, err := UpsertParsedSponsor(ctx, client, order, now, true)
 	if err != nil {
 		t.Fatalf("upsert order: %v", err)
 	}
@@ -164,10 +166,12 @@ func TestUpsertParsedSponsorSkipsSyncDisabledRecords(t *testing.T) {
 		t.Fatalf("pin sponsor: %v", err)
 	}
 
-	// A later sync/webhook for the same user must not touch the pinned record.
+	// A later sync/webhook for the same user must not touch the pinned record,
+	// even though its future expiry would otherwise derive is_active = true.
 	order.Name = "爱发电同步名"
-	order.IsActive = true
-	row, err := UpsertParsedSponsor(ctx, client, order, true)
+	future := now.AddDate(0, 6, 0)
+	order.PlanExpiresAt = &future
+	row, err := UpsertParsedSponsor(ctx, client, order, now, true)
 	if err != nil {
 		t.Fatalf("re-upsert pinned order: %v", err)
 	}
@@ -316,6 +320,255 @@ func TestBuildSponsorPageResponseExpiresDurationSponsors(t *testing.T) {
 	for _, item := range resp.Supporters {
 		if item.ID == "expired-duration" && item.IsActive {
 			t.Fatalf("expired duration sponsor should be inactive in response")
+		}
+	}
+}
+
+func paidAfdianOrder(t *testing.T, userID string, outTradeNo string, planID string, month int, paidAt time.Time) parsedAfdianSponsor {
+	t.Helper()
+	order := map[string]any{
+		"out_trade_no": outTradeNo,
+		"user_id":      userID,
+		"month":        float64(month),
+		"total_amount": "5.00",
+		"status":       float64(afdianOrderStatusPaid),
+		"create_time":  float64(paidAt.Unix()),
+	}
+	if planID != "" {
+		order["plan_id"] = planID
+	}
+	parsed, ok := parseAfdianOrder(order, paidAt)
+	if !ok {
+		t.Fatalf("expected paid order %q to parse", outTradeNo)
+	}
+	return parsed
+}
+
+// querySponsorItem mimics one entry of Afdian's query-sponsor list. plan is the
+// current_plan object; nil omits it entirely (a one-time supporter).
+func querySponsorItem(t *testing.T, userID string, plan map[string]any, lastPay time.Time) parsedAfdianSponsor {
+	t.Helper()
+	item := map[string]any{
+		"user":           map[string]any{"user_id": userID, "name": "供养者"},
+		"all_sum_amount": "5.00",
+		"last_pay_time":  float64(lastPay.Unix()),
+		"first_pay_time": float64(lastPay.Unix()),
+	}
+	if plan != nil {
+		item["current_plan"] = plan
+	}
+	parsed, ok := parseAfdianSponsorItem(item, lastPay)
+	if !ok {
+		t.Fatalf("expected query-sponsor item for %q to parse", userID)
+	}
+	return parsed
+}
+
+func TestParseAfdianOrderAcceptsOnlyPaidStatus(t *testing.T) {
+	now := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	order := func(status float64) map[string]any {
+		return map[string]any{
+			"out_trade_no": "order-status",
+			"user_id":      "status-user",
+			"plan_id":      "monthly-plan",
+			"month":        float64(1),
+			"total_amount": "5.00",
+			"status":       status,
+			"create_time":  float64(now.Unix()),
+		}
+	}
+
+	for _, status := range []float64{0, 1, 3} {
+		if _, ok := parseAfdianOrder(order(status), now); ok {
+			t.Fatalf("status %v accepted, want only paid orders (status 2)", status)
+		}
+	}
+	// A missing status must not default to "paid" either.
+	unset := order(0)
+	delete(unset, "status")
+	if _, ok := parseAfdianOrder(unset, now); ok {
+		t.Fatalf("order without status accepted, want rejected")
+	}
+	parsed, ok := parseAfdianOrder(order(2), now)
+	if !ok {
+		t.Fatalf("status 2 rejected, want accepted")
+	}
+	if parsed.OutTradeNo != "order-status" {
+		t.Fatalf("out trade no = %q", parsed.OutTradeNo)
+	}
+}
+
+func TestUpsertParsedSponsorDeactivatesExpiredPlanOnSync(t *testing.T) {
+	cases := []struct {
+		name string
+		plan func(paidAt time.Time) map[string]any
+	}{
+		{
+			// Production shape: once the plan lapses Afdian keeps a current_plan
+			// object but drops expire_time, so the item alone looks "active".
+			name: "expire_time omitted",
+			plan: func(time.Time) map[string]any { return map[string]any{"name": "", "plan_id": "monthly-plan"} },
+		},
+		{
+			name: "expire_time in the past",
+			plan: func(paidAt time.Time) map[string]any {
+				return map[string]any{"plan_id": "monthly-plan", "name": "月度赞助", "pay_month": float64(1), "expire_time": float64(paidAt.AddDate(0, 1, 0).Unix())}
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			client := enttest.Open(t, "sqlite3", uniqueSponsorSQLiteDSN(t))
+			defer client.Close()
+
+			paidAt := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+			created, err := UpsertParsedSponsor(ctx, client, paidAfdianOrder(t, "lapsed-user", "order-1", "monthly-plan", 1, paidAt), paidAt, true)
+			if err != nil {
+				t.Fatalf("upsert order: %v", err)
+			}
+			if !created.IsActive {
+				t.Fatalf("freshly paid monthly sponsor should be active")
+			}
+
+			syncAt := paidAt.AddDate(0, 2, 0)
+			row, err := UpsertParsedSponsor(ctx, client, querySponsorItem(t, "lapsed-user", tc.plan(paidAt), paidAt), syncAt, false)
+			if err != nil {
+				t.Fatalf("sync upsert: %v", err)
+			}
+			if row.IsActive {
+				t.Fatalf("is_active = true after the plan expired, want false")
+			}
+			if row.PlanExpiresAt == nil || !row.PlanExpiresAt.Equal(paidAt.AddDate(0, 1, 0)) {
+				t.Fatalf("plan_expires_at = %v, want original expiry %v preserved", row.PlanExpiresAt, paidAt.AddDate(0, 1, 0))
+			}
+		})
+	}
+}
+
+func TestUpsertParsedSponsorReactivatesRenewedPlan(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", uniqueSponsorSQLiteDSN(t))
+	defer client.Close()
+
+	paidAt := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	if _, err := UpsertParsedSponsor(ctx, client, paidAfdianOrder(t, "renew-user", "order-1", "monthly-plan", 1, paidAt), paidAt, true); err != nil {
+		t.Fatalf("upsert first order: %v", err)
+	}
+
+	lapsedAt := paidAt.AddDate(0, 2, 0)
+	row, err := UpsertParsedSponsor(ctx, client, querySponsorItem(t, "renew-user", map[string]any{"name": ""}, paidAt), lapsedAt, false)
+	if err != nil {
+		t.Fatalf("sync after lapse: %v", err)
+	}
+	if row.IsActive {
+		t.Fatalf("is_active = true after lapse, want false before renewal")
+	}
+
+	// Webhook for a fresh payment extends the expiry and must flip it back.
+	row, err = UpsertParsedSponsor(ctx, client, paidAfdianOrder(t, "renew-user", "order-2", "monthly-plan", 1, lapsedAt), lapsedAt, true)
+	if err != nil {
+		t.Fatalf("upsert renewal order: %v", err)
+	}
+	if !row.IsActive {
+		t.Fatalf("is_active = false after renewal, want true")
+	}
+	if row.PlanExpiresAt == nil || !row.PlanExpiresAt.Equal(lapsedAt.AddDate(0, 1, 0)) {
+		t.Fatalf("plan_expires_at = %v, want %v", row.PlanExpiresAt, lapsedAt.AddDate(0, 1, 0))
+	}
+	if row.SupportCount != 2 {
+		t.Fatalf("support count = %d, want 2", row.SupportCount)
+	}
+
+	// The next sync sees the renewed plan with a future expire_time and keeps it active.
+	renewedPlan := map[string]any{"plan_id": "monthly-plan", "name": "月度赞助", "pay_month": float64(1), "expire_time": float64(lapsedAt.AddDate(0, 1, 0).Unix())}
+	row, err = UpsertParsedSponsor(ctx, client, querySponsorItem(t, "renew-user", renewedPlan, lapsedAt), lapsedAt.Add(time.Hour), false)
+	if err != nil {
+		t.Fatalf("sync after renewal: %v", err)
+	}
+	if !row.IsActive {
+		t.Fatalf("is_active = false on sync after renewal, want true")
+	}
+}
+
+func TestUpsertParsedSponsorKeepsNoPlanSponsorActive(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", uniqueSponsorSQLiteDSN(t))
+	defer client.Close()
+
+	paidAt := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	created, err := UpsertParsedSponsor(ctx, client, paidAfdianOrder(t, "one-time-user", "order-1", "", 1, paidAt), paidAt, true)
+	if err != nil {
+		t.Fatalf("upsert one-time order: %v", err)
+	}
+	if created.PlanExpiresAt != nil || created.PlanID != nil {
+		t.Fatalf("one-time order stored plan %#v / expiry %v, want none", created.PlanID, created.PlanExpiresAt)
+	}
+	if !created.IsActive {
+		t.Fatalf("one-time sponsor should be active on creation")
+	}
+
+	// A year of syncs without any plan must not demote a no-plan sponsor.
+	row, err := UpsertParsedSponsor(ctx, client, querySponsorItem(t, "one-time-user", nil, paidAt), paidAt.AddDate(1, 0, 0), false)
+	if err != nil {
+		t.Fatalf("sync one-time sponsor: %v", err)
+	}
+	if !row.IsActive {
+		t.Fatalf("is_active = false for a sponsor without a plan, want permanently active")
+	}
+	if row.PlanExpiresAt != nil {
+		t.Fatalf("plan_expires_at = %v, want nil", row.PlanExpiresAt)
+	}
+}
+
+func TestSyncAfdianSponsorsDeactivatesExpiredPlans(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", uniqueSponsorSQLiteDSN(t))
+	defer client.Close()
+
+	paidAt := time.Date(2026, time.June, 20, 12, 0, 0, 0, time.UTC)
+	syncAt := paidAt.AddDate(0, 2, 0)
+	for _, user := range []string{"lapsed-user", "renewed-user"} {
+		if _, err := UpsertParsedSponsor(ctx, client, paidAfdianOrder(t, user, "order-"+user, "monthly-plan", 1, paidAt), paidAt, true); err != nil {
+			t.Fatalf("seed %s: %v", user, err)
+		}
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/query-sponsor") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"ec":200,"em":"","data":{"total_count":3,"total_page":1,"list":[
+			{"user":{"user_id":"lapsed-user","name":"A"},"all_sum_amount":"5.00","last_pay_time":%d,"current_plan":{"name":""}},
+			{"user":{"user_id":"renewed-user","name":"B"},"all_sum_amount":"10.00","last_pay_time":%d,"current_plan":{"plan_id":"monthly-plan","name":"月度赞助","pay_month":1,"expire_time":%d}},
+			{"user":{"user_id":"one-time-user","name":"C"},"all_sum_amount":"30.00","last_pay_time":%d}
+		]}}`, paidAt.Unix(), syncAt.Unix(), syncAt.AddDate(0, 1, 0).Unix(), paidAt.Unix())
+	}))
+	defer server.Close()
+
+	cfg := NewAfdianConfig(AfdianConfigOptions{UserID: "dev", APIToken: "token", APIBaseURL: server.URL})
+	result, err := SyncAfdianSponsors(ctx, client, cfg, syncAt)
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	if result.Imported != 3 || result.Skipped != 0 {
+		t.Fatalf("sync result = %+v, want 3 imported", result)
+	}
+
+	want := map[string]bool{
+		"afdian_lapsed-user":   false,
+		"afdian_renewed-user":  true,
+		"afdian_one-time-user": true,
+	}
+	for id, active := range want {
+		row, err := client.Sponsor.Query().Where(sponsorSchema.IDEQ(id)).Only(ctx)
+		if err != nil {
+			t.Fatalf("load %s: %v", id, err)
+		}
+		if row.IsActive != active {
+			t.Fatalf("%s is_active = %v, want %v", id, row.IsActive, active)
 		}
 	}
 }
