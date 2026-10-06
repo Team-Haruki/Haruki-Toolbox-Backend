@@ -1,7 +1,6 @@
 package adminstats
 
 import (
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -185,7 +184,10 @@ func parseUploadLogQueryFilters(c fiber.Ctx, now time.Time) (*uploadLogQueryFilt
 func applyUploadLogFilters(query *postgresql.UploadLogQuery, filters *uploadLogQueryFilters) *postgresql.UploadLogQuery {
 	q := query.Where(
 		func(s *sql.Selector) {
-			s.Where(sql.ExprP(fmt.Sprintf("COALESCE(%s, %s) >= ? AND COALESCE(%s, %s) < ?", s.C(uploadlog.FieldReceivedAt), s.C(uploadlog.FieldUploadTime), s.C(uploadlog.FieldReceivedAt), s.C(uploadlog.FieldUploadTime)), filters.From, filters.To))
+			s.Where(sql.P(func(b *sql.Builder) {
+				b.WriteString("COALESCE(").Ident(s.C(uploadlog.FieldReceivedAt)).WriteString(", ").Ident(s.C(uploadlog.FieldUploadTime)).WriteString(") >= ").Arg(filters.From)
+				b.WriteString(" AND COALESCE(").Ident(s.C(uploadlog.FieldReceivedAt)).WriteString(", ").Ident(s.C(uploadlog.FieldUploadTime)).WriteString(") < ").Arg(filters.To)
+			}))
 		},
 	)
 	if len(filters.GameUserIDs) > 0 {
