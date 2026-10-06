@@ -441,8 +441,16 @@ func parseAfdianSponsorItem(item map[string]any, now time.Time) (parsedAfdianSpo
 // sync pass deactivates a lapsed plan and a later payment that pushes the expiry
 // forward reactivates it. now is the instant the expiry is judged against.
 func UpsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, now time.Time, incrementCount bool) (*postgresql.Sponsor, error) {
-	return upsertParsedSponsor(ctx, db, item, now, incrementCount, true)
+	for attempt := 0; attempt < 3; attempt++ {
+		row, err := upsertParsedSponsor(ctx, db, item, now, incrementCount, true)
+		if !errors.Is(err, errSponsorUpdateConflict) {
+			return row, err
+		}
+	}
+	return nil, errSponsorUpdateConflict
 }
+
+var errSponsorUpdateConflict = errors.New("sponsor changed during update; retry required")
 
 func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, now time.Time, incrementCount bool, allowRetry bool) (*postgresql.Sponsor, error) {
 	existing, err := db.Sponsor.Query().Where(sponsorSchema.IDEQ(item.ID)).Only(ctx)
@@ -478,6 +486,12 @@ func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 		return existing, nil
 	}
 
+	// Ignore snapshots/orders older than the latest stored payment. A delayed
+	// sync must not undo a renewal, even after a conflict is retried.
+	if item.PaidAt != nil && existing.PaidAt != nil && item.PaidAt.Before(*existing.PaidAt) {
+		return existing, nil
+	}
+
 	// SetNillablePlanExpiresAt(nil) below leaves the stored expiry in place, so
 	// judge activity against the expiry that will actually remain on the row:
 	// the incoming one when Afdian reports it, otherwise the stored one. Trusting
@@ -488,6 +502,7 @@ func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 		effectiveExpiresAt = existing.PlanExpiresAt
 	}
 	update := existing.Update().
+		Where(sponsorSchema.UpdatedAtEQ(existing.UpdatedAt), sponsorSchema.AfdianSyncDisabledEQ(false)).
 		SetIsActive(activeForExpiry(effectiveExpiresAt, now)).
 		SetPlanRank(item.PlanRank).
 		SetRaw(item.Raw)
@@ -497,7 +512,13 @@ func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsed
 	} else if item.SupportCount > 0 {
 		update.SetSupportCount(item.SupportCount)
 	}
-	return update.Save(ctx)
+	// Compare-and-swap guards the read-derived expiry and activity together,
+	// including an administrator pin applied between the SELECT and UPDATE.
+	saved, err := update.Save(ctx)
+	if postgresql.IsNotFound(err) {
+		return nil, errSponsorUpdateConflict
+	}
+	return saved, err
 }
 
 func setSponsorCreateFields(create *postgresql.SponsorCreate, item parsedAfdianSponsor) {
