@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
@@ -14,15 +15,17 @@ import (
 // They are supplied by the composition root instead of being hidden on the
 // compatibility RouterHelpers service locator.
 type Dependencies struct {
-	DataSync                harukiDataHandler.DataSyncConfig
-	BackgroundTasks         harukiBackground.Runner
-	OAuth2WebhookAuthorizer harukiDataHandler.OAuth2WebhookAuthorizer
-	HTTPClient              *harukiHttp.Client
-	DataHandlerLogger       *harukiLogger.Logger
-	BirthdaySubscription    harukiDataHandler.BirthdaySubscriptionConfig
-	SuiteRestoreService     *harukiDataHandler.SuiteRestoreService
-	ServerCryptor           harukiSekai.ServerCryptor
-	Proxy                   string
+	ValidateUploadIdentity    func(context.Context) error
+	HarukiProxyV3ClientPolicy *harukiDataHandler.ClientPolicy
+	DataSync                  harukiDataHandler.DataSyncConfig
+	BackgroundTasks           harukiBackground.Runner
+	OAuth2WebhookAuthorizer   harukiDataHandler.OAuth2WebhookAuthorizer
+	HTTPClient                *harukiHttp.Client
+	DataHandlerLogger         *harukiLogger.Logger
+	BirthdaySubscription      harukiDataHandler.BirthdaySubscriptionConfig
+	SuiteRestoreService       *harukiDataHandler.SuiteRestoreService
+	ServerCryptor             harukiSekai.ServerCryptor
+	Proxy                     string
 	// HydraConfig gates the delegated OAuth2 upload route. When nil that route
 	// is not registered at all, so a deployment without Hydra simply does not
 	// expose it.

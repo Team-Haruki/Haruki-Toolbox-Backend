@@ -51,6 +51,34 @@ func (_c *GameAccountDataGrantCreate) SetDataType(v string) *GameAccountDataGran
 	return _c
 }
 
+// SetCanRead sets the "can_read" field.
+func (_c *GameAccountDataGrantCreate) SetCanRead(v bool) *GameAccountDataGrantCreate {
+	_c.mutation.SetCanRead(v)
+	return _c
+}
+
+// SetNillableCanRead sets the "can_read" field if the given value is not nil.
+func (_c *GameAccountDataGrantCreate) SetNillableCanRead(v *bool) *GameAccountDataGrantCreate {
+	if v != nil {
+		_c.SetCanRead(*v)
+	}
+	return _c
+}
+
+// SetCanWrite sets the "can_write" field.
+func (_c *GameAccountDataGrantCreate) SetCanWrite(v bool) *GameAccountDataGrantCreate {
+	_c.mutation.SetCanWrite(v)
+	return _c
+}
+
+// SetNillableCanWrite sets the "can_write" field if the given value is not nil.
+func (_c *GameAccountDataGrantCreate) SetNillableCanWrite(v *bool) *GameAccountDataGrantCreate {
+	if v != nil {
+		_c.SetCanWrite(*v)
+	}
+	return _c
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_c *GameAccountDataGrantCreate) SetExpiresAt(v time.Time) *GameAccountDataGrantCreate {
 	_c.mutation.SetExpiresAt(v)
@@ -142,6 +170,14 @@ func (_c *GameAccountDataGrantCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *GameAccountDataGrantCreate) defaults() {
+	if _, ok := _c.mutation.CanRead(); !ok {
+		v := gameaccountdatagrant.DefaultCanRead
+		_c.mutation.SetCanRead(v)
+	}
+	if _, ok := _c.mutation.CanWrite(); !ok {
+		v := gameaccountdatagrant.DefaultCanWrite
+		_c.mutation.SetCanWrite(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := gameaccountdatagrant.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -193,6 +229,12 @@ func (_c *GameAccountDataGrantCreate) check() error {
 		if err := gameaccountdatagrant.DataTypeValidator(v); err != nil {
 			return &ValidationError{Name: "data_type", err: fmt.Errorf(`postgresql: validator failed for field "GameAccountDataGrant.data_type": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.CanRead(); !ok {
+		return &ValidationError{Name: "can_read", err: errors.New(`postgresql: missing required field "GameAccountDataGrant.can_read"`)}
+	}
+	if _, ok := _c.mutation.CanWrite(); !ok {
+		return &ValidationError{Name: "can_write", err: errors.New(`postgresql: missing required field "GameAccountDataGrant.can_write"`)}
 	}
 	if _, ok := _c.mutation.ExpiresAt(); !ok {
 		return &ValidationError{Name: "expires_at", err: errors.New(`postgresql: missing required field "GameAccountDataGrant.expires_at"`)}
@@ -246,6 +288,14 @@ func (_c *GameAccountDataGrantCreate) createSpec() (*GameAccountDataGrant, *sqlg
 	if value, ok := _c.mutation.DataType(); ok {
 		_spec.SetField(gameaccountdatagrant.FieldDataType, field.TypeString, value)
 		_node.DataType = value
+	}
+	if value, ok := _c.mutation.CanRead(); ok {
+		_spec.SetField(gameaccountdatagrant.FieldCanRead, field.TypeBool, value)
+		_node.CanRead = value
+	}
+	if value, ok := _c.mutation.CanWrite(); ok {
+		_spec.SetField(gameaccountdatagrant.FieldCanWrite, field.TypeBool, value)
+		_node.CanWrite = value
 	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(gameaccountdatagrant.FieldExpiresAt, field.TypeTime, value)

@@ -11,6 +11,14 @@ const (
 	Label = "upload_log"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldActorUserID holds the string denoting the actor_user_id field in the database.
+	FieldActorUserID = "actor_user_id"
+	// FieldAuthMethod holds the string denoting the auth_method field in the database.
+	FieldAuthMethod = "auth_method"
+	// FieldGrantID holds the string denoting the grant_id field in the database.
+	FieldGrantID = "grant_id"
+	// FieldAuthorizationSource holds the string denoting the authorization_source field in the database.
+	FieldAuthorizationSource = "authorization_source"
 	// FieldServer holds the string denoting the server field in the database.
 	FieldServer = "server"
 	// FieldGameUserID holds the string denoting the game_user_id field in the database.
@@ -27,6 +35,44 @@ const (
 	FieldErrorMessage = "error_message"
 	// FieldUploadTime holds the string denoting the upload_time field in the database.
 	FieldUploadTime = "upload_time"
+	// FieldClientName holds the string denoting the client_name field in the database.
+	FieldClientName = "client_name"
+	// FieldClientVersion holds the string denoting the client_version field in the database.
+	FieldClientVersion = "client_version"
+	// FieldClientChannel holds the string denoting the client_channel field in the database.
+	FieldClientChannel = "client_channel"
+	// FieldClientMetadataFormat holds the string denoting the client_metadata_format field in the database.
+	FieldClientMetadataFormat = "client_metadata_format"
+	// FieldProtocolVersion holds the string denoting the protocol_version field in the database.
+	FieldProtocolVersion = "protocol_version"
+	// FieldPlatform holds the string denoting the platform field in the database.
+	FieldPlatform = "platform"
+	// FieldOsVersion holds the string denoting the os_version field in the database.
+	FieldOsVersion = "os_version"
+	// FieldOsBuild holds the string denoting the os_build field in the database.
+	FieldOsBuild = "os_build"
+	// FieldOsArch holds the string denoting the os_arch field in the database.
+	FieldOsArch = "os_arch"
+	// FieldAppArch holds the string denoting the app_arch field in the database.
+	FieldAppArch = "app_arch"
+	// FieldFailureStage holds the string denoting the failure_stage field in the database.
+	FieldFailureStage = "failure_stage"
+	// FieldErrorCode holds the string denoting the error_code field in the database.
+	FieldErrorCode = "error_code"
+	// FieldRequestID holds the string denoting the request_id field in the database.
+	FieldRequestID = "request_id"
+	// FieldClaimedGameUserID holds the string denoting the claimed_game_user_id field in the database.
+	FieldClaimedGameUserID = "claimed_game_user_id"
+	// FieldOauthClientID holds the string denoting the oauth_client_id field in the database.
+	FieldOauthClientID = "oauth_client_id"
+	// FieldProcessingDurationMs holds the string denoting the processing_duration_ms field in the database.
+	FieldProcessingDurationMs = "processing_duration_ms"
+	// FieldRequestBytes holds the string denoting the request_bytes field in the database.
+	FieldRequestBytes = "request_bytes"
+	// FieldIdentityVerified holds the string denoting the identity_verified field in the database.
+	FieldIdentityVerified = "identity_verified"
+	// FieldReceivedAt holds the string denoting the received_at field in the database.
+	FieldReceivedAt = "received_at"
 	// Table holds the table name of the uploadlog in the database.
 	Table = "upload_logs"
 )
@@ -34,6 +80,10 @@ const (
 // Columns holds all SQL columns for uploadlog fields.
 var Columns = []string{
 	FieldID,
+	FieldActorUserID,
+	FieldAuthMethod,
+	FieldGrantID,
+	FieldAuthorizationSource,
 	FieldServer,
 	FieldGameUserID,
 	FieldToolboxUserID,
@@ -42,6 +92,25 @@ var Columns = []string{
 	FieldSuccess,
 	FieldErrorMessage,
 	FieldUploadTime,
+	FieldClientName,
+	FieldClientVersion,
+	FieldClientChannel,
+	FieldClientMetadataFormat,
+	FieldProtocolVersion,
+	FieldPlatform,
+	FieldOsVersion,
+	FieldOsBuild,
+	FieldOsArch,
+	FieldAppArch,
+	FieldFailureStage,
+	FieldErrorCode,
+	FieldRequestID,
+	FieldClaimedGameUserID,
+	FieldOauthClientID,
+	FieldProcessingDurationMs,
+	FieldRequestBytes,
+	FieldIdentityVerified,
+	FieldReceivedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -63,6 +132,40 @@ var (
 	ToolboxUserIDValidator func(string) error
 	// DataTypeValidator is a validator for the "data_type" field. It is called by the builders before save.
 	DataTypeValidator func(string) error
+	// ClientNameValidator is a validator for the "client_name" field. It is called by the builders before save.
+	ClientNameValidator func(string) error
+	// ClientVersionValidator is a validator for the "client_version" field. It is called by the builders before save.
+	ClientVersionValidator func(string) error
+	// ClientChannelValidator is a validator for the "client_channel" field. It is called by the builders before save.
+	ClientChannelValidator func(string) error
+	// ClientMetadataFormatValidator is a validator for the "client_metadata_format" field. It is called by the builders before save.
+	ClientMetadataFormatValidator func(string) error
+	// ProtocolVersionValidator is a validator for the "protocol_version" field. It is called by the builders before save.
+	ProtocolVersionValidator func(string) error
+	// PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
+	PlatformValidator func(string) error
+	// OsVersionValidator is a validator for the "os_version" field. It is called by the builders before save.
+	OsVersionValidator func(string) error
+	// OsBuildValidator is a validator for the "os_build" field. It is called by the builders before save.
+	OsBuildValidator func(string) error
+	// OsArchValidator is a validator for the "os_arch" field. It is called by the builders before save.
+	OsArchValidator func(string) error
+	// AppArchValidator is a validator for the "app_arch" field. It is called by the builders before save.
+	AppArchValidator func(string) error
+	// FailureStageValidator is a validator for the "failure_stage" field. It is called by the builders before save.
+	FailureStageValidator func(string) error
+	// ErrorCodeValidator is a validator for the "error_code" field. It is called by the builders before save.
+	ErrorCodeValidator func(string) error
+	// RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	RequestIDValidator func(string) error
+	// ClaimedGameUserIDValidator is a validator for the "claimed_game_user_id" field. It is called by the builders before save.
+	ClaimedGameUserIDValidator func(string) error
+	// OauthClientIDValidator is a validator for the "oauth_client_id" field. It is called by the builders before save.
+	OauthClientIDValidator func(string) error
+	// ProcessingDurationMsValidator is a validator for the "processing_duration_ms" field. It is called by the builders before save.
+	ProcessingDurationMsValidator func(int64) error
+	// RequestBytesValidator is a validator for the "request_bytes" field. It is called by the builders before save.
+	RequestBytesValidator func(int64) error
 )
 
 // OrderOption defines the ordering options for the UploadLog queries.
@@ -71,6 +174,26 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByActorUserID orders the results by the actor_user_id field.
+func ByActorUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorUserID, opts...).ToFunc()
+}
+
+// ByAuthMethod orders the results by the auth_method field.
+func ByAuthMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthMethod, opts...).ToFunc()
+}
+
+// ByGrantID orders the results by the grant_id field.
+func ByGrantID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantID, opts...).ToFunc()
+}
+
+// ByAuthorizationSource orders the results by the authorization_source field.
+func ByAuthorizationSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorizationSource, opts...).ToFunc()
 }
 
 // ByServer orders the results by the server field.
@@ -111,4 +234,99 @@ func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 // ByUploadTime orders the results by the upload_time field.
 func ByUploadTime(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUploadTime, opts...).ToFunc()
+}
+
+// ByClientName orders the results by the client_name field.
+func ByClientName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientName, opts...).ToFunc()
+}
+
+// ByClientVersion orders the results by the client_version field.
+func ByClientVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientVersion, opts...).ToFunc()
+}
+
+// ByClientChannel orders the results by the client_channel field.
+func ByClientChannel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientChannel, opts...).ToFunc()
+}
+
+// ByClientMetadataFormat orders the results by the client_metadata_format field.
+func ByClientMetadataFormat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientMetadataFormat, opts...).ToFunc()
+}
+
+// ByProtocolVersion orders the results by the protocol_version field.
+func ByProtocolVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProtocolVersion, opts...).ToFunc()
+}
+
+// ByPlatform orders the results by the platform field.
+func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlatform, opts...).ToFunc()
+}
+
+// ByOsVersion orders the results by the os_version field.
+func ByOsVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOsVersion, opts...).ToFunc()
+}
+
+// ByOsBuild orders the results by the os_build field.
+func ByOsBuild(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOsBuild, opts...).ToFunc()
+}
+
+// ByOsArch orders the results by the os_arch field.
+func ByOsArch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOsArch, opts...).ToFunc()
+}
+
+// ByAppArch orders the results by the app_arch field.
+func ByAppArch(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAppArch, opts...).ToFunc()
+}
+
+// ByFailureStage orders the results by the failure_stage field.
+func ByFailureStage(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailureStage, opts...).ToFunc()
+}
+
+// ByErrorCode orders the results by the error_code field.
+func ByErrorCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldErrorCode, opts...).ToFunc()
+}
+
+// ByRequestID orders the results by the request_id field.
+func ByRequestID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestID, opts...).ToFunc()
+}
+
+// ByClaimedGameUserID orders the results by the claimed_game_user_id field.
+func ByClaimedGameUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClaimedGameUserID, opts...).ToFunc()
+}
+
+// ByOauthClientID orders the results by the oauth_client_id field.
+func ByOauthClientID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOauthClientID, opts...).ToFunc()
+}
+
+// ByProcessingDurationMs orders the results by the processing_duration_ms field.
+func ByProcessingDurationMs(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProcessingDurationMs, opts...).ToFunc()
+}
+
+// ByRequestBytes orders the results by the request_bytes field.
+func ByRequestBytes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestBytes, opts...).ToFunc()
+}
+
+// ByIdentityVerified orders the results by the identity_verified field.
+func ByIdentityVerified(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIdentityVerified, opts...).ToFunc()
+}
+
+// ByReceivedAt orders the results by the received_at field.
+func ByReceivedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReceivedAt, opts...).ToFunc()
 }

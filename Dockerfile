@@ -1,14 +1,20 @@
-FROM golang:1.27.1-alpine AS builder
-ARG VERSION=dev
-ARG GIT_SHA=unknown
-ARG BUILD_DATE=unknown
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache build-base
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+# Modules in their own layer: it only changes with go.mod/go.sum, and CI keeps it in the
+# registry build cache.
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build \
+# Build args are declared here, right before the build, not at the top: an ARG becomes part of
+# the environment of every later RUN, so per-commit values (GIT_SHA, BUILD_DATE) used to re-run
+# every layer. Cross-compiles for the requested platform (TARGETOS/TARGETARCH) from the native
+# builder; CGO is off, so no C toolchain is needed.
+ARG TARGETOS TARGETARCH
+ARG VERSION=dev
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -trimpath \
     -ldflags="-s -w \
       -X 'github.com/Team-Haruki/Haruki-Toolbox-Backend/version.Version=${VERSION}' \
@@ -19,12 +25,6 @@ RUN go build \
 FROM alpine:3.24
 
 ENV TZ=Asia/Shanghai
-ARG VERSION=dev
-ARG GIT_SHA=unknown
-ARG BUILD_DATE=unknown
-LABEL org.opencontainers.image.version=$VERSION \
-      org.opencontainers.image.revision=$GIT_SHA \
-      org.opencontainers.image.created=$BUILD_DATE
 
 WORKDIR /app
 # The uid/gid are PINNED. `adduser -S` picks the first free system id, which a
@@ -37,6 +37,14 @@ RUN apk --no-cache add ca-certificates tzdata \
     && adduser -u 10001 -S -G haruki haruki \
     && mkdir -p logs \
     && chown haruki:haruki logs
+
+# After the RUN above, so the per-commit values do not re-run it.
+ARG VERSION=dev
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.version=$VERSION \
+      org.opencontainers.image.revision=$GIT_SHA \
+      org.opencontainers.image.created=$BUILD_DATE
 
 COPY --from=builder --chown=haruki:haruki /app/haruki-toolbox-backend .
 COPY --from=builder --chown=haruki:haruki /app/data ./data

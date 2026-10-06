@@ -14,22 +14,9 @@ import (
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
-// Delegated upload: a third-party client holding a game-data:write token uploads
-// on behalf of the account owner, without going through the owner's own session
-// or proxy.
-//
-// The payload is the RAW game payload, exactly what the manual and proxy routes
-// take. That is not a convenience choice — it is what keeps the anti-forgery
-// property. HandleUpload decrypts it and then requires the game user id the GAME
-// itself wrote inside the payload to match the account being written to
-// (ExtractGameUserIDForExpected). If clients could post already-decoded JSON,
-// that id would be something the client wrote, and holding a token for one
-// account would let a client write any content it liked into it.
-//
-// Authorization is deliberately STRICTER than the read side. Reads are permitted
-// through a grant — another owner sharing their data with you — but a grant is
-// permission to LOOK at someone's data, not to overwrite it. A delegated write
-// therefore requires the binding to be owned outright.
+// OAuth2 upload identifies the actor from the bearer token, then checks an owned
+// account or a write grant. Raw game payloads remain untrusted and are decoded
+// with the shared bounds and account-consistency checks.
 func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -56,7 +43,7 @@ func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid game user_id, it must be integer")
 		}
 
-		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(
+		access, err := apiHelper.DBManager.DB.CanWriteGameAccountData(
 			ctx, authUserID, string(server), gameUserIDStr, string(dataType), time.Now().UTC())
 		if err != nil {
 			harukiLogger.Errorf("Failed to verify oauth2 upload access: %v", err)
@@ -66,13 +53,7 @@ func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 			// Same message for "no such binding" and "not yours": telling them
 			// apart turns this endpoint into an oracle for which game accounts
 			// are bound to the service.
-			return harukiAPIHelper.ErrorNotFound(c, "game account binding not found or not owned by you")
-		}
-		if access.ViaGrant {
-			// A grant conveys read access. Writing through one would let a
-			// recipient overwrite the granter's data, which is not what anyone
-			// consented to when sharing it.
-			return harukiAPIHelper.ErrorForbidden(c, "delegated upload requires an owned binding; granted access is read-only")
+			return harukiAPIHelper.ErrorForbidden(c, "upload not allowed")
 		}
 
 		body := c.Request().Body()
@@ -80,6 +61,7 @@ func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 			return harukiAPIHelper.ErrorBadRequest(c, "empty upload body")
 		}
 
+		dependencies := oauthUploadDependencies(c, apiHelper, dependencies)
 		// From here the delegated path is the SAME path as every other upload:
 		// ban checks, binding ownership, decryption, payload identity, the
 		// per-account policy and the audit log all come from HandleUpload. The
@@ -87,7 +69,7 @@ func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 		// write from one the owner made.
 		if _, err := HandleUpload(
 			ctx, body, server, dataType, &gameUserID, &authUserID,
-			apiHelper, dependencies, harukiUtils.UploadMethodOAuth2,
+			apiHelper, dependencies, harukiUtils.UploadMethodOAuth2, oauthUploadAttempt(c),
 		); err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
@@ -112,6 +94,7 @@ func registerOAuth2UploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		return
 	}
 	o := apiHelper.Router.Group("/api/oauth2/game-data")
+	o.Get("/upload-targets", harukiOAuth2.VerifyOAuth2Token(dependencies.HydraConfig, apiHelper.DBManager.DB, harukiOAuth2.ScopeGameDataWrite, dependencies.OAuth2ClientActiveChecker), harukiOAuth2.VerifyOAuth2Token(dependencies.HydraConfig, apiHelper.DBManager.DB, harukiOAuth2.ScopeBindingsRead, dependencies.OAuth2ClientActiveChecker), handleOAuthUploadTargets(apiHelper))
 	o.Post("/:server/:data_type/:user_id",
 		harukiOAuth2.VerifyOAuth2Token(
 			dependencies.HydraConfig,

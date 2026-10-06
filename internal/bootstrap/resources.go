@@ -177,6 +177,16 @@ func prepareToolboxDatabase(cfg harukiConfig.Config, entClient *dbManager.Client
 	}
 	cancelWebhookSchema()
 
+	uploadSchemaCtx, cancelUploadSchema := startupContext()
+	if err := validateUploadGrantSchema(uploadSchemaCtx, entClient); err != nil {
+		cancelUploadSchema()
+		return fmt.Errorf("validate upload grant schema: %w", err)
+	}
+	if err := validateUploadLogSchema(uploadSchemaCtx, entClient); err != nil {
+		cancelUploadSchema()
+		return err
+	}
+	cancelUploadSchema()
 	grantsCleanupCtx, cancelGrantsCleanup := startupContext()
 	if deleted, err := entClient.CleanupExpiredGameAccountDataGrants(grantsCleanupCtx, time.Now().UTC()); err != nil {
 		logger.Warnf("failed to cleanup expired game account data grants: %v", err)

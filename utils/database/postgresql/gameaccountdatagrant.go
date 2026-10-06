@@ -28,6 +28,10 @@ type GameAccountDataGrant struct {
 	GameUserID string `json:"game_user_id,omitempty"`
 	// DataType holds the value of the "data_type" field.
 	DataType string `json:"data_type,omitempty"`
+	// CanRead holds the value of the "can_read" field.
+	CanRead bool `json:"can_read,omitzero"`
+	// CanWrite holds the value of the "can_write" field.
+	CanWrite bool `json:"can_write,omitzero"`
 	// ExpiresAt holds the value of the "expires_at" field.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -78,6 +82,8 @@ func (*GameAccountDataGrant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case gameaccountdatagrant.FieldCanRead, gameaccountdatagrant.FieldCanWrite:
+			values[i] = new(sql.NullBool)
 		case gameaccountdatagrant.FieldID:
 			values[i] = new(sql.NullInt64)
 		case gameaccountdatagrant.FieldOwnerUserID, gameaccountdatagrant.FieldGranteeUserID, gameaccountdatagrant.FieldServer, gameaccountdatagrant.FieldGameUserID, gameaccountdatagrant.FieldDataType:
@@ -134,6 +140,18 @@ func (_m *GameAccountDataGrant) assignValues(columns []string, values []any) err
 				return fmt.Errorf("unexpected type %T for field data_type", values[i])
 			} else if value.Valid {
 				_m.DataType = value.String
+			}
+		case gameaccountdatagrant.FieldCanRead:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field can_read", values[i])
+			} else if value.Valid {
+				_m.CanRead = value.Bool
+			}
+		case gameaccountdatagrant.FieldCanWrite:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field can_write", values[i])
+			} else if value.Valid {
+				_m.CanWrite = value.Bool
 			}
 		case gameaccountdatagrant.FieldExpiresAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -213,6 +231,12 @@ func (_m *GameAccountDataGrant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("data_type=")
 	builder.WriteString(_m.DataType)
+	builder.WriteString(", ")
+	builder.WriteString("can_read=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CanRead))
+	builder.WriteString(", ")
+	builder.WriteString("can_write=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CanWrite))
 	builder.WriteString(", ")
 	builder.WriteString("expires_at=")
 	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))

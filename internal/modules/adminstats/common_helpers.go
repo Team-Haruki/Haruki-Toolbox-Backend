@@ -5,11 +5,11 @@ import (
 
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
-	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -29,21 +29,22 @@ func scopeUploadLogsForAdminActor(
 	db *postgresql.Client,
 	query *postgresql.UploadLogQuery,
 	actorRole string,
+	actorIDs ...string,
 ) (*postgresql.UploadLogQuery, error) {
 	if adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin {
 		return query, nil
 	}
-	superAdminIDs, err := db.User.Query().Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).IDs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(superAdminIDs) == 0 {
-		return query, nil
-	}
-	return query.Where(uploadlog.Or(
-		uploadlog.ToolboxUserIDIsNil(),
-		uploadlog.ToolboxUserIDNotIn(superAdminIDs...),
-	)), nil
+	return query.Where(func(s *sql.Selector) {
+		users := sql.Table("users")
+		allowed := sql.Select(users.C("id")).From(users).Where(sql.NEQ(users.C("role"), adminCoreModule.RoleSuperAdmin))
+		s.Where(sql.In(s.C(uploadlog.FieldToolboxUserID), allowed))
+		s.Where(sql.EQ(s.C(uploadlog.FieldIdentityVerified), true))
+		s.Where(sql.Or(sql.IsNull(s.C(uploadlog.FieldActorUserID)), sql.In(s.C(uploadlog.FieldActorUserID), allowed)))
+		if len(actorIDs) > 0 {
+			s.Where(sql.NEQ(s.C(uploadlog.FieldToolboxUserID), actorIDs[0]))
+			s.Where(sql.Or(sql.IsNull(s.C(uploadlog.FieldActorUserID)), sql.NEQ(s.C(uploadlog.FieldActorUserID), actorIDs[0])))
+		}
+	}), nil
 }
 
 var adminNow = time.Now

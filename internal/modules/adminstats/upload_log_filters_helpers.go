@@ -138,7 +138,36 @@ func parseUploadLogQueryFilters(c fiber.Ctx, now time.Time) (*uploadLogQueryFilt
 		return nil, err
 	}
 
+	metadata := map[string][]string{}
+	for field, limit := range uploadMetadataFilters {
+		values := parseCSVValues(c.Query(field))
+		if len(values) > 20 {
+			return nil, fiber.NewError(400, "too many filter values")
+		}
+		for _, v := range values {
+			if len(v) > limit {
+				return nil, fiber.NewError(400, "filter value too long")
+			}
+		}
+		if len(values) > 0 {
+			metadata[field] = values
+		}
+	}
+	for _, values := range [][]string{gameUserIDs, uploadMethods, dataTypes, servers} {
+		if len(values) > 20 {
+			return nil, fiber.NewError(400, "too many filter values")
+		}
+		for _, v := range values {
+			if len(v) > 128 {
+				return nil, fiber.NewError(400, "filter value too long")
+			}
+		}
+	}
+	if to.Sub(from) > 31*24*time.Hour {
+		return nil, fiber.NewError(400, "time range exceeds 31 days")
+	}
 	return &uploadLogQueryFilters{
+		Metadata:      metadata,
 		From:          from,
 		To:            to,
 		GameUserIDs:   gameUserIDs,
@@ -154,8 +183,12 @@ func parseUploadLogQueryFilters(c fiber.Ctx, now time.Time) (*uploadLogQueryFilt
 
 func applyUploadLogFilters(query *postgresql.UploadLogQuery, filters *uploadLogQueryFilters) *postgresql.UploadLogQuery {
 	q := query.Where(
-		uploadlog.UploadTimeGTE(filters.From),
-		uploadlog.UploadTimeLTE(filters.To),
+		func(s *sql.Selector) {
+			s.Where(sql.P(func(b *sql.Builder) {
+				b.WriteString("COALESCE(").Ident(s.C(uploadlog.FieldReceivedAt)).WriteString(", ").Ident(s.C(uploadlog.FieldUploadTime)).WriteString(") >= ").Arg(filters.From)
+				b.WriteString(" AND COALESCE(").Ident(s.C(uploadlog.FieldReceivedAt)).WriteString(", ").Ident(s.C(uploadlog.FieldUploadTime)).WriteString(") < ").Arg(filters.To)
+			}))
+		},
 	)
 	if len(filters.GameUserIDs) > 0 {
 		q = q.Where(uploadlog.GameUserIDIn(filters.GameUserIDs...))
@@ -172,6 +205,9 @@ func applyUploadLogFilters(query *postgresql.UploadLogQuery, filters *uploadLogQ
 	if filters.Success != nil {
 		q = q.Where(uploadlog.SuccessEQ(*filters.Success))
 	}
+	for field, values := range filters.Metadata {
+		q = q.Where(func(s *sql.Selector) { s.Where(sql.In(s.C(field), stringArgs(values)...)) })
+	}
 	return q
 }
 
@@ -186,4 +222,14 @@ func applyUploadLogSorting(query *postgresql.UploadLogQuery, sortValue string) *
 	default:
 		return query.Order(uploadlog.ByUploadTime(sql.OrderDesc()), uploadlog.ByID(sql.OrderDesc()))
 	}
+}
+
+var uploadMetadataFilters = map[string]int{"protocol_version": 16, "client_version": 128, "client_channel": 32, "platform": 16, "os_version": 64, "os_arch": 16, "app_arch": 16, "client_name": 64, "oauth_client_id": 255}
+
+func stringArgs(values []string) []any {
+	args := make([]any, len(values))
+	for i, v := range values {
+		args[i] = v
+	}
+	return args
 }

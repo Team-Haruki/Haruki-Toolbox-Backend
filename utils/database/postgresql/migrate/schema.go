@@ -99,6 +99,8 @@ var (
 		{Name: "server", Type: field.TypeString},
 		{Name: "game_user_id", Type: field.TypeString},
 		{Name: "data_type", Type: field.TypeString},
+		{Name: "can_read", Type: field.TypeBool, Default: true},
+		{Name: "can_write", Type: field.TypeBool, Default: false},
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
@@ -113,13 +115,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "game_account_data_grants_users_game_account_data_grants_owned",
-				Columns:    []*schema.Column{GameAccountDataGrantsColumns[7]},
+				Columns:    []*schema.Column{GameAccountDataGrantsColumns[9]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "game_account_data_grants_users_game_account_data_grants_received",
-				Columns:    []*schema.Column{GameAccountDataGrantsColumns[8]},
+				Columns:    []*schema.Column{GameAccountDataGrantsColumns[10]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -128,12 +130,12 @@ var (
 			{
 				Name:    "gameaccountdatagrant_owner_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{GameAccountDataGrantsColumns[7]},
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[9]},
 			},
 			{
 				Name:    "gameaccountdatagrant_grantee_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{GameAccountDataGrantsColumns[8]},
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[10]},
 			},
 			{
 				Name:    "gameaccountdatagrant_server_game_user_id_data_type",
@@ -143,12 +145,12 @@ var (
 			{
 				Name:    "gameaccountdatagrant_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{GameAccountDataGrantsColumns[4]},
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[6]},
 			},
 			{
 				Name:    "gameaccountdatagrant_owner_user_id_grantee_user_id_server_game_user_id_data_type",
 				Unique:  true,
-				Columns: []*schema.Column{GameAccountDataGrantsColumns[7], GameAccountDataGrantsColumns[8], GameAccountDataGrantsColumns[1], GameAccountDataGrantsColumns[2], GameAccountDataGrantsColumns[3]},
+				Columns: []*schema.Column{GameAccountDataGrantsColumns[9], GameAccountDataGrantsColumns[10], GameAccountDataGrantsColumns[1], GameAccountDataGrantsColumns[2], GameAccountDataGrantsColumns[3]},
 			},
 		},
 	}
@@ -522,14 +524,37 @@ var (
 	// UploadLogsColumns holds the columns for the "upload_logs" table.
 	UploadLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "actor_user_id", Type: field.TypeString, Nullable: true},
+		{Name: "auth_method", Type: field.TypeString, Nullable: true},
+		{Name: "grant_id", Type: field.TypeInt, Nullable: true},
+		{Name: "authorization_source", Type: field.TypeString, Nullable: true},
 		{Name: "server", Type: field.TypeString},
-		{Name: "game_user_id", Type: field.TypeString, Size: 30},
+		{Name: "game_user_id", Type: field.TypeString, Nullable: true, Size: 30},
 		{Name: "toolbox_user_id", Type: field.TypeString, Nullable: true, Size: 10},
 		{Name: "data_type", Type: field.TypeString},
 		{Name: "upload_method", Type: field.TypeString},
 		{Name: "success", Type: field.TypeBool},
 		{Name: "error_message", Type: field.TypeString, Nullable: true},
 		{Name: "upload_time", Type: field.TypeTime},
+		{Name: "client_name", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "client_version", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "client_channel", Type: field.TypeString, Nullable: true, Size: 32},
+		{Name: "client_metadata_format", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "protocol_version", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "platform", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "os_version", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "os_build", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "os_arch", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "app_arch", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "failure_stage", Type: field.TypeString, Nullable: true, Size: 32},
+		{Name: "error_code", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, Size: 36},
+		{Name: "claimed_game_user_id", Type: field.TypeString, Nullable: true, Size: 30},
+		{Name: "oauth_client_id", Type: field.TypeString, Nullable: true, Size: 255},
+		{Name: "processing_duration_ms", Type: field.TypeInt64, Nullable: true},
+		{Name: "request_bytes", Type: field.TypeInt64, Nullable: true},
+		{Name: "identity_verified", Type: field.TypeBool, Nullable: true},
+		{Name: "received_at", Type: field.TypeTime, Nullable: true},
 	}
 	// UploadLogsTable holds the schema information for the "upload_logs" table.
 	UploadLogsTable = &schema.Table{
@@ -540,27 +565,52 @@ var (
 			{
 				Name:    "uploadlog_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[8]},
+				Columns: []*schema.Column{UploadLogsColumns[12]},
+			},
+			{
+				Name:    "uploadlog_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[31]},
+			},
+			{
+				Name:    "uploadlog_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[25]},
+			},
+			{
+				Name:    "uploadlog_upload_method_protocol_version_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[9], UploadLogsColumns[17], UploadLogsColumns[31]},
+			},
+			{
+				Name:    "uploadlog_upload_method_client_channel_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[9], UploadLogsColumns[15], UploadLogsColumns[31]},
+			},
+			{
+				Name:    "uploadlog_upload_method_platform_received_at",
+				Unique:  false,
+				Columns: []*schema.Column{UploadLogsColumns[9], UploadLogsColumns[18], UploadLogsColumns[31]},
 			},
 			{
 				Name:    "uploadlog_server_game_user_id_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[1], UploadLogsColumns[2], UploadLogsColumns[8]},
+				Columns: []*schema.Column{UploadLogsColumns[5], UploadLogsColumns[6], UploadLogsColumns[12]},
 			},
 			{
 				Name:    "uploadlog_upload_method_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[5], UploadLogsColumns[8]},
+				Columns: []*schema.Column{UploadLogsColumns[9], UploadLogsColumns[12]},
 			},
 			{
 				Name:    "uploadlog_data_type_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[4], UploadLogsColumns[8]},
+				Columns: []*schema.Column{UploadLogsColumns[8], UploadLogsColumns[12]},
 			},
 			{
 				Name:    "uploadlog_success_upload_time",
 				Unique:  false,
-				Columns: []*schema.Column{UploadLogsColumns[6], UploadLogsColumns[8]},
+				Columns: []*schema.Column{UploadLogsColumns[10], UploadLogsColumns[12]},
 			},
 		},
 	}

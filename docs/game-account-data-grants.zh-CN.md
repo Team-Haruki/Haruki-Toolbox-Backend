@@ -1,6 +1,6 @@
 # 游戏账号数据授权说明
 
-游戏账号数据授权允许用户把自己已经验证绑定的账号数据授权给另一个 Toolbox 用户读取。支持 `suite` / `mysekai`（已上传并存储的数据）和 `profile`（实时向游戏 API 查询），不影响 public API 或 private token API。
+游戏账号数据授权允许用户把自己已经验证绑定的账号数据授权给另一个 Toolbox 用户读取或上传。suite/mysekai 支持独立 read/write 权限，profile 仅支持 read。完整前端契约见 [读写授权前端对接](toolbox-upload-grants-frontend.zh-CN.md)。支持 `suite` / `mysekai`（已上传并存储的数据）和 `profile`（实时向游戏 API 查询），不影响 public API 或 private token API。
 
 ## 权限规则
 
@@ -33,7 +33,8 @@ PUT /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_t
 Content-Type: application/json
 
 {
-  "expiresAt": "2026-07-01T00:00:00Z"
+  "expiresAt": "2026-11-01T00:00:00Z",
+  "permissions": ["read"]
 }
 ```
 
@@ -50,7 +51,11 @@ Content-Type: application/json
 DELETE /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
 ```
 
+permissions 为 read/write 数组，历史授权保持只读。缺省创建为 read，缺省更新保持原权限；显式数组完整替换，空数组拒绝。
+
 ## 可访问账号聚合接口
+
+默认 action=read 保持下述读取语义。上传选择器使用 action=write 和 writeCapabilities，见前端对接文档。
 
 选择器不应该自己去合并「我的绑定」和「收到的授权」，也不应该复刻后端的有效性判断。以下接口返回当前用户**现在就能读到数据**的全部游戏账号，本人绑定与有效授权已经合并、去重、预过滤。
 

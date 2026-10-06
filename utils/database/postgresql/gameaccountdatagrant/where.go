@@ -80,6 +80,16 @@ func DataType(v string) predicate.GameAccountDataGrant {
 	return predicate.GameAccountDataGrant(sql.FieldEQ(FieldDataType, v))
 }
 
+// CanRead applies equality check predicate on the "can_read" field. It's identical to CanReadEQ.
+func CanRead(v bool) predicate.GameAccountDataGrant {
+	return predicate.GameAccountDataGrant(sql.FieldEQ(FieldCanRead, v))
+}
+
+// CanWrite applies equality check predicate on the "can_write" field. It's identical to CanWriteEQ.
+func CanWrite(v bool) predicate.GameAccountDataGrant {
+	return predicate.GameAccountDataGrant(sql.FieldEQ(FieldCanWrite, v))
+}
+
 // ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
 func ExpiresAt(v time.Time) predicate.GameAccountDataGrant {
 	return predicate.GameAccountDataGrant(sql.FieldEQ(FieldExpiresAt, v))
@@ -418,6 +428,26 @@ func DataTypeEqualFold(v string) predicate.GameAccountDataGrant {
 // DataTypeContainsFold applies the ContainsFold predicate on the "data_type" field.
 func DataTypeContainsFold(v string) predicate.GameAccountDataGrant {
 	return predicate.GameAccountDataGrant(sql.FieldContainsFold(FieldDataType, v))
+}
+
+// CanReadEQ applies the EQ predicate on the "can_read" field.
+func CanReadEQ(v bool) predicate.GameAccountDataGrant {
+	return predicate.GameAccountDataGrant(sql.FieldEQ(FieldCanRead, v))
+}
+
+// CanReadNEQ applies the NEQ predicate on the "can_read" field.
+func CanReadNEQ(v bool) predicate.GameAccountDataGrant {
+	return predicate.GameAccountDataGrant(sql.FieldNEQ(FieldCanRead, v))
+}
+
+// CanWriteEQ applies the EQ predicate on the "can_write" field.
+func CanWriteEQ(v bool) predicate.GameAccountDataGrant {
+	return predicate.GameAccountDataGrant(sql.FieldEQ(FieldCanWrite, v))
+}
+
+// CanWriteNEQ applies the NEQ predicate on the "can_write" field.
+func CanWriteNEQ(v bool) predicate.GameAccountDataGrant {
+	return predicate.GameAccountDataGrant(sql.FieldNEQ(FieldCanWrite, v))
 }
 
 // ExpiresAtEQ applies the EQ predicate on the "expires_at" field.

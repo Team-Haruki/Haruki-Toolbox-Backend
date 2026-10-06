@@ -7,6 +7,7 @@ import (
 )
 
 type uploadLogQueryFilters struct {
+	Metadata      map[string][]string
 	From          time.Time
 	To            time.Time
 	GameUserIDs   []string
@@ -22,11 +23,12 @@ type uploadLogQueryFilters struct {
 type uploadLogListItem = adminCoreModule.UploadLogListItem
 
 type uploadLogAppliedFilters struct {
-	GameUserIDs   []string `json:"gameUserIds,omitempty"`
-	UploadMethods []string `json:"uploadMethods,omitempty"`
-	DataTypes     []string `json:"dataTypes,omitempty"`
-	Servers       []string `json:"servers,omitempty"`
-	Success       *bool    `json:"success,omitzero"`
+	Metadata      map[string][]string `json:"metadata,omitempty"`
+	GameUserIDs   []string            `json:"gameUserIds,omitempty"`
+	UploadMethods []string            `json:"uploadMethods,omitempty"`
+	DataTypes     []string            `json:"dataTypes,omitempty"`
+	Servers       []string            `json:"servers,omitempty"`
+	Success       *bool               `json:"success,omitzero"`
 }
 
 type uploadLogQuerySummary struct {

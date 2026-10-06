@@ -329,3 +329,18 @@ func stringifyAny(value any) string {
 		return ""
 	}
 }
+
+// AuthenticateUploadRequest validates a bearer without advancing the Fiber chain.
+// Upload adapters use it both at admission and immediately before persistence.
+func AuthenticateUploadRequest(c fiber.Ctx, cfg *HydraConfig, db *postgresql.Client, checker ClientActiveChecker) error {
+	if cfg == nil || checker == nil {
+		return fiber.NewError(503, "oauth2 upload unavailable")
+	}
+	result, failure := authenticateOAuth2BearerToken(c, cfg, db, ScopeGameDataWrite, checker)
+	if failure != nil {
+		c.Set("WWW-Authenticate", buildBearerChallenge(failure.ErrorCode, failure.Message, failure.Scope))
+		return fiber.NewError(failure.Status, failure.Message)
+	}
+	applyOAuth2BearerAuthLocals(c, result)
+	return nil
+}
