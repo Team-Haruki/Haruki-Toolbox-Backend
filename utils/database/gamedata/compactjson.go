@@ -54,8 +54,13 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gamedata: compact value is not an object")
 	}
 	var enums orderedDoc
+	enumKey := nuverserestore.EnumKey
 	if value, ok := doc.get(nuverserestore.EnumKey); ok {
 		enums, _ = value.(orderedDoc)
+	} else if value, ok := doc.get(nuverserestore.EnumKeyAlias); ok {
+		if aliased, isObject := value.(orderedDoc); isObject {
+			enums, enumKey = aliased, nuverserestore.EnumKeyAlias
+		}
 	}
 	type column struct {
 		key        []byte
@@ -66,7 +71,7 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 	columns := make([]column, 0, len(doc))
 	rows := -1
 	for _, p := range doc {
-		if p.Key == nuverserestore.EnumKey {
+		if p.Key == nuverserestore.EnumKey || p.Key == enumKey {
 			continue
 		}
 		key, err := json.Marshal(p.Key)
