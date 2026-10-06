@@ -53,3 +53,22 @@ func TestNewLoggerFromGlobalDoesNotDuplicateWrites(t *testing.T) {
 		t.Fatalf("expected one log line, got %d in %q", count, buf.String())
 	}
 }
+
+func TestLoggerRedactsCredentials(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	logger := NewLogger("redact-test", "DEBUG", &buf)
+	logger.Errorf("API returned non-200 status for %s: %d", "https://game.example/api/inherit/user/FAKEinheritID0004?isExecuteInherit=False", 403)
+	logger.Warnf("Hydra proxy request failed: %v", `Get "http://hydra:4444/oauth2/sessions/logout?id_token_hint=FAKEtoken0004": EOF`)
+
+	out := buf.String()
+	for _, secret := range []string{"FAKEinheritID0004", "FAKEtoken0004"} {
+		if strings.Contains(out, secret) {
+			t.Fatalf("log output leaked %q: %q", secret, out)
+		}
+	}
+	if !strings.Contains(out, "/inherit/user/<redacted>?isExecuteInherit=False: 403") {
+		t.Fatalf("unexpected log output: %q", out)
+	}
+}

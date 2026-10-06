@@ -10,6 +10,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -138,7 +139,22 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return err
 		}
 
-		row, err := apiHelper.DBManager.DB.UpsertGameAccountDataGrant(c.Context(), ownerUserID, granteeUserID, string(server), gameUserID, dataType, expiresAt)
+		var permissions [][]string
+		if payload.Permissions != nil {
+			if _, _, err := postgresql.ParseGrantPermissions(dataType, *payload.Permissions); err != nil {
+				return harukiAPIHelper.ErrorBadRequest(c, "invalid permissions")
+			}
+			permissions = append(permissions, *payload.Permissions)
+		}
+		previous, err := apiHelper.DBManager.DB.GameAccountDataGrant.Query().Where(gameaccountdatagrant.OwnerUserIDEQ(ownerUserID), gameaccountdatagrant.GranteeUserIDEQ(granteeUserID), gameaccountdatagrant.ServerEQ(string(server)), gameaccountdatagrant.GameUserIDEQ(gameUserID), gameaccountdatagrant.DataTypeEQ(dataType)).Only(c.Context())
+		if err != nil && !postgresql.IsNotFound(err) {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query previous grant")
+		}
+		previousPermissions := []string{}
+		if previous != nil {
+			previousPermissions = postgresql.GrantPermissions(previous.CanRead, previous.CanWrite)
+		}
+		row, err := apiHelper.DBManager.DB.UpsertGameAccountDataGrant(c.Context(), ownerUserID, granteeUserID, string(server), gameUserID, dataType, expiresAt, permissions...)
 		if err != nil {
 			if errors.Is(err, postgresql.ErrGameAccountDataGrantOwnerNotFound) {
 				return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
@@ -154,11 +170,13 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			Grant:       buildGameAccountDataGrantItemFromRow(row),
 		}
 		userCoreModule.WriteUserAuditLog(c, apiHelper, "user.game_account_data_grant.upsert", harukiAPIHelper.SystemLogResultSuccess, ownerUserID, map[string]any{
-			"server":        string(server),
-			"gameUserID":    gameUserID,
-			"dataType":      dataType,
-			"granteeUserID": granteeUserID,
-			"expiresAt":     expiresAt.Format(time.RFC3339),
+			"server":              string(server),
+			"gameUserID":          gameUserID,
+			"dataType":            dataType,
+			"granteeUserID":       granteeUserID,
+			"expiresAt":           expiresAt.Format(time.RFC3339),
+			"permissions":         postgresql.GrantPermissions(row.CanRead, row.CanWrite),
+			"previousPermissions": previousPermissions,
 		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "game account data grant saved", &resp)
 	}

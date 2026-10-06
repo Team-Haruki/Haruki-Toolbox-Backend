@@ -176,3 +176,44 @@ func TestVerifyOAuth2TokenScopesClientCheckerToMiddleware(t *testing.T) {
 		t.Fatalf("unchecked status = %d, want %d", uncheckedResp.StatusCode, fiber.StatusNoContent)
 	}
 }
+
+func TestAuthenticateUploadRequestDoesNotAdvanceChain(t *testing.T) {
+	hydra := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"active":true,"sub":"actor","client_id":"client","scope":"game-data:write","token_use":"access_token"}`))
+	}))
+	defer hydra.Close()
+	cfg := NewHydraConfig(HydraConfigOptions{AdminURL: hydra.URL, RequestTimeout: time.Second})
+	for _, valid := range []bool{true, false} {
+		app := fiber.New()
+		app.Get("/", func(c fiber.Ctx) error {
+			err := AuthenticateUploadRequest(c, cfg, nil, func(context.Context, string) (bool, error) { return valid, nil })
+			if !valid {
+				if err == nil {
+					t.Error("disabled client allowed")
+				}
+				return c.SendStatus(401)
+			}
+			if err != nil {
+				return err
+			}
+			if c.Locals("userID") != "actor" {
+				t.Error("wrong actor")
+			}
+			return c.SendStatus(204)
+		})
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer token")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		want := 204
+		if !valid {
+			want = 401
+		}
+		if resp.StatusCode != want {
+			t.Fatal(resp.StatusCode)
+		}
+	}
+}

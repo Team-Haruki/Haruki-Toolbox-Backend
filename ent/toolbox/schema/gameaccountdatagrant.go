@@ -22,6 +22,8 @@ func (GameAccountDataGrant) Fields() []ent.Field {
 		field.String("server").NotEmpty(),
 		field.String("game_user_id").NotEmpty(),
 		field.String("data_type").NotEmpty(),
+		field.Bool("can_read").Default(true),
+		field.Bool("can_write").Default(false),
 		field.Time("expires_at"),
 		field.Time("created_at").Default(time.Now),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),

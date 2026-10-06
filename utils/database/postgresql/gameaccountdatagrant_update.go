@@ -99,6 +99,34 @@ func (_u *GameAccountDataGrantUpdate) SetNillableDataType(v *string) *GameAccoun
 	return _u
 }
 
+// SetCanRead sets the "can_read" field.
+func (_u *GameAccountDataGrantUpdate) SetCanRead(v bool) *GameAccountDataGrantUpdate {
+	_u.mutation.SetCanRead(v)
+	return _u
+}
+
+// SetNillableCanRead sets the "can_read" field if the given value is not nil.
+func (_u *GameAccountDataGrantUpdate) SetNillableCanRead(v *bool) *GameAccountDataGrantUpdate {
+	if v != nil {
+		_u.SetCanRead(*v)
+	}
+	return _u
+}
+
+// SetCanWrite sets the "can_write" field.
+func (_u *GameAccountDataGrantUpdate) SetCanWrite(v bool) *GameAccountDataGrantUpdate {
+	_u.mutation.SetCanWrite(v)
+	return _u
+}
+
+// SetNillableCanWrite sets the "can_write" field if the given value is not nil.
+func (_u *GameAccountDataGrantUpdate) SetNillableCanWrite(v *bool) *GameAccountDataGrantUpdate {
+	if v != nil {
+		_u.SetCanWrite(*v)
+	}
+	return _u
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_u *GameAccountDataGrantUpdate) SetExpiresAt(v time.Time) *GameAccountDataGrantUpdate {
 	_u.mutation.SetExpiresAt(v)
@@ -265,6 +293,12 @@ func (_u *GameAccountDataGrantUpdate) sqlSave(ctx context.Context) (_node int, e
 	if value, ok := _u.mutation.DataType(); ok {
 		_spec.SetField(gameaccountdatagrant.FieldDataType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.CanRead(); ok {
+		_spec.SetField(gameaccountdatagrant.FieldCanRead, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.CanWrite(); ok {
+		_spec.SetField(gameaccountdatagrant.FieldCanWrite, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(gameaccountdatagrant.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -418,6 +452,34 @@ func (_u *GameAccountDataGrantUpdateOne) SetDataType(v string) *GameAccountDataG
 func (_u *GameAccountDataGrantUpdateOne) SetNillableDataType(v *string) *GameAccountDataGrantUpdateOne {
 	if v != nil {
 		_u.SetDataType(*v)
+	}
+	return _u
+}
+
+// SetCanRead sets the "can_read" field.
+func (_u *GameAccountDataGrantUpdateOne) SetCanRead(v bool) *GameAccountDataGrantUpdateOne {
+	_u.mutation.SetCanRead(v)
+	return _u
+}
+
+// SetNillableCanRead sets the "can_read" field if the given value is not nil.
+func (_u *GameAccountDataGrantUpdateOne) SetNillableCanRead(v *bool) *GameAccountDataGrantUpdateOne {
+	if v != nil {
+		_u.SetCanRead(*v)
+	}
+	return _u
+}
+
+// SetCanWrite sets the "can_write" field.
+func (_u *GameAccountDataGrantUpdateOne) SetCanWrite(v bool) *GameAccountDataGrantUpdateOne {
+	_u.mutation.SetCanWrite(v)
+	return _u
+}
+
+// SetNillableCanWrite sets the "can_write" field if the given value is not nil.
+func (_u *GameAccountDataGrantUpdateOne) SetNillableCanWrite(v *bool) *GameAccountDataGrantUpdateOne {
+	if v != nil {
+		_u.SetCanWrite(*v)
 	}
 	return _u
 }
@@ -617,6 +679,12 @@ func (_u *GameAccountDataGrantUpdateOne) sqlSave(ctx context.Context) (_node *Ga
 	}
 	if value, ok := _u.mutation.DataType(); ok {
 		_spec.SetField(gameaccountdatagrant.FieldDataType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CanRead(); ok {
+		_spec.SetField(gameaccountdatagrant.FieldCanRead, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.CanWrite(); ok {
+		_spec.SetField(gameaccountdatagrant.FieldCanWrite, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(gameaccountdatagrant.FieldExpiresAt, field.TypeTime, value)

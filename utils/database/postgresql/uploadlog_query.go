@@ -262,12 +262,12 @@ func (_q *UploadLogQuery) Clone() *UploadLogQuery {
 // Example:
 //
 //	var v []struct {
-//		Server string `json:"server,omitempty"`
+//		ActorUserID string `json:"actor_user_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.UploadLog.Query().
-//		GroupBy(uploadlog.FieldServer).
+//		GroupBy(uploadlog.FieldActorUserID).
 //		Aggregate(postgresql.Count()).
 //		Scan(ctx, &v)
 func (_q *UploadLogQuery) GroupBy(field string, fields ...string) *UploadLogGroupBy {
@@ -285,11 +285,11 @@ func (_q *UploadLogQuery) GroupBy(field string, fields ...string) *UploadLogGrou
 // Example:
 //
 //	var v []struct {
-//		Server string `json:"server,omitempty"`
+//		ActorUserID string `json:"actor_user_id,omitempty"`
 //	}
 //
 //	client.UploadLog.Query().
-//		Select(uploadlog.FieldServer).
+//		Select(uploadlog.FieldActorUserID).
 //		Scan(ctx, &v)
 func (_q *UploadLogQuery) Select(fields ...string) *UploadLogSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

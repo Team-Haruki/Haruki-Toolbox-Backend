@@ -2,6 +2,7 @@ package upload
 
 import (
 	"fmt"
+	platform "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 )
 
 type uploadContext struct {
+	Attempt              *platform.Attempt
 	Server               harukiUtils.SupportedDataUploadServer
 	DataType             harukiUtils.UploadDataType
 	ExpectedGameUserID   int64

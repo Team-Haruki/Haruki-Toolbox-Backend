@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 
@@ -232,4 +233,49 @@ func packForTest(plaintext []byte, aad, keyMaterial string) ([]byte, error) {
 	out = append(out, nonce...)
 	out = append(out, sealed...)
 	return out, nil
+}
+
+func TestHarukiProxyLegacySunset(t *testing.T) {
+	cutoff := time.Date(2026, 10, 31, 16, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name   string
+		now    time.Time
+		status int
+	}{
+		{"before", cutoff.Add(-time.Nanosecond), http.StatusNoContent},
+		{"exact", cutoff, http.StatusGone},
+		{"after", cutoff.Add(time.Second), http.StatusGone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := fiber.New()
+			app.Post("/", harukiProxyLegacyGate(func() time.Time { return tc.now }), func(c fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
+			resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
+			}
+			if resp.Header.Get("Sunset") != "Sat, 31 Oct 2026 16:00:00 GMT" {
+				t.Fatalf("Sunset = %s", resp.Header.Get("Sunset"))
+			}
+		})
+	}
+}
+
+func TestHarukiProxyV3DoesNotFallBackToLegacyAuth(t *testing.T) {
+	app := fiber.New()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, HarukiProxySecret: "legacy", HarukiProxyUnpackKey: "legacy-key"}
+	registerHarukiProxyRoutes(helper, Dependencies{})
+	req := httptest.NewRequest("POST", "/harukiproxy/v3/jp/123/suite/upload", nil)
+	req.Header.Set("X-Haruki-Toolbox-Secret", "legacy")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 503 {
+		t.Fatal(resp.StatusCode)
+	}
 }

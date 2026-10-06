@@ -54,6 +54,26 @@ func IDLTE(id int) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldLTE(FieldID, id))
 }
 
+// ActorUserID applies equality check predicate on the "actor_user_id" field. It's identical to ActorUserIDEQ.
+func ActorUserID(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldActorUserID, v))
+}
+
+// AuthMethod applies equality check predicate on the "auth_method" field. It's identical to AuthMethodEQ.
+func AuthMethod(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthMethod, v))
+}
+
+// GrantID applies equality check predicate on the "grant_id" field. It's identical to GrantIDEQ.
+func GrantID(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldGrantID, v))
+}
+
+// AuthorizationSource applies equality check predicate on the "authorization_source" field. It's identical to AuthorizationSourceEQ.
+func AuthorizationSource(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthorizationSource, v))
+}
+
 // Server applies equality check predicate on the "server" field. It's identical to ServerEQ.
 func Server(v string) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldEQ(FieldServer, v))
@@ -92,6 +112,376 @@ func ErrorMessage(v string) predicate.UploadLog {
 // UploadTime applies equality check predicate on the "upload_time" field. It's identical to UploadTimeEQ.
 func UploadTime(v time.Time) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldEQ(FieldUploadTime, v))
+}
+
+// ClientName applies equality check predicate on the "client_name" field. It's identical to ClientNameEQ.
+func ClientName(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientName, v))
+}
+
+// ClientVersion applies equality check predicate on the "client_version" field. It's identical to ClientVersionEQ.
+func ClientVersion(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientVersion, v))
+}
+
+// ClientChannel applies equality check predicate on the "client_channel" field. It's identical to ClientChannelEQ.
+func ClientChannel(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientChannel, v))
+}
+
+// ClientMetadataFormat applies equality check predicate on the "client_metadata_format" field. It's identical to ClientMetadataFormatEQ.
+func ClientMetadataFormat(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientMetadataFormat, v))
+}
+
+// ProtocolVersion applies equality check predicate on the "protocol_version" field. It's identical to ProtocolVersionEQ.
+func ProtocolVersion(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldProtocolVersion, v))
+}
+
+// Platform applies equality check predicate on the "platform" field. It's identical to PlatformEQ.
+func Platform(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldPlatform, v))
+}
+
+// OsVersion applies equality check predicate on the "os_version" field. It's identical to OsVersionEQ.
+func OsVersion(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOsVersion, v))
+}
+
+// OsBuild applies equality check predicate on the "os_build" field. It's identical to OsBuildEQ.
+func OsBuild(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOsBuild, v))
+}
+
+// OsArch applies equality check predicate on the "os_arch" field. It's identical to OsArchEQ.
+func OsArch(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOsArch, v))
+}
+
+// AppArch applies equality check predicate on the "app_arch" field. It's identical to AppArchEQ.
+func AppArch(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAppArch, v))
+}
+
+// FailureStage applies equality check predicate on the "failure_stage" field. It's identical to FailureStageEQ.
+func FailureStage(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldFailureStage, v))
+}
+
+// ErrorCode applies equality check predicate on the "error_code" field. It's identical to ErrorCodeEQ.
+func ErrorCode(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldErrorCode, v))
+}
+
+// RequestID applies equality check predicate on the "request_id" field. It's identical to RequestIDEQ.
+func RequestID(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldRequestID, v))
+}
+
+// ClaimedGameUserID applies equality check predicate on the "claimed_game_user_id" field. It's identical to ClaimedGameUserIDEQ.
+func ClaimedGameUserID(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClaimedGameUserID, v))
+}
+
+// OauthClientID applies equality check predicate on the "oauth_client_id" field. It's identical to OauthClientIDEQ.
+func OauthClientID(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOauthClientID, v))
+}
+
+// ProcessingDurationMs applies equality check predicate on the "processing_duration_ms" field. It's identical to ProcessingDurationMsEQ.
+func ProcessingDurationMs(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldProcessingDurationMs, v))
+}
+
+// RequestBytes applies equality check predicate on the "request_bytes" field. It's identical to RequestBytesEQ.
+func RequestBytes(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldRequestBytes, v))
+}
+
+// IdentityVerified applies equality check predicate on the "identity_verified" field. It's identical to IdentityVerifiedEQ.
+func IdentityVerified(v bool) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldIdentityVerified, v))
+}
+
+// ReceivedAt applies equality check predicate on the "received_at" field. It's identical to ReceivedAtEQ.
+func ReceivedAt(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldReceivedAt, v))
+}
+
+// ActorUserIDEQ applies the EQ predicate on the "actor_user_id" field.
+func ActorUserIDEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldActorUserID, v))
+}
+
+// ActorUserIDNEQ applies the NEQ predicate on the "actor_user_id" field.
+func ActorUserIDNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldActorUserID, v))
+}
+
+// ActorUserIDIn applies the In predicate on the "actor_user_id" field.
+func ActorUserIDIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldActorUserID, vs...))
+}
+
+// ActorUserIDNotIn applies the NotIn predicate on the "actor_user_id" field.
+func ActorUserIDNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldActorUserID, vs...))
+}
+
+// ActorUserIDGT applies the GT predicate on the "actor_user_id" field.
+func ActorUserIDGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldActorUserID, v))
+}
+
+// ActorUserIDGTE applies the GTE predicate on the "actor_user_id" field.
+func ActorUserIDGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldActorUserID, v))
+}
+
+// ActorUserIDLT applies the LT predicate on the "actor_user_id" field.
+func ActorUserIDLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldActorUserID, v))
+}
+
+// ActorUserIDLTE applies the LTE predicate on the "actor_user_id" field.
+func ActorUserIDLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldActorUserID, v))
+}
+
+// ActorUserIDContains applies the Contains predicate on the "actor_user_id" field.
+func ActorUserIDContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldActorUserID, v))
+}
+
+// ActorUserIDHasPrefix applies the HasPrefix predicate on the "actor_user_id" field.
+func ActorUserIDHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldActorUserID, v))
+}
+
+// ActorUserIDHasSuffix applies the HasSuffix predicate on the "actor_user_id" field.
+func ActorUserIDHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldActorUserID, v))
+}
+
+// ActorUserIDIsNil applies the IsNil predicate on the "actor_user_id" field.
+func ActorUserIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldActorUserID))
+}
+
+// ActorUserIDNotNil applies the NotNil predicate on the "actor_user_id" field.
+func ActorUserIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldActorUserID))
+}
+
+// ActorUserIDEqualFold applies the EqualFold predicate on the "actor_user_id" field.
+func ActorUserIDEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldActorUserID, v))
+}
+
+// ActorUserIDContainsFold applies the ContainsFold predicate on the "actor_user_id" field.
+func ActorUserIDContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldActorUserID, v))
+}
+
+// AuthMethodEQ applies the EQ predicate on the "auth_method" field.
+func AuthMethodEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthMethod, v))
+}
+
+// AuthMethodNEQ applies the NEQ predicate on the "auth_method" field.
+func AuthMethodNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldAuthMethod, v))
+}
+
+// AuthMethodIn applies the In predicate on the "auth_method" field.
+func AuthMethodIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldAuthMethod, vs...))
+}
+
+// AuthMethodNotIn applies the NotIn predicate on the "auth_method" field.
+func AuthMethodNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldAuthMethod, vs...))
+}
+
+// AuthMethodGT applies the GT predicate on the "auth_method" field.
+func AuthMethodGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldAuthMethod, v))
+}
+
+// AuthMethodGTE applies the GTE predicate on the "auth_method" field.
+func AuthMethodGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldAuthMethod, v))
+}
+
+// AuthMethodLT applies the LT predicate on the "auth_method" field.
+func AuthMethodLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldAuthMethod, v))
+}
+
+// AuthMethodLTE applies the LTE predicate on the "auth_method" field.
+func AuthMethodLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldAuthMethod, v))
+}
+
+// AuthMethodContains applies the Contains predicate on the "auth_method" field.
+func AuthMethodContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldAuthMethod, v))
+}
+
+// AuthMethodHasPrefix applies the HasPrefix predicate on the "auth_method" field.
+func AuthMethodHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldAuthMethod, v))
+}
+
+// AuthMethodHasSuffix applies the HasSuffix predicate on the "auth_method" field.
+func AuthMethodHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldAuthMethod, v))
+}
+
+// AuthMethodIsNil applies the IsNil predicate on the "auth_method" field.
+func AuthMethodIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldAuthMethod))
+}
+
+// AuthMethodNotNil applies the NotNil predicate on the "auth_method" field.
+func AuthMethodNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldAuthMethod))
+}
+
+// AuthMethodEqualFold applies the EqualFold predicate on the "auth_method" field.
+func AuthMethodEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldAuthMethod, v))
+}
+
+// AuthMethodContainsFold applies the ContainsFold predicate on the "auth_method" field.
+func AuthMethodContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldAuthMethod, v))
+}
+
+// GrantIDEQ applies the EQ predicate on the "grant_id" field.
+func GrantIDEQ(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldGrantID, v))
+}
+
+// GrantIDNEQ applies the NEQ predicate on the "grant_id" field.
+func GrantIDNEQ(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldGrantID, v))
+}
+
+// GrantIDIn applies the In predicate on the "grant_id" field.
+func GrantIDIn(vs ...int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldGrantID, vs...))
+}
+
+// GrantIDNotIn applies the NotIn predicate on the "grant_id" field.
+func GrantIDNotIn(vs ...int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldGrantID, vs...))
+}
+
+// GrantIDGT applies the GT predicate on the "grant_id" field.
+func GrantIDGT(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldGrantID, v))
+}
+
+// GrantIDGTE applies the GTE predicate on the "grant_id" field.
+func GrantIDGTE(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldGrantID, v))
+}
+
+// GrantIDLT applies the LT predicate on the "grant_id" field.
+func GrantIDLT(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldGrantID, v))
+}
+
+// GrantIDLTE applies the LTE predicate on the "grant_id" field.
+func GrantIDLTE(v int) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldGrantID, v))
+}
+
+// GrantIDIsNil applies the IsNil predicate on the "grant_id" field.
+func GrantIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldGrantID))
+}
+
+// GrantIDNotNil applies the NotNil predicate on the "grant_id" field.
+func GrantIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldGrantID))
+}
+
+// AuthorizationSourceEQ applies the EQ predicate on the "authorization_source" field.
+func AuthorizationSourceEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceNEQ applies the NEQ predicate on the "authorization_source" field.
+func AuthorizationSourceNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceIn applies the In predicate on the "authorization_source" field.
+func AuthorizationSourceIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldAuthorizationSource, vs...))
+}
+
+// AuthorizationSourceNotIn applies the NotIn predicate on the "authorization_source" field.
+func AuthorizationSourceNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldAuthorizationSource, vs...))
+}
+
+// AuthorizationSourceGT applies the GT predicate on the "authorization_source" field.
+func AuthorizationSourceGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceGTE applies the GTE predicate on the "authorization_source" field.
+func AuthorizationSourceGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceLT applies the LT predicate on the "authorization_source" field.
+func AuthorizationSourceLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceLTE applies the LTE predicate on the "authorization_source" field.
+func AuthorizationSourceLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceContains applies the Contains predicate on the "authorization_source" field.
+func AuthorizationSourceContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceHasPrefix applies the HasPrefix predicate on the "authorization_source" field.
+func AuthorizationSourceHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceHasSuffix applies the HasSuffix predicate on the "authorization_source" field.
+func AuthorizationSourceHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceIsNil applies the IsNil predicate on the "authorization_source" field.
+func AuthorizationSourceIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldAuthorizationSource))
+}
+
+// AuthorizationSourceNotNil applies the NotNil predicate on the "authorization_source" field.
+func AuthorizationSourceNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldAuthorizationSource))
+}
+
+// AuthorizationSourceEqualFold applies the EqualFold predicate on the "authorization_source" field.
+func AuthorizationSourceEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldAuthorizationSource, v))
+}
+
+// AuthorizationSourceContainsFold applies the ContainsFold predicate on the "authorization_source" field.
+func AuthorizationSourceContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldAuthorizationSource, v))
 }
 
 // ServerEQ applies the EQ predicate on the "server" field.
@@ -212,6 +602,16 @@ func GameUserIDHasPrefix(v string) predicate.UploadLog {
 // GameUserIDHasSuffix applies the HasSuffix predicate on the "game_user_id" field.
 func GameUserIDHasSuffix(v string) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldHasSuffix(FieldGameUserID, v))
+}
+
+// GameUserIDIsNil applies the IsNil predicate on the "game_user_id" field.
+func GameUserIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldGameUserID))
+}
+
+// GameUserIDNotNil applies the NotNil predicate on the "game_user_id" field.
+func GameUserIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldGameUserID))
 }
 
 // GameUserIDEqualFold applies the EqualFold predicate on the "game_user_id" field.
@@ -552,6 +952,1301 @@ func UploadTimeLT(v time.Time) predicate.UploadLog {
 // UploadTimeLTE applies the LTE predicate on the "upload_time" field.
 func UploadTimeLTE(v time.Time) predicate.UploadLog {
 	return predicate.UploadLog(sql.FieldLTE(FieldUploadTime, v))
+}
+
+// ClientNameEQ applies the EQ predicate on the "client_name" field.
+func ClientNameEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientName, v))
+}
+
+// ClientNameNEQ applies the NEQ predicate on the "client_name" field.
+func ClientNameNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldClientName, v))
+}
+
+// ClientNameIn applies the In predicate on the "client_name" field.
+func ClientNameIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldClientName, vs...))
+}
+
+// ClientNameNotIn applies the NotIn predicate on the "client_name" field.
+func ClientNameNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldClientName, vs...))
+}
+
+// ClientNameGT applies the GT predicate on the "client_name" field.
+func ClientNameGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldClientName, v))
+}
+
+// ClientNameGTE applies the GTE predicate on the "client_name" field.
+func ClientNameGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldClientName, v))
+}
+
+// ClientNameLT applies the LT predicate on the "client_name" field.
+func ClientNameLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldClientName, v))
+}
+
+// ClientNameLTE applies the LTE predicate on the "client_name" field.
+func ClientNameLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldClientName, v))
+}
+
+// ClientNameContains applies the Contains predicate on the "client_name" field.
+func ClientNameContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldClientName, v))
+}
+
+// ClientNameHasPrefix applies the HasPrefix predicate on the "client_name" field.
+func ClientNameHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldClientName, v))
+}
+
+// ClientNameHasSuffix applies the HasSuffix predicate on the "client_name" field.
+func ClientNameHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldClientName, v))
+}
+
+// ClientNameIsNil applies the IsNil predicate on the "client_name" field.
+func ClientNameIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldClientName))
+}
+
+// ClientNameNotNil applies the NotNil predicate on the "client_name" field.
+func ClientNameNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldClientName))
+}
+
+// ClientNameEqualFold applies the EqualFold predicate on the "client_name" field.
+func ClientNameEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldClientName, v))
+}
+
+// ClientNameContainsFold applies the ContainsFold predicate on the "client_name" field.
+func ClientNameContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldClientName, v))
+}
+
+// ClientVersionEQ applies the EQ predicate on the "client_version" field.
+func ClientVersionEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientVersion, v))
+}
+
+// ClientVersionNEQ applies the NEQ predicate on the "client_version" field.
+func ClientVersionNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldClientVersion, v))
+}
+
+// ClientVersionIn applies the In predicate on the "client_version" field.
+func ClientVersionIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldClientVersion, vs...))
+}
+
+// ClientVersionNotIn applies the NotIn predicate on the "client_version" field.
+func ClientVersionNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldClientVersion, vs...))
+}
+
+// ClientVersionGT applies the GT predicate on the "client_version" field.
+func ClientVersionGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldClientVersion, v))
+}
+
+// ClientVersionGTE applies the GTE predicate on the "client_version" field.
+func ClientVersionGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldClientVersion, v))
+}
+
+// ClientVersionLT applies the LT predicate on the "client_version" field.
+func ClientVersionLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldClientVersion, v))
+}
+
+// ClientVersionLTE applies the LTE predicate on the "client_version" field.
+func ClientVersionLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldClientVersion, v))
+}
+
+// ClientVersionContains applies the Contains predicate on the "client_version" field.
+func ClientVersionContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldClientVersion, v))
+}
+
+// ClientVersionHasPrefix applies the HasPrefix predicate on the "client_version" field.
+func ClientVersionHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldClientVersion, v))
+}
+
+// ClientVersionHasSuffix applies the HasSuffix predicate on the "client_version" field.
+func ClientVersionHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldClientVersion, v))
+}
+
+// ClientVersionIsNil applies the IsNil predicate on the "client_version" field.
+func ClientVersionIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldClientVersion))
+}
+
+// ClientVersionNotNil applies the NotNil predicate on the "client_version" field.
+func ClientVersionNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldClientVersion))
+}
+
+// ClientVersionEqualFold applies the EqualFold predicate on the "client_version" field.
+func ClientVersionEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldClientVersion, v))
+}
+
+// ClientVersionContainsFold applies the ContainsFold predicate on the "client_version" field.
+func ClientVersionContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldClientVersion, v))
+}
+
+// ClientChannelEQ applies the EQ predicate on the "client_channel" field.
+func ClientChannelEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientChannel, v))
+}
+
+// ClientChannelNEQ applies the NEQ predicate on the "client_channel" field.
+func ClientChannelNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldClientChannel, v))
+}
+
+// ClientChannelIn applies the In predicate on the "client_channel" field.
+func ClientChannelIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldClientChannel, vs...))
+}
+
+// ClientChannelNotIn applies the NotIn predicate on the "client_channel" field.
+func ClientChannelNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldClientChannel, vs...))
+}
+
+// ClientChannelGT applies the GT predicate on the "client_channel" field.
+func ClientChannelGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldClientChannel, v))
+}
+
+// ClientChannelGTE applies the GTE predicate on the "client_channel" field.
+func ClientChannelGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldClientChannel, v))
+}
+
+// ClientChannelLT applies the LT predicate on the "client_channel" field.
+func ClientChannelLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldClientChannel, v))
+}
+
+// ClientChannelLTE applies the LTE predicate on the "client_channel" field.
+func ClientChannelLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldClientChannel, v))
+}
+
+// ClientChannelContains applies the Contains predicate on the "client_channel" field.
+func ClientChannelContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldClientChannel, v))
+}
+
+// ClientChannelHasPrefix applies the HasPrefix predicate on the "client_channel" field.
+func ClientChannelHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldClientChannel, v))
+}
+
+// ClientChannelHasSuffix applies the HasSuffix predicate on the "client_channel" field.
+func ClientChannelHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldClientChannel, v))
+}
+
+// ClientChannelIsNil applies the IsNil predicate on the "client_channel" field.
+func ClientChannelIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldClientChannel))
+}
+
+// ClientChannelNotNil applies the NotNil predicate on the "client_channel" field.
+func ClientChannelNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldClientChannel))
+}
+
+// ClientChannelEqualFold applies the EqualFold predicate on the "client_channel" field.
+func ClientChannelEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldClientChannel, v))
+}
+
+// ClientChannelContainsFold applies the ContainsFold predicate on the "client_channel" field.
+func ClientChannelContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldClientChannel, v))
+}
+
+// ClientMetadataFormatEQ applies the EQ predicate on the "client_metadata_format" field.
+func ClientMetadataFormatEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatNEQ applies the NEQ predicate on the "client_metadata_format" field.
+func ClientMetadataFormatNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatIn applies the In predicate on the "client_metadata_format" field.
+func ClientMetadataFormatIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldClientMetadataFormat, vs...))
+}
+
+// ClientMetadataFormatNotIn applies the NotIn predicate on the "client_metadata_format" field.
+func ClientMetadataFormatNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldClientMetadataFormat, vs...))
+}
+
+// ClientMetadataFormatGT applies the GT predicate on the "client_metadata_format" field.
+func ClientMetadataFormatGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatGTE applies the GTE predicate on the "client_metadata_format" field.
+func ClientMetadataFormatGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatLT applies the LT predicate on the "client_metadata_format" field.
+func ClientMetadataFormatLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatLTE applies the LTE predicate on the "client_metadata_format" field.
+func ClientMetadataFormatLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatContains applies the Contains predicate on the "client_metadata_format" field.
+func ClientMetadataFormatContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatHasPrefix applies the HasPrefix predicate on the "client_metadata_format" field.
+func ClientMetadataFormatHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatHasSuffix applies the HasSuffix predicate on the "client_metadata_format" field.
+func ClientMetadataFormatHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatIsNil applies the IsNil predicate on the "client_metadata_format" field.
+func ClientMetadataFormatIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldClientMetadataFormat))
+}
+
+// ClientMetadataFormatNotNil applies the NotNil predicate on the "client_metadata_format" field.
+func ClientMetadataFormatNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldClientMetadataFormat))
+}
+
+// ClientMetadataFormatEqualFold applies the EqualFold predicate on the "client_metadata_format" field.
+func ClientMetadataFormatEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldClientMetadataFormat, v))
+}
+
+// ClientMetadataFormatContainsFold applies the ContainsFold predicate on the "client_metadata_format" field.
+func ClientMetadataFormatContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldClientMetadataFormat, v))
+}
+
+// ProtocolVersionEQ applies the EQ predicate on the "protocol_version" field.
+func ProtocolVersionEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionNEQ applies the NEQ predicate on the "protocol_version" field.
+func ProtocolVersionNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionIn applies the In predicate on the "protocol_version" field.
+func ProtocolVersionIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldProtocolVersion, vs...))
+}
+
+// ProtocolVersionNotIn applies the NotIn predicate on the "protocol_version" field.
+func ProtocolVersionNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldProtocolVersion, vs...))
+}
+
+// ProtocolVersionGT applies the GT predicate on the "protocol_version" field.
+func ProtocolVersionGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionGTE applies the GTE predicate on the "protocol_version" field.
+func ProtocolVersionGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionLT applies the LT predicate on the "protocol_version" field.
+func ProtocolVersionLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionLTE applies the LTE predicate on the "protocol_version" field.
+func ProtocolVersionLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionContains applies the Contains predicate on the "protocol_version" field.
+func ProtocolVersionContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionHasPrefix applies the HasPrefix predicate on the "protocol_version" field.
+func ProtocolVersionHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionHasSuffix applies the HasSuffix predicate on the "protocol_version" field.
+func ProtocolVersionHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionIsNil applies the IsNil predicate on the "protocol_version" field.
+func ProtocolVersionIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldProtocolVersion))
+}
+
+// ProtocolVersionNotNil applies the NotNil predicate on the "protocol_version" field.
+func ProtocolVersionNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldProtocolVersion))
+}
+
+// ProtocolVersionEqualFold applies the EqualFold predicate on the "protocol_version" field.
+func ProtocolVersionEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldProtocolVersion, v))
+}
+
+// ProtocolVersionContainsFold applies the ContainsFold predicate on the "protocol_version" field.
+func ProtocolVersionContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldProtocolVersion, v))
+}
+
+// PlatformEQ applies the EQ predicate on the "platform" field.
+func PlatformEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldPlatform, v))
+}
+
+// PlatformNEQ applies the NEQ predicate on the "platform" field.
+func PlatformNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldPlatform, v))
+}
+
+// PlatformIn applies the In predicate on the "platform" field.
+func PlatformIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldPlatform, vs...))
+}
+
+// PlatformNotIn applies the NotIn predicate on the "platform" field.
+func PlatformNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldPlatform, vs...))
+}
+
+// PlatformGT applies the GT predicate on the "platform" field.
+func PlatformGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldPlatform, v))
+}
+
+// PlatformGTE applies the GTE predicate on the "platform" field.
+func PlatformGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldPlatform, v))
+}
+
+// PlatformLT applies the LT predicate on the "platform" field.
+func PlatformLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldPlatform, v))
+}
+
+// PlatformLTE applies the LTE predicate on the "platform" field.
+func PlatformLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldPlatform, v))
+}
+
+// PlatformContains applies the Contains predicate on the "platform" field.
+func PlatformContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldPlatform, v))
+}
+
+// PlatformHasPrefix applies the HasPrefix predicate on the "platform" field.
+func PlatformHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldPlatform, v))
+}
+
+// PlatformHasSuffix applies the HasSuffix predicate on the "platform" field.
+func PlatformHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldPlatform, v))
+}
+
+// PlatformIsNil applies the IsNil predicate on the "platform" field.
+func PlatformIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldPlatform))
+}
+
+// PlatformNotNil applies the NotNil predicate on the "platform" field.
+func PlatformNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldPlatform))
+}
+
+// PlatformEqualFold applies the EqualFold predicate on the "platform" field.
+func PlatformEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldPlatform, v))
+}
+
+// PlatformContainsFold applies the ContainsFold predicate on the "platform" field.
+func PlatformContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldPlatform, v))
+}
+
+// OsVersionEQ applies the EQ predicate on the "os_version" field.
+func OsVersionEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOsVersion, v))
+}
+
+// OsVersionNEQ applies the NEQ predicate on the "os_version" field.
+func OsVersionNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldOsVersion, v))
+}
+
+// OsVersionIn applies the In predicate on the "os_version" field.
+func OsVersionIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldOsVersion, vs...))
+}
+
+// OsVersionNotIn applies the NotIn predicate on the "os_version" field.
+func OsVersionNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldOsVersion, vs...))
+}
+
+// OsVersionGT applies the GT predicate on the "os_version" field.
+func OsVersionGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldOsVersion, v))
+}
+
+// OsVersionGTE applies the GTE predicate on the "os_version" field.
+func OsVersionGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldOsVersion, v))
+}
+
+// OsVersionLT applies the LT predicate on the "os_version" field.
+func OsVersionLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldOsVersion, v))
+}
+
+// OsVersionLTE applies the LTE predicate on the "os_version" field.
+func OsVersionLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldOsVersion, v))
+}
+
+// OsVersionContains applies the Contains predicate on the "os_version" field.
+func OsVersionContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldOsVersion, v))
+}
+
+// OsVersionHasPrefix applies the HasPrefix predicate on the "os_version" field.
+func OsVersionHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldOsVersion, v))
+}
+
+// OsVersionHasSuffix applies the HasSuffix predicate on the "os_version" field.
+func OsVersionHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldOsVersion, v))
+}
+
+// OsVersionIsNil applies the IsNil predicate on the "os_version" field.
+func OsVersionIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldOsVersion))
+}
+
+// OsVersionNotNil applies the NotNil predicate on the "os_version" field.
+func OsVersionNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldOsVersion))
+}
+
+// OsVersionEqualFold applies the EqualFold predicate on the "os_version" field.
+func OsVersionEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldOsVersion, v))
+}
+
+// OsVersionContainsFold applies the ContainsFold predicate on the "os_version" field.
+func OsVersionContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldOsVersion, v))
+}
+
+// OsBuildEQ applies the EQ predicate on the "os_build" field.
+func OsBuildEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOsBuild, v))
+}
+
+// OsBuildNEQ applies the NEQ predicate on the "os_build" field.
+func OsBuildNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldOsBuild, v))
+}
+
+// OsBuildIn applies the In predicate on the "os_build" field.
+func OsBuildIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldOsBuild, vs...))
+}
+
+// OsBuildNotIn applies the NotIn predicate on the "os_build" field.
+func OsBuildNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldOsBuild, vs...))
+}
+
+// OsBuildGT applies the GT predicate on the "os_build" field.
+func OsBuildGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldOsBuild, v))
+}
+
+// OsBuildGTE applies the GTE predicate on the "os_build" field.
+func OsBuildGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldOsBuild, v))
+}
+
+// OsBuildLT applies the LT predicate on the "os_build" field.
+func OsBuildLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldOsBuild, v))
+}
+
+// OsBuildLTE applies the LTE predicate on the "os_build" field.
+func OsBuildLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldOsBuild, v))
+}
+
+// OsBuildContains applies the Contains predicate on the "os_build" field.
+func OsBuildContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldOsBuild, v))
+}
+
+// OsBuildHasPrefix applies the HasPrefix predicate on the "os_build" field.
+func OsBuildHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldOsBuild, v))
+}
+
+// OsBuildHasSuffix applies the HasSuffix predicate on the "os_build" field.
+func OsBuildHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldOsBuild, v))
+}
+
+// OsBuildIsNil applies the IsNil predicate on the "os_build" field.
+func OsBuildIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldOsBuild))
+}
+
+// OsBuildNotNil applies the NotNil predicate on the "os_build" field.
+func OsBuildNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldOsBuild))
+}
+
+// OsBuildEqualFold applies the EqualFold predicate on the "os_build" field.
+func OsBuildEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldOsBuild, v))
+}
+
+// OsBuildContainsFold applies the ContainsFold predicate on the "os_build" field.
+func OsBuildContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldOsBuild, v))
+}
+
+// OsArchEQ applies the EQ predicate on the "os_arch" field.
+func OsArchEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOsArch, v))
+}
+
+// OsArchNEQ applies the NEQ predicate on the "os_arch" field.
+func OsArchNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldOsArch, v))
+}
+
+// OsArchIn applies the In predicate on the "os_arch" field.
+func OsArchIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldOsArch, vs...))
+}
+
+// OsArchNotIn applies the NotIn predicate on the "os_arch" field.
+func OsArchNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldOsArch, vs...))
+}
+
+// OsArchGT applies the GT predicate on the "os_arch" field.
+func OsArchGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldOsArch, v))
+}
+
+// OsArchGTE applies the GTE predicate on the "os_arch" field.
+func OsArchGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldOsArch, v))
+}
+
+// OsArchLT applies the LT predicate on the "os_arch" field.
+func OsArchLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldOsArch, v))
+}
+
+// OsArchLTE applies the LTE predicate on the "os_arch" field.
+func OsArchLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldOsArch, v))
+}
+
+// OsArchContains applies the Contains predicate on the "os_arch" field.
+func OsArchContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldOsArch, v))
+}
+
+// OsArchHasPrefix applies the HasPrefix predicate on the "os_arch" field.
+func OsArchHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldOsArch, v))
+}
+
+// OsArchHasSuffix applies the HasSuffix predicate on the "os_arch" field.
+func OsArchHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldOsArch, v))
+}
+
+// OsArchIsNil applies the IsNil predicate on the "os_arch" field.
+func OsArchIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldOsArch))
+}
+
+// OsArchNotNil applies the NotNil predicate on the "os_arch" field.
+func OsArchNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldOsArch))
+}
+
+// OsArchEqualFold applies the EqualFold predicate on the "os_arch" field.
+func OsArchEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldOsArch, v))
+}
+
+// OsArchContainsFold applies the ContainsFold predicate on the "os_arch" field.
+func OsArchContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldOsArch, v))
+}
+
+// AppArchEQ applies the EQ predicate on the "app_arch" field.
+func AppArchEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldAppArch, v))
+}
+
+// AppArchNEQ applies the NEQ predicate on the "app_arch" field.
+func AppArchNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldAppArch, v))
+}
+
+// AppArchIn applies the In predicate on the "app_arch" field.
+func AppArchIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldAppArch, vs...))
+}
+
+// AppArchNotIn applies the NotIn predicate on the "app_arch" field.
+func AppArchNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldAppArch, vs...))
+}
+
+// AppArchGT applies the GT predicate on the "app_arch" field.
+func AppArchGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldAppArch, v))
+}
+
+// AppArchGTE applies the GTE predicate on the "app_arch" field.
+func AppArchGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldAppArch, v))
+}
+
+// AppArchLT applies the LT predicate on the "app_arch" field.
+func AppArchLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldAppArch, v))
+}
+
+// AppArchLTE applies the LTE predicate on the "app_arch" field.
+func AppArchLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldAppArch, v))
+}
+
+// AppArchContains applies the Contains predicate on the "app_arch" field.
+func AppArchContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldAppArch, v))
+}
+
+// AppArchHasPrefix applies the HasPrefix predicate on the "app_arch" field.
+func AppArchHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldAppArch, v))
+}
+
+// AppArchHasSuffix applies the HasSuffix predicate on the "app_arch" field.
+func AppArchHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldAppArch, v))
+}
+
+// AppArchIsNil applies the IsNil predicate on the "app_arch" field.
+func AppArchIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldAppArch))
+}
+
+// AppArchNotNil applies the NotNil predicate on the "app_arch" field.
+func AppArchNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldAppArch))
+}
+
+// AppArchEqualFold applies the EqualFold predicate on the "app_arch" field.
+func AppArchEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldAppArch, v))
+}
+
+// AppArchContainsFold applies the ContainsFold predicate on the "app_arch" field.
+func AppArchContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldAppArch, v))
+}
+
+// FailureStageEQ applies the EQ predicate on the "failure_stage" field.
+func FailureStageEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldFailureStage, v))
+}
+
+// FailureStageNEQ applies the NEQ predicate on the "failure_stage" field.
+func FailureStageNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldFailureStage, v))
+}
+
+// FailureStageIn applies the In predicate on the "failure_stage" field.
+func FailureStageIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldFailureStage, vs...))
+}
+
+// FailureStageNotIn applies the NotIn predicate on the "failure_stage" field.
+func FailureStageNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldFailureStage, vs...))
+}
+
+// FailureStageGT applies the GT predicate on the "failure_stage" field.
+func FailureStageGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldFailureStage, v))
+}
+
+// FailureStageGTE applies the GTE predicate on the "failure_stage" field.
+func FailureStageGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldFailureStage, v))
+}
+
+// FailureStageLT applies the LT predicate on the "failure_stage" field.
+func FailureStageLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldFailureStage, v))
+}
+
+// FailureStageLTE applies the LTE predicate on the "failure_stage" field.
+func FailureStageLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldFailureStage, v))
+}
+
+// FailureStageContains applies the Contains predicate on the "failure_stage" field.
+func FailureStageContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldFailureStage, v))
+}
+
+// FailureStageHasPrefix applies the HasPrefix predicate on the "failure_stage" field.
+func FailureStageHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldFailureStage, v))
+}
+
+// FailureStageHasSuffix applies the HasSuffix predicate on the "failure_stage" field.
+func FailureStageHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldFailureStage, v))
+}
+
+// FailureStageIsNil applies the IsNil predicate on the "failure_stage" field.
+func FailureStageIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldFailureStage))
+}
+
+// FailureStageNotNil applies the NotNil predicate on the "failure_stage" field.
+func FailureStageNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldFailureStage))
+}
+
+// FailureStageEqualFold applies the EqualFold predicate on the "failure_stage" field.
+func FailureStageEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldFailureStage, v))
+}
+
+// FailureStageContainsFold applies the ContainsFold predicate on the "failure_stage" field.
+func FailureStageContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldFailureStage, v))
+}
+
+// ErrorCodeEQ applies the EQ predicate on the "error_code" field.
+func ErrorCodeEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldErrorCode, v))
+}
+
+// ErrorCodeNEQ applies the NEQ predicate on the "error_code" field.
+func ErrorCodeNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldErrorCode, v))
+}
+
+// ErrorCodeIn applies the In predicate on the "error_code" field.
+func ErrorCodeIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldErrorCode, vs...))
+}
+
+// ErrorCodeNotIn applies the NotIn predicate on the "error_code" field.
+func ErrorCodeNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldErrorCode, vs...))
+}
+
+// ErrorCodeGT applies the GT predicate on the "error_code" field.
+func ErrorCodeGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldErrorCode, v))
+}
+
+// ErrorCodeGTE applies the GTE predicate on the "error_code" field.
+func ErrorCodeGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldErrorCode, v))
+}
+
+// ErrorCodeLT applies the LT predicate on the "error_code" field.
+func ErrorCodeLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldErrorCode, v))
+}
+
+// ErrorCodeLTE applies the LTE predicate on the "error_code" field.
+func ErrorCodeLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldErrorCode, v))
+}
+
+// ErrorCodeContains applies the Contains predicate on the "error_code" field.
+func ErrorCodeContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldErrorCode, v))
+}
+
+// ErrorCodeHasPrefix applies the HasPrefix predicate on the "error_code" field.
+func ErrorCodeHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldErrorCode, v))
+}
+
+// ErrorCodeHasSuffix applies the HasSuffix predicate on the "error_code" field.
+func ErrorCodeHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldErrorCode, v))
+}
+
+// ErrorCodeIsNil applies the IsNil predicate on the "error_code" field.
+func ErrorCodeIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldErrorCode))
+}
+
+// ErrorCodeNotNil applies the NotNil predicate on the "error_code" field.
+func ErrorCodeNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldErrorCode))
+}
+
+// ErrorCodeEqualFold applies the EqualFold predicate on the "error_code" field.
+func ErrorCodeEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldErrorCode, v))
+}
+
+// ErrorCodeContainsFold applies the ContainsFold predicate on the "error_code" field.
+func ErrorCodeContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldErrorCode, v))
+}
+
+// RequestIDEQ applies the EQ predicate on the "request_id" field.
+func RequestIDEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldRequestID, v))
+}
+
+// RequestIDNEQ applies the NEQ predicate on the "request_id" field.
+func RequestIDNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldRequestID, v))
+}
+
+// RequestIDIn applies the In predicate on the "request_id" field.
+func RequestIDIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldRequestID, vs...))
+}
+
+// RequestIDNotIn applies the NotIn predicate on the "request_id" field.
+func RequestIDNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldRequestID, vs...))
+}
+
+// RequestIDGT applies the GT predicate on the "request_id" field.
+func RequestIDGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldRequestID, v))
+}
+
+// RequestIDGTE applies the GTE predicate on the "request_id" field.
+func RequestIDGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldRequestID, v))
+}
+
+// RequestIDLT applies the LT predicate on the "request_id" field.
+func RequestIDLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldRequestID, v))
+}
+
+// RequestIDLTE applies the LTE predicate on the "request_id" field.
+func RequestIDLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldRequestID, v))
+}
+
+// RequestIDContains applies the Contains predicate on the "request_id" field.
+func RequestIDContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldRequestID, v))
+}
+
+// RequestIDHasPrefix applies the HasPrefix predicate on the "request_id" field.
+func RequestIDHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldRequestID, v))
+}
+
+// RequestIDHasSuffix applies the HasSuffix predicate on the "request_id" field.
+func RequestIDHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldRequestID, v))
+}
+
+// RequestIDIsNil applies the IsNil predicate on the "request_id" field.
+func RequestIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldRequestID))
+}
+
+// RequestIDNotNil applies the NotNil predicate on the "request_id" field.
+func RequestIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldRequestID))
+}
+
+// RequestIDEqualFold applies the EqualFold predicate on the "request_id" field.
+func RequestIDEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldRequestID, v))
+}
+
+// RequestIDContainsFold applies the ContainsFold predicate on the "request_id" field.
+func RequestIDContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldRequestID, v))
+}
+
+// ClaimedGameUserIDEQ applies the EQ predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDNEQ applies the NEQ predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDIn applies the In predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldClaimedGameUserID, vs...))
+}
+
+// ClaimedGameUserIDNotIn applies the NotIn predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldClaimedGameUserID, vs...))
+}
+
+// ClaimedGameUserIDGT applies the GT predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDGTE applies the GTE predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDLT applies the LT predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDLTE applies the LTE predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDContains applies the Contains predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDHasPrefix applies the HasPrefix predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDHasSuffix applies the HasSuffix predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDIsNil applies the IsNil predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldClaimedGameUserID))
+}
+
+// ClaimedGameUserIDNotNil applies the NotNil predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldClaimedGameUserID))
+}
+
+// ClaimedGameUserIDEqualFold applies the EqualFold predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldClaimedGameUserID, v))
+}
+
+// ClaimedGameUserIDContainsFold applies the ContainsFold predicate on the "claimed_game_user_id" field.
+func ClaimedGameUserIDContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldClaimedGameUserID, v))
+}
+
+// OauthClientIDEQ applies the EQ predicate on the "oauth_client_id" field.
+func OauthClientIDEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldOauthClientID, v))
+}
+
+// OauthClientIDNEQ applies the NEQ predicate on the "oauth_client_id" field.
+func OauthClientIDNEQ(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldOauthClientID, v))
+}
+
+// OauthClientIDIn applies the In predicate on the "oauth_client_id" field.
+func OauthClientIDIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldOauthClientID, vs...))
+}
+
+// OauthClientIDNotIn applies the NotIn predicate on the "oauth_client_id" field.
+func OauthClientIDNotIn(vs ...string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldOauthClientID, vs...))
+}
+
+// OauthClientIDGT applies the GT predicate on the "oauth_client_id" field.
+func OauthClientIDGT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldOauthClientID, v))
+}
+
+// OauthClientIDGTE applies the GTE predicate on the "oauth_client_id" field.
+func OauthClientIDGTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldOauthClientID, v))
+}
+
+// OauthClientIDLT applies the LT predicate on the "oauth_client_id" field.
+func OauthClientIDLT(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldOauthClientID, v))
+}
+
+// OauthClientIDLTE applies the LTE predicate on the "oauth_client_id" field.
+func OauthClientIDLTE(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldOauthClientID, v))
+}
+
+// OauthClientIDContains applies the Contains predicate on the "oauth_client_id" field.
+func OauthClientIDContains(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContains(FieldOauthClientID, v))
+}
+
+// OauthClientIDHasPrefix applies the HasPrefix predicate on the "oauth_client_id" field.
+func OauthClientIDHasPrefix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasPrefix(FieldOauthClientID, v))
+}
+
+// OauthClientIDHasSuffix applies the HasSuffix predicate on the "oauth_client_id" field.
+func OauthClientIDHasSuffix(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldHasSuffix(FieldOauthClientID, v))
+}
+
+// OauthClientIDIsNil applies the IsNil predicate on the "oauth_client_id" field.
+func OauthClientIDIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldOauthClientID))
+}
+
+// OauthClientIDNotNil applies the NotNil predicate on the "oauth_client_id" field.
+func OauthClientIDNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldOauthClientID))
+}
+
+// OauthClientIDEqualFold applies the EqualFold predicate on the "oauth_client_id" field.
+func OauthClientIDEqualFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEqualFold(FieldOauthClientID, v))
+}
+
+// OauthClientIDContainsFold applies the ContainsFold predicate on the "oauth_client_id" field.
+func OauthClientIDContainsFold(v string) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldContainsFold(FieldOauthClientID, v))
+}
+
+// ProcessingDurationMsEQ applies the EQ predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsEQ(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldProcessingDurationMs, v))
+}
+
+// ProcessingDurationMsNEQ applies the NEQ predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsNEQ(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldProcessingDurationMs, v))
+}
+
+// ProcessingDurationMsIn applies the In predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsIn(vs ...int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldProcessingDurationMs, vs...))
+}
+
+// ProcessingDurationMsNotIn applies the NotIn predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsNotIn(vs ...int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldProcessingDurationMs, vs...))
+}
+
+// ProcessingDurationMsGT applies the GT predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsGT(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldProcessingDurationMs, v))
+}
+
+// ProcessingDurationMsGTE applies the GTE predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsGTE(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldProcessingDurationMs, v))
+}
+
+// ProcessingDurationMsLT applies the LT predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsLT(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldProcessingDurationMs, v))
+}
+
+// ProcessingDurationMsLTE applies the LTE predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsLTE(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldProcessingDurationMs, v))
+}
+
+// ProcessingDurationMsIsNil applies the IsNil predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldProcessingDurationMs))
+}
+
+// ProcessingDurationMsNotNil applies the NotNil predicate on the "processing_duration_ms" field.
+func ProcessingDurationMsNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldProcessingDurationMs))
+}
+
+// RequestBytesEQ applies the EQ predicate on the "request_bytes" field.
+func RequestBytesEQ(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldRequestBytes, v))
+}
+
+// RequestBytesNEQ applies the NEQ predicate on the "request_bytes" field.
+func RequestBytesNEQ(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldRequestBytes, v))
+}
+
+// RequestBytesIn applies the In predicate on the "request_bytes" field.
+func RequestBytesIn(vs ...int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldRequestBytes, vs...))
+}
+
+// RequestBytesNotIn applies the NotIn predicate on the "request_bytes" field.
+func RequestBytesNotIn(vs ...int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldRequestBytes, vs...))
+}
+
+// RequestBytesGT applies the GT predicate on the "request_bytes" field.
+func RequestBytesGT(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldRequestBytes, v))
+}
+
+// RequestBytesGTE applies the GTE predicate on the "request_bytes" field.
+func RequestBytesGTE(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldRequestBytes, v))
+}
+
+// RequestBytesLT applies the LT predicate on the "request_bytes" field.
+func RequestBytesLT(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldRequestBytes, v))
+}
+
+// RequestBytesLTE applies the LTE predicate on the "request_bytes" field.
+func RequestBytesLTE(v int64) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldRequestBytes, v))
+}
+
+// RequestBytesIsNil applies the IsNil predicate on the "request_bytes" field.
+func RequestBytesIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldRequestBytes))
+}
+
+// RequestBytesNotNil applies the NotNil predicate on the "request_bytes" field.
+func RequestBytesNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldRequestBytes))
+}
+
+// IdentityVerifiedEQ applies the EQ predicate on the "identity_verified" field.
+func IdentityVerifiedEQ(v bool) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldIdentityVerified, v))
+}
+
+// IdentityVerifiedNEQ applies the NEQ predicate on the "identity_verified" field.
+func IdentityVerifiedNEQ(v bool) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldIdentityVerified, v))
+}
+
+// IdentityVerifiedIsNil applies the IsNil predicate on the "identity_verified" field.
+func IdentityVerifiedIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldIdentityVerified))
+}
+
+// IdentityVerifiedNotNil applies the NotNil predicate on the "identity_verified" field.
+func IdentityVerifiedNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldIdentityVerified))
+}
+
+// ReceivedAtEQ applies the EQ predicate on the "received_at" field.
+func ReceivedAtEQ(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldEQ(FieldReceivedAt, v))
+}
+
+// ReceivedAtNEQ applies the NEQ predicate on the "received_at" field.
+func ReceivedAtNEQ(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNEQ(FieldReceivedAt, v))
+}
+
+// ReceivedAtIn applies the In predicate on the "received_at" field.
+func ReceivedAtIn(vs ...time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIn(FieldReceivedAt, vs...))
+}
+
+// ReceivedAtNotIn applies the NotIn predicate on the "received_at" field.
+func ReceivedAtNotIn(vs ...time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotIn(FieldReceivedAt, vs...))
+}
+
+// ReceivedAtGT applies the GT predicate on the "received_at" field.
+func ReceivedAtGT(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGT(FieldReceivedAt, v))
+}
+
+// ReceivedAtGTE applies the GTE predicate on the "received_at" field.
+func ReceivedAtGTE(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldGTE(FieldReceivedAt, v))
+}
+
+// ReceivedAtLT applies the LT predicate on the "received_at" field.
+func ReceivedAtLT(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLT(FieldReceivedAt, v))
+}
+
+// ReceivedAtLTE applies the LTE predicate on the "received_at" field.
+func ReceivedAtLTE(v time.Time) predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldLTE(FieldReceivedAt, v))
+}
+
+// ReceivedAtIsNil applies the IsNil predicate on the "received_at" field.
+func ReceivedAtIsNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldIsNull(FieldReceivedAt))
+}
+
+// ReceivedAtNotNil applies the NotNil predicate on the "received_at" field.
+func ReceivedAtNotNil() predicate.UploadLog {
+	return predicate.UploadLog(sql.FieldNotNull(FieldReceivedAt))
 }
 
 // And groups predicates with the AND operator between them.

@@ -129,6 +129,17 @@ sekai_api:
   api_token: ""
 
 haruki_proxy:
+  # v3 uses OAuth2 game-data:write; no shared client/encryption key.
+  # v3 always requires structured UA with platform. Independent from legacy version.
+  v3_client_policy:
+    allowed_channels: [stable, preview, beta, rc, dev]
+    minimum_versions:
+      stable: "3.0.0"
+      preview: "3.0.0-preview"
+      beta: "3.0.0-beta"
+      rc: "3.0.0-rc"
+      dev: "3.0.0-dev"
+  # Legacy v2 settings; old endpoints retire on 2026-11-01 00:00:00 UTC+8.
   user_agent: "HarukiProxy"
   version: "v1.7.0"
   secret: ""

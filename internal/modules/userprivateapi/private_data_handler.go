@@ -198,7 +198,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 	}
 }
 
-// loadPrivateData resolves the stored (gzip-compressed) body for this request,
+// loadPrivateData resolves the stored (zstd-compressed) body for this request,
 // collapsing concurrent same-request misses via singleflight so a burst does a
 // single Mongo pull + marshal + compress + cache write. It reports whether the
 // document exists and marshals the response exactly once (the previous code
@@ -236,7 +236,12 @@ func loadPrivateData(
 		if !found {
 			return payload{found: false}, nil
 		}
-		body, cmpErr := data.CompressGameDataBody(encoded)
+		// Stored as zstd: Haruki Cloud, the dominant caller, sends only
+		// Accept-Encoding: zstd, so hits pass the entry straight through
+		// instead of gunzipping it for the compress middleware to re-encode.
+		// Legacy gzip entries under live keys are still served (see
+		// ServeGameDataBody) until their TTL expires.
+		body, cmpErr := data.CompressGameDataBodyZstd(encoded)
 		if cmpErr != nil {
 			harukiLogger.Warnf("Failed to compress private game data body, storing plain: %v", cmpErr)
 			body = string(encoded)

@@ -8,18 +8,43 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/zstd"
 )
 
-// Cached game-data bodies are stored gzip-compressed (written once per
-// document generation by the singleflight leader) and served as-is to clients
-// whose Accept-Encoding admits gzip, so the per-request compress middleware —
-// which fasthttp skips whenever Content-Encoding is already set — no longer
-// re-compresses multi-megabyte bodies on every hit. Entries are sniffed by the
-// gzip magic number: a JSON body can never begin with 0x1f 0x8b, so legacy
-// plain entries from before this scheme (and the plain fallback below) stay
-// servable without a key migration.
+// Cached game-data bodies are stored compressed (written once per document
+// generation by the singleflight leader) and served as-is to clients whose
+// Accept-Encoding admits the stored coding, so the per-request compress
+// middleware — which skips any response that already has Content-Encoding set —
+// does not re-compress multi-megabyte bodies on every hit.
+//
+// The stored coding is sniffed from the entry's magic number, so no separate
+// marker is kept and entries written by earlier releases keep working until
+// they expire:
+//   - gzip  (1f 8b):       public and OAuth2 surfaces, and legacy private entries
+//   - zstd  (28 b5 2f fd): private surface, whose main consumer (Haruki Cloud)
+//     sends only Accept-Encoding: zstd
+//   - plain (anything else): entries from before compression and the fallback
+//     when compression fails
+//
+// A JSON body can never begin with 0x1f or 0x28 ('('), so the sniff cannot
+// misclassify a plain entry.
+
+const (
+	encodingGzip = "gzip"
+	encodingZstd = "zstd"
+)
 
 const maxPooledGameDataBodyBuffer = 1 << 20
+
+// gameDataZstdWindow keeps the frame window within the 8 MiB limit RFC 9659
+// sets for the zstd content coding, so any conforming HTTP client can decode
+// a passed-through entry without a larger history buffer.
+const gameDataZstdWindow = 8 << 20
+
+// maxDecodedGameDataBody bounds the decoded size of a stored zstd entry when a
+// client that does not accept zstd forces a decode. The largest JP suites are
+// ~20 MiB, so this only rejects corrupt or hostile cache contents.
+const maxDecodedGameDataBody = 256 << 20
 
 type gameDataBodyCompressor struct {
 	buffer bytes.Buffer
@@ -68,6 +93,73 @@ func CompressGameDataBody(encoded []byte) (string, error) {
 	return compressor.buffer.String(), nil
 }
 
+// zstd encoders and decoders are pooled with one internal state each (~17 MiB
+// for the encoder at an 8 MiB window) rather than shared with GOMAXPROCS
+// states: a shared instance keeps every state it has ever used alive, while
+// pooled ones are released by the GC once misses quiet down. That matches how
+// the gzip writers above and the compress middleware's own encoders are held.
+// Neither starts goroutines at concurrency 1, so dropping one needs no Close.
+var gameDataZstdEncoderPool = sync.Pool{
+	New: func() any {
+		encoder, err := zstd.NewWriter(nil,
+			zstd.WithEncoderLevel(zstd.SpeedFastest),
+			zstd.WithEncoderConcurrency(1),
+			zstd.WithWindowSize(gameDataZstdWindow),
+			// Frames are self-contained cache entries; the checksum lets both
+			// this process and the client detect a corrupt entry.
+			zstd.WithEncoderCRC(true),
+		)
+		if err != nil {
+			return err
+		}
+		return encoder
+	},
+}
+
+var gameDataZstdDecoderPool = sync.Pool{
+	New: func() any {
+		decoder, err := zstd.NewReader(nil,
+			zstd.WithDecoderConcurrency(1),
+			zstd.WithDecoderMaxWindow(gameDataZstdWindow),
+			zstd.WithDecoderMaxMemory(maxDecodedGameDataBody),
+		)
+		if err != nil {
+			return err
+		}
+		return decoder
+	},
+}
+
+var gameDataZstdBufferPool = sync.Pool{
+	New: func() any { return new([]byte) },
+}
+
+// CompressGameDataBodyZstd zstd-compresses a marshaled response body for cache
+// storage. SpeedFastest costs about the same CPU as gzip level 1, stores ~15%
+// smaller on game-data JSON, and is the level the compress middleware used
+// when it re-encoded these bodies per request, so zstd clients receive the
+// same wire size as before (see BenchmarkGameDataBodyServe).
+func CompressGameDataBodyZstd(encoded []byte) (string, error) {
+	pooled := gameDataZstdEncoderPool.Get()
+	encoder, ok := pooled.(*zstd.Encoder)
+	if !ok {
+		return "", pooled.(error)
+	}
+	defer gameDataZstdEncoderPool.Put(encoder)
+	bufferRef := gameDataZstdBufferPool.Get().(*[]byte)
+	defer func() {
+		if cap(*bufferRef) > maxPooledGameDataBodyBuffer {
+			*bufferRef = nil
+		}
+		gameDataZstdBufferPool.Put(bufferRef)
+	}()
+	out := encoder.EncodeAll(encoded, (*bufferRef)[:0])
+	*bufferRef = out
+	// The string conversion copies: the pooled buffer can be reused while the
+	// cache entry lives on.
+	return string(out), nil
+}
+
 // ServeGameDataBody writes a stored cache entry as the JSON response,
 // negotiating the transfer form against the client's Accept-Encoding. It
 // returns an error only when a compressed entry cannot be decoded; callers
@@ -88,51 +180,114 @@ func ServeGameDataBody(c fiber.Ctx, stored string) error {
 }
 
 // negotiateStoredBody resolves a stored entry to the bytes and
-// Content-Encoding to send for the given Accept-Encoding header.
+// Content-Encoding to send for the given Accept-Encoding header. A compressed
+// entry the client does not accept is decoded to plain JSON, which the
+// compress middleware then encodes however that client asked.
 func negotiateStoredBody(stored, acceptEncoding string) (body []byte, encoding string, err error) {
-	if !isGzipEntry(stored) {
+	switch storedEncoding(stored) {
+	case encodingGzip:
+		if acceptsGzip(acceptEncoding) {
+			return []byte(stored), encodingGzip, nil
+		}
+		plain, err := gunzipStoredBody(stored)
+		return plain, "", err
+	case encodingZstd:
+		if acceptsZstd(acceptEncoding) {
+			return []byte(stored), encodingZstd, nil
+		}
+		plain, err := unzstdStoredBody(stored)
+		return plain, "", err
+	default:
 		return []byte(stored), "", nil
 	}
-	if acceptsGzip(acceptEncoding) {
-		return []byte(stored), "gzip", nil
+}
+
+func storedEncoding(stored string) string {
+	switch {
+	case isGzipEntry(stored):
+		return encodingGzip
+	case isZstdEntry(stored):
+		return encodingZstd
+	default:
+		return ""
 	}
-	r, err := gzip.NewReader(strings.NewReader(stored))
-	if err != nil {
-		return nil, "", err
-	}
-	plain, err := io.ReadAll(r)
-	if err != nil {
-		return nil, "", err
-	}
-	if err := r.Close(); err != nil {
-		return nil, "", err
-	}
-	return plain, "", nil
 }
 
 func isGzipEntry(stored string) bool {
 	return len(stored) >= 2 && stored[0] == 0x1f && stored[1] == 0x8b
 }
 
-// acceptsGzip reports whether an Accept-Encoding header admits gzip: a gzip or
-// * member whose q-value is not zero. An absent header serves identity, which
-// matches what the compress middleware does for such clients today.
+func isZstdEntry(stored string) bool {
+	return len(stored) >= 4 && stored[0] == 0x28 && stored[1] == 0xb5 && stored[2] == 0x2f && stored[3] == 0xfd
+}
+
+func gunzipStoredBody(stored string) ([]byte, error) {
+	r, err := gzip.NewReader(strings.NewReader(stored))
+	if err != nil {
+		return nil, err
+	}
+	plain, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.Close(); err != nil {
+		return nil, err
+	}
+	return plain, nil
+}
+
+func unzstdStoredBody(stored string) ([]byte, error) {
+	pooled := gameDataZstdDecoderPool.Get()
+	decoder, ok := pooled.(*zstd.Decoder)
+	if !ok {
+		return nil, pooled.(error)
+	}
+	defer gameDataZstdDecoderPool.Put(decoder)
+	return decoder.DecodeAll([]byte(stored), nil)
+}
+
+// acceptsGzip reports whether an Accept-Encoding header admits gzip: a gzip
+// member with a non-zero q-value, or failing that a * member with a non-zero
+// q-value. An absent header serves identity, which matches what the compress
+// middleware does for such clients.
 func acceptsGzip(acceptEncoding string) bool {
-	for _, member := range strings.Split(acceptEncoding, ",") {
-		parts := strings.Split(member, ";")
-		token := strings.TrimSpace(parts[0])
-		if !strings.EqualFold(token, "gzip") && token != "*" {
-			continue
+	return acceptsCoding(acceptEncoding, encodingGzip, true)
+}
+
+// acceptsZstd reports whether an Accept-Encoding header explicitly admits
+// zstd. A bare * is not enough: zstd support is recent and a client that
+// merely tolerates "anything" is more safely served gzip or identity.
+func acceptsZstd(acceptEncoding string) bool {
+	return acceptsCoding(acceptEncoding, encodingZstd, false)
+}
+
+// acceptsCoding evaluates Accept-Encoding for one coding. An explicit member
+// for the coding decides by its q-value; otherwise, when allowWildcard is set,
+// a * member does.
+func acceptsCoding(acceptEncoding, coding string, allowWildcard bool) bool {
+	wildcard := false
+	for member := range strings.SplitSeq(acceptEncoding, ",") {
+		token, params, _ := strings.Cut(member, ";")
+		token = strings.TrimSpace(token)
+		switch {
+		case strings.EqualFold(token, coding):
+			return !hasZeroQuality(params)
+		case allowWildcard && token == "*":
+			wildcard = !hasZeroQuality(params)
 		}
-		for _, param := range parts[1:] {
-			param = strings.TrimSpace(param)
-			if q, ok := strings.CutPrefix(param, "q="); ok {
-				if v := strings.TrimSpace(q); v == "0" || strings.HasPrefix(v, "0.") && strings.Trim(v[2:], "0") == "" {
-					return false
-				}
+	}
+	return wildcard
+}
+
+func hasZeroQuality(params string) bool {
+	for param := range strings.SplitSeq(params, ";") {
+		param = strings.TrimSpace(param)
+		if q, ok := strings.CutPrefix(param, "q="); ok {
+			v := strings.TrimSpace(q)
+			if v == "0" || strings.HasPrefix(v, "0.") && strings.Trim(v[2:], "0") == "" {
+				return true
 			}
 		}
-		return true
 	}
 	return false
 }

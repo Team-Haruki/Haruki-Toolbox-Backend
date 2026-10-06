@@ -24,8 +24,11 @@ func TestScopeUploadLogsForAdminActorHidesSuperAdminOwners(t *testing.T) {
 	if _, err := client.User.Create().SetID("super").SetName("super").SetEmail("super@example.com").SetRole(userSchema.RoleSuperAdmin).Save(ctx); err != nil {
 		t.Fatalf("seed super admin: %v", err)
 	}
+	if _, err := client.User.Create().SetID("user").SetName("user").SetEmail("user@example.com").Save(ctx); err != nil {
+		t.Fatal(err)
+	}
 	seed := func(owner string) {
-		builder := client.UploadLog.Create().SetServer("jp").SetGameUserID("123").SetDataType("suite").SetUploadMethod("manual").SetSuccess(true).SetUploadTime(time.Now())
+		builder := client.UploadLog.Create().SetServer("jp").SetGameUserID("123").SetDataType("suite").SetUploadMethod("manual").SetSuccess(true).SetUploadTime(time.Now()).SetIdentityVerified(true)
 		if owner != "" {
 			builder.SetToolboxUserID(owner)
 		}
@@ -45,8 +48,8 @@ func TestScopeUploadLogsForAdminActorHidesSuperAdminOwners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query admin upload logs: %v", err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("admin visible upload logs = %d, want 2", len(rows))
+	if len(rows) != 1 {
+		t.Fatalf("admin visible upload logs = %d, want 1", len(rows))
 	}
 
 	query, err = scopeUploadLogsForAdminActor(ctx, client, client.UploadLog.Query(), adminCoreModule.RoleSuperAdmin)
@@ -217,5 +220,32 @@ func TestParseUploadLogQueryFiltersGameUserIDs(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
+	}
+}
+
+func TestUploadMetadataFiltersQuery(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:upload-metadata-filters?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	now := time.Now().UTC()
+	ctx := context.Background()
+	for _, platform := range []string{"android", "windows"} {
+		_, err := client.UploadLog.Create().SetServer("jp").SetGameUserID("123").SetDataType("suite").SetUploadMethod("manual").SetSuccess(true).SetUploadTime(now).SetReceivedAt(now).SetPlatform(platform).Save(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	success := true
+	filters := &uploadLogQueryFilters{From: now.Add(-time.Hour), To: now.Add(time.Hour), GameUserIDs: []string{"123"}, UploadMethods: []string{"manual"}, DataTypes: []string{"suite"}, Servers: []string{"jp"}, Success: &success, Metadata: map[string][]string{"platform": {"android"}}}
+	rows, err := applyUploadLogFilters(client.UploadLog.Query(), filters).All(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Platform == nil || *rows[0].Platform != "android" {
+		t.Fatal(rows)
+	}
+	filters.Metadata["platform"] = []string{"android' OR TRUE --"}
+	count, err := applyUploadLogFilters(client.UploadLog.Query(), filters).Count(ctx)
+	if err != nil || count != 0 {
+		t.Fatalf("unsafe filter count=%d err=%v", count, err)
 	}
 }

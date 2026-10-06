@@ -42,13 +42,14 @@ type accessibleGameAccountOwner struct {
 }
 
 type accessibleGameAccountItem struct {
-	Server       string                                     `json:"server"`
-	GameUserID   string                                     `json:"gameUserId"`
-	Ownership    string                                     `json:"ownership"`
-	Verified     bool                                       `json:"verified"`
-	IsDefault    bool                                       `json:"isDefault"`
-	Capabilities map[string]accessibleGameAccountCapability `json:"capabilities"`
-	Owner        *accessibleGameAccountOwner                `json:"owner"`
+	Server            string                                     `json:"server"`
+	GameUserID        string                                     `json:"gameUserId"`
+	Ownership         string                                     `json:"ownership"`
+	Verified          bool                                       `json:"verified"`
+	IsDefault         bool                                       `json:"isDefault"`
+	Capabilities      map[string]accessibleGameAccountCapability `json:"capabilities"`
+	WriteCapabilities map[string]accessibleGameAccountCapability `json:"writeCapabilities,omitempty"`
+	Owner             *accessibleGameAccountOwner                `json:"owner"`
 }
 
 // grantedGameAccountAggregate pairs a granted account with the recency key it is
@@ -74,14 +75,31 @@ func handleListAccessibleGameAccounts(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
 		}
 
+		action := c.Query("action", "read")
+		if action != "read" && action != "write" {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid action")
+		}
 		now := gameAccountGrantNowUTC()
-		accessible, err := apiHelper.DBManager.DB.ListAccessibleGameAccounts(ctx, userID, now)
+		accessible, err := apiHelper.DBManager.DB.ListAccessibleGameAccounts(ctx, userID, now, action)
 		if err != nil {
 			harukiLogger.Errorf("Failed to list accessible game accounts: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to list accessible game accounts")
 		}
 
 		accounts := buildAccessibleGameAccountItems(accessible)
+		if action == "write" {
+			for i := range accounts {
+				a := &accounts[i]
+				a.WriteCapabilities = map[string]accessibleGameAccountCapability{}
+				for _, kind := range []string{"suite", "mysekai"} {
+					if capability, ok := a.Capabilities[kind]; ok {
+						a.WriteCapabilities[kind] = capability
+					}
+				}
+				a.Capabilities = map[string]accessibleGameAccountCapability{}
+				a.Owner = nil
+			}
+		}
 		resp := accessibleGameAccountListResponse{
 			GeneratedAt: now,
 			Total:       len(accounts),

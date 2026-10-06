@@ -17,6 +17,14 @@ type UploadLog struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitzero"`
+	// ActorUserID holds the value of the "actor_user_id" field.
+	ActorUserID *string `json:"actor_user_id,omitzero"`
+	// AuthMethod holds the value of the "auth_method" field.
+	AuthMethod *string `json:"auth_method,omitzero"`
+	// GrantID holds the value of the "grant_id" field.
+	GrantID *int `json:"grant_id,omitzero"`
+	// AuthorizationSource holds the value of the "authorization_source" field.
+	AuthorizationSource *string `json:"authorization_source,omitzero"`
 	// jp en tw kr cn
 	Server string `json:"server,omitempty"`
 	// GameUserID holds the value of the "game_user_id" field.
@@ -32,7 +40,45 @@ type UploadLog struct {
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage *string `json:"error_message,omitzero"`
 	// UploadTime holds the value of the "upload_time" field.
-	UploadTime   time.Time `json:"upload_time,omitempty"`
+	UploadTime time.Time `json:"upload_time,omitempty"`
+	// ClientName holds the value of the "client_name" field.
+	ClientName *string `json:"client_name,omitzero"`
+	// ClientVersion holds the value of the "client_version" field.
+	ClientVersion *string `json:"client_version,omitzero"`
+	// ClientChannel holds the value of the "client_channel" field.
+	ClientChannel *string `json:"client_channel,omitzero"`
+	// ClientMetadataFormat holds the value of the "client_metadata_format" field.
+	ClientMetadataFormat *string `json:"client_metadata_format,omitzero"`
+	// ProtocolVersion holds the value of the "protocol_version" field.
+	ProtocolVersion *string `json:"protocol_version,omitzero"`
+	// Platform holds the value of the "platform" field.
+	Platform *string `json:"platform,omitzero"`
+	// OsVersion holds the value of the "os_version" field.
+	OsVersion *string `json:"os_version,omitzero"`
+	// OsBuild holds the value of the "os_build" field.
+	OsBuild *string `json:"os_build,omitzero"`
+	// OsArch holds the value of the "os_arch" field.
+	OsArch *string `json:"os_arch,omitzero"`
+	// AppArch holds the value of the "app_arch" field.
+	AppArch *string `json:"app_arch,omitzero"`
+	// FailureStage holds the value of the "failure_stage" field.
+	FailureStage *string `json:"failure_stage,omitzero"`
+	// ErrorCode holds the value of the "error_code" field.
+	ErrorCode *string `json:"error_code,omitzero"`
+	// RequestID holds the value of the "request_id" field.
+	RequestID *string `json:"request_id,omitzero"`
+	// ClaimedGameUserID holds the value of the "claimed_game_user_id" field.
+	ClaimedGameUserID *string `json:"claimed_game_user_id,omitzero"`
+	// OauthClientID holds the value of the "oauth_client_id" field.
+	OauthClientID *string `json:"oauth_client_id,omitzero"`
+	// ProcessingDurationMs holds the value of the "processing_duration_ms" field.
+	ProcessingDurationMs *int64 `json:"processing_duration_ms,omitzero"`
+	// RequestBytes holds the value of the "request_bytes" field.
+	RequestBytes *int64 `json:"request_bytes,omitzero"`
+	// IdentityVerified holds the value of the "identity_verified" field.
+	IdentityVerified *bool `json:"identity_verified,omitzero"`
+	// ReceivedAt holds the value of the "received_at" field.
+	ReceivedAt   *time.Time `json:"received_at,omitzero"`
 	selectValues sql.SelectValues
 }
 
@@ -41,13 +87,13 @@ func (*UploadLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case uploadlog.FieldSuccess:
+		case uploadlog.FieldSuccess, uploadlog.FieldIdentityVerified:
 			values[i] = new(sql.NullBool)
-		case uploadlog.FieldID:
+		case uploadlog.FieldID, uploadlog.FieldGrantID, uploadlog.FieldProcessingDurationMs, uploadlog.FieldRequestBytes:
 			values[i] = new(sql.NullInt64)
-		case uploadlog.FieldServer, uploadlog.FieldGameUserID, uploadlog.FieldToolboxUserID, uploadlog.FieldDataType, uploadlog.FieldUploadMethod, uploadlog.FieldErrorMessage:
+		case uploadlog.FieldActorUserID, uploadlog.FieldAuthMethod, uploadlog.FieldAuthorizationSource, uploadlog.FieldServer, uploadlog.FieldGameUserID, uploadlog.FieldToolboxUserID, uploadlog.FieldDataType, uploadlog.FieldUploadMethod, uploadlog.FieldErrorMessage, uploadlog.FieldClientName, uploadlog.FieldClientVersion, uploadlog.FieldClientChannel, uploadlog.FieldClientMetadataFormat, uploadlog.FieldProtocolVersion, uploadlog.FieldPlatform, uploadlog.FieldOsVersion, uploadlog.FieldOsBuild, uploadlog.FieldOsArch, uploadlog.FieldAppArch, uploadlog.FieldFailureStage, uploadlog.FieldErrorCode, uploadlog.FieldRequestID, uploadlog.FieldClaimedGameUserID, uploadlog.FieldOauthClientID:
 			values[i] = new(sql.NullString)
-		case uploadlog.FieldUploadTime:
+		case uploadlog.FieldUploadTime, uploadlog.FieldReceivedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -70,6 +116,34 @@ func (_m *UploadLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case uploadlog.FieldActorUserID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_user_id", values[i])
+			} else if value.Valid {
+				_m.ActorUserID = new(string)
+				*_m.ActorUserID = value.String
+			}
+		case uploadlog.FieldAuthMethod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field auth_method", values[i])
+			} else if value.Valid {
+				_m.AuthMethod = new(string)
+				*_m.AuthMethod = value.String
+			}
+		case uploadlog.FieldGrantID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_id", values[i])
+			} else if value.Valid {
+				_m.GrantID = new(int)
+				*_m.GrantID = int(value.Int64)
+			}
+		case uploadlog.FieldAuthorizationSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field authorization_source", values[i])
+			} else if value.Valid {
+				_m.AuthorizationSource = new(string)
+				*_m.AuthorizationSource = value.String
+			}
 		case uploadlog.FieldServer:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field server", values[i])
@@ -119,6 +193,139 @@ func (_m *UploadLog) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UploadTime = value.Time
 			}
+		case uploadlog.FieldClientName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_name", values[i])
+			} else if value.Valid {
+				_m.ClientName = new(string)
+				*_m.ClientName = value.String
+			}
+		case uploadlog.FieldClientVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_version", values[i])
+			} else if value.Valid {
+				_m.ClientVersion = new(string)
+				*_m.ClientVersion = value.String
+			}
+		case uploadlog.FieldClientChannel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_channel", values[i])
+			} else if value.Valid {
+				_m.ClientChannel = new(string)
+				*_m.ClientChannel = value.String
+			}
+		case uploadlog.FieldClientMetadataFormat:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_metadata_format", values[i])
+			} else if value.Valid {
+				_m.ClientMetadataFormat = new(string)
+				*_m.ClientMetadataFormat = value.String
+			}
+		case uploadlog.FieldProtocolVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field protocol_version", values[i])
+			} else if value.Valid {
+				_m.ProtocolVersion = new(string)
+				*_m.ProtocolVersion = value.String
+			}
+		case uploadlog.FieldPlatform:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field platform", values[i])
+			} else if value.Valid {
+				_m.Platform = new(string)
+				*_m.Platform = value.String
+			}
+		case uploadlog.FieldOsVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field os_version", values[i])
+			} else if value.Valid {
+				_m.OsVersion = new(string)
+				*_m.OsVersion = value.String
+			}
+		case uploadlog.FieldOsBuild:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field os_build", values[i])
+			} else if value.Valid {
+				_m.OsBuild = new(string)
+				*_m.OsBuild = value.String
+			}
+		case uploadlog.FieldOsArch:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field os_arch", values[i])
+			} else if value.Valid {
+				_m.OsArch = new(string)
+				*_m.OsArch = value.String
+			}
+		case uploadlog.FieldAppArch:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field app_arch", values[i])
+			} else if value.Valid {
+				_m.AppArch = new(string)
+				*_m.AppArch = value.String
+			}
+		case uploadlog.FieldFailureStage:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field failure_stage", values[i])
+			} else if value.Valid {
+				_m.FailureStage = new(string)
+				*_m.FailureStage = value.String
+			}
+		case uploadlog.FieldErrorCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field error_code", values[i])
+			} else if value.Valid {
+				_m.ErrorCode = new(string)
+				*_m.ErrorCode = value.String
+			}
+		case uploadlog.FieldRequestID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field request_id", values[i])
+			} else if value.Valid {
+				_m.RequestID = new(string)
+				*_m.RequestID = value.String
+			}
+		case uploadlog.FieldClaimedGameUserID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field claimed_game_user_id", values[i])
+			} else if value.Valid {
+				_m.ClaimedGameUserID = new(string)
+				*_m.ClaimedGameUserID = value.String
+			}
+		case uploadlog.FieldOauthClientID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field oauth_client_id", values[i])
+			} else if value.Valid {
+				_m.OauthClientID = new(string)
+				*_m.OauthClientID = value.String
+			}
+		case uploadlog.FieldProcessingDurationMs:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field processing_duration_ms", values[i])
+			} else if value.Valid {
+				_m.ProcessingDurationMs = new(int64)
+				*_m.ProcessingDurationMs = value.Int64
+			}
+		case uploadlog.FieldRequestBytes:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field request_bytes", values[i])
+			} else if value.Valid {
+				_m.RequestBytes = new(int64)
+				*_m.RequestBytes = value.Int64
+			}
+		case uploadlog.FieldIdentityVerified:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field identity_verified", values[i])
+			} else if value.Valid {
+				_m.IdentityVerified = new(bool)
+				*_m.IdentityVerified = value.Bool
+			}
+		case uploadlog.FieldReceivedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field received_at", values[i])
+			} else if value.Valid {
+				_m.ReceivedAt = new(time.Time)
+				*_m.ReceivedAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -155,6 +362,26 @@ func (_m *UploadLog) String() string {
 	var builder strings.Builder
 	builder.WriteString("UploadLog(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.ActorUserID; v != nil {
+		builder.WriteString("actor_user_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AuthMethod; v != nil {
+		builder.WriteString("auth_method=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.GrantID; v != nil {
+		builder.WriteString("grant_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.AuthorizationSource; v != nil {
+		builder.WriteString("authorization_source=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	builder.WriteString("server=")
 	builder.WriteString(_m.Server)
 	builder.WriteString(", ")
@@ -180,6 +407,101 @@ func (_m *UploadLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("upload_time=")
 	builder.WriteString(_m.UploadTime.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := _m.ClientName; v != nil {
+		builder.WriteString("client_name=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ClientVersion; v != nil {
+		builder.WriteString("client_version=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ClientChannel; v != nil {
+		builder.WriteString("client_channel=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ClientMetadataFormat; v != nil {
+		builder.WriteString("client_metadata_format=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ProtocolVersion; v != nil {
+		builder.WriteString("protocol_version=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Platform; v != nil {
+		builder.WriteString("platform=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.OsVersion; v != nil {
+		builder.WriteString("os_version=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.OsBuild; v != nil {
+		builder.WriteString("os_build=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.OsArch; v != nil {
+		builder.WriteString("os_arch=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AppArch; v != nil {
+		builder.WriteString("app_arch=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.FailureStage; v != nil {
+		builder.WriteString("failure_stage=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ErrorCode; v != nil {
+		builder.WriteString("error_code=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.RequestID; v != nil {
+		builder.WriteString("request_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ClaimedGameUserID; v != nil {
+		builder.WriteString("claimed_game_user_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.OauthClientID; v != nil {
+		builder.WriteString("oauth_client_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ProcessingDurationMs; v != nil {
+		builder.WriteString("processing_duration_ms=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.RequestBytes; v != nil {
+		builder.WriteString("request_bytes=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.IdentityVerified; v != nil {
+		builder.WriteString("identity_verified=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ReceivedAt; v != nil {
+		builder.WriteString("received_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

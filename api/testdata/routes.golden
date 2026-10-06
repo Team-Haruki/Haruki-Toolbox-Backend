@@ -35,6 +35,7 @@ GET /api/admin/risk/rules
 GET /api/admin/sponsors
 GET /api/admin/statistics/dashboard
 GET /api/admin/statistics/timeseries
+GET /api/admin/statistics/upload-analytics
 GET /api/admin/statistics/upload-logs
 GET /api/admin/system-logs
 GET /api/admin/system-logs/:id
@@ -65,6 +66,7 @@ GET /api/misc/sponsors
 GET /api/oauth2/authorize
 GET /api/oauth2/consent
 GET /api/oauth2/game-data/:server/:data_type/:user_id
+GET /api/oauth2/game-data/upload-targets
 GET /api/oauth2/login
 GET /api/oauth2/logout
 GET /api/oauth2/user/bindings
@@ -123,6 +125,7 @@ POST /api/admin/webhooks
 POST /api/haruki-bot-neo/register
 POST /api/haruki-bot-neo/send-mail
 POST /api/harukiproxy/:server/:user_id/:data_type/upload
+POST /api/harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /api/inherit/:server/:upload_type/submit
 POST /api/ios/proxy/:server/user/:user_id/mysekai
 POST /api/ios/script/:upload_code/upload
@@ -155,6 +158,7 @@ POST /api/user/reset-password
 POST /api/user/reset-password/send
 POST /api/verify-social-platform
 POST /harukiproxy/:server/:user_id/:data_type/upload
+POST /harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /internal/mysekai-birthday-events/:event_id/ack
 POST /ios/proxy/:server/user/:user_id/mysekai
 POST /ios/script/:upload_code/upload
