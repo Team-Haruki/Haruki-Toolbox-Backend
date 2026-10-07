@@ -169,11 +169,11 @@ func TestAdminListFiltersAndPagination(t *testing.T) {
 	owners := &fakeOwners{owners: map[int]int64{30042042: 1234567890123}}
 	env := newAdminTestEnv(t, owners)
 	base := testNow.Add(-time.Hour)
-	a1 := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", base)
-	a2 := mustCreateAlert(t, env.db, "replay_detected", "30042042", "203.0.113.7", "cn06", base.Add(time.Minute))
-	a3 := mustCreateAlert(t, env.db, "auth_failed", "", "198.51.100.9", "cn01", base.Add(2*time.Minute))
-	a4 := mustCreateAlert(t, env.db, "auth_failed", "777", "198.51.100.9", "cn01", base.Add(3*time.Minute))
-	a5 := mustCreateAlert(t, env.db, "rate_limited", "30042042", "", "cn06", base.Add(-48*time.Hour))
+	a1 := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", base)
+	a2 := mustCreateAlert(t, env.db, "replay_detected", "30042042", "203.0.113.7", "node-a", base.Add(time.Minute))
+	a3 := mustCreateAlert(t, env.db, "auth_failed", "", "198.51.100.9", "node-b", base.Add(2*time.Minute))
+	a4 := mustCreateAlert(t, env.db, "auth_failed", "777", "198.51.100.9", "node-b", base.Add(3*time.Minute))
+	a5 := mustCreateAlert(t, env.db, "rate_limited", "30042042", "", "node-a", base.Add(-48*time.Hour))
 	if _, err := env.db.BotSecurityAlert.UpdateOneID(a2.ID).SetStatus(botsecurityalert.StatusResolved).Save(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestAdminListItemShape(t *testing.T) {
 	row, err := env.db.BotSecurityAlert.Create().
 		SetKind("auth_failed").SetBotID("30042042").SetSubject("30042042").SetSourceIP("203.0.113.7").
 		SetBuildID("b1").SetClientVersion("3.2.1").SetReason("invalid credential").SetEnforced(true).
-		SetCount(5).SetThreshold(5).SetWindowSeconds(600).SetNode("cn06").
+		SetCount(5).SetThreshold(5).SetWindowSeconds(600).SetNode("node-a").
 		SetAlertTime(testNow.Add(-time.Minute)).SetReceivedAt(testNow.Add(-time.Minute + time.Second)).
 		Save(t.Context())
 	if err != nil {
@@ -280,7 +280,7 @@ func TestAdminListItemShape(t *testing.T) {
 		"id": float64(row.ID), "kind": "auth_failed", "botId": "30042042", "ownerQq": "10001",
 		"sourceIp": "203.0.113.7", "buildId": "b1", "clientVersion": "3.2.1", "reason": "invalid credential",
 		"enforced": true, "count": float64(5), "threshold": float64(5), "windowSeconds": float64(600),
-		"node": "cn06", "alertTime": testNow.Add(-time.Minute).Format(time.RFC3339),
+		"node": "node-a", "alertTime": testNow.Add(-time.Minute).Format(time.RFC3339),
 		"receivedAt": testNow.Add(-time.Minute + time.Second).Format(time.RFC3339), "status": "open", "note": "",
 		"handledBy": nil, "handledAt": nil,
 	}
@@ -298,8 +298,8 @@ func TestAdminListItemShape(t *testing.T) {
 func TestAdminListOwnerLookupUnavailable(t *testing.T) {
 	failing := &fakeOwners{err: errors.New("dial tcp: connection refused")}
 	env := newAdminTestEnv(t, failing)
-	mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", testNow.Add(-time.Minute))
-	mustCreateAlert(t, env.db, "auth_failed", "30042043", "203.0.113.7", "cn06", testNow.Add(-2*time.Minute))
+	mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
+	mustCreateAlert(t, env.db, "auth_failed", "30042043", "203.0.113.7", "node-a", testNow.Add(-2*time.Minute))
 	got := env.list(t, url.Values{})
 	if got.Total != 2 || got.Items[0].OwnerQQ != nil || got.Items[1].OwnerQQ != nil {
 		t.Fatalf("list with failing bot DB = %+v, want owners null", got)
@@ -310,7 +310,7 @@ func TestAdminListOwnerLookupUnavailable(t *testing.T) {
 
 	// Not configured: owners null, nothing logged.
 	env = newAdminTestEnv(t, NewBotDBOwnerLookup(func() *neopg.Client { return nil }))
-	mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", testNow.Add(-time.Minute))
+	mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
 	if got := env.list(t, url.Values{}); got.Items[0].OwnerQQ != nil {
 		t.Fatalf("ownerQq = %v without a bot DB", *got.Items[0].OwnerQQ)
 	}
@@ -337,8 +337,8 @@ func TestBotDBOwnerLookup(t *testing.T) {
 	}
 
 	env := newAdminTestEnv(t, lookup)
-	mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", testNow.Add(-time.Minute))
-	mustCreateAlert(t, env.db, "auth_failed", "not-a-number", "203.0.113.7", "cn06", testNow.Add(-2*time.Minute))
+	mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
+	mustCreateAlert(t, env.db, "auth_failed", "not-a-number", "203.0.113.7", "node-a", testNow.Add(-2*time.Minute))
 	got := env.list(t, url.Values{})
 	if got.Items[0].OwnerQQ == nil || *got.Items[0].OwnerQQ != "1234567890123" || got.Items[1].OwnerQQ != nil {
 		t.Fatalf("items = %+v", got.Items)
@@ -381,7 +381,7 @@ func (e *adminTestEnv) auditRows(t *testing.T) []*postgresql.SystemLog {
 
 func TestAdminUpdateTransitions(t *testing.T) {
 	env := newAdminTestEnv(t, &fakeOwners{owners: map[int]int64{30042042: 10001}})
-	row := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", testNow.Add(-time.Minute))
+	row := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
 
 	update := func(user, body string) testAlertItem {
 		t.Helper()
@@ -445,7 +445,7 @@ func TestAdminUpdateTransitions(t *testing.T) {
 
 func TestAdminUpdateRejects(t *testing.T) {
 	env := newAdminTestEnv(t, nil)
-	row := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", testNow.Add(-time.Minute))
+	row := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
 
 	cases := []struct {
 		name   string
@@ -486,7 +486,7 @@ func TestAdminUpdateRejects(t *testing.T) {
 
 func TestAdminRoutesRequireAdmin(t *testing.T) {
 	env := newAdminTestEnv(t, nil)
-	row := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "cn06", testNow.Add(-time.Minute))
+	row := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
 	if _, err := env.db.User.UpdateOneID("admin-2").SetBanned(true).Save(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -531,11 +531,11 @@ func TestAdminSummary(t *testing.T) {
 		t.Fatalf("empty summary: status %d body %s, want byKind []", resp.Status, resp.Body)
 	}
 
-	mustCreateAlert(t, env.db, "auth_failed", "1", "", "cn06", testNow.Add(-time.Hour))
-	mustCreateAlert(t, env.db, "auth_failed", "2", "", "cn06", testNow.Add(-2*time.Hour))
-	mustCreateAlert(t, env.db, "replay_detected", "1", "", "cn06", testNow.Add(-3*24*time.Hour))
-	mustCreateAlert(t, env.db, "build_rejected", "3", "", "cn06", testNow.Add(-30*24*time.Hour))
-	resolved := mustCreateAlert(t, env.db, "build_rejected", "4", "", "cn06", testNow.Add(-time.Minute))
+	mustCreateAlert(t, env.db, "auth_failed", "1", "", "node-a", testNow.Add(-time.Hour))
+	mustCreateAlert(t, env.db, "auth_failed", "2", "", "node-a", testNow.Add(-2*time.Hour))
+	mustCreateAlert(t, env.db, "replay_detected", "1", "", "node-a", testNow.Add(-3*24*time.Hour))
+	mustCreateAlert(t, env.db, "build_rejected", "3", "", "node-a", testNow.Add(-30*24*time.Hour))
+	resolved := mustCreateAlert(t, env.db, "build_rejected", "4", "", "node-a", testNow.Add(-time.Minute))
 	if _, err := env.db.BotSecurityAlert.UpdateOneID(resolved.ID).SetStatus(botsecurityalert.StatusResolved).Save(t.Context()); err != nil {
 		t.Fatal(err)
 	}

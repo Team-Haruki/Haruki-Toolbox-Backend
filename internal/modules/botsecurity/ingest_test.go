@@ -57,7 +57,7 @@ func sampleCloudPayload() cloudAlertPayload {
 		Count:         5,
 		Threshold:     5,
 		WindowSeconds: 600,
-		Node:          "cn06",
+		Node:          "node-a",
 		Time:          testNow.Add(-time.Minute).Format(time.RFC3339),
 	}
 }
@@ -289,7 +289,7 @@ func TestIngestDeduplicates(t *testing.T) {
 	variants := []func(p *cloudAlertPayload){
 		func(p *cloudAlertPayload) { p.Kind = "replay_detected" },
 		func(p *cloudAlertPayload) { p.BotID = "30042043" },
-		func(p *cloudAlertPayload) { p.Node = "cn01" },
+		func(p *cloudAlertPayload) { p.Node = "node-b" },
 		func(p *cloudAlertPayload) { p.Time = alertTime.Add(time.Second).Format(time.RFC3339) },
 	}
 	ids := map[int]bool{first.ID: true}
@@ -338,7 +338,7 @@ func TestIngestValidation(t *testing.T) {
 		{"bot_id with space", encode(func(m map[string]any) { m["bot_id"] = "1 2" })},
 		{"long source_ip", encode(func(m map[string]any) { m["source_ip"] = strings.Repeat("1", 65) })},
 		{"long node", encode(func(m map[string]any) { m["node"] = strings.Repeat("n", 65) })},
-		{"node with NUL", encode(func(m map[string]any) { m["node"] = "cn\x0006" })},
+		{"node with NUL", encode(func(m map[string]any) { m["node"] = "node\x00a" })},
 		{"negative count", encode(func(m map[string]any) { m["count"] = -1 })},
 		{"fractional count", encode(func(m map[string]any) { m["count"] = 1.5 })},
 		{"count as string", encode(func(m map[string]any) { m["count"] = "5" })},
