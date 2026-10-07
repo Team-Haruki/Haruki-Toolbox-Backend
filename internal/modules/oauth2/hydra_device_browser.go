@@ -141,6 +141,14 @@ const (
 	deviceScopeRiskOffline  = "offline"
 )
 
+// formatDeviceTimestamp renders a review-card time (requestedAt, expiresAt) in
+// the wire format the /device page relies on: RFC 3339 in UTC, whatever
+// location the time carries, so the card never depends on the process time
+// zone.
+func formatDeviceTimestamp(t time.Time) string {
+	return t.UTC().Format(time.RFC3339)
+}
+
 func deviceScopeRisk(scope string) string {
 	if risk, ok := deviceScopeRisks[scope]; ok {
 		return risk
@@ -452,8 +460,8 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 		UserCode:    formatDeviceUserCode(userCode),
 		Scopes:      make([]deviceReviewScope, 0, len(scopes)),
 		DeviceLabel: claim.DeviceLabel,
-		RequestedAt: claim.CreatedAt.Format(time.RFC3339),
-		ExpiresAt:   claim.ExpiresAt.Format(time.RFC3339),
+		RequestedAt: formatDeviceTimestamp(claim.CreatedAt),
+		ExpiresAt:   formatDeviceTimestamp(claim.ExpiresAt),
 		Account:     deviceReviewAccount{UserID: user.ID, Name: accountName},
 	}
 	confidential := claim.ClientType == oauthClientTypeConfidential

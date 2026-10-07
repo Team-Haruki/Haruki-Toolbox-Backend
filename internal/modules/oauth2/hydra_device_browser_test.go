@@ -102,6 +102,19 @@ func TestDeviceLookupReturnsReviewCard(t *testing.T) {
 	})
 }
 
+func TestFormatDeviceTimestampIsUTC(t *testing.T) {
+	shanghai := time.FixedZone("UTC+8", 8*60*60)
+	for _, at := range []time.Time{
+		time.Date(2026, 10, 7, 16, 0, 0, 0, shanghai),
+		time.Date(2026, 10, 7, 8, 0, 0, 0, time.UTC),
+		time.UnixMilli(1791360000000).In(shanghai),
+	} {
+		if got := formatDeviceTimestamp(at); got != "2026-10-07T08:00:00Z" {
+			t.Errorf("formatDeviceTimestamp(%s) = %q, want 2026-10-07T08:00:00Z", at, got)
+		}
+	}
+}
+
 func TestDeviceScopeRiskTableIsTheOnlySource(t *testing.T) {
 	for _, scope := range deviceFlowGrantableScopes {
 		if _, ok := deviceScopeRisks[scope]; !ok {
