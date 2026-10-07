@@ -9,6 +9,9 @@ import (
 // AuthorizeSocialPlatformInfo is the predicate function for authorizesocialplatforminfo builders.
 type AuthorizeSocialPlatformInfo func(*sql.Selector)
 
+// BotSecurityAlert is the predicate function for botsecurityalert builders.
+type BotSecurityAlert func(*sql.Selector)
+
 // FriendLink is the predicate function for friendlink builders.
 type FriendLink func(*sql.Selector)
 

@@ -40,6 +40,61 @@ var (
 			},
 		},
 	}
+	// BotSecurityAlertsColumns holds the columns for the "bot_security_alerts" table.
+	BotSecurityAlertsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "kind", Type: field.TypeString, Size: 64},
+		{Name: "bot_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "subject", Type: field.TypeString, Size: 128},
+		{Name: "source_ip", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "build_id", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "client_version", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "reason", Type: field.TypeString, Size: 1024, Default: ""},
+		{Name: "enforced", Type: field.TypeBool, Default: false},
+		{Name: "count", Type: field.TypeInt64, Default: 0},
+		{Name: "threshold", Type: field.TypeInt64, Default: 0},
+		{Name: "window_seconds", Type: field.TypeInt64, Default: 0},
+		{Name: "node", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "alert_time", Type: field.TypeTime},
+		{Name: "received_at", Type: field.TypeTime},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"open", "resolved", "ignored"}, Default: "open"},
+		{Name: "note", Type: field.TypeString, Size: 4000, Default: ""},
+		{Name: "handled_by_user_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "handled_at", Type: field.TypeTime, Nullable: true},
+	}
+	// BotSecurityAlertsTable holds the schema information for the "bot_security_alerts" table.
+	BotSecurityAlertsTable = &schema.Table{
+		Name:       "bot_security_alerts",
+		Columns:    BotSecurityAlertsColumns,
+		PrimaryKey: []*schema.Column{BotSecurityAlertsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "botsecurityalert_status_alert_time",
+				Unique:  false,
+				Columns: []*schema.Column{BotSecurityAlertsColumns[15], BotSecurityAlertsColumns[13]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						BotSecurityAlertsColumns[13].Name: true,
+					},
+				},
+			},
+			{
+				Name:    "botsecurityalert_alert_time",
+				Unique:  false,
+				Columns: []*schema.Column{BotSecurityAlertsColumns[13]},
+			},
+			{
+				Name:    "botsecurityalert_bot_id",
+				Unique:  false,
+				Columns: []*schema.Column{BotSecurityAlertsColumns[2]},
+			},
+			{
+				Name:    "botsecurityalert_kind_subject_node_alert_time",
+				Unique:  true,
+				Columns: []*schema.Column{BotSecurityAlertsColumns[1], BotSecurityAlertsColumns[3], BotSecurityAlertsColumns[12], BotSecurityAlertsColumns[13]},
+			},
+		},
+	}
 	// FriendLinksColumns holds the columns for the "friend_links" table.
 	FriendLinksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -711,6 +766,7 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AuthorizeSocialPlatformInfosTable,
+		BotSecurityAlertsTable,
 		FriendLinksTable,
 		GameAccountBindingsTable,
 		GameAccountDataGrantsTable,
@@ -734,6 +790,9 @@ var (
 
 func init() {
 	AuthorizeSocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
+	BotSecurityAlertsTable.Annotation = &entsql.Annotation{
+		Table: "bot_security_alerts",
+	}
 	GameAccountBindingsTable.ForeignKeys[0].RefTable = UsersTable
 	GameAccountBindingsTable.Annotation = &entsql.Annotation{
 		Table: "game_account_bindings",

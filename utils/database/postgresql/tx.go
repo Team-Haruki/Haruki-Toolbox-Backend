@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// AuthorizeSocialPlatformInfo is the client for interacting with the AuthorizeSocialPlatformInfo builders.
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
+	// BotSecurityAlert is the client for interacting with the BotSecurityAlert builders.
+	BotSecurityAlert *BotSecurityAlertClient
 	// FriendLink is the client for interacting with the FriendLink builders.
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
@@ -182,6 +184,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(tx.config)
+	tx.BotSecurityAlert = NewBotSecurityAlertClient(tx.config)
 	tx.FriendLink = NewFriendLinkClient(tx.config)
 	tx.GameAccountBinding = NewGameAccountBindingClient(tx.config)
 	tx.GameAccountDataGrant = NewGameAccountDataGrantClient(tx.config)

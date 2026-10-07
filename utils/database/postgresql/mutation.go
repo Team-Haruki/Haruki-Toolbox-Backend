@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/botsecurityalert"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
@@ -44,6 +45,7 @@ const (
 
 	// Node types.
 	TypeAuthorizeSocialPlatformInfo = "AuthorizeSocialPlatformInfo"
+	TypeBotSecurityAlert            = "BotSecurityAlert"
 	TypeFriendLink                  = "FriendLink"
 	TypeGameAccountBinding          = "GameAccountBinding"
 	TypeGameAccountDataGrant        = "GameAccountDataGrant"
@@ -770,6 +772,1412 @@ func (m *AuthorizeSocialPlatformInfoMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AuthorizeSocialPlatformInfo edge %s", name)
+}
+
+// BotSecurityAlertMutation represents an operation that mutates the BotSecurityAlert nodes in the graph.
+type BotSecurityAlertMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int
+	kind               *string
+	bot_id             *string
+	subject            *string
+	source_ip          *string
+	build_id           *string
+	client_version     *string
+	reason             *string
+	enforced           *bool
+	count              *int64
+	addcount           *int64
+	threshold          *int64
+	addthreshold       *int64
+	window_seconds     *int64
+	addwindow_seconds  *int64
+	node               *string
+	alert_time         *time.Time
+	received_at        *time.Time
+	status             *botsecurityalert.Status
+	note               *string
+	handled_by_user_id *string
+	handled_at         *time.Time
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*BotSecurityAlert, error)
+	predicates         []predicate.BotSecurityAlert
+}
+
+var _ ent.Mutation = (*BotSecurityAlertMutation)(nil)
+
+// botsecurityalertOption allows management of the mutation configuration using functional options.
+type botsecurityalertOption func(*BotSecurityAlertMutation)
+
+// newBotSecurityAlertMutation creates new mutation for the BotSecurityAlert entity.
+func newBotSecurityAlertMutation(c config, op Op, opts ...botsecurityalertOption) *BotSecurityAlertMutation {
+	m := &BotSecurityAlertMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBotSecurityAlert,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBotSecurityAlertID sets the ID field of the mutation.
+func withBotSecurityAlertID(id int) botsecurityalertOption {
+	return func(m *BotSecurityAlertMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BotSecurityAlert
+		)
+		m.oldValue = func(ctx context.Context) (*BotSecurityAlert, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BotSecurityAlert.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBotSecurityAlert sets the old BotSecurityAlert of the mutation.
+func withBotSecurityAlert(node *BotSecurityAlert) botsecurityalertOption {
+	return func(m *BotSecurityAlertMutation) {
+		m.oldValue = func(context.Context) (*BotSecurityAlert, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BotSecurityAlertMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BotSecurityAlertMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BotSecurityAlertMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BotSecurityAlertMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BotSecurityAlert.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetKind sets the "kind" field.
+func (m *BotSecurityAlertMutation) SetKind(s string) {
+	m.kind = &s
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *BotSecurityAlertMutation) Kind() (r string, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *BotSecurityAlertMutation) ResetKind() {
+	m.kind = nil
+}
+
+// SetBotID sets the "bot_id" field.
+func (m *BotSecurityAlertMutation) SetBotID(s string) {
+	m.bot_id = &s
+}
+
+// BotID returns the value of the "bot_id" field in the mutation.
+func (m *BotSecurityAlertMutation) BotID() (r string, exists bool) {
+	v := m.bot_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBotID returns the old "bot_id" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldBotID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBotID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBotID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBotID: %w", err)
+	}
+	return oldValue.BotID, nil
+}
+
+// ClearBotID clears the value of the "bot_id" field.
+func (m *BotSecurityAlertMutation) ClearBotID() {
+	m.bot_id = nil
+	m.clearedFields[botsecurityalert.FieldBotID] = struct{}{}
+}
+
+// BotIDCleared returns if the "bot_id" field was cleared in this mutation.
+func (m *BotSecurityAlertMutation) BotIDCleared() bool {
+	_, ok := m.clearedFields[botsecurityalert.FieldBotID]
+	return ok
+}
+
+// ResetBotID resets all changes to the "bot_id" field.
+func (m *BotSecurityAlertMutation) ResetBotID() {
+	m.bot_id = nil
+	delete(m.clearedFields, botsecurityalert.FieldBotID)
+}
+
+// SetSubject sets the "subject" field.
+func (m *BotSecurityAlertMutation) SetSubject(s string) {
+	m.subject = &s
+}
+
+// Subject returns the value of the "subject" field in the mutation.
+func (m *BotSecurityAlertMutation) Subject() (r string, exists bool) {
+	v := m.subject
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubject returns the old "subject" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldSubject(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubject requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
+	}
+	return oldValue.Subject, nil
+}
+
+// ResetSubject resets all changes to the "subject" field.
+func (m *BotSecurityAlertMutation) ResetSubject() {
+	m.subject = nil
+}
+
+// SetSourceIP sets the "source_ip" field.
+func (m *BotSecurityAlertMutation) SetSourceIP(s string) {
+	m.source_ip = &s
+}
+
+// SourceIP returns the value of the "source_ip" field in the mutation.
+func (m *BotSecurityAlertMutation) SourceIP() (r string, exists bool) {
+	v := m.source_ip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceIP returns the old "source_ip" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldSourceIP(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceIP is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceIP requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceIP: %w", err)
+	}
+	return oldValue.SourceIP, nil
+}
+
+// ResetSourceIP resets all changes to the "source_ip" field.
+func (m *BotSecurityAlertMutation) ResetSourceIP() {
+	m.source_ip = nil
+}
+
+// SetBuildID sets the "build_id" field.
+func (m *BotSecurityAlertMutation) SetBuildID(s string) {
+	m.build_id = &s
+}
+
+// BuildID returns the value of the "build_id" field in the mutation.
+func (m *BotSecurityAlertMutation) BuildID() (r string, exists bool) {
+	v := m.build_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBuildID returns the old "build_id" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldBuildID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBuildID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBuildID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBuildID: %w", err)
+	}
+	return oldValue.BuildID, nil
+}
+
+// ResetBuildID resets all changes to the "build_id" field.
+func (m *BotSecurityAlertMutation) ResetBuildID() {
+	m.build_id = nil
+}
+
+// SetClientVersion sets the "client_version" field.
+func (m *BotSecurityAlertMutation) SetClientVersion(s string) {
+	m.client_version = &s
+}
+
+// ClientVersion returns the value of the "client_version" field in the mutation.
+func (m *BotSecurityAlertMutation) ClientVersion() (r string, exists bool) {
+	v := m.client_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientVersion returns the old "client_version" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldClientVersion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientVersion: %w", err)
+	}
+	return oldValue.ClientVersion, nil
+}
+
+// ResetClientVersion resets all changes to the "client_version" field.
+func (m *BotSecurityAlertMutation) ResetClientVersion() {
+	m.client_version = nil
+}
+
+// SetReason sets the "reason" field.
+func (m *BotSecurityAlertMutation) SetReason(s string) {
+	m.reason = &s
+}
+
+// Reason returns the value of the "reason" field in the mutation.
+func (m *BotSecurityAlertMutation) Reason() (r string, exists bool) {
+	v := m.reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReason returns the old "reason" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReason: %w", err)
+	}
+	return oldValue.Reason, nil
+}
+
+// ResetReason resets all changes to the "reason" field.
+func (m *BotSecurityAlertMutation) ResetReason() {
+	m.reason = nil
+}
+
+// SetEnforced sets the "enforced" field.
+func (m *BotSecurityAlertMutation) SetEnforced(b bool) {
+	m.enforced = &b
+}
+
+// Enforced returns the value of the "enforced" field in the mutation.
+func (m *BotSecurityAlertMutation) Enforced() (r bool, exists bool) {
+	v := m.enforced
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnforced returns the old "enforced" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldEnforced(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnforced is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnforced requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnforced: %w", err)
+	}
+	return oldValue.Enforced, nil
+}
+
+// ResetEnforced resets all changes to the "enforced" field.
+func (m *BotSecurityAlertMutation) ResetEnforced() {
+	m.enforced = nil
+}
+
+// SetCount sets the "count" field.
+func (m *BotSecurityAlertMutation) SetCount(i int64) {
+	m.count = &i
+	m.addcount = nil
+}
+
+// Count returns the value of the "count" field in the mutation.
+func (m *BotSecurityAlertMutation) Count() (r int64, exists bool) {
+	v := m.count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCount returns the old "count" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldCount(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCount: %w", err)
+	}
+	return oldValue.Count, nil
+}
+
+// AddCount adds i to the "count" field.
+func (m *BotSecurityAlertMutation) AddCount(i int64) {
+	if m.addcount != nil {
+		*m.addcount += i
+	} else {
+		m.addcount = &i
+	}
+}
+
+// AddedCount returns the value that was added to the "count" field in this mutation.
+func (m *BotSecurityAlertMutation) AddedCount() (r int64, exists bool) {
+	v := m.addcount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCount resets all changes to the "count" field.
+func (m *BotSecurityAlertMutation) ResetCount() {
+	m.count = nil
+	m.addcount = nil
+}
+
+// SetThreshold sets the "threshold" field.
+func (m *BotSecurityAlertMutation) SetThreshold(i int64) {
+	m.threshold = &i
+	m.addthreshold = nil
+}
+
+// Threshold returns the value of the "threshold" field in the mutation.
+func (m *BotSecurityAlertMutation) Threshold() (r int64, exists bool) {
+	v := m.threshold
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldThreshold returns the old "threshold" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldThreshold(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldThreshold is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldThreshold requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldThreshold: %w", err)
+	}
+	return oldValue.Threshold, nil
+}
+
+// AddThreshold adds i to the "threshold" field.
+func (m *BotSecurityAlertMutation) AddThreshold(i int64) {
+	if m.addthreshold != nil {
+		*m.addthreshold += i
+	} else {
+		m.addthreshold = &i
+	}
+}
+
+// AddedThreshold returns the value that was added to the "threshold" field in this mutation.
+func (m *BotSecurityAlertMutation) AddedThreshold() (r int64, exists bool) {
+	v := m.addthreshold
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetThreshold resets all changes to the "threshold" field.
+func (m *BotSecurityAlertMutation) ResetThreshold() {
+	m.threshold = nil
+	m.addthreshold = nil
+}
+
+// SetWindowSeconds sets the "window_seconds" field.
+func (m *BotSecurityAlertMutation) SetWindowSeconds(i int64) {
+	m.window_seconds = &i
+	m.addwindow_seconds = nil
+}
+
+// WindowSeconds returns the value of the "window_seconds" field in the mutation.
+func (m *BotSecurityAlertMutation) WindowSeconds() (r int64, exists bool) {
+	v := m.window_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWindowSeconds returns the old "window_seconds" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldWindowSeconds(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWindowSeconds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWindowSeconds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWindowSeconds: %w", err)
+	}
+	return oldValue.WindowSeconds, nil
+}
+
+// AddWindowSeconds adds i to the "window_seconds" field.
+func (m *BotSecurityAlertMutation) AddWindowSeconds(i int64) {
+	if m.addwindow_seconds != nil {
+		*m.addwindow_seconds += i
+	} else {
+		m.addwindow_seconds = &i
+	}
+}
+
+// AddedWindowSeconds returns the value that was added to the "window_seconds" field in this mutation.
+func (m *BotSecurityAlertMutation) AddedWindowSeconds() (r int64, exists bool) {
+	v := m.addwindow_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetWindowSeconds resets all changes to the "window_seconds" field.
+func (m *BotSecurityAlertMutation) ResetWindowSeconds() {
+	m.window_seconds = nil
+	m.addwindow_seconds = nil
+}
+
+// SetNode sets the "node" field.
+func (m *BotSecurityAlertMutation) SetNode(s string) {
+	m.node = &s
+}
+
+// Node returns the value of the "node" field in the mutation.
+func (m *BotSecurityAlertMutation) Node() (r string, exists bool) {
+	v := m.node
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNode returns the old "node" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldNode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNode: %w", err)
+	}
+	return oldValue.Node, nil
+}
+
+// ResetNode resets all changes to the "node" field.
+func (m *BotSecurityAlertMutation) ResetNode() {
+	m.node = nil
+}
+
+// SetAlertTime sets the "alert_time" field.
+func (m *BotSecurityAlertMutation) SetAlertTime(t time.Time) {
+	m.alert_time = &t
+}
+
+// AlertTime returns the value of the "alert_time" field in the mutation.
+func (m *BotSecurityAlertMutation) AlertTime() (r time.Time, exists bool) {
+	v := m.alert_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAlertTime returns the old "alert_time" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldAlertTime(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAlertTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAlertTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAlertTime: %w", err)
+	}
+	return oldValue.AlertTime, nil
+}
+
+// ResetAlertTime resets all changes to the "alert_time" field.
+func (m *BotSecurityAlertMutation) ResetAlertTime() {
+	m.alert_time = nil
+}
+
+// SetReceivedAt sets the "received_at" field.
+func (m *BotSecurityAlertMutation) SetReceivedAt(t time.Time) {
+	m.received_at = &t
+}
+
+// ReceivedAt returns the value of the "received_at" field in the mutation.
+func (m *BotSecurityAlertMutation) ReceivedAt() (r time.Time, exists bool) {
+	v := m.received_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReceivedAt returns the old "received_at" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldReceivedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReceivedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReceivedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReceivedAt: %w", err)
+	}
+	return oldValue.ReceivedAt, nil
+}
+
+// ResetReceivedAt resets all changes to the "received_at" field.
+func (m *BotSecurityAlertMutation) ResetReceivedAt() {
+	m.received_at = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *BotSecurityAlertMutation) SetStatus(b botsecurityalert.Status) {
+	m.status = &b
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *BotSecurityAlertMutation) Status() (r botsecurityalert.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldStatus(ctx context.Context) (v botsecurityalert.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *BotSecurityAlertMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetNote sets the "note" field.
+func (m *BotSecurityAlertMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *BotSecurityAlertMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *BotSecurityAlertMutation) ResetNote() {
+	m.note = nil
+}
+
+// SetHandledByUserID sets the "handled_by_user_id" field.
+func (m *BotSecurityAlertMutation) SetHandledByUserID(s string) {
+	m.handled_by_user_id = &s
+}
+
+// HandledByUserID returns the value of the "handled_by_user_id" field in the mutation.
+func (m *BotSecurityAlertMutation) HandledByUserID() (r string, exists bool) {
+	v := m.handled_by_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHandledByUserID returns the old "handled_by_user_id" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldHandledByUserID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHandledByUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHandledByUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHandledByUserID: %w", err)
+	}
+	return oldValue.HandledByUserID, nil
+}
+
+// ClearHandledByUserID clears the value of the "handled_by_user_id" field.
+func (m *BotSecurityAlertMutation) ClearHandledByUserID() {
+	m.handled_by_user_id = nil
+	m.clearedFields[botsecurityalert.FieldHandledByUserID] = struct{}{}
+}
+
+// HandledByUserIDCleared returns if the "handled_by_user_id" field was cleared in this mutation.
+func (m *BotSecurityAlertMutation) HandledByUserIDCleared() bool {
+	_, ok := m.clearedFields[botsecurityalert.FieldHandledByUserID]
+	return ok
+}
+
+// ResetHandledByUserID resets all changes to the "handled_by_user_id" field.
+func (m *BotSecurityAlertMutation) ResetHandledByUserID() {
+	m.handled_by_user_id = nil
+	delete(m.clearedFields, botsecurityalert.FieldHandledByUserID)
+}
+
+// SetHandledAt sets the "handled_at" field.
+func (m *BotSecurityAlertMutation) SetHandledAt(t time.Time) {
+	m.handled_at = &t
+}
+
+// HandledAt returns the value of the "handled_at" field in the mutation.
+func (m *BotSecurityAlertMutation) HandledAt() (r time.Time, exists bool) {
+	v := m.handled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHandledAt returns the old "handled_at" field's value of the BotSecurityAlert entity.
+// If the BotSecurityAlert object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BotSecurityAlertMutation) OldHandledAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHandledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHandledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHandledAt: %w", err)
+	}
+	return oldValue.HandledAt, nil
+}
+
+// ClearHandledAt clears the value of the "handled_at" field.
+func (m *BotSecurityAlertMutation) ClearHandledAt() {
+	m.handled_at = nil
+	m.clearedFields[botsecurityalert.FieldHandledAt] = struct{}{}
+}
+
+// HandledAtCleared returns if the "handled_at" field was cleared in this mutation.
+func (m *BotSecurityAlertMutation) HandledAtCleared() bool {
+	_, ok := m.clearedFields[botsecurityalert.FieldHandledAt]
+	return ok
+}
+
+// ResetHandledAt resets all changes to the "handled_at" field.
+func (m *BotSecurityAlertMutation) ResetHandledAt() {
+	m.handled_at = nil
+	delete(m.clearedFields, botsecurityalert.FieldHandledAt)
+}
+
+// Where appends a list predicates to the BotSecurityAlertMutation builder.
+func (m *BotSecurityAlertMutation) Where(ps ...predicate.BotSecurityAlert) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BotSecurityAlertMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BotSecurityAlertMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BotSecurityAlert, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BotSecurityAlertMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BotSecurityAlertMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BotSecurityAlert).
+func (m *BotSecurityAlertMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BotSecurityAlertMutation) Fields() []string {
+	fields := make([]string, 0, 18)
+	if m.kind != nil {
+		fields = append(fields, botsecurityalert.FieldKind)
+	}
+	if m.bot_id != nil {
+		fields = append(fields, botsecurityalert.FieldBotID)
+	}
+	if m.subject != nil {
+		fields = append(fields, botsecurityalert.FieldSubject)
+	}
+	if m.source_ip != nil {
+		fields = append(fields, botsecurityalert.FieldSourceIP)
+	}
+	if m.build_id != nil {
+		fields = append(fields, botsecurityalert.FieldBuildID)
+	}
+	if m.client_version != nil {
+		fields = append(fields, botsecurityalert.FieldClientVersion)
+	}
+	if m.reason != nil {
+		fields = append(fields, botsecurityalert.FieldReason)
+	}
+	if m.enforced != nil {
+		fields = append(fields, botsecurityalert.FieldEnforced)
+	}
+	if m.count != nil {
+		fields = append(fields, botsecurityalert.FieldCount)
+	}
+	if m.threshold != nil {
+		fields = append(fields, botsecurityalert.FieldThreshold)
+	}
+	if m.window_seconds != nil {
+		fields = append(fields, botsecurityalert.FieldWindowSeconds)
+	}
+	if m.node != nil {
+		fields = append(fields, botsecurityalert.FieldNode)
+	}
+	if m.alert_time != nil {
+		fields = append(fields, botsecurityalert.FieldAlertTime)
+	}
+	if m.received_at != nil {
+		fields = append(fields, botsecurityalert.FieldReceivedAt)
+	}
+	if m.status != nil {
+		fields = append(fields, botsecurityalert.FieldStatus)
+	}
+	if m.note != nil {
+		fields = append(fields, botsecurityalert.FieldNote)
+	}
+	if m.handled_by_user_id != nil {
+		fields = append(fields, botsecurityalert.FieldHandledByUserID)
+	}
+	if m.handled_at != nil {
+		fields = append(fields, botsecurityalert.FieldHandledAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BotSecurityAlertMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case botsecurityalert.FieldKind:
+		return m.Kind()
+	case botsecurityalert.FieldBotID:
+		return m.BotID()
+	case botsecurityalert.FieldSubject:
+		return m.Subject()
+	case botsecurityalert.FieldSourceIP:
+		return m.SourceIP()
+	case botsecurityalert.FieldBuildID:
+		return m.BuildID()
+	case botsecurityalert.FieldClientVersion:
+		return m.ClientVersion()
+	case botsecurityalert.FieldReason:
+		return m.Reason()
+	case botsecurityalert.FieldEnforced:
+		return m.Enforced()
+	case botsecurityalert.FieldCount:
+		return m.Count()
+	case botsecurityalert.FieldThreshold:
+		return m.Threshold()
+	case botsecurityalert.FieldWindowSeconds:
+		return m.WindowSeconds()
+	case botsecurityalert.FieldNode:
+		return m.Node()
+	case botsecurityalert.FieldAlertTime:
+		return m.AlertTime()
+	case botsecurityalert.FieldReceivedAt:
+		return m.ReceivedAt()
+	case botsecurityalert.FieldStatus:
+		return m.Status()
+	case botsecurityalert.FieldNote:
+		return m.Note()
+	case botsecurityalert.FieldHandledByUserID:
+		return m.HandledByUserID()
+	case botsecurityalert.FieldHandledAt:
+		return m.HandledAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BotSecurityAlertMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case botsecurityalert.FieldKind:
+		return m.OldKind(ctx)
+	case botsecurityalert.FieldBotID:
+		return m.OldBotID(ctx)
+	case botsecurityalert.FieldSubject:
+		return m.OldSubject(ctx)
+	case botsecurityalert.FieldSourceIP:
+		return m.OldSourceIP(ctx)
+	case botsecurityalert.FieldBuildID:
+		return m.OldBuildID(ctx)
+	case botsecurityalert.FieldClientVersion:
+		return m.OldClientVersion(ctx)
+	case botsecurityalert.FieldReason:
+		return m.OldReason(ctx)
+	case botsecurityalert.FieldEnforced:
+		return m.OldEnforced(ctx)
+	case botsecurityalert.FieldCount:
+		return m.OldCount(ctx)
+	case botsecurityalert.FieldThreshold:
+		return m.OldThreshold(ctx)
+	case botsecurityalert.FieldWindowSeconds:
+		return m.OldWindowSeconds(ctx)
+	case botsecurityalert.FieldNode:
+		return m.OldNode(ctx)
+	case botsecurityalert.FieldAlertTime:
+		return m.OldAlertTime(ctx)
+	case botsecurityalert.FieldReceivedAt:
+		return m.OldReceivedAt(ctx)
+	case botsecurityalert.FieldStatus:
+		return m.OldStatus(ctx)
+	case botsecurityalert.FieldNote:
+		return m.OldNote(ctx)
+	case botsecurityalert.FieldHandledByUserID:
+		return m.OldHandledByUserID(ctx)
+	case botsecurityalert.FieldHandledAt:
+		return m.OldHandledAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown BotSecurityAlert field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BotSecurityAlertMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case botsecurityalert.FieldKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case botsecurityalert.FieldBotID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBotID(v)
+		return nil
+	case botsecurityalert.FieldSubject:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubject(v)
+		return nil
+	case botsecurityalert.FieldSourceIP:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceIP(v)
+		return nil
+	case botsecurityalert.FieldBuildID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBuildID(v)
+		return nil
+	case botsecurityalert.FieldClientVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientVersion(v)
+		return nil
+	case botsecurityalert.FieldReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReason(v)
+		return nil
+	case botsecurityalert.FieldEnforced:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnforced(v)
+		return nil
+	case botsecurityalert.FieldCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCount(v)
+		return nil
+	case botsecurityalert.FieldThreshold:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetThreshold(v)
+		return nil
+	case botsecurityalert.FieldWindowSeconds:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWindowSeconds(v)
+		return nil
+	case botsecurityalert.FieldNode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNode(v)
+		return nil
+	case botsecurityalert.FieldAlertTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAlertTime(v)
+		return nil
+	case botsecurityalert.FieldReceivedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReceivedAt(v)
+		return nil
+	case botsecurityalert.FieldStatus:
+		v, ok := value.(botsecurityalert.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case botsecurityalert.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	case botsecurityalert.FieldHandledByUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHandledByUserID(v)
+		return nil
+	case botsecurityalert.FieldHandledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHandledAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BotSecurityAlert field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BotSecurityAlertMutation) AddedFields() []string {
+	var fields []string
+	if m.addcount != nil {
+		fields = append(fields, botsecurityalert.FieldCount)
+	}
+	if m.addthreshold != nil {
+		fields = append(fields, botsecurityalert.FieldThreshold)
+	}
+	if m.addwindow_seconds != nil {
+		fields = append(fields, botsecurityalert.FieldWindowSeconds)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BotSecurityAlertMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case botsecurityalert.FieldCount:
+		return m.AddedCount()
+	case botsecurityalert.FieldThreshold:
+		return m.AddedThreshold()
+	case botsecurityalert.FieldWindowSeconds:
+		return m.AddedWindowSeconds()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BotSecurityAlertMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case botsecurityalert.FieldCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCount(v)
+		return nil
+	case botsecurityalert.FieldThreshold:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddThreshold(v)
+		return nil
+	case botsecurityalert.FieldWindowSeconds:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWindowSeconds(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BotSecurityAlert numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BotSecurityAlertMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(botsecurityalert.FieldBotID) {
+		fields = append(fields, botsecurityalert.FieldBotID)
+	}
+	if m.FieldCleared(botsecurityalert.FieldHandledByUserID) {
+		fields = append(fields, botsecurityalert.FieldHandledByUserID)
+	}
+	if m.FieldCleared(botsecurityalert.FieldHandledAt) {
+		fields = append(fields, botsecurityalert.FieldHandledAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BotSecurityAlertMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BotSecurityAlertMutation) ClearField(name string) error {
+	switch name {
+	case botsecurityalert.FieldBotID:
+		m.ClearBotID()
+		return nil
+	case botsecurityalert.FieldHandledByUserID:
+		m.ClearHandledByUserID()
+		return nil
+	case botsecurityalert.FieldHandledAt:
+		m.ClearHandledAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BotSecurityAlert nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BotSecurityAlertMutation) ResetField(name string) error {
+	switch name {
+	case botsecurityalert.FieldKind:
+		m.ResetKind()
+		return nil
+	case botsecurityalert.FieldBotID:
+		m.ResetBotID()
+		return nil
+	case botsecurityalert.FieldSubject:
+		m.ResetSubject()
+		return nil
+	case botsecurityalert.FieldSourceIP:
+		m.ResetSourceIP()
+		return nil
+	case botsecurityalert.FieldBuildID:
+		m.ResetBuildID()
+		return nil
+	case botsecurityalert.FieldClientVersion:
+		m.ResetClientVersion()
+		return nil
+	case botsecurityalert.FieldReason:
+		m.ResetReason()
+		return nil
+	case botsecurityalert.FieldEnforced:
+		m.ResetEnforced()
+		return nil
+	case botsecurityalert.FieldCount:
+		m.ResetCount()
+		return nil
+	case botsecurityalert.FieldThreshold:
+		m.ResetThreshold()
+		return nil
+	case botsecurityalert.FieldWindowSeconds:
+		m.ResetWindowSeconds()
+		return nil
+	case botsecurityalert.FieldNode:
+		m.ResetNode()
+		return nil
+	case botsecurityalert.FieldAlertTime:
+		m.ResetAlertTime()
+		return nil
+	case botsecurityalert.FieldReceivedAt:
+		m.ResetReceivedAt()
+		return nil
+	case botsecurityalert.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case botsecurityalert.FieldNote:
+		m.ResetNote()
+		return nil
+	case botsecurityalert.FieldHandledByUserID:
+		m.ResetHandledByUserID()
+		return nil
+	case botsecurityalert.FieldHandledAt:
+		m.ResetHandledAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BotSecurityAlert field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BotSecurityAlertMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BotSecurityAlertMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BotSecurityAlertMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BotSecurityAlertMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BotSecurityAlertMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BotSecurityAlertMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BotSecurityAlertMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BotSecurityAlert unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BotSecurityAlertMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BotSecurityAlert edge %s", name)
 }
 
 // FriendLinkMutation represents an operation that mutates the FriendLink nodes in the graph.

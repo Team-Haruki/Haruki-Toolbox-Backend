@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/botsecurityalert"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
@@ -92,6 +93,7 @@ func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			authorizesocialplatforminfo.Table: authorizesocialplatforminfo.ValidColumn,
+			botsecurityalert.Table:            botsecurityalert.ValidColumn,
 			friendlink.Table:                  friendlink.ValidColumn,
 			gameaccountbinding.Table:          gameaccountbinding.ValidColumn,
 			gameaccountdatagrant.Table:        gameaccountdatagrant.ValidColumn,

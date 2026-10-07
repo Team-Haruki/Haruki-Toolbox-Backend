@@ -21,6 +21,18 @@ func (f AuthorizeSocialPlatformInfoFunc) Mutate(ctx context.Context, m postgresq
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.AuthorizeSocialPlatformInfoMutation", m)
 }
 
+// The BotSecurityAlertFunc type is an adapter to allow the use of ordinary
+// function as BotSecurityAlert mutator.
+type BotSecurityAlertFunc func(context.Context, *postgresql.BotSecurityAlertMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BotSecurityAlertFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.BotSecurityAlertMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.BotSecurityAlertMutation", m)
+}
+
 // The FriendLinkFunc type is an adapter to allow the use of ordinary
 // function as FriendLink mutator.
 type FriendLinkFunc func(context.Context, *postgresql.FriendLinkMutation) (postgresql.Value, error)

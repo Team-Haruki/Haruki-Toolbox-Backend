@@ -7,6 +7,7 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/botsecurityalert"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
@@ -37,6 +38,108 @@ func init() {
 	authorizesocialplatforminfoDescAllowFastVerification := authorizesocialplatforminfoFields[5].Descriptor()
 	// authorizesocialplatforminfo.DefaultAllowFastVerification holds the default value on creation for the allow_fast_verification field.
 	authorizesocialplatforminfo.DefaultAllowFastVerification = authorizesocialplatforminfoDescAllowFastVerification.Default.(bool)
+	botsecurityalertFields := schema.BotSecurityAlert{}.Fields()
+	_ = botsecurityalertFields
+	// botsecurityalertDescKind is the schema descriptor for kind field.
+	botsecurityalertDescKind := botsecurityalertFields[0].Descriptor()
+	// botsecurityalert.KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	botsecurityalert.KindValidator = func() func(string) error {
+		validators := botsecurityalertDescKind.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(kind string) error {
+			for _, fn := range fns {
+				if err := fn(kind); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// botsecurityalertDescBotID is the schema descriptor for bot_id field.
+	botsecurityalertDescBotID := botsecurityalertFields[1].Descriptor()
+	// botsecurityalert.BotIDValidator is a validator for the "bot_id" field. It is called by the builders before save.
+	botsecurityalert.BotIDValidator = botsecurityalertDescBotID.Validators[0].(func(string) error)
+	// botsecurityalertDescSubject is the schema descriptor for subject field.
+	botsecurityalertDescSubject := botsecurityalertFields[2].Descriptor()
+	// botsecurityalert.SubjectValidator is a validator for the "subject" field. It is called by the builders before save.
+	botsecurityalert.SubjectValidator = func() func(string) error {
+		validators := botsecurityalertDescSubject.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(subject string) error {
+			for _, fn := range fns {
+				if err := fn(subject); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// botsecurityalertDescSourceIP is the schema descriptor for source_ip field.
+	botsecurityalertDescSourceIP := botsecurityalertFields[3].Descriptor()
+	// botsecurityalert.DefaultSourceIP holds the default value on creation for the source_ip field.
+	botsecurityalert.DefaultSourceIP = botsecurityalertDescSourceIP.Default.(string)
+	// botsecurityalert.SourceIPValidator is a validator for the "source_ip" field. It is called by the builders before save.
+	botsecurityalert.SourceIPValidator = botsecurityalertDescSourceIP.Validators[0].(func(string) error)
+	// botsecurityalertDescBuildID is the schema descriptor for build_id field.
+	botsecurityalertDescBuildID := botsecurityalertFields[4].Descriptor()
+	// botsecurityalert.DefaultBuildID holds the default value on creation for the build_id field.
+	botsecurityalert.DefaultBuildID = botsecurityalertDescBuildID.Default.(string)
+	// botsecurityalert.BuildIDValidator is a validator for the "build_id" field. It is called by the builders before save.
+	botsecurityalert.BuildIDValidator = botsecurityalertDescBuildID.Validators[0].(func(string) error)
+	// botsecurityalertDescClientVersion is the schema descriptor for client_version field.
+	botsecurityalertDescClientVersion := botsecurityalertFields[5].Descriptor()
+	// botsecurityalert.DefaultClientVersion holds the default value on creation for the client_version field.
+	botsecurityalert.DefaultClientVersion = botsecurityalertDescClientVersion.Default.(string)
+	// botsecurityalert.ClientVersionValidator is a validator for the "client_version" field. It is called by the builders before save.
+	botsecurityalert.ClientVersionValidator = botsecurityalertDescClientVersion.Validators[0].(func(string) error)
+	// botsecurityalertDescReason is the schema descriptor for reason field.
+	botsecurityalertDescReason := botsecurityalertFields[6].Descriptor()
+	// botsecurityalert.DefaultReason holds the default value on creation for the reason field.
+	botsecurityalert.DefaultReason = botsecurityalertDescReason.Default.(string)
+	// botsecurityalert.ReasonValidator is a validator for the "reason" field. It is called by the builders before save.
+	botsecurityalert.ReasonValidator = botsecurityalertDescReason.Validators[0].(func(string) error)
+	// botsecurityalertDescEnforced is the schema descriptor for enforced field.
+	botsecurityalertDescEnforced := botsecurityalertFields[7].Descriptor()
+	// botsecurityalert.DefaultEnforced holds the default value on creation for the enforced field.
+	botsecurityalert.DefaultEnforced = botsecurityalertDescEnforced.Default.(bool)
+	// botsecurityalertDescCount is the schema descriptor for count field.
+	botsecurityalertDescCount := botsecurityalertFields[8].Descriptor()
+	// botsecurityalert.DefaultCount holds the default value on creation for the count field.
+	botsecurityalert.DefaultCount = botsecurityalertDescCount.Default.(int64)
+	// botsecurityalertDescThreshold is the schema descriptor for threshold field.
+	botsecurityalertDescThreshold := botsecurityalertFields[9].Descriptor()
+	// botsecurityalert.DefaultThreshold holds the default value on creation for the threshold field.
+	botsecurityalert.DefaultThreshold = botsecurityalertDescThreshold.Default.(int64)
+	// botsecurityalertDescWindowSeconds is the schema descriptor for window_seconds field.
+	botsecurityalertDescWindowSeconds := botsecurityalertFields[10].Descriptor()
+	// botsecurityalert.DefaultWindowSeconds holds the default value on creation for the window_seconds field.
+	botsecurityalert.DefaultWindowSeconds = botsecurityalertDescWindowSeconds.Default.(int64)
+	// botsecurityalertDescNode is the schema descriptor for node field.
+	botsecurityalertDescNode := botsecurityalertFields[11].Descriptor()
+	// botsecurityalert.DefaultNode holds the default value on creation for the node field.
+	botsecurityalert.DefaultNode = botsecurityalertDescNode.Default.(string)
+	// botsecurityalert.NodeValidator is a validator for the "node" field. It is called by the builders before save.
+	botsecurityalert.NodeValidator = botsecurityalertDescNode.Validators[0].(func(string) error)
+	// botsecurityalertDescReceivedAt is the schema descriptor for received_at field.
+	botsecurityalertDescReceivedAt := botsecurityalertFields[13].Descriptor()
+	// botsecurityalert.DefaultReceivedAt holds the default value on creation for the received_at field.
+	botsecurityalert.DefaultReceivedAt = botsecurityalertDescReceivedAt.Default.(func() time.Time)
+	// botsecurityalertDescNote is the schema descriptor for note field.
+	botsecurityalertDescNote := botsecurityalertFields[15].Descriptor()
+	// botsecurityalert.DefaultNote holds the default value on creation for the note field.
+	botsecurityalert.DefaultNote = botsecurityalertDescNote.Default.(string)
+	// botsecurityalert.NoteValidator is a validator for the "note" field. It is called by the builders before save.
+	botsecurityalert.NoteValidator = botsecurityalertDescNote.Validators[0].(func(string) error)
+	// botsecurityalertDescHandledByUserID is the schema descriptor for handled_by_user_id field.
+	botsecurityalertDescHandledByUserID := botsecurityalertFields[16].Descriptor()
+	// botsecurityalert.HandledByUserIDValidator is a validator for the "handled_by_user_id" field. It is called by the builders before save.
+	botsecurityalert.HandledByUserIDValidator = botsecurityalertDescHandledByUserID.Validators[0].(func(string) error)
 	friendlinkFields := schema.FriendLink{}.Fields()
 	_ = friendlinkFields
 	// friendlinkDescName is the schema descriptor for name field.
