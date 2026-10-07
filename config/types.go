@@ -222,8 +222,9 @@ type OAuth2Config struct {
 }
 
 // OAuth2InternalAPIConfig configures the internal token introspection API that
-// our own services (Sekai Station) call over the tailnet or the compose
-// network. Oathkeeper has no rule for it.
+// our own services (Sekai Station) call. It is reachable only on the private
+// network / compose network, never via the public proxy: Oathkeeper has no
+// rule for it.
 type OAuth2InternalAPIConfig struct {
 	// TokenSHA256 is the hex SHA-256 (64 characters) of the internal token
 	// (sent as a Bearer token or as the HTTP Basic password); the token itself

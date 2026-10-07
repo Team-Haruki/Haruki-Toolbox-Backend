@@ -171,7 +171,7 @@ func ServeGameDataBody(c fiber.Ctx, stored string) error {
 	}
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	// The representation now varies on Accept-Encoding at the origin, so
-	// intermediaries (EdgeOne in front of the public API) must key on it.
+	// intermediaries (the CDN in front of the public API) must key on it.
 	appendVaryAcceptEncoding(c)
 	if encoding != "" {
 		c.Set(fiber.HeaderContentEncoding, encoding)

@@ -28,7 +28,8 @@ import (
 
 // InternalIntrospectPath is served on the backend port only. Oathkeeper has no
 // rule for /internal/ (architecture test TestInternalAPINotRoutedByOathkeeper),
-// so it is reachable over the tailnet and the compose network, not publicly.
+// so it is reachable only on the private network / compose network, never via
+// the public proxy.
 const InternalIntrospectPath = "/internal/oauth2/introspect"
 
 // internalIntrospectMaxTokenLength bounds the token forwarded to Hydra; Hydra

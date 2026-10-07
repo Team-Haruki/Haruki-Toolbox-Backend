@@ -12,9 +12,9 @@ import (
 
 // TestInternalAPINotRoutedByOathkeeper keeps /internal/ off the public
 // gateway: POST /internal/oauth2/introspect and the birthday-monitor mirror
-// are reachable only on the backend port (tailnet and compose network), so no
-// Oathkeeper access rule anywhere in the repository may match an /internal/
-// URL, for any method, scheme or host.
+// are reachable only on the backend port (private network / compose network,
+// never via the public proxy), so no Oathkeeper access rule anywhere in the
+// repository may match an /internal/ URL, for any method, scheme or host.
 func TestInternalAPINotRoutedByOathkeeper(t *testing.T) {
 	root := repositoryRoot(t)
 	var files []string
