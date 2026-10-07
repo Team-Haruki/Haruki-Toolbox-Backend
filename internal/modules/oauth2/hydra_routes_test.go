@@ -203,7 +203,7 @@ func TestRegisterHydraRoutesLoginRejectRequiresSession(t *testing.T) {
 		Router:         app,
 		SessionHandler: harukiAPIHelper.NewSessionHandler(nil, "test-sign-key"),
 	}
-	registerHydraOAuth2Routes(apiHelper, hydraConfig)
+	registerHydraOAuth2Routes(apiHelper, hydraConfig, DeviceFlowConfig{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/oauth2/login/reject?login_challenge=test", nil)
 	resp, err := app.Test(req)

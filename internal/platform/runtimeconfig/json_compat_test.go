@@ -107,3 +107,72 @@ func TestSnapshotJSONGo126Fixture(t *testing.T) {
 		t.Fatal("native Sonic wire format changed")
 	}
 }
+
+// A snapshot written before the device-flow switch existed, or by an older
+// binary, must read as the switch being off.
+func TestOAuth2DeviceFlowSwitchMissingFieldIsOff(t *testing.T) {
+	payload, err := os.ReadFile("testdata/snapshot-go126-sonic.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old Snapshot
+	if err := unmarshalSnapshot(payload, &old); err != nil {
+		t.Fatal(err)
+	}
+	if old.OAuth2DeviceFlowEnabled != nil || old.OAuth2DeviceFlowSwitchOn() {
+		t.Fatal("an old snapshot must leave the device flow switch off")
+	}
+	if (Snapshot{}).OAuth2DeviceFlowSwitchOn() {
+		t.Fatal("the zero snapshot must leave the device flow switch off")
+	}
+	// The nil switch is omitted, so the pre-existing wire format is unchanged.
+	encoded, err := marshalSnapshot(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("oauth2DeviceFlowEnabled")) {
+		t.Fatalf("nil switch was serialized: %s", encoded)
+	}
+
+	for _, value := range []bool{true, false} {
+		enabled := value
+		encoded, err := marshalSnapshot(Snapshot{OAuth2DeviceFlowEnabled: &enabled})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded Snapshot
+		if err := unmarshalSnapshot(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if decoded.OAuth2DeviceFlowEnabled == nil || *decoded.OAuth2DeviceFlowEnabled != value || decoded.OAuth2DeviceFlowSwitchOn() != value {
+			t.Fatalf("switch %v did not round-trip: %s", value, encoded)
+		}
+	}
+}
+
+func TestOAuth2DeviceFlowSwitchUpdateKeepsOtherFields(t *testing.T) {
+	store, _ := newRuntimeConfigRedisStore(t)
+	service := New(Snapshot{PrivateAPIToken: "seed"}, store)
+	enabled := true
+	if err := service.Update(t.Context(), Update{OAuth2DeviceFlowEnabled: &enabled}); err != nil {
+		t.Fatal(err)
+	}
+	secret := "rotated"
+	if err := service.Update(t.Context(), Update{WebhookJWTSecret: &secret}); err != nil {
+		t.Fatal(err)
+	}
+	other := New(Snapshot{}, store)
+	current, err := other.Current(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !current.OAuth2DeviceFlowSwitchOn() || current.PrivateAPIToken != "seed" || current.WebhookJWTSecret != "rotated" {
+		t.Fatalf("persisted snapshot = %+v", current)
+	}
+	// Copies never alias the stored switch.
+	*current.OAuth2DeviceFlowEnabled = false
+	again, _ := other.Current(t.Context())
+	if !again.OAuth2DeviceFlowSwitchOn() {
+		t.Fatal("Current leaked the switch pointer")
+	}
+}

@@ -68,6 +68,12 @@ type adminOAuthClientRevokeResponse struct {
 	RevokeTokens          bool    `json:"revokeTokens"`
 	RevokedAuthorizations int     `json:"revokedAuthorizations"`
 	RevokedTokens         int     `json:"revokedTokens"`
+	// RevokedSubjects counts the subjects whose consent revocation Hydra accepted.
+	// FailedSubjects lists the failed subjects the admin may see and is never null.
+	// RevocationComplete is false when any subject failed, shown or not.
+	RevokedSubjects    int      `json:"revokedSubjects"`
+	FailedSubjects     []string `json:"failedSubjects"`
+	RevocationComplete bool     `json:"revocationComplete"`
 }
 
 type adminOAuthClientRestoreResponse struct {

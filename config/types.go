@@ -215,6 +215,94 @@ type OAuth2Config struct {
 	HydraClientID             string `yaml:"hydra_client_id"`
 	HydraClientSecret         string `yaml:"hydra_client_secret"`
 	HydraRequestTimeoutSecond int    `yaml:"hydra_request_timeout_seconds"`
+	// DeviceFlow configures the RFC 8628 device authorization grant.
+	DeviceFlow OAuth2DeviceFlowConfig `yaml:"device_flow"`
+	// InternalAPI configures POST /internal/oauth2/introspect.
+	InternalAPI OAuth2InternalAPIConfig `yaml:"internal_api"`
+}
+
+// OAuth2InternalAPIConfig configures the internal token introspection API that
+// our own services (Sekai Station) call over the tailnet or the compose
+// network. Oathkeeper has no rule for it.
+type OAuth2InternalAPIConfig struct {
+	// TokenSHA256 is the hex SHA-256 (64 characters) of the internal token
+	// (sent as a Bearer token or as the HTTP Basic password); the token itself
+	// never goes into backend config. Empty leaves the route unregistered.
+	TokenSHA256 string `yaml:"token_sha256"`
+	// ClientID is the only HTTP Basic username accepted, so an RFC 7662
+	// client can authenticate as client_id:token. Empty means
+	// DefaultOAuth2InternalAPIClientID.
+	ClientID string `yaml:"client_id"`
+	// Audience is returned as "aud" in every active answer. The endpoint
+	// vouches for tokens to its single internal caller, so it names that
+	// caller, not the audience Hydra granted. Empty means
+	// DefaultOAuth2InternalAPIAudience.
+	Audience []string `yaml:"audience"`
+}
+
+// DefaultOAuth2InternalAPIClientID names the internal API's only caller,
+// Sekai Station.
+const DefaultOAuth2InternalAPIClientID = "station"
+
+// DefaultOAuth2InternalAPIAudience returns a fresh copy of the default
+// oauth2.internal_api.audience.
+func DefaultOAuth2InternalAPIAudience() []string {
+	return []string{"station"}
+}
+
+// OAuth2DeviceFlowConfig is the startup configuration of the device
+// authorization grant. It is validated only when Enabled is true; the runtime
+// switch oauth2DeviceFlowEnabled must also be on for the flow to answer.
+type OAuth2DeviceFlowConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// ClientAllowlist empty means every client holding the device grant.
+	ClientAllowlist []string `yaml:"client_allowlist"`
+	// VerificationURL empty means {user_system.frontend_url}/device.
+	VerificationURL string `yaml:"verification_url"`
+	// HydraIssuerURL empty means oauth2.hydra_browser_url.
+	HydraIssuerURL string `yaml:"hydra_issuer_url"`
+	// AllowedOrigins empty means [origin(user_system.frontend_url)].
+	AllowedOrigins []string `yaml:"allowed_origins"`
+
+	// The user-code alphabet, length and lifetime must equal Hydra's
+	// OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_* and TTL_DEVICE_USER_CODE.
+	UserCodeCharset string `yaml:"user_code_charset"`
+	UserCodeLength  int    `yaml:"user_code_length"`
+	// UserCodeTTL is a Go duration, parsed by startup validation.
+	UserCodeTTL string `yaml:"user_code_ttl"`
+
+	MinPollIntervalSeconds       int `yaml:"min_poll_interval_seconds"`
+	ClaimTTLSeconds              int `yaml:"claim_ttl_seconds"`
+	ApproveLeaseSeconds          int `yaml:"approve_lease_seconds"`
+	ApprovalTimeoutSeconds       int `yaml:"approval_timeout_seconds"`
+	MinRemainingSecondsToApprove int `yaml:"min_remaining_seconds_to_approve"`
+	MaxApproveAttempts           int `yaml:"max_approve_attempts"`
+	RecordGraceSeconds           int `yaml:"record_grace_seconds"`
+	ReaperIntervalSeconds        int `yaml:"reaper_interval_seconds"`
+	ReaperGraceSeconds           int `yaml:"reaper_grace_seconds"`
+
+	Limits OAuth2DeviceFlowLimits `yaml:"limits"`
+}
+
+// OAuth2DeviceFlowLimits are the device-flow rate limits. Windows are 10
+// minutes except the per-day limits.
+type OAuth2DeviceFlowLimits struct {
+	// Warn-only counters for device/auth.
+	AuthAttemptUnknownClientWarnPer10m int `yaml:"auth_attempt_unknown_client_warn_per_10m"`
+	AuthAttemptClientWarnMultiplier    int `yaml:"auth_attempt_client_warn_multiplier"`
+	// AuthIssuedGlobalPer10m bounds the public and confidential pools together
+	// and feeds the brute-force budget check.
+	AuthIssuedGlobalPer10m        int `yaml:"auth_issued_global_per_10m"`
+	AuthIssuedPublicPer10m        int `yaml:"auth_issued_public_per_10m"`
+	AuthIssuedConfidentialPer10m  int `yaml:"auth_issued_confidential_per_10m"`
+	AuthIssuedClientDefaultPer10m int `yaml:"auth_issued_client_default_per_10m"`
+	LookupUserPer10m              int `yaml:"lookup_user_per_10m"`
+	LookupFailUserPer10m          int `yaml:"lookup_fail_user_per_10m"`
+	LookupFailUserPerDay          int `yaml:"lookup_fail_user_per_day"`
+	LookupFailGlobalPer10m        int `yaml:"lookup_fail_global_per_10m"`
+	DecisionUserPerDay            int `yaml:"decision_user_per_day"`
+	MaxSlowDown                   int `yaml:"max_slow_down"`
+	MaxIntervalSeconds            int `yaml:"max_interval_seconds"`
 }
 
 type RestoreMysekaiConfig struct {

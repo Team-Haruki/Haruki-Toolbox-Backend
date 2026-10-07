@@ -24,19 +24,25 @@ https://toolbox-api-direct.haruki.seiunx.com
 https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration
 ```
 
-端点清单（2026-08-26 实测）：
+端点清单（2026-08-26 实测；Token 与 Device Authorization 两行自设备授权上线起）：
 
 | 用途 | 端点 | 状态 |
 | --- | --- | --- |
 | Discovery | `/.well-known/openid-configuration` | ✅ 200 |
 | Authorization | `/oauth2/auth` | ✅ 302 |
-| Token | `/oauth2/token` | ✅ |
+| Token | `/api/oauth2/token`（Discovery 公布的 `token_endpoint`） | ✅ 见下文 |
 | JWKS | `/.well-known/jwks.json` | ✅ 2 把 RS256 密钥 |
 | UserInfo | `/userinfo` | ✅ |
 | Revocation | `/oauth2/revoke` | ✅ |
 | End Session | `/oauth2/sessions/logout` | ✅ 见 §5 |
+| Device Authorization | `/api/oauth2/device/auth`（Discovery 公布的 `device_authorization_endpoint`） | 无浏览器设备用，登录场景用不到 |
 
 支持 `authorization_code` + PKCE（`S256` 与 `plain`），签名算法 RS256。
+
+**Token 端点的两个地址都能用。** Discovery 的 `token_endpoint` 是 `https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token`：
+它是 Haruki 后端的令牌端点兼容层，授权码与刷新令牌请求原样转发给 Hydra、响应原样返回，只额外处理设备授权许可。
+以前写死在配置里的 `/oauth2/token` 仍然可用，不需要改；`private_key_jwt` 的 `aud` 写两个地址中的任何一个都会被接受。
+Issuer、`authorization_endpoint`、`jwks_uri` 与 `userinfo_endpoint` 不变。
 
 ---
 
@@ -130,7 +136,7 @@ https://toolbox-api-direct.haruki.seiunx.com/oauth2/sessions/logout
 用户确认后浏览器跳回你的 `post_logout_redirect_uri`。
 
 **`post_logout_redirect_uri` 必须随 client 一起登记**，和 `redirect_uris` 一样精确匹配。申请
-client 时一并提供。
+client 时一并提供；它的 scheme、host、port 必须与你登记的某个 `redirect_uri` 相同。
 
 两个行为需要知道：
 
@@ -146,6 +152,9 @@ client 时一并提供。
 ## 6. 常见库的配置要点
 
 以下只列需要偏离默认的地方，其余按库的标准用法即可。
+
+所有库都建议从 Discovery 读取端点，而不是手写。缓存了 Discovery 元数据的库在重启或缓存过期后会改用
+`…/api/oauth2/token`，前后两个地址行为相同（§1），不需要做任何调整；手写了 `token-uri` / `tokenURL` 的配置也继续有效。
 
 **Node.js `openid-client`**
 
@@ -195,6 +204,9 @@ OIDCScope "openid profile email"
 | 授权跳转后 404 | `redirect_uri` 与注册值不完全一致（含尾斜杠、协议、端口） |
 | 换 token 报 `invalid_client` | `client_id` / `client_secret` 不匹配，或 public client 误用了 secret |
 | 换 token 报 `invalid_grant` | `code` 已使用或已过期，或 `redirect_uri` 与授权时不一致 |
+| Discovery 的 `token_endpoint` 与以前不同 | 正常：现在是 `…/api/oauth2/token`，旧的 `/oauth2/token` 也照常可用，见 §1 |
+| 把 `device_code` 发到 `/oauth2/token` 得到 `invalid_grant` | 设备授权只能经 `/api/oauth2/device/auth` 发起、经 `/api/oauth2/token` 轮询；Hydra 直连地址不认识 Haruki 签发的设备码。设备授权接入见 [`oauth2-integration.zh-CN.md`](oauth2-integration.zh-CN.md) §4A |
+| 请求 `/oauth2/device/auth` 或 `/oauth2/device/verify` 得到 404 | 这两个 Hydra 地址不对外开放；用 Discovery 公布的 `device_authorization_endpoint`，用户在 `https://haruki.seiunx.com/device` 输入代码 |
 | 公开客户端换 token 失败 | 没做 PKCE —— 公开客户端必须带 `code_verifier` |
 | 拿不到 `refresh_token` | scope 里没有 `offline_access` |
 | 拿不到 `name` / `email` | 对应 scope 未登记，或用户在授权页上没有勾选 |

@@ -63,16 +63,20 @@ type Dependencies struct {
 	MiscAssets                miscModule.AssetsConfig
 	TicketNotifications       ticketsModule.NotificationConfig
 	HydraConfig               *harukiOAuth2.HydraConfig
-	IOSEndpoints              iosModule.EndpointConfig
-	OAuth2AvatarBaseURL       string
-	UserProfileConfig         userProfileModule.Config
-	SocialBotVerify           userSocialModule.BotVerifyConfig
-	UploadHTTPClient          *harukiHttp.Client
-	UploadLogger              *harukiLogger.Logger
-	BirthdaySubscription      harukiHandler.BirthdaySubscriptionConfig
-	SuiteRestoreService       *harukiHandler.SuiteRestoreService
-	ServerCryptor             harukiSekai.ServerCryptor
-	UploadProxy               string
+	// OAuth2DeviceFlow is the startup device-flow configuration; RegisterRoutes
+	// adds the runtime switch to it.
+	OAuth2DeviceFlow     oauth2Module.DeviceFlowConfig
+	OAuth2InternalAPI    oauth2Module.InternalAPIConfig
+	IOSEndpoints         iosModule.EndpointConfig
+	OAuth2AvatarBaseURL  string
+	UserProfileConfig    userProfileModule.Config
+	SocialBotVerify      userSocialModule.BotVerifyConfig
+	UploadHTTPClient     *harukiHttp.Client
+	UploadLogger         *harukiLogger.Logger
+	BirthdaySubscription harukiHandler.BirthdaySubscriptionConfig
+	SuiteRestoreService  *harukiHandler.SuiteRestoreService
+	ServerCryptor        harukiSekai.ServerCryptor
+	UploadProxy          string
 }
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -102,7 +106,26 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 	oauth2Module.RegisterOAuth2Routes(apiHelper, oauth2Module.RouteOptions{
 		HydraConfig:   dependencies.HydraConfig,
 		AvatarBaseURL: dependencies.OAuth2AvatarBaseURL,
+		DeviceFlow:    dependencies.OAuth2DeviceFlow.WithRuntimeGate(oauth2DeviceFlowRuntimeGate(apiHelper)),
 	})
+	// Registered only when oauth2.internal_api.token_sha256 is set.
+	oauth2Module.RegisterOAuth2InternalRoutes(apiHelper, oauth2Module.InternalRouteOptions{
+		HydraConfig: dependencies.HydraConfig,
+		Config:      dependencies.OAuth2InternalAPI,
+	})
+}
+
+// oauth2DeviceFlowRuntimeGate reads the runtime switch oauth2DeviceFlowEnabled.
+// A missing field is off; a snapshot that cannot be read is an error, which the
+// device endpoints answer with 503.
+func oauth2DeviceFlowRuntimeGate(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) oauth2Module.DeviceFlowRuntimeGate {
+	return func(ctx context.Context) (bool, error) {
+		snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
+		if err != nil {
+			return false, err
+		}
+		return snapshot.OAuth2DeviceFlowSwitchOn(), nil
+	}
 }
 
 func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {

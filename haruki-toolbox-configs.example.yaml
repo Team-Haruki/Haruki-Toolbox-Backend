@@ -81,6 +81,56 @@ oauth2:
   hydra_client_id: ""
   hydra_client_secret: ""
   hydra_request_timeout_seconds: 10
+  # RFC 8628 device authorization (POST /api/oauth2/device/auth and the device
+  # branch of POST /api/oauth2/token). Validated at startup only when enabled;
+  # enabling it requires user_system.session_sign_token (>= 16 characters),
+  # which keys the HMACs in the flow's Redis key names. The flow answers only
+  # when both this switch and the runtime switch oauth2DeviceFlowEnabled
+  # (PUT /api/admin/config/runtime; missing = off) are on.
+  device_flow:
+    enabled: false # env OAUTH2_DEVICE_FLOW_ENABLED; also starts the unredeemed-approval reaper
+    client_allowlist: [] # env OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST (CSV); empty = every client holding the device grant
+    verification_url: "" # env OAUTH2_DEVICE_FLOW_VERIFICATION_URL; empty = {user_system.frontend_url}/device
+    hydra_issuer_url: "" # env OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL; empty = oauth2.hydra_browser_url
+    allowed_origins: [] # env OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS (CSV); empty = [origin of user_system.frontend_url]
+    # The next three must equal Hydra's OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_*
+    # and TTL_DEVICE_USER_CODE (compose feeds both from DEVICE_FLOW_USER_CODE_*).
+    user_code_charset: "BCDFGHJKLMNPQRSTVWXZ" # env OAUTH2_DEVICE_FLOW_USER_CODE_CHARSET; A-Z/0-9, >= 8 distinct
+    user_code_length: 8 # env OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH; 6-12
+    user_code_ttl: "10m" # env OAUTH2_DEVICE_FLOW_USER_CODE_TTL; Go duration, 1m-30m
+    min_poll_interval_seconds: 5 # floor of the interval handed to devices
+    claim_ttl_seconds: 300 # lease of a browser's claim on a user code
+    approve_lease_seconds: 30 # lease of one approval attempt; > approval_timeout_seconds + 10
+    approval_timeout_seconds: 15 # deadline of the server-driven Hydra chain
+    min_remaining_seconds_to_approve: 30 # >= approval_timeout_seconds
+    max_approve_attempts: 3
+    record_grace_seconds: 1800 # flow records outlive the user code by this much
+    reaper_interval_seconds: 60
+    reaper_grace_seconds: 60 # revoke unredeemed approvals this long after exp
+    limits: # 10-minute windows unless named per_day
+      auth_attempt_unknown_client_warn_per_10m: 6000 # warn only
+      auth_attempt_client_warn_multiplier: 10 # warn only, x the client's max_codes_per_10m
+      auth_issued_global_per_10m: 1200 # public + confidential pools must not exceed it; feeds the budget check
+      auth_issued_public_per_10m: 600
+      auth_issued_confidential_per_10m: 600
+      auth_issued_client_default_per_10m: 60 # for clients without metadata.haruki.device.max_codes_per_10m
+      lookup_user_per_10m: 30
+      lookup_fail_user_per_10m: 5
+      lookup_fail_user_per_day: 20
+      lookup_fail_global_per_10m: 150 # hard cap; feeds the budget check
+      decision_user_per_day: 20
+      max_slow_down: 30 # pending flows fail after more early polls
+      max_interval_seconds: 60
+  # Internal token introspection for our own services (Sekai Station):
+  # POST /internal/oauth2/introspect on the backend port, reachable over the
+  # tailnet and the compose network only (Oathkeeper has no rule for it).
+  # Callers send either "Authorization: Bearer <internal token>" or, as an
+  # RFC 7662 client, HTTP Basic "<client_id>:<internal token>"; store only the
+  # token's SHA-256 here (printf %s "$TOKEN" | sha256sum).
+  internal_api:
+    token_sha256: "" # env OAUTH2_INTERNAL_API_TOKEN_SHA256; 64 hex characters; empty = route not registered
+    client_id: "station" # env OAUTH2_INTERNAL_API_CLIENT_ID; the only Basic username accepted; no colon; empty = station
+    audience: ["station"] # env OAUTH2_INTERNAL_API_AUDIENCE (CSV); returned as "aud" in active answers; empty = [station]
 
 backend:
   host: "0.0.0.0"

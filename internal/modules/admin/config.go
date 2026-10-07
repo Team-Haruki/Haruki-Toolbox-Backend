@@ -28,6 +28,8 @@ type runtimeConfigPayload struct {
 	HarukiProxyUnpackKey *string     `json:"harukiProxyUnpackKey,omitzero"`
 	WebhookJWTSecret     *string     `json:"webhookJwtSecret,omitzero"`
 	WebhookEnabled       *bool       `json:"webhookEnabled,omitzero"`
+	// OAuth2DeviceFlowEnabled is the device-flow runtime switch; omitted keeps it.
+	OAuth2DeviceFlowEnabled *bool `json:"oauth2DeviceFlowEnabled,omitzero"`
 }
 
 type runtimeConfigResponse struct {
@@ -41,6 +43,8 @@ type runtimeConfigResponse struct {
 	HarukiProxyUnpackKeyConfigured bool   `json:"harukiProxyUnpackKeyConfigured"`
 	WebhookJWTSecretConfigured     bool   `json:"webhookJwtSecretConfigured"`
 	WebhookEnabled                 bool   `json:"webhookEnabled"`
+	// OAuth2DeviceFlowEnabled is the effective switch: a missing field is false.
+	OAuth2DeviceFlowEnabled bool `json:"oauth2DeviceFlowEnabled"`
 }
 
 func sanitizePublicAPIAllowedKeys(keys []string) ([]string, error) {
@@ -90,6 +94,7 @@ func buildRuntimeConfigResponse(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		HarukiProxyUnpackKeyConfigured: strings.TrimSpace(harukiProxyUnpackKey) != "",
 		WebhookJWTSecretConfigured:     strings.TrimSpace(webhookJWTSecret) != "",
 		WebhookEnabled:                 apiHelper.GetWebhookEnabled(),
+		OAuth2DeviceFlowEnabled:        apiHelper.GetOAuth2DeviceFlowEnabled(),
 	}
 }
 
@@ -234,6 +239,9 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		if payload.WebhookEnabled != nil {
 			update.WebhookEnabled = payload.WebhookEnabled
 		}
+		if payload.OAuth2DeviceFlowEnabled != nil {
+			update.OAuth2DeviceFlowEnabled = payload.OAuth2DeviceFlowEnabled
+		}
 
 		if update.AllowedKeys != nil {
 			if err := clearPublicAccessCache(apiHelper, c); err != nil {
@@ -247,12 +255,17 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		}
 
 		resp := buildRuntimeConfigResponse(apiHelper)
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+		auditMetadata := map[string]any{
 			"updatedPublicAPIKeys": payload.AllowedKeys != nil,
 			"updatedPrivateToken":  privateAPIToken != nil,
 			"updatedWebhookSecret": webhookJWTSecret != nil,
 			"updatedWebhookFlag":   payload.WebhookEnabled != nil,
-		})
+		}
+		if payload.OAuth2DeviceFlowEnabled != nil {
+			// The new value, so an incident review sees who switched it and how.
+			auditMetadata["oauth2DeviceFlowEnabled"] = *payload.OAuth2DeviceFlowEnabled
+		}
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultSuccess, auditMetadata)
 		return harukiAPIHelper.Responses.SuccessResponse(c, "runtime config updated", &resp)
 	}
 }

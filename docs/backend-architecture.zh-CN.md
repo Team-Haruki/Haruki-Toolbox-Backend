@@ -67,7 +67,7 @@ main -> bootstrap -> api -> modules -> platform
 4. 注册路由和后台任务。
 5. 返回拥有全部资源的 `Application`。
 
-`Application.Serve` 只负责运行并响应取消；`Application.Close` 幂等完成关闭。生命周期区分两类后台工作：爱发电同步与性能采样属于长期 scheduler，收到关闭信号后先取消并等待；upload audit、上传 fanout、birthday/webhook 通知及 iOS 异步组包属于请求派生的有限任务，必须先让 Fiber 停止接收请求并完成 handler drain，再封口任务组并有界等待。只有 HTTP shutdown 与 upload task drain 都成功后，才按资源获取的逆序释放连接；任一阶段超时都保留 PostgreSQL、Redis 等仍可能被使用的资源。`internal/platform/mailnotify` 当前仍使用自身的有界派发器，不属于本轮 upload task group，后续应单独迁移。不要在业务模块中自行管理进程信号或长期资源的关闭顺序。
+`Application.Serve` 只负责运行并响应取消；`Application.Close` 幂等完成关闭。生命周期区分两类后台工作：爱发电同步、OAuth2 设备授权回收器（`oauth2.device_flow.enabled=true` 时启动，不受运行时总开关影响）与性能采样属于长期 scheduler，收到关闭信号后先取消并等待；upload audit、上传 fanout、birthday/webhook 通知及 iOS 异步组包属于请求派生的有限任务，必须先让 Fiber 停止接收请求并完成 handler drain，再封口任务组并有界等待。只有 HTTP shutdown 与 upload task drain 都成功后，才按资源获取的逆序释放连接；任一阶段超时都保留 PostgreSQL、Redis 等仍可能被使用的资源。`internal/platform/mailnotify` 当前仍使用自身的有界派发器，不属于本轮 upload task group，后续应单独迁移。不要在业务模块中自行管理进程信号或长期资源的关闭顺序。
 
 ## 4. 配置所有权
 

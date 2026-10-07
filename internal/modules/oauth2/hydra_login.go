@@ -17,7 +17,7 @@ func handleHydraGetLoginRequest(hydraConfig *harukiOAuth2.HydraConfig) fiber.Han
 		if challenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "login_challenge is required")
 		}
-		resp, err := getHydraLoginRequest(c.Context(), hydraConfig, challenge)
+		resp, err := getGenericHydraLoginRequest(c.Context(), hydraConfig, challenge)
 		if err != nil {
 			return respondHydraError(c, err, "failed to query login request")
 		}
@@ -40,17 +40,18 @@ func handleHydraAcceptLogin(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler
 		if payload.LoginChallenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "loginChallenge is required")
 		}
+		if _, err := getGenericHydraLoginRequest(c.Context(), hydraConfig, payload.LoginChallenge); err != nil {
+			return respondHydraError(c, err, "failed to query login request")
+		}
 		if payload.RememberFor < 0 {
 			payload.RememberFor = 0
 		}
 
+		// No acr, whatever the browser sent: see hydraLoginAcceptPayload.
 		requestBody := map[string]any{
 			"subject":      hydraSubject,
 			"remember":     payload.Remember,
 			"remember_for": payload.RememberFor,
-		}
-		if payload.ACR != "" {
-			requestBody["acr"] = payload.ACR
 		}
 
 		redirect, err := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/login/accept", url.Values{"login_challenge": {payload.LoginChallenge}}, requestBody)
@@ -70,6 +71,9 @@ func handleHydraRejectLogin(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler
 		payload.LoginChallenge = normalizeChallenge(payload.LoginChallenge, c.Query("login_challenge"))
 		if payload.LoginChallenge == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "loginChallenge is required")
+		}
+		if _, err := getGenericHydraLoginRequest(c.Context(), hydraConfig, payload.LoginChallenge); err != nil {
+			return respondHydraError(c, err, "failed to query login request")
 		}
 		if payload.Error == "" {
 			payload.Error = "access_denied"

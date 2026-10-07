@@ -14,6 +14,7 @@ DELETE /api/user/:toolbox_user_id/authorize-social-platform/:id/
 DELETE /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
 DELETE /api/user/:toolbox_user_id/game-account/:server/:game_user_id
 DELETE /api/user/:toolbox_user_id/oauth2/authorizations/:client_id
+DELETE /api/user/:toolbox_user_id/oauth2/authorizations/:client_id/consents/:consent_request_id
 DELETE /api/user/:toolbox_user_id/social-platform/clear
 DELETE /api/webhook/:server/:data_type/:user_id
 DELETE /internal/mysekai-birthday-monitors/:subscription_id
@@ -133,6 +134,10 @@ POST /api/manual/:server/:user_id/:data_type/upload
 POST /api/oauth2/authorize/consent
 POST /api/oauth2/consent/accept
 POST /api/oauth2/consent/reject
+POST /api/oauth2/device/approve
+POST /api/oauth2/device/auth
+POST /api/oauth2/device/deny
+POST /api/oauth2/device/lookup
 POST /api/oauth2/game-data/:server/:data_type/:user_id
 POST /api/oauth2/login/accept
 POST /api/oauth2/login/reject
@@ -160,6 +165,7 @@ POST /api/verify-social-platform
 POST /harukiproxy/:server/:user_id/:data_type/upload
 POST /harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /internal/mysekai-birthday-events/:event_id/ack
+POST /internal/oauth2/introspect
 POST /ios/proxy/:server/user/:user_id/mysekai
 POST /ios/script/:upload_code/upload
 PUT /api/admin/config/public-api-keys

@@ -20,6 +20,18 @@ const (
 	adminOAuthClientIDMinLen = 3
 	adminOAuthClientIDMaxLen = 128
 	adminOAuthClientNameMax  = 128
+
+	adminOAuthClientErrorCodePublicClientHasNoSecret = "public_client_has_no_secret"
+
+	// Codes of the 400s a client create or update answers with in updatedData.code.
+	adminOAuthClientErrorCodeUnsupportedGrantType            = "unsupported_grant_type"
+	adminOAuthClientErrorCodeGrantTypeRequired               = "grant_type_required"
+	adminOAuthClientErrorCodeRedirectURIsRequired            = "redirect_uris_required"
+	adminOAuthClientErrorCodePostLogoutRequiresRedirectURIs  = "post_logout_requires_redirect_uris"
+	adminOAuthClientErrorCodeOfflineAccessRequiresRefresh    = "offline_access_requires_refresh_token"
+	adminOAuthClientErrorCodeDeviceRequiresUserRead          = "device_requires_user_read"
+	adminOAuthClientErrorCodeDeviceWriteRequiresPublicClient = "device_write_requires_public_client"
+	adminOAuthClientErrorCodeInvalidDevicePolicy             = "invalid_device_policy"
 )
 
 var adminOAuthClientIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -36,14 +48,34 @@ type adminOAuthClientUsageStats struct {
 }
 
 type adminOAuthClientListItem struct {
-	ClientID     string                     `json:"clientId"`
-	Name         string                     `json:"name"`
-	ClientType   string                     `json:"clientType"`
-	Active       bool                       `json:"active"`
-	CreatedAt    time.Time                  `json:"createdAt"`
-	RedirectURIs []string                   `json:"redirectUris"`
-	Scopes       []string                   `json:"scopes"`
-	Usage        adminOAuthClientUsageStats `json:"usage"`
+	ClientID               string                       `json:"clientId"`
+	Name                   string                       `json:"name"`
+	ClientType             string                       `json:"clientType"`
+	Active                 bool                         `json:"active"`
+	CreatedAt              time.Time                    `json:"createdAt"`
+	RedirectURIs           []string                     `json:"redirectUris"`
+	PostLogoutRedirectURIs []string                     `json:"postLogoutRedirectUris"`
+	Scopes                 []string                     `json:"scopes"`
+	GrantTypes             []string                     `json:"grantTypes"`
+	DeviceEnabled          bool                         `json:"deviceEnabled"`
+	DevicePolicy           adminOAuthClientDevicePolicy `json:"devicePolicy"`
+	Usage                  adminOAuthClientUsageStats   `json:"usage"`
+}
+
+// adminOAuthClientDevicePolicy echoes metadata.haruki.device, with defaults for
+// members that are not stored.
+type adminOAuthClientDevicePolicy struct {
+	FirstParty     bool `json:"firstParty"`
+	AllowWrite     bool `json:"allowWrite"`
+	MaxCodesPer10m int  `json:"maxCodesPer10m"`
+}
+
+// adminOAuthClientDevicePolicyPayload is the devicePolicy of a create or update.
+// MaxCodesPer10m nil means the default (60).
+type adminOAuthClientDevicePolicyPayload struct {
+	FirstParty     bool `json:"firstParty"`
+	AllowWrite     bool `json:"allowWrite"`
+	MaxCodesPer10m *int `json:"maxCodesPer10m"`
 }
 
 type adminOAuthClientListResponse struct {
@@ -63,6 +95,14 @@ type adminOAuthClientListResponse struct {
 type adminOAuthClientActiveResponse struct {
 	ClientID string `json:"clientId"`
 	Active   bool   `json:"active"`
+	// Disabling revokes the client's grants subject by subject. RevokedSubjects
+	// counts the subjects Hydra accepted. FailedSubjects lists the failed subjects
+	// the admin may see and is never null. RevocationComplete is false when any step
+	// failed: listing the grants, a subject (shown or not), or the access-token
+	// cleanup. Enabling revokes nothing (0, [], true).
+	RevokedSubjects    int      `json:"revokedSubjects"`
+	FailedSubjects     []string `json:"failedSubjects"`
+	RevocationComplete bool     `json:"revocationComplete"`
 }
 
 type adminOAuthClientPayload struct {
@@ -70,28 +110,65 @@ type adminOAuthClientPayload struct {
 	Name         string   `json:"name"`
 	ClientType   string   `json:"clientType"`
 	RedirectURIs []string `json:"redirectUris"`
-	Scopes       []string `json:"scopes"`
+	// PostLogoutRedirectURIs: nil (field omitted) keeps the registered list on
+	// update; an empty array clears it.
+	PostLogoutRedirectURIs []string `json:"postLogoutRedirectUris"`
+	Scopes                 []string `json:"scopes"`
+	// GrantTypes: nil (field omitted) keeps the registered grant types on update
+	// and means authorization_code + refresh_token on create.
+	GrantTypes []string `json:"grantTypes"`
+	// DevicePolicy: nil (field omitted) keeps the stored policy on update; a
+	// non-nil policy replaces all three members.
+	DevicePolicy *adminOAuthClientDevicePolicyPayload `json:"devicePolicy"`
 }
 
 type adminOAuthClientCreateResponse struct {
-	ClientID     string    `json:"clientId"`
-	ClientSecret string    `json:"clientSecret"`
-	Name         string    `json:"name"`
-	ClientType   string    `json:"clientType"`
-	Active       bool      `json:"active"`
-	RedirectURIs []string  `json:"redirectUris"`
-	Scopes       []string  `json:"scopes"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ClientID               string                       `json:"clientId"`
+	ClientSecret           string                       `json:"clientSecret"`
+	Name                   string                       `json:"name"`
+	ClientType             string                       `json:"clientType"`
+	Active                 bool                         `json:"active"`
+	RedirectURIs           []string                     `json:"redirectUris"`
+	PostLogoutRedirectURIs []string                     `json:"postLogoutRedirectUris"`
+	Scopes                 []string                     `json:"scopes"`
+	GrantTypes             []string                     `json:"grantTypes"`
+	DeviceEnabled          bool                         `json:"deviceEnabled"`
+	DevicePolicy           adminOAuthClientDevicePolicy `json:"devicePolicy"`
+	CreatedAt              time.Time                    `json:"createdAt"`
 }
 
 type adminOAuthClientUpdateResponse struct {
-	ClientID     string    `json:"clientId"`
-	Name         string    `json:"name"`
-	ClientType   string    `json:"clientType"`
-	Active       bool      `json:"active"`
-	RedirectURIs []string  `json:"redirectUris"`
-	Scopes       []string  `json:"scopes"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ClientID string `json:"clientId"`
+	// ClientSecret is set, once, only when the update switched a public client to
+	// confidential.
+	ClientSecret           string                       `json:"clientSecret,omitempty"`
+	Name                   string                       `json:"name"`
+	ClientType             string                       `json:"clientType"`
+	Active                 bool                         `json:"active"`
+	RedirectURIs           []string                     `json:"redirectUris"`
+	PostLogoutRedirectURIs []string                     `json:"postLogoutRedirectUris"`
+	Scopes                 []string                     `json:"scopes"`
+	GrantTypes             []string                     `json:"grantTypes"`
+	DeviceEnabled          bool                         `json:"deviceEnabled"`
+	DevicePolicy           adminOAuthClientDevicePolicy `json:"devicePolicy"`
+	CreatedAt              time.Time                    `json:"createdAt"`
+}
+
+// adminOAuthClientErrorData is the updatedData of an error the frontend keys on.
+type adminOAuthClientErrorData struct {
+	Code string `json:"code"`
+}
+
+// adminOAuthClientPayloadError is a 400 on a client create or update that the
+// frontend keys on: Message is the envelope message, Code goes to
+// updatedData.code.
+type adminOAuthClientPayloadError struct {
+	Code    string
+	Message string
+}
+
+func (e *adminOAuthClientPayloadError) Error() string {
+	return e.Message
 }
 
 type adminOAuthClientRotateSecretResponse struct {

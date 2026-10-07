@@ -571,3 +571,15 @@ func TestBuildAdminOAuthClientTrendPoints(t *testing.T) {
 		t.Fatalf("unexpected points[3]: %#v", points[3])
 	}
 }
+
+// station:room:write is an ordinary registered scope an admin may give to any
+// client, without openid.
+func TestSanitizeAdminOAuthClientScopesAcceptsStationScope(t *testing.T) {
+	scopes, err := sanitizeAdminOAuthClientScopes([]string{harukiOAuth2.ScopeUserRead, harukiOAuth2.ScopeOfflineAccess, harukiOAuth2.ScopeStationRoomWrite})
+	if err != nil {
+		t.Fatalf("sanitizeAdminOAuthClientScopes returned error: %v", err)
+	}
+	if len(scopes) != 3 || scopes[2] != harukiOAuth2.ScopeStationRoomWrite {
+		t.Fatalf("scopes = %v", scopes)
+	}
+}

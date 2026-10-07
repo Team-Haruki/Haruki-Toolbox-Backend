@@ -149,6 +149,21 @@ func (h *HarukiToolboxRouterHelpers) currentRuntimeConfigSnapshot() platformRunt
 	return snapshot
 }
 
+// CurrentRuntimeConfig returns the distributed runtime snapshot and any store
+// error, for callers that must fail closed when the snapshot cannot be read.
+func (h *HarukiToolboxRouterHelpers) CurrentRuntimeConfig(ctx context.Context) (platformRuntimeConfig.Snapshot, error) {
+	service := h.runtimeConfigService()
+	if service == nil {
+		return platformRuntimeConfig.Snapshot{}, nil
+	}
+	snapshot, err := service.Current(ctx)
+	if err != nil {
+		return snapshot, err
+	}
+	h.applyLegacyRuntimeConfigSnapshot(snapshot)
+	return snapshot, nil
+}
+
 func (h *HarukiToolboxRouterHelpers) UpdateRuntimeConfig(update RuntimeConfigUpdate) error {
 	if h == nil {
 		return nil
@@ -231,6 +246,15 @@ func (h *HarukiToolboxRouterHelpers) GetWebhookEnabled() bool {
 
 func (h *HarukiToolboxRouterHelpers) SetWebhookEnabled(enabled bool) {
 	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{WebhookEnabled: &enabled})
+}
+
+// GetOAuth2DeviceFlowEnabled is the effective runtime device-flow switch; a
+// missing field is off.
+func (h *HarukiToolboxRouterHelpers) GetOAuth2DeviceFlowEnabled() bool {
+	if h == nil {
+		return false
+	}
+	return h.currentRuntimeConfigSnapshot().OAuth2DeviceFlowSwitchOn()
 }
 
 func (h *HarukiToolboxRouterHelpers) RedisClient() *redis.Client {

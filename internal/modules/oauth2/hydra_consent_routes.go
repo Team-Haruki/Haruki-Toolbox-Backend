@@ -12,6 +12,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -28,6 +29,9 @@ func handleHydraGetConsentRequest(hydraConfig *harukiOAuth2.HydraConfig) fiber.H
 		}
 		if err := ensureHydraConsentSubjectMatchesCurrentUser(c, resp); err != nil {
 			return respondHydraError(c, err, "failed to validate consent request subject")
+		}
+		if err := ensureHydraConsentNotDeviceFlow(resp); err != nil {
+			return respondHydraError(c, err, "failed to query consent request")
 		}
 		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", resp)
 	}
@@ -77,6 +81,9 @@ func handleHydraRejectConsent(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handl
 		}
 		if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
 			return respondHydraError(c, err, "failed to validate consent request subject")
+		}
+		if err := ensureHydraConsentNotDeviceFlow(consentReq); err != nil {
+			return respondHydraError(c, err, "failed to query consent request")
 		}
 		if payload.Error == "" {
 			payload.Error = "access_denied"
@@ -128,6 +135,9 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
 				return respondHydraError(c, err, "failed to validate consent request subject")
 			}
+			if err := ensureHydraConsentNotDeviceFlow(consentReq); err != nil {
+				return respondHydraError(c, err, "failed to query consent request")
+			}
 			rejectResp, rejectErr := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
 				"error":             "access_denied",
 				"error_description": "user denied the consent request",
@@ -157,8 +167,17 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 	if err != nil {
 		return nil, err
 	}
+	// The subject check comes first: a user who does not own the request gets
+	// the subject mismatch and learns neither the flow type nor the client's
+	// state.
 	if subject := strings.TrimSpace(consentReq.Subject); subject != "" && subject != strings.TrimSpace(hydraSubject) && subject != strings.TrimSpace(userID) {
 		return nil, fiber.NewError(fiber.StatusForbidden, "consent request subject does not match current user")
+	}
+	if err := ensureHydraConsentNotDeviceFlow(consentReq); err != nil {
+		return nil, err
+	}
+	if err := ensureHydraConsentClientActive(ctx, hydraConfig, consentReq.Client.ClientID); err != nil {
+		return nil, err
 	}
 
 	grantScope, err := normalizeGrantedValues(consentReq.RequestedScope, requestedGrantScope)
@@ -179,18 +198,107 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 		rememberFor = 0
 	}
 
-	idToken := buildHydraOIDCIDTokenClaims(dbUser.ID, dbUser.Name, dbUser.Email, emailVerified, grantScope)
-
-	return sendHydraAdminJSON(ctx, hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/accept", url.Values{"consent_challenge": {consentChallenge}}, map[string]any{
-		"grant_scope":                 grantScope,
-		"grant_access_token_audience": audience,
-		"remember":                    remember,
-		"remember_for":                rememberFor,
-		"session": map[string]any{
-			"access_token": map[string]any{"uid": dbUser.ID},
-			"id_token":     idToken,
-		},
+	body := buildHydraConsentAcceptBody(hydraConsentAcceptBodyInput{
+		GrantScope:    grantScope,
+		GrantAudience: audience,
+		Remember:      remember,
+		RememberFor:   rememberFor,
+		UserID:        dbUser.ID,
+		UserName:      dbUser.Name,
+		UserEmail:     dbUser.Email,
+		EmailVerified: emailVerified,
 	})
+	return sendHydraAdminJSON(ctx, hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/accept", url.Values{"consent_challenge": {consentChallenge}}, body)
+}
+
+// hydraConsentDeviceContext is what a device-flow approval adds to a consent
+// accept. The browser consent path passes none.
+type hydraConsentDeviceContext struct {
+	FlowID      string
+	Label       string
+	LabelSource string
+}
+
+// hydraDeviceApprovedVia tags consents granted by the server-driven device
+// approval chain, in context.haruki.approved_via.
+const hydraDeviceApprovedVia = "device-bff/v1"
+
+type hydraConsentAcceptBodyInput struct {
+	GrantScope    []string
+	GrantAudience []string
+	Remember      bool
+	RememberFor   int64
+	UserID        string
+	UserName      string
+	UserEmail     string
+	EmailVerified bool
+	// Device is nil on the browser consent path.
+	Device *hydraConsentDeviceContext
+}
+
+// buildHydraConsentAcceptBody builds PUT /admin/oauth2/auth/requests/consent/accept,
+// shared by the browser consent endpoints and the device approval chain. The
+// browser path's session.access_token carries only {"uid"} and no context,
+// exactly as before; a device approval adds the flow ID and the device label
+// to the access-token session (visible in introspection ext) and a
+// context.haruki block (visible in the consent session list).
+func buildHydraConsentAcceptBody(input hydraConsentAcceptBodyInput) map[string]any {
+	accessToken := map[string]any{"uid": input.UserID}
+	body := map[string]any{
+		"grant_scope":                 input.GrantScope,
+		"grant_access_token_audience": input.GrantAudience,
+		"remember":                    input.Remember,
+		"remember_for":                input.RememberFor,
+		"session": map[string]any{
+			"access_token": accessToken,
+			"id_token":     buildHydraOIDCIDTokenClaims(input.UserID, input.UserName, input.UserEmail, input.EmailVerified, input.GrantScope),
+		},
+	}
+	if device := input.Device; device != nil {
+		accessToken["flow"] = "device"
+		accessToken["device_flow_id"] = device.FlowID
+		accessToken["device_label"] = device.Label
+		body["context"] = map[string]any{
+			"haruki": map[string]any{
+				"flow":           "device",
+				"device_flow_id": device.FlowID,
+				"label":          device.Label,
+				"label_source":   device.LabelSource,
+				"approved_via":   hydraDeviceApprovedVia,
+			},
+		}
+	}
+	return body
+}
+
+// errHydraConsentClientDisabled refuses consent for a disabled or deleted
+// client (updatedData.code "client_disabled").
+var errHydraConsentClientDisabled = &oauth2CodedError{
+	Status:  fiber.StatusForbidden,
+	Code:    "client_disabled",
+	Message: "oauth2 client is disabled",
+}
+
+// ensureHydraConsentClientActive refuses consent for a client an admin has
+// disabled. Hydra ignores metadata.haruki.active, so without this check a
+// disabled client still completes the authorization-code flow and receives
+// fresh tokens. A deleted client reads as disabled, so the response does not
+// tell the two apart, and a failed lookup refuses rather than lets it through,
+// with the bearer middleware's 503 wording.
+func ensureHydraConsentClientActive(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		return errHydraConsentClientDisabled
+	}
+	active, err := checkHydraOAuth2ClientActive(hydraConfig)(ctx, clientID)
+	if err != nil {
+		harukiLogger.Errorf("OAuth2 consent client active check failed: client=%s err=%v", clientID, err)
+		return fiber.NewError(fiber.StatusServiceUnavailable, "oauth2 client validation unavailable")
+	}
+	if !active {
+		return errHydraConsentClientDisabled
+	}
+	return nil
 }
 
 func normalizeGrantedValues(allowed []string, requested []string) ([]string, error) {

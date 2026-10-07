@@ -24,6 +24,11 @@ func respondHydraError(c fiber.Ctx, err error, fallback string) error {
 		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, status, message, nil)
 	}
 
+	var codedErr *oauth2CodedError
+	if errors.As(err, &codedErr) {
+		return harukiAPIHelper.Responses.UpdatedDataResponse(c, codedErr.Status, codedErr.Message, &oauth2ErrorCodeData{Code: codedErr.Code})
+	}
+
 	var fiberErr *fiber.Error
 	if errors.As(err, &fiberErr) {
 		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)

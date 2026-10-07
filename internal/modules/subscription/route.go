@@ -19,11 +19,16 @@ func RegisterSubscriptionRoutes(apiHelper *apiHelper.HarukiToolboxRouterHelpers)
 	if apiHelper == nil {
 		return
 	}
-	internal := apiHelper.Router.Group("/internal", userPrivateAPI.ValidateUserPermission(apiHelper))
-	internal.Put("/mysekai-birthday-monitors/:subscription_id", handleUpsertBirthdayMonitor(apiHelper))
-	internal.Delete("/mysekai-birthday-monitors/:subscription_id", handleDeleteBirthdayMonitor(apiHelper))
-	internal.Get("/mysekai-birthday-events/:event_id", handleGetBirthdayEvent(apiHelper))
-	internal.Post("/mysekai-birthday-events/:event_id/ack", handleAckBirthdayEvent(apiHelper))
+	// The private API guard is attached per route, not to the /internal group:
+	// a group handler is a prefix middleware that would also run in front of
+	// other modules' /internal routes (POST /internal/oauth2/introspect has its
+	// own internal token).
+	requirePrivateAPI := userPrivateAPI.ValidateUserPermission(apiHelper)
+	internal := apiHelper.Router.Group("/internal")
+	internal.Put("/mysekai-birthday-monitors/:subscription_id", requirePrivateAPI, handleUpsertBirthdayMonitor(apiHelper))
+	internal.Delete("/mysekai-birthday-monitors/:subscription_id", requirePrivateAPI, handleDeleteBirthdayMonitor(apiHelper))
+	internal.Get("/mysekai-birthday-events/:event_id", requirePrivateAPI, handleGetBirthdayEvent(apiHelper))
+	internal.Post("/mysekai-birthday-events/:event_id/ack", requirePrivateAPI, handleAckBirthdayEvent(apiHelper))
 }
 
 func handleUpsertBirthdayMonitor(apiHelper *apiHelper.HarukiToolboxRouterHelpers) fiber.Handler {

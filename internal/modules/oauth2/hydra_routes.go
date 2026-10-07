@@ -8,15 +8,28 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) {
+func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, deviceFlow DeviceFlowConfig) {
 	authenticatedUser := func(handler fiber.Handler) (any, []any) {
 		routeHandler, routeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedUser(apiHelper), handler)
 		return routeHandler, routeRest
 	}
 
 	apiHelper.Router.Get("/api/oauth2/authorize", handleHydraAuthorizeRedirect(hydraConfig))
-	apiHelper.Router.Post("/api/oauth2/token", handleHydraPublicProxy(hydraConfig, "/oauth2/token"))
+	// Device routes are registered unconditionally; the handlers apply the
+	// startup and runtime switches.
+	deviceFlowStore := newDeviceFlowStore(apiHelper.DBManager)
+	apiHelper.Router.Post("/api/oauth2/device/auth", handleHydraDeviceAuthorization(hydraConfig, deviceFlow, deviceFlowStore))
+	apiHelper.Router.Post("/api/oauth2/token", handleHydraTokenEndpoint(apiHelper, hydraConfig, deviceFlow, deviceFlowStore))
 	apiHelper.Router.Post("/api/oauth2/revoke", handleHydraPublicProxy(hydraConfig, "/oauth2/revoke"))
+	// Browser device decisions: signed-in users only, behind the same session
+	// guard as consent; the handlers never answer 401 themselves.
+	deviceBrowser := newDeviceBrowserHandlers(apiHelper, hydraConfig, deviceFlow, deviceFlowStore)
+	deviceLookupHandler, deviceLookupRest := authenticatedUser(deviceBrowser.handleDeviceLookup)
+	apiHelper.Router.Post("/api/oauth2/device/lookup", deviceLookupHandler, deviceLookupRest...)
+	deviceApproveHandler, deviceApproveRest := authenticatedUser(deviceBrowser.handleDeviceApprove)
+	apiHelper.Router.Post("/api/oauth2/device/approve", deviceApproveHandler, deviceApproveRest...)
+	deviceDenyHandler, deviceDenyRest := authenticatedUser(deviceBrowser.handleDeviceDeny)
+	apiHelper.Router.Post("/api/oauth2/device/deny", deviceDenyHandler, deviceDenyRest...)
 
 	apiHelper.Router.Get("/api/oauth2/login", handleHydraGetLoginRequest(hydraConfig))
 	loginAcceptHandler, loginAcceptRest := authenticatedUser(handleHydraAcceptLogin(hydraConfig))

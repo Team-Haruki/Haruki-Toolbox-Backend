@@ -1,0 +1,75 @@
+# Live Hydra for the device-flow integration test (docs/ory-suite-usage.zh-CN.md §11.3):
+#   internal/modules/oauth2/hydra_device_live_test.go (go test -tags hydra_live).
+#
+# Same shape as production (non-dev Hydra, Postgres 18, https issuer served over
+# plain http, the repository's hydra.yml, the device env of docker-compose.yml)
+# with two deliberate differences: the user code lives 1 minute instead of 10,
+# so the expiry subtests finish in about a minute, and there is no
+# hydra-device-janitor service, because the Go test extracts the janitor SQL
+# from docker-compose.yml and runs it itself.
+#
+#   HYDRA_IT_VERSION=v25.4.0 docker compose -f external/hydra/it/docker-compose.device-it.yml up -d --wait
+#   go test -tags hydra_live -count=1 -run TestHydraDeviceFlowLive ./internal/modules/oauth2
+#   docker compose -f external/hydra/it/docker-compose.device-it.yml down -v
+#
+# The HYDRA_IT_* defaults below are also the test's defaults; change both
+# together. Ports bind to 127.0.0.1 only. Nothing here is a production secret.
+name: haruki-hydra-device-it
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: hydra-it-password
+      POSTGRES_DB: hydra
+    ports:
+      - "127.0.0.1:${HYDRA_IT_POSTGRES_PORT:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hydra -d hydra"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  hydra-migrate:
+    image: oryd/hydra:${HYDRA_IT_VERSION:-v25.4.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: migrate sql up -e --yes -c /etc/config/hydra/hydra.yml
+    environment:
+      DSN: postgres://hydra:hydra-it-password@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - ../hydra.yml:/etc/config/hydra/hydra.yml:ro
+
+  hydra:
+    image: oryd/hydra:${HYDRA_IT_VERSION:-v25.4.0}
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+    command: serve -c /etc/config/hydra/hydra.yml all
+    environment:
+      DSN: postgres://hydra:hydra-it-password@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      LOG_LEVEL: warn
+      # https issuer over plain http, as in production; never --dev.
+      URLS_SELF_ISSUER: ${HYDRA_IT_ISSUER_URL:-https://toolbox-api.haruki-it.test}
+      URLS_LOGIN: ${HYDRA_IT_FRONTEND_URL:-https://haruki.haruki-it.test}/oauth2/login
+      URLS_CONSENT: ${HYDRA_IT_FRONTEND_URL:-https://haruki.haruki-it.test}/oauth2/consent
+      URLS_LOGOUT: ${HYDRA_IT_FRONTEND_URL:-https://haruki.haruki-it.test}/logout
+      SECRETS_SYSTEM_0: hydra-it-system-secret-not-for-production
+      OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: hydra-it-pairwise-salt-not-for-production
+      # The device block of the production hydra service, values inlined.
+      URLS_DEVICE_VERIFICATION: ${HYDRA_IT_FRONTEND_URL:-https://haruki.haruki-it.test}/device
+      URLS_DEVICE_SUCCESS: ${HYDRA_IT_FRONTEND_URL:-https://haruki.haruki-it.test}/device/done
+      TTL_DEVICE_USER_CODE: ${HYDRA_IT_USER_CODE_TTL:-1m}
+      OAUTH2_DEVICE_AUTHORIZATION_TOKEN_POLLING_INTERVAL: 5s
+      OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_LENGTH: "8"
+      OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_CHARACTER_SET: BCDFGHJKLMNPQRSTVWXZ  # never also set ..._ENTROPY_PRESET (schema oneOf)
+      # BACKEND_PUBLIC_BASE_URL equals the issuer in production.
+      WEBFINGER_OIDC_DISCOVERY_DEVICE_AUTHORIZATION_URL: ${HYDRA_IT_ISSUER_URL:-https://toolbox-api.haruki-it.test}/api/oauth2/device/auth
+      WEBFINGER_OIDC_DISCOVERY_TOKEN_URL: ${HYDRA_IT_ISSUER_URL:-https://toolbox-api.haruki-it.test}/api/oauth2/token
+    ports:
+      - "127.0.0.1:${HYDRA_IT_PUBLIC_PORT:-14444}:4444"
+      - "127.0.0.1:${HYDRA_IT_ADMIN_PORT:-14445}:4445"
+    volumes:
+      - ../hydra.yml:/etc/config/hydra/hydra.yml:ro

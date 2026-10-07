@@ -408,3 +408,49 @@ func TestUnknownReadSourceIsRejected(t *testing.T) {
 		t.Fatal("unknown read source accepted")
 	}
 }
+
+func TestOAuth2DeviceFlowDefaultsAndEnv(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "cfg.yaml")
+	content := []byte("oauth2:\n  device_flow:\n    claim_ttl_seconds: 120\n    limits:\n      lookup_user_per_10m: 7\n")
+	if err := os.WriteFile(cfgPath, content, 0600); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	flow := cfg.OAuth2.DeviceFlow
+	if flow.Enabled || flow.UserCodeCharset != "BCDFGHJKLMNPQRSTVWXZ" || flow.UserCodeLength != 8 || flow.UserCodeTTL != "10m" {
+		t.Fatalf("device flow defaults = %+v", flow)
+	}
+	// A partial YAML block keeps the defaults of the keys it leaves out.
+	if flow.ClaimTTLSeconds != 120 || flow.ApproveLeaseSeconds != 30 || flow.Limits.LookupUserPer10m != 7 || flow.Limits.AuthIssuedGlobalPer10m != 1200 {
+		t.Fatalf("partial device flow block = %+v", flow)
+	}
+
+	t.Setenv("OAUTH2_DEVICE_FLOW_ENABLED", "true")
+	t.Setenv("OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST", "haruki-client, other ,")
+	t.Setenv("OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS", "https://a.example.com,https://b.example.com")
+	t.Setenv("OAUTH2_DEVICE_FLOW_VERIFICATION_URL", "https://a.example.com/device")
+	t.Setenv("OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL", "https://issuer.example.com")
+	t.Setenv("OAUTH2_DEVICE_FLOW_USER_CODE_CHARSET", "ABCDEFGHJK")
+	t.Setenv("OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH", "9")
+	t.Setenv("OAUTH2_DEVICE_FLOW_USER_CODE_TTL", "5m")
+	cfg, err = Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load with env returned error: %v", err)
+	}
+	flow = cfg.OAuth2.DeviceFlow
+	if !flow.Enabled || len(flow.ClientAllowlist) != 2 || flow.ClientAllowlist[1] != "other" || len(flow.AllowedOrigins) != 2 ||
+		flow.VerificationURL != "https://a.example.com/device" || flow.HydraIssuerURL != "https://issuer.example.com" ||
+		flow.UserCodeCharset != "ABCDEFGHJK" || flow.UserCodeLength != 9 || flow.UserCodeTTL != "5m" {
+		t.Fatalf("device flow env overrides = %+v", flow)
+	}
+
+	t.Setenv("OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH", "eight")
+	if _, err := Load(cfgPath); err == nil {
+		t.Fatal("a non-integer OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH must fail")
+	}
+}

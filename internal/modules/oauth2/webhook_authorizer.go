@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
 // WebhookAuthorizer adapts Hydra consent state to the narrow capability used
@@ -31,7 +32,27 @@ func (a WebhookAuthorizer) AuthorizedClientIDs(ctx context.Context, userID strin
 	if err != nil {
 		return nil, err
 	}
-	return gameDataWebhookClientIDs(sessions), nil
+	return activeWebhookClientIDs(ctx, gameDataWebhookClientIDs(sessions), checkHydraOAuth2ClientActive(a.HydraConfig)), nil
+}
+
+// activeWebhookClientIDs drops clients an admin has disabled (or deleted).
+// Hydra keeps their consent sessions and ignores metadata.haruki.active, so
+// without this a disabled client would still be told about the user's
+// game-data updates. clientIDs is already de-duplicated, so a fan-out looks
+// each client up at most once. A failed lookup skips that client only.
+func activeWebhookClientIDs(ctx context.Context, clientIDs []string, isActive harukiOAuth2.ClientActiveChecker) []string {
+	activeIDs := make([]string, 0, len(clientIDs))
+	for _, clientID := range clientIDs {
+		active, err := isActive(ctx, clientID)
+		if err != nil {
+			harukiLogger.Warnf("Skip OAuth2 webhook client whose active state is unknown: client=%s err=%v", clientID, err)
+			continue
+		}
+		if active {
+			activeIDs = append(activeIDs, clientID)
+		}
+	}
+	return activeIDs
 }
 
 func gameDataWebhookClientIDs(sessions []HydraConsentSession) []string {

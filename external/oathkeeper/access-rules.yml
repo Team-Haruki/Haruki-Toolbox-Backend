@@ -19,6 +19,8 @@
     # 404, not Hydra's response.
     # jwks lives at /.well-known/jwks.json (covered by the well-known rule);
     # Hydra returns 404 for /oauth2/jwks.json, so that alternative is dropped.
+    # oauth2/device/* and oauth2/fallbacks/device are deliberately NOT routed
+    # (device approval is backend-mediated; see docs/ory-suite-usage.zh-CN.md).
     url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/sessions/logout|userinfo>
     methods: [GET, POST]
   upstream:
@@ -248,7 +250,10 @@
     # logout challenge is on their way out and their Kratos session may
     # already be gone. The challenge is the credential — Hydra minted it,
     # it is single-use, and it names the session being ended.
-    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login|logout|logout/accept|logout/reject>
+    # device/auth is the anonymous RFC 8628 device authorization endpoint (the
+    # backend proxies Hydra and rate-limits it; Discovery advertises it). The
+    # device_code grant itself is polled at token, which stays on this rule.
+    url: <http|https>://<[^/]+>/api/oauth2/<token|revoke|login|logout|logout/accept|logout/reject|device/auth>
     methods: [GET, POST]
   upstream:
     url: http://backend:16666
@@ -261,7 +266,10 @@
 
 - id: haruki-protected-oauth-consent
   match:
-    url: <http|https>://<[^/]+>/api/oauth2/<login/accept|login/reject|consent|consent/accept|consent/reject|authorize/consent>
+    # device/lookup, device/approve and device/deny are the /device page's
+    # decision endpoints: they need the Kratos session and the trusted headers
+    # exactly like consent (the backend also checks JSON and Origin).
+    url: <http|https>://<[^/]+>/api/oauth2/<login/accept|login/reject|consent|consent/accept|consent/reject|authorize/consent|device/lookup|device/approve|device/deny>
     methods: [GET, POST]
   upstream:
     url: http://backend:16666
