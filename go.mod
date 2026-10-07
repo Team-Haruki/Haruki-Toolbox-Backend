@@ -22,6 +22,7 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.9.1
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.46.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.23.0
 	gopkg.in/yaml.v3 v3.0.1
 )
