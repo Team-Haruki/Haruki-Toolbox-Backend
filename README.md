@@ -23,6 +23,7 @@ It also utilizes Redis for efficient caching to speed up API responses.
 
 - Start from [`docs/README.md`](./docs/README.md) for the full documentation index.
 - See [`docs/backend-architecture.zh-CN.md`](./docs/backend-architecture.zh-CN.md) for module boundaries and allowed dependency directions.
+- Third-party OAuth2 / OIDC integration (authorization code with PKCE, confidential clients, and the device authorization grant for headless programs, RFC 8628) is in [`docs/oauth2-integration.zh-CN.md`](./docs/oauth2-integration.zh-CN.md); how the backend runs Kratos, Hydra and Oathkeeper, including device-flow operations, is in [`docs/ory-suite-usage.zh-CN.md`](./docs/ory-suite-usage.zh-CN.md).
 - See [`CLAUDE.md`](./CLAUDE.md) for build, test, code generation and commit conventions.
 
 ## License

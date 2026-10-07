@@ -267,7 +267,7 @@ state / telegram_user_id / created_at / expires_at / used=false
 | `scope` | 是 | 空格分隔；必须含 `user:read` |
 | `device_label` | 否 | 设备自述，显示在用户的审核卡和「已授权应用」里；控制字符与双向覆盖字符会被删除，截断到 64 个字符。内容要求见 4A.3 |
 
-其他参数一律忽略，不转发；同一参数出现两次、或带了 `audience`，返回 `invalid_request`。
+其他参数一律忽略，不转发；`client_id`、`scope`、`device_label` 出现两次，或带了 `audience`，返回 `invalid_request`。
 
 ```bash
 curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/device/auth' \
@@ -298,7 +298,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/device/aut
 
 | HTTP | `error` | 原因 | 程序应该 |
 | --- | --- | --- | --- |
-| 400 | `invalid_request` | Content-Type 不是表单；body 超过 4 KiB 或无法解析；参数重复；缺 `client_id`；表单 `client_id` 与 Basic 用户名不一致；Basic 头格式错误；带了 `audience` | 修正请求，不要重试 |
+| 400 | `invalid_request` | Content-Type 不是表单；body 超过 4 KiB 或无法解析；`client_id` / `scope` / `device_label` 重复；缺 `client_id`；表单 `client_id` 与 Basic 用户名不一致；Basic 头格式错误；带了 `audience` | 修正请求，不要重试 |
 | 401 | `invalid_client` | 客户端不存在；保密客户端的 secret 错误 | 检查配置，不要重试 |
 | 400 | `unauthorized_client` | 设备授权未开放；客户端不在允许名单、已被停用或没有设备授权许可 | 联系管理员，不要循环重试 |
 | 400 | `invalid_scope` | scope 为空；缺 `user:read`（`error_description` 为 `user:read is required for device authorization`）；含 `email`；scope 未为该客户端登记；该 scope 不能经设备授权申请（如未开通 `allowWrite` 的 `game-data:write`） | 修正 scope |
@@ -352,7 +352,7 @@ loop:
 | 400 | `access_denied` | 用户拒绝了；或批准后客户端被管理员停用 | 停止，告诉用户；需要时重新发起 4A.2 |
 | 400 | `expired_token` | 代码在 `expires_in` 内没有被批准；批准没能完成；无视 `slow_down` 超过 30 次；或设备授权已被关闭 | 停止；需要时重新发起 4A.2 |
 | 400 | `invalid_grant` | `device_code` 不认识（拼错、不是本服务签发、已经兑换过）或属于另一个客户端；授权已被用户撤销 | 停止，不要重试 |
-| 400 | `invalid_request` | 缺 `client_id` 或 `device_code`；参数重复；表单 `client_id` 与 Basic 用户名不一致 | 修正请求 |
+| 400 | `invalid_request` | 缺 `client_id` 或 `device_code`；`grant_type` / `device_code` / `client_id` 重复；表单 `client_id` 与 Basic 用户名不一致 | 修正请求 |
 | 401 | `invalid_client` | 客户端认证失败 | 检查 secret，不要重试 |
 | 503 | `temporarily_unavailable` | 服务暂时不可用（包括服务端读取开关配置出错） | 按 5xx 退避后继续，不是终止信号 |
 | 5xx / 网络错误 | — | — | `interval = min(interval×2, 60)` 后继续，直到 `deadline` |
@@ -927,7 +927,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 满足条件时发起回调。Hydra 查询失败或回调失败**不会影响上传响应**，只记录日志。
 
-设备授权（§4A）取得的授权同样是 Hydra consent session，按上面的条件触发回调；用户按设备撤销某一台设备后，只要该用户对该 client 还有别的有效授权，回调照常。已批准却从未兑换令牌的设备授权会在代码过期约 1 分钟后被服务端自动撤销，不会长期留在回调范围里。
+设备授权（§4A）取得的授权同样是 Hydra consent session，按上面的条件触发回调；用户按设备撤销某一台设备后，只要该用户对该 client 还有别的有效授权，回调照常。已批准却从未兑换令牌的设备授权会在代码过期约 1–2 分钟后被服务端自动撤销，不会长期留在回调范围里。
 
 ### 8.2 上传来源不影响触发
 
@@ -1049,7 +1049,7 @@ station:room:write
 - 编辑时省略 `devicePolicy` 表示保留已保存的策略；传了就写入三项（省略的 `maxCodesPer10m` 按 60），`metadata.haruki.device` 下的其他键保留
 - 把公开客户端改成 `confidential` 时，更新响应会带一次性的 `clientSecret`，与创建时一样只返回这一次
 - 公开客户端没有 secret，对它调用 `rotate-secret` 返回 400，`updatedData.code` 为 `public_client_has_no_secret`
-- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用），Sekai Station 也不再接受它的令牌；设备授权立刻对它关闭：发起返回 `unauthorized_client`，已批准未兑换的流程兑换时返回 `access_denied`。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
+- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用），Sekai Station 也不再接受它的令牌；设备授权随即对它关闭（客户端状态有最多 5 秒的缓存）：发起返回 `unauthorized_client`，已批准未兑换的流程兑换时返回 `access_denied`。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
 - 停用一旦生效就返回 200：`revokedSubjects` 是撤销成功的 subject 数，`failedSubjects` 列出撤销失败的 subject，`revocationComplete` 为 false 表示有一步失败、还有授权没撤销掉，这时对该客户端执行「撤销全部授权」补救。「撤销全部授权」部分失败时同样返回 200 和这三个字段；一条授权都没撤销成功时返回 500
 - 删除客户端时，它的授权和 token 由 Hydra 一并删除
 

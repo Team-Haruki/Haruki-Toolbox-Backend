@@ -26,13 +26,33 @@ utils/database/neopg/            Bot Ent 生成产物（迁移期保持位置不
 | --- | --- |
 | `internal/platform/api` | HTTP 公共响应、会话验证、身份集成、审计及游戏数据访问；`data`、`ios` 为子包 |
 | `internal/platform/upload` | 游戏上传预处理、Suite 复原编排、同步与通知 |
-| `internal/platform/oauth2` | Hydra 客户端、token introspection 与鉴权中间件 |
+| `internal/platform/oauth2` | Hydra 客户端（含不跟随重定向的 `DoWithoutRedirect`）、token introspection（bearer 中间件与内部 API 共用 `IntrospectAccessToken`）、scope 定义与鉴权中间件 |
 | `utils/game/sekai`、`utils/game/sekaiapi` | 游戏客户端加解密、协议处理及 SekaiAPI 适配 |
 | `utils/game/nuverserestore` | 统一 AVSC 加载、Suite/MYSEKAI 复原、compact 列式展开及离线对照工具 |
 | `utils/codec/{jsoncodec,jsonvalue,msgpackcodec}` | 通用 JSON/MessagePack 编解码与 JSON 值操作 |
 | `utils/orderedmap` | 通用有序容器 |
 | `utils/database` | 数据库连接、游戏数据存储、Redis 及 Ent 生成代码 |
 | `utils/{http,smtp,cloudflare,logger,background,perfstats,perfdebug}` | 网络、邮件、外部适配、日志与运行期基础设施 |
+
+### OAuth2 设备授权的代码落点
+
+RFC 8628 设备授权集中在 `internal/modules/oauth2`，不另建模块；行为、Redis 键与状态机以 [Ory 套件使用说明](ory-suite-usage.zh-CN.md) §10.5 为准，配置与启动校验以 §10.6.1 为准。
+
+| 位置 | 职责 |
+| --- | --- |
+| `hydra_device_authorization.go` | `POST /api/oauth2/device/auth`，代理 Hydra 并签发包装设备码 `hdc_…` |
+| `hydra_token_endpoint.go` | `POST /api/oauth2/token` 兼容层：设备授权许可走本地状态机，其余请求经 `handleHydraPublicProxy` 逐字节转发 |
+| `hydra_device_browser.go`、`hydra_device_verification.go` | `/device` 页面调用的 lookup / approve / deny，以及 approve 内的服务端代驱链 |
+| `hydra_device_store.go`、`hydra_device_decision_store.go`、`hydra_device_rate_limit.go` | Redis 流程状态机、Lua 脚本与限流计数 |
+| `hydra_device_codes.go`、`hydra_device_policy.go`、`hydra_device_challenge.go` | 码的生成、密封与规范化；设备授权的 scope 策略；通用 login / consent 拒绝设备模式的 challenge |
+| `hydra_device_config.go` | 不可变的 `DeviceFlowConfig` 与运行时闸门 `Active(ctx)` |
+| `hydra_device_reaper.go` | 回收器 `StartDeviceFlowReaper`：撤销已批准却从未兑换的授权（见 §3） |
+| `internal_introspect.go` | `POST /internal/oauth2/introspect`，只在配置了内部 token 时注册，不经 Oathkeeper |
+| `internal/modules/useroauth`、`adminoauth`、`adminusers` | 按设备列出与撤销授权；管理端 client 的 `grantTypes` / `devicePolicy`；管理员只读镜像 |
+| `utils/database/redis/keys.go` | `BuildOAuth2Device*Key`：`haruki:oauth2-device:` 与 `haruki:rate-limit:oauth2-device:` 两个前缀，码只以 HMAC 出现在键名里 |
+| `utils/redact` | 访问日志里 `user_code`、`device_code`、`flowHandle` 与令牌字面量的脱敏 |
+
+配置分两处：启动配置 `oauth2.device_flow.*`、`oauth2.internal_api.*` 与作为键名 HMAC 密钥的 `user_system.session_sign_token`（`config/types.go`，校验在 `internal/bootstrap/validate.go`），以及运行期设置 `oauth2DeviceFlowEnabled`（`internal/platform/runtimeconfig`，字段缺失视为关闭）。过期的 Hydra 设备码行由 compose 中的 `hydra-device-janitor` 清理，它是独立容器，不在后端进程里。
 
 `utils` 根暂保留共享类型和枚举。包迁移直接更新调用方，不保留旧路径转发包；修改 Go 导入路径不改变 HTTP、配置、存储或加密协议。测试数据随包迁移，仓库 `data/` 中的发布 schema 路径保持不变。
 

@@ -100,7 +100,7 @@ Hydra 在当前项目里负责：
 相关入口：
 
 - `internal/modules/oauth2/hydra_routes.go`
-- `internal/modules/adminoauth/hydra_handlers.go`
+- `internal/modules/adminoauth/hydra_client_handlers.go`、`hydra_revoke_handlers.go`
 - `internal/platform/oauth2/middleware.go`
 - `internal/platform/oauth2/provider.go`
 
@@ -483,7 +483,7 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
   - `Authorization: Bearer <internal token>`（原有方式，继续可用）；
   - HTTP Basic `<client_id>:<internal token>`，即 RFC 7662 / RFC 6749 §2.3.1 标准客户端（例如 Go 的 `req.SetBasicAuth(clientID, secret)`）的做法。用户名必须等于 `oauth2.internal_api.client_id`（默认 `station`，env `OAUTH2_INTERNAL_API_CLIENT_ID`），密码就是内部 token。用户名和密码按字面比较、不做 form-urldecode（与 Go `net/http` 的 `BasicAuth()` 一致；默认 client_id 与十六进制 token 编码前后相同）。
 
-  后端 YAML 只存 token 的 SHA-256：`oauth2.internal_api.token_sha256`（64 位十六进制，env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）；Bearer token 与 Basic 密码走同一个哈希、常数时间比较，Basic 用户名也常数时间比较（两项都比完再判定）。缺失、不符、Basic 格式错误（不是标准 base64、没有冒号、用户名或密码为空）、Bearer 与 Basic 同时出现（或任意两个 `Authorization` 头）、不认识的认证方案，一律返回 401 `{"error":"unauthorized"}` 并记一条 WARN，日志只带原因（`missing` / `multiple` / `unsupported_scheme` / `malformed` / `client_mismatch` / `mismatch`），从不记凭据或用户名。`token_sha256` 为空时路由不注册（404），其余两项不检查；非空时 `token_sha256` 不是 64 位十六进制、`client_id` 为空或含冒号/控制字符/首尾空白、`audience` 为空列表或含空项，后端都拒绝启动。tailnet 上的其他节点也能连到 16666，所以内部 token 不能省。
+  后端 YAML 只存 token 的 SHA-256：`oauth2.internal_api.token_sha256`（64 位十六进制，env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）；Bearer token 与 Basic 密码走同一个哈希、常数时间比较，Basic 用户名也常数时间比较（两项都比完再判定）。缺失、不符、Basic 格式错误（不是标准 base64、没有冒号、用户名或密码为空）、Bearer 与 Basic 同时出现（或任意两个 `Authorization` 头）、不认识的认证方案，一律返回 401 `{"error":"unauthorized"}` 并记一条 WARN，日志只带原因（`missing` / `multiple` / `unsupported_scheme` / `malformed` / `client_mismatch` / `mismatch`），从不记凭据或用户名。`token_sha256` 为空时路由不注册（404），其余两项不检查；非空时 `token_sha256` 不是 64 位十六进制、`client_id` 含冒号/控制字符/首尾空白、`audience` 含空项或带控制字符/首尾空白的项，后端都拒绝启动。`client_id` 留空、`audience` 为空列表时在加载配置时回落到默认值 `station` / `["station"]`，不会拒绝启动。tailnet 上的其他节点也能连到 16666，所以内部 token 不能省。
 - **请求**：`application/x-www-form-urlencoded` 的 `token=<access_token>`（RFC 7662 形式，可附 `token_type_hint`）或 JSON `{"token":"…"}`（格式不对返回 400 `{"error":"invalid_request"}`）。`token_type_hint` 不论取什么值都忽略：RFC 7662 §2.1 允许服务端忽略它，并要求按提示找不到时继续查其他类型，而这里只有 access token 才可能 active，提示不会改变结果（带 `refresh_token` 提示传 refresh token 照样是 `{"active":false}`）。
 - **响应**：后端调 Hydra admin 内省，与 bearer 中间件同一套规则（`internal/platform/oauth2/introspect.go`）：非 active、不是 `access_token`、已过期、subject 找不到本地用户或用户被封禁、客户端已停用或已删除（客户端查询有 5 s 进程内缓存）都返回 `{"active":false}`（只有这一个字段）。否则返回：
 
@@ -892,7 +892,7 @@ Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory
 | `user.oauth.device.token_issued` | 兼容层交出令牌（actor 匿名，target = 认领者） | — |
 | `user.oauth.authorization.revoke_consent` | 按设备撤销 | `consentRequestId` |
 
-- **结构化日志**统一为 `oauth2_device event=<e> fid=… cid=… [stage=… reason=… status=… hydra_error=…]`，`<e>` ∈ {`authorize`, `lookup_fail`, `lookup_conflict`, `lookup_fail_global_warn`, `claim`, `approve`, `deny`, `phishing_signal`, `chain_error`, `login_skip_unexpected`, `unconfirmed`, `poll_slow_down`, `token_issued`, `token_after_terminal`, `settle_failed`, `reaped`, `charset_mismatch`, `ttl_mismatch`, `auth_issued_global_warn`, `auth_unknown_client_warn`, `auth_attempt_client_warn`}。
+- **结构化日志**统一为 `oauth2_device event=<e> fid=… cid=… [stage=… reason=… status=… hydra_error=…]`，`<e>` ∈ {`authorize`, `poll`, `lookup_fail`, `lookup_conflict`, `lookup_fail_global_warn`, `claim`, `approve`, `deny`, `phishing_signal`, `chain_error`, `login_skip_unexpected`, `unconfirmed`, `poll_slow_down`, `token_issued`, `token_after_terminal`, `settle_failed`, `reaped`, `charset_mismatch`, `ttl_mismatch`, `auth_issued_global_warn`, `auth_unknown_client_warn`, `auth_attempt_client_warn`}。
 - **永不记录**：Cookie 容器内容、`Set-Cookie`、`Location` / `redirect_to`、challenge、verifier、`user_code`、`hdc`、`ory_dc_`、`flowHandle`、Hydra device/auth 的响应体。访问日志按 `utils/redact` 脱敏 `user_code` / `device_code` 查询参数、`userCode` / `deviceCode` / `flowHandle` JSON 字段，以及 `ory_at_` / `ory_rt_` / `ory_ac_` / `ory_dc_` / `hdc_` / `dfh_` 字面量。
 
 #### 10.5.12 安全要点
@@ -1318,15 +1318,15 @@ done
 
 后果：
 
-- 所有 `POST /api/oauth2/device/auth` 返回 500 `server_error`（日志 `charset_mismatch` 或 `ttl_mismatch`），
-  设备一律拿不到用户码；授权码流程不受影响，所以容易被当成 Hydra 偶发故障
+- `POST /api/oauth2/device/auth` 返回 500 `server_error`（日志 `charset_mismatch` 或 `ttl_mismatch`）：Hydra 生成的用户码不在 backend 的字母表或长度内，
+  或 Hydra 的 `expires_in` 比 backend 的 `user_code_ttl` 长 5 s 以上时，设备拿不到用户码；授权码流程不受影响，所以容易被当成 Hydra 偶发故障
 - 在 `hydra.yml` 或环境变量里再加 user_code 熵预设（`entropy_preset`）时，它与 compose 设置的 LENGTH + CHARACTER_SET
   同时存在，违反 Hydra schema 的 `oneOf`，Hydra 配置校验失败、无法启动
 
 原因：
 
-- 字符集、长度、TTL 只改了 Hydra 或只改了 backend 一侧；或单独 `up -d` 了其中一个服务。backend 的启动校验与
-  运行时自检在两侧不一致时失败关闭，这是故意的
+- 字符集、长度、TTL 只改了 Hydra 或只改了 backend 一侧；或单独 `up -d` 了其中一个服务。backend 的运行时自检（device/auth
+  校验 Hydra 返回的用户码与 `expires_in`）在两侧不一致时失败关闭，这是故意的；启动校验只检查 backend 自己的配置，发现不了与 Hydra 的漂移
 - 正确做法：只改 `.env` 里的 `DEVICE_FLOW_USER_CODE_*`，同时重建 `hydra` 与 `backend`；Hydra 只用 LENGTH + CHARACTER_SET。见 §11.3
 
 ### 12.10 把 Hydra 的设备端点接到 Oathkeeper 上，或发现文档没指向后端

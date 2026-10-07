@@ -74,6 +74,8 @@ HarukiProxy 注册 public client，采用授权码 + PKCE S256，经系统浏览
 
 最小上传 scope 为 game-data:write。需要刷新时请求 offline_access；需要账号选择器时请求 bindings:read。不默认请求 game-data:read、profile 或 email。
 
+没有系统浏览器的运行环境可以改用设备授权（[OAuth2 接入](oauth2-integration.zh-CN.md) §4A），签发的 token 与授权码流程相同，上传仍走上面的账号写权限判断。经设备授权申请 game-data:write 有额外前提：client 为公开客户端，由管理员开通设备授权许可并设 `devicePolicy.allowWrite=true`，且每次请求都带 user:read（见该文档 §9、§10）。
+
 应用安全保存 refresh token，按平台使用安全存储；刷新过程串行化，防止并发刷新覆盖 token。401 最多触发一次刷新和重试；刷新失败暂停上传并重新授权，不能循环重试。具体 token 有效期、刷新轮换和撤销行为沿用并验证 Hydra 配置，不在客户端假设固定时长。
 
 client_id 为公开标识，不是密钥。UA 仅作版本策略与统计；应用身份以通过验证的 token client_id 为准。公开客户端身份也不构成官方二进制或数据真实性证明。

@@ -12,6 +12,8 @@
 
 完整 OAuth2 端点和换取/刷新 token 的参数见 [OAuth2 接入](oauth2-integration.zh-CN.md)。需先登记 client_id、准确的回调 URI 和所需 scope；回调校验 state，code_verifier 只用于当前授权流程。
 
+没有系统浏览器的部署（例如无界面的服务器上运行代理）可以改用设备授权（同一文档 §4A）：程序在本机显示用户码，用户在自己的浏览器里批准，拿到的 token 与授权码流程相同，本文其余要求不变。前提是管理员为该公开客户端开通设备授权许可并设 `devicePolicy.allowWrite=true`（否则经设备授权申请 game-data:write 会得到 `invalid_scope`），且请求的 scope 必须含 user:read。
+
 ## 2. Scope 与目标账号
 
 | scope | 用途 |
