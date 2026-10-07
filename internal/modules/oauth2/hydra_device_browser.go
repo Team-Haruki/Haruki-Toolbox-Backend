@@ -124,13 +124,14 @@ func respondDeviceBrowserSuccess[T any](c fiber.Ctx, status int, message string,
 // missing from the table is shown as write, the most cautious class; a new
 // grantable scope registers its class here (e.g. station:room:write → write).
 var deviceScopeRisks = map[string]string{
-	harukiOAuth2.ScopeOpenID:        deviceScopeRiskIdentity,
-	harukiOAuth2.ScopeProfile:       deviceScopeRiskIdentity,
-	harukiOAuth2.ScopeOfflineAccess: deviceScopeRiskOffline,
-	harukiOAuth2.ScopeUserRead:      deviceScopeRiskRead,
-	harukiOAuth2.ScopeBindingsRead:  deviceScopeRiskRead,
-	harukiOAuth2.ScopeGameDataRead:  deviceScopeRiskRead,
-	harukiOAuth2.ScopeGameDataWrite: deviceScopeRiskWrite,
+	harukiOAuth2.ScopeOpenID:           deviceScopeRiskIdentity,
+	harukiOAuth2.ScopeProfile:          deviceScopeRiskIdentity,
+	harukiOAuth2.ScopeOfflineAccess:    deviceScopeRiskOffline,
+	harukiOAuth2.ScopeUserRead:         deviceScopeRiskRead,
+	harukiOAuth2.ScopeBindingsRead:     deviceScopeRiskRead,
+	harukiOAuth2.ScopeGameDataRead:     deviceScopeRiskRead,
+	harukiOAuth2.ScopeGameDataWrite:    deviceScopeRiskWrite,
+	harukiOAuth2.ScopeStationRoomWrite: deviceScopeRiskWrite,
 }
 
 const (

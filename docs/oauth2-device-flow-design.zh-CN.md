@@ -476,7 +476,7 @@ oauth2:
 
 ### 7.2 Redis 键
 
-新增常量 `KeyModuleOAuth2Device = "oauth2-device"`、`KeyActionOAuth2Device = "oauth2-device"`（后者挂在现有 `KeyModuleRateLimit = "rate-limit"` 下）。新增 `hashExactIdentifier(domain, raw)` = hex(HMAC-SHA256(identifierHashSecret, domain+"\x00"+raw))，**不 trim、不转小写**（`hdc` 区分大小写），下文 `hx(d, v)` 即它。密钥取自 `user_system.session_sign_token`：设备流程启用时启动校验要求它非空且 ≥ 16 字节，不接受 KeyBuilder 退回无密钥 SHA-256（否则拿到 Redis 转储即可离线穷举 2.56×10^10 的码空间）。轮换它会让进行中的流程失效。v1 不另设专用密钥；由于它同时是会话签名密钥（`NewSessionHandler`）与现有 HMAC 键的来源，生产值为空时不能在上线窗口里临时设置，须先单独评估（§14.2 第 11 项、§15 F9）。
+新增常量 `KeyModuleOAuth2Device = "oauth2-device"`、`KeyActionOAuth2Device = "oauth2-device"`（后者挂在现有 `KeyModuleRateLimit = "rate-limit"` 下）。新增 `hashExactIdentifier(domain, raw)` = hex(HMAC-SHA256(identifierHashSecret, domain+"\x00"+raw))，**不 trim、不转小写**（`hdc` 区分大小写），下文 `hx(d, v)` 即它。密钥取自 `user_system.session_sign_token`：设备流程启用时启动校验要求它非空且 ≥ 16 字节，不接受 KeyBuilder 退回无密钥 SHA-256（否则拿到 Redis 转储即可离线穷举 2.56×10^10 的码空间）。轮换它会让进行中的流程失效。v1 不另设专用密钥；它**不是**会话签名密钥（`NewSessionHandler` 忽略该参数），只是现有 Redis 键名 HMAC 化名的来源，所以生产值为空时直接在上线窗口里用 `openssl rand -hex 32` 生成写入即可（只会让当时进行中的验证码作废，见 §3.4、§14.2 第 11 项）。
 
 | Key 模式 | 类型 | 值 | TTL |
 | --- | --- | --- | --- |
