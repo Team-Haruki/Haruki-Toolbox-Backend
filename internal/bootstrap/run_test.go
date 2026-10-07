@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -346,4 +347,122 @@ func TestValidateBackendConfigRequiresExactTrustedProxyAddresses(t *testing.T) {
 			t.Fatalf("exact edge proxy addresses should pass: %v", err)
 		}
 	})
+}
+
+func validDeviceFlowTestConfig(t *testing.T) harukiConfig.Config {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "cfg.yaml")
+	// Loading an empty file yields the shipped defaults of oauth2.device_flow.
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := harukiConfig.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.OAuth2.HydraPublicURL = "http://hydra:4444"
+	cfg.OAuth2.HydraAdminURL = "http://hydra:4445"
+	cfg.OAuth2.HydraBrowserURL = "https://toolbox-api-direct.haruki.seiunx.com"
+	cfg.UserSystem.FrontendURL = "https://haruki.seiunx.com"
+	cfg.UserSystem.SessionSignToken = "0123456789abcdef0123456789abcdef"
+	cfg.Redis.Host = "redis"
+	cfg.OAuth2.DeviceFlow.Enabled = true
+	return cfg
+}
+
+func TestValidateOAuth2DeviceFlowConfigSkippedWhenDisabled(t *testing.T) {
+	cfg := validDeviceFlowTestConfig(t)
+	cfg.OAuth2.DeviceFlow.Enabled = false
+	// Production has no session_sign_token today; a disabled flow must not care.
+	cfg.UserSystem.SessionSignToken = ""
+	cfg.OAuth2.DeviceFlow.UserCodeTTL = "not a duration"
+	cfg.OAuth2.DeviceFlow.Limits.LookupFailGlobalPer10m = 0
+	if err := validateOAuth2DeviceFlowConfig(cfg); err != nil {
+		t.Fatalf("disabled device flow was validated: %v", err)
+	}
+}
+
+func TestValidateOAuth2DeviceFlowConfigAcceptsDefaults(t *testing.T) {
+	cfg := validDeviceFlowTestConfig(t)
+	if err := validateOAuth2DeviceFlowConfig(cfg); err != nil {
+		t.Fatalf("defaults rejected: %v", err)
+	}
+	ttl, _ := time.ParseDuration(cfg.OAuth2.DeviceFlow.UserCodeTTL)
+	if budget := deviceFlowBruteForceBudget(cfg.OAuth2.DeviceFlow, ttl); budget < 0.73 || budget > 0.75 {
+		t.Fatalf("default budget = %.4f, want about 0.74", budget)
+	}
+	// Local development over plain http is allowed for localhost only.
+	cfg.OAuth2.HydraBrowserURL = "http://localhost:4444"
+	cfg.UserSystem.FrontendURL = "http://127.0.0.1:5173"
+	if err := validateOAuth2DeviceFlowConfig(cfg); err != nil {
+		t.Fatalf("localhost http rejected: %v", err)
+	}
+}
+
+func TestValidateOAuth2DeviceFlowConfigRejects(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(cfg *harukiConfig.Config)
+		want string
+	}{
+		{"empty session_sign_token", func(c *harukiConfig.Config) { c.UserSystem.SessionSignToken = "" }, "session_sign_token"},
+		{"short session_sign_token", func(c *harukiConfig.Config) { c.UserSystem.SessionSignToken = "   short-secret   " }, "session_sign_token"},
+		{"no browser URL", func(c *harukiConfig.Config) { c.OAuth2.HydraBrowserURL = "" }, "hydra_browser_url"},
+		{"no Redis", func(c *harukiConfig.Config) { c.Redis.Host = "" }, "redis"},
+		{"http issuer", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.HydraIssuerURL = "http://api.example.com" }, "hydra_issuer_url"},
+		{"relative verification URL", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.VerificationURL = "/device" }, "verification_url"},
+		{"no frontend for the default verification URL", func(c *harukiConfig.Config) { c.UserSystem.FrontendURL = "" }, "verification_url"},
+		{"origin with a path", func(c *harukiConfig.Config) {
+			c.OAuth2.DeviceFlow.AllowedOrigins = []string{"https://haruki.seiunx.com/device"}
+		}, "allowed_origins"},
+		{"charset too short", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeCharset = "BCDFGHJ" }, "user_code_charset"},
+		{"lower-case charset", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeCharset = "bcdfghjklm" }, "user_code_charset"},
+		{"repeated charset", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeCharset = "BCDFGHJKLB" }, "user_code_charset"},
+		{"length too short", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeLength = 5 }, "user_code_length"},
+		{"length too long", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeLength = 13 }, "user_code_length"},
+		{"zero limit", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.Limits.DecisionUserPerDay = 0 }, "decision_user_per_day"},
+		{"pools exceed global", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.Limits.AuthIssuedPublicPer10m = 700 }, "auth_issued_global_per_10m"},
+		{"lease too short", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.ApproveLeaseSeconds = 25 }, "approve_lease_seconds"},
+		{"remaining below timeout", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.MinRemainingSecondsToApprove = 10 }, "min_remaining_seconds_to_approve"},
+		{"unparsable TTL", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeTTL = "ten minutes" }, "user_code_ttl"},
+		{"TTL too long", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeTTL = "31m" }, "user_code_ttl"},
+		// Default limits with a TTL over 10 minutes add a live window and
+		// break the budget (about 1.11 guesses per year at 20 minutes).
+		{"budget exceeded by TTL", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeTTL = "20m" }, "guesses per year"},
+		{"budget exceeded by lookup failures", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.Limits.LookupFailGlobalPer10m = 300 }, "guesses per year"},
+		{"budget exceeded by a short code", func(c *harukiConfig.Config) { c.OAuth2.DeviceFlow.UserCodeLength = 7 }, "guesses per year"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := validDeviceFlowTestConfig(t)
+			tc.edit(&cfg)
+			err := validateOAuth2DeviceFlowConfig(cfg)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildRefusesInvalidEnabledDeviceFlowBeforeAcquiringResources(t *testing.T) {
+	cfg := validDeviceFlowTestConfig(t)
+	cfg.UserSystem.KratosPublicURL = "http://kratos:4433"
+	cfg.UserSystem.KratosAdminURL = "http://kratos:4434"
+	cfg.GameData.URL = "postgres://unused"
+	cfg.UserSystem.SessionSignToken = ""
+	if _, err := Build(cfg); err == nil || !strings.Contains(err.Error(), "session_sign_token") {
+		t.Fatalf("Build err = %v, want the device flow validation error", err)
+	}
+}
+
+func TestNewOAuth2DeviceFlowConfigResolvesDefaults(t *testing.T) {
+	cfg := validDeviceFlowTestConfig(t)
+	flow := newOAuth2DeviceFlowConfig(cfg, nil)
+	if !flow.Enabled() || flow.VerificationURL() != "https://haruki.seiunx.com/device" ||
+		flow.HydraIssuerOrigin() != "https://toolbox-api-direct.haruki.seiunx.com" ||
+		!flow.OriginAllowed("https://haruki.seiunx.com") || flow.UserCodeTTL() != 10*time.Minute ||
+		flow.UserCodeLength() != 8 || flow.UserCodeCharset() != "BCDFGHJKLMNPQRSTVWXZ" ||
+		flow.Timings().ReaperInterval != time.Minute || flow.Limits().AuthIssuedGlobalPer10m != 1200 {
+		t.Fatalf("resolved device flow config is wrong: %+v", flow)
+	}
 }

@@ -193,6 +193,23 @@ func RevokeHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.H
 	return err
 }
 
+// RevokeHydraConsentSessionByID revokes the one consent session (and the access
+// and refresh tokens issued under it, refreshed ones included) created by a
+// consent request: DELETE /admin/oauth2/auth/sessions/consent with only
+// consent_request_id, the only parameter combination Hydra accepts for it. A
+// device code still waiting to be redeemed is deleted with it (ON DELETE
+// CASCADE). Hydra answers 204 for an unknown ID as well, so callers that act on
+// a user's behalf must check ownership first.
+func RevokeHydraConsentSessionByID(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, consentRequestID string) error {
+	consentRequestID = strings.TrimSpace(consentRequestID)
+	if consentRequestID == "" {
+		return fmt.Errorf("consent request id is required")
+	}
+	query := url.Values{"consent_request_id": {consentRequestID}}
+	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", query, nil)
+	return err
+}
+
 // RevokeHydraConsentSessionsForSubjects revokes consent sessions one subject at a
 // time: subject+client when clientID is set, subject+all=true (every client of the
 // subject) when it is empty. Hydra v25.4.0 rejects client without subject, with or

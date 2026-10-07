@@ -352,8 +352,9 @@ Hydra 在当前项目里负责：
 项目提供了一组后端兼容入口，背后实际对接 Hydra：
 
 - `/api/oauth2/authorize`
-- `/api/oauth2/token`
+- `/api/oauth2/token`（令牌端点兼容层，见下文）
 - `/api/oauth2/revoke`
+- `/api/oauth2/device/auth`（RFC 8628 设备授权端点，匿名；见 §10.5）
 - `/api/oauth2/login`
 - `/api/oauth2/login/accept`
 - `/api/oauth2/login/reject`
@@ -365,6 +366,13 @@ Hydra 在当前项目里负责：
 这些入口的核心实现位于：
 
 - `internal/modules/oauth2/hydra_routes.go`
+
+`/api/oauth2/token` 是令牌端点兼容层（`hydra_token_endpoint.go`）：
+
+- 不是表单、或 `grant_type` 不是 `urn:ietf:params:oauth:grant-type:device_code` 的请求，与 `/api/oauth2/revoke` 一样经 `handleHydraPublicProxy` 逐字节转发（原始 body、查询串、`Authorization` / `Content-Type` / `Accept`），响应原样返回。`TestTokenShimNonDeviceGrantVerbatim` 守护这一点
+- 设备授权许可的请求带的是后端签发的包装设备码 `hdc_…`：兼容层用它找到流程、在本地执行 `slow_down`（早于 `interval` 的轮询不调用 Hydra），其余轮询解封出 Hydra 的 `ory_dc_…` 后转发 `POST /oauth2/token`，由 Hydra 认证客户端，再按流程状态改写 Hydra 的回答（`access_denied`、`expired_token`，或对已拒绝 / 已停用的流程不交出令牌并按 `consent_request_id` 撤销）。客户端认证之前只会本地回答参数错误、`slow_down`、未知码（`invalid_grant`）、功能关闭（`expired_token`）和 503
+- 设备分支的每个响应（包括透传的 Hydra 响应）都带 `Cache-Control: no-store` 与 `Pragma: no-cache`
+- Hydra 自己的 `/oauth2/token` 仍由 Oathkeeper `hydra-public-oauth` 直通，供写死 Hydra 地址的授权码客户端使用；它不认识 `hdc_…`，只会返回 `invalid_grant`
 
 ### 10.2 登录同意与用户 subject
 
@@ -476,6 +484,10 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 - `internal/modules/adminoauth/hydra_client_handlers.go`
 - `internal/modules/adminoauth/hydra_client_grant_revocation.go`
 - `internal/modules/adminusers/user_oauth_handlers.go`
+
+### 10.5 设备授权（RFC 8628）
+
+设备授权的架构与运维手册在功能完成后写入本节；在此之前以 [OAuth2 设备授权设计](oauth2-device-flow-design.zh-CN.md) 为准。
 
 ## 11. 当前配置层面对 Ory 的约束
 

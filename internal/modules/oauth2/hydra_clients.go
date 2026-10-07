@@ -195,12 +195,26 @@ func HydraOAuthClientDevicePolicyOf(client *HydraOAuthClient) HydraOAuthClientDe
 	if allowWrite, ok := device[hydraClientDeviceAllowWriteKey].(bool); ok {
 		policy.AllowWrite = allowWrite
 	}
-	// Metadata decodes into any, so a stored integer arrives as float64.
-	if maxCodes, ok := device[hydraClientDeviceMaxCodesPer10mKey].(float64); ok && maxCodes == math.Trunc(maxCodes) &&
-		maxCodes >= HydraDeviceMaxCodesPer10mMin && maxCodes <= HydraDeviceMaxCodesPer10mMax {
-		policy.MaxCodesPer10m = int(maxCodes)
+	if maxCodes, ok := hydraOAuthClientStoredMaxCodesPer10m(client); ok {
+		policy.MaxCodesPer10m = maxCodes
 	}
 	return policy
+}
+
+// hydraOAuthClientStoredMaxCodesPer10m returns a valid stored
+// metadata.haruki.device.max_codes_per_10m.
+func hydraOAuthClientStoredMaxCodesPer10m(client *HydraOAuthClient) (int, bool) {
+	if client == nil {
+		return 0, false
+	}
+	namespace, _ := client.Metadata[hydraClientMetadataNamespace].(map[string]any)
+	device, _ := namespace[hydraClientDeviceKey].(map[string]any)
+	// Metadata decodes into any, so a stored integer arrives as float64.
+	maxCodes, ok := device[hydraClientDeviceMaxCodesPer10mKey].(float64)
+	if !ok || maxCodes != math.Trunc(maxCodes) || maxCodes < HydraDeviceMaxCodesPer10mMin || maxCodes > HydraDeviceMaxCodesPer10mMax {
+		return 0, false
+	}
+	return int(maxCodes), true
 }
 
 func ListHydraOAuthClients(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig) ([]HydraOAuthClient, error) {

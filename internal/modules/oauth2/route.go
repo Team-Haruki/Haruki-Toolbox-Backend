@@ -10,10 +10,13 @@ import (
 type RouteOptions struct {
 	HydraConfig   *harukiOAuth2.HydraConfig
 	AvatarBaseURL string
+	// DeviceFlow gates the device authorization grant; its zero value keeps
+	// the device routes registered but answering as disabled.
+	DeviceFlow DeviceFlowConfig
 }
 
 func RegisterOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, options RouteOptions) {
-	registerHydraOAuth2Routes(apiHelper, options.HydraConfig)
+	registerHydraOAuth2Routes(apiHelper, options.HydraConfig, options.DeviceFlow)
 
 	registerOAuth2UserInfoRoutes(apiHelper, options.HydraConfig, options.AvatarBaseURL)
 

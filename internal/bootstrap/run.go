@@ -10,6 +10,7 @@ import (
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	iosModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/ios"
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
+	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	userProfileModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
@@ -44,6 +45,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		return nil, err
 	}
 	if err := validateBotRegistrationConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateOAuth2DeviceFlowConfig(cfg); err != nil {
 		return nil, err
 	}
 
@@ -137,6 +141,18 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		SyncEnabled:    cfg.Afdian.SyncEnabled,
 		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
 	})
+	// One HydraConfig serves the routes and the device-flow reaper.
+	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		Provider:       cfg.OAuth2.Provider,
+		PublicURL:      cfg.OAuth2.HydraPublicURL,
+		BrowserURL:     cfg.OAuth2.HydraBrowserURL,
+		AdminURL:       cfg.OAuth2.HydraAdminURL,
+		ClientID:       cfg.OAuth2.HydraClientID,
+		ClientSecret:   cfg.OAuth2.HydraClientSecret,
+		RequestTimeout: time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
+	})
+	deviceFlowLogger := harukiLogger.NewLoggerFromGlobal("OAuth2Device")
+	deviceFlowConfig := newOAuth2DeviceFlowConfig(cfg, deviceFlowLogger)
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
 		HarukiProxyV3ClientPolicy: proxyPolicy,
 		DataSync:                  harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
@@ -151,15 +167,8 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 			BackendURL:    cfg.Backend.BackendURL,
 			BackendCDNURL: cfg.Backend.BackendCDNURL,
 		}),
-		HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
-			Provider:       cfg.OAuth2.Provider,
-			PublicURL:      cfg.OAuth2.HydraPublicURL,
-			BrowserURL:     cfg.OAuth2.HydraBrowserURL,
-			AdminURL:       cfg.OAuth2.HydraAdminURL,
-			ClientID:       cfg.OAuth2.HydraClientID,
-			ClientSecret:   cfg.OAuth2.HydraClientSecret,
-			RequestTimeout: time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
-		}),
+		HydraConfig:         hydraConfig,
+		OAuth2DeviceFlow:    deviceFlowConfig,
 		OAuth2AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		UploadHTTPClient:    harukiHttp.NewClient(strings.TrimSpace(cfg.Proxy), 15*time.Second),
 		UploadLogger:        harukiLogger.NewLoggerFromGlobal("SekaiDataHandler"),
@@ -190,6 +199,14 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
 	waitAfdianScheduler := startAfdianSponsorSyncScheduler(schedulerCtx, resources.toolboxClient, afdianConfig, resources.logger)
+	// The reaper follows the startup switch only: it keeps revoking unredeemed
+	// approvals while the runtime switch is off.
+	waitDeviceFlowReaper := oauth2Module.StartDeviceFlowReaper(schedulerCtx, oauth2Module.DeviceFlowReaperOptions{
+		Config:      deviceFlowConfig,
+		HydraConfig: hydraConfig,
+		DBManager:   resources.databaseManager,
+		Logger:      deviceFlowLogger,
+	})
 	waitStatsSampler := func() {}
 	if cfg.Backend.ProfilingEnabled {
 		sqlPools := []sqlPoolSource{{name: "toolbox", db: resources.toolboxSQLDB}}
@@ -204,6 +221,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	application.stopWorkers = func() {
 		stopSchedulers()
 		waitAfdianScheduler()
+		waitDeviceFlowReaper()
 		waitStatsSampler()
 	}
 
@@ -227,4 +245,51 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 
 	buildComplete = true
 	return application, nil
+}
+
+// newOAuth2DeviceFlowConfig turns oauth2.device_flow into the module's
+// immutable configuration. An unparsable user_code_ttl only reaches here while
+// the device flow is disabled (validation refuses it otherwise).
+func newOAuth2DeviceFlowConfig(cfg harukiConfig.Config, logger *harukiLogger.Logger) oauth2Module.DeviceFlowConfig {
+	flow := cfg.OAuth2.DeviceFlow
+	ttl, _ := time.ParseDuration(strings.TrimSpace(flow.UserCodeTTL))
+	seconds := func(value int) time.Duration { return time.Duration(value) * time.Second }
+	return oauth2Module.NewDeviceFlowConfig(oauth2Module.DeviceFlowConfigOptions{
+		Enabled:         flow.Enabled,
+		ClientAllowlist: flow.ClientAllowlist,
+		VerificationURL: deviceFlowVerificationURL(cfg),
+		FrontendURL:     cfg.UserSystem.FrontendURL,
+		HydraIssuerURL:  deviceFlowIssuerURL(cfg),
+		AllowedOrigins:  flow.AllowedOrigins,
+		UserCodeCharset: flow.UserCodeCharset,
+		UserCodeLength:  flow.UserCodeLength,
+		UserCodeTTL:     ttl,
+		Timings: oauth2Module.DeviceFlowTimings{
+			MinPollInterval:       seconds(flow.MinPollIntervalSeconds),
+			ClaimTTL:              seconds(flow.ClaimTTLSeconds),
+			ApproveLease:          seconds(flow.ApproveLeaseSeconds),
+			ApprovalTimeout:       seconds(flow.ApprovalTimeoutSeconds),
+			MinRemainingToApprove: seconds(flow.MinRemainingSecondsToApprove),
+			MaxApproveAttempts:    flow.MaxApproveAttempts,
+			RecordGrace:           seconds(flow.RecordGraceSeconds),
+			ReaperInterval:        seconds(flow.ReaperIntervalSeconds),
+			ReaperGrace:           seconds(flow.ReaperGraceSeconds),
+		},
+		Limits: oauth2Module.DeviceFlowLimits{
+			AuthAttemptUnknownClientWarnPer10m: flow.Limits.AuthAttemptUnknownClientWarnPer10m,
+			AuthAttemptClientWarnMultiplier:    flow.Limits.AuthAttemptClientWarnMultiplier,
+			AuthIssuedGlobalPer10m:             flow.Limits.AuthIssuedGlobalPer10m,
+			AuthIssuedPublicPer10m:             flow.Limits.AuthIssuedPublicPer10m,
+			AuthIssuedConfidentialPer10m:       flow.Limits.AuthIssuedConfidentialPer10m,
+			AuthIssuedClientDefaultPer10m:      flow.Limits.AuthIssuedClientDefaultPer10m,
+			LookupUserPer10m:                   flow.Limits.LookupUserPer10m,
+			LookupFailUserPer10m:               flow.Limits.LookupFailUserPer10m,
+			LookupFailUserPerDay:               flow.Limits.LookupFailUserPerDay,
+			LookupFailGlobalPer10m:             flow.Limits.LookupFailGlobalPer10m,
+			DecisionUserPerDay:                 flow.Limits.DecisionUserPerDay,
+			MaxSlowDown:                        flow.Limits.MaxSlowDown,
+			MaxIntervalSeconds:                 flow.Limits.MaxIntervalSeconds,
+		},
+		Logger: logger,
+	})
 }
