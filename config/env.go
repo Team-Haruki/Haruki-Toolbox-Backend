@@ -205,6 +205,9 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	overrideString(&cfg.HarukiBot.CredentialSignToken, "HARUKI_BOT_CREDENTIAL_SIGN_TOKEN")
 
+	// Checked by startup validation (64 hex characters when non-empty).
+	overrideString(&cfg.BotSecurity.IngestTokenSHA256, "BOT_SECURITY_INGEST_TOKEN_SHA256")
+
 	overrideString(&cfg.Subscription.HMESInternalBaseURL, "HARUKI_HMES_INTERNAL_BASE_URL")
 	overrideString(&cfg.Subscription.HMESInternalToken, "HARUKI_HMES_INTERNAL_API_TOKEN")
 	overrideString(&cfg.Subscription.UserAgent, "HARUKI_SUBSCRIPTION_USER_AGENT")

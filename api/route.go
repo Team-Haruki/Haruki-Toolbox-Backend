@@ -14,6 +14,7 @@ import (
 	adminTicketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admintickets"
 	adminUsersModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminusers"
 	adminWebhookModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminwebhook"
+	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
 	harukiBotNeoModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/harukibotneo"
 	iosModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/ios"
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
@@ -65,8 +66,10 @@ type Dependencies struct {
 	HydraConfig               *harukiOAuth2.HydraConfig
 	// OAuth2DeviceFlow is the startup device-flow configuration; RegisterRoutes
 	// adds the runtime switch to it.
-	OAuth2DeviceFlow     oauth2Module.DeviceFlowConfig
-	OAuth2InternalAPI    oauth2Module.InternalAPIConfig
+	OAuth2DeviceFlow  oauth2Module.DeviceFlowConfig
+	OAuth2InternalAPI oauth2Module.InternalAPIConfig
+	// BotSecurityIngest gates POST /internal/bot-security/alerts.
+	BotSecurityIngest    botSecurityModule.IngestConfig
 	IOSEndpoints         iosModule.EndpointConfig
 	OAuth2AvatarBaseURL  string
 	UserProfileConfig    userProfileModule.Config
@@ -113,6 +116,10 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 		HydraConfig: dependencies.HydraConfig,
 		Config:      dependencies.OAuth2InternalAPI,
 	})
+	// Registered only when bot_security.ingest_token_sha256 is set.
+	botSecurityModule.RegisterIngestRoutes(apiHelper, botSecurityModule.IngestRouteOptions{
+		Config: dependencies.BotSecurityIngest,
+	})
 }
 
 // oauth2DeviceFlowRuntimeGate reads the runtime switch oauth2DeviceFlowEnabled.
@@ -141,6 +148,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 	adminStatsModule.RegisterAdminStatisticsRoutes(apiHelper, adminGroup)
 	adminTicketsModule.RegisterAdminTicketRoutes(apiHelper, adminGroup, dependencies.TicketNotifications)
 	adminWebhookModule.RegisterAdminWebhookRoutes(apiHelper, adminGroup)
+	botSecurityModule.RegisterAdminRoutes(apiHelper, adminGroup, botSecurityModule.AdminRouteOptions{})
 }
 
 func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {

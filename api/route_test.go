@@ -95,6 +95,8 @@ func TestRouteManifest(t *testing.T) {
 		HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{}),
 		// The internal API registers only when its token hash is configured.
 		OAuth2InternalAPI: testInternalAPIConfig(t),
+		// So is the bot security alert ingest.
+		BotSecurityIngest: testBotSecurityIngestConfig(t),
 	})
 
 	actual := routeManifest(app)
