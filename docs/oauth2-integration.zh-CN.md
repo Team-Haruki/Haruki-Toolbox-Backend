@@ -88,7 +88,7 @@ OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码
 | 浏览器授权流程 | 相同 | 相同 |
 | 差别所在 | — | **换 token 由你的后端完成,并携带 secret** |
 
-保密客户端在 Hydra 侧会被创建为 `token_endpoint_auth_method = client_secret_basic`、`grant_types = ["authorization_code", "refresh_token"]`（见 [`hydra_clients.go`](../internal/modules/oauth2/hydra_clients.go)）。
+保密客户端在 Hydra 侧会被创建为 `token_endpoint_auth_method = client_secret_basic`，未指定授权类型时 `grant_types = ["authorization_code", "refresh_token"]`（见 [`hydra_clients.go`](../internal/modules/oauth2/hydra_clients.go)）。
 
 两种类型的浏览器授权流程**完全一致** —— 用户都要经过前端登录页和授权页。唯一的区别在第 5 节换 token 那一步。
 
@@ -477,18 +477,40 @@ user:read  bindings:read  game-data:read  game-data:write
 
 ## 10. 管理员创建 OAuth Client 需要什么
 
-需要提供 `clientId`、`name`、`clientType`、`redirectUris`、`scopes`，可选 `postLogoutRedirectUris`，其中：
+需要提供 `clientId`、`name`、`clientType`、`scopes`，授权码客户端还要 `redirectUris`；可选 `postLogoutRedirectUris`、`grantTypes`、`devicePolicy`，其中：
 
 - `clientType` 只能是 `public` 或 `confidential`
-- `redirectUris` 必须是合法 URI，且**不能包含 fragment**
-- `postLogoutRedirectUris`（RP 发起登出后的回跳地址）规则同 `redirectUris`，并且每一个都必须与某个 `redirectUris` 的 scheme、host、port 一致（Hydra 自身的规则），否则返回 400
-- `scopes` 必须来自系统允许的 scope 集
+- `grantTypes` 只能取 `authorization_code`、`refresh_token`、`urn:ietf:params:oauth:grant-type:device_code`（设备授权许可），并且必须含 `authorization_code` 或设备授权许可；`refresh_token` 只能与它们之一同时出现。创建时省略等于 `["authorization_code", "refresh_token"]`。`response_types` 由它推导：含 `authorization_code` 时为 `["code"]`，否则为空
+- `redirectUris` 必须是合法 URI，且**不能包含 fragment**。授权类型含 `authorization_code` 时必填；仅设备客户端可以为空或省略
+- `postLogoutRedirectUris`（RP 发起登出后的回跳地址）规则同 `redirectUris`，并且每一个都必须与某个 `redirectUris` 的 scheme、host、port 一致（Hydra 自身的规则），否则返回 400。`redirectUris` 为空（仅设备客户端）时它也必须为空
+- `scopes` 必须来自系统允许的 scope 集；含 `offline_access` 时授权类型必须含 `refresh_token`；授权类型含设备授权许可时 scope 必须含 `user:read`。设备授权许可永远不会授予 `email`，与它同时登记只记警告
+- `devicePolicy` 是设备授权的按客户端策略，保存在 Hydra client 的 `metadata.haruki.device`：
+  - `firstParty`（默认 `false`）：授权页上的「官方」徽章，只对保密客户端显示
+  - `allowWrite`（默认 `false`）：允许经设备授权申请 `game-data:write`。只能给有设备授权许可、scope 含 `game-data:write` 的**公开**客户端
+  - `maxCodesPer10m`（默认 `60`，范围 1–600）：每 10 分钟最多为该客户端签发的设备码数
+
+以下规则「看生效值」：编辑时省略 `grantTypes` / `devicePolicy` 就按客户端现有的值判断，所以编辑一个仅设备客户端而不传 `grantTypes`，不会因为 `redirectUris` 为空被拒绝。违反下列规则返回 400，`updatedData.code` 为：
+
+| `updatedData.code` | 原因 |
+| --- | --- |
+| `unsupported_grant_type` | `grantTypes` 含上述三种以外的授权类型 |
+| `grant_type_required` | `grantTypes` 既没有 `authorization_code` 也没有设备授权许可（含空列表、只有 `refresh_token`） |
+| `redirect_uris_required` | 授权类型含 `authorization_code` 却没有 `redirectUris` |
+| `post_logout_requires_redirect_uris` | 没有 `redirectUris` 却给了 `postLogoutRedirectUris` |
+| `offline_access_requires_refresh_token` | scope 含 `offline_access`，授权类型却没有 `refresh_token` |
+| `device_requires_user_read` | 授权类型含设备授权许可，scope 却没有 `user:read` |
+| `device_write_requires_public_client` | `allowWrite=true`，但客户端不是公开客户端、没有设备授权许可或 scope 没有 `game-data:write` |
+| `invalid_device_policy` | `maxCodesPer10m` 不在 1–600 之间 |
+
+创建、编辑和列表的响应都带 `grantTypes`（Hydra 中登记的授权类型）、`deviceEnabled`（是否有设备授权许可）和 `devicePolicy`（未保存的项显示默认值）。登记设备授权许可只是让客户端具备资格，设备授权流程本身的接入方式另见后续文档。
 
 服务端创建逻辑见 [`hydra_client_handlers.go`](../internal/modules/adminoauth/hydra_client_handlers.go)。
 
-编辑、启停、恢复和轮换 secret 都用 JSON Patch 只改管理端负责的字段。在 Hydra 侧单独配置的授权类型、token 寿命和其他 metadata 不会被覆盖。另外：
+编辑、启停、恢复和轮换 secret 都用 JSON Patch 只改管理端负责的字段。在 Hydra 侧单独配置的 token 寿命和其他 metadata 不会被覆盖，没传 `grantTypes` 时授权类型也不会。另外：
 
 - 编辑时省略 `postLogoutRedirectUris` 表示保留现有列表，传 `[]` 表示清空
+- 编辑时省略 `grantTypes` 表示保留现有授权类型；传了就整体替换，`response_types` 随之重新推导。把客户端改成仅设备（`redirectUris: []`）时，`postLogoutRedirectUris` 会在同一次修改中清空
+- 编辑时省略 `devicePolicy` 表示保留已保存的策略；传了就写入三项（省略的 `maxCodesPer10m` 按 60），`metadata.haruki.device` 下的其他键保留
 - 把公开客户端改成 `confidential` 时，更新响应会带一次性的 `clientSecret`，与创建时一样只返回这一次
 - 公开客户端没有 secret，对它调用 `rotate-secret` 返回 400，`updatedData.code` 为 `public_client_has_no_secret`
 - 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用）。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4

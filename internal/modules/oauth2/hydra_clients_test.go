@@ -212,6 +212,123 @@ func TestBuildHydraOAuthClientUpdatePatch(t *testing.T) {
 	}
 }
 
+func TestBuildHydraOAuthClientUpdatePatchWritesDevicePolicy(t *testing.T) {
+	policy := &HydraOAuthClientDevicePolicy{FirstParty: true, MaxCodesPer10m: 300}
+	nested := `{"allow_write":false,"first_party":true,"max_codes_per_10m":300}`
+	testCases := []struct {
+		name     string
+		metadata map[string]any
+		want     string
+	}{
+		{
+			name: "no metadata",
+			want: `[{"op":"add","path":"/metadata","value":{"haruki":{"device":` + nested + `}}}]`,
+		},
+		{
+			name:     "no haruki namespace",
+			metadata: map[string]any{"owner": "infra"},
+			want:     `[{"op":"add","path":"/metadata/haruki","value":{"device":` + nested + `}}]`,
+		},
+		{
+			name:     "no device policy yet",
+			metadata: map[string]any{"haruki": map[string]any{"active": true}},
+			want:     `[{"op":"add","path":"/metadata/haruki/device","value":` + nested + `}]`,
+		},
+		{
+			name:     "stored policy is patched member by member",
+			metadata: map[string]any{"haruki": map[string]any{"device": map[string]any{"note": "kept"}}},
+			want: `[{"op":"add","path":"/metadata/haruki/device/first_party","value":true},` +
+				`{"op":"add","path":"/metadata/haruki/device/allow_write","value":false},` +
+				`{"op":"add","path":"/metadata/haruki/device/max_codes_per_10m","value":300}]`,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ops, err := buildHydraOAuthClientUpdatePatch(&HydraOAuthClient{ClientID: "c", Metadata: testCase.metadata}, HydraOAuthClientUpsertInput{
+				ClientName:   "Name",
+				RedirectURIs: []string{"https://app.example.com/cb"},
+				Scopes:       []string{"user:read"},
+				DevicePolicy: policy,
+			})
+			if err != nil {
+				t.Fatalf("buildHydraOAuthClientUpdatePatch returned error: %v", err)
+			}
+			var metadataOps []HydraJSONPatchOp
+			for _, op := range ops {
+				if strings.HasPrefix(op.Path, "/metadata") {
+					metadataOps = append(metadataOps, op)
+				}
+			}
+			if got := marshalPatchForTest(t, metadataOps); got != testCase.want {
+				t.Fatalf("metadata ops =\n%s\nwant\n%s", got, testCase.want)
+			}
+		})
+	}
+}
+
+func TestBuildHydraOAuthClientPayloadWritesDevicePolicy(t *testing.T) {
+	payload := buildHydraOAuthClientPayload(HydraOAuthClientUpsertInput{
+		ClientID:     "cli",
+		ClientName:   "CLI",
+		Scopes:       []string{"user:read"},
+		GrantTypes:   []string{HydraGrantTypeDeviceCode},
+		DevicePolicy: &HydraOAuthClientDevicePolicy{AllowWrite: true, MaxCodesPer10m: 60},
+		Active:       true,
+	})
+	want := map[string]any{"haruki": map[string]any{
+		"active": true,
+		"device": map[string]any{"first_party": false, "allow_write": true, "max_codes_per_10m": 60},
+	}}
+	if !reflect.DeepEqual(payload["metadata"], want) {
+		t.Fatalf("metadata = %#v, want %#v", payload["metadata"], want)
+	}
+	if got := payload["redirect_uris"]; !reflect.DeepEqual(got, []string{}) {
+		t.Fatalf("redirect_uris = %#v, want an empty list", got)
+	}
+}
+
+func TestHydraOAuthClientDevicePolicyOf(t *testing.T) {
+	decode := func(raw string) *HydraOAuthClient {
+		var client HydraOAuthClient
+		if err := json.Unmarshal([]byte(raw), &client); err != nil {
+			t.Fatalf("decode client: %v", err)
+		}
+		return &client
+	}
+	defaults := DefaultHydraOAuthClientDevicePolicy()
+	for name, testCase := range map[string]struct {
+		client *HydraOAuthClient
+		want   HydraOAuthClientDevicePolicy
+	}{
+		"nil client":     {client: nil, want: defaults},
+		"no metadata":    {client: decode(`{"client_id":"c"}`), want: defaults},
+		"no device":      {client: decode(`{"metadata":{"haruki":{"active":true}}}`), want: defaults},
+		"device not map": {client: decode(`{"metadata":{"haruki":{"device":true}}}`), want: defaults},
+		"stored": {
+			client: decode(`{"metadata":{"haruki":{"device":{"first_party":true,"allow_write":true,"max_codes_per_10m":600}}}}`),
+			want:   HydraOAuthClientDevicePolicy{FirstParty: true, AllowWrite: true, MaxCodesPer10m: 600},
+		},
+		"malformed members fall back one by one": {
+			client: decode(`{"metadata":{"haruki":{"device":{"first_party":"yes","allow_write":true,"max_codes_per_10m":1.5}}}}`),
+			want:   HydraOAuthClientDevicePolicy{AllowWrite: true, MaxCodesPer10m: HydraDeviceMaxCodesPer10mDefault},
+		},
+		"out of range cap": {
+			client: decode(`{"metadata":{"haruki":{"device":{"max_codes_per_10m":601}}}}`),
+			want:   defaults,
+		},
+	} {
+		if got := HydraOAuthClientDevicePolicyOf(testCase.client); got != testCase.want {
+			t.Fatalf("%s: policy = %#v, want %#v", name, got, testCase.want)
+		}
+	}
+	if !HydraOAuthClientDeviceEnabled(decode(`{"grant_types":["authorization_code","urn:ietf:params:oauth:grant-type:device_code"]}`)) {
+		t.Fatalf("device grant not detected")
+	}
+	if HydraOAuthClientDeviceEnabled(decode(`{"grant_types":["authorization_code"]}`)) || HydraOAuthClientDeviceEnabled(nil) {
+		t.Fatalf("device grant reported without it")
+	}
+}
+
 func TestHydraOAuthClientSwitchesToConfidential(t *testing.T) {
 	testCases := []struct {
 		method     string

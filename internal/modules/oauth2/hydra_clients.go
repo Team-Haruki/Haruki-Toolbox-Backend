@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -21,8 +22,22 @@ const (
 	hydraClientMetadataNamespace = "haruki"
 	hydraClientActiveKey         = "active"
 
-	hydraGrantTypeAuthorizationCode  = "authorization_code"
-	hydraGrantTypeRefreshToken       = "refresh_token"
+	// metadata.haruki.device holds the per-client device-flow policy.
+	hydraClientDeviceKey               = "device"
+	hydraClientDeviceFirstPartyKey     = "first_party"
+	hydraClientDeviceAllowWriteKey     = "allow_write"
+	hydraClientDeviceMaxCodesPer10mKey = "max_codes_per_10m"
+
+	HydraGrantTypeAuthorizationCode = "authorization_code"
+	HydraGrantTypeRefreshToken      = "refresh_token"
+	// HydraGrantTypeDeviceCode is the RFC 8628 device authorization grant.
+	HydraGrantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
+
+	// The device policy's per-client cap on device codes issued per 10 minutes.
+	HydraDeviceMaxCodesPer10mDefault = 60
+	HydraDeviceMaxCodesPer10mMin     = 1
+	HydraDeviceMaxCodesPer10mMax     = 600
+
 	hydraResponseTypeCode            = "code"
 	hydraAuthMethodNone              = "none"
 	hydraAuthMethodClientSecretBasic = "client_secret_basic"
@@ -70,8 +85,36 @@ type HydraOAuthClientUpsertInput struct {
 	// GrantTypes on create defaults to authorization_code + refresh_token when
 	// empty. On update nil keeps grant_types and response_types as registered.
 	GrantTypes []string
+	// DevicePolicy is written to metadata.haruki.device when non-nil, on create and
+	// on update alike; nil writes nothing, so an update keeps the stored policy.
+	DevicePolicy *HydraOAuthClientDevicePolicy
 	// Active only seeds metadata on create; SetHydraOAuthClientActive changes it.
 	Active bool
+}
+
+// HydraOAuthClientDevicePolicy is a client's device-flow policy, stored as
+// metadata.haruki.device = {"first_party": bool, "allow_write": bool,
+// "max_codes_per_10m": int}. Hydra ignores it; the backend enforces it.
+type HydraOAuthClientDevicePolicy struct {
+	// FirstParty is only a badge on the approval card, shown for confidential
+	// clients alone: anyone can use a public client's client_id.
+	FirstParty bool
+	// AllowWrite lets the client's device flows be granted game-data:write. Only
+	// public clients may have it.
+	AllowWrite bool
+	// MaxCodesPer10m caps the device codes issued to the client per 10 minutes.
+	MaxCodesPer10m int
+}
+
+// DefaultHydraOAuthClientDevicePolicy is the policy of a client with no stored one.
+func DefaultHydraOAuthClientDevicePolicy() HydraOAuthClientDevicePolicy {
+	return HydraOAuthClientDevicePolicy{MaxCodesPer10m: HydraDeviceMaxCodesPer10mDefault}
+}
+
+// DefaultHydraOAuthClientGrantTypes are the grant types a client is created with
+// when none are given.
+func DefaultHydraOAuthClientGrantTypes() []string {
+	return []string{HydraGrantTypeAuthorizationCode, HydraGrantTypeRefreshToken}
 }
 
 // HydraJSONPatchOp is one RFC 6902 operation for PATCH /admin/clients/{id}.
@@ -128,6 +171,36 @@ func HydraOAuthClientActive(client *HydraOAuthClient) bool {
 		return true
 	}
 	return active
+}
+
+// HydraOAuthClientDeviceEnabled reports whether the client holds the device
+// authorization grant.
+func HydraOAuthClientDeviceEnabled(client *HydraOAuthClient) bool {
+	return client != nil && slices.Contains(client.GrantTypes, HydraGrantTypeDeviceCode)
+}
+
+// HydraOAuthClientDevicePolicyOf reads metadata.haruki.device. Missing or
+// malformed members, and a max_codes_per_10m outside its range, fall back to
+// DefaultHydraOAuthClientDevicePolicy member by member.
+func HydraOAuthClientDevicePolicyOf(client *HydraOAuthClient) HydraOAuthClientDevicePolicy {
+	policy := DefaultHydraOAuthClientDevicePolicy()
+	if client == nil {
+		return policy
+	}
+	namespace, _ := client.Metadata[hydraClientMetadataNamespace].(map[string]any)
+	device, _ := namespace[hydraClientDeviceKey].(map[string]any)
+	if firstParty, ok := device[hydraClientDeviceFirstPartyKey].(bool); ok {
+		policy.FirstParty = firstParty
+	}
+	if allowWrite, ok := device[hydraClientDeviceAllowWriteKey].(bool); ok {
+		policy.AllowWrite = allowWrite
+	}
+	// Metadata decodes into any, so a stored integer arrives as float64.
+	if maxCodes, ok := device[hydraClientDeviceMaxCodesPer10mKey].(float64); ok && maxCodes == math.Trunc(maxCodes) &&
+		maxCodes >= HydraDeviceMaxCodesPer10mMin && maxCodes <= HydraDeviceMaxCodesPer10mMax {
+		policy.MaxCodesPer10m = int(maxCodes)
+	}
+	return policy
 }
 
 func ListHydraOAuthClients(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig) ([]HydraOAuthClient, error) {
@@ -188,7 +261,9 @@ func SetHydraOAuthClientActive(ctx context.Context, hydraConfig *harukiOAuth2.Hy
 	if err != nil {
 		return nil, err
 	}
-	return PatchHydraOAuthClient(ctx, hydraConfig, clientID, []HydraJSONPatchOp{hydraClientActiveMetadataPatchOp(current.Metadata, active)})
+	return PatchHydraOAuthClient(ctx, hydraConfig, clientID, hydraClientMetadataPatchOps(current.Metadata, []string{hydraClientMetadataNamespace}, []hydraClientMetadataMember{
+		{key: hydraClientActiveKey, value: active},
+	}))
 }
 
 // RotateHydraOAuthClientSecret replaces the secret of a confidential client.
@@ -389,18 +464,18 @@ func buildHydraOAuthClientPayload(input HydraOAuthClientUpsertInput) map[string]
 	}
 	grantTypes := append([]string(nil), input.GrantTypes...)
 	if len(grantTypes) == 0 {
-		grantTypes = []string{hydraGrantTypeAuthorizationCode, hydraGrantTypeRefreshToken}
+		grantTypes = DefaultHydraOAuthClientGrantTypes()
 	}
 	method := hydraAuthMethodFromClientType(clientType)
 	payload := map[string]any{
 		"client_id":                  strings.TrimSpace(input.ClientID),
 		"client_name":                strings.TrimSpace(input.ClientName),
-		"redirect_uris":              append([]string(nil), input.RedirectURIs...),
+		"redirect_uris":              append([]string{}, input.RedirectURIs...),
 		"grant_types":                grantTypes,
 		"response_types":             hydraResponseTypesForGrantTypes(grantTypes),
 		"scope":                      strings.Join(input.Scopes, " "),
 		"token_endpoint_auth_method": method,
-		"metadata":                   buildHydraClientMetadata(input.Active),
+		"metadata":                   buildHydraClientMetadata(input.Active, input.DevicePolicy),
 	}
 	if len(input.PostLogoutRedirectURIs) > 0 {
 		payload["post_logout_redirect_uris"] = append([]string(nil), input.PostLogoutRedirectURIs...)
@@ -443,6 +518,10 @@ func buildHydraOAuthClientUpdatePatch(current *HydraOAuthClient, input HydraOAut
 		)
 	}
 
+	if input.DevicePolicy != nil {
+		ops = append(ops, hydraClientMetadataPatchOps(current.Metadata, []string{hydraClientMetadataNamespace, hydraClientDeviceKey}, hydraClientDevicePolicyMembers(*input.DevicePolicy))...)
+	}
+
 	// The auth method is only written when the client type changes, so an out-of-band
 	// confidential method such as client_secret_post survives an edit.
 	if clientType := strings.TrimSpace(input.ClientType); clientType != "" {
@@ -461,24 +540,62 @@ func buildHydraOAuthClientUpdatePatch(current *HydraOAuthClient, input HydraOAut
 	return ops, nil
 }
 
-// hydraClientActiveMetadataPatchOp targets the deepest existing parent of
-// metadata.haruki.active. Re-sending the whole metadata map would round-trip
-// unknown values through any (large integers lose precision) and overwrite keys
-// changed concurrently.
-func hydraClientActiveMetadataPatchOp(metadata map[string]any, active bool) HydraJSONPatchOp {
+// hydraClientMetadataMember is one metadata member a patch writes.
+type hydraClientMetadataMember struct {
+	key   string
+	value any
+}
+
+// hydraClientMetadataPatchOps writes members into the metadata object at
+// parents (e.g. haruki, device) with add operations aimed at the deepest
+// existing parent: one op per member when the whole path exists, otherwise a
+// single op creating the first missing object with the rest nested inside.
+// Re-sending the whole metadata map would round-trip unknown values through any
+// (large integers lose precision) and overwrite keys changed concurrently.
+func hydraClientMetadataPatchOps(metadata map[string]any, parents []string, members []hydraClientMetadataMember) []HydraJSONPatchOp {
 	if metadata == nil {
-		return HydraJSONPatchOp{Op: hydraJSONPatchOpAdd, Path: "/metadata", Value: buildHydraClientMetadata(active)}
+		return []HydraJSONPatchOp{{Op: hydraJSONPatchOpAdd, Path: "/metadata", Value: nestHydraClientMetadata(parents, members)}}
 	}
-	if _, ok := metadata[hydraClientMetadataNamespace].(map[string]any); !ok {
-		return HydraJSONPatchOp{Op: hydraJSONPatchOpAdd, Path: "/metadata/" + hydraClientMetadataNamespace, Value: map[string]any{hydraClientActiveKey: active}}
+	path := "/metadata"
+	node := metadata
+	for i, parent := range parents {
+		next, ok := node[parent].(map[string]any)
+		if !ok {
+			return []HydraJSONPatchOp{{Op: hydraJSONPatchOpAdd, Path: path + "/" + parent, Value: nestHydraClientMetadata(parents[i+1:], members)}}
+		}
+		path += "/" + parent
+		node = next
 	}
-	return HydraJSONPatchOp{Op: hydraJSONPatchOpAdd, Path: "/metadata/" + hydraClientMetadataNamespace + "/" + hydraClientActiveKey, Value: active}
+	ops := make([]HydraJSONPatchOp, 0, len(members))
+	for _, member := range members {
+		ops = append(ops, HydraJSONPatchOp{Op: hydraJSONPatchOpAdd, Path: path + "/" + member.key, Value: member.value})
+	}
+	return ops
+}
+
+func nestHydraClientMetadata(parents []string, members []hydraClientMetadataMember) map[string]any {
+	value := make(map[string]any, len(members))
+	for _, member := range members {
+		value[member.key] = member.value
+	}
+	for i := len(parents) - 1; i >= 0; i-- {
+		value = map[string]any{parents[i]: value}
+	}
+	return value
+}
+
+func hydraClientDevicePolicyMembers(policy HydraOAuthClientDevicePolicy) []hydraClientMetadataMember {
+	return []hydraClientMetadataMember{
+		{key: hydraClientDeviceFirstPartyKey, value: policy.FirstParty},
+		{key: hydraClientDeviceAllowWriteKey, value: policy.AllowWrite},
+		{key: hydraClientDeviceMaxCodesPer10mKey, value: policy.MaxCodesPer10m},
+	}
 }
 
 // hydraResponseTypesForGrantTypes returns ["code"] exactly when the client may
 // use the authorization code grant; a device-only client has none.
 func hydraResponseTypesForGrantTypes(grantTypes []string) []string {
-	if slices.Contains(grantTypes, hydraGrantTypeAuthorizationCode) {
+	if slices.Contains(grantTypes, HydraGrantTypeAuthorizationCode) {
 		return []string{hydraResponseTypeCode}
 	}
 	return []string{}
@@ -493,10 +610,10 @@ func hydraAuthMethodFromClientType(clientType string) string {
 	}
 }
 
-func buildHydraClientMetadata(active bool) map[string]any {
-	return map[string]any{
-		hydraClientMetadataNamespace: map[string]any{
-			hydraClientActiveKey: active,
-		},
+func buildHydraClientMetadata(active bool, devicePolicy *HydraOAuthClientDevicePolicy) map[string]any {
+	namespace := map[string]any{hydraClientActiveKey: active}
+	if devicePolicy != nil {
+		namespace[hydraClientDeviceKey] = nestHydraClientMetadata(nil, hydraClientDevicePolicyMembers(*devicePolicy))
 	}
+	return map[string]any{hydraClientMetadataNamespace: namespace}
 }

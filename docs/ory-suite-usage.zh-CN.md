@@ -450,7 +450,7 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 编辑、启停、恢复和轮换 secret 都通过 `PATCH /admin/clients/{id}`（JSON Patch，请求体是操作数组）完成，不用整体 `PUT`：
 
-- 只改管理端负责的字段：`client_name`、`scope`、`redirect_uris`、`post_logout_redirect_uris`、`token_endpoint_auth_method`、`client_secret`、`metadata.haruki.active`。授权类型、token 寿命、`skip_consent` 和其他 metadata 保持原样
+- 只改管理端负责的字段：`client_name`、`scope`、`redirect_uris`、`post_logout_redirect_uris`、`token_endpoint_auth_method`、`client_secret`、`metadata.haruki.active`，以及载荷里带了才改的 `grant_types` / `response_types` 与 `metadata.haruki.device` 的三个键（写到已存在的最深父节点）。token 寿命、`skip_consent` 和其他 metadata 保持原样
 - 只用 `add` / `replace`，不用 `test`（Hydra 对 `test` 返回 500，即使值匹配）
 - 公开客户端切换为保密客户端时，新 secret 和 `token_endpoint_auth_method` 写在同一个 patch 里。只改认证方式不写 secret，Hydra 也会接受，但客户端之后无法认证
 - 公开客户端（`token_endpoint_auth_method=none`）拒绝轮换 secret
