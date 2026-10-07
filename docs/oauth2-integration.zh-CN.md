@@ -490,6 +490,9 @@ user:read  bindings:read  game-data:read  game-data:write
 - 编辑时省略 `postLogoutRedirectUris` 表示保留现有列表，传 `[]` 表示清空
 - 把公开客户端改成 `confidential` 时，更新响应会带一次性的 `clientSecret`，与创建时一样只返回这一次
 - 公开客户端没有 secret，对它调用 `rotate-secret` 返回 400，`updatedData.code` 为 `public_client_has_no_secret`
+- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用）。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
+- 停用一旦生效就返回 200：`revokedSubjects` 是撤销成功的 subject 数，`failedSubjects` 列出撤销失败的 subject，`revocationComplete` 为 false 表示有一步失败、还有授权没撤销掉，这时对该客户端执行「撤销全部授权」补救。「撤销全部授权」部分失败时同样返回 200 和这三个字段；一条授权都没撤销成功时返回 500
+- 删除客户端时，它的授权和 token 由 Hydra 一并删除
 
 公开客户端示例：
 

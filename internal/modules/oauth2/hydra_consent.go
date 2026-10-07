@@ -173,6 +173,10 @@ func extractHydraNextPageToken(linkHeaders []string) string {
 	return ""
 }
 
+// RevokeHydraConsentSessions sends DELETE /admin/oauth2/auth/sessions/consent with
+// subject+client, or subject+all=true when clientID is empty. The query goes through
+// url.Values, so a "+" in the subject is sent as %2B: Hydra reads a raw "+" as a
+// space and then answers 204 without revoking anything.
 func RevokeHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject, clientID string) error {
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
@@ -189,19 +193,36 @@ func RevokeHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.H
 	return err
 }
 
-func RevokeHydraConsentSessionsForSubjects(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subjects []string, clientID string) error {
+// RevokeHydraConsentSessionsForSubjects revokes consent sessions one subject at a
+// time: subject+client when clientID is set, subject+all=true (every client of the
+// subject) when it is empty. Hydra v25.4.0 rejects client without subject, with or
+// without all=true, so revoking a whole client means calling this with each of its
+// subjects. Revoking a consent session also invalidates the access and refresh
+// tokens issued under it.
+//
+// Every subject is tried. revoked counts the subjects Hydra accepted, failed lists
+// the others, and err is non-nil when any subject failed or none was given.
+func RevokeHydraConsentSessionsForSubjects(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, subjects []string) (revoked int, failed []string, err error) {
 	normalizedSubjects := normalizeHydraSubjects(subjects...)
 	if len(normalizedSubjects) == 0 {
-		return fmt.Errorf("at least one subject is required")
+		return 0, nil, fmt.Errorf("at least one subject is required")
 	}
 
 	var firstErr error
 	for _, subject := range normalizedSubjects {
-		if err := RevokeHydraConsentSessions(ctx, hydraConfig, subject, clientID); err != nil && firstErr == nil {
-			firstErr = err
+		if revokeErr := RevokeHydraConsentSessions(ctx, hydraConfig, subject, clientID); revokeErr != nil {
+			failed = append(failed, subject)
+			if firstErr == nil {
+				firstErr = revokeErr
+			}
+			continue
 		}
+		revoked++
 	}
-	return firstErr
+	if firstErr != nil {
+		return revoked, failed, fmt.Errorf("failed to revoke hydra consent sessions for %d of %d subjects: %w", len(failed), len(normalizedSubjects), firstErr)
+	}
+	return revoked, nil, nil
 }
 
 func HydraConsentSessionExistsForClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject, clientID string) (bool, error) {

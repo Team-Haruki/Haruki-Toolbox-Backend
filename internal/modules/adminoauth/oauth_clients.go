@@ -66,6 +66,14 @@ type adminOAuthClientListResponse struct {
 type adminOAuthClientActiveResponse struct {
 	ClientID string `json:"clientId"`
 	Active   bool   `json:"active"`
+	// Disabling revokes the client's grants subject by subject. RevokedSubjects
+	// counts the subjects Hydra accepted. FailedSubjects lists the failed subjects
+	// the admin may see and is never null. RevocationComplete is false when any step
+	// failed: listing the grants, a subject (shown or not), or the access-token
+	// cleanup. Enabling revokes nothing (0, [], true).
+	RevokedSubjects    int      `json:"revokedSubjects"`
+	FailedSubjects     []string `json:"failedSubjects"`
+	RevocationComplete bool     `json:"revocationComplete"`
 }
 
 type adminOAuthClientPayload struct {

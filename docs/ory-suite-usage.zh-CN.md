@@ -450,10 +450,25 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 - 公开客户端（`token_endpoint_auth_method=none`）拒绝轮换 secret
 - `PUT /admin/clients/{id}/lifespans` 会整体替换所有寿命字段，后端不调用它
 
+停用、撤销全部授权和删除客户端时，授权按 subject 撤销：
+
+- Hydra v25.4.0 的授权会话撤销接口（`DELETE /admin/oauth2/auth/sessions/consent`）只接受三种参数组合：只带 `consent_request_id`；`subject`+`client`；`subject`+`all=true`。按客户端整体撤销（`client=X&all=true`，或只带 `client`）返回 400，所以撤销一个客户端的授权要对每个 subject 各调用一次 `subject`+`client`
+- subject 由 `collectHydraClientAuthorizationRecords` 枚举：遍历本地用户，找出持有该客户端授权会话的用户，再撤销每个用户的全部 subject（`kratos_identity_id` 和 `users.id`），因为旧授权可能挂在回退 subject 下。有两类授权枚举不到：
+  - 没有本地用户的 subject 的授权
+  - 用户在该客户端下的流程全部不在 Hydra 的授权会话列表里。v25.4.0 的列表（`GET /admin/oauth2/auth/sessions/consent?subject=`）跳过 `consent_skip=TRUE` 的流程（因为记住了之前的同意而跳过同意页），也跳过 `remember_for > 0` 且已过期的流程（不论 `remember` 是否为 true）。这些流程签发的 refresh token 可能仍然有效
+  - 这两类授权在客户端停用期间由 bearer 中间件的 active 检查拦截，但没有被撤销：重新启用客户端后又能使用，「撤销全部授权」也撤不到。被枚举到的用户不受影响，因为撤销接口按 `subject`+`client` 删除时不做这层过滤，隐藏的流程会一起删掉。单个用户可以用指定用户的撤销补救（请求体带 `targetUserId` 和 `"revokeTokens": false`，否则返回 501），它直接按该用户的 subject 撤销，不依赖枚举
+- 查询串用 `url.Values` 构造，subject 中的 `+` 编码为 `%2B`。未编码的 `+` 会被 Hydra 解成空格，返回 204 但什么都没删
+- 撤销授权会话会级联删除该会话签发的 access token 和 refresh token，这才是真正的撤销。`DELETE /admin/oauth2/tokens?client_id=` 只删 access token，refresh token 仍能换出新的 access token，只作补充清理
+- 停用（`PUT /api/admin/oauth-clients/:client_id/active`，`active=false`）：先改 metadata，再逐 subject 撤销，最后删 access token。metadata 改完后一律返回 200，响应带 `revokedSubjects`（Hydra 接受撤销的 subject 数）、`failedSubjects`（撤销失败、且当前管理员有权管理的用户的 subject，以及管理员本人的 subject。这几个路由只有超级管理员能访问，所以目前不会过滤掉任何 subject；按角色层级过滤是纵深防御，防止将来放宽路由守卫后普通管理员看到超级管理员的 subject）和 `revocationComplete`（任何一步失败即为 false，包括看不到的 subject）。停用之后界面上只剩「启用」，没撤销完的授权用「撤销全部授权」补救
+- 撤销全部授权（`POST /api/admin/oauth-clients/:client_id/revoke`，不指定用户）同样逐 subject 撤销。部分失败返回 200 和上述字段。枚举失败，或者枚举到了授权却没有一条确认撤销（每个持有者都至少有一个 subject 撤销失败）时，返回 500，也不再删 access token。判断依据是确认撤销的授权数，而不是 `revokedSubjects`：持有者另一个空的 subject 撤销时 Hydra 也返回 204，会被计入 `revokedSubjects`。返回 500 不保证什么都没变（持有者的一个 subject 可能已经撤销成功），但撤销是幂等的，可以直接重试
+- 删除客户端时，Hydra 通过外键级联删除它的授权会话和 token，后端不再先调用撤销接口；`deletedAuthorizations` 仍按枚举到的授权数计
+
 实现主要在：
 
 - `internal/modules/oauth2/hydra_clients.go`
+- `internal/modules/oauth2/hydra_consent.go`
 - `internal/modules/adminoauth/hydra_client_handlers.go`
+- `internal/modules/adminoauth/hydra_client_grant_revocation.go`
 - `internal/modules/adminusers/user_oauth_handlers.go`
 
 ## 11. 当前配置层面对 Ory 的约束
@@ -642,6 +657,26 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 
 - `PUT /admin/clients/{id}` 是整体替换，载荷里没带的字段都会丢失。生命周期操作要用
   JSON Patch，见 §10.4
+
+### 12.8 按客户端整体撤销授权
+
+后果：
+
+- 停用接口在 metadata 已经改成停用之后返回 500，refresh token 仍然有效，重新启用后又能继续刷新
+- 「撤销全部授权」失败；默认的「删除并撤销」在删除之前就失败，客户端没有被删掉
+
+原因：
+
+- Hydra 对 `client=X&all=true` 和只带 `client` 的撤销请求返回 400。要逐个 subject
+  用 `subject`+`client` 撤销；`DELETE /admin/oauth2/tokens?client_id=` 只删 access token，
+  不能代替撤销。见 §10.4
+
+逐个 subject 撤销后仍有残余：
+
+- subject 靠枚举本地用户的授权会话得到，有两类授权找不到：没有本地用户的 subject 的授权；
+  用户在该客户端下的流程全部被 Hydra 的会话列表跳过（`consent_skip=TRUE`，或
+  `remember_for > 0` 且已过期）。客户端停用期间这些 token 被 bearer 中间件拦截，重新启用后
+  恢复有效，「撤销全部授权」也撤不到。见 §10.4
 
 ## 13. 对后续开发的建议
 

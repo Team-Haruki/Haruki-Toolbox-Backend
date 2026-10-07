@@ -68,6 +68,9 @@ func handleRevokeHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusNotImplemented, "targeted token revocation is unavailable while oauth2 is backed by hydra", nil)
 		}
 		revokedAuthorizations := 0
+		revokedSubjects := 0
+		failedSubjects := []string{}
+		failedSubjectCount := 0
 		if options.RevokeAuthorizations {
 			if targetUser != nil {
 				subjects := oauth2Module.HydraSubjectsForUser(targetUser.ID, targetUser.KratosIdentityID)
@@ -78,24 +81,37 @@ func handleRevokeHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 						}
 					}
 				}
-				if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(c.Context(), hydraConfig, subjects, clientID); err != nil {
+				revoked, _, err := oauth2Module.RevokeHydraConsentSessionsForSubjects(c.Context(), hydraConfig, clientID, subjects)
+				if err != nil {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true}))
 					return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
 				}
+				revokedSubjects = revoked
 			} else {
-				if records, listErr := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID); listErr == nil {
-					revokedAuthorizations = len(records)
-				}
-				if err := oauth2Module.RevokeHydraConsentSessionsByClient(c.Context(), hydraConfig, clientID); err != nil {
-					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true}))
+				revocation, err := revokeHydraClientGrantsPerSubject(c.Context(), apiHelper, hydraConfig, clientID)
+				if err != nil {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{"hydraMode": true}))
 					return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
 				}
+				// Grants were found but not one is confirmed revoked: every holder has a
+				// failed subject. That is a failure, not a partial success. revocation.revoked
+				// cannot decide this, because it also counts a holder's empty second subject.
+				// Revoking is idempotent, so the admin can simply retry.
+				if len(revocation.records) > 0 && revocation.revokedAuthorizations() == 0 {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true, "revokedSubjects": revocation.revoked, "failedSubjects": len(revocation.failed)}))
+					return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
+				}
+				revokedAuthorizations = revocation.revokedAuthorizations()
+				revokedSubjects = revocation.revoked
+				failedSubjects = revocation.failedSubjectsVisibleTo(actorUserID, actorRole)
+				failedSubjectCount = len(revocation.failed)
 			}
 		}
 		revokedTokens := 0
 		if targetUser == nil && options.RevokeTokens {
+			// Access tokens only: refresh tokens die with the consent sessions revoked above.
 			if err := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID); err != nil {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true}))
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true, "revokedSubjects": revokedSubjects, "failedSubjects": failedSubjectCount}))
 				return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth tokens")
 			}
 		}
@@ -104,13 +120,36 @@ func handleRevokeHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			target := targetUser.ID
 			targetUserID = &target
 		}
-		resp := adminOAuthClientRevokeResponse{ClientID: clientID, TargetUserID: targetUserID, RevokeAuthorizations: options.RevokeAuthorizations, RevokeTokens: options.RevokeTokens && targetUser == nil, RevokedAuthorizations: revokedAuthorizations, RevokedTokens: revokedTokens}
-		metadata := map[string]any{"hydraMode": true, "revokeAuthorizations": options.RevokeAuthorizations, "revokeTokens": options.RevokeTokens && targetUser == nil, "revokedAuthorizations": revokedAuthorizations, "revokedTokens": revokedTokens}
+		resp := adminOAuthClientRevokeResponse{
+			ClientID:              clientID,
+			TargetUserID:          targetUserID,
+			RevokeAuthorizations:  options.RevokeAuthorizations,
+			RevokeTokens:          options.RevokeTokens && targetUser == nil,
+			RevokedAuthorizations: revokedAuthorizations,
+			RevokedTokens:         revokedTokens,
+			RevokedSubjects:       revokedSubjects,
+			FailedSubjects:        failedSubjects,
+			RevocationComplete:    failedSubjectCount == 0,
+		}
+		metadata := map[string]any{
+			"hydraMode":             true,
+			"revokeAuthorizations":  options.RevokeAuthorizations,
+			"revokeTokens":          options.RevokeTokens && targetUser == nil,
+			"revokedAuthorizations": revokedAuthorizations,
+			"revokedTokens":         revokedTokens,
+			"revokedSubjects":       revokedSubjects,
+			"failedSubjects":        failedSubjectCount,
+			"revocationComplete":    resp.RevocationComplete,
+		}
 		if targetUser != nil {
 			metadata["targetUserID"] = targetUser.ID
 		}
+		message := "oauth client authorizations revoked"
+		if !resp.RevocationComplete {
+			message = "oauth client authorizations revoked partially"
+		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, metadata)
-		return harukiAPIHelper.Responses.SuccessResponse(c, "oauth client authorizations revoked", &resp)
+		return harukiAPIHelper.Responses.SuccessResponse(c, message, &resp)
 	}
 }
 

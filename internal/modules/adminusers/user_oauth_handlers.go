@@ -131,7 +131,7 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 				}
 			}
 		}
-		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(c.Context(), hydraConfig, hydraSubjects, clientID); err != nil {
+		if _, _, err := oauth2Module.RevokeHydraConsentSessionsForSubjects(c.Context(), hydraConfig, clientID, hydraSubjects); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
 		}

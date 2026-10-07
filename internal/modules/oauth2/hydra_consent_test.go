@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,35 +148,93 @@ func TestListHydraConsentSessionsForSubjectsDeduplicates(t *testing.T) {
 	}
 }
 
-func TestRevokeHydraConsentSessionsForSubjectsRevokesAllSubjects(t *testing.T) {
-	seenSubjects := make([]string, 0, 2)
+// newHydraConsentRevokeRecorder records the raw query of every consent revocation
+// and answers 500 for the subjects in failing, 204 otherwise.
+func newHydraConsentRevokeRecorder(t *testing.T, failing ...string) (*harukiOAuth2.HydraConfig, *[]string) {
+	t.Helper()
+	var mu sync.Mutex
+	rawQueries := make([]string, 0)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" {
+		if r.URL.Path != "/admin/oauth2/auth/sessions/consent" || r.Method != http.MethodDelete {
+			t.Errorf("unexpected hydra request %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		if r.Method != http.MethodDelete {
-			w.WriteHeader(http.StatusMethodNotAllowed)
+		mu.Lock()
+		rawQueries = append(rawQueries, r.URL.RawQuery)
+		mu.Unlock()
+		if slices.Contains(failing, r.URL.Query().Get("subject")) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"server_error"}`))
 			return
 		}
-		seenSubjects = append(seenSubjects, r.URL.Query().Get("subject"))
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
+	return harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: server.URL, RequestTimeout: 5 * time.Second}), &rawQueries
+}
 
-	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
-		AdminURL:       server.URL,
-		RequestTimeout: 5 * time.Second,
-	})
+func TestRevokeHydraConsentSessionsForSubjectsRevokesAllSubjects(t *testing.T) {
+	hydraConfig, rawQueries := newHydraConsentRevokeRecorder(t)
 
-	if err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, []string{"kratos-1", "u-1", "kratos-1"}, "client-a"); err != nil {
+	revoked, failed, err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, "client-a", []string{"kratos-1", "u-1", "kratos-1"})
+	if err != nil {
 		t.Fatalf("RevokeHydraConsentSessionsForSubjects returned error: %v", err)
 	}
-	slices.Sort(seenSubjects)
-	if len(seenSubjects) != 2 {
-		t.Fatalf("len(seenSubjects) = %d, want 2", len(seenSubjects))
+	if revoked != 2 || len(failed) != 0 {
+		t.Fatalf("revoked = %d, failed = %#v, want 2 and none", revoked, failed)
 	}
-	if seenSubjects[0] != "kratos-1" || seenSubjects[1] != "u-1" {
-		t.Fatalf("seenSubjects = %#v, want [kratos-1 u-1]", seenSubjects)
+	got := slices.Sorted(slices.Values(*rawQueries))
+	if want := []string{"client=client-a&subject=kratos-1", "client=client-a&subject=u-1"}; !slices.Equal(got, want) {
+		t.Fatalf("queries = %#v, want %#v", got, want)
+	}
+}
+
+// Hydra decodes a raw "+" to a space and then revokes nothing (T10).
+func TestRevokeEncodesPlusInSubject(t *testing.T) {
+	hydraConfig, rawQueries := newHydraConsentRevokeRecorder(t)
+
+	if _, _, err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, "bot-1", []string{"a+b"}); err != nil {
+		t.Fatalf("RevokeHydraConsentSessionsForSubjects returned error: %v", err)
+	}
+	if want := []string{"client=bot-1&subject=a%2Bb"}; !slices.Equal(*rawQueries, want) {
+		t.Fatalf("queries = %#v, want %#v", *rawQueries, want)
+	}
+}
+
+func TestRevokeHydraConsentSessionsForSubjectsReportsFailedSubjects(t *testing.T) {
+	hydraConfig, rawQueries := newHydraConsentRevokeRecorder(t, "u-2")
+
+	revoked, failed, err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, "client-a", []string{"u-1", "u-2", "u-3"})
+	if err == nil {
+		t.Fatalf("expected an error when a subject fails")
+	}
+	if status := HydraRequestStatusCode(err); status != http.StatusInternalServerError {
+		t.Fatalf("HydraRequestStatusCode(err) = %d, want the wrapped hydra 500", status)
+	}
+	if revoked != 2 || !slices.Equal(failed, []string{"u-2"}) {
+		t.Fatalf("revoked = %d, failed = %#v, want 2 and [u-2]", revoked, failed)
+	}
+	if len(*rawQueries) != 3 {
+		t.Fatalf("queries = %#v, want every subject tried after the failure", *rawQueries)
+	}
+}
+
+func TestRevokeHydraConsentSessionsForSubjectsWithoutClientRevokesEveryClient(t *testing.T) {
+	hydraConfig, rawQueries := newHydraConsentRevokeRecorder(t)
+
+	if _, _, err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, "", []string{"kratos-1"}); err != nil {
+		t.Fatalf("RevokeHydraConsentSessionsForSubjects returned error: %v", err)
+	}
+	if want := []string{"all=true&subject=kratos-1"}; !slices.Equal(*rawQueries, want) {
+		t.Fatalf("queries = %#v, want %#v", *rawQueries, want)
+	}
+
+	if _, _, err := RevokeHydraConsentSessionsForSubjects(context.Background(), hydraConfig, "client-a", []string{" ", ""}); err == nil {
+		t.Fatalf("expected an error without subjects")
+	}
+	if len(*rawQueries) != 1 {
+		t.Fatalf("queries = %#v, want no request without subjects", *rawQueries)
 	}
 }

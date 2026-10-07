@@ -11,6 +11,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -171,7 +172,7 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
 		}
-		_, _, err := adminCoreModule.CurrentAdminActor(c)
+		actorUserID, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
@@ -190,20 +191,42 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
 		}
+		resp := adminOAuthClientActiveResponse{
+			ClientID:           updatedClient.ClientID,
+			Active:             oauth2Module.HydraOAuthClientActive(updatedClient),
+			FailedSubjects:     []string{},
+			RevocationComplete: true,
+		}
+		metadata := map[string]any{"hydraMode": true, "active": active}
+		message := "oauth client status updated"
 		if !active {
-			// Disabling must cut existing access, not only flip the metadata flag.
-			if err := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID); err != nil {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true, "active": active}))
-				return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
+			// Disabling must cut existing access, not only flip the metadata flag. The
+			// client is already disabled here, so revocation failures are reported in a
+			// 200 and the admin can finish the job with revoke-all.
+			revocation, enumerateErr := revokeHydraClientGrantsPerSubject(c.Context(), apiHelper, hydraConfig, clientID)
+			if enumerateErr != nil {
+				harukiLogger.Warnf("Failed to list grants of disabled oauth client %s: %v", clientID, enumerateErr)
+				metadata["queryAuthorizationsFailed"] = true
 			}
-			if err := oauth2Module.RevokeHydraConsentSessionsByClient(c.Context(), hydraConfig, clientID); err != nil {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true, "active": active}))
-				return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
+			// Access tokens only: refresh tokens die with the consent sessions revoked
+			// above. This also reaches subjects the enumeration cannot find.
+			tokensErr := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID)
+			if tokensErr != nil {
+				harukiLogger.Warnf("Failed to delete access tokens of disabled oauth client %s: %v", clientID, tokensErr)
+				metadata["revokeTokensFailed"] = true
+			}
+			resp.RevokedSubjects = revocation.revoked
+			resp.FailedSubjects = revocation.failedSubjectsVisibleTo(actorUserID, actorRole)
+			resp.RevocationComplete = enumerateErr == nil && revocation.complete() && tokensErr == nil
+			metadata["revokedSubjects"] = revocation.revoked
+			metadata["failedSubjects"] = len(revocation.failed)
+			metadata["revocationComplete"] = resp.RevocationComplete
+			if !resp.RevocationComplete {
+				message = "oauth client disabled, but some grants could not be revoked"
 			}
 		}
-		resp := adminOAuthClientActiveResponse{ClientID: updatedClient.ClientID, Active: oauth2Module.HydraOAuthClientActive(updatedClient)}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{"hydraMode": true, "active": active})
-		return harukiAPIHelper.Responses.SuccessResponse(c, "oauth client status updated", &resp)
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, metadata)
+		return harukiAPIHelper.Responses.SuccessResponse(c, message, &resp)
 	}
 }
 
@@ -355,12 +378,10 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		}
 		deletedAuthorizations := 0
 		if options.DeleteAuthorizations {
+			// Nothing to revoke first: deleting the client cascades to its consent
+			// sessions and tokens in Hydra. The grants are only counted.
 			if records, listErr := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID); listErr == nil {
 				deletedAuthorizations = len(records)
-			}
-			if err := oauth2Module.RevokeHydraConsentSessionsByClient(c.Context(), hydraConfig, clientID); err != nil {
-				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteAuthorizationsFailed, map[string]any{"hydraMode": true}))
-				return harukiAPIHelper.ErrorInternal(c, "failed to delete oauth authorizations")
 			}
 		}
 		deletedTokens := 0

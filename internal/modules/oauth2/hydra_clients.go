@@ -247,27 +247,21 @@ func PatchHydraOAuthClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraC
 	return sendHydraClientBody(ctx, hydraConfig, http.MethodPatch, "/admin/clients/"+url.PathEscape(clientID), requestBody)
 }
 
+// DeleteHydraOAuthClient deletes the client. Hydra's foreign keys cascade the delete
+// to the client's consent sessions, access tokens and refresh tokens.
 func DeleteHydraOAuthClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
 	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/clients/"+url.PathEscape(strings.TrimSpace(clientID)), nil, nil)
 	return err
 }
 
+// DeleteHydraOAuthTokensByClientID deletes the client's access tokens only. Hydra
+// keeps its refresh tokens, and they go on minting new access tokens. This is a
+// supplement: revoking the consent sessions (RevokeHydraConsentSessionsForSubjects)
+// is what invalidates access and refresh tokens together.
 func DeleteHydraOAuthTokensByClientID(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
 	query := url.Values{}
 	query.Set("client_id", strings.TrimSpace(clientID))
 	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/tokens", query, nil)
-	return err
-}
-
-func RevokeHydraConsentSessionsByClient(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
-	clientID = strings.TrimSpace(clientID)
-	if clientID == "" {
-		return fmt.Errorf("client id is required")
-	}
-	query := url.Values{}
-	query.Set("client", clientID)
-	query.Set("all", "true")
-	_, err := sendHydraAdminRequest(ctx, hydraConfig, http.MethodDelete, "/admin/oauth2/auth/sessions/consent", query, nil)
 	return err
 }
 

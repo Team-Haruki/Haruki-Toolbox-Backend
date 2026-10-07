@@ -53,7 +53,6 @@ const (
 	adminFailureReasonCountSuccessAuditLogsFailed     = "count_success_audit_logs_failed"
 	adminFailureReasonCountTokensFailed               = "count_tokens_failed"
 	adminFailureReasonCreateClientFailed              = "create_client_failed"
-	adminFailureReasonDeleteAuthorizationsFailed      = "delete_authorizations_failed"
 	adminFailureReasonDeleteClientFailed              = "delete_client_failed"
 	adminFailureReasonDeleteTokensFailed              = "delete_tokens_failed"
 	adminFailureReasonGenerateClientSecretFailed      = "generate_client_secret_failed"

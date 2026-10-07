@@ -17,8 +17,10 @@ import (
 	json "encoding/json/v2"
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -60,33 +62,26 @@ var adminOwnedClientPatchPaths = []string{
 
 func TestSetActivePatchPreservesGrantTypesAndLifespans(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	helper := newAdminOAuthTestHelper(t)
+	seedAdminOAuthTestUser(t, helper, "u-1", "kratos-1", userSchema.RoleUser)
+	hydra.addConsent("kratos-1", "bot-1", "consent-1")
+	app := newHydraClientHandlerTestAppAs(helper, hydra.config, "super-admin-1", adminCoreModule.RoleSuperAdmin)
 	before := hydra.client("bot-1")
 
-	// TODO(BE-3): disable still revokes consent with client=X&all=true, which Hydra
-	// rejects with 400 (PF4), so the handler answers 500 after the metadata patch has
-	// landed. BE-3 revokes per subject, never sends client+all, and expects 200 here.
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/bot-1/active", `{"active":false}`)
-	if status != http.StatusInternalServerError {
-		t.Fatalf("deactivate status = %d, want 500 until BE-3 fixes PF4, body = %#v", status, envelope)
+	if status != http.StatusOK {
+		t.Fatalf("deactivate status = %d, body = %#v", status, envelope)
 	}
 	requests := hydra.takeRequests()
-	if got := requestLines(requests); !reflect.DeepEqual(got, []string{
-		"GET /admin/clients/bot-1",
-		"PATCH /admin/clients/bot-1",
-		"DELETE /admin/oauth2/tokens",
-		"DELETE /admin/oauth2/auth/sessions/consent",
-	}) {
-		t.Fatalf("deactivate requests = %v", got)
+	if got := requestLines(requests[:2]); !reflect.DeepEqual(got, []string{"GET /admin/clients/bot-1", "PATCH /admin/clients/bot-1"}) {
+		t.Fatalf("deactivate requests = %v, want the metadata patch first", requestLines(requests))
 	}
 	if want := `[{"op":"add","path":"/metadata/haruki/active","value":false}]`; string(requests[1].Body) != want {
 		t.Fatalf("deactivate patch = %s, want %s", requests[1].Body, want)
 	}
-	if got := requests[2].Query.Get("client_id"); got != "bot-1" {
-		t.Fatalf("token revocation client_id = %q, want bot-1", got)
-	}
-	if got := requests[3].Query; got.Get("client") != "bot-1" || got.Get("all") != "true" || got.Get("subject") != "" {
-		t.Fatalf("consent revocation query = %v, want the client+all call that PF4 replaces", got)
+	// The grants are revoked after the patch; TestDisableClientRevokesPerSubject covers how.
+	if got := hydra.consentClients("kratos-1"); len(got) != 0 {
+		t.Fatalf("consent sessions left after disable: %v", got)
 	}
 	after := hydra.client("bot-1")
 	assertClientMembersUnchanged(t, before, after, "grant_types", "response_types", "redirect_uris", "post_logout_redirect_uris",
@@ -95,7 +90,6 @@ func TestSetActivePatchPreservesGrantTypesAndLifespans(t *testing.T) {
 	if !reflect.DeepEqual(metadata["owner"], map[string]any{"team": "infra"}) {
 		t.Fatalf("foreign metadata changed: %#v", metadata)
 	}
-	// The metadata patch landed even though the request failed afterwards (PF4).
 	haruki := metadata["haruki"].(map[string]any)
 	if haruki["active"] != false || haruki["device"] == nil {
 		t.Fatalf("haruki metadata = %#v, want active=false with device kept", haruki)
@@ -455,18 +449,26 @@ func TestFakeHydraConsentRevokeMatchesHydra(t *testing.T) {
 }
 
 func newHydraClientHandlerTestApp(hydraConfig *harukiOAuth2.HydraConfig) *fiber.App {
+	return newHydraClientHandlerTestAppAs(nil, hydraConfig, "super-admin-1", adminCoreModule.RoleSuperAdmin)
+}
+
+// newHydraClientHandlerTestAppAs serves the handlers as the given actor. Handlers that
+// list a client's grants (disable, revoke, delete) need a helper with a user database.
+func newHydraClientHandlerTestAppAs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, actorUserID, actorRole string) *fiber.App {
 	app := fiber.New(fiber.Config{JSONEncoder: jsoncodec.Marshal, JSONDecoder: jsoncodec.Unmarshal})
 	app.Use(func(c fiber.Ctx) error {
-		c.Locals("userID", "super-admin-1")
-		c.Locals("userRole", adminCoreModule.RoleSuperAdmin)
+		c.Locals("userID", actorUserID)
+		c.Locals("userRole", actorRole)
 		return c.Next()
 	})
-	app.Get("/oauth-clients", handleListHydraOAuthClients(nil, hydraConfig))
-	app.Post("/oauth-clients", handleCreateHydraOAuthClient(nil, hydraConfig))
-	app.Put("/oauth-clients/:client_id", handleUpdateHydraOAuthClient(nil, hydraConfig))
-	app.Put("/oauth-clients/:client_id/active", handleUpdateHydraOAuthClientActive(nil, hydraConfig))
-	app.Post("/oauth-clients/:client_id/restore", handleRestoreHydraOAuthClient(nil, hydraConfig))
-	app.Post("/oauth-clients/:client_id/rotate-secret", handleRotateHydraOAuthClientSecret(nil, hydraConfig))
+	app.Get("/oauth-clients", handleListHydraOAuthClients(apiHelper, hydraConfig))
+	app.Post("/oauth-clients", handleCreateHydraOAuthClient(apiHelper, hydraConfig))
+	app.Put("/oauth-clients/:client_id", handleUpdateHydraOAuthClient(apiHelper, hydraConfig))
+	app.Delete("/oauth-clients/:client_id", handleDeleteHydraOAuthClient(apiHelper, hydraConfig))
+	app.Put("/oauth-clients/:client_id/active", handleUpdateHydraOAuthClientActive(apiHelper, hydraConfig))
+	app.Post("/oauth-clients/:client_id/restore", handleRestoreHydraOAuthClient(apiHelper, hydraConfig))
+	app.Post("/oauth-clients/:client_id/revoke", handleRevokeHydraOAuthClient(apiHelper, hydraConfig))
+	app.Post("/oauth-clients/:client_id/rotate-secret", handleRotateHydraOAuthClientSecret(apiHelper, hydraConfig))
 	return app
 }
 
@@ -517,18 +519,38 @@ type fakeHydraRequest struct {
 // mistakes: replace of a missing member fails, any PUT on a client fails the test,
 // and a "test" op fails the test (Hydra answers it with 500). Revocation DELETEs
 // get Hydra's 400 for query combinations it rejects, such as client+all=true.
+// Consent sessions are kept per subject; revoking or deleting the client removes
+// them, as Hydra's cascade does.
 type fakeHydraClients struct {
 	t        *testing.T
 	config   *harukiOAuth2.HydraConfig
 	mu       sync.Mutex
 	clients  map[string]map[string]any
 	secrets  map[string]string
+	consents map[string][]fakeHydraConsent
 	requests []fakeHydraRequest
+
+	// failRevokeSubjects get 500 on consent revocation; failConsentList and
+	// failTokenDelete make those endpoints answer 500.
+	failRevokeSubjects map[string]bool
+	failConsentList    bool
+	failTokenDelete    bool
+}
+
+type fakeHydraConsent struct {
+	ConsentRequestID string
+	ClientID         string
 }
 
 func newFakeHydraClients(t *testing.T, clients ...string) *fakeHydraClients {
 	t.Helper()
-	fake := &fakeHydraClients{t: t, clients: map[string]map[string]any{}, secrets: map[string]string{}}
+	fake := &fakeHydraClients{
+		t:                  t,
+		clients:            map[string]map[string]any{},
+		secrets:            map[string]string{},
+		consents:           map[string][]fakeHydraConsent{},
+		failRevokeSubjects: map[string]bool{},
+	}
 	for _, raw := range clients {
 		var doc map[string]any
 		if err := json.Unmarshal([]byte(raw), &doc); err != nil {
@@ -580,16 +602,58 @@ func (f *fakeHydraClients) serve(w http.ResponseWriter, r *http.Request) {
 	case isClientPath && r.Method == http.MethodPut:
 		f.t.Errorf("PUT %s replaces the whole client; lifecycle changes must use JSON Patch", r.URL.Path)
 		writeFakeHydraJSON(w, http.StatusInternalServerError, map[string]any{"error": "error"})
+	case isClientPath && r.Method == http.MethodDelete:
+		if _, ok := f.clients[clientID]; !ok {
+			writeFakeHydraJSON(w, http.StatusNotFound, map[string]any{"error": "not_found"})
+			return
+		}
+		delete(f.clients, clientID)
+		delete(f.secrets, clientID)
+		for subject := range f.consents {
+			f.removeConsents(subject, func(consent fakeHydraConsent) bool { return consent.ClientID == clientID })
+		}
+		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodDelete && r.URL.Path == "/admin/oauth2/tokens":
 		if r.URL.Query().Get("client_id") == "" {
 			writeFakeHydraJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_request"})
 			return
 		}
+		if f.failTokenDelete {
+			writeFakeHydraJSON(w, http.StatusInternalServerError, map[string]any{"error": "server_error"})
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
+	case r.Method == http.MethodGet && r.URL.Path == "/admin/oauth2/auth/sessions/consent":
+		if f.failConsentList {
+			writeFakeHydraJSON(w, http.StatusInternalServerError, map[string]any{"error": "server_error"})
+			return
+		}
+		sessions := make([]map[string]any, 0)
+		for _, consent := range f.consents[r.URL.Query().Get("subject")] {
+			sessions = append(sessions, map[string]any{
+				"consent_request_id": consent.ConsentRequestID,
+				"grant_scope":        []string{"openid"},
+				"consent_request":    map[string]any{"client": map[string]any{"client_id": consent.ClientID}},
+			})
+		}
+		writeFakeHydraJSON(w, http.StatusOK, sessions)
 	case r.Method == http.MethodDelete && r.URL.Path == "/admin/oauth2/auth/sessions/consent":
-		if !fakeHydraConsentRevokeQueryAccepted(r.URL.Query()) {
+		query := r.URL.Query()
+		if !fakeHydraConsentRevokeQueryAccepted(query) {
 			writeFakeHydraJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_request", "error_hint": "Invalid combination of query parameters."})
 			return
+		}
+		subject, revokeClientID, consentRequestID := query.Get("subject"), query.Get("client"), query.Get("consent_request_id")
+		if f.failRevokeSubjects[subject] {
+			writeFakeHydraJSON(w, http.StatusInternalServerError, map[string]any{"error": "server_error"})
+			return
+		}
+		if consentRequestID != "" {
+			for owner := range f.consents {
+				f.removeConsents(owner, func(consent fakeHydraConsent) bool { return consent.ConsentRequestID == consentRequestID })
+			}
+		} else {
+			f.removeConsents(subject, func(consent fakeHydraConsent) bool { return revokeClientID == "" || consent.ClientID == revokeClientID })
 		}
 		w.WriteHeader(http.StatusNoContent)
 	default:
@@ -719,6 +783,37 @@ func (f *fakeHydraClients) takeRequests() []fakeHydraRequest {
 	requests := f.requests
 	f.requests = nil
 	return requests
+}
+
+// removeConsents drops the subject's sessions that match; the caller holds f.mu.
+func (f *fakeHydraClients) removeConsents(subject string, match func(fakeHydraConsent) bool) {
+	f.consents[subject] = slices.DeleteFunc(f.consents[subject], match)
+}
+
+func (f *fakeHydraClients) addConsent(subject, clientID, consentRequestID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.consents[subject] = append(f.consents[subject], fakeHydraConsent{ConsentRequestID: consentRequestID, ClientID: clientID})
+}
+
+// consentClients lists the clients the subject still has a consent session for.
+func (f *fakeHydraClients) consentClients(subject string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	clients := make([]string, 0, len(f.consents[subject]))
+	for _, consent := range f.consents[subject] {
+		clients = append(clients, consent.ClientID)
+	}
+	slices.Sort(clients)
+	return clients
+}
+
+func (f *fakeHydraClients) failRevoke(subjects ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, subject := range subjects {
+		f.failRevokeSubjects[subject] = true
+	}
 }
 
 func requestLines(requests []fakeHydraRequest) []string {

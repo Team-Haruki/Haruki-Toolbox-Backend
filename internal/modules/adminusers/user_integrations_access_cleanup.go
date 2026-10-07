@@ -42,7 +42,8 @@ func clearManagedUserSessions(ctx context.Context, apiHelper *harukiAPIHelper.Ha
 func revokeManagedUserOAuthTokens(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, targetUserID string, kratosIdentityID *string) (oauthRevokeFailed bool) {
 	if oauth2Module.HydraOAuthManagementEnabled(hydraConfig) {
 		subjects := oauth2Module.HydraSubjectsForUser(targetUserID, kratosIdentityID)
-		if err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, hydraConfig, subjects, ""); err != nil {
+		// An empty client ID revokes every client of each subject (subject&all=true).
+		if _, _, err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, hydraConfig, "", subjects); err != nil {
 			oauthRevokeFailed = true
 		}
 		return oauthRevokeFailed
