@@ -95,7 +95,7 @@ Hydra 在当前项目里负责：
 
 后端不是另起一套 OAuth2 server，而是提供一层兼容 / 编排逻辑，把业务用户状态和 Hydra 的授权流程拼接起来。
 
-设备授权是这种编排最重的一处：Hydra v25.4.0 的设备流程不限流、不保证单次批准、不把拒绝和过期告诉设备、也不清理过期的设备码行，所以 Hydra 自己的 `/oauth2/device/auth`、`/oauth2/device/verify`、`/oauth2/fallbacks/device` 不经 Oathkeeper 对外（公网 404）。设备调用后端的 `POST /api/oauth2/device/auth` 并轮询令牌端点兼容层 `POST /api/oauth2/token`；用户在前端 `/device` 页输入用户码，后端在 approve 请求内代替浏览器走完 Hydra 的 verify → login → consent 链。两份发现文档（`/.well-known/openid-configuration` 与 `/.well-known/oauth-authorization-server`）的 `device_authorization_endpoint` 和 `token_endpoint` 都由 Hydra 环境变量覆盖为后端地址（§11.3）。过期设备码行由 compose 中的 `hydra-device-janitor` 每小时分批删除。设备流程的端点见 §10.1，架构见 §10.5，运维见 §10.6。
+设备授权是这种编排最重的一处：Hydra v25.4.0 的设备流程不限流、不保证单次批准、不把拒绝和过期告诉设备、也不清理过期的设备码行，所以 Hydra 自己的 `/oauth2/device/auth`、`/oauth2/device/verify`、`/oauth2/fallbacks/device` 不经 Oathkeeper 对外（公网 404）。设备调用后端的 `POST /api/oauth2/device/auth` 并轮询令牌端点兼容层 `POST /api/oauth2/token`；用户在前端 `/device` 页输入用户码，后端在 approve 请求内代替浏览器走完 Hydra 的 verify → login → consent 链。两份发现文档（`/.well-known/openid-configuration` 与 `/.well-known/oauth-authorization-server`）的 `device_authorization_endpoint` 和 `token_endpoint` 都由 Hydra 环境变量覆盖为后端地址（§11.3）。过期设备码行由 compose 中的 `hydra-device-janitor` 每小时分批删除。设备流程的端点见 §10.1，架构见 §10.5，配置与开关见 §10.6。
 
 相关入口：
 
@@ -345,7 +345,7 @@ Hydra 在当前项目里负责：
 - `TestHydraDeviceEndpointsAreNotRouted`：Hydra 的设备路径任何方法都不命中规则；发现文档与 Hydra `/oauth2/token` 仍然路由
 - `TestPerDeviceRevokeRouteCovered`：按设备撤销由现有 `haruki-protected-user` 覆盖；路由清单（`api/testdata/routes.golden`）里每条 `/api/user/:toolbox_user_id/oauth2/authorizations…` 路由都必须恰好命中一条 cookie_session 规则
 
-**内部 API 不走 Oathkeeper。** backend 主端口 16666 上的 `/internal/*`（例如 Sekai Station 调用的 `POST /internal/oauth2/introspect`，§10.3.1）没有任何 Oathkeeper 规则，公网请求得到 404；它只在 tailnet（`${TAILSCALE_IP}:${BACKEND_PORT}`）和 compose 网络（`http://backend:16666`）上可达，并且每个请求仍要带内部 token。不要为 `/internal/*` 加规则，`TestInternalAPINotRoutedByOathkeeper` 会拒绝任何匹配 `/internal/` 的规则。
+**内部路由不走 Oathkeeper。** 后端另有少量只供自有服务调用的内部路由，它们没有任何 Oathkeeper 规则、不属于对外接口，公网请求得到 404；不要为它们加规则，架构测试 `TestInternalAPINotRoutedByOathkeeper` 会拒绝这类规则。它们的说明不在本仓库。
 
 兼容期内项目仍保留组卡推荐输入数据接口：
 
@@ -353,7 +353,7 @@ Hydra 在当前项目里负责：
 - 查询参数 `mode=suite|mysekai`，默认 `suite`
 - `mode=mysekai` 会在 suite 基础数据上合并 MySekai 推荐所需字段，方便前端 wasm 直接作为 `user_data` 使用
 
-游戏账号数据授权接口见 [`docs/game-account-data-grants.zh-CN.md`](game-account-data-grants.zh-CN.md)。
+游戏账号数据授权（把账号数据的读或写授权给其他 Toolbox 用户）的读写规则见 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §7.4。
 
 ### 9.2 会话级重认证支撑
 
@@ -474,66 +474,7 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 这让 API 的 bearer token 身份与浏览器身份迁移可以在同一项目内逐步收敛。
 
-### 10.3.1 内部令牌校验 API（`POST /internal/oauth2/introspect`）
-
-供我们自己的服务（目前是 Sekai Station 后端）校验 Toolbox 访问令牌。它不是对外接口，不写进 OAuth2 接入文档。
-
-- **可达性**：挂在 backend 主端口 16666 上，Oathkeeper 没有任何匹配 `/internal/` 的规则，公网请求得到 Oathkeeper 的 404（架构测试 `TestInternalAPINotRoutedByOathkeeper` 守护，不要给 `/internal/*` 加规则）。调用方经 tailnet 调 `http://100.80.207.86:16666/internal/oauth2/introspect`，或作为容器加入 `haruki-toolbox-services_haruki-net` 调 `http://backend:16666/internal/oauth2/introspect`。
-- **认证**：调用方二选一，只带**一个** `Authorization` 头：
-  - `Authorization: Bearer <internal token>`（原有方式，继续可用）；
-  - HTTP Basic `<client_id>:<internal token>`，即 RFC 7662 / RFC 6749 §2.3.1 标准客户端（例如 Go 的 `req.SetBasicAuth(clientID, secret)`）的做法。用户名必须等于 `oauth2.internal_api.client_id`（默认 `station`，env `OAUTH2_INTERNAL_API_CLIENT_ID`），密码就是内部 token。用户名和密码按字面比较、不做 form-urldecode（与 Go `net/http` 的 `BasicAuth()` 一致；默认 client_id 与十六进制 token 编码前后相同）。
-
-  后端 YAML 只存 token 的 SHA-256：`oauth2.internal_api.token_sha256`（64 位十六进制，env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）；Bearer token 与 Basic 密码走同一个哈希、常数时间比较，Basic 用户名也常数时间比较（两项都比完再判定）。缺失、不符、Basic 格式错误（不是标准 base64、没有冒号、用户名或密码为空）、Bearer 与 Basic 同时出现（或任意两个 `Authorization` 头）、不认识的认证方案，一律返回 401 `{"error":"unauthorized"}` 并记一条 WARN，日志只带原因（`missing` / `multiple` / `unsupported_scheme` / `malformed` / `client_mismatch` / `mismatch`），从不记凭据或用户名。`token_sha256` 为空时路由不注册（404），其余两项不检查；非空时 `token_sha256` 不是 64 位十六进制、`client_id` 含冒号/控制字符/首尾空白、`audience` 含空项或带控制字符/首尾空白的项，后端都拒绝启动。`client_id` 留空、`audience` 为空列表时在加载配置时回落到默认值 `station` / `["station"]`，不会拒绝启动。tailnet 上的其他节点也能连到 16666，所以内部 token 不能省。
-- **请求**：`application/x-www-form-urlencoded` 的 `token=<access_token>`（RFC 7662 形式，可附 `token_type_hint`）或 JSON `{"token":"…"}`（格式不对返回 400 `{"error":"invalid_request"}`）。`token_type_hint` 不论取什么值都忽略：RFC 7662 §2.1 允许服务端忽略它，并要求按提示找不到时继续查其他类型，而这里只有 access token 才可能 active，提示不会改变结果（带 `refresh_token` 提示传 refresh token 照样是 `{"active":false}`）。
-- **响应**：后端调 Hydra admin 内省，与 bearer 中间件同一套规则（`internal/platform/oauth2/introspect.go`）：非 active、不是 `access_token`、已过期、subject 找不到本地用户或用户被封禁、客户端已停用或已删除（客户端查询有 5 s 进程内缓存）都返回 `{"active":false}`（只有这一个字段）。否则返回：
-
-  | 字段 | 含义 |
-  | --- | --- |
-  | `active` | `true` |
-  | `sub` | 本地 `users.id`（字符串），与 `user_id` 相同；**不是** Hydra 的 subject（Kratos identity ID） |
-  | `user_id` | 同上，保留给旧调用方 |
-  | `client_id` | 申请令牌的 OAuth 客户端 |
-  | `aud` | JSON 数组，取自 `oauth2.internal_api.audience`（默认 `["station"]`，env `OAUTH2_INTERNAL_API_AUDIENCE`，逗号分隔） |
-  | `scope` | 令牌被授予的全部 scope，空格分隔 |
-  | `token_type` | 固定 `"Bearer"`（RFC 7662 的 `token_type` 是 RFC 6749 §7.1 的令牌类型；“是 access token”这一点由 active 本身保证） |
-  | `exp` / `iat` | Unix 秒 |
-  | `device_label` | 仅设备授权令牌 |
-
-  **`aud` 为什么是配置值**：这个端点只为它唯一的内部调用方担保令牌，`aud` 写的是“这份答复给谁用”，即调用方自己的名字，而不是照抄 Hydra 授予的 audience（设备流程与授权码流程的令牌通常没有 audience）。换调用方或多个调用方共用时改 `audience` 列表。**不返回 `iss`**：配置里没有稳定、与 Hydra 令牌 `iss` 逐字一致的公开 issuer 字段，RFC 7662 客户端（包括 Station）只在 `iss` 存在时才比较。也从不返回 `nbf`、用户名、邮箱或其他 Hydra 原始字段。结果不缓存（响应带 `Cache-Control: no-store`），撤销对下一次调用立即生效。Hydra 或数据库不可用时返回 503 `{"error":"temporarily_unavailable"}`。
-- **Station 的接受规则**（`station-backend` `internal/auth/oauth/introspection.go`）：HTTP 200 且 `active==true`；`exp`/`nbf` 有则必须有效；`aud`（字符串或数组）含 Station 配置的 `audience`；`iss` 有则必须等于 Station 配置的 `issuer`；`sub` 非空且不超过 128 字节；`scope` 含 `required_scopes` 的每一项。非 200（包括内部 token 不对得到的 401）在 Station 一侧是 503「验证服务不可用」，`active:false` 是 401，缺 scope 是 403。`sub` 是 Station 的提交者统计通道，所以必须是稳定的本地 `users.id`。Station 不看 `client_id`（`station:room:write` 是普通 scope，任何由管理员登记了它的客户端都可以申请）；需要展示名时另调 `/api/oauth2/user/profile`（前提是令牌带 `user:read`）。`TestInternalIntrospectServesStationClient` 按 Station 的原样代码（请求构造、响应校验、`authorize()`）经真实 HTTP 调用本端点，Station 改了校验逻辑时同步更新它。
-- **Station 配置**（Station 的 `config.yaml`）：
-
-  ```yaml
-  auth:
-    oauth:
-      enabled: true
-      mode: introspection
-      # introspection 模式下 Station 仍要求一个合法的 http(s) issuer URL。
-      # 本端点不返回 iss，Station 只在 iss 存在时比较，所以这里只需合法；
-      # 填 Toolbox 的 OIDC issuer（Hydra 公开地址），它是令牌真正的签发方。
-      issuer: https://toolbox-api-direct.haruki.seiunx.com
-      audience: station                      # 必须在 oauth2.internal_api.audience 里
-      introspection_url: http://100.80.207.86:16666/internal/oauth2/introspect
-      client_id: station                     # 必须等于 oauth2.internal_api.client_id
-      client_secret_env: TOOLBOX_INTROSPECTION_SECRET   # 环境变量里放内部 token 原文
-      required_scopes: [station:room:write]
-  ```
-
-  Station 与 backend 同机部署、加入 compose 网络时把 `introspection_url` 换成 `http://backend:16666/internal/oauth2/introspect`。
-- **调用方缓存**：后端不缓存，Station 当前实现也不缓存（每次提交调用一次）。若调用方要缓存，按令牌的 SHA-256 缓存 `active:true` 不超过 60 s、`active:false` 不缓存，撤销最多 60 s 后生效。
-- **生成与配置 token**：
-  ```bash
-  TOKEN=$(openssl rand -hex 32)           # 只放进 Station 的环境变量 TOOLBOX_INTROSPECTION_SECRET，不进仓库、不打印到日志
-  printf %s "$TOKEN" | sha256sum          # 输出的 64 位十六进制写进 backend YAML 的 oauth2.internal_api.token_sha256
-  ```
-  后端只保存哈希，backend 配置泄漏也拿不到可用的 token。
-- **轮换**：生成新 token → 把新哈希写进 backend YAML（或 env）并重启 backend → 把新 token 写进 Station 的 `TOOLBOX_INTROSPECTION_SECRET` 并重启 Station。两步之间 Station 的调用会得到 401（只支持一个哈希；Station 侧表现为 503），所以放在同一个维护窗口里连续完成。怀疑泄漏时立即轮换：持有内部 token 的 tailnet 节点能校验任意令牌（拿不到令牌本身）。
-
-实现位于：
-
-- `internal/modules/oauth2/internal_introspect.go`
-- `internal/platform/oauth2/introspect.go`
-- `internal/modules/oauth2/internal_introspect_station_test.go`（Station 客户端回放）
+内省的判定规则（非 active、不是 `access_token`、已过期、找不到本地用户或用户被封禁、客户端已停用或已删除都视为无效）集中在 `internal/platform/oauth2/introspect.go` 的 `IntrospectAccessToken`，bearer 中间件与后端供自有服务使用的内部令牌校验接口共用它。内部接口不是对外接口，不写进本仓库的文档。
 
 ### 10.4 管理端 OAuth Client 管理
 
@@ -576,15 +517,15 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 ### 10.5 设备授权（RFC 8628）：架构
 
-设备授权是 Toolbox OAuth 提供方的一项通用能力：任何由管理员登记、并按客户端开通设备授权许可的客户端，都能在没有浏览器的环境里以 Toolbox 用户的身份取得令牌，不绑定特定接入方，也不改变授权码客户端。第一个接入方是 Haruki-Client 的车牌收集：公开客户端 `haruki-client` 走设备授权拿到带 `station:room:write` 的令牌，以 `Authorization: Bearer` 向 Sekai Station 提交车牌；Station 经内部 API（§10.3.1）校验令牌，接受任何有效且带该 scope 的令牌，不限客户端。Haruki-Client 的机器人功能使用 Haruki Cloud 的认证，与这里完全分开：设备授权的发码与展示不经机器人通道，设备标签与内省结果里没有 bot_id、QQ 号或任何 Cloud 身份，Toolbox 令牌也从不发给 Haruki Cloud。
+设备授权是 Toolbox OAuth 提供方的一项通用能力：任何由管理员登记、并按客户端开通设备授权许可的客户端，都能在没有浏览器的环境里以 Toolbox 用户的身份取得令牌，不绑定特定接入方，也不改变授权码客户端。第一个接入方是 Haruki-Client 的车牌收集：公开客户端 `haruki-client` 走设备授权拿到带 `station:room:write` 的令牌，以 `Authorization: Bearer` 向 Sekai Station 提交车牌；Station 在服务端向 Toolbox 校验令牌，接受任何有效且带该 scope 的令牌，不限客户端。Haruki-Client 的机器人功能使用 Haruki Cloud 的认证，与这里完全分开：设备授权的发码与展示不经机器人通道，设备标签与内省结果里没有 bot_id、QQ 号或任何 Cloud 身份，Toolbox 令牌也从不发给 Haruki Cloud。
 
-接入方契约（轮询算法、错误表、展示与令牌保存要求、示例）只写在 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A；本节写我们自己的实现，§10.6 写运维。部署配置见 §11.3，Oathkeeper 规则见 §9.1。
+接入方契约（轮询算法、错误表、展示与令牌保存要求、示例）只写在 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A；本节写我们自己的实现，配置与开关见 §10.6。部署配置见 §11.3，Oathkeeper 规则见 §9.1。
 
 总体做法是**后端中介 + 服务端代驱**：Hydra 的设备机制只由后端经内部地址调用。设备调用后端的 `POST /api/oauth2/device/auth`，拿到后端签发的包装设备码和前端短地址 `https://haruki.seiunx.com/device`；用户登录后在 `/device` 输入 8 位用户码，后端用 Redis Lua 认领并返回审核卡；用户点「允许」时，后端在同一个请求里用新建的内存 Cookie 容器经 `http://hydra:4444` 走完 verify → device accept → login accept → consent accept → 最后一跳；点「拒绝」只写 Redis。`/api/oauth2/token` 是令牌端点兼容层，非设备授权许可逐字节透传。回收器撤销「已批准却从未兑换」的授权，清理服务删除过期设备码行。
 
 #### 10.5.1 Hydra 的缺口与后端的补偿
 
-生产用 Hydra v25.4.0，不打补丁；下表在 v26.2.0 上同样成立（源码对照）。每一项都由真实 Hydra 集成测试复核（§11.3「真实 Hydra 集成测试」），测试失败消息以「§10.5.1」开头。
+目标 Hydra 版本为 v25.4.0（`ORY_VERSION`），不打补丁；下表在 v26.2.0 上同样成立（源码对照）。每一项都由真实 Hydra 集成测试复核（§11.3「真实 Hydra 集成测试」），测试失败消息以「§10.5.1」开头。
 
 | Hydra 的行为 | 后端的做法 |
 | --- | --- |
@@ -610,11 +551,11 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 | 角色 | 地址 | 说明 |
 | --- | --- | --- |
-| API（后端 + Hydra issuer） | `https://toolbox-api-direct.haruki.seiunx.com` | 链路 SafeLine → Oathkeeper → `backend:16666` / `hydra:4444`；OAuth 与设备流程一律不走 `toolbox-api-cdn` |
+| API（后端 + Hydra issuer） | `https://toolbox-api-direct.haruki.seiunx.com` | 链路 边缘 WAF → Oathkeeper → `backend:16666` / `hydra:4444`（仓库 compose 的服务名）；OAuth 与设备流程一律不走 `toolbox-api-cdn` |
 | 前端 SPA | `https://haruki.seiunx.com` | `/device`、`/device/done`；`/device` 的请求固定发往 direct 端点 |
 | Hydra 内部地址 | public `http://hydra:4444`，admin `http://hydra:4445` | 只有后端访问 |
 | 设备（如 Haruki-Client） | 运行者的主机 | 只调用 device/auth、token、revoke 与 `/api/oauth2/user/profile` |
-| Sekai Station 后端 | 独立进程 | 只调用内部 API（§10.3.1） |
+| Sekai Station 后端 | 独立进程 | 只在服务端校验令牌，不经对外接口 |
 
 不变量：浏览器**从不**访问 Hydra 主机；设备**只**拿到 `hdc_…`，`ory_dc_…` 密封存放在 Redis；代驱链的 Cookie 容器每次批准新建、只在内存、处理函数返回即丢弃，从不持久化或写日志；原始用户码、`hdc`、`ory_dc_`、流程句柄从不出现在 Redis 键名和日志中；Hydra 的 `/oauth2/device/auth`、`/oauth2/device/verify`、`/oauth2/fallbacks/device` 在 Oathkeeper 上返回 404（`TestHydraDeviceEndpointsAreNotRouted`）。
 
@@ -655,7 +596,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 - **上线当天**就把发现文档的 `token_endpoint` 覆盖为后端，否则按发现文档配置的库会把 `hdc_` 发给 Hydra。非设备授权逐字节透传，授权码 RP 不受影响；Hydra 直连的 `/oauth2/token` 仍然路由。
 - **统一 `invalid_code`**：未知、认领前已过期、被其他账号认领或处理的码一律 400 `invalid_code` 并计入失败预算，文案点明「已被其他账号使用」；猜码者拿不到额外信号。
 - **拒绝只写 Redis**，不调用 Hydra reject（它什么都不保存）；最后一跳结果未知时 Hydra 可能已完成同意，所以有 `crid` 就按它撤销。
-- **不按 IP 限流**：`c.IP()` 是 Oathkeeper 的地址，SafeLine 也不支持按路径规则；预算全部由后端的全局、按用户、按客户端计数承担。
+- **不按 IP 限流**：`c.IP()` 是 Oathkeeper 的地址，边缘 WAF 也不支持按路径规则；预算全部由后端的全局、按用户、按客户端计数承担。
 - **允许的客户端**：公共与机密都可以，须管理员创建并按客户端开通设备授权许可；另有可选的客户端允许名单（默认留空 = 所有持有许可的客户端）。`station:room:write` 是普通 scope，不需要额外许可。
 - **撤销全部仍按用户枚举**，不建设备授权登记表；发起人提示、写操作的升级认证都不在 v1。
 
@@ -824,7 +765,7 @@ consent accept 的请求体由 `buildHydraConsentAcceptBody` 构造，浏览器�
 
 流程定位：lookup 用 `uc` 索引，approve / deny 用 `fh` 索引，令牌请求用 `dc` 索引。
 
-Lua 脚本（`hydra_device_store.go`、`hydra_device_decision_store.go`，`now` 以 ARGV 毫秒传入）：`deviceFlowCreateScript`（`OK` / `UC_COLLISION`）、`deviceFlowClaimScript`（`CLAIMED_NEW`、`CLAIMED_RENEWED`、`TAKEN`、`EXPIRED`、`EXPIRED_OWN`、`HANDLED_OWN`、`IN_PROGRESS_OWN`、`MISSING`）、`deviceFlowBeginApproveScript`、`deviceFlowRecordConsentScript`、`deviceFlowFinishApproveScript`（`approved` / `unconfirmed` / `revert` / `failed`；`ALREADY_ISSUED` 按成功处理）、`deviceFlowDenyScript`、`deviceFlowPollScript`、`deviceFlowSettleScript`、`deviceFlowReapScript` / `deviceFlowMarkExpiredScript`、`deviceFlowRequeueScript` / `deviceFlowRemoveUnredeemedScript`、客户端停用与失败标记脚本、限流的预占 / 释放脚本。Claim 在脚本内 `GET uc` 得 fid 再拼出 flow key，该 key 没有在 KEYS 中声明，只适用于单节点 Redis（生产与测试都是单节点），将来改集群必须改写。
+Lua 脚本（`hydra_device_store.go`、`hydra_device_decision_store.go`，`now` 以 ARGV 毫秒传入）：`deviceFlowCreateScript`（`OK` / `UC_COLLISION`）、`deviceFlowClaimScript`（`CLAIMED_NEW`、`CLAIMED_RENEWED`、`TAKEN`、`EXPIRED`、`EXPIRED_OWN`、`HANDLED_OWN`、`IN_PROGRESS_OWN`、`MISSING`）、`deviceFlowBeginApproveScript`、`deviceFlowRecordConsentScript`、`deviceFlowFinishApproveScript`（`approved` / `unconfirmed` / `revert` / `failed`；`ALREADY_ISSUED` 按成功处理）、`deviceFlowDenyScript`、`deviceFlowPollScript`、`deviceFlowSettleScript`、`deviceFlowReapScript` / `deviceFlowMarkExpiredScript`、`deviceFlowRequeueScript` / `deviceFlowRemoveUnredeemedScript`、客户端停用与失败标记脚本、限流的预占 / 释放脚本。Claim 在脚本内 `GET uc` 得 fid 再拼出 flow key，该 key 没有在 KEYS 中声明，只适用于单节点 Redis（当前部署与测试都是单节点），将来改集群必须改写。
 
 Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory-policy`（默认 `noeviction`）；方案不依赖淘汰策略：热键都有 TTL，未兑换集合由回收器清空，内存打满表现为写入报错（503），不会静默丢键。
 
@@ -861,7 +802,7 @@ Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory
 | 流程 `att` | 流程生命周期 | 3 | Lua | `failed`，502 `approval_failed` |
 | 流程 `ivl` / `sdn` | 每次轮询 | 初始 5 s，早到 +5 s（保持），上限 60 s，容差 1 s；`pending` / `claimed` 时早到超过 30 次 ⇒ `failed` | Lua | 400 `slow_down` |
 
-`Retry-After` 取超限 key 的剩余 TTL（至少 1 s）；每个告警只在计数恰好等于阈值时记一次。公共客户端的 `client_id` 任何人都能冒用，公共池与机密池分开后，冒用最多耗尽公共池，不影响机密客户端。边缘不做按路径或按 IP 的限流：SafeLine 不支持按路径规则，也不挑战非浏览器的 API POST，所以设备侧两个 POST 不需要豁免；EdgeOne `toolbox-api-cdn` 对 `/api/oauth2/*` 设「不缓存」只作兜底。
+`Retry-After` 取超限 key 的剩余 TTL（至少 1 s）；每个告警只在计数恰好等于阈值时记一次。公共客户端的 `client_id` 任何人都能冒用，公共池与机密池分开后，冒用最多耗尽公共池，不影响机密客户端。边缘不做按路径或按 IP 的限流，设备侧两个 POST 也不需要边缘豁免；CDN 对 `/api/oauth2/*` 设「不缓存」只作兜底。
 
 暴力破解预算（期望命中须 ≤ 1 次 / 年，启动校验）：
 
@@ -871,7 +812,7 @@ Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory
 | 同时存活的码 N_live | ≤ (⌈TTL / 600 s⌉ + 1) × 1200 = 2400 |
 | 每年失败查询 G | ≤ 150 × 52,560 = 7.884×10^6（成功不耗全局预算，格式错误不算猜测） |
 | 最坏期望 | G × N_live / S ≈ **0.74 次 / 年**；实际 N_live ≈ 20 时约 6.2×10^-3 次 / 年 |
-| 攻击成本 | 每账号每天最多 20 次失败 ⇒ 打满 G 每天至少约 1,080 个新账号；触发全局熔断需每 10 min 30 个账号。Kratos 注册不限一次性邮箱（只要求验证邮箱），所以熔断的 DoS 成本很低，告警必须有人看（§10.6.4） |
+| 攻击成本 | 每账号每天最多 20 次失败 ⇒ 打满 G 每天至少约 1,080 个新账号；触发全局熔断需每 10 min 30 个账号。Kratos 注册不限一次性邮箱（只要求验证邮箱），所以熔断的 DoS 成本很低，告警必须有人值守 |
 | 命中后果 | 攻击者只能用**自己的账号**批准陌生人的设备（设备会显示「已授权为 <攻击者>」），拿不到受害者账号 |
 | DoS 杠杆（接受） | 全局熔断只阻断 lookup ≤ 10 min；device/auth、轮询和已认领流程的批准不受影响 |
 | 设备码 | `hdc` 256 位、`ory_dc_` 不出服务端，不可暴力破解 |
@@ -907,13 +848,12 @@ Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory
 | 非机密客户端被冒用与匿名洪泛（RFC 8628 §5.6） | 公共客户端默认只读、永不显示「官方」；每客户端配额；公共池与机密池分开；未知客户端只计告警；只有签发预占能拒绝，错误 secret 在 H3 后立即释放 | 被冒用的公共客户端（或公共池）最多被阻断 10 min |
 | 浏览器端点 CSRF、点击劫持、重复提交；按设备撤销越权 | 只收 JSON（415）；Origin 允许名单（403）；句柄只在 JSON 中；approve 须重新提交匹配的 `userCode`；`/device` 在 iframe 内不渲染审核卡；BeginApprove CAS + `anonce`；按设备撤销先匹配本人授权，否则 404 且不调用 Hydra | 没有响应头级的 `frame-ancestors` |
 | 代驱链的 SSRF / 开放跳转与凭据泄漏 | 不跟随重定向；只改写一种 URL；前端 Location 只解析不请求；响应体上限；整链超时；容器、challenge、verifier 不返回浏览器、不记日志 | 无 |
-| Redis 被读取或篡改；码进入日志或 URL | 键名只有 HMAC，启动时拒绝空密钥；`ory_dc_` 密封；日志脱敏；页面读取后立即清除查询串；GA 去掉敏感参数 | 密钥本身泄漏；有写权限者可让流程失败；EdgeOne Pages 访问日志可能记录首次请求的 `?user_code=` |
-| 内部 API 被滥用 | Oathkeeper 无规则，公网不可达；tailnet 与容器网络内还要内部 token；只返回 `active`、用户 ID、客户端、scope、时间与标签 | 拿到内部 token 的 tailnet 节点可以校验任意令牌（拿不到令牌本身） |
+| Redis 被读取或篡改；码进入日志或 URL | 键名只有 HMAC，启动时拒绝空密钥；`ory_dc_` 密封；日志脱敏；页面读取后立即清除查询串；前端统计去掉敏感参数 | 密钥本身泄漏；有写权限者可让流程失败；前端托管方的访问日志可能记录首次请求的 `?user_code=` |
 | Hydra 行为随版本变化 | 代驱链依赖未文档化的 Cookie / 重定向机制，由真实 Hydra 集成测试在每次升级前验证（§11.3） | — |
 
-### 10.6 设备授权：运维手册
+### 10.6 设备授权：配置与开关
 
-生产只有单节点（编排目录 `toolbox-stack`，`compose.sh` + `.portainer-env.sh`，容器名形如 `haruki-toolbox-services-<service>-1`），重启 Hydra、backend、Oathkeeper 都会短暂中断。环境变量、compose、清理服务与生产同步注意事项见 §11.3；Oathkeeper 规则见 §9.1；内部 API 见 §10.3.1。
+本节是后端的配置参考。生产上线、监控告警与回滚手册属于运维文档，不在本仓库。部署配置（compose 环境变量、清理服务）见 §11.3；Oathkeeper 规则见 §9.1。
 
 #### 10.6.1 后端配置与启动校验
 
@@ -935,119 +875,26 @@ compose 总会设置 7 个 backend `OAUTH2_DEVICE_FLOW_*` 变量（空串也算�
 5. `user_code_ttl` 可解析且在 1–30 min，并通过 §10.5.10 的预算公式。
 6. `user_system.session_sign_token`（env `SESSION_SIGN_TOKEN`）trim 后至少 16 个字符。
 
-内部 API 的配置见 §10.3.1：`oauth2.internal_api.token_sha256`（env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）空 = 路由不注册，非空但不是 64 位十六进制时拒绝启动；`client_id`（默认 `station`，env `OAUTH2_INTERNAL_API_CLIENT_ID`）与 `audience`（默认 `["station"]`，env `OAUTH2_INTERNAL_API_AUDIENCE`，逗号分隔）只在启用时校验，填空回落到默认值。
-
-**`session_sign_token` 是什么**：它**不是**会话签名密钥（`NewSessionHandler` 忽略该参数，登录会话由 Kratos 管理），现在唯一的用途是 Redis 键名里邮箱、QQ 等标识的 HMAC 化名密钥，设备流程的 `hx` 也用它。生产在上线前为空（YAML 无该键，env 未设）。设置或更改它只会让当时进行中的邮箱验证码、重置链接、QQ 验证码与设备流程作废、限流计数归零，**不会让任何人掉登录**。所以在上线部署时直接生成写入（§10.6.3），之后不再更改、不打印。
+**`session_sign_token` 是什么**：它**不是**会话签名密钥（`NewSessionHandler` 忽略该参数，登录会话由 Kratos 管理），现在唯一的用途是 Redis 键名里邮箱、QQ 等标识的 HMAC 化名密钥，设备流程的 `hx` 也用它。设置或更改它只会让当时进行中的邮箱验证码、重置链接、QQ 验证码与设备流程作废、限流计数归零，**不会让任何人掉登录**。所以在首次启用设备授权时生成写入，之后不再更改、不打印。
 
 #### 10.6.2 开关层级与运行时总开关
 
 | 层级 | 怎么改 | 需重启 | 关闭时的效果 |
 | --- | --- | --- | --- |
 | 运行时总开关 `oauth2DeviceFlowEnabled` | `PUT /api/admin/config/runtime`（需二次认证） | 否，最多 1 s 后生效 | device/auth `unauthorized_client`；lookup / approve / deny 403 `feature_disabled`；兼容层对 `hdc_` 回答 `expired_token`；非设备授权许可与回收器不受影响 |
-| 启动开关 `OAUTH2_DEVICE_FLOW_ENABLED` | 改 env 后 `compose.sh up -d backend` | 是 | 同上；另外回收器不启动 |
+| 启动开关 `OAUTH2_DEVICE_FLOW_ENABLED` | 改 env 后重启 backend | 是 | 同上；另外回收器不启动 |
 | 客户端允许名单 `OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST` | 同上（CSV） | 是 | 名单外客户端 `unauthorized_client`；空 = 全部持有许可的客户端 |
 | 单个客户端的设备授权许可 / 配额；停用客户端 | 管理端（JSON Patch；停用时逐 subject 撤销） | 否 | 只影响该客户端，客户端缓存最多 5 s 后生效；停用还拦截已批准流程的兑换并撤销已有授权会话（列表找不到的授权只被拦截、不被撤销，见 §10.4） |
 
 生效 = 启动开关 ∧ 运行时总开关。运行时总开关是三态：明确开；明确关（`false` **或字段缺失**）；读取出错（503）。字段缺失视为关闭，使开关在状态丢失时失败关闭：Redis 运行时键丢失时种子快照来自启动配置（没有该字段）；Redis 以 `--save 60 1` 持久化，崩溃前 60 s 内的 `PUT false` 可能丢失；旧镜像修改运行时配置时会丢掉该字段。三种情况都回到「关」，不会悄悄重新打开在钓鱼事件中关掉的开关。`Active(ctx)` 把**成功**读取的结果缓存 1 s（出错不缓存），避免匿名洪泛拖住同一把锁后面的私有 API 鉴权。已签发的设备令牌在开关关闭后仍然有效，需要时按授权会话或按客户端撤销。
 
-#### 10.6.3 上线步骤（一次上线，不做暗发布与试点）
+#### 10.6.3–10.6.5 上线、监控与回滚
 
-后端（#97）与前端（Haruki-Toolbox #104）的 `feat/oauth2-device-flow` 均已合入 main；在一个提前公告的凌晨低峰窗口里一次上线；提前 48 小时站内公告，并通知已登记的第三方：令牌端点地址会变为 `…/api/oauth2/token`，无需改动（backend 的可用性从此影响这些 RP 的刷新）。
-
-**预检**（窗口前或窗口开头完成，结果记入上线单）：
-
-1. 生产 `hydra` 库已有设备表：`SELECT to_regclass('hydra_oauth2_device_auth_codes')` 输出表名（2026-10-07 已确认），否则停止上线、排查 hydra-migrate；记录行数与 `expires_at IS NULL` 行数作为基线（预期都为 0）。
-2. 线上 `hydra.yml`、`access-rules.yml` 与发布 tag 比对，只差本次改动。
-3. Oathkeeper CORS **生效值**为 `https://haruki.seiunx.com`（env `SERVE_PROXY_CORS_ALLOWED_ORIGINS_0`，`compose.sh config` 与 `docker exec … env` 核对）。
-4. env：前端 `https://haruki.seiunx.com`，后端与 Hydra `https://toolbox-api-direct.haruki.seiunx.com`，`ORY_VERSION=v25.4.0`。
-5. 留存两份发现文档的快照（`token_endpoint` 还是 `…/oauth2/token`）供回滚比对；记录 Redis `maxmemory` / `maxmemory-policy`（只记录）。
-6. 准备探针数据：一个内部授权码测试客户端及其有效 refresh token（RT0），测试账号 A、B。每个 RT **只能用一次**（刷新轮换 + 重用检测会作废整条链）。
-7. 在要部署的 commit 上触发 `Device flow live`（`device-flow-live.yml`），v25.4.0 与 v26.2.0 都通过（§11.3）。
-8. 备份 `hydra.yml`、`access-rules.yml`、编排 compose、`.portainer-env.sh` 与 `GET /api/admin/config/runtime` 的结果。
-9. 边缘与统计：SafeLine 不需要改；EdgeOne 对 `/api/oauth2/*` 设「不缓存」；GA4 数据流「隐去数据 → 查询参数」加入 `user_code`、`login_challenge`、`consent_challenge`、`logout_challenge`、`device_challenge`。
-10. 记录当前 `BACKEND_IMAGE` 与运行中镜像的 digest（生产用 `…:latest` 且没有 `pull_policy`，`latest` 会被覆盖）。
-11. 生成内部 API token（§10.3.1）：`openssl rand -hex 32` 得到的 token 只放进 Sekai Station 的环境变量（`client_secret_env` 指向的 `TOOLBOX_INTROSPECTION_SECRET`），它的 SHA-256 写进 backend YAML `oauth2.internal_api.token_sha256`；都不打印、不进仓库。Station 的 `auth.oauth` 照 §10.3.1 的配置块填写（`client_id`/`audience` 与 backend 的 `oauth2.internal_api` 默认值一致）。
-
-**窗口内，先做前置修复冒烟**（同一批代码里的客户端 JSON Patch、逐 subject 撤销、停用拦截等修复）：
-
-- backend 镜像改为本次发布的不可变标签（`ghcr.io/team-haruki/haruki-toolbox-backend:sha-<短 commit>` 或 release 标签），`up -d backend` 后用 `docker inspect` 确认新 digest；前端发布对应版本。
-- 临时授权码客户端 `phase0-smoke` 拿到 RT → 停用，期望 200、`revokedSubjects ≥ 1`、`failedSubjects=[]`、`revocationComplete=true` → 用该 RT 刷新得到 `invalid_grant`。
-- 另一客户端在轮换、编辑、停用、恢复前后 GET：`grant_types`、lifespans、`post_logout_redirect_uris` 与未知 metadata 不变；把公开客户端编辑为保密时管理端显示一次性 secret 且能通过客户端认证；公开客户端轮换 secret 得到 400 `public_client_has_no_secret`；默认选项删除成功；新账号从带 `redirect` 的登录页注册、验证邮箱后点「继续」回到原地址。
-- 回补：在 `toolbox` 库（不是 `hydra` 库）的 `system_logs` 中查 action 为 `admin.oauth_client.active.update`、`.update`、`.rotate_secret`、`.revoke`、`.delete`、`.restore` 且 `result='failure'` 的记录，重做失败的停用、删除与撤销全部（部署之后停用即使撤销不完整也记 `success`，改看元数据 `revocationComplete=false`，补救方式是撤销全部）。
-- 出口：冒烟通过，授权码登录与经 `/api/oauth2/token` 的刷新无回归。
-
-**然后上线设备授权**：
-
-1. 生成 `session_sign_token`：`openssl rand -hex 32`，写入 backend YAML `user_system.session_sign_token`（或 env `SESSION_SIGN_TOKEN`），随下面的 backend 重启生效。它只是 Redis 键名的 HMAC 密钥（§10.6.1），不打印、不进仓库，之后不再更改。
-2. 更新编排 compose（hydra / backend 环境变量、`hydra-device-janitor` 服务，§11.3）；env 写入 `OAUTH2_DEVICE_FLOW_ENABLED=true`（允许名单留空）；backend YAML 写入 `oauth2.internal_api.token_sha256`；`BACKEND_IMAGE` 改为本次发布的不可变 digest。
-3. `compose.sh config --quiet` 无报错，且能 grep 到原样的 `expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval`。
-4. 同步 `hydra.yml`。
-5. `compose.sh up -d hydra hydra-device-janitor backend`（Hydra 与 backend 的用户码变量必须同一次生效），`docker inspect` 确认 backend 为新 digest。
-6. 确认两份发现文档的 `token_endpoint` 为 `…/api/oauth2/token`、`device_authorization_endpoint` 为 `…/api/oauth2/device/auth`。
-7. 替换 `access-rules.yml` 并重启 Oathkeeper（单文件 bind mount、不热加载；替换前与线上文件 diff 并备份）。
-8. 管理端创建 `haruki-client`：公开、仅设备（`grantTypes` = 设备授权许可 + `refresh_token`，`redirectUris: []`），scope `user:read offline_access station:room:write`，`maxCodesPer10m=60`。
-9. `PUT /api/admin/config/runtime` `{"oauth2DeviceFlowEnabled":true}`。
-10. 部署 Sekai Station 后端新版本（只接受 Bearer，经内部 API 校验）；发布删除了旧签名代码的 Haruki-Client 新版。
-11. 执行探针，全部通过才算完成：
-
-| # | 探针 | 期望 |
-| --- | --- | --- |
-| 1 | `POST /api/oauth2/device/auth`（`client_id=probe`，`scope=openid`） | 400 `unauthorized_client`（总开关关时）或 401 `invalid_client`，都带 `Cache-Control: no-store`：是后端 JSON，不是 Oathkeeper 404 |
-| 2 | `GET /oauth2/device/verify`，`POST /oauth2/device/auth`、`/oauth2/fallbacks/device` | 都是 404 |
-| 3 | 两份 `.well-known` 的 `device_authorization_endpoint`、`token_endpoint` | `…/api/oauth2/device/auth` 与 `…/api/oauth2/token` |
-| 4 | RT0 经 `/api/oauth2/token` 刷新得 RT1，再用 RT1 经 Hydra 直连 `/oauth2/token` 刷新 | 两次都 200；绝不重复使用同一个 RT |
-| 5 | 用 Haruki-Client 测试实例完成一次设备登录 | 设备显示「已授权为 <A>」；`/device` 审核卡把 `station:room:write` 标红 |
-| 6 | 经 tailnet 调内部 API（带内部 token），分别用上一步的 AT、一个不含 `station:room:write` 的授权码令牌、无效串 | 前者 `active:true` 且 `scope` 含 `station:room:write`；第二个 `active:true` 但不含该 scope（Station 应拒绝）；无效串 `active:false` |
-| 7 | 不带内部 token 调内部 API；从公网访问 `https://toolbox-api-direct…/internal/oauth2/introspect` | 401；404 |
-| 8 | 按设备撤销后：用 RT 刷新、内部 API 校验原 AT | `invalid_grant`；`active:false` |
-| 9 | 拒绝；让代码过期；B 输入 A 的代码 | `access_denied` + `phishing_signal`（选「不是我发起的」时）；`expired_token`；`invalid_code` |
-| 10 | Haruki-Client 测试实例提交一个车牌；用不带该 scope 的令牌提交 | 前者 Station 接受并记到 Toolbox 用户 A；后者被拒 |
-| 11 | `compose.sh logs --since 10m hydra-device-janitor` | `deleted=0 remaining=<基线>` |
-| 12 | 管理端编辑保存一个非设备客户端后 GET | `grant_types` 等字段不变 |
-
-任一探针失败：先第 1 级回滚（§10.6.5），排查后决定是否第 4 级回滚（必要时连镜像一起回退），再用尚未用过的 RT 重跑探针 3、4。之后其他客户端按申请登记 scope（含 `station:room:write`）与设备授权许可。
-
-发布顺序：先 backend 后前端；Hydra 与 backend 的字符集变量必须同时生效（只改一边会让所有 device/auth 返回 500 `charset_mismatch`）；Hydra 与 Oathkeeper 的重启放在同一窗口，之后的调整只需重启 backend 或完全不重启。
-
-#### 10.6.4 监控与排障
-
-没有指标系统：靠结构化日志、`system_logs`、Redis 与 SQL。告警由 Toolbox 主机上每 5 分钟执行的 grep 脚本推送到运维群，后端负责人值守（Kratos 注册不限一次性邮箱，打满全局熔断的成本很低，告警没人看就等于没有）。
-
-| 信号 | 阈值 | 处置 |
-| --- | --- | --- |
-| `lookup_fail_global_warn` | 出现即告警 | 按用户分组查 `lookup_fail`，封禁可疑账号；持续出现时第 1 级回滚 |
-| `chain_error` | 超过当天批准次数（`event=approve`）的 2% | 看 `stage` / `reason`；Hydra 变更后出现则第 1 级回滚、回退 `ORY_VERSION`、重跑真实 Hydra 集成测试 |
-| `charset_mismatch`、`ttl_mismatch`、`login_skip_unexpected` | 出现即告警 | 前两者检查 Hydra 与 backend 环境变量漂移（§12.9）；后者第 1 级回滚并排查 |
-| device/auth 的 429 | 单个客户端短时间集中出现 | 区分正常突发（如 Haruki-Client 新版本发布后集中首次登录）与滥用，调 `maxCodesPer10m` 或第 2 级回滚 |
-| `phishing_signal` | 同一客户端每天 ≥ 3 次 | 撤销对应授权会话或停用客户端，取消其设备授权许可，联系接入方 |
-| `auth_issued_global_warn`（`pool=public\|confidential`） | 出现即告警（某池一个窗口达 300） | `pool=public` 多半是公共客户端被冒用，必要时降配额或加 SafeLine IP 规则 |
-| `auth_unknown_client_warn`、`auth_attempt_client_warn`、`token_after_terminal`、`settle_failed` | 出现即告警 | 前两项是 device/auth 洪泛；`token_after_terminal` 核对 `crid` 是否已撤销；`settle_failed` 相关设备可能要重新绑定 |
-
-日检：Hydra 设备表行数 < 20k、`expires_at IS NULL` 为 0；清理服务每小时一行 `deleted=… remaining=…` 且没有 `delete failed`；`ZCARD haruki:oauth2-device:unredeemed` 很小；Redis `evicted_keys` 不增长；`toolbox` 库 `system_logs` 中 `user.oauth.device.%` 按 action / result 汇总无突增。
-
-排障：
-
-- 用户说「代码无效」：先看是否超过 10 分钟，再查 `lookup_fail` / `lookup_conflict`；后者说明代码被其他账号认领过，要看是不是钓鱼。
-- 已批准但设备一直在等：`HGETALL haruki:oauth2-device:flow:<fid>`（fid 取自审计的 `deviceFlowID`）。`approved` 说明设备没在轮询 `/api/oauth2/token`（多半是直连了 Hydra，§12.10）；`unconfirmed` 由兼容层或回收器结算。
-- Redis 数据丢失：进行中的流程失败，已签发令牌不受影响，运行时总开关回到关；未兑换集合丢失后需按审计里的 `consentRequestId` 人工撤销遗留授权。
-- device/auth 洪泛：依次降低 `maxCodesPer10m`、加 SafeLine IP 规则、手动执行一次清理 SQL（§11.3）。
-
-#### 10.6.5 回滚（从快到慢）
-
-| 级 | 手段 | 生效 | 注意 |
-| --- | --- | --- | --- |
-| 1 | `PUT {"oauth2DeviceFlowEnabled":false}` | 秒级 | 已签发的设备令牌仍有效，需要时按授权会话或按客户端撤销 |
-| 2 | 单个客户端去掉设备授权许可；要让令牌失效则停用该客户端 | 秒级 | 只影响该客户端 |
-| 3 | `OAUTH2_DEVICE_FLOW_ENABLED=false` 后 `up -d backend` | backend 短暂中断 | 回收器不再启动；不赶时间时先做第 1 级，等至少 12 分钟、`ZCARD haruki:oauth2-device:unredeemed` 为 0 再做 |
-| 4 | 恢复备份的 `access-rules.yml` 并重启 Oathkeeper；恢复 hydra 环境变量后 `up -d hydra` | 各自短暂中断 | 只恢复 `WEBFINGER_OIDC_DISCOVERY_TOKEN_URL` 对授权码 RP 安全，但按发现文档轮询的设备客户端会失效，所以先做第 1 级；字符集变量必须与 backend 一起恢复 |
-
-- **回滚 backend 镜像**：`BACKEND_IMAGE` 改回预检记录的值（`latest` 已被覆盖时写成 `ghcr.io/team-haruki/haruki-toolbox-backend@sha256:<digest>`）后 `up -d backend` 并确认 digest。回到没有回收器的镜像前，先做第 1 级并等至少 12 分钟（10 min TTL + 60 s 宽限 + 一个 60 s 回收周期），确认未兑换集合为空。旧镜像读带新字段的运行时快照不会出错，但一旦修改任意运行时配置就会丢掉该字段；因为字段缺失视为关闭，重新升级后开关回到关，确认后再 `PUT true`。
-- **不要回滚客户端管理的 JSON Patch 与逐 subject 撤销**（设备客户端存在之后）：旧代码整体 PUT 会清空 `grant_types`（§12.7），旧停用路径会再次 500（§12.8）。确实无法避免时，重新升级前冻结管理端对 OAuth 客户端的所有编辑。
-- **数据**：Redis 键自然过期（流程记录不超过 `expires_in + 1800 s`，计数器不超过 24 h）；Hydra 设备行由清理服务删除，清理服务也撤下时按 §11.3 手动执行同一段 SQL。前端没有开关，后端关闭时 `/device` 显示「设备登录暂未开放」，一般不需要回滚前端。
+这三部分是生产运维手册，维护在私有的运维文档中，不在本仓库。与代码相关的约束都已写在本文其他章节：Hydra 与 backend 的用户码变量必须同时生效（§12.9），发现文档必须指向后端（§12.10），客户端管理必须用 JSON Patch 与逐 subject 撤销（§12.7、§12.8）。
 
 #### 10.6.6 升级 Ory 前
 
-代驱链依赖 Hydra 未文档化的 Cookie 与重定向行为（§10.5.1）。修改 `ORY_VERSION` 前，在待部署的 commit 上对当前版本与目标版本各跑一遍真实 Hydra 集成测试（§11.3），全部通过才能升级；`chain_error` 在升级后出现时按 §10.6.4 处置。
+代驱链依赖 Hydra 未文档化的 Cookie 与重定向行为（§10.5.1）。修改 `ORY_VERSION` 前，在待部署的 commit 上对当前版本与目标版本各跑一遍真实 Hydra 集成测试（§11.3），全部通过才能升级；`chain_error` 在升级后出现时，先关闭运行时总开关（§10.6.2）再排查。
 
 ## 11. 当前配置层面对 Ory 的约束
 
@@ -1199,16 +1046,11 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 - 改动后用 `docker compose config --quiet` 校验，并 grep 渲染结果里原样的 `expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval`
 - 清理服务停掉时，手动用 psql 在 `hydra` 库执行同一段 SQL（参数写成字面量 `interval '1 hour'`、`LIMIT 5000`），重复到返回值小于 5000
 
-生产部署注意（生产编排目录 `toolbox-stack` 在 Toolbox 主机上，不在仓库里；以下按仓库文件同步过去）：
-
-- 生产 env 文件 `.portainer-env.sh` 由 `compose.sh` 以 shell 方式 source：含空格的值必须加引号（`HYDRA_DEVICE_JANITOR_GRACE="1 hour"`，否则 `hour` 被当成命令执行），不需要覆盖时直接省略该行，用 compose 里的默认值
-- 生产编排 compose 要手工合入本仓库 `docker-compose.yml` 的 hydra / backend 环境变量与 `hydra-device-janitor` 服务；生产 `hydra.yml` 也是手工同步的副本
-- 生产 access-rules 是单文件 bind mount、不热加载：替换前与线上文件 diff 并备份，替换后重启 Oathkeeper 容器
-- Hydra 与 backend 的字符集 / 长度变量必须在同一次 `up -d hydra backend` 中生效
+仓库的 `docker-compose.yml`、`external/hydra/hydra.yml` 与 `external/oathkeeper/access-rules.yml` 是部署配置的参考来源。同步到实际部署时，Hydra 与 backend 的字符集 / 长度变量必须在同一次 `up -d hydra backend` 中生效。
 
 #### 真实 Hydra 集成测试（升级门禁）
 
-`internal/modules/oauth2/hydra_device_live_test.go`（build tag `hydra_live`，普通 `go test ./...` 不编译它）在真实的 non-dev Hydra + Postgres 18 上走完整个设备流程，并复核 §10.5.1 记录的 Hydra 行为（失败消息以「§10.5.1」开头）。后端在测试进程内按生产路由表启动（Redis 用 miniredis、用户库用 SQLite），只有 Hydra 与它的 Postgres 是真的。`external/hydra/it/docker-compose.device-it.yml` 与生产 compose 同构（https issuer + 明文 http、仓库的 `hydra.yml`、同一组设备环境变量），差别只有：用户码 1 分钟过期（让过期类子测试一分钟内跑完）、没有清理服务（测试从 `docker-compose.yml` 提取清理 SQL 自己执行）。端口只绑 `127.0.0.1`（14444 / 14445 / 15432）。子测试 `GoXOAuth2Sample` 运行的就是 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A.8 的 Go 示例，并注入一次 503 验证外层退避；普通 `go test` 里的 `TestIntegrationDocGoSampleMatchesLiveTest` 保证文档与测试代码一致。
+`internal/modules/oauth2/hydra_device_live_test.go`（build tag `hydra_live`，普通 `go test ./...` 不编译它）在真实的 non-dev Hydra + Postgres 18 上走完整个设备流程，并复核 §10.5.1 记录的 Hydra 行为（失败消息以「§10.5.1」开头）。后端在测试进程内按正式路由表启动（Redis 用 miniredis、用户库用 SQLite），只有 Hydra 与它的 Postgres 是真的。`external/hydra/it/docker-compose.device-it.yml` 与仓库 `docker-compose.yml` 同构（https issuer + 明文 http、仓库的 `hydra.yml`、同一组设备环境变量），差别只有：用户码 1 分钟过期（让过期类子测试一分钟内跑完）、没有清理服务（测试从 `docker-compose.yml` 提取清理 SQL 自己执行）。端口只绑 `127.0.0.1`（14444 / 14445 / 15432）。子测试 `GoXOAuth2Sample` 运行的就是 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A.8 的 Go 示例，并注入一次 503 验证外层退避；普通 `go test` 里的 `TestIntegrationDocGoSampleMatchesLiveTest` 保证文档与测试代码一致。
 
 本地运行（每个版本各一遍，用完 `down -v`）：
 

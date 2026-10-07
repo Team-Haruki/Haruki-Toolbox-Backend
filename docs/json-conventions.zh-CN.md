@@ -33,7 +33,7 @@
 - `utils/codec/msgpackcodec`：MessagePack 结构校验、有序解码和直接 JSON 输出。
 - `utils/orderedmap`：有序容器及 JSON v2 流式编码；容器可变，不支持并发写。
 
-MessagePack 各输出策略、provider 派生字段和只读共享约定见 [MessagePack codec 与 OrderedMap](msgpack-codec.zh-CN.md)。游戏结构复原见 [MYSEKAI 与 Nuverse 复原](mysekai-restore.zh-CN.md)。
+MessagePack 各输出策略、provider 派生字段和只读共享约定见 [MessagePack codec 与 OrderedMap](msgpack-codec.zh-CN.md)。游戏结构复原在 `utils/game/nuverserestore`。
 
 ## 维护与验证
 

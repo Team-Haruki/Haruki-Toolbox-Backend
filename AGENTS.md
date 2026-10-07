@@ -136,14 +136,14 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 
 ### 6. OAuth2 设备授权（RFC 8628）由后端中介
 
-设备授权的代码集中在 `internal/modules/oauth2`（`hydra_device_*.go`、`hydra_token_endpoint.go`），架构见 `docs/ory-suite-usage.zh-CN.md` §10.5，配置与运维见 §10.6。改动时保持：
+设备授权的代码集中在 `internal/modules/oauth2`（`hydra_device_*.go`、`hydra_token_endpoint.go`），架构见 `docs/ory-suite-usage.zh-CN.md` §10.5，配置与开关见 §10.6。改动时保持：
 
 - Hydra 的 `/oauth2/device/*`、`/oauth2/fallbacks/device` 不加 Oathkeeper 规则；设备只调用后端的 `POST /api/oauth2/device/auth` 与 `POST /api/oauth2/token`，lookup / approve / deny 走 cookie_session 规则（`internal/architecture/oathkeeper_oauth2_device_rules_test.go`）
 - `/api/oauth2/token` 是令牌端点兼容层：非设备授权许可的请求逐字节转发给 Hydra（`TestTokenShimNonDeviceGrantVerbatim`）；两份发现文档的 `token_endpoint` 与 `device_authorization_endpoint` 由 compose 中的 Hydra 环境变量指向后端（`TestOryDeviceFlowDeploymentContract`）
 - Hydra 与 backend 的用户码字符集、长度、TTL 只来自 `.env` 的 `DEVICE_FLOW_USER_CODE_*`，不设 Hydra 的 user_code 熵预设
 - 运行时总开关 `oauth2DeviceFlowEnabled` 字段缺失视为关闭，不要改成缺省开启
 - 原始用户码、`hdc_…`、`ory_dc_…`、`dfh_…` 不进入 Redis 键名与日志：键名经 `KeyBuilder` 用 `user_system.session_sign_token` 做 HMAC，日志经 `utils/redact` 脱敏
-- `POST /internal/oauth2/introspect`（Sekai Station 用）只在 backend 端口上、不加 Oathkeeper 规则（`TestInternalAPINotRoutedByOathkeeper`），只写在 `docs/ory-suite-usage.zh-CN.md` §10.3.1，不写进对外接入文档
+- `/internal/*` 下供自有服务调用的内部路由只在 backend 端口上、不加 Oathkeeper 规则（`TestInternalAPINotRoutedByOathkeeper`）；它们的说明只放在私有运维文档中，不写进本仓库的任何文档
 
 ## 安全不变量
 
@@ -213,28 +213,29 @@ Ory 相关改动尤其建议关注：
 
 具体落点：
 
-- Ory 行为、认证流程、OAuth2 流程、Auth Proxy header 约定 → `docs/ory-suite-usage.zh-CN.md`（设备授权：架构 §10.5、运维 §10.6、内部令牌校验 API §10.3.1、部署 §11.3）
+- Ory 行为、认证流程、OAuth2 流程、Auth Proxy header 约定 → `docs/ory-suite-usage.zh-CN.md`（设备授权：架构 §10.5、配置与开关 §10.6、仓库内的部署配置 §11.3）
 - OAuth2 客户端对接 → `docs/oauth2-integration.zh-CN.md`（一份文档覆盖公开客户端、保密客户端、设备授权 §4A 与 OAuth2 Webhook）；只做 OIDC 登录的 RP 能看到的变化（Discovery、端点、登出）另同步 `docs/oidc-provider.zh-CN.md`
 - Webhook 行为 → `docs/webhook-integration.zh-CN.md`（Public API webhook）与 `docs/oauth2-integration.zh-CN.md` §8（OAuth2 webhook）
-- 游戏账号数据授权或可访问账号聚合 → `docs/game-account-data-grants.zh-CN.md`，含前端门控用的功能与能力对照表
-- 爱发电赞助 webhook / 同步 → `docs/afdian-sponsor-integration.zh-CN.md`
+- 架构、依赖方向、模块边界 → `docs/backend-architecture.zh-CN.md`；JSON / MessagePack 编解码约定 → `docs/json-conventions.zh-CN.md`、`docs/msgpack-codec.zh-CN.md`
+- 生产部署与上线步骤、监控告警、回滚、密钥轮换、数据库手工迁移、内部接口，以及站内前端契约（游戏账号数据授权、上传读写授权页面）、爱发电赞助、上传维护、MYSEKAI 复原、iOS 模块、游戏数据加密配置等运维资料 → 私有运维文档（不在本仓库；需要时向维护者索取）
 - 新增或移除公开/受保护端点 → `external/oathkeeper/access-rules.yml`；auth-proxy header 约定同时在 `external/oathkeeper/oathkeeper.yml`（header mutator）
 
 文档维护约定：
 
 - 关于本项目自身系统的文档只在工作未完成时保留：落地后删除，代码无法表达的内容改为写在相关代码旁的注释里，历史留在 git。给外部集成方的文档始终保留。
+- `docs/` 与本仓库其他 Markdown 都是公开的：不写 tailnet / 私网 IP、内部主机名、生产文件路径、生产容器或 compose 项目名、密钥及其存放位置、内部接口（`/internal/*`）及其访问方式、运维手册。集成方必须使用的公开域名（issuer、公开 API 基址）可以写。这类内容写进私有运维文档，公开文档只能说「运维资料另行维护」，不得链接私有仓库或路径。
 - `docs/` 内的链接一律用仓库相对路径（`oauth2-integration.zh-CN.md`、`../internal/...`），不要提交本机绝对路径。
 - 修改代理规则时先改本文件；`.github/copilot-instructions.md` 只是摘要，涉及其中条目时同步更新，`CLAUDE.md` 保持只指向本文件。
 
 当前文档：
 
 - `docs/README.md` — 文档索引，按读者分组；新增文档在这里登记
-- `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明（含设备授权架构 §10.5、运维 §10.6、内部令牌校验 API §10.3.1、部署配置 §11.3）
+- `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明（含设备授权架构 §10.5、配置与开关 §10.6、部署配置 §11.3）
 - `docs/oauth2-integration.zh-CN.md` — OAuth2 / OIDC 接入(公开 + 保密客户端 + 设备授权 §4A + Webhook)
 - `docs/oidc-provider.zh-CN.md` — 只做 OIDC 登录的外部 RP 接入（令牌端点地址变化见 §1）
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
-- `docs/game-account-data-grants.zh-CN.md` — 游戏账号数据读写授权与可访问账号聚合（含前端门控用的功能与能力对照表）
-- `docs/afdian-sponsor-integration.zh-CN.md` — 爱发电赞助 webhook/同步对接
+- `docs/harukiproxy-v3-client-integration.zh-CN.md` — HarukiProxy v3 客户端对接（OAuth2 上传）
+- `docs/backend-architecture.zh-CN.md`、`docs/json-conventions.zh-CN.md`、`docs/msgpack-codec.zh-CN.md` — 贡献者的代码约定
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 - `external/oathkeeper/oathkeeper.yml` — Oathkeeper auth-proxy header mutator 约定
 
