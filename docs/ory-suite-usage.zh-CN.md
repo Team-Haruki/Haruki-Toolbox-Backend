@@ -386,6 +386,12 @@ Hydra 需要 subject。项目里的策略是：
 - 新 OAuth2 数据尽量围绕 Kratos identity 稳定下来
 - 老数据、过渡期客户端仍有兼容空间
 
+通用 login / consent 端点另有三条 Hydra 自己不做的校验（`internal/modules/oauth2/hydra_device_challenge.go`、`hydra_consent_routes.go`）：
+
+- **拒绝设备授权模式的 challenge**：Hydra 的 login / consent 请求不带设备授权标记，只能靠 `request_url` 识别（路径以 `/oauth2/device/verify` 结尾）。查询、接受、拒绝（含旧版 `authorize/consent` 的两个分支）一律返回 403（`updatedData.code` 为 `device_flow_challenge`），不向 Hydra 发出 accept / reject。设备授权的 challenge 只由设备授权专用端点处理，即使泄漏也不能从通用端点接受或拒绝。为此 login accept / reject 会先 GET 一次 login request。consent 端点先校验请求主体：不属于当前用户的请求仍返回原有的主体不符错误，不暴露它是不是设备授权流程。
+- **不转发浏览器提交的 `acr`**：login accept 只发送 `subject`、`remember`、`remember_for`，用户不能自报 id_token 里的认证强度。
+- **停用的 client 不能完成 consent**：Hydra 不认识 `metadata.haruki.active`。consent accept 在主体校验之后、发出 accept 之前查 client，已停用或已删除都返回 403（`updatedData.code` 为 `client_disabled`，不区分两者），查询失败返回 503（措辞与 bearer 中间件相同）；OAuth2 webhook 扇出（`WebhookAuthorizer`）同样剔除停用的 client。已签发的 token 仍由 bearer 中间件按 client 状态拦截。
+
 ### 10.2.1 RP-Initiated Logout（2026-08-26 打通）
 
 登出与登录同构，但**三个编排端点是匿名的**：

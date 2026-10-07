@@ -399,6 +399,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 - 上传账号存在已验证的游戏账号绑定
 - 绑定 owner 未被封禁
+- OAuth2 client 本身处于启用状态（被管理员停用或已删除的 client 不再收到回调，即使用户的 consent session 还在）
 - OAuth2 client 配置了启用状态的 webhook endpoint
 - 该 owner 对该 client 存在有效 Hydra consent session
 - consent 的 grant scope 包含 `game-data:read`

@@ -55,11 +55,13 @@ type hydraRedirectResponse struct {
 	RedirectTo string `json:"redirect_to"`
 }
 
+// hydraLoginAcceptPayload deliberately has no acr: a browser-supplied value
+// would end up in the id_token's acr claim, letting the user self-assert how
+// strongly they authenticated. An acr member in the body is ignored.
 type hydraLoginAcceptPayload struct {
 	LoginChallenge string `json:"loginChallenge"`
 	Remember       bool   `json:"remember"`
 	RememberFor    int64  `json:"rememberFor"`
-	ACR            string `json:"acr"`
 }
 
 type hydraLoginRejectPayload struct {
@@ -107,4 +109,22 @@ type hydraRequestError struct {
 
 func (e *hydraRequestError) Error() string {
 	return fmt.Sprintf("hydra request failed with status %d: %s", e.Status, e.Message)
+}
+
+// oauth2CodedError is a refusal a page can key on. respondHydraError answers
+// with Message, a short English sentence, as the envelope's message and with
+// Code as updatedData.code.
+type oauth2CodedError struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+func (e *oauth2CodedError) Error() string {
+	return e.Code + ": " + e.Message
+}
+
+// oauth2ErrorCodeData is the updatedData of an oauth2CodedError response.
+type oauth2ErrorCodeData struct {
+	Code string `json:"code"`
 }

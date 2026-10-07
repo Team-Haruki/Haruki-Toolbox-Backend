@@ -12,6 +12,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -28,6 +29,9 @@ func handleHydraGetConsentRequest(hydraConfig *harukiOAuth2.HydraConfig) fiber.H
 		}
 		if err := ensureHydraConsentSubjectMatchesCurrentUser(c, resp); err != nil {
 			return respondHydraError(c, err, "failed to validate consent request subject")
+		}
+		if err := ensureHydraConsentNotDeviceFlow(resp); err != nil {
+			return respondHydraError(c, err, "failed to query consent request")
 		}
 		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", resp)
 	}
@@ -77,6 +81,9 @@ func handleHydraRejectConsent(hydraConfig *harukiOAuth2.HydraConfig) fiber.Handl
 		}
 		if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
 			return respondHydraError(c, err, "failed to validate consent request subject")
+		}
+		if err := ensureHydraConsentNotDeviceFlow(consentReq); err != nil {
+			return respondHydraError(c, err, "failed to query consent request")
 		}
 		if payload.Error == "" {
 			payload.Error = "access_denied"
@@ -128,6 +135,9 @@ func handleHydraLegacyConsentDecision(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			if err := ensureHydraConsentSubjectMatchesCurrentUser(c, consentReq); err != nil {
 				return respondHydraError(c, err, "failed to validate consent request subject")
 			}
+			if err := ensureHydraConsentNotDeviceFlow(consentReq); err != nil {
+				return respondHydraError(c, err, "failed to query consent request")
+			}
 			rejectResp, rejectErr := sendHydraAdminJSON(c.Context(), hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/reject", url.Values{"consent_challenge": {payload.ConsentChallenge}}, map[string]any{
 				"error":             "access_denied",
 				"error_description": "user denied the consent request",
@@ -157,8 +167,17 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 	if err != nil {
 		return nil, err
 	}
+	// The subject check comes first: a user who does not own the request gets
+	// the subject mismatch and learns neither the flow type nor the client's
+	// state.
 	if subject := strings.TrimSpace(consentReq.Subject); subject != "" && subject != strings.TrimSpace(hydraSubject) && subject != strings.TrimSpace(userID) {
 		return nil, fiber.NewError(fiber.StatusForbidden, "consent request subject does not match current user")
+	}
+	if err := ensureHydraConsentNotDeviceFlow(consentReq); err != nil {
+		return nil, err
+	}
+	if err := ensureHydraConsentClientActive(ctx, hydraConfig, consentReq.Client.ClientID); err != nil {
+		return nil, err
 	}
 
 	grantScope, err := normalizeGrantedValues(consentReq.RequestedScope, requestedGrantScope)
@@ -191,6 +210,36 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 			"id_token":     idToken,
 		},
 	})
+}
+
+// errHydraConsentClientDisabled refuses consent for a disabled or deleted
+// client (updatedData.code "client_disabled").
+var errHydraConsentClientDisabled = &oauth2CodedError{
+	Status:  fiber.StatusForbidden,
+	Code:    "client_disabled",
+	Message: "oauth2 client is disabled",
+}
+
+// ensureHydraConsentClientActive refuses consent for a client an admin has
+// disabled. Hydra ignores metadata.haruki.active, so without this check a
+// disabled client still completes the authorization-code flow and receives
+// fresh tokens. A deleted client reads as disabled, so the response does not
+// tell the two apart, and a failed lookup refuses rather than lets it through,
+// with the bearer middleware's 503 wording.
+func ensureHydraConsentClientActive(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string) error {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		return errHydraConsentClientDisabled
+	}
+	active, err := checkHydraOAuth2ClientActive(hydraConfig)(ctx, clientID)
+	if err != nil {
+		harukiLogger.Errorf("OAuth2 consent client active check failed: client=%s err=%v", clientID, err)
+		return fiber.NewError(fiber.StatusServiceUnavailable, "oauth2 client validation unavailable")
+	}
+	if !active {
+		return errHydraConsentClientDisabled
+	}
+	return nil
 }
 
 func normalizeGrantedValues(allowed []string, requested []string) ([]string, error) {
