@@ -693,6 +693,23 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 - 生产 access-rules 是单文件 bind mount、不热加载：替换前与线上文件 diff 并备份，替换后重启 Oathkeeper 容器
 - Hydra 与 backend 的字符集 / 长度变量必须在同一次 `up -d hydra backend` 中生效
 
+#### 真实 Hydra 集成测试（升级门禁）
+
+`internal/modules/oauth2/hydra_device_live_test.go`（build tag `hydra_live`，普通 `go test ./...` 不编译它）在真实的 non-dev Hydra + Postgres 18 上走完整个设备流程，并复核设计文档 §3.1 记录的 Hydra 行为。后端在测试进程内按生产路由表启动（Redis 用 miniredis、用户库用 SQLite），只有 Hydra 与它的 Postgres 是真的。`external/hydra/it/docker-compose.device-it.yml` 与生产 compose 同构（https issuer + 明文 http、仓库的 `hydra.yml`、同一组设备环境变量），差别只有：用户码 1 分钟过期（让过期类子测试一分钟内跑完）、没有清理服务（测试从 `docker-compose.yml` 提取清理 SQL 自己执行）。端口只绑 `127.0.0.1`（14444 / 14445 / 15432）。
+
+本地运行（每个版本各一遍，用完 `down -v`）：
+
+```bash
+export COMPOSE_FILE=external/hydra/it/docker-compose.device-it.yml
+for v in v25.4.0 v26.2.0; do
+  HYDRA_IT_VERSION=$v docker compose up -d --wait
+  HYDRA_IT_VERSION=$v go test -race -tags hydra_live -count=1 -run TestHydraDeviceFlowLive -v ./internal/modules/oauth2
+  docker compose down -v
+done
+```
+
+单遍约 80 秒（子测试并行，耗时取决于等待过期的两项）。`HYDRA_IT_VERSION` 设置时测试会核对 Hydra `/version`，避免测到旧容器；其余 `HYDRA_IT_*` 变量（地址、DSN、issuer、前端地址、用户码寿命）默认值与 IT compose 一致，只在改端口时需要设置。GitHub Actions 的 `Device flow live`（`.github/workflows/device-flow-live.yml`，只能手动触发、不是必需检查）对两个版本各跑一遍；上线前与修改 `ORY_VERSION` 前都要在待部署的 commit 上跑通。
+
 ## 12. 当前架构下的常见坑
 
 ### 12.1 忘记配置 `auth_proxy_session_header`
