@@ -282,9 +282,25 @@ func TestUsesKratosProvider(t *testing.T) {
 		t.Fatalf("UsesKratosProvider should be true when provider=kratos and kratos URL set")
 	}
 
-	handler.ConfigureIdentityProvider("local", "http://kratos.example", "", "", "", true, true, 2*time.Second, nil)
+	for _, provider := range []string{"", "local", "auto", "hybrid", " KRATOS ", "unknown"} {
+		handler.ConfigureIdentityProvider(provider, "http://kratos.example", "", "", "", true, true, 2*time.Second, nil)
+		if handler.SessionProvider != sessionProviderKratos {
+			t.Fatalf("SessionProvider for %q = %q, want %q", provider, handler.SessionProvider, sessionProviderKratos)
+		}
+		if !handler.UsesKratosProvider() {
+			t.Fatalf("legacy provider %q should be coerced to kratos mode", provider)
+		}
+	}
+
+	// A value set directly on the struct is still Kratos mode.
+	handler.SessionProvider = "local"
 	if !handler.UsesKratosProvider() {
-		t.Fatalf("legacy provider aliases should be coerced to kratos mode")
+		t.Fatalf("UsesKratosProvider should not depend on the SessionProvider value")
+	}
+
+	handler.ConfigureIdentityProvider("kratos", "", "", "", "", true, true, 2*time.Second, nil)
+	if handler.UsesKratosProvider() {
+		t.Fatalf("UsesKratosProvider should be false without a Kratos URL")
 	}
 }
 

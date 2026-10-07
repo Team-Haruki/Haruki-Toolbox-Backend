@@ -33,15 +33,6 @@ const (
 	kratosProvisionUserIDRandomRange int64 = 1000000
 )
 
-func normalizeSessionProvider(provider string) string {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "", sessionProviderKratos, "local", "auto", "hybrid":
-		return sessionProviderKratos
-	default:
-		return sessionProviderKratos
-	}
-}
-
 func NewSessionHandler(redisClient *redis.Client, _ string) *SessionHandler {
 	return &SessionHandler{
 		RedisClient:                  redisClient,
@@ -61,8 +52,11 @@ func NewSessionHandler(redisClient *redis.Client, _ string) *SessionHandler {
 	}
 }
 
+// ConfigureIdentityProvider configures Kratos, the only browser identity
+// provider. The first argument is the legacy provider name ("", "local",
+// "auto", "hybrid" or "kratos"); every value selects Kratos.
 func (s *SessionHandler) ConfigureIdentityProvider(
-	provider string,
+	_ string,
 	kratosPublicURL string,
 	kratosAdminURL string,
 	kratosSessionHeader string,
@@ -72,7 +66,7 @@ func (s *SessionHandler) ConfigureIdentityProvider(
 	kratosRequestTimeout time.Duration,
 	dbClient *postgresql.Client,
 ) {
-	s.SessionProvider = normalizeSessionProvider(provider)
+	s.SessionProvider = sessionProviderKratos
 	s.KratosPublicURL = strings.TrimSpace(kratosPublicURL)
 	s.KratosAdminURL = strings.TrimSpace(kratosAdminURL)
 	s.KratosSessionHeader = strings.TrimSpace(kratosSessionHeader)
@@ -184,6 +178,6 @@ func (s *SessionHandler) kratosHTTPClient() *http.Client {
 }
 
 func (s *SessionHandler) UsesKratosProvider() bool {
-	provider := normalizeSessionProvider(s.SessionProvider)
-	return provider == sessionProviderKratos && s.hasKratosProviderConfigured()
+	// Kratos is the only provider, whatever SessionProvider holds.
+	return s.hasKratosProviderConfigured()
 }
