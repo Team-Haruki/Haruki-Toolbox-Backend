@@ -1,6 +1,9 @@
 package oauth2
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -92,5 +95,42 @@ func TestHydraConfigCopiesCredentialsAndTimeout(t *testing.T) {
 	config = NewHydraConfig(HydraConfigOptions{RequestTimeout: 27 * time.Second})
 	if got := config.RequestTimeout(); got != 27*time.Second {
 		t.Fatalf("RequestTimeout() = %s, want %s", got, 27*time.Second)
+	}
+}
+
+func TestHydraConfigDoWithoutRedirect(t *testing.T) {
+	var followed atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/next" {
+			followed.Store(true)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: "csrf", Value: "v", Secure: true})
+		w.Header().Set("Location", "/next")
+		w.WriteHeader(http.StatusFound)
+	}))
+	t.Cleanup(server.Close)
+
+	cfg := NewHydraConfig(HydraConfigOptions{PublicURL: server.URL})
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/start", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := cfg.DoWithoutRedirect(req)
+	if err != nil {
+		t.Fatalf("DoWithoutRedirect returned error: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/next" || followed.Load() {
+		t.Fatalf("status = %d, location = %q, followed = %v", resp.StatusCode, resp.Header.Get("Location"), followed.Load())
+	}
+	if len(resp.Cookies()) != 1 {
+		t.Fatalf("Set-Cookie not returned to the caller: %v", resp.Header.Values("Set-Cookie"))
+	}
+
+	var nilConfig *HydraConfig
+	if _, err := nilConfig.DoWithoutRedirect(req); err == nil {
+		t.Fatal("nil config must refuse")
 	}
 }

@@ -198,18 +198,77 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 		rememberFor = 0
 	}
 
-	idToken := buildHydraOIDCIDTokenClaims(dbUser.ID, dbUser.Name, dbUser.Email, emailVerified, grantScope)
-
-	return sendHydraAdminJSON(ctx, hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/accept", url.Values{"consent_challenge": {consentChallenge}}, map[string]any{
-		"grant_scope":                 grantScope,
-		"grant_access_token_audience": audience,
-		"remember":                    remember,
-		"remember_for":                rememberFor,
-		"session": map[string]any{
-			"access_token": map[string]any{"uid": dbUser.ID},
-			"id_token":     idToken,
-		},
+	body := buildHydraConsentAcceptBody(hydraConsentAcceptBodyInput{
+		GrantScope:    grantScope,
+		GrantAudience: audience,
+		Remember:      remember,
+		RememberFor:   rememberFor,
+		UserID:        dbUser.ID,
+		UserName:      dbUser.Name,
+		UserEmail:     dbUser.Email,
+		EmailVerified: emailVerified,
 	})
+	return sendHydraAdminJSON(ctx, hydraConfig, http.MethodPut, "/admin/oauth2/auth/requests/consent/accept", url.Values{"consent_challenge": {consentChallenge}}, body)
+}
+
+// hydraConsentDeviceContext is what a device-flow approval adds to a consent
+// accept. The browser consent path passes none.
+type hydraConsentDeviceContext struct {
+	FlowID      string
+	Label       string
+	LabelSource string
+}
+
+// hydraDeviceApprovedVia tags consents granted by the server-driven device
+// approval chain, in context.haruki.approved_via.
+const hydraDeviceApprovedVia = "device-bff/v1"
+
+type hydraConsentAcceptBodyInput struct {
+	GrantScope    []string
+	GrantAudience []string
+	Remember      bool
+	RememberFor   int64
+	UserID        string
+	UserName      string
+	UserEmail     string
+	EmailVerified bool
+	// Device is nil on the browser consent path.
+	Device *hydraConsentDeviceContext
+}
+
+// buildHydraConsentAcceptBody builds PUT /admin/oauth2/auth/requests/consent/accept,
+// shared by the browser consent endpoints and the device approval chain. The
+// browser path's session.access_token carries only {"uid"} and no context,
+// exactly as before; a device approval adds the flow ID and the device label
+// to the access-token session (visible in introspection ext) and a
+// context.haruki block (visible in the consent session list).
+func buildHydraConsentAcceptBody(input hydraConsentAcceptBodyInput) map[string]any {
+	accessToken := map[string]any{"uid": input.UserID}
+	body := map[string]any{
+		"grant_scope":                 input.GrantScope,
+		"grant_access_token_audience": input.GrantAudience,
+		"remember":                    input.Remember,
+		"remember_for":                input.RememberFor,
+		"session": map[string]any{
+			"access_token": accessToken,
+			"id_token":     buildHydraOIDCIDTokenClaims(input.UserID, input.UserName, input.UserEmail, input.EmailVerified, input.GrantScope),
+		},
+	}
+	if device := input.Device; device != nil {
+		accessToken["flow"] = "device"
+		accessToken["device_flow_id"] = device.FlowID
+		accessToken["device_label"] = device.Label
+		body["context"] = map[string]any{
+			"haruki": map[string]any{
+				"flow":           "device",
+				"device_flow_id": device.FlowID,
+				"label":          device.Label,
+				"label_source":   device.LabelSource,
+				"approved_via":   hydraDeviceApprovedVia,
+			},
+		}
+	}
+	return body
 }
 
 // errHydraConsentClientDisabled refuses consent for a disabled or deleted

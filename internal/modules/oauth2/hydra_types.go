@@ -22,7 +22,10 @@ type hydraLoginRequestResponse struct {
 }
 
 type hydraConsentRequestResponse struct {
-	Challenge                    string                  `json:"challenge"`
+	Challenge string `json:"challenge"`
+	// ConsentRequestID identifies the consent session the request creates;
+	// the device approval chain records it before accepting.
+	ConsentRequestID             string                  `json:"consent_request_id"`
 	Skip                         bool                    `json:"skip"`
 	Subject                      string                  `json:"subject"`
 	RequestURL                   string                  `json:"request_url"`

@@ -38,6 +38,13 @@ type HydraConfig struct {
 	clientSecret   string
 	requestTimeout time.Duration
 	httpClient     *http.Client
+	// noRedirectClient never follows redirects and keeps no cookies: the
+	// device-approval chain inspects every Hydra Location itself and carries
+	// its own per-approval cookie jar. It does not keep connections alive
+	// either: net/http silently replays a GET that failed on a reused
+	// connection, which would turn the chain's "final hop result unknown"
+	// into a second, explicit answer (Hydra's 403 for a used verifier).
+	noRedirectClient *http.Client
 }
 
 func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
@@ -63,6 +70,13 @@ func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
 		clientSecret:   options.ClientSecret,
 		requestTimeout: timeout,
 		httpClient:     &http.Client{Timeout: timeout},
+		noRedirectClient: &http.Client{
+			Timeout:   timeout,
+			Transport: newNoKeepAliveTransport(),
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
 	}
 }
 
@@ -119,6 +133,27 @@ func (c *HydraConfig) Do(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("hydra config is not initialized")
 	}
 	return c.httpClient.Do(req)
+}
+
+// DoWithoutRedirect sends req without following redirects (a 3xx is returned
+// as is) and without any cookie jar. The device-approval chain uses it for
+// Hydra's public browser endpoints, whose Location headers it validates hop by
+// hop instead of following them.
+func (c *HydraConfig) DoWithoutRedirect(req *http.Request) (*http.Response, error) {
+	if c == nil || c.noRedirectClient == nil {
+		return nil, fmt.Errorf("hydra config is not initialized")
+	}
+	return c.noRedirectClient.Do(req)
+}
+
+func newNoKeepAliveTransport() http.RoundTripper {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Transport{DisableKeepAlives: true}
+	}
+	clone := transport.Clone()
+	clone.DisableKeepAlives = true
+	return clone
 }
 
 func buildHydraEndpoint(baseURL, endpointPath string) (string, error) {
