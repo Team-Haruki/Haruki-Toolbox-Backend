@@ -122,8 +122,9 @@ oauth2:
       max_slow_down: 30 # pending flows fail after more early polls
       max_interval_seconds: 60
   # Internal token introspection for our own services (Sekai Station):
-  # POST /internal/oauth2/introspect on the backend port, reachable over the
-  # tailnet and the compose network only (Oathkeeper has no rule for it).
+  # POST /internal/oauth2/introspect on the backend port, reachable only on the
+  # private network / compose network, never via the public proxy (Oathkeeper
+  # has no rule for it).
   # Callers send either "Authorization: Bearer <internal token>" or, as an
   # RFC 7662 client, HTTP Basic "<client_id>:<internal token>"; store only the
   # token's SHA-256 here (printf %s "$TOKEN" | sha256sum).

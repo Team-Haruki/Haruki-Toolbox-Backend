@@ -26,16 +26,19 @@ func TestOAuth2UploadMethodIsItsOwnValue(t *testing.T) {
 	}
 }
 
-// The write scope must exist, be distinct from the read scope, and carry a
-// consent description — a scope with no description is invisible on the consent
-// screen, so a user would be granting write access without being told.
+// The write scope must exist, be distinct from the read scope, and be
+// registered in AllScopes: that map is the set of scopes an admin can assign
+// to an OAuth2 client (sanitizeAdminOAuthClientScopes), so a scope missing
+// from it could never be granted. The consent screen does not show these
+// descriptions (the frontend has its own wording); a non-empty one is still
+// required so the registry stays complete.
 func TestGameDataWriteScopeIsDeclaredForConsent(t *testing.T) {
 	if harukiOAuth2.ScopeGameDataWrite == harukiOAuth2.ScopeGameDataRead {
 		t.Fatal("the write scope is the same string as the read scope")
 	}
 	desc, ok := harukiOAuth2.AllScopes[harukiOAuth2.ScopeGameDataWrite]
 	if !ok || desc == "" {
-		t.Fatal("game-data:write has no consent description; users would grant it blind")
+		t.Fatal("game-data:write is not registered in AllScopes or has no description")
 	}
 	if !harukiOAuth2.HasScope([]string{harukiOAuth2.ScopeGameDataWrite}, harukiOAuth2.ScopeGameDataWrite) {
 		t.Fatal("HasScope does not recognise the write scope")

@@ -14,8 +14,9 @@ import (
 )
 
 // emptyArray is what a requested-but-absent suite key renders as. It is not a
-// stylistic choice: the MongoDB path returns bson.A{} from GetValueFromResult
-// for a key the projection did not find, and clients depend on it.
+// stylistic choice: the retired MongoDB path returned bson.A{} from
+// GetValueFromResult for a key the projection did not find, and clients depend
+// on it.
 var emptyArray = []byte("[]")
 
 // userGamedataAllowedFields mirrors internal/platform/api/data. The whole userGamedata
@@ -112,8 +113,8 @@ func (r *Row) suiteBareValue(key string) ([]byte, error) {
 			return nil, err
 		}
 		if !ok {
-			// The MongoDB path returns an empty DOCUMENT here, not an empty
-			// array, because it falls back to bson.D{}.
+			// The retired MongoDB path returned an empty DOCUMENT here, not an
+			// empty array, because it fell back to bson.D{}; clients keep that.
 			return []byte("{}"), nil
 		}
 		return v, nil

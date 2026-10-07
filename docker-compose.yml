@@ -4,8 +4,9 @@ name: ${COMPOSE_PROJECT_NAME:-haruki-toolbox}
 # binds 0.0.0.0, and Docker's DNAT rules bypass the host firewall's INPUT chain
 # entirely — ufw can report "default deny (incoming)" while the port answers
 # from the public internet. Bind to 127.0.0.1 (host-network consumers such as a
-# local WAF/reverse proxy) plus ${TAILSCALE_IP} (other nodes); public traffic
-# must arrive through the edge proxy, never at a container port.
+# local WAF/reverse proxy) plus ${TAILSCALE_IP} (the host's private-network
+# address, for other nodes); public traffic must arrive through the edge proxy,
+# never at a container port.
 services:
   mihomo:
     image: metacubex/mihomo
@@ -323,16 +324,16 @@ services:
       HARUKI_BOT_DB_URL: ${HARUKI_BOT_DB_URL}
       HARUKI_BOT_ENABLE_REGISTRATION: ${HARUKI_BOT_ENABLE_REGISTRATION:-false}
       HARUKI_BOT_CREDENTIAL_SIGN_TOKEN: ${HARUKI_BOT_CREDENTIAL_SIGN_TOKEN}
-    # SECURITY: bind the backend port ONLY to the internal Tailscale interface so
-    # internal microservices can reach it over Tailscale, while it stays
-    # unreachable from the public internet. NEVER publish it on 0.0.0.0 / all
+    # SECURITY: bind the backend port ONLY to the private-network interface
+    # (${TAILSCALE_IP}) so internal services can reach it over the private
+    # network, while it stays unreachable from the public internet. NEVER publish it on 0.0.0.0 / all
     # interfaces: the backend trusts Oathkeeper-injected identity headers gated by
     # a shared secret, so a caller reaching it off-proxy could forge identity and
     # impersonate any user/admin. Public traffic must go through Oathkeeper.
     # The internal API (/internal/*, e.g. POST /internal/oauth2/introspect for
     # Sekai Station) is served on this same port and has NO Oathkeeper rule: it
-    # is reachable only over the tailnet and the compose network, and still
-    # requires its internal token.
+    # is reachable only on the private network / compose network, never via the
+    # public proxy, and still requires its internal token.
     ports:
       - "${TAILSCALE_IP}:${BACKEND_PORT}:16666"
     volumes:

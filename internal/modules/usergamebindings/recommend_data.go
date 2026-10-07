@@ -18,7 +18,7 @@ import (
 )
 
 // deckRecommendReadTimeout bounds the deck-recommend data read. It is wider than
-// the other read deadlines because mysekai mode issues two sequential Mongo
+// the other read deadlines because mysekai mode issues two sequential game-data
 // fetches (suite subset + mysekai subset).
 const deckRecommendReadTimeout = 5 * time.Second
 
@@ -78,7 +78,7 @@ func validateVerifiedOwnedGameAccountBinding(binding *postgresql.GameAccountBind
 
 func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Bound the PG binding lookup and both Mongo fetches; Fiber v3 request
+		// Bound the PG binding lookup and both game-data fetches; Fiber v3 request
 		// contexts carry no deadline.
 		ctx, cancel := context.WithTimeout(c.Context(), deckRecommendReadTimeout)
 		defer cancel()

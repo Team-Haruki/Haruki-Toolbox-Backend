@@ -19,13 +19,13 @@ import (
 )
 
 // publicReadTimeout bounds the whole public read path (PG binding lookup, Redis
-// cache ops, Mongo fetch). Fiber v3 request contexts carry no deadline, so
-// without this a stalled dependency parks the request indefinitely — the same
-// landmine class fixed for private box reads in v8.3.0.
+// cache ops, game-data PostgreSQL fetch). Fiber v3 request contexts carry no
+// deadline, so without this a stalled dependency parks the request
+// indefinitely — the same landmine class fixed for private box reads in v8.3.0.
 const publicReadTimeout = 3 * time.Second
 
 // publicDataGroup collapses concurrent cache misses for the same cacheKey into a
-// single Mongo read + marshal + cache write. Misses here are correlated: every
+// single game-data read + render + cache write. Misses here are correlated: every
 // upload invalidates all cached surfaces for that user and then fans out webhook
 // notifications, so subscribers commonly re-fetch the same key at once.
 var publicDataGroup singleflight.Group

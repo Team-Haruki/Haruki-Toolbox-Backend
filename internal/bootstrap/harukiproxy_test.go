@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -25,7 +26,28 @@ func TestCompileProxyPolicy(t *testing.T) {
 		t.Fatal("wrong channel floor accepted")
 	}
 }
+
+// assertSchemaHint checks that a schema error names what is wrong and how to
+// fix it without pointing at a repository file: the migration SQL lives in the
+// operations docs, not in docs/.
+func assertSchemaHint(t *testing.T, err error, wants ...string) {
+	t.Helper()
+	msg := err.Error()
+	for _, want := range append(wants, "schema migration", "see the operations docs", "backend.auto_migrate") {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not mention %q", msg, want)
+		}
+	}
+	if strings.Contains(msg, "docs/") || strings.Contains(msg, ".sql") {
+		t.Errorf("error %q still points at a repository file", msg)
+	}
+}
+
 func TestUploadSchemaValidation(t *testing.T) {
+	wantInError := map[string][]string{
+		"missing":  {"upload_logs.client_version", "HarukiProxy v3", "upload-grants"},
+		"not-null": {"upload_logs.game_user_id", "upload_logs.toolbox_user_id", "nullable", "HarukiProxy v3"},
+	}
 	for _, tc := range []string{"valid", "missing", "not-null"} {
 		t.Run(tc, func(t *testing.T) {
 			client, mock := newBootstrapSQLMockClient(t)
@@ -45,6 +67,9 @@ func TestUploadSchemaValidation(t *testing.T) {
 			if (err == nil) != (tc == "valid") {
 				t.Fatalf("unexpected schema validation: %v", err)
 			}
+			if err != nil {
+				assertSchemaHint(t, err, wantInError[tc]...)
+			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
 			}
@@ -59,6 +84,9 @@ func TestWriteGrantSchemaRequiresBothPermissions(t *testing.T) {
 		err := validateUploadGrantSchema(context.Background(), client)
 		if (err == nil) != (count == 2) {
 			t.Fatalf("columns %d: %v", count, err)
+		}
+		if err != nil {
+			assertSchemaHint(t, err, "game_account_data_grants.can_read", "can_write", "upload-grants")
 		}
 		if err := mock.ExpectationsWereMet(); err != nil {
 			t.Fatal(err)
