@@ -17,7 +17,8 @@ var composeDefaultRef = regexp.MustCompile(`^\$\{([A-Z0-9_]+):-([^}]*)\}$`)
 // user-code charset, length and TTL from the same DEVICE_FLOW_* variables, and
 // the compose fallbacks and .env.example values equal the backend defaults.
 // Any drift makes every user code invalid, so it is caught here rather than
-// by the startup self-check in production.
+// in production, where only the device/auth runtime self-check (which answers
+// 500 charset_mismatch / ttl_mismatch) would notice it.
 func TestDeviceUserCodeDefaultsMatchCompose(t *testing.T) {
 	contents, err := os.ReadFile("../docker-compose.yml")
 	if err != nil {
