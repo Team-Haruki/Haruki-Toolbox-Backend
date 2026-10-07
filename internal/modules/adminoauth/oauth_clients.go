@@ -20,6 +20,8 @@ const (
 	adminOAuthClientIDMinLen = 3
 	adminOAuthClientIDMaxLen = 128
 	adminOAuthClientNameMax  = 128
+
+	adminOAuthClientErrorCodePublicClientHasNoSecret = "public_client_has_no_secret"
 )
 
 var adminOAuthClientIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -36,14 +38,15 @@ type adminOAuthClientUsageStats struct {
 }
 
 type adminOAuthClientListItem struct {
-	ClientID     string                     `json:"clientId"`
-	Name         string                     `json:"name"`
-	ClientType   string                     `json:"clientType"`
-	Active       bool                       `json:"active"`
-	CreatedAt    time.Time                  `json:"createdAt"`
-	RedirectURIs []string                   `json:"redirectUris"`
-	Scopes       []string                   `json:"scopes"`
-	Usage        adminOAuthClientUsageStats `json:"usage"`
+	ClientID               string                     `json:"clientId"`
+	Name                   string                     `json:"name"`
+	ClientType             string                     `json:"clientType"`
+	Active                 bool                       `json:"active"`
+	CreatedAt              time.Time                  `json:"createdAt"`
+	RedirectURIs           []string                   `json:"redirectUris"`
+	PostLogoutRedirectURIs []string                   `json:"postLogoutRedirectUris"`
+	Scopes                 []string                   `json:"scopes"`
+	Usage                  adminOAuthClientUsageStats `json:"usage"`
 }
 
 type adminOAuthClientListResponse struct {
@@ -70,28 +73,41 @@ type adminOAuthClientPayload struct {
 	Name         string   `json:"name"`
 	ClientType   string   `json:"clientType"`
 	RedirectURIs []string `json:"redirectUris"`
-	Scopes       []string `json:"scopes"`
+	// PostLogoutRedirectURIs: nil (field omitted) keeps the registered list on
+	// update; an empty array clears it.
+	PostLogoutRedirectURIs []string `json:"postLogoutRedirectUris"`
+	Scopes                 []string `json:"scopes"`
 }
 
 type adminOAuthClientCreateResponse struct {
-	ClientID     string    `json:"clientId"`
-	ClientSecret string    `json:"clientSecret"`
-	Name         string    `json:"name"`
-	ClientType   string    `json:"clientType"`
-	Active       bool      `json:"active"`
-	RedirectURIs []string  `json:"redirectUris"`
-	Scopes       []string  `json:"scopes"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ClientID               string    `json:"clientId"`
+	ClientSecret           string    `json:"clientSecret"`
+	Name                   string    `json:"name"`
+	ClientType             string    `json:"clientType"`
+	Active                 bool      `json:"active"`
+	RedirectURIs           []string  `json:"redirectUris"`
+	PostLogoutRedirectURIs []string  `json:"postLogoutRedirectUris"`
+	Scopes                 []string  `json:"scopes"`
+	CreatedAt              time.Time `json:"createdAt"`
 }
 
 type adminOAuthClientUpdateResponse struct {
-	ClientID     string    `json:"clientId"`
-	Name         string    `json:"name"`
-	ClientType   string    `json:"clientType"`
-	Active       bool      `json:"active"`
-	RedirectURIs []string  `json:"redirectUris"`
-	Scopes       []string  `json:"scopes"`
-	CreatedAt    time.Time `json:"createdAt"`
+	ClientID string `json:"clientId"`
+	// ClientSecret is set, once, only when the update switched a public client to
+	// confidential.
+	ClientSecret           string    `json:"clientSecret,omitempty"`
+	Name                   string    `json:"name"`
+	ClientType             string    `json:"clientType"`
+	Active                 bool      `json:"active"`
+	RedirectURIs           []string  `json:"redirectUris"`
+	PostLogoutRedirectURIs []string  `json:"postLogoutRedirectUris"`
+	Scopes                 []string  `json:"scopes"`
+	CreatedAt              time.Time `json:"createdAt"`
+}
+
+// adminOAuthClientErrorData is the updatedData of an error the frontend keys on.
+type adminOAuthClientErrorData struct {
+	Code string `json:"code"`
 }
 
 type adminOAuthClientRotateSecretResponse struct {

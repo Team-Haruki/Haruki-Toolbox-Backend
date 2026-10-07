@@ -442,9 +442,18 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 - 激活 / 禁用
 - revoke / consent session 相关统计与操作
 
+编辑、启停、恢复和轮换 secret 都通过 `PATCH /admin/clients/{id}`（JSON Patch，请求体是操作数组）完成，不用整体 `PUT`：
+
+- 只改管理端负责的字段：`client_name`、`scope`、`redirect_uris`、`post_logout_redirect_uris`、`token_endpoint_auth_method`、`client_secret`、`metadata.haruki.active`。授权类型、token 寿命、`skip_consent` 和其他 metadata 保持原样
+- 只用 `add` / `replace`，不用 `test`（Hydra 对 `test` 返回 500，即使值匹配）
+- 公开客户端切换为保密客户端时，新 secret 和 `token_endpoint_auth_method` 写在同一个 patch 里。只改认证方式不写 secret，Hydra 也会接受，但客户端之后无法认证
+- 公开客户端（`token_endpoint_auth_method=none`）拒绝轮换 secret
+- `PUT /admin/clients/{id}/lifespans` 会整体替换所有寿命字段，后端不调用它
+
 实现主要在：
 
-- `internal/modules/adminoauth/hydra_handlers.go`
+- `internal/modules/oauth2/hydra_clients.go`
+- `internal/modules/adminoauth/hydra_client_handlers.go`
 - `internal/modules/adminusers/user_oauth_handlers.go`
 
 ## 11. 当前配置层面对 Ory 的约束
@@ -621,6 +630,18 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
   `X-Forwarded-For` 变成客户端可控输入，攻击者每次请求换一个伪造 IP 即可绕过上限
 
 见 §11.2。
+
+### 12.7 用整体 PUT 更新 Hydra client
+
+后果：
+
+- 每次编辑、启停或轮换 secret 之后，在 Hydra 侧单独配置的授权类型、token 寿命、
+  `post_logout_redirect_uris` 和其他 metadata 都被清空，管理端看不出任何异常
+
+原因：
+
+- `PUT /admin/clients/{id}` 是整体替换，载荷里没带的字段都会丢失。生命周期操作要用
+  JSON Patch，见 §10.4
 
 ## 13. 对后续开发的建议
 

@@ -476,13 +476,20 @@ user:read  bindings:read  game-data:read  game-data:write
 
 ## 10. 管理员创建 OAuth Client 需要什么
 
-需要提供 `clientId`、`name`、`clientType`、`redirectUris`、`scopes`，其中：
+需要提供 `clientId`、`name`、`clientType`、`redirectUris`、`scopes`，可选 `postLogoutRedirectUris`，其中：
 
 - `clientType` 只能是 `public` 或 `confidential`
 - `redirectUris` 必须是合法 URI，且**不能包含 fragment**
+- `postLogoutRedirectUris`（RP 发起登出后的回跳地址）规则同 `redirectUris`，并且每一个都必须与某个 `redirectUris` 的 scheme、host、port 一致（Hydra 自身的规则），否则返回 400
 - `scopes` 必须来自系统允许的 scope 集
 
 服务端创建逻辑见 [`hydra_client_handlers.go`](../internal/modules/adminoauth/hydra_client_handlers.go)。
+
+编辑、启停、恢复和轮换 secret 都用 JSON Patch 只改管理端负责的字段。在 Hydra 侧单独配置的授权类型、token 寿命和其他 metadata 不会被覆盖。另外：
+
+- 编辑时省略 `postLogoutRedirectUris` 表示保留现有列表，传 `[]` 表示清空
+- 把公开客户端改成 `confidential` 时，更新响应会带一次性的 `clientSecret`，与创建时一样只返回这一次
+- 公开客户端没有 secret，对它调用 `rotate-secret` 返回 400，`updatedData.code` 为 `public_client_has_no_secret`
 
 公开客户端示例：
 

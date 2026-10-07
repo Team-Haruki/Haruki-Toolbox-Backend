@@ -95,28 +95,85 @@ func sanitizeAdminOAuthClientRedirectURIs(values []string) ([]string, error) {
 	if len(values) == 0 {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "redirectUris is required")
 	}
+	return sanitizeAdminOAuthClientURIs(values, "redirectUris")
+}
+
+// sanitizeAdminOAuthClientPostLogoutRedirectURIs keeps nil as nil so an update
+// that omits the field leaves the registered list alone.
+func sanitizeAdminOAuthClientPostLogoutRedirectURIs(values []string, redirectURIs []string) ([]string, error) {
+	if values == nil {
+		return nil, nil
+	}
+	result, err := sanitizeAdminOAuthClientURIs(values, "postLogoutRedirectUris")
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureAdminOAuthClientPostLogoutRedirectURIsMatch(result, redirectURIs); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ensureAdminOAuthClientKeptPostLogoutRedirectURIsMatch checks the registered
+// post-logout URIs an update keeps (payload omitted the field) against the new
+// redirect URIs. With no redirect URIs left, UpdateHydraOAuthClient clears the
+// kept list in the same patch (device-only clients), so nothing is rejected.
+func ensureAdminOAuthClientKeptPostLogoutRedirectURIsMatch(kept []string, redirectURIs []string) error {
+	if len(redirectURIs) == 0 {
+		return nil
+	}
+	return ensureAdminOAuthClientPostLogoutRedirectURIsMatch(kept, redirectURIs)
+}
+
+// ensureAdminOAuthClientPostLogoutRedirectURIsMatch applies Hydra's own rule:
+// each post-logout URI shares scheme, host and port with a redirect URI. Hydra
+// rejects the write otherwise, so checking here turns that into a 400.
+func ensureAdminOAuthClientPostLogoutRedirectURIsMatch(postLogoutRedirectURIs []string, redirectURIs []string) error {
+	if len(postLogoutRedirectURIs) == 0 {
+		return nil
+	}
+	if len(redirectURIs) == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "postLogoutRedirectUris requires redirectUris")
+	}
+	type uriOrigin struct{ scheme, host, port string }
+	origins := make(map[uriOrigin]struct{}, len(redirectURIs))
+	for _, redirectURI := range redirectURIs {
+		if parsed, err := url.ParseRequestURI(redirectURI); err == nil {
+			origins[uriOrigin{parsed.Scheme, parsed.Hostname(), parsed.Port()}] = struct{}{}
+		}
+	}
+	for _, postLogoutRedirectURI := range postLogoutRedirectURIs {
+		parsed, err := url.ParseRequestURI(postLogoutRedirectURI)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "postLogoutRedirectUris contains invalid uri")
+		}
+		if _, ok := origins[uriOrigin{parsed.Scheme, parsed.Hostname(), parsed.Port()}]; !ok {
+			return fiber.NewError(fiber.StatusBadRequest, "postLogoutRedirectUris must match the scheme, host and port of a redirect uri")
+		}
+	}
+	return nil
+}
+
+func sanitizeAdminOAuthClientURIs(values []string, field string) ([]string, error) {
 	result := make([]string, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
 	for _, raw := range values {
-		redirectURI := strings.TrimSpace(raw)
-		if redirectURI == "" {
-			return nil, fiber.NewError(fiber.StatusBadRequest, "redirectUris contains empty value")
+		uri := strings.TrimSpace(raw)
+		if uri == "" {
+			return nil, fiber.NewError(fiber.StatusBadRequest, field+" contains empty value")
 		}
-		if strings.Contains(redirectURI, "#") {
-			return nil, fiber.NewError(fiber.StatusBadRequest, "redirectUris must not include fragment")
+		if strings.Contains(uri, "#") {
+			return nil, fiber.NewError(fiber.StatusBadRequest, field+" must not include fragment")
 		}
-		parsed, err := url.ParseRequestURI(redirectURI)
+		parsed, err := url.ParseRequestURI(uri)
 		if err != nil || strings.TrimSpace(parsed.Scheme) == "" {
-			return nil, fiber.NewError(fiber.StatusBadRequest, "redirectUris contains invalid uri")
+			return nil, fiber.NewError(fiber.StatusBadRequest, field+" contains invalid uri")
 		}
-		if _, ok := seen[redirectURI]; ok {
+		if _, ok := seen[uri]; ok {
 			continue
 		}
-		seen[redirectURI] = struct{}{}
-		result = append(result, redirectURI)
-	}
-	if len(result) == 0 {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "redirectUris is required")
+		seen[uri] = struct{}{}
+		result = append(result, uri)
 	}
 	return result, nil
 }
@@ -179,6 +236,10 @@ func parseAdminOAuthClientPayload(c fiber.Ctx, requireClientID bool) (*adminOAut
 	if err != nil {
 		return nil, err
 	}
+	postLogoutRedirectURIs, err := sanitizeAdminOAuthClientPostLogoutRedirectURIs(payload.PostLogoutRedirectURIs, redirectURIs)
+	if err != nil {
+		return nil, err
+	}
 	scopes, err := sanitizeAdminOAuthClientScopes(payload.Scopes)
 	if err != nil {
 		return nil, err
@@ -186,6 +247,7 @@ func parseAdminOAuthClientPayload(c fiber.Ctx, requireClientID bool) (*adminOAut
 	payload.Name = name
 	payload.ClientType = clientType
 	payload.RedirectURIs = redirectURIs
+	payload.PostLogoutRedirectURIs = postLogoutRedirectURIs
 	payload.Scopes = scopes
 	return &payload, nil
 }

@@ -1,6 +1,7 @@
 package adminoauth
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -69,14 +70,15 @@ func handleListHydraOAuthClients(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 		items := make([]adminOAuthClientListItem, 0, len(pageClients))
 		for _, client := range pageClients {
 			items = append(items, adminOAuthClientListItem{
-				ClientID:     client.ClientID,
-				Name:         strings.TrimSpace(client.ClientName),
-				ClientType:   oauth2Module.HydraClientTypeFromAuthMethod(client.TokenEndpointAuthMethod),
-				Active:       oauth2Module.HydraOAuthClientActive(&client),
-				CreatedAt:    hydraClientCreatedAt(&client),
-				RedirectURIs: append([]string(nil), client.RedirectURIs...),
-				Scopes:       append([]string(nil), oauth2Module.HydraOAuthClientScopes(&client)...),
-				Usage:        adminOAuthClientUsageStats{},
+				ClientID:               client.ClientID,
+				Name:                   strings.TrimSpace(client.ClientName),
+				ClientType:             oauth2Module.HydraClientTypeFromAuthMethod(client.TokenEndpointAuthMethod),
+				Active:                 oauth2Module.HydraOAuthClientActive(&client),
+				CreatedAt:              hydraClientCreatedAt(&client),
+				RedirectURIs:           append([]string(nil), client.RedirectURIs...),
+				PostLogoutRedirectURIs: append([]string(nil), client.PostLogoutRedirectURIs...),
+				Scopes:                 append([]string(nil), oauth2Module.HydraOAuthClientScopes(&client)...),
+				Usage:                  adminOAuthClientUsageStats{},
 			})
 		}
 		resp := adminOAuthClientListResponse{
@@ -123,13 +125,14 @@ func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			}
 		}
 		createdClient, err := oauth2Module.CreateHydraOAuthClient(c.Context(), hydraConfig, oauth2Module.HydraOAuthClientUpsertInput{
-			ClientID:     payload.ClientID,
-			ClientSecret: plainSecret,
-			ClientName:   payload.Name,
-			ClientType:   payload.ClientType,
-			RedirectURIs: payload.RedirectURIs,
-			Scopes:       payload.Scopes,
-			Active:       true,
+			ClientID:               payload.ClientID,
+			ClientSecret:           plainSecret,
+			ClientName:             payload.Name,
+			ClientType:             payload.ClientType,
+			RedirectURIs:           payload.RedirectURIs,
+			PostLogoutRedirectURIs: payload.PostLogoutRedirectURIs,
+			Scopes:                 payload.Scopes,
+			Active:                 true,
 		})
 		if err != nil {
 			if oauth2Module.IsHydraConflictError(err) {
@@ -140,20 +143,22 @@ func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorInternal(c, "failed to create oauth client")
 		}
 		resp := adminOAuthClientCreateResponse{
-			ClientID:     createdClient.ClientID,
-			ClientSecret: plainSecret,
-			Name:         strings.TrimSpace(createdClient.ClientName),
-			ClientType:   oauth2Module.HydraClientTypeFromAuthMethod(createdClient.TokenEndpointAuthMethod),
-			Active:       oauth2Module.HydraOAuthClientActive(createdClient),
-			RedirectURIs: append([]string(nil), createdClient.RedirectURIs...),
-			Scopes:       append([]string(nil), oauth2Module.HydraOAuthClientScopes(createdClient)...),
-			CreatedAt:    hydraClientCreatedAt(createdClient),
+			ClientID:               createdClient.ClientID,
+			ClientSecret:           plainSecret,
+			Name:                   strings.TrimSpace(createdClient.ClientName),
+			ClientType:             oauth2Module.HydraClientTypeFromAuthMethod(createdClient.TokenEndpointAuthMethod),
+			Active:                 oauth2Module.HydraOAuthClientActive(createdClient),
+			RedirectURIs:           append([]string(nil), createdClient.RedirectURIs...),
+			PostLogoutRedirectURIs: append([]string(nil), createdClient.PostLogoutRedirectURIs...),
+			Scopes:                 append([]string(nil), oauth2Module.HydraOAuthClientScopes(createdClient)...),
+			CreatedAt:              hydraClientCreatedAt(createdClient),
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientCreate, adminAuditTargetTypeOAuthClient, createdClient.ClientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			"hydraMode":   true,
-			"clientType":  resp.ClientType,
-			"scopeCount":  len(resp.Scopes),
-			"redirectCnt": len(resp.RedirectURIs),
+			"hydraMode":             true,
+			"clientType":            resp.ClientType,
+			"scopeCount":            len(resp.Scopes),
+			"redirectCnt":           len(resp.RedirectURIs),
+			"postLogoutRedirectCnt": len(resp.PostLogoutRedirectURIs),
 		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "oauth client created", &resp)
 	}
@@ -184,6 +189,17 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
+		}
+		if !active {
+			// Disabling must cut existing access, not only flip the metadata flag.
+			if err := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true, "active": active}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
+			}
+			if err := oauth2Module.RevokeHydraConsentSessionsByClient(c.Context(), hydraConfig, clientID); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true, "active": active}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
+			}
 		}
 		resp := adminOAuthClientActiveResponse{ClientID: updatedClient.ClientID, Active: oauth2Module.HydraOAuthClientActive(updatedClient)}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{"hydraMode": true, "active": active})
@@ -217,28 +233,62 @@ func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
 		}
-		updatedClient, err := oauth2Module.UpdateHydraOAuthClient(c.Context(), hydraConfig, clientID, oauth2Module.HydraOAuthClientUpsertInput{
-			ClientID:     clientID,
-			ClientName:   payload.Name,
-			ClientType:   payload.ClientType,
-			RedirectURIs: payload.RedirectURIs,
-			Scopes:       payload.Scopes,
-			Active:       oauth2Module.HydraOAuthClientActive(currentClient),
+		if payload.PostLogoutRedirectURIs == nil {
+			if err := ensureAdminOAuthClientKeptPostLogoutRedirectURIsMatch(currentClient.PostLogoutRedirectURIs, payload.RedirectURIs); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, map[string]any{"hydraMode": true}))
+				return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
+			}
+		}
+		plainSecret := ""
+		if oauth2Module.HydraOAuthClientSwitchesToConfidential(currentClient, payload.ClientType) {
+			// Hydra accepts the auth-method change without a secret and the client could then
+			// never authenticate, so the secret goes into the same patch.
+			plainSecret, err = harukiOAuth2.GenerateRandomToken(32)
+			if err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonGenerateClientSecretFailed, map[string]any{"hydraMode": true}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
+			}
+		}
+		// GrantTypes stays nil: the admin payload does not carry grant types, so the
+		// registered grant_types and response_types are kept.
+		updatedClient, err := oauth2Module.UpdateHydraOAuthClient(c.Context(), hydraConfig, currentClient, oauth2Module.HydraOAuthClientUpsertInput{
+			ClientID:               clientID,
+			ClientSecret:           plainSecret,
+			ClientName:             payload.Name,
+			ClientType:             payload.ClientType,
+			RedirectURIs:           payload.RedirectURIs,
+			PostLogoutRedirectURIs: payload.PostLogoutRedirectURIs,
+			Scopes:                 payload.Scopes,
 		})
 		if err != nil {
+			if errors.Is(err, oauth2Module.ErrHydraPostLogoutRequiresRedirectURIs) {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, map[string]any{"hydraMode": true}))
+				return harukiAPIHelper.ErrorBadRequest(c, "postLogoutRedirectUris requires redirectUris")
+			}
+			// ErrHydraClientSecretRequired stays a 500: this handler generates the secret
+			// whenever the switch needs one, so that error means a bug, not bad input.
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to update oauth client")
 		}
 		resp := adminOAuthClientUpdateResponse{
-			ClientID:     updatedClient.ClientID,
-			Name:         strings.TrimSpace(updatedClient.ClientName),
-			ClientType:   oauth2Module.HydraClientTypeFromAuthMethod(updatedClient.TokenEndpointAuthMethod),
-			Active:       oauth2Module.HydraOAuthClientActive(updatedClient),
-			RedirectURIs: append([]string(nil), updatedClient.RedirectURIs...),
-			Scopes:       append([]string(nil), oauth2Module.HydraOAuthClientScopes(updatedClient)...),
-			CreatedAt:    hydraClientCreatedAt(updatedClient),
+			ClientID:               updatedClient.ClientID,
+			ClientSecret:           plainSecret,
+			Name:                   strings.TrimSpace(updatedClient.ClientName),
+			ClientType:             oauth2Module.HydraClientTypeFromAuthMethod(updatedClient.TokenEndpointAuthMethod),
+			Active:                 oauth2Module.HydraOAuthClientActive(updatedClient),
+			RedirectURIs:           append([]string(nil), updatedClient.RedirectURIs...),
+			PostLogoutRedirectURIs: append([]string(nil), updatedClient.PostLogoutRedirectURIs...),
+			Scopes:                 append([]string(nil), oauth2Module.HydraOAuthClientScopes(updatedClient)...),
+			CreatedAt:              hydraClientCreatedAt(updatedClient),
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{"hydraMode": true, "scopeCount": len(resp.Scopes), "redirectCnt": len(resp.RedirectURIs)})
+		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
+			"hydraMode":             true,
+			"clientType":            resp.ClientType,
+			"scopeCount":            len(resp.Scopes),
+			"redirectCnt":           len(resp.RedirectURIs),
+			"postLogoutRedirectCnt": len(resp.PostLogoutRedirectURIs),
+			"clientSecretIssued":    plainSecret != "",
+		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "oauth client updated", &resp)
 	}
 }
@@ -264,6 +314,10 @@ func handleRotateHydraOAuthClientSecret(apiHelper *harukiAPIHelper.HarukiToolbox
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRotateSecret, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorNotFound(c, "client not found")
+			}
+			if errors.Is(err, oauth2Module.ErrHydraPublicClientHasNoSecret) {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRotateSecret, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonPublicClientHasNoSecret, map[string]any{"hydraMode": true}))
+				return harukiAPIHelper.Responses.UpdatedDataResponse(c, fiber.StatusBadRequest, "public clients have no secret to rotate", &adminOAuthClientErrorData{Code: adminOAuthClientErrorCodePublicClientHasNoSecret})
 			}
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRotateSecret, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonUpdateClientSecretFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to rotate oauth client secret")

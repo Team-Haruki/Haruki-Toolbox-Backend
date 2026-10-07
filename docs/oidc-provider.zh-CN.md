@@ -130,7 +130,7 @@ https://toolbox-api-direct.haruki.seiunx.com/oauth2/sessions/logout
 用户确认后浏览器跳回你的 `post_logout_redirect_uri`。
 
 **`post_logout_redirect_uri` 必须随 client 一起登记**，和 `redirect_uris` 一样精确匹配。申请
-client 时一并提供。
+client 时一并提供；它的 scheme、host、port 必须与你登记的某个 `redirect_uri` 相同。
 
 两个行为需要知道：
 
