@@ -261,6 +261,12 @@ The files in `.github/workflows` are thin callers:
   published with `SHA256SUMS-<tag>.txt` (`-rc` tags as pre-releases that never become
   "latest"). Manual dispatch is a dry run: it builds the binaries with the version from
   `version/version.go` and publishes nothing, also when started on a tag.
+- `device-flow-live.yml` (`Device flow live`) is manual dispatch only and not a required
+  check: a custom matrix job (the `go-ci` template cannot start Hydra) that brings up
+  `external/hydra/it/docker-compose.device-it.yml` with Hydra `v25.4.0` and `v26.2.0` and runs
+  the `hydra_live`-tagged OAuth2 device-flow test against each. Run it on the commit to
+  deploy and before changing `ORY_VERSION`; the local recipe is in
+  `docs/ory-suite-usage.zh-CN.md` §11.3.
 - Dockerfile: modules are downloaded in their own layer; `VERSION`, `GIT_SHA` and
   `BUILD_DATE` are declared right before `go build` (and after the runtime stage's `RUN`),
   so their per-commit values no longer invalidate the earlier layers; the builder

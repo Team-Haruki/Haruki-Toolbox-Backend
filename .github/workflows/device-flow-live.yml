@@ -1,0 +1,64 @@
+name: Device flow live
+# BE-9: the OAuth2 device flow against a real, non-dev Hydra on Postgres, for the Hydra
+# that production runs (v25.4.0) and the latest release (v26.2.0). Manual only and not a
+# required check: run it on the commit to deploy, and before any ORY_VERSION change.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  live:
+    # Custom job: the shared go-ci template only offers Postgres/Redis service containers and
+    # cannot run Hydra (hydra-migrate, then serve with the repository's hydra.yml), so this job
+    # starts external/hydra/it/docker-compose.device-it.yml itself and runs the tagged test.
+    name: Hydra ${{ matrix.hydra }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        hydra: [v25.4.0, v26.2.0]
+    env:
+      COMPOSE_FILE: external/hydra/it/docker-compose.device-it.yml
+      HYDRA_IT_VERSION: ${{ matrix.hydra }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Go cache paths
+        id: paths
+        run: |
+          echo "mod=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+      # Read-only reuse of the cache CI's test job saves from main.
+      - name: Restore Go cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.paths.outputs.mod }}
+            ${{ steps.paths.outputs.build }}
+          key: go-test-${{ runner.os }}-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-test-${{ runner.os }}-${{ hashFiles('**/go.sum') }}-
+            go-test-${{ runner.os }}-
+      - name: Start Hydra
+        run: docker compose up -d --wait
+      - name: Live device-flow test
+        run: go test -mod=readonly -race -tags hydra_live -count=1 -run TestHydraDeviceFlowLive -v ./internal/modules/oauth2
+      - name: Hydra logs
+        if: failure()
+        run: docker compose logs --no-color hydra-migrate hydra
+      - name: Stop Hydra
+        if: always()
+        run: docker compose down -v
