@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
 
@@ -299,4 +300,11 @@ func validateDeviceFlowAbsoluteURL(name, raw string) error {
 		}
 	}
 	return fmt.Errorf("%s must use https (http only for localhost), got %q", name, raw)
+}
+
+// validateOAuth2InternalAPIConfig checks oauth2.internal_api.token_sha256:
+// empty disables the internal API, anything else must be 64 hex characters.
+func validateOAuth2InternalAPIConfig(cfg harukiConfig.Config) error {
+	_, err := oauth2Module.ParseInternalAPIConfig(cfg.OAuth2.InternalAPI.TokenSHA256)
+	return err
 }

@@ -176,6 +176,8 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	// Parsed by startup validation, so a bad value only matters when enabled.
 	overrideString(&cfg.OAuth2.DeviceFlow.UserCodeTTL, "OAUTH2_DEVICE_FLOW_USER_CODE_TTL")
+	// Checked by startup validation (64 hex characters when non-empty).
+	overrideString(&cfg.OAuth2.InternalAPI.TokenSHA256, "OAUTH2_INTERNAL_API_TOKEN_SHA256")
 
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")

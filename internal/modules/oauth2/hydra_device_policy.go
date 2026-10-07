@@ -10,6 +10,8 @@ import (
 // deviceFlowGrantableScopes may be requested through a device flow when the
 // client has them registered. game-data:write is added only for public clients
 // whose device policy allows writes; email is never grantable.
+// station:room:write is an ordinary scope: any client registered with it may
+// request it, public or confidential, without allow_write.
 var deviceFlowGrantableScopes = []string{
 	harukiOAuth2.ScopeOpenID,
 	harukiOAuth2.ScopeProfile,
@@ -17,6 +19,7 @@ var deviceFlowGrantableScopes = []string{
 	harukiOAuth2.ScopeUserRead,
 	harukiOAuth2.ScopeBindingsRead,
 	harukiOAuth2.ScopeGameDataRead,
+	harukiOAuth2.ScopeStationRoomWrite,
 }
 
 const deviceScopeUserReadRequired = "user:read is required for device authorization"

@@ -454,6 +454,27 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 这让 API 的 bearer token 身份与浏览器身份迁移可以在同一项目内逐步收敛。
 
+### 10.3.1 内部令牌校验 API（`POST /internal/oauth2/introspect`）
+
+供我们自己的服务（目前是 Sekai Station 后端）校验 Toolbox 访问令牌。它不是对外接口，不写进 OAuth2 接入文档。
+
+- **可达性**：挂在 backend 主端口 16666 上，Oathkeeper 没有任何匹配 `/internal/` 的规则，公网请求得到 Oathkeeper 的 404（架构测试 `TestInternalAPINotRoutedByOathkeeper` 守护，不要给 `/internal/*` 加规则）。调用方经 tailnet 调 `http://100.80.207.86:16666/internal/oauth2/introspect`，或作为容器加入 `haruki-toolbox-services_haruki-net` 调 `http://backend:16666/internal/oauth2/introspect`。
+- **认证**：请求头 `Authorization: Bearer <internal token>`。后端 YAML 只存 token 的 SHA-256：`oauth2.internal_api.token_sha256`（64 位十六进制，env `OAUTH2_INTERNAL_API_TOKEN_SHA256`），按常数时间比较；缺失或不符返回 401 `{"error":"unauthorized"}` 并记一条 WARN（不记 token）。该值为空时路由不注册（404）；非空但不是 64 位十六进制时后端拒绝启动。tailnet 上的其他节点也能连到 16666，所以内部 token 不能省。
+- **请求与响应**：`application/x-www-form-urlencoded` 的 `token=<access_token>` 或 JSON `{"token":"…"}`（格式不对返回 400 `{"error":"invalid_request"}`）。后端调 Hydra admin 内省，与 bearer 中间件同一套规则（`internal/platform/oauth2/introspect.go`）：非 active、不是 `access_token`、已过期、subject 找不到本地用户或用户被封禁、客户端已停用或已删除（客户端查询有 5 s 进程内缓存）都返回 `{"active":false}`；否则返回 `active`、`user_id`（本地 `users.id`，字符串）、`client_id`、`scope`（令牌被授予的全部 scope）、`exp`、`iat`，设备授权令牌另有 `device_label`。从不返回用户名、邮箱或 Hydra 原始字段；结果不缓存（响应带 `Cache-Control: no-store`），撤销对下一次调用立即生效。Hydra 或数据库不可用时返回 503 `{"error":"temporarily_unavailable"}`。
+- **Station 的接受规则**：`active==true` 且 `scope` 含 `station:room:write`，不看 `client_id`（该 scope 是普通 scope，任何由管理员登记了它的客户端都可以申请）。
+- **生成与配置 token**：
+  ```bash
+  TOKEN=$(openssl rand -hex 32)           # 只交给 Station 后端的配置，不进仓库、不打印到日志
+  printf %s "$TOKEN" | sha256sum          # 输出的 64 位十六进制写进 backend YAML 的 oauth2.internal_api.token_sha256
+  ```
+  后端只保存哈希，backend 配置泄漏也拿不到可用的 token。
+- **轮换**：生成新 token → 把新哈希写进 backend YAML（或 env）并重启 backend → 把新 token 写进 Station 后端配置并重启 Station。两步之间 Station 的调用会得到 401（只支持一个哈希），所以放在同一个维护窗口里连续完成。怀疑泄漏时立即轮换：持有内部 token 的 tailnet 节点能校验任意令牌（拿不到令牌本身）。
+
+实现位于：
+
+- `internal/modules/oauth2/internal_introspect.go`
+- `internal/platform/oauth2/introspect.go`
+
 ### 10.4 管理端 OAuth Client 管理
 
 管理员对 OAuth client 的查询、创建、更新、启停等能力，当前已经改为 Hydra-backed：

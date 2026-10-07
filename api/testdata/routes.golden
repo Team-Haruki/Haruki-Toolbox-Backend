@@ -164,6 +164,7 @@ POST /api/verify-social-platform
 POST /harukiproxy/:server/:user_id/:data_type/upload
 POST /harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /internal/mysekai-birthday-events/:event_id/ack
+POST /internal/oauth2/introspect
 POST /ios/proxy/:server/user/:user_id/mysekai
 POST /ios/script/:upload_code/upload
 PUT /api/admin/config/public-api-keys

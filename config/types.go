@@ -217,6 +217,18 @@ type OAuth2Config struct {
 	HydraRequestTimeoutSecond int    `yaml:"hydra_request_timeout_seconds"`
 	// DeviceFlow configures the RFC 8628 device authorization grant.
 	DeviceFlow OAuth2DeviceFlowConfig `yaml:"device_flow"`
+	// InternalAPI configures POST /internal/oauth2/introspect.
+	InternalAPI OAuth2InternalAPIConfig `yaml:"internal_api"`
+}
+
+// OAuth2InternalAPIConfig configures the internal token introspection API that
+// our own services (Sekai Station) call over the tailnet or the compose
+// network. Oathkeeper has no rule for it.
+type OAuth2InternalAPIConfig struct {
+	// TokenSHA256 is the hex SHA-256 (64 characters) of the internal bearer
+	// token; the token itself never goes into backend config. Empty leaves
+	// the route unregistered.
+	TokenSHA256 string `yaml:"token_sha256"`
 }
 
 // OAuth2DeviceFlowConfig is the startup configuration of the device

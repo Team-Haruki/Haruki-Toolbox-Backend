@@ -50,6 +50,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	if err := validateOAuth2DeviceFlowConfig(cfg); err != nil {
 		return nil, err
 	}
+	if err := validateOAuth2InternalAPIConfig(cfg); err != nil {
+		return nil, err
+	}
 
 	if strings.TrimSpace(cfg.GameData.URL) == "" {
 		return nil, fmt.Errorf("game_data.url is required")
@@ -169,6 +172,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		}),
 		HydraConfig:         hydraConfig,
 		OAuth2DeviceFlow:    deviceFlowConfig,
+		OAuth2InternalAPI:   newOAuth2InternalAPIConfig(cfg),
 		OAuth2AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		UploadHTTPClient:    harukiHttp.NewClient(strings.TrimSpace(cfg.Proxy), 15*time.Second),
 		UploadLogger:        harukiLogger.NewLoggerFromGlobal("SekaiDataHandler"),
@@ -292,4 +296,12 @@ func newOAuth2DeviceFlowConfig(cfg harukiConfig.Config, logger *harukiLogger.Log
 		},
 		Logger: logger,
 	})
+}
+
+// newOAuth2InternalAPIConfig turns oauth2.internal_api into the module's
+// configuration. validateOAuth2InternalAPIConfig has already refused a
+// malformed hash, so the error is always nil here.
+func newOAuth2InternalAPIConfig(cfg harukiConfig.Config) oauth2Module.InternalAPIConfig {
+	internalAPI, _ := oauth2Module.ParseInternalAPIConfig(cfg.OAuth2.InternalAPI.TokenSHA256)
+	return internalAPI
 }

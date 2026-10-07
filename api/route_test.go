@@ -91,7 +91,11 @@ func TestRouteManifest(t *testing.T) {
 		DBManager:      &database.HarukiToolboxDBManager{},
 		SessionHandler: harukiAPIHelper.NewSessionHandler(nil, ""),
 	}
-	RegisterRoutes(apiHelper, Dependencies{HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{})})
+	RegisterRoutes(apiHelper, Dependencies{
+		HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{}),
+		// The internal API registers only when its token hash is configured.
+		OAuth2InternalAPI: testInternalAPIConfig(t),
+	})
 
 	actual := routeManifest(app)
 	goldenPath := filepath.Join("testdata", "routes.golden")

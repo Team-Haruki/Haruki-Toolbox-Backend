@@ -66,6 +66,7 @@ type Dependencies struct {
 	// OAuth2DeviceFlow is the startup device-flow configuration; RegisterRoutes
 	// adds the runtime switch to it.
 	OAuth2DeviceFlow     oauth2Module.DeviceFlowConfig
+	OAuth2InternalAPI    oauth2Module.InternalAPIConfig
 	IOSEndpoints         iosModule.EndpointConfig
 	OAuth2AvatarBaseURL  string
 	UserProfileConfig    userProfileModule.Config
@@ -106,6 +107,11 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 		HydraConfig:   dependencies.HydraConfig,
 		AvatarBaseURL: dependencies.OAuth2AvatarBaseURL,
 		DeviceFlow:    dependencies.OAuth2DeviceFlow.WithRuntimeGate(oauth2DeviceFlowRuntimeGate(apiHelper)),
+	})
+	// Registered only when oauth2.internal_api.token_sha256 is set.
+	oauth2Module.RegisterOAuth2InternalRoutes(apiHelper, oauth2Module.InternalRouteOptions{
+		HydraConfig: dependencies.HydraConfig,
+		Config:      dependencies.OAuth2InternalAPI,
 	})
 }
 

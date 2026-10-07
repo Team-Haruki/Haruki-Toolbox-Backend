@@ -9,6 +9,11 @@ const (
 	ScopeBindingsRead  = "bindings:read"
 	ScopeGameDataRead  = "game-data:read"
 	ScopeGameDataWrite = "game-data:write"
+	// ScopeStationRoomWrite lets a client submit room numbers to Sekai Station
+	// as the user. It is an ordinary scope any registered client may hold; its
+	// risk class is write. Sekai Station checks it through the internal
+	// introspection API, whatever the client.
+	ScopeStationRoomWrite = "station:room:write"
 )
 
 var AllScopes = map[string]string{
@@ -20,6 +25,8 @@ var AllScopes = map[string]string{
 	ScopeBindingsRead:  "Read your bound game accounts",
 	ScopeGameDataRead:  "Read your uploaded game data",
 	ScopeGameDataWrite: "Upload game data for accounts you own or have write permission for",
+	// Scopes of other Haruki services.
+	ScopeStationRoomWrite: "Submit room numbers to Sekai Station on your behalf",
 }
 
 func HasScope(scopes []string, required string) bool {

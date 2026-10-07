@@ -121,6 +121,13 @@ oauth2:
       decision_user_per_day: 20
       max_slow_down: 30 # pending flows fail after more early polls
       max_interval_seconds: 60
+  # Internal token introspection for our own services (Sekai Station):
+  # POST /internal/oauth2/introspect on the backend port, reachable over the
+  # tailnet and the compose network only (Oathkeeper has no rule for it).
+  # Callers send "Authorization: Bearer <internal token>"; store only the
+  # token's SHA-256 here (printf %s "$TOKEN" | sha256sum).
+  internal_api:
+    token_sha256: "" # env OAUTH2_INTERNAL_API_TOKEN_SHA256; 64 hex characters; empty = route not registered
 
 backend:
   host: "0.0.0.0"

@@ -3,6 +3,7 @@ package oauth2
 import (
 	"bytes"
 	"context"
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"fmt"
 	"io"
@@ -31,6 +32,9 @@ type hydraIntrospectionResponse struct {
 	Exp      int64  `json:"exp"`
 	Nbf      int64  `json:"nbf"`
 	Iat      int64  `json:"iat"`
+	// Ext is session.access_token of the consent; decoded leniently by
+	// introspectionDeviceLabel so an unexpected shape never fails bearer auth.
+	Ext jsontext.Value `json:"ext"`
 }
 
 // ClientActiveChecker, when provided, is consulted during bearer-token
@@ -45,11 +49,14 @@ type hydraIntrospectionError struct {
 }
 
 type oauth2BearerAuthResult struct {
-	Subject    string
-	UserID     string
-	IdentityID string
-	ClientID   string
-	Scopes     []string
+	Subject     string
+	UserID      string
+	IdentityID  string
+	ClientID    string
+	Scopes      []string
+	Exp         int64
+	Iat         int64
+	DeviceLabel string
 }
 
 type oauth2BearerAuthFailure struct {
@@ -123,8 +130,16 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, hydraConfig *HydraConfig, db *po
 	if !ok {
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, Message: "missing or invalid authorization header"}
 	}
+	return authenticateOAuth2AccessToken(c.Context(), hydraConfig, db, tokenStr, requiredScope, clientActiveChecker)
+}
 
-	introspection, err := introspectHydraToken(c.Context(), hydraConfig, tokenStr)
+// authenticateOAuth2AccessToken validates an access token through Hydra admin
+// introspection: active, an access token (not a refresh token), unexpired, a
+// subject that resolves to a local user who is not banned, and a client that
+// is still enabled. Bearer middleware and the internal introspection API share
+// it, so both accept exactly the same tokens.
+func authenticateOAuth2AccessToken(ctx context.Context, hydraConfig *HydraConfig, db *postgresql.Client, tokenStr, requiredScope string, clientActiveChecker ClientActiveChecker) (*oauth2BearerAuthResult, *oauth2BearerAuthFailure) {
+	introspection, err := introspectHydraToken(ctx, hydraConfig, tokenStr)
 	if err != nil {
 		harukiLogger.Errorf("OAuth2 introspection failed: %v", err)
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 introspection unavailable"}
@@ -154,7 +169,7 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, hydraConfig *HydraConfig, db *po
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token not active yet"}
 	}
 
-	resolvedUserID, resolvedIdentityID, subjectErr := resolveOAuth2BearerSubject(c.Context(), db, subject)
+	resolvedUserID, resolvedIdentityID, subjectErr := resolveOAuth2BearerSubject(ctx, db, subject)
 	if subjectErr != nil {
 		if fErr, ok := subjectErr.(*fiber.Error); ok {
 			if fErr.Code == fiber.StatusUnauthorized {
@@ -172,7 +187,7 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, hydraConfig *HydraConfig, db *po
 
 	// Reject tokens issued to a client that has since been disabled.
 	if clientActiveChecker != nil {
-		active, err := clientActiveChecker(c.Context(), clientID)
+		active, err := clientActiveChecker(ctx, clientID)
 		if err != nil {
 			harukiLogger.Errorf("OAuth2 client active check failed: %v", err)
 			return nil, &oauth2BearerAuthFailure{Status: fiber.StatusServiceUnavailable, Message: "oauth2 client validation unavailable"}
@@ -188,12 +203,34 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, hydraConfig *HydraConfig, db *po
 	}
 
 	return &oauth2BearerAuthResult{
-		Subject:    subject,
-		UserID:     resolvedUserID,
-		IdentityID: resolvedIdentityID,
-		ClientID:   clientID,
-		Scopes:     scopes,
+		Subject:     subject,
+		UserID:      resolvedUserID,
+		IdentityID:  resolvedIdentityID,
+		ClientID:    clientID,
+		Scopes:      scopes,
+		Exp:         introspection.Exp,
+		Iat:         introspection.Iat,
+		DeviceLabel: introspectionDeviceLabel(introspection.Ext),
 	}, nil
+}
+
+// introspectionDeviceLabel returns ext.device_label when it is a JSON string,
+// and "" for any other or missing value.
+func introspectionDeviceLabel(ext jsontext.Value) string {
+	if len(ext) == 0 {
+		return ""
+	}
+	var decoded struct {
+		DeviceLabel jsontext.Value `json:"device_label"`
+	}
+	if err := json.Unmarshal(ext, &decoded); err != nil || len(decoded.DeviceLabel) == 0 {
+		return ""
+	}
+	var label string
+	if err := json.Unmarshal(decoded.DeviceLabel, &label); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(label)
 }
 
 func resolveOAuth2BearerSubject(ctx context.Context, db *postgresql.Client, subject string) (string, string, error) {
