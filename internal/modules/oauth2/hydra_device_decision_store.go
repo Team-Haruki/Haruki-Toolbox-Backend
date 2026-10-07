@@ -133,18 +133,23 @@ redis.call('HSET', KEYS[1], 'st', 'approving', 'auntil', now + tonumber(ARGV[5])
 return {'OK', tostring(att)}
 `
 
-// deviceFlowRecordConsentScript: KEYS flow, unredeemed; ARGV anonce, crid,
-// sub, fid. Runs at H9h, before consent accept: from here on Hydra may hold a
-// consent session for the flow, so it joins the unredeemed set (score exp).
+// deviceFlowRecordConsentScript: KEYS flow, unredeemed, crid; ARGV anonce,
+// crid, sub, fid, crid retention ms. Runs at H9h, before consent accept: from
+// here on Hydra may hold a consent session for the flow, so it joins the
+// unredeemed set (score exp). The crid is also kept in its own key that
+// outlives the flow HASH by the retention, for the reaper.
 const deviceFlowRecordConsentScript = `
 local f = redis.call('HMGET', KEYS[1], 'st', 'anonce', 'exp')
 if f[1] ~= 'approving' or f[2] ~= ARGV[1] then return 'NONCE_MISMATCH' end
 redis.call('HSET', KEYS[1], 'crid', ARGV[2], 'sub', ARGV[3])
 redis.call('ZADD', KEYS[2], tonumber(f[3]) or 0, ARGV[4])
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl < 0 then ttl = 0 end
+redis.call('SET', KEYS[3], ARGV[2], 'PX', ttl + tonumber(ARGV[5]))
 return 'OK'
 `
 
-// deviceFlowFinishApproveScript: KEYS flow, unredeemed; ARGV anonce, mode
+// deviceFlowFinishApproveScript: KEYS flow, unredeemed, crid; ARGV anonce, mode
 // (approved, unconfirmed, revert, failed), fid, label, label source, max
 // attempts. It returns {code, state}. A flow the device already redeemed
 // answers ALREADY_ISSUED, which callers treat as success. revert returns the
@@ -164,6 +169,7 @@ elseif mode == 'revert' then
   st = 'claimed'
   if (tonumber(f[3]) or 0) >= tonumber(ARGV[6]) then st = 'failed' end
   redis.call('ZREM', KEYS[2], ARGV[3])
+  redis.call('DEL', KEYS[3])
 else
   st = 'failed'
 end
@@ -372,7 +378,8 @@ func (s *deviceFlowStore) recordConsent(ctx context.Context, flowID, nonce, cons
 	result, err := manager.Redis.Eval(ctx, deviceFlowRecordConsentScript, []string{
 		keys.BuildOAuth2DeviceFlowKey(flowID),
 		keys.BuildOAuth2DeviceUnredeemedKey(),
-	}, nonce, consentRequestID, subject, flowID).Text()
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
+	}, nonce, consentRequestID, subject, flowID, deviceFlowConsentRequestRetention.Milliseconds()).Text()
 	if err != nil {
 		return false, err
 	}
@@ -390,6 +397,7 @@ func (s *deviceFlowStore) finishApprove(ctx context.Context, flowID, nonce, mode
 	values, err := manager.Redis.Eval(ctx, deviceFlowFinishApproveScript, []string{
 		keys.BuildOAuth2DeviceFlowKey(flowID),
 		keys.BuildOAuth2DeviceUnredeemedKey(),
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
 	}, nonce, mode, flowID, label, labelSource, maxAttempts).StringSlice()
 	if err != nil {
 		return "", "", err

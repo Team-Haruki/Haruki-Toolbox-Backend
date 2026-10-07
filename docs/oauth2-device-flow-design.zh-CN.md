@@ -485,9 +485,10 @@ oauth2:
 | `haruki:oauth2-device:uc:{hx("uc",normalizedCode)}` | STRING（SET NX） | fid | `expires_in` |
 | `haruki:oauth2-device:fh:{hx("fh",flowHandle)}` | STRING | fid | `min(300 s, exp−now)`，续租时重置 |
 | `haruki:oauth2-device:unredeemed` | ZSET | 成员 fid，score = `exp`（ms） | 无（回收器或签发移除） |
+| `haruki:oauth2-device:crid:{fid}` | STRING | crid（与 flow 的 `crid` 同时写入） | flow 剩余 TTL + 7 天，回收器每次撤销失败续到 7 天；fid 离开未兑换集合时同时删除（§7.6） |
 | `haruki:rate-limit:oauth2-device:<计数器>` | 计数器 | §8.2 表中的 10 个计数器 key（9 个构造方法，公共 / 机密两个池共用 `BuildOAuth2DeviceAuthIssuedPoolKey(ctype)`）；客户端维度后缀为 `{hx("cid",cid)}`，用户维度为 `{hx("uid",uid)}`（`uid` = `users.id`） | 带 `-day` 的 86400 s，其余 600 s |
 
-共 14 个 `BuildOAuth2Device…Key` 方法（`keys_test.go` 表驱动，并断言 `hashExactIdentifier("dc","AbC") != hashExactIdentifier("dc","abc")`）。store 注册时只保存 DBManager、每次调用才取 Redis，为 nil 时返回 `errDeviceStoreUnavailable` ⇒ 503（路由清单测试的 `DBManager{}` 中 Redis 为 nil）。
+共 15 个 `BuildOAuth2Device…Key` 方法（`keys_test.go` 表驱动，并断言 `hashExactIdentifier("dc","AbC") != hashExactIdentifier("dc","abc")`）。store 注册时只保存 DBManager、每次调用才取 Redis，为 nil 时返回 `errDeviceStoreUnavailable` ⇒ 503（路由清单测试的 `DBManager{}` 中 Redis 为 nil）。
 
 ### 7.3 流程 HASH 字段（名称固定）
 
@@ -538,12 +539,13 @@ oauth2:
 | `deviceFlowCreateScript` | flow, dc, uc | `OK` / `UC_COLLISION`（SET NX 失败 ⇒ 500，不写 flow 与 dc）；依次 `SET uc fid NX PX expires_in`、`HSET flow` + `PEXPIRE (expires_in+1800)·1000`、`SET dc` |
 | `deviceFlowClaimScript` | uc, fh(新) | `CLAIMED_NEW`、`CLAIMED_RENEWED`、`TAKEN`、`EXPIRED`、`EXPIRED_OWN`、`HANDLED_OWN`、`IN_PROGRESS_OWN`、`MISSING` |
 | `deviceFlowBeginApproveScript` | flow | `OK(att)`、`HANDLE_MISMATCH`、`SESSION_CHANGED`、`NOT_CLAIMER`、`IN_PROGRESS`、`HANDLED`、`TOO_LATE`、`EXPIRED`、`MAX_ATTEMPTS` |
-| `deviceFlowRecordConsentScript` | flow, unredeemed | `OK`（写 `crid`、`sub`，ZADD score=`exp`）、`NONCE_MISMATCH` |
-| `deviceFlowFinishApproveScript`（`approved` / `unconfirmed` / `revert` / `failed`） | flow, unredeemed | `OK`、`ALREADY_ISSUED`（设备抢先兑换，按成功处理）、`NONCE_MISMATCH`；`revert` 只在确认 Hydra 侧没有完成的同意时用，且同时 ZREM |
+| `deviceFlowRecordConsentScript` | flow, unredeemed, crid | `OK`（写 `crid`、`sub`，ZADD score=`exp`，并写 crid 键）、`NONCE_MISMATCH` |
+| `deviceFlowFinishApproveScript`（`approved` / `unconfirmed` / `revert` / `failed`） | flow, unredeemed, crid | `OK`、`ALREADY_ISSUED`（设备抢先兑换，按成功处理）、`NONCE_MISMATCH`；`revert` 只在确认 Hydra 侧没有完成的同意时用，且同时 ZREM 并删 crid 键 |
 | `deviceFlowDenyScript` | flow | `OK(crid)`、`HANDLE_MISMATCH`、`SESSION_CHANGED`、`NOT_CLAIMER`、`IN_PROGRESS`、`HANDLED`、`EXPIRED`；不改集合 |
 | `deviceFlowPollScript` | flow | `{SLOW_DOWN, ivl}`、`{CLIENT_MISMATCH}`、`{FORWARD, st, exp, wdc, crid}`；flow 不存在返回 nil（⇒ `invalid_grant`） |
-| `deviceFlowSettleScript`（Hydra 结果 `ok` / `pending` / `expired_token` / `invalid_grant` / `other`） | flow, unredeemed, dc | `{response, st}`，按 §6.3；`issued` 时 flow 与 dc PEXPIRE 300 s、ZREM、写 `ist` |
-| `deviceFlowReapScript`；`deviceFlowMarkExpiredScript` | unredeemed, flow；flow | ZREM 抢占，仅当 ZREM=1 且 `st≠issued` 且 `crid` 非空时返回 `crid`；非终态置 `expired`，`denied` / `failed` 不变，对 `expired` 幂等 |
+| `deviceFlowSettleScript`（Hydra 结果 `ok` / `pending` / `expired_token` / `invalid_grant` / `other`） | flow, unredeemed, dc, crid | `{response, st}`，按 §6.3；`issued` 时 flow 与 dc PEXPIRE 300 s、ZREM、写 `ist`；凡 ZREM 都同时删 crid 键 |
+| `deviceFlowReapScript`；`deviceFlowMarkExpiredScript` | unredeemed, flow, crid；flow, crid | ZREM 抢占，仅当 ZREM=1 且 `st≠issued` 且 crid 已知时返回 `crid`（flow 的 `crid`，flow 已过期或缺字段时取 crid 键）；后者删 crid 键，非终态置 `expired`，`denied` / `failed` 不变，对 `expired` 与已过期的 flow 幂等 |
+| `deviceFlowRequeueScript`；`deviceFlowRemoveUnredeemedScript` | unredeemed, crid | 前者 ZADD score=now 并把 crid 键续到 7 天（回收器撤销失败）；后者 ZREM 并删 crid 键（拒绝、兼容层或 H9j 撤销成功后） |
 | `deviceFlowClientDisabledScript`、`deviceFlowFailScript`（建议名） | flow | 前者仅已批准类置 `denied`（不改集合，撤销成功后调用方 ZREM）；后者在 H2 刷新发现客户端不可用时仅 `pending` / `claimed` 置 `failed` |
 | `deviceRateReserveScript` / `deviceRateReleaseScript` | N 个计数器 | 预占：任一 ≥ 上限 ⇒ 返回其 1 起始下标且不加，否则全部 INCR（首次 PEXPIRE）返回 0；释放：DECR（≤ 1 时 DEL），照抄 `userpasswordreset/rate_limit.go` |
 
@@ -553,6 +555,7 @@ Claim 在脚本内 `GET uc` 得 fid 再拼出 flow key，该 key 未在 KEYS 中
 
 - `StartDeviceFlowReaper(ctx, opts DeviceFlowReaperOptions) (wait func())`，启动开关 `enabled=true` 时启动，由 `application.stopWorkers` 等待退出；**不受运行时总开关影响**。
 - 每 `reaper_interval_seconds`（60 s）：`ZRANGEBYSCORE haruki:oauth2-device:unredeemed -inf (now−60000) LIMIT 0 100` → 对每个 fid 执行 `deviceFlowReapScript`（ZREM 抢占，多实例只处理一次）→ 返回 `crid` 则 `RevokeHydraConsentSessionByID`（期望 204），失败以 score=now 重新 ZADD 下轮再试 → 成功后 `deviceFlowMarkExpiredScript` 并记 `reaped`；`crid` 为空只标记过期。
+- **crid 键比 flow 活得久**：flow HASH 只活 `expires_in + record_grace_seconds`；若撤销一直失败超过这段时间（Hydra admin 长时间不可用），回收器重试时会发现 flow 已不存在，旧实现据此答 `GONE` 并丢掉成员却没有撤销，授权会话就会一直留在用户的已授权应用里。因此 RecordConsent 另写 `haruki:oauth2-device:crid:{fid}`（TTL = flow 剩余 TTL + 7 天），每次撤销失败重新入队时续到 7 天；flow 不存在而 crid 键在时回收器照样按它撤销，成功后才删除成员与 crid 键。fid 离开未兑换集合的每条路径（签发、`invalid_grant`、revert、按 crid 撤销成功、回收）都同时删 crid 键，所以 7 天只限制「回收器完全停摆」的时长。选它而不把 crid 编进 ZSET 成员，是因为成员保持 fid 不变，已有的 ZREM 调用方与多实例 ZREM 抢占都不用改；键名与 flow 键一样直接用 fid（服务端随机、非秘密），值里的 crid 也不是凭据（撤销要 Hydra admin）。
 - 宽限期 `exp` 之后 60 s：Hydra 在 `exp` 后拒绝兑换迟到的批准但**不删**授权会话，清理服务也只删设备码行。任何记录过 `crid` 却没交出令牌的流程都在 `exp + 60 s` 后的下一轮被撤销，不会长期留在「已授权应用」或 `WebhookAuthorizer` 的推送范围；唯一副作用是「交出了令牌但结算失败」时会撤销已交出的令牌。
 
 ## 8. 用户码、限流与暴力破解预算

@@ -79,7 +79,9 @@ type deviceFlowReaper struct {
 // runOnce handles one batch: claim each due flow by ZREM (so several instances
 // never handle one twice), revoke its consent session by consent request ID,
 // and mark it expired. A failed revocation puts the flow back with score now,
-// so it is retried after another grace period.
+// so it is retried after another grace period, and renews the flow's crid key:
+// the retries may outlast the flow HASH (expires_in + record_grace), and the
+// crid key is what still names the consent to revoke once the HASH is gone.
 func (r *deviceFlowReaper) runOnce(ctx context.Context) {
 	now := r.store.now()
 	due, err := r.store.dueUnredeemed(ctx, now.Add(-r.grace).UnixMilli(), deviceReaperBatch)
@@ -107,7 +109,7 @@ func (r *deviceFlowReaper) reapFlow(ctx context.Context, flowID string) {
 	case "REVOKE":
 		if err := RevokeHydraConsentSessionByID(ctx, r.hydraConfig, consentRequestID); err != nil {
 			logDeviceEvent(r.logger, "warn", "reaped", flowID, "", "reason=revoke_failed")
-			if requeueErr := r.store.requeueUnredeemed(ctx, flowID, r.store.now().UnixMilli()); requeueErr != nil {
+			if requeueErr := r.store.requeueUnredeemed(ctx, flowID, consentRequestID, r.store.now().UnixMilli()); requeueErr != nil {
 				logDeviceEvent(r.logger, "error", "reaped", flowID, "", "reason=requeue_failed")
 			}
 			return

@@ -230,6 +230,7 @@ func TestBuildOAuth2DeviceKeys(t *testing.T) {
 		{"uc", b.BuildOAuth2DeviceUserCodeIndexKey(code), "haruki:oauth2-device:uc:" + hx("uc", code), code},
 		{"fh", b.BuildOAuth2DeviceFlowHandleIndexKey(handle), "haruki:oauth2-device:fh:" + hx("fh", handle), handle},
 		{"unredeemed", b.BuildOAuth2DeviceUnredeemedKey(), "haruki:oauth2-device:unredeemed", ""},
+		{"crid", b.BuildOAuth2DeviceConsentRequestKey(fid), "haruki:oauth2-device:crid:" + fid, ""},
 		{"auth-attempt unknown", b.BuildOAuth2DeviceAuthAttemptUnknownClientKey(), "haruki:rate-limit:oauth2-device:auth-attempt:unknown-client", ""},
 		{"auth-attempt client", b.BuildOAuth2DeviceAuthAttemptClientKey(cid), "haruki:rate-limit:oauth2-device:auth-attempt:client:" + hx("cid", cid), cid},
 		{"auth-issued public", b.BuildOAuth2DeviceAuthIssuedPoolKey("public"), "haruki:rate-limit:oauth2-device:auth-issued:global:public", ""},

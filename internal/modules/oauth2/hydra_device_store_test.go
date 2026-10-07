@@ -243,6 +243,106 @@ func TestDeviceFlowReaper(t *testing.T) {
 	env.assertNoSecretLeaks()
 }
 
+// TestDeviceFlowReaperRevokesAfterFlowExpired: a revocation that keeps failing
+// for longer than the flow HASH lives (expires_in + record_grace) must still
+// revoke the recorded consent once Hydra recovers, instead of finding the
+// flow gone and dropping it while the consent stays among the user's apps.
+func TestDeviceFlowReaperRevokesAfterFlowExpired(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	reaper := &deviceFlowReaper{store: env.store, hydraConfig: env.hydraConfig, logger: env.logger, grace: time.Minute}
+	keys := env.db.Redis.KeyBuilder()
+
+	// Record the consent the way the approval chain does (H9h), then approve.
+	_, flowID := env.issue(testPublicClientID)
+	env.setFlow(flowID, "st", deviceFlowStateApproving, "anonce", "nonce-1", "cby", "4242")
+	if recorded, err := env.store.recordConsent(t.Context(), flowID, "nonce-1", "crid-late", "kratos-4242"); err != nil || !recorded {
+		t.Fatalf("recordConsent = %v, %v", recorded, err)
+	}
+	if code, state, err := env.store.finishApprove(t.Context(), flowID, "nonce-1", deviceFinishApproved, "label", deviceLabelSourceDevice, 3); err != nil || code != deviceDecisionOK || state != deviceFlowStateApproved {
+		t.Fatalf("finishApprove = %s %s %v", code, state, err)
+	}
+	cridKey := keys.BuildOAuth2DeviceConsentRequestKey(flowID)
+	if got, _ := env.redis.Get(cridKey); got != "crid-late" {
+		t.Fatalf("crid key = %q", got)
+	}
+	if env.redis.TTL(cridKey) <= env.redis.TTL(env.flowKey(flowID)) {
+		t.Fatalf("crid key TTL %s does not outlive the flow's %s", env.redis.TTL(cridKey), env.redis.TTL(env.flowKey(flowID)))
+	}
+
+	// A flow that recorded nothing and whose HASH is gone is only dropped.
+	if _, err := env.redis.ZAdd(env.unredeemedKey(), 0, "0000000000000000000000000000dead"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hydra keeps failing past the flow's lifetime.
+	env.hydra.mu.Lock()
+	env.hydra.revokeStatus = http.StatusInternalServerError
+	env.hydra.mu.Unlock()
+	env.advance(testHydraDeviceTTL*time.Second + 61*time.Second)
+	reaper.runOnce(t.Context())
+	if !env.inUnredeemed(flowID) || env.inUnredeemed("0000000000000000000000000000dead") {
+		t.Fatal("the failed flow must be requeued and the empty one dropped")
+	}
+	if env.redis.TTL(cridKey) != deviceFlowConsentRequestRetention {
+		t.Fatalf("a failed revocation did not renew the crid key: TTL %s", env.redis.TTL(cridKey))
+	}
+	env.redis.FastForward(env.redis.TTL(env.flowKey(flowID)) + time.Second)
+	if env.redis.Exists(env.flowKey(flowID)) || !env.redis.Exists(cridKey) {
+		t.Fatal("expected the flow HASH expired and the crid key kept")
+	}
+
+	// Hydra recovers: the next round revokes by the kept crid and cleans up.
+	env.hydra.mu.Lock()
+	env.hydra.revokeStatus = 0
+	env.hydra.mu.Unlock()
+	env.advance(61 * time.Second)
+	reaper.runOnce(t.Context())
+	revokes := env.hydra.callsTo(http.MethodDelete, "/admin/oauth2/auth/sessions/consent")
+	if len(revokes) != 2 || revokes[0].RawQuery != "consent_request_id=crid-late" || revokes[1].RawQuery != "consent_request_id=crid-late" {
+		t.Fatalf("revocations = %+v, want the failed one and its retry", revokes)
+	}
+	if env.inUnredeemed(flowID) || env.redis.Exists(cridKey) || env.redis.Exists(env.flowKey(flowID)) {
+		t.Fatal("a revoked flow must leave the set and its crid key, without recreating the flow")
+	}
+	env.assertNoSecretLeaks()
+}
+
+// TestDeviceFlowConsentRequestKeyLeavesWithTheSet checks that every way out
+// of the unredeemed set also deletes the flow's crid key.
+func TestDeviceFlowConsentRequestKeyLeavesWithTheSet(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	keys := env.db.Redis.KeyBuilder()
+	record := func(nonce string) (string, string) {
+		_, flowID := env.issue(testPublicClientID)
+		env.setFlow(flowID, "st", deviceFlowStateApproving, "anonce", nonce, "cby", "4242", "att", "1")
+		if recorded, err := env.store.recordConsent(t.Context(), flowID, nonce, "crid-"+nonce, "kratos-4242"); err != nil || !recorded {
+			t.Fatalf("recordConsent = %v, %v", recorded, err)
+		}
+		return flowID, keys.BuildOAuth2DeviceConsentRequestKey(flowID)
+	}
+
+	reverted, revertedKey := record("revert")
+	if _, _, err := env.store.finishApprove(t.Context(), reverted, "revert", deviceFinishRevert, "", "", 3); err != nil {
+		t.Fatal(err)
+	}
+	removed, removedKey := record("removed")
+	if err := env.store.removeUnredeemed(t.Context(), removed); err != nil {
+		t.Fatal(err)
+	}
+	issued, issuedKey := record("issued")
+	if _, _, err := env.store.finishApprove(t.Context(), issued, "issued", deviceFinishApproved, "label", deviceLabelSourceDevice, 3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.settle(t.Context(), issued, "hdc_unused", deviceHydraResultOK, "1"); err != nil {
+		t.Fatal(err)
+	}
+	for name, flow := range map[string][2]string{"revert": {reverted, revertedKey}, "removeUnredeemed": {removed, removedKey}, "issued": {issued, issuedKey}} {
+		if env.inUnredeemed(flow[0]) || env.redis.Exists(flow[1]) {
+			t.Errorf("%s: the flow left the set but kept its crid key (or stayed in the set)", name)
+		}
+	}
+}
+
 func TestStartDeviceFlowReaperLifecycle(t *testing.T) {
 	disabled := StartDeviceFlowReaper(t.Context(), DeviceFlowReaperOptions{})
 	disabled()

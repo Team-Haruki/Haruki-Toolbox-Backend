@@ -32,6 +32,12 @@ const (
 	// deviceFlowIssuedRetention is how long a flow and its dc index live after
 	// its tokens were handed out.
 	deviceFlowIssuedRetention = 300 * time.Second
+	// deviceFlowConsentRequestRetention is how long the crid key of an
+	// unredeemed flow outlives the flow HASH, and the TTL every failed reaper
+	// revocation renews it to. The key is deleted whenever the flow leaves the
+	// unredeemed set, so this only bounds how long the reaper may be stopped
+	// before a still-unrevoked consent is forgotten.
+	deviceFlowConsentRequestRetention = 7 * 24 * time.Hour
 )
 
 // errDeviceStoreUnavailable means Redis is not configured; callers answer 503.
@@ -97,7 +103,7 @@ local f = redis.call('HMGET', KEYS[1], 'exp', 'wdc', 'crid')
 return {'FORWARD', st, f[1] or '0', f[2] or '', f[3] or ''}
 `
 
-// deviceFlowSettleScript: KEYS flow, unredeemed, dc; ARGV now ms, Hydra result
+// deviceFlowSettleScript: KEYS flow, unredeemed, dc, crid; ARGV now ms, Hydra result
 // (ok, pending, expired_token, invalid_grant, other), client active ("1", "0",
 // or "" when not yet known), issued retention ms, fid. It returns
 // {action, state, crid, cby}; see deviceSettle* for the actions and design §6.3
@@ -121,6 +127,7 @@ if result == 'ok' then
       set_state('issued')
       redis.call('HSET', KEYS[1], 'ist', now)
       redis.call('ZREM', KEYS[2], ARGV[5])
+      redis.call('DEL', KEYS[4])
       redis.call('PEXPIRE', KEYS[1], ARGV[4])
       redis.call('PEXPIRE', KEYS[3], ARGV[4])
       return {'TOKEN', st, crid, cby}
@@ -148,6 +155,7 @@ elseif result == 'invalid_grant' then
   if approved then
     if active == '' then return {'CHECK_CLIENT', st, crid, cby} end
     redis.call('ZREM', KEYS[2], ARGV[5])
+    redis.call('DEL', KEYS[4])
     if active == '0' then
       set_state('denied')
       redis.call('HSET', KEYS[1], 'dres', 'client_disabled')
@@ -161,21 +169,51 @@ end
 return {'PASS', st, crid, cby}
 `
 
-// deviceFlowReapScript: KEYS unredeemed, flow; ARGV fid. The ZREM is the claim,
-// so with several instances only one handles a flow. It returns {REVOKE, crid}
-// only when the claim succeeded, the flow was not issued and has a crid.
+// deviceFlowReapScript: KEYS unredeemed, flow, crid; ARGV fid. The ZREM is the
+// claim, so with several instances only one handles a flow. It returns
+// {REVOKE, crid} only when the claim succeeded, the flow was not issued and a
+// crid is known. The crid key outlives the flow HASH, so a flow whose
+// revocation kept failing past the HASH's TTL is still revoked rather than
+// dropped as GONE.
 const deviceFlowReapScript = `
 if redis.call('ZREM', KEYS[1], ARGV[1]) == 0 then return {'SKIP', ''} end
-if redis.call('EXISTS', KEYS[2]) == 0 then return {'GONE', ''} end
+local kept = redis.call('GET', KEYS[3]) or ''
+if redis.call('EXISTS', KEYS[2]) == 0 then
+  if kept == '' then return {'GONE', ''} end
+  return {'REVOKE', kept}
+end
 local f = redis.call('HMGET', KEYS[2], 'st', 'crid')
-if f[1] == 'issued' then return {'ISSUED', ''} end
-if not f[2] or f[2] == '' then return {'MARK', ''} end
-return {'REVOKE', f[2]}
+if f[1] == 'issued' then
+  redis.call('DEL', KEYS[3])
+  return {'ISSUED', ''}
+end
+local crid = f[2] or ''
+if crid == '' then crid = kept end
+if crid == '' then return {'MARK', ''} end
+return {'REVOKE', crid}
 `
 
-// deviceFlowMarkExpiredScript: KEYS flow. Non-terminal states become expired;
-// issued, denied, failed and expired are left alone.
+// deviceFlowRequeueScript: KEYS unredeemed, crid; ARGV score ms, fid, crid,
+// crid retention ms. Puts a flow whose revocation failed back into the set
+// and renews its crid key, so the retry survives the flow HASH's expiry.
+const deviceFlowRequeueScript = `
+redis.call('ZADD', KEYS[1], ARGV[1], ARGV[2])
+redis.call('SET', KEYS[2], ARGV[3], 'PX', ARGV[4])
+return 'OK'
+`
+
+// deviceFlowRemoveUnredeemedScript: KEYS unredeemed, crid; ARGV fid.
+const deviceFlowRemoveUnredeemedScript = `
+redis.call('ZREM', KEYS[1], ARGV[1])
+redis.call('DEL', KEYS[2])
+return 'OK'
+`
+
+// deviceFlowMarkExpiredScript: KEYS flow, crid. Ends a reaped flow: its crid
+// key is deleted; non-terminal states become expired; issued, denied, failed
+// and expired are left alone, as is a flow HASH that already expired.
 const deviceFlowMarkExpiredScript = `
+redis.call('DEL', KEYS[2])
 local st = redis.call('HGET', KEYS[1], 'st')
 if not st then return '' end
 if st == 'pending' or st == 'claimed' or st == 'approving' or st == 'approved' or st == 'unconfirmed' then
@@ -385,6 +423,7 @@ func (s *deviceFlowStore) settle(ctx context.Context, flowID, wrappedDeviceCode,
 		keys.BuildOAuth2DeviceFlowKey(flowID),
 		keys.BuildOAuth2DeviceUnredeemedKey(),
 		keys.BuildOAuth2DeviceCodeIndexKey(wrappedDeviceCode),
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
 	}, s.nowMillis(), hydraResult, clientActive, deviceFlowIssuedRetention.Milliseconds(), flowID).StringSlice()
 	if err != nil {
 		return deviceSettleResult{}, err
@@ -395,14 +434,18 @@ func (s *deviceFlowStore) settle(ctx context.Context, flowID, wrappedDeviceCode,
 	return deviceSettleResult{Action: values[0], State: values[1], ConsentRequestID: values[2], ClaimedBy: values[3]}, nil
 }
 
-// removeUnredeemed drops a flow from the unredeemed set after its consent
-// session was revoked.
+// removeUnredeemed drops a flow from the unredeemed set, and its crid key,
+// after its consent session was revoked.
 func (s *deviceFlowStore) removeUnredeemed(ctx context.Context, flowID string) error {
 	manager, err := s.redisManager()
 	if err != nil {
 		return err
 	}
-	return manager.Redis.ZRem(ctx, manager.KeyBuilder().BuildOAuth2DeviceUnredeemedKey(), flowID).Err()
+	keys := manager.KeyBuilder()
+	return manager.Redis.Eval(ctx, deviceFlowRemoveUnredeemedScript, []string{
+		keys.BuildOAuth2DeviceUnredeemedKey(),
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
+	}, flowID).Err()
 }
 
 // dueUnredeemed lists up to limit flows whose score (exp in ms) is below cutoff.
@@ -421,8 +464,8 @@ func (s *deviceFlowStore) dueUnredeemed(ctx context.Context, cutoffMillis int64,
 }
 
 // reap claims a due flow. The action is REVOKE (with the consent request ID to
-// revoke), MARK (no consent request ID: only mark it expired), or ISSUED, GONE
-// and SKIP (nothing to do).
+// revoke, also when the flow HASH already expired), MARK (no consent request
+// ID: only mark it expired), or ISSUED, GONE and SKIP (nothing to do).
 func (s *deviceFlowStore) reap(ctx context.Context, flowID string) (action string, consentRequestID string, err error) {
 	manager, err := s.redisManager()
 	if err != nil {
@@ -432,6 +475,7 @@ func (s *deviceFlowStore) reap(ctx context.Context, flowID string) (action strin
 	values, err := manager.Redis.Eval(ctx, deviceFlowReapScript, []string{
 		keys.BuildOAuth2DeviceUnredeemedKey(),
 		keys.BuildOAuth2DeviceFlowKey(flowID),
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
 	}, flowID).StringSlice()
 	if err != nil {
 		return "", "", err
@@ -442,22 +486,33 @@ func (s *deviceFlowStore) reap(ctx context.Context, flowID string) (action strin
 	return values[0], values[1], nil
 }
 
+// markExpired ends a reaped flow: it marks a non-terminal flow expired and
+// deletes the flow's crid key.
 func (s *deviceFlowStore) markExpired(ctx context.Context, flowID string) error {
 	manager, err := s.redisManager()
 	if err != nil {
 		return err
 	}
-	return manager.Redis.Eval(ctx, deviceFlowMarkExpiredScript, []string{manager.KeyBuilder().BuildOAuth2DeviceFlowKey(flowID)}).Err()
+	keys := manager.KeyBuilder()
+	return manager.Redis.Eval(ctx, deviceFlowMarkExpiredScript, []string{
+		keys.BuildOAuth2DeviceFlowKey(flowID),
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
+	}).Err()
 }
 
 // requeueUnredeemed puts a flow back into the unredeemed set after a failed
-// revocation, so a later reaper round retries it.
-func (s *deviceFlowStore) requeueUnredeemed(ctx context.Context, flowID string, scoreMillis int64) error {
+// revocation, so a later reaper round retries it, and renews its crid key so
+// the retry does not depend on the flow HASH still existing.
+func (s *deviceFlowStore) requeueUnredeemed(ctx context.Context, flowID, consentRequestID string, scoreMillis int64) error {
 	manager, err := s.redisManager()
 	if err != nil {
 		return err
 	}
-	return manager.Redis.ZAdd(ctx, manager.KeyBuilder().BuildOAuth2DeviceUnredeemedKey(), redis.Z{Score: float64(scoreMillis), Member: flowID}).Err()
+	keys := manager.KeyBuilder()
+	return manager.Redis.Eval(ctx, deviceFlowRequeueScript, []string{
+		keys.BuildOAuth2DeviceUnredeemedKey(),
+		keys.BuildOAuth2DeviceConsentRequestKey(flowID),
+	}, scoreMillis, flowID, consentRequestID, deviceFlowConsentRequestRetention.Milliseconds()).Err()
 }
 
 // deviceClientCacheTTL is how long a Hydra client lookup (found or 404) is

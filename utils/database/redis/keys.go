@@ -276,6 +276,13 @@ func (b KeyBuilder) BuildOAuth2DeviceUnredeemedKey() string {
 	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "unredeemed")
 }
 
+// BuildOAuth2DeviceConsentRequestKey keeps the consent request ID of an
+// unredeemed flow (STRING haruki:oauth2-device:crid:{fid}) beyond the flow
+// HASH, so the reaper can still revoke the consent after the flow expired.
+func (b KeyBuilder) BuildOAuth2DeviceConsentRequestKey(flowID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "crid", flowID)
+}
+
 func (b KeyBuilder) BuildOAuth2DeviceAuthAttemptUnknownClientKey() string {
 	return b.oauth2DeviceRateLimitKey("auth-attempt", "unknown-client")
 }
