@@ -16,13 +16,21 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
 
+// requestHeaderBufferSize bounds the request line plus all headers. Fiber's
+// 4 KiB default answers 431 to Hydra consent/login redirects: the challenge in
+// the query is ~2.5 KiB and the browser adds Kratos and Hydra CSRF cookies on
+// top of the identity headers Oathkeeper injects. fasthttp grows the buffer
+// only up to this size when a request needs it.
+const requestHeaderBufferSize = 32 << 10
+
 func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 	app := fiber.New(fiber.Config{
-		BodyLimit:   100 * 1024 * 1024,
-		JSONEncoder: jsoncodec.Marshal,
-		JSONDecoder: jsoncodec.Unmarshal,
-		ProxyHeader: cfg.Backend.ProxyHeader,
-		TrustProxy:  cfg.Backend.EnableTrustProxy,
+		BodyLimit:      100 * 1024 * 1024,
+		ReadBufferSize: requestHeaderBufferSize,
+		JSONEncoder:    jsoncodec.Marshal,
+		JSONDecoder:    jsoncodec.Unmarshal,
+		ProxyHeader:    cfg.Backend.ProxyHeader,
+		TrustProxy:     cfg.Backend.EnableTrustProxy,
 		TrustProxyConfig: fiber.TrustProxyConfig{
 			Proxies: cfg.Backend.TrustProxies,
 		},
