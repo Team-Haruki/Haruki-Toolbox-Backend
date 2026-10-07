@@ -18,12 +18,12 @@ import (
 )
 
 // oauth2GameDataReadTimeout bounds the whole OAuth2 game-data read (PG access
-// check, Redis cache ops, Mongo fetch) — Fiber v3 request contexts carry no
-// deadline, so this mirrors the private box-read fix.
+// check, Redis cache ops, game-data PostgreSQL fetch) — Fiber v3 request
+// contexts carry no deadline, so this mirrors the private box-read fix.
 const oauth2GameDataReadTimeout = 3 * time.Second
 
 // oauth2GameDataGroup collapses concurrent cache misses for the same cacheKey
-// into a single Mongo read + marshal + cache write (see publicDataGroup for why
+// into a single game-data read + render + cache write (see publicDataGroup for why
 // misses on these surfaces are correlated).
 var oauth2GameDataGroup singleflight.Group
 

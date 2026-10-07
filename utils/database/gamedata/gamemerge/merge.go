@@ -8,8 +8,8 @@
 // looks more advanced.
 //
 // The package is deliberately storage-agnostic and has no dependencies: the same
-// implementation serves the MongoDB path and the PostgreSQL one, so the cutover
-// cannot introduce a behaviour difference here.
+// implementation served the MongoDB path and the PostgreSQL one during the
+// cutover, so the cutover could not introduce a behaviour difference here.
 //
 // ONE HAZARD, and it is silent: every value here fails CLOSED. A document whose
 // shape the normalizer does not recognise, or whose identity field is missing,
@@ -47,7 +47,7 @@ const (
 //
 // It is injected rather than inferred because the coercions FAIL CLOSED: an
 // element whose type the normalizer does not recognise is skipped silently. The
-// MongoDB path hands in bson.A / bson.D / bson.M and the PostgreSQL path hands
+// MongoDB path handed in bson.A / bson.D / bson.M and the PostgreSQL path hands
 // in JSON-decoded []any / map[string]any, and a shared implementation that tried
 // to guess would quietly drop a whole side of the merge — which is exactly the
 // failure this indirection exists to make impossible.

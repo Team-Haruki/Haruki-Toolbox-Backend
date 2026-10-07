@@ -19,7 +19,7 @@ const (
 	// HeaderUploadTime echoes the matched stamp on 304 responses. It is set
 	// ONLY there: a full response's stamp must be read from the body's own
 	// upload_time field, which cannot disagree with the body it arrived in —
-	// a header sourced from a fresh Mongo read can (the Redis body cache may
+	// a header sourced from a fresh game-data read can (the Redis body cache may
 	// briefly trail an upload), and a client adopting such a stamp would 304
 	// against a stale body until the next upload.
 	HeaderUploadTime = "X-Upload-Time"
@@ -46,7 +46,7 @@ const (
 // must not have excluded upload_time from the allowlist (the 304/200
 // distinction is an equality oracle on a stamp the body itself would not
 // reveal) and the key filter must be one the full path accepts, and on the
-// private surface Mongo-operator/dotted/empty key segments are skipped so the
+// private surface `$`-containing, dotted and empty key segments are skipped so the
 // full path keeps owning their outcome.
 //
 // The check is a pure optimization and never introduces a new failure mode:
@@ -90,9 +90,10 @@ func CheckNotModified(
 		}
 	} else if _, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
 		// The private surface has no key allowlist, but a dotted, empty, or
-		// $-prefixed key segment changes the full path's outcome (nested
-		// projection or a Mongo projection error); skip the conditional answer
-		// and let the full path behave exactly as it always has.
+		// $-containing key segment is one the full path has always handled on
+		// its own (under MongoDB a nested projection or a projection error);
+		// skip the conditional answer and let the full path behave exactly as
+		// it always has.
 		return false
 	}
 	if !notModifiedDecision(known, stamp, time.Now().Unix(), stamp > 0) {

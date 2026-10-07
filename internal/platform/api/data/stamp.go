@@ -17,17 +17,17 @@ import (
 
 // ResolveGameDataStamp returns the stored document's current upload_time (0
 // when the document is missing or predates the stamp), preferring a short
-// Redis memo over a Mongo projection read so the steady-state read path stays
+// Redis memo over a game-data PostgreSQL read so the steady-state read path stays
 // Redis-only. The memo is the freshness ceiling of every stamp-changing write
 // path: it lives for GameDataStampMemoTTL and is deleted by every per-user
 // cache clear (upload, backfill has its own stamp bump, binding changes) and
 // by the allowlist namespace wipe.
 //
-// confirmed reports whether the stamp came from the memo or a live Mongo read.
-// When Mongo is unreachable and no memo exists, the long-lived fallback key
-// supplies the last stamp a live read ever resolved, so warm cache generations
-// keep serving through a Mongo outage — but such a stamp is NOT confirmed and
-// must never answer a conditional 304.
+// confirmed reports whether the stamp came from the memo or a live database
+// read. When the game-data database is unreachable and no memo exists, the
+// long-lived fallback key supplies the last stamp a live read ever resolved, so
+// warm cache generations keep serving through a database outage — but such a
+// stamp is NOT confirmed and must never answer a conditional 304.
 func ResolveGameDataStamp(
 	ctx context.Context,
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
@@ -44,7 +44,7 @@ func ResolveGameDataStamp(
 			if parsed, pErr := strconv.ParseInt(raw, 10, 64); pErr == nil {
 				return parsed, true, nil
 			}
-			// A corrupt memo falls through to Mongo and is overwritten below.
+			// A corrupt memo falls through to the database and is overwritten below.
 		}
 	}
 	current, found, mErr := readUploadTime(ctx, apiHelper, server, dataType, userID)
@@ -56,7 +56,7 @@ func ResolveGameDataStamp(
 	}
 	if apiHelper.DBManager.Redis != nil {
 		// Best-effort: a failed memo write only means the next read resolves
-		// from Mongo again.
+		// from the database again.
 		value := strconv.FormatInt(current, 10)
 		if wErr := apiHelper.DBManager.Redis.SetRawCache(ctx, memoKey, value, harukiRedis.GameDataStampMemoTTL); wErr != nil {
 			harukiLogger.Warnf("Failed to write game data stamp memo %s: %v", memoKey, wErr)
@@ -70,8 +70,8 @@ func ResolveGameDataStamp(
 }
 
 // resolveStampFallback serves the last stamp a live read ever resolved when
-// Mongo is unreachable, so existing cache generations stay servable through an
-// outage. The stamp is unconfirmed; when no fallback exists the original
+// the game-data database is unreachable, so existing cache generations stay
+// servable through an outage. The stamp is unconfirmed; when no fallback exists the original
 // resolve error surfaces and the full path owns the failure.
 func resolveStampFallback(
 	ctx context.Context,
@@ -94,7 +94,7 @@ func resolveStampFallback(
 
 // ConfirmGameDataCacheWrite fences a singleflight leader's cache write: the
 // write is allowed only when the generation's second has fully elapsed and a
-// fresh Mongo read — bypassing the memo — still reports the same stamp, so a
+// fresh database read — bypassing the memo — still reports the same stamp, so a
 // leader racing an upload with a NEWER stamp can never resurrect an
 // already-cleared generation. It cannot detect a same-stamp collision (two
 // uploads minted in one wall-clock second where the body was read between
@@ -146,14 +146,13 @@ func PublicAllowlistDigest(allowedKeys []string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// readUploadTime resolves the generation stamp from whichever datastore is
-// currently authoritative.
+// readUploadTime resolves the generation stamp from the game-data PostgreSQL
+// store (DBManager.GameData, utils/database/gamedata).
 //
-// This indirection is what keeps the cache correct across the cutover. Both
-// callers previously reached straight into DBManager.Mongo and returned a bare
-// false when it was nil — so the moment MongoDB is removed, the write fence
-// would refuse every write, the response cache would sit permanently empty, and
-// NOTHING would report it: an empty cache is indistinguishable from a cold one.
+// A missing store is an ERROR, never a bare false: a silent false would make
+// the write fence refuse every write and leave the response cache permanently
+// empty with NOTHING reporting it, because an empty cache is indistinguishable
+// from a cold one. (The MongoDB-era callers had exactly that bug.)
 func readUploadTime(
 	ctx context.Context,
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,

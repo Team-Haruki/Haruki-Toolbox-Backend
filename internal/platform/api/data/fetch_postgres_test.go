@@ -40,7 +40,8 @@ func TestMarshallingARenderedBodyWouldBase64It(t *testing.T) {
 	}
 }
 
-// The MongoDB path still returns Go values and must still be marshalled.
+// Callers that hand in a Go value rather than a rendered body must still get it
+// marshalled.
 func TestEncodeGameDataBodyMarshalsGoValues(t *testing.T) {
 	got, err := EncodeGameDataBody(map[string]any{"a": 1})
 	if err != nil {
@@ -51,14 +52,14 @@ func TestEncodeGameDataBodyMarshalsGoValues(t *testing.T) {
 	}
 }
 
-// The generation stamp must resolve from whichever datastore is authoritative.
+// The generation stamp resolves from the game-data PostgreSQL store.
 //
-// Both callers used to reach straight into DBManager.Mongo and return a bare
-// false when it was nil. The moment MongoDB is removed that would make the cache
-// write fence refuse every write and leave the response cache permanently
-// empty — with nothing reporting it, because an empty cache looks exactly like a
-// cold one. This asserts the nil-Mongo case now produces an ERROR (which the
-// caller turns into the unconfirmed fallback) rather than a silent false.
+// The MongoDB-era callers returned a bare false when their store was nil. That
+// would make the cache write fence refuse every write and leave the response
+// cache permanently empty — with nothing reporting it, because an empty cache
+// looks exactly like a cold one. This asserts a nil game-data store produces an
+// ERROR (which the caller turns into the unconfirmed fallback) rather than a
+// silent false.
 func TestUploadTimeWithNoStoreConfiguredIsAnErrorNotASilentFalse(t *testing.T) {
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
 		DBManager: &harukiDatabase.HarukiToolboxDBManager{},

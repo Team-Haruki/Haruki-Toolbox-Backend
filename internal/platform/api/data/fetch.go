@@ -64,8 +64,10 @@ func InvalidSuiteRequestKey(requestKey string, allowedKeySet map[string]struct{}
 }
 
 // InvalidMysekaiRequestKey returns the first requested mysekai key that is
-// empty or that Mongo would treat as a dotted projection path or operator, so
-// a caller cannot probe nested document structure.
+// empty or contains `.` or `$`. Those were dotted projection paths and
+// operators under the retired MongoDB store; the PostgreSQL read path keeps
+// rejecting them so the accepted key set is unchanged and a caller cannot
+// probe nested document structure.
 func InvalidMysekaiRequestKey(requestKey string) (string, bool) {
 	if requestKey == "" {
 		return "", false
@@ -79,8 +81,8 @@ func InvalidMysekaiRequestKey(requestKey string) (string, bool) {
 }
 
 // HandleSuiteRequest takes an explicit ctx (rather than deriving one from the
-// fiber request) so callers can bound the Mongo read with a deadline — Fiber v3
-// request contexts carry none.
+// fiber request) so callers can bound the game-data PostgreSQL read with a
+// deadline — Fiber v3 request contexts carry none.
 func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (any, error) {
 	var keys []string
 	if requestKey == "" {

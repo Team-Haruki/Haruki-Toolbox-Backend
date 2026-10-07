@@ -32,7 +32,7 @@ const privateReadTimeout = 3 * time.Second
 const privateReadSlowThreshold = 500 * time.Millisecond
 
 // privateDataGroup collapses concurrent cache misses for the same cacheKey into a
-// single Mongo read + marshal + cache write, so a same-key burst does not stampede
+// single game-data read + render + cache write, so a same-key burst does not stampede
 // the database with duplicate full-document pulls.
 var privateDataGroup singleflight.Group
 
@@ -47,9 +47,9 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		dataTypeStr := c.Params("data_type")
 		userIDStr := c.Params("user_id")
 		// Slow-read autopsy: when profiling is on, log a per-stage breakdown for reads
-		// that cross the threshold, so a spike can be attributed to PG vs Redis vs
-		// Mongo without server-side slow logs (client-side pool waits are invisible
-		// there). Timestamps are captured unconditionally (~ns) and only formatted when
+		// that cross the threshold, so a spike can be attributed to the Toolbox
+		// database vs Redis vs the game-data database without server-side slow
+		// logs (client-side pool waits are invisible there). Timestamps are captured unconditionally (~ns) and only formatted when
 		// the read is slow and profiling is enabled.
 		var dBinding, dAuth, dStamp, dCache, dLoad time.Duration
 		defer func() {
@@ -200,7 +200,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 
 // loadPrivateData resolves the stored (zstd-compressed) body for this request,
 // collapsing concurrent same-request misses via singleflight so a burst does a
-// single Mongo pull + marshal + compress + cache write. It reports whether the
+// single game-data read + render + compress + cache write. It reports whether the
 // document exists and marshals the response exactly once (the previous code
 // marshaled once for the cache and again in c.JSON). cacheKey may be empty
 // (unresolved document generation), in which case the result is served but not
@@ -269,13 +269,12 @@ func loadPrivateData(
 	return p.body, p.found, nil
 }
 
-// fetchPrivateData reads the stored document, projecting to only the requested
-// keys when a comma-separated `key` filter is supplied so the box read no longer
-// transfers and decodes the full multi-MB document for a keyed request.
-// renderPrivateData produces the private-surface body from whichever datastore
-// is currently authoritative.
+// renderPrivateData produces the private-surface body from the game-data
+// PostgreSQL store, reading only the requested columns when a comma-separated
+// `key` filter is supplied so a keyed request does not transfer and decode the
+// full multi-MB row.
 //
-// The two paths must agree on three things that are easy to get wrong:
+// It must keep three MongoDB-era behaviours that are easy to get wrong:
 //
 //  1. 404 here means the ROW is absent, and only that. Every other surface 404s
 //     when the requested keys are all empty; harmonising them would reintroduce,
@@ -318,10 +317,11 @@ func renderPrivateData(
 }
 
 // buildKeyProjection returns an inclusion projection limited to the requested keys,
-// or nil when no explicit key was requested — in which case the caller fetches the
-// full document, matching legacy behavior.
+// or nil when no explicit key was requested. It is the MongoDB-era projection: no
+// production code calls it since reads moved to PostgreSQL (renderPrivateData),
+// and only its tests keep the behaviour below documented.
 //
-// We intentionally do NOT exclude _id. Excluding it would make Mongo return an empty
+// It intentionally did NOT exclude _id. Excluding it would make Mongo return an empty
 // document when a request asks only for keys the document does not contain, which the
 // len()==0 check would then misreport as "not found" (404) even though the account
 // exists. Keeping the implicit _id inclusion guarantees an existing document always

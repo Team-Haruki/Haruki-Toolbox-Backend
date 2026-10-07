@@ -46,8 +46,8 @@ func DefaultLimits() Limits {
 // ValidateUploadFieldNames rejects field names an upload must never carry.
 //
 // It keeps the MongoDB-era rejection of `.` and `$` even though PostgreSQL has
-// no such operators: those names round-trip through the Mongo path during the
-// cutover, and a name that is legal in one store and an operator in the other is
+// no such operators: those names round-tripped through the Mongo path during
+// the cutover, and a name that is legal in one store and an operator in the other is
 // exactly the kind of difference that turns into an injection later.
 //
 // It additionally rejects NUL and invalid UTF-8, which MongoDB accepted:

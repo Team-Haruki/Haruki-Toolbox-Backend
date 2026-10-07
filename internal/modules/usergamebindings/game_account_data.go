@@ -16,7 +16,8 @@ import (
 )
 
 // ownedGameAccountReadTimeout bounds the owned-account data read (PG access
-// check + Mongo fetch); Fiber v3 request contexts carry no deadline.
+// check + game-data PostgreSQL fetch); Fiber v3 request contexts carry no
+// deadline.
 const ownedGameAccountReadTimeout = 3 * time.Second
 
 type ownedGameAccountDataType string
@@ -48,7 +49,7 @@ func buildAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (
 
 func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Bound the PG access check and Mongo reads; the profile branch keeps the
+		// Bound the PG access check and game-data reads; the profile branch keeps the
 		// request context because it proxies an upstream game-API call with its
 		// own client-side timeout.
 		ctx, cancel := context.WithTimeout(c.Context(), ownedGameAccountReadTimeout)

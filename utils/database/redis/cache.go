@@ -49,10 +49,10 @@ const (
 	FreshGenerationCacheTTL = 5 * time.Minute
 	// GameDataStampMemoTTL bounds the per-document upload_time memo that lets
 	// the read path resolve the current cache generation from Redis instead of
-	// Mongo. It is the staleness ceiling for every stamp-changing write path
-	// (uploads, backfill, binding clears); the residual same-second upload
-	// window is fenced separately at cache-write time (see
-	// ConfirmGameDataCacheWrite).
+	// the game-data database. It is the staleness ceiling for every
+	// stamp-changing write path (uploads, backfill, binding clears); the
+	// residual same-second upload window is fenced separately at cache-write
+	// time (see ConfirmGameDataCacheWrite).
 	GameDataStampMemoTTL = 60 * time.Second
 
 	redisIncrementWithTTLScript = `
@@ -129,9 +129,9 @@ func BuildGameDataStampMemoKey(server, dataType string, userID int64) string {
 }
 
 // BuildGameDataStampFallbackKey addresses the long-lived last-known stamp used
-// only when Mongo cannot be reached: it lets warm cache generations keep
-// serving through a Mongo outage instead of failing every read after the 60s
-// memo expires. It is never trusted for conditional 304 answers.
+// only when the game-data database cannot be reached: it lets warm cache
+// generations keep serving through a database outage instead of failing every
+// read after the 60s memo expires. It is never trusted for conditional 304 answers.
 func BuildGameDataStampFallbackKey(server, dataType string, userID int64) string {
 	return buildStampKey(":stamplast:", server, dataType, userID)
 }
@@ -345,7 +345,7 @@ func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server st
 		return fmt.Errorf("redis client is nil")
 	}
 	// Drop the stamp keys FIRST: the memo is the freshness authority, so the
-	// next read re-resolves the current generation from Mongo even if the
+	// next read re-resolves the current generation from the database even if the
 	// (slower, SCAN-based) body sweep below fails midway.
 	if err := r.Redis.Unlink(ctx,
 		BuildGameDataStampMemoKey(server, dataType, userID),
