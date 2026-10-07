@@ -355,6 +355,7 @@ Hydra 在当前项目里负责：
 - `/api/oauth2/token`（令牌端点兼容层，见下文）
 - `/api/oauth2/revoke`
 - `/api/oauth2/device/auth`（RFC 8628 设备授权端点，匿名；见 §10.5）
+- `/api/oauth2/device/lookup`、`/api/oauth2/device/approve`、`/api/oauth2/device/deny`（设备授权的浏览器决定端点，须登录；见下文与 §10.5）
 - `/api/oauth2/login`
 - `/api/oauth2/login/accept`
 - `/api/oauth2/login/reject`
@@ -373,6 +374,13 @@ Hydra 在当前项目里负责：
 - 设备授权许可的请求带的是后端签发的包装设备码 `hdc_…`：兼容层用它找到流程、在本地执行 `slow_down`（早于 `interval` 的轮询不调用 Hydra），其余轮询解封出 Hydra 的 `ory_dc_…` 后转发 `POST /oauth2/token`，由 Hydra 认证客户端，再按流程状态改写 Hydra 的回答（`access_denied`、`expired_token`，或对已拒绝 / 已停用的流程不交出令牌并按 `consent_request_id` 撤销）。客户端认证之前只会本地回答参数错误、`slow_down`、未知码（`invalid_grant`）、功能关闭（`expired_token`）和 503
 - 设备分支的每个响应（包括透传的 Hydra 响应）都带 `Cache-Control: no-store` 与 `Pragma: no-cache`
 - Hydra 自己的 `/oauth2/token` 仍由 Oathkeeper `hydra-public-oauth` 直通，供写死 Hydra 地址的授权码客户端使用；它不认识 `hdc_…`，只会返回 `invalid_grant`
+
+`/api/oauth2/device/lookup`、`approve`、`deny` 是 `/device` 页面调用的浏览器端点（`hydra_device_browser.go`、`hydra_device_verification.go`），与 consent 一样经会话守卫：
+
+- 开头依次检查功能开关（关闭 403 `feature_disabled`）、`Content-Type: application/json`（否则 415）、`Origin` 在 `oauth2.device_flow.allowed_origins` 中（否则 403）、请求体 ≤ 1 KiB；错误一律放在 `updatedData.code`，`message` 是固定英文短句，从不转发 Hydra 的文本，处理函数自己从不返回 401
+- lookup 用 Redis Lua 认领用户码并返回审核卡与流程句柄；未知、过期、已被他人认领的码统一 400 `invalid_code` 并计入失败预算，格式错误的 `malformed_code` 不计
+- approve 先做认领者、会话、句柄与尝试次数的 CAS，再由后端在同一请求内用不跟随重定向、不保持连接的 `HydraConfig.DoWithoutRedirect` 和每次批准新建的内存 Cookie 容器走完 Hydra 的 verify → device accept → login accept → consent accept → 最后一跳（只校验不访问）；每一跳都校验流程标记 `haruki_dfl` 与 `client_id`，login `skip` 直接失败，login / consent 都以 `remember=false` 接受。consent accept 的请求体由 `buildHydraConsentAcceptBody` 构造，浏览器同意页共用它
+- deny 只写 Redis，不调用 Hydra 的 reject；流程已记录 `consent_request_id` 时随后按它撤销
 
 ### 10.2 登录同意与用户 subject
 
@@ -487,7 +495,7 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 
 ### 10.5 设备授权（RFC 8628）
 
-设备授权的架构与运维手册在功能完成后写入本节；在此之前以 [OAuth2 设备授权设计](oauth2-device-flow-design.zh-CN.md) 为准。
+设备授权（device/auth、令牌端点兼容层、lookup / approve / deny 与服务端代驱链）的架构与运维手册在功能完成后写入本节；在此之前以 [OAuth2 设备授权设计](oauth2-device-flow-design.zh-CN.md) 为准。
 
 ## 11. 当前配置层面对 Ory 的约束
 

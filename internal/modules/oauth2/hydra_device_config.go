@@ -240,6 +240,33 @@ func (c DeviceFlowConfig) maxSlowDown() int {
 	return 30
 }
 
+func (c DeviceFlowConfig) claimTTL() time.Duration {
+	if c.timings.ClaimTTL > 0 {
+		return c.timings.ClaimTTL
+	}
+	return 300 * time.Second
+}
+
+// approvalTimings are the timings of an approve, with the documented defaults
+// for unset values: a 30 s lease, a 15 s chain timeout, 30 s minimum
+// remaining lifetime and 3 attempts.
+func (c DeviceFlowConfig) approvalTimings() DeviceFlowTimings {
+	timings := c.timings
+	if timings.ApproveLease <= 0 {
+		timings.ApproveLease = 30 * time.Second
+	}
+	if timings.ApprovalTimeout <= 0 {
+		timings.ApprovalTimeout = 15 * time.Second
+	}
+	if timings.MinRemainingToApprove <= 0 {
+		timings.MinRemainingToApprove = 30 * time.Second
+	}
+	if timings.MaxApproveAttempts <= 0 {
+		timings.MaxApproveAttempts = 3
+	}
+	return timings
+}
+
 // urlOrigin returns the lowercase scheme://host of an absolute URL, or "".
 func urlOrigin(raw string) string {
 	parsed, err := url.Parse(strings.TrimSpace(raw))

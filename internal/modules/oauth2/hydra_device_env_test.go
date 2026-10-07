@@ -122,10 +122,13 @@ type fakeDeviceHydra struct {
 	// token answers POST /oauth2/token; nil answers authorization_pending.
 	token        func(form url.Values, header http.Header) (int, any)
 	revokeStatus int
-	calls        []fakeDeviceHydraCall
-	issued       int
-	userCodes    []string
-	deviceCodes  []string
+	// chain, when set, serves the browser leg the approval chain walks
+	// (verify, device/login/consent requests and accepts).
+	chain       *fakeDeviceChain
+	calls       []fakeDeviceHydraCall
+	issued      int
+	userCodes   []string
+	deviceCodes []string
 }
 
 func (f *fakeDeviceHydra) serve(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +189,12 @@ func (f *fakeDeviceHydra) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(status)
 	default:
+		f.mu.Lock()
+		chain := f.chain
+		f.mu.Unlock()
+		if chain != nil && chain.serve(w, r, raw) {
+			return
+		}
 		writeFakeHydraJSON(w, http.StatusNotFound, map[string]any{"error": "not_found"})
 	}
 }
@@ -274,6 +283,19 @@ type deviceTestEnv struct {
 	authBodies []string
 	tokenBody  []string
 	issuedHDC  []string
+	// browser holds the lookup/approve/deny responses; flowHandles every
+	// handle a lookup issued.
+	browser     []deviceBrowserRecord
+	flowHandles []string
+}
+
+// deviceBrowserRecord is one browser-endpoint response. Only a successful
+// lookup may carry a flow handle (the one it issues) and the formatted user
+// code (the one the user typed).
+type deviceBrowserRecord struct {
+	Path   string
+	Status int
+	Body   string
 }
 
 type deviceTestEnvOption func(*DeviceFlowConfigOptions)
@@ -368,7 +390,9 @@ func (e *deviceTestEnv) do(path, contentType, body string, header map[string]str
 	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	e.mu.Lock()
-	if path == "/api/oauth2/token" {
+	if strings.HasPrefix(path, "/api/oauth2/device/") && path != "/api/oauth2/device/auth" {
+		e.browser = append(e.browser, deviceBrowserRecord{Path: path, Status: resp.StatusCode, Body: string(raw)})
+	} else if path == "/api/oauth2/token" {
 		e.tokenBody = append(e.tokenBody, string(raw))
 	} else {
 		e.authBodies = append(e.authBodies, string(raw))
@@ -464,9 +488,19 @@ func (e *deviceTestEnv) inUnredeemed(flowID string) bool {
 }
 
 // assertNoSecretLeaks checks that no user code, wrapped or Hydra device code
-// appears in the logs, in any Redis key name or stored value, in token-endpoint
-// responses, or (for Hydra's code) in any response at all.
+// or flow handle appears in the logs, in any Redis key name or stored value,
+// in token-endpoint responses, or (for Hydra's code) in any response at all.
+// Browser responses carry none of them either, except that a successful
+// lookup returns the handle it issued and the code the user typed. Nor do
+// the approval chain's challenges, verifiers and cookies reach logs or
+// browser responses.
 func (e *deviceTestEnv) assertNoSecretLeaks() {
+	e.t.Helper()
+	e.assertNoDeviceCodeLeaks()
+	e.assertNoBrowserLeaks()
+}
+
+func (e *deviceTestEnv) assertNoDeviceCodeLeaks() {
 	e.t.Helper()
 	e.hydra.mu.Lock()
 	userCodes := append([]string(nil), e.hydra.userCodes...)

@@ -133,7 +133,10 @@ POST /api/manual/:server/:user_id/:data_type/upload
 POST /api/oauth2/authorize/consent
 POST /api/oauth2/consent/accept
 POST /api/oauth2/consent/reject
+POST /api/oauth2/device/approve
 POST /api/oauth2/device/auth
+POST /api/oauth2/device/deny
+POST /api/oauth2/device/lookup
 POST /api/oauth2/game-data/:server/:data_type/:user_id
 POST /api/oauth2/login/accept
 POST /api/oauth2/login/reject
