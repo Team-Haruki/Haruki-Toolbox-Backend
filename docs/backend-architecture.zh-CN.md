@@ -50,7 +50,7 @@ RFC 8628 设备授权集中在 `internal/modules/oauth2`，不另建模块；行
 | `hydra_device_codes.go`、`hydra_device_policy.go`、`hydra_device_challenge.go` | 码的生成、密封与规范化；设备授权的 scope 策略；通用 login / consent 拒绝设备模式的 challenge |
 | `hydra_device_config.go` | 不可变的 `DeviceFlowConfig` 与运行时闸门 `Active(ctx)` |
 | `hydra_device_reaper.go` | 回收器 `StartDeviceFlowReaper`：撤销已批准却从未兑换的授权（见 §3） |
-| `internal_introspect.go` | `POST /internal/oauth2/introspect`，只在配置了内部 token 时注册，不经 Oathkeeper |
+| `internal_introspect.go` | 供自有服务使用的内部令牌校验接口（不对外），只在配置了内部 token 时注册，不经 Oathkeeper |
 | `internal/modules/useroauth`、`adminoauth`、`adminusers` | 按设备列出与撤销授权；管理端 client 的 `grantTypes` / `devicePolicy`；管理员只读镜像 |
 | `utils/database/redis/keys.go` | `BuildOAuth2Device*Key`：`haruki:oauth2-device:` 与 `haruki:rate-limit:oauth2-device:` 两个前缀，码只以 HMAC 出现在键名里 |
 | `utils/redact` | 访问日志里 `user_code`、`device_code`、`flowHandle` 与令牌字面量的脱敏 |
@@ -128,7 +128,7 @@ Suite / MYSEKAI 由独立 PostgreSQL pool 读写；`game_data.url`（或 `GAME_D
 
 游戏字段以 `utils/database/gamedata/catalog` 为准。`userInherit`、`userPlatformInheritIos`、`userPlatformInheritAndroid`、`userPlatforms`、`userRegistration` 包含继承凭据或个人信息，必须维持拒绝存储规则；不得因删除旧的字段置空配置而重新纳入。API 的投影与授权另行生效。
 
-历史 Mongo 冷备份不包含迁移后写入 PostgreSQL 的数据，不能直接恢复为当前读源或视为无损回滚。未落地的数据版本与缓存一致性改造见 [revision 设计](game-data-revision-design.zh-CN.md)。
+游戏数据的 revision 与缓存一致性改造尚未落地；在此之前，条件读取以 unix 秒精度的 `upload_time` 为准，同一秒内的多次上传无法区分。
 
 性能工作优先减少重复解析、展开、查询和复制；引继等待及代理上游耗时不计入后处理优化收益。对照测试应保持投影、压缩协商、缓存状态和响应体积一致，分别记录延迟分位与分配量，不能将微基准结果直接当作生产 API 收益。
 
