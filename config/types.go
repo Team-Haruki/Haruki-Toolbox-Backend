@@ -225,10 +225,29 @@ type OAuth2Config struct {
 // our own services (Sekai Station) call over the tailnet or the compose
 // network. Oathkeeper has no rule for it.
 type OAuth2InternalAPIConfig struct {
-	// TokenSHA256 is the hex SHA-256 (64 characters) of the internal bearer
-	// token; the token itself never goes into backend config. Empty leaves
-	// the route unregistered.
+	// TokenSHA256 is the hex SHA-256 (64 characters) of the internal token
+	// (sent as a Bearer token or as the HTTP Basic password); the token itself
+	// never goes into backend config. Empty leaves the route unregistered.
 	TokenSHA256 string `yaml:"token_sha256"`
+	// ClientID is the only HTTP Basic username accepted, so an RFC 7662
+	// client can authenticate as client_id:token. Empty means
+	// DefaultOAuth2InternalAPIClientID.
+	ClientID string `yaml:"client_id"`
+	// Audience is returned as "aud" in every active answer. The endpoint
+	// vouches for tokens to its single internal caller, so it names that
+	// caller, not the audience Hydra granted. Empty means
+	// DefaultOAuth2InternalAPIAudience.
+	Audience []string `yaml:"audience"`
+}
+
+// DefaultOAuth2InternalAPIClientID names the internal API's only caller,
+// Sekai Station.
+const DefaultOAuth2InternalAPIClientID = "station"
+
+// DefaultOAuth2InternalAPIAudience returns a fresh copy of the default
+// oauth2.internal_api.audience.
+func DefaultOAuth2InternalAPIAudience() []string {
+	return []string{"station"}
 }
 
 // OAuth2DeviceFlowConfig is the startup configuration of the device

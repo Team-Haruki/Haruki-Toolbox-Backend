@@ -302,9 +302,21 @@ func validateDeviceFlowAbsoluteURL(name, raw string) error {
 	return fmt.Errorf("%s must use https (http only for localhost), got %q", name, raw)
 }
 
-// validateOAuth2InternalAPIConfig checks oauth2.internal_api.token_sha256:
-// empty disables the internal API, anything else must be 64 hex characters.
+// validateOAuth2InternalAPIConfig checks oauth2.internal_api: an empty
+// token_sha256 disables the internal API; otherwise it must be 64 hex
+// characters, client_id a valid HTTP Basic username and audience a non-empty
+// list of non-empty values.
 func validateOAuth2InternalAPIConfig(cfg harukiConfig.Config) error {
-	_, err := oauth2Module.ParseInternalAPIConfig(cfg.OAuth2.InternalAPI.TokenSHA256)
+	_, err := oauth2Module.ParseInternalAPIConfig(internalAPISettings(cfg))
 	return err
+}
+
+// internalAPISettings hands oauth2.internal_api to the OAuth2 module.
+func internalAPISettings(cfg harukiConfig.Config) oauth2Module.InternalAPISettings {
+	internalAPI := cfg.OAuth2.InternalAPI
+	return oauth2Module.InternalAPISettings{
+		TokenSHA256: internalAPI.TokenSHA256,
+		ClientID:    internalAPI.ClientID,
+		Audience:    internalAPI.Audience,
+	}
 }

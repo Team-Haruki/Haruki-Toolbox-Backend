@@ -847,14 +847,26 @@ func liveStationScopeInternalIntrospect(t *testing.T, h *liveHydra) {
 	gotScopes := strings.Fields(stringField(result, "scope"))
 	slices.Sort(gotScopes)
 	wantScopes := slices.Sorted(slices.Values(scopes))
-	if result["active"] != true || result["user_id"] != b.alice.id || result["client_id"] != client.id || !slices.Equal(gotScopes, wantScopes) ||
-		result["device_label"] != label || intField(result, "exp") <= intField(result, "iat") {
+	if result["active"] != true || result["user_id"] != b.alice.id || result["sub"] != b.alice.id || result["client_id"] != client.id || !slices.Equal(gotScopes, wantScopes) ||
+		result["device_label"] != label || intField(result, "exp") <= intField(result, "iat") || result["token_type"] != "Bearer" {
 		t.Errorf("internal introspection = %v", result)
 	}
-	for _, leaked := range []string{"name", "email", "sub", "ext"} {
+	if aud, ok := result["aud"].([]any); !ok || len(aud) != 1 || aud[0] != "station" {
+		t.Errorf("internal introspection aud = %v, want [station]", result["aud"])
+	}
+	for _, leaked := range []string{"name", "email", "ext", "iss", "nbf", "username"} {
 		if _, ok := result[leaked]; ok {
 			t.Errorf("internal introspection leaks %q", leaked)
 		}
+	}
+	// Sekai Station's RFC 7662 request: HTTP Basic station:<internal token>
+	// and token_type_hint=access_token.
+	basicForm := url.Values{"token": {accessToken}, "token_type_hint": {"access_token"}}.Encode()
+	viaBasic := b.request(http.MethodPost, b.baseURL+oauth2Module.InternalIntrospectPath, "application/x-www-form-urlencoded", basicForm,
+		map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte("station:"+b.internal))})
+	expectStatus(t, viaBasic, http.StatusOK)
+	if got := viaBasic.json(t); got["active"] != true || got["sub"] != b.alice.id {
+		t.Errorf("internal introspection with Basic auth = %v", got)
 	}
 
 	revoked := b.userRequest(b.alice, http.MethodDelete, "/api/user/"+b.alice.id+"/oauth2/authorizations/"+url.PathEscape(client.id)+"/consents/"+url.PathEscape(consentRequestID))
@@ -1320,7 +1332,11 @@ func newLiveBackend(t *testing.T, h *liveHydra) *liveBackend {
 	deviceFlow := oauth2Module.NewDeviceFlowConfig(liveDeviceFlowOptions(h, logger))
 	b.internal = "internal-" + hex.EncodeToString(randomBytes(16))
 	sum := sha256.Sum256([]byte(b.internal))
-	internalAPI, err := oauth2Module.ParseInternalAPIConfig(hex.EncodeToString(sum[:]))
+	internalAPI, err := oauth2Module.ParseInternalAPIConfig(oauth2Module.InternalAPISettings{
+		TokenSHA256: hex.EncodeToString(sum[:]),
+		ClientID:    "station",
+		Audience:    []string{"station"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

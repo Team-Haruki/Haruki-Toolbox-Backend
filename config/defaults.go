@@ -22,6 +22,10 @@ func defaultConfig() Config {
 			Provider:                  "hydra",
 			HydraRequestTimeoutSecond: 10,
 			DeviceFlow:                defaultOAuth2DeviceFlowConfig(),
+			InternalAPI: OAuth2InternalAPIConfig{
+				ClientID: DefaultOAuth2InternalAPIClientID,
+				Audience: DefaultOAuth2InternalAPIAudience(),
+			},
 		},
 		UserSystem: UserSystemConfig{
 			AuthProvider:                 "kratos",
@@ -160,6 +164,14 @@ func normalizeConfigDefaults(cfg *Config) error {
 	}
 	if cfg.OAuth2.HydraRequestTimeoutSecond <= 0 {
 		cfg.OAuth2.HydraRequestTimeoutSecond = 10
+	}
+	// Blank values fall back to the defaults; entries are checked by startup
+	// validation, and only when token_sha256 enables the internal API.
+	if strings.TrimSpace(cfg.OAuth2.InternalAPI.ClientID) == "" {
+		cfg.OAuth2.InternalAPI.ClientID = DefaultOAuth2InternalAPIClientID
+	}
+	if len(cfg.OAuth2.InternalAPI.Audience) == 0 {
+		cfg.OAuth2.InternalAPI.Audience = DefaultOAuth2InternalAPIAudience()
 	}
 	if strings.TrimSpace(cfg.Subscription.UserAgent) == "" {
 		cfg.Subscription.UserAgent = "Haruki-Toolbox-Backend"

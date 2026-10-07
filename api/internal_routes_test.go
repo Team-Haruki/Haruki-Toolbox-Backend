@@ -22,7 +22,11 @@ const testInternalAPIToken = "internal-api-route-test-token"
 func testInternalAPIConfig(t *testing.T) oauth2Module.InternalAPIConfig {
 	t.Helper()
 	sum := sha256.Sum256([]byte(testInternalAPIToken))
-	cfg, err := oauth2Module.ParseInternalAPIConfig(hex.EncodeToString(sum[:]))
+	cfg, err := oauth2Module.ParseInternalAPIConfig(oauth2Module.InternalAPISettings{
+		TokenSHA256: hex.EncodeToString(sum[:]),
+		ClientID:    "station",
+		Audience:    []string{"station"},
+	})
 	if err != nil {
 		t.Fatalf("ParseInternalAPIConfig: %v", err)
 	}

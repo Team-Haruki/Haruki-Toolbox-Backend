@@ -4,14 +4,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	json "encoding/json/v2"
 	"fmt"
 	"mime"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	platformAuthHeader "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/authheader"
@@ -32,17 +35,40 @@ const InternalIntrospectPath = "/internal/oauth2/introspect"
 // access tokens are far shorter.
 const internalIntrospectMaxTokenLength = 4096
 
+// internalIntrospectTokenType is the RFC 7662 token_type of every active
+// answer: only access tokens are ever active, and Hydra issues them as
+// RFC 6750 bearer tokens.
+const internalIntrospectTokenType = "Bearer"
+
+// InternalAPISettings is oauth2.internal_api as read from config, after the
+// config package has filled in the defaults of client_id and audience.
+type InternalAPISettings struct {
+	// TokenSHA256 is the hex SHA-256 of the internal token; empty disables
+	// the internal API.
+	TokenSHA256 string
+	// ClientID is the only HTTP Basic username accepted.
+	ClientID string
+	// Audience is returned as "aud" in every active answer.
+	Audience []string
+}
+
 // InternalAPIConfig is the immutable configuration of the internal API. Its
 // zero value is disabled: the route is not registered.
 type InternalAPIConfig struct {
-	tokenSHA256 []byte
+	tokenSHA256    []byte
+	clientIDSHA256 []byte
+	audience       []string
 }
 
-// ParseInternalAPIConfig reads oauth2.internal_api.token_sha256: empty (after
-// trimming) disables the internal API, otherwise it must be exactly 64 hex
-// characters in either case.
-func ParseInternalAPIConfig(tokenSHA256Hex string) (InternalAPIConfig, error) {
-	value := strings.TrimSpace(tokenSHA256Hex)
+// ParseInternalAPIConfig validates oauth2.internal_api. An empty
+// token_sha256 (after trimming) disables the internal API and nothing else is
+// checked. Otherwise token_sha256 must be exactly 64 hex characters in either
+// case, client_id must be a non-empty HTTP Basic user-id (no colon, no
+// control characters, no surrounding whitespace) and audience must hold at
+// least one entry, none of them empty or padded with whitespace. Errors name
+// the key but never repeat its value.
+func ParseInternalAPIConfig(settings InternalAPISettings) (InternalAPIConfig, error) {
+	value := strings.TrimSpace(settings.TokenSHA256)
 	if value == "" {
 		return InternalAPIConfig{}, nil
 	}
@@ -53,7 +79,30 @@ func ParseInternalAPIConfig(tokenSHA256Hex string) (InternalAPIConfig, error) {
 	if err != nil {
 		return InternalAPIConfig{}, fmt.Errorf("oauth2.internal_api.token_sha256 must be hex")
 	}
-	return InternalAPIConfig{tokenSHA256: sum}, nil
+	if !validInternalAPIConfigString(settings.ClientID) || strings.Contains(settings.ClientID, ":") {
+		return InternalAPIConfig{}, fmt.Errorf("oauth2.internal_api.client_id must be non-empty, without a colon, control characters or surrounding whitespace")
+	}
+	if len(settings.Audience) == 0 {
+		return InternalAPIConfig{}, fmt.Errorf("oauth2.internal_api.audience must list at least one value")
+	}
+	for _, entry := range settings.Audience {
+		if !validInternalAPIConfigString(entry) {
+			return InternalAPIConfig{}, fmt.Errorf("oauth2.internal_api.audience entries must be non-empty, without control characters or surrounding whitespace")
+		}
+	}
+	clientIDSum := sha256.Sum256([]byte(settings.ClientID))
+	return InternalAPIConfig{
+		tokenSHA256:    sum,
+		clientIDSHA256: clientIDSum[:],
+		audience:       slices.Clone(settings.Audience),
+	}, nil
+}
+
+func validInternalAPIConfigString(value string) bool {
+	if value == "" || value != strings.TrimSpace(value) {
+		return false
+	}
+	return !strings.ContainsFunc(value, unicode.IsControl)
 }
 
 // Enabled reports whether the internal API is configured.
@@ -61,19 +110,87 @@ func (c InternalAPIConfig) Enabled() bool {
 	return len(c.tokenSHA256) == sha256.Size
 }
 
-// authorize checks "Authorization: Bearer <internal token>" against the
-// configured hash in constant time. It returns "" on success, otherwise the
-// logged reason ("missing" or "mismatch").
-func (c InternalAPIConfig) authorize(header string) string {
-	token, ok := platformAuthHeader.ExtractBearerToken(header)
-	if !ok {
+// authorize checks the caller's credentials against the configured hash in
+// constant time. Exactly one Authorization header is accepted, either
+// "Bearer <internal token>" or RFC 7617 "Basic base64(client_id:internal
+// token)" as an RFC 7662 client sends it (RFC 6749 §2.3.1). It returns "" on
+// success, otherwise the logged reason: "missing", "multiple" (more than one
+// Authorization header, e.g. Bearer and Basic together), "unsupported_scheme",
+// "malformed", "client_mismatch" or "mismatch". No reason carries a
+// credential.
+func (c InternalAPIConfig) authorize(headers [][]byte) string {
+	switch len(headers) {
+	case 0:
+		return "missing"
+	case 1:
+	default:
+		return "multiple"
+	}
+	header := string(headers[0])
+	fields := strings.Fields(header)
+	if len(fields) == 0 {
 		return "missing"
 	}
-	sum := sha256.Sum256([]byte(token))
-	if !c.Enabled() || subtle.ConstantTimeCompare(sum[:], c.tokenSHA256) != 1 {
-		return "mismatch"
+	switch scheme := fields[0]; {
+	case strings.EqualFold(scheme, "Bearer"):
+		token, ok := platformAuthHeader.ExtractBearerToken(header)
+		if !ok {
+			return "malformed"
+		}
+		if !c.Enabled() || !c.secretMatches(token) {
+			return "mismatch"
+		}
+		return ""
+	case strings.EqualFold(scheme, "Basic"):
+		if len(fields) != 2 {
+			return "malformed"
+		}
+		clientID, secret, ok := parseInternalBasicCredentials(fields[1])
+		if !ok {
+			return "malformed"
+		}
+		if !c.Enabled() {
+			return "mismatch"
+		}
+		// Both comparisons always run, so the timing does not reveal which
+		// half was wrong.
+		clientSum := sha256.Sum256([]byte(clientID))
+		clientOK := subtle.ConstantTimeCompare(clientSum[:], c.clientIDSHA256) == 1
+		secretOK := c.secretMatches(secret)
+		switch {
+		case !clientOK:
+			return "client_mismatch"
+		case !secretOK:
+			return "mismatch"
+		}
+		return ""
+	default:
+		return "unsupported_scheme"
 	}
-	return ""
+}
+
+// secretMatches compares the SHA-256 of secret with the configured hash in
+// constant time.
+func (c InternalAPIConfig) secretMatches(secret string) bool {
+	sum := sha256.Sum256([]byte(secret))
+	return subtle.ConstantTimeCompare(sum[:], c.tokenSHA256) == 1
+}
+
+// parseInternalBasicCredentials decodes the token68 of a Basic header:
+// standard base64 of "user-id:password", both halves non-empty. Like
+// net/http's Request.BasicAuth (which Station's client mirrors with
+// SetBasicAuth), the halves are taken literally, not form-urldecoded; the
+// configured client_id and the hex internal token are identical either way.
+func parseInternalBasicCredentials(credentials string) (string, string, bool) {
+	decoded, err := base64.StdEncoding.DecodeString(credentials)
+	if err != nil {
+		return "", "", false
+	}
+	clientID, secret, ok := strings.Cut(string(decoded), ":")
+	if !ok || clientID == "" || secret == "" {
+		return "", "", false
+	}
+	return clientID, secret, true
 }
 
 // InternalRouteOptions configures RegisterOAuth2InternalRoutes.
@@ -121,16 +238,24 @@ func cachedClientActiveChecker(hydraConfig *harukiOAuth2.HydraConfig) harukiOAut
 	}
 }
 
-// internalIntrospectionResponse is the active answer. It never carries a
-// username, email or raw Hydra field.
+// internalIntrospectionResponse is the active answer, shaped for an RFC 7662
+// client. It never carries a username, email or raw Hydra field: sub is the
+// local users.id (the same value as user_id), not Hydra's subject, and aud is
+// the configured oauth2.internal_api.audience. The endpoint vouches for the
+// token to its single internal caller, so aud names that caller rather than
+// echoing the audience Hydra granted (usually empty). iss is omitted: an
+// RFC 7662 client checks it only when present.
 type internalIntrospectionResponse struct {
-	Active      bool   `json:"active"`
-	UserID      string `json:"user_id"`
-	ClientID    string `json:"client_id"`
-	Scope       string `json:"scope"`
-	Exp         int64  `json:"exp"`
-	Iat         int64  `json:"iat"`
-	DeviceLabel string `json:"device_label,omitempty"`
+	Active      bool     `json:"active"`
+	Sub         string   `json:"sub"`
+	UserID      string   `json:"user_id"`
+	ClientID    string   `json:"client_id"`
+	Aud         []string `json:"aud"`
+	Scope       string   `json:"scope"`
+	TokenType   string   `json:"token_type"`
+	Exp         int64    `json:"exp"`
+	Iat         int64    `json:"iat"`
+	DeviceLabel string   `json:"device_label,omitempty"`
 }
 
 func handleInternalOAuth2Introspect(hydraConfig *harukiOAuth2.HydraConfig, cfg InternalAPIConfig, userDB func() *postgresql.Client, clientActive harukiOAuth2.ClientActiveChecker, logger *harukiLogger.Logger) fiber.Handler {
@@ -139,7 +264,7 @@ func handleInternalOAuth2Introspect(hydraConfig *harukiOAuth2.HydraConfig, cfg I
 		c.Set(fiber.HeaderCacheControl, "no-store")
 		c.Set(fiber.HeaderPragma, "no-cache")
 
-		if reason := cfg.authorize(c.Get(fiber.HeaderAuthorization)); reason != "" {
+		if reason := cfg.authorize(c.Request().Header.PeekAll(fiber.HeaderAuthorization)); reason != "" {
 			logger.Warnf("oauth2_internal event=unauthorized path=%s reason=%s ip=%s", InternalIntrospectPath, reason, strconv.Quote(c.IP()))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 		}
@@ -159,9 +284,12 @@ func handleInternalOAuth2Introspect(hydraConfig *harukiOAuth2.HydraConfig, cfg I
 		}
 		return c.JSON(internalIntrospectionResponse{
 			Active:      true,
+			Sub:         result.UserID,
 			UserID:      result.UserID,
 			ClientID:    result.ClientID,
+			Aud:         cfg.audience,
 			Scope:       strings.Join(result.Scopes, " "),
+			TokenType:   internalIntrospectTokenType,
 			Exp:         result.Exp,
 			Iat:         result.Iat,
 			DeviceLabel: result.DeviceLabel,
@@ -171,7 +299,10 @@ func handleInternalOAuth2Introspect(hydraConfig *harukiOAuth2.HydraConfig, cfg I
 
 // parseInternalIntrospectToken reads the token from an
 // application/x-www-form-urlencoded body (token=…, RFC 7662 style) or a JSON
-// body {"token":"…"}. Exactly one non-empty token is required.
+// body {"token":"…"}. Exactly one non-empty token is required. token_type_hint
+// (and any other parameter) is ignored: RFC 7662 §2.1 lets the server ignore
+// the hint and requires it to search every token type anyway, and the answer
+// does not depend on it, because only an access token can ever be active.
 func parseInternalIntrospectToken(c fiber.Ctx) (string, bool) {
 	mediaType, _, err := mime.ParseMediaType(c.Get(fiber.HeaderContentType))
 	if err != nil {

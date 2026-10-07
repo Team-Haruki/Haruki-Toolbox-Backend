@@ -299,9 +299,9 @@ func newOAuth2DeviceFlowConfig(cfg harukiConfig.Config, logger *harukiLogger.Log
 }
 
 // newOAuth2InternalAPIConfig turns oauth2.internal_api into the module's
-// configuration. validateOAuth2InternalAPIConfig has already refused a
-// malformed hash, so the error is always nil here.
+// configuration. validateOAuth2InternalAPIConfig has already refused an
+// invalid section, so the error is always nil here.
 func newOAuth2InternalAPIConfig(cfg harukiConfig.Config) oauth2Module.InternalAPIConfig {
-	internalAPI, _ := oauth2Module.ParseInternalAPIConfig(cfg.OAuth2.InternalAPI.TokenSHA256)
+	internalAPI, _ := oauth2Module.ParseInternalAPIConfig(internalAPISettings(cfg))
 	return internalAPI
 }

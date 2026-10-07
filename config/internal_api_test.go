@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -55,4 +56,45 @@ func TestExampleConfigInternalAPIDisabled(t *testing.T) {
 	if cfg.OAuth2.InternalAPI.TokenSHA256 != "" {
 		t.Fatalf("example token_sha256 = %q, want empty", cfg.OAuth2.InternalAPI.TokenSHA256)
 	}
+	if cfg.OAuth2.InternalAPI.ClientID != "station" || !slices.Equal(cfg.OAuth2.InternalAPI.Audience, []string{"station"}) {
+		t.Fatalf("example client_id %q audience %q, want station [station]", cfg.OAuth2.InternalAPI.ClientID, cfg.OAuth2.InternalAPI.Audience)
+	}
+}
+
+func TestOAuth2InternalAPICallerDefaultsAndEnv(t *testing.T) {
+	tmp := t.TempDir()
+	load := func(content string) Config {
+		t.Helper()
+		path := filepath.Join(tmp, "cfg.yaml")
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load returned error: %v", err)
+		}
+		return cfg
+	}
+	assertCaller := func(cfg Config, clientID string, audience []string) {
+		t.Helper()
+		if cfg.OAuth2.InternalAPI.ClientID != clientID || !slices.Equal(cfg.OAuth2.InternalAPI.Audience, audience) {
+			t.Fatalf("client_id %q audience %q, want %q %q", cfg.OAuth2.InternalAPI.ClientID, cfg.OAuth2.InternalAPI.Audience, clientID, audience)
+		}
+	}
+
+	assertCaller(load("{}\n"), "station", []string{"station"})
+	// Blank values fall back to the defaults.
+	assertCaller(load("oauth2:\n  internal_api:\n    client_id: \"  \"\n    audience: []\n"), "station", []string{"station"})
+	assertCaller(load("oauth2:\n  internal_api:\n    client_id: station-staging\n    audience: [station, station-staging]\n"), "station-staging", []string{"station", "station-staging"})
+
+	t.Setenv("OAUTH2_INTERNAL_API_CLIENT_ID", "station-env")
+	t.Setenv("OAUTH2_INTERNAL_API_AUDIENCE", " station-a , ,station-b ")
+	assertCaller(load("oauth2:\n  internal_api:\n    client_id: station-staging\n"), "station-env", []string{"station-a", "station-b"})
+
+	// The defaults are fresh slices: one config cannot change another's.
+	first := load("{}\n")
+	first.OAuth2.InternalAPI.Audience[0] = "mutated"
+	t.Setenv("OAUTH2_INTERNAL_API_CLIENT_ID", "")
+	t.Setenv("OAUTH2_INTERNAL_API_AUDIENCE", "")
+	assertCaller(load("{}\n"), "station", []string{"station"})
 }

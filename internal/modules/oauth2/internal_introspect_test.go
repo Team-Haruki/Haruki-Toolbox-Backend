@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -29,6 +30,8 @@ import (
 
 const (
 	testInternalToken        = "internal-api-token-0123456789abcdef"
+	testInternalClientID     = "station"
+	testInternalAudience     = "station"
 	testIntrospectClientID   = "haruki-client"
 	testIntrospectIdentityID = "kratos-identity-1"
 	testIntrospectUserID     = "12345"
@@ -163,8 +166,7 @@ func newIntrospectTestEnv(t *testing.T) *introspectTestEnv {
 	entClient.User.Create().SetID("legacy-user").SetName("Legacy").SetEmail("legacy@example.test").SaveX(ctx)
 	entClient.User.Create().SetID("banned-user").SetName("Banned").SetEmail("banned@example.test").SetBanned(true).SaveX(ctx)
 
-	sum := sha256.Sum256([]byte(testInternalToken))
-	cfg, err := ParseInternalAPIConfig(hex.EncodeToString(sum[:]))
+	cfg, err := ParseInternalAPIConfig(testInternalAPISettings())
 	if err != nil {
 		t.Fatalf("ParseInternalAPIConfig: %v", err)
 	}
@@ -177,6 +179,22 @@ func newIntrospectTestEnv(t *testing.T) *introspectTestEnv {
 		Logger:      harukiLogger.NewLogger("OAuth2InternalTest", "DEBUG", logs),
 	})
 	return &introspectTestEnv{t: t, hydra: hydra, app: app, logs: logs}
+}
+
+// testInternalAPISettings is oauth2.internal_api as the config package
+// defaults it, with testInternalToken's hash.
+func testInternalAPISettings() InternalAPISettings {
+	sum := sha256.Sum256([]byte(testInternalToken))
+	return InternalAPISettings{
+		TokenSHA256: hex.EncodeToString(sum[:]),
+		ClientID:    testInternalClientID,
+		Audience:    []string{testInternalAudience},
+	}
+}
+
+// setBasicAuthValue is the Authorization value net/http's SetBasicAuth produces.
+func setBasicAuthValue(username, password string) string {
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 }
 
 type introspectTestResponse struct {
@@ -196,9 +214,19 @@ func (r introspectTestResponse) json(t *testing.T) map[string]any {
 
 func (e *introspectTestEnv) post(authorization, contentType, body string) introspectTestResponse {
 	e.t.Helper()
-	req := httptest.NewRequest(http.MethodPost, InternalIntrospectPath, strings.NewReader(body))
+	var authorizations []string
 	if authorization != "" {
-		req.Header.Set("Authorization", authorization)
+		authorizations = []string{authorization}
+	}
+	return e.postWithAuthorizations(authorizations, contentType, body)
+}
+
+// postWithAuthorizations sends one Authorization header line per entry.
+func (e *introspectTestEnv) postWithAuthorizations(authorizations []string, contentType, body string) introspectTestResponse {
+	e.t.Helper()
+	req := httptest.NewRequest(http.MethodPost, InternalIntrospectPath, strings.NewReader(body))
+	for _, authorization := range authorizations {
+		req.Header.Add("Authorization", authorization)
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
@@ -229,18 +257,45 @@ func (e *introspectTestEnv) assertInactive(resp introspectTestResponse) {
 
 func TestInternalIntrospectRequiresToken(t *testing.T) {
 	env := newIntrospectTestEnv(t)
-	cases := map[string]string{
-		"missing":        "",
-		"wrong token":    "Bearer wrong-internal-token-value",
-		"wrong scheme":   "Basic " + testInternalToken,
-		"token as is":    testInternalToken,
-		"token prefixed": "Bearer " + testInternalToken + "x",
+	encode := func(raw string) string { return base64.StdEncoding.EncodeToString([]byte(raw)) }
+	cases := map[string]struct {
+		authorizations []string
+		reason         string
+	}{
+		"missing":             {nil, "missing"},
+		"blank":               {[]string{"   "}, "missing"},
+		"wrong token":         {[]string{"Bearer wrong-internal-token-value"}, "mismatch"},
+		"token as is":         {[]string{testInternalToken}, "unsupported_scheme"},
+		"token prefixed":      {[]string{"Bearer " + testInternalToken + "x"}, "mismatch"},
+		"bearer two parts":    {[]string{"Bearer " + testInternalToken + " extra"}, "malformed"},
+		"other scheme":        {[]string{"Digest " + encode(testInternalClientID+":"+testInternalToken)}, "unsupported_scheme"},
+		"basic wrong client":  {[]string{setBasicAuthValue("haruki-client", testInternalToken)}, "client_mismatch"},
+		"basic client case":   {[]string{setBasicAuthValue("Station", testInternalToken)}, "client_mismatch"},
+		"basic wrong secret":  {[]string{setBasicAuthValue(testInternalClientID, "wrong-internal-token-value")}, "mismatch"},
+		"basic both wrong":    {[]string{setBasicAuthValue("haruki-client", "wrong-internal-token-value")}, "client_mismatch"},
+		"basic raw token":     {[]string{"Basic " + testInternalToken}, "malformed"},
+		"basic no colon":      {[]string{"Basic " + encode(testInternalToken)}, "malformed"},
+		"basic empty client":  {[]string{"Basic " + encode(":"+testInternalToken)}, "malformed"},
+		"basic empty secret":  {[]string{"Basic " + encode(testInternalClientID+":")}, "malformed"},
+		"basic no token68":    {[]string{"Basic"}, "malformed"},
+		"basic two parts":     {[]string{setBasicAuthValue(testInternalClientID, testInternalToken) + " extra"}, "malformed"},
+		"basic raw url safe":  {[]string{"Basic " + base64.RawURLEncoding.EncodeToString([]byte(testInternalClientID+":"+testInternalToken+"?>"))}, "malformed"},
+		"bearer and basic":    {[]string{"Bearer " + testInternalToken, setBasicAuthValue(testInternalClientID, testInternalToken)}, "multiple"},
+		"basic and bearer":    {[]string{setBasicAuthValue(testInternalClientID, testInternalToken), "Bearer " + testInternalToken}, "multiple"},
+		"two valid bearers":   {[]string{"Bearer " + testInternalToken, "Bearer " + testInternalToken}, "multiple"},
+		"bearer comma basic":  {[]string{"Bearer " + testInternalToken + ", " + setBasicAuthValue(testInternalClientID, testInternalToken)}, "malformed"},
+		"basic comma bearer":  {[]string{setBasicAuthValue(testInternalClientID, testInternalToken) + ", Bearer " + testInternalToken}, "malformed"},
+		"basic with password": {[]string{setBasicAuthValue(testInternalClientID, testInternalToken+":suffix")}, "mismatch"},
 	}
-	for name, authorization := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			resp := env.post(authorization, "application/x-www-form-urlencoded", "token="+testActiveAccessToken)
+			before := env.logs.String()
+			resp := env.postWithAuthorizations(tc.authorizations, "application/x-www-form-urlencoded", "token="+testActiveAccessToken+"&token_type_hint=access_token")
 			if resp.status != http.StatusUnauthorized || strings.TrimSpace(string(resp.body)) != `{"error":"unauthorized"}` {
 				t.Fatalf("status %d body %s, want 401 {\"error\":\"unauthorized\"}", resp.status, resp.body)
+			}
+			if logged := strings.TrimPrefix(env.logs.String(), before); !strings.Contains(logged, "reason="+tc.reason+" ") {
+				t.Fatalf("logged %q, want reason=%s", logged, tc.reason)
 			}
 		})
 	}
@@ -251,10 +306,50 @@ func TestInternalIntrospectRequiresToken(t *testing.T) {
 	if strings.Count(logs, "oauth2_internal event=unauthorized") != len(cases) || !strings.Contains(logs, "WARN") {
 		t.Fatalf("expected one WARN per unauthorized call, logs:\n%s", logs)
 	}
-	for _, secret := range []string{testInternalToken, "wrong-internal-token-value", testActiveAccessToken} {
+	secrets := []string{testInternalToken, "wrong-internal-token-value", testActiveAccessToken, "haruki-client", encode(testInternalClientID + ":" + testInternalToken)}
+	for _, secret := range secrets {
 		if strings.Contains(logs, secret) {
-			t.Fatalf("logs contain a token:\n%s", logs)
+			t.Fatalf("logs contain a credential:\n%s", logs)
 		}
+	}
+}
+
+// Basic auth is accepted on its own, in any scheme case, with a form body
+// carrying token_type_hint (whatever its value) or a JSON body.
+func TestInternalIntrospectAcceptsBasicAuth(t *testing.T) {
+	env := newIntrospectTestEnv(t)
+	basic := setBasicAuthValue(testInternalClientID, testInternalToken)
+	encoded := strings.TrimPrefix(basic, "Basic ")
+	cases := []struct{ name, authorization, contentType, body string }{
+		{"form with hint", basic, "application/x-www-form-urlencoded", "token=" + testActiveAccessToken + "&token_type_hint=access_token"},
+		{"form hint first", basic, "application/x-www-form-urlencoded; charset=utf-8", "token_type_hint=access_token&token=" + testActiveAccessToken},
+		{"form refresh hint", basic, "application/x-www-form-urlencoded", "token=" + testActiveAccessToken + "&token_type_hint=refresh_token"},
+		{"form unknown hint", basic, "application/x-www-form-urlencoded", "token=" + testActiveAccessToken + "&token_type_hint=mac"},
+		{"form without hint", basic, "application/x-www-form-urlencoded", "token=" + testActiveAccessToken},
+		{"json with hint", basic, "application/json", `{"token":"` + testActiveAccessToken + `","token_type_hint":"access_token"}`},
+		{"lowercase scheme", "basic " + encoded, "application/x-www-form-urlencoded", "token=" + testActiveAccessToken},
+		{"padded", "  Basic\t" + encoded + "  ", "application/x-www-form-urlencoded", "token=" + testActiveAccessToken},
+		{"bearer still works", "Bearer " + testInternalToken, "application/x-www-form-urlencoded", "token=" + testActiveAccessToken + "&token_type_hint=access_token"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := env.post(tc.authorization, tc.contentType, tc.body)
+			if resp.status != http.StatusOK {
+				t.Fatalf("status %d body %s", resp.status, resp.body)
+			}
+			got := resp.json(t)
+			if got["active"] != true || got["sub"] != testIntrospectUserID {
+				t.Fatalf("response %s, want an active answer for %s", resp.body, testIntrospectUserID)
+			}
+		})
+	}
+	// A refresh-token hint never makes a refresh token active.
+	refresh := activeTokenBody(testIntrospectIdentityID, testIntrospectClientID, "station:room:write")
+	refresh["token_use"] = "refresh_token"
+	env.hydra.setToken("ory_rt_refreshToken0123456789", refresh)
+	env.assertInactive(env.post(basic, "application/x-www-form-urlencoded", "token=ory_rt_refreshToken0123456789&token_type_hint=refresh_token"))
+	if logs := env.logs.String(); strings.Contains(logs, "event=unauthorized") || strings.Contains(logs, encoded) {
+		t.Fatalf("logs:\n%s", logs)
 	}
 }
 
@@ -320,14 +415,17 @@ func TestInternalIntrospectReturnsUserAndScopes(t *testing.T) {
 			got := resp.json(t)
 			want := map[string]any{
 				"active":       true,
+				"sub":          testIntrospectUserID,
 				"user_id":      testIntrospectUserID,
 				"client_id":    testIntrospectClientID,
+				"aud":          []any{testInternalAudience},
 				"scope":        "user:read offline_access station:room:write",
+				"token_type":   "Bearer",
 				"exp":          float64(body["exp"].(int64)),
 				"iat":          float64(body["iat"].(int64)),
 				"device_label": "Haruki-Client @ home-server",
 			}
-			if !maps.Equal(got, want) {
+			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("response = %v\nwant %v", got, want)
 			}
 		})
@@ -335,8 +433,8 @@ func TestInternalIntrospectReturnsUserAndScopes(t *testing.T) {
 
 	// A legacy token whose subject is the local users.id still resolves.
 	env.hydra.setToken("ory_at_legacySubject0123456789", activeTokenBody("legacy-user", testIntrospectClientID, "user:read"))
-	if got := env.introspect("ory_at_legacySubject0123456789").json(t)["user_id"]; got != "legacy-user" {
-		t.Fatalf("legacy subject user_id = %v", got)
+	if got := env.introspect("ory_at_legacySubject0123456789").json(t); got["user_id"] != "legacy-user" || got["sub"] != "legacy-user" {
+		t.Fatalf("legacy subject user_id = %v, sub = %v", got["user_id"], got["sub"])
 	}
 
 	// Nothing is cached: a revocation in Hydra applies to the next call.
@@ -358,13 +456,18 @@ func TestInternalIntrospectNeverLeaksUserFields(t *testing.T) {
 	for _, token := range []string{testActiveAccessToken, "ory_at_browserToken0123456789"} {
 		resp := env.introspect(token)
 		got := resp.json(t)
-		allowed := []string{"active", "user_id", "client_id", "scope", "exp", "iat", "device_label"}
+		allowed := []string{"active", "sub", "user_id", "client_id", "aud", "scope", "token_type", "exp", "iat", "device_label"}
 		for key := range got {
 			if !slices.Contains(allowed, key) {
 				t.Fatalf("response carries %q: %s", key, resp.body)
 			}
 		}
-		for _, leak := range []string{testIntrospectUserName, testIntrospectUserEmail, testIntrospectIdentityID, "issuer.example.com", "token_use", "username", "sub"} {
+		// sub is the local users.id, never Hydra's subject (the Kratos
+		// identity ID); iss is never returned.
+		if got["sub"] != got["user_id"] {
+			t.Fatalf("sub %v differs from user_id %v", got["sub"], got["user_id"])
+		}
+		for _, leak := range []string{testIntrospectUserName, testIntrospectUserEmail, testIntrospectIdentityID, "issuer.example.com", "token_use", "username", `"iss"`, "nbf"} {
 			if strings.Contains(string(resp.body), leak) {
 				t.Fatalf("response leaks %q: %s", leak, resp.body)
 			}
@@ -416,31 +519,78 @@ func TestInternalIntrospectHydraFailureIsUnavailable(t *testing.T) {
 }
 
 func TestParseInternalAPIConfig(t *testing.T) {
-	sum := sha256.Sum256([]byte(testInternalToken))
-	lower := hex.EncodeToString(sum[:])
+	lower := testInternalAPISettings().TokenSHA256
+	withHash := func(value string) InternalAPISettings {
+		settings := testInternalAPISettings()
+		settings.TokenSHA256 = value
+		return settings
+	}
+	authorization := func(value string) [][]byte { return [][]byte{[]byte(value)} }
 	for _, value := range []string{lower, strings.ToUpper(lower), "  " + lower + "\n"} {
-		cfg, err := ParseInternalAPIConfig(value)
+		cfg, err := ParseInternalAPIConfig(withHash(value))
 		if err != nil || !cfg.Enabled() {
 			t.Fatalf("ParseInternalAPIConfig(%q) = %v, %v", value, cfg.Enabled(), err)
 		}
-		if cfg.authorize("Bearer "+testInternalToken) != "" {
+		if cfg.authorize(authorization("Bearer "+testInternalToken)) != "" {
 			t.Fatalf("token does not match its own hash %q", value)
+		}
+		if cfg.authorize(authorization(setBasicAuthValue(testInternalClientID, testInternalToken))) != "" {
+			t.Fatalf("Basic credentials do not match hash %q", value)
 		}
 	}
 	for _, value := range []string{"", "   "} {
-		cfg, err := ParseInternalAPIConfig(value)
+		// A disabled API checks nothing else.
+		cfg, err := ParseInternalAPIConfig(InternalAPISettings{TokenSHA256: value, ClientID: "bad:id"})
 		if err != nil || cfg.Enabled() {
 			t.Fatalf("ParseInternalAPIConfig(%q) = %v, %v; want disabled", value, cfg.Enabled(), err)
 		}
 	}
 	for _, value := range []string{lower[:63], lower + "0", "g" + lower[1:], testInternalToken} {
-		if _, err := ParseInternalAPIConfig(value); err == nil {
-			t.Fatalf("ParseInternalAPIConfig(%q) accepted", value)
+		_, err := ParseInternalAPIConfig(withHash(value))
+		if err == nil || !strings.Contains(err.Error(), "token_sha256") {
+			t.Fatalf("ParseInternalAPIConfig(%q) err = %v", value, err)
 		}
 	}
+	for _, clientID := range []string{"", " ", "station ", " station", "sta:tion", "sta\ntion"} {
+		settings := testInternalAPISettings()
+		settings.ClientID = clientID
+		_, err := ParseInternalAPIConfig(settings)
+		if err == nil || !strings.Contains(err.Error(), "oauth2.internal_api.client_id") {
+			t.Fatalf("client_id %q: err = %v", clientID, err)
+		}
+	}
+	for name, audience := range map[string][]string{
+		"nil":       nil,
+		"empty":     {},
+		"blank":     {""},
+		"spaces":    {"  "},
+		"padded":    {"station "},
+		"one blank": {"station", ""},
+		"control":   {"sta\ttion"},
+	} {
+		settings := testInternalAPISettings()
+		settings.Audience = audience
+		_, err := ParseInternalAPIConfig(settings)
+		if err == nil || !strings.Contains(err.Error(), "oauth2.internal_api.audience") {
+			t.Fatalf("audience %s %q: err = %v", name, audience, err)
+		}
+	}
+	// The audience is copied: later changes to the settings do not leak in.
+	settings := testInternalAPISettings()
+	settings.Audience = []string{"station", "station-staging"}
+	cfg, err := ParseInternalAPIConfig(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Audience[0] = "mutated"
+	if !slices.Equal(cfg.audience, []string{"station", "station-staging"}) {
+		t.Fatalf("audience = %q", cfg.audience)
+	}
 	// The zero value never authorizes, not even an empty-string token.
-	if (InternalAPIConfig{}).authorize("Bearer x") == "" {
-		t.Fatal("zero config authorized a token")
+	for _, header := range []string{"Bearer x", setBasicAuthValue("x", "y"), setBasicAuthValue(testInternalClientID, testInternalToken)} {
+		if (InternalAPIConfig{}).authorize(authorization(header)) == "" {
+			t.Fatalf("zero config authorized %q", header)
+		}
 	}
 }
 
