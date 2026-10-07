@@ -73,20 +73,163 @@ func TestTextRedactsSecretPathSegments(t *testing.T) {
 func TestTextRedactsSensitiveQueryParams(t *testing.T) {
 	t.Parallel()
 
-	in := "https://h.example/cb?state=ok&code=abc123&access_token=tok&Password=pw&inherit_id=id1&inheritPassword=p2&key=upload_time&client_secret=cs"
-	want := "https://h.example/cb?state=ok&code=<redacted>&access_token=<redacted>&Password=<redacted>&inherit_id=<redacted>&inheritPassword=<redacted>&key=upload_time&client_secret=<redacted>"
-	if got := Text(in); got != want {
-		t.Fatalf("Text()\n got  %q\n want %q", got, want)
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "authorization code callback and other credentials",
+			in:   "https://h.example/cb?state=ok&code=abc123&access_token=tok&Password=pw&inherit_id=id1&inheritPassword=p2&key=upload_time&client_secret=cs",
+			want: "https://h.example/cb?state=ok&code=<redacted>&access_token=<redacted>&Password=<redacted>&inherit_id=<redacted>&inheritPassword=<redacted>&key=upload_time&client_secret=<redacted>",
+		},
+		{
+			name: "device verification page user_code",
+			in:   "GET /device?user_code=BCDFGHJK",
+			want: "GET /device?user_code=<redacted>",
+		},
+		{
+			name: "user code spellings",
+			in:   "/api/oauth2/device/lookup?client_id=bot&user-code=BCDF-GHJK&usercode=MNPQRSTV&userCode=WXZBCDFG&state=keep",
+			want: "/api/oauth2/device/lookup?client_id=bot&user-code=<redacted>&usercode=<redacted>&userCode=<redacted>&state=keep",
+		},
+		{
+			name: "device_code in a token request form",
+			in:   "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=ory_dc_x.y&client_id=bot",
+			want: "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=<redacted>&client_id=bot",
+		},
+		{
+			name: "device code spellings",
+			in:   "/poll?device-code=abc&deviceCode=def&DEVICE_CODE=ghi&interval=5",
+			want: "/poll?device-code=<redacted>&deviceCode=<redacted>&DEVICE_CODE=<redacted>&interval=5",
+		},
+		{
+			name: "device_challenge keeps the challenge rule",
+			in:   "/oauth2/device/verify?device_challenge=abc123&state=keep",
+			want: "/oauth2/device/verify?device_challenge=<redacted>&state=keep",
+		},
+		{
+			name: "verification_uri_complete inside JSON",
+			in:   `{"verification_uri_complete":"https://toolbox.example/device?user_code=BCDF-GHJK","expires_in":600}`,
+			want: `{"verification_uri_complete":"https://toolbox.example/device?user_code=<redacted>","expires_in":600}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Text(tc.in); got != tc.want {
+				t.Fatalf("Text(%q)\n got  %q\n want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
 func TestTextRedactsSensitiveJSONFields(t *testing.T) {
 	t.Parallel()
 
-	in := `{"inherit_id":"id\"1","inherit_password":"pw","server":"jp"}`
-	want := `{"inherit_id":"<redacted>","inherit_password":"<redacted>","server":"jp"}`
-	if got := Text(in); got != want {
-		t.Fatalf("Text()\n got  %q\n want %q", got, want)
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "inherit credentials",
+			in:   `{"inherit_id":"id\"1","inherit_password":"pw","server":"jp"}`,
+			want: `{"inherit_id":"<redacted>","inherit_password":"<redacted>","server":"jp"}`,
+		},
+		{
+			name: "device flow browser body in camelCase",
+			in:   `{"flowHandle":"dfh_abc","userCode":"BCDF-GHJK","deviceCode":"hdc_abc","label":"keep"}`,
+			want: `{"flowHandle":"<redacted>","userCode":"<redacted>","deviceCode":"<redacted>","label":"keep"}`,
+		},
+		{
+			name: "Hydra device authorization response in snake_case",
+			in:   `{"device_code":"ory_dc_abc.def","user_code":"BCDFGHJK","expires_in":600,"interval":5}`,
+			want: `{"device_code":"<redacted>","user_code":"<redacted>","expires_in":600,"interval":5}`,
+		},
+		{
+			name: "flow_handle with spaces around the colon",
+			in:   `{"flow_handle" : "dfh_abc", "state": "claimed"}`,
+			want: `{"flow_handle" : "<redacted>", "state": "claimed"}`,
+		},
+		{
+			name: "hyphenated user-code, device-code and flow-handle keys",
+			in:   `{"user-code":"BCDFGHJK","device-code":"abc","flow-handle":"dfh_abc","label":"keep"}`,
+			want: `{"user-code":"<redacted>","device-code":"<redacted>","flow-handle":"<redacted>","label":"keep"}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Text(tc.in); got != tc.want {
+				t.Fatalf("Text(%q)\n got  %q\n want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTextRedactsTokenLiterals(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "Hydra access token in a bearer header",
+			in:   "Authorization: Bearer ory_at_FAKEaccess0123456789.sig-part_x",
+			want: "Authorization: Bearer <redacted>",
+		},
+		{
+			name: "Hydra refresh token, authorization code and device code in free text",
+			in:   "rt ory_rt_FAKErefresh0123456789 ac ory_ac_FAKEauthcode012345 dc ory_dc_FAKEdevicecode0123.sig",
+			want: "rt <redacted> ac <redacted> dc <redacted>",
+		},
+		{
+			name: "wrapped device code and flow handle",
+			in:   "poll hdc_FAKEwrappedDeviceCode0123456789-_x for flow dfh_FAKEflowHandle0123456789",
+			want: "poll <redacted> for flow <redacted>",
+		},
+		{
+			// Holds no ory_ or hdc_, so only the dfh_ gate lets the regex run.
+			name: "flow handle alone in free text",
+			in:   "claim failed for dfh_FAKEflowHandle0123456789",
+			want: "claim failed for <redacted>",
+		},
+		{
+			name: "literal under a parameter name that is not a credential",
+			in:   "/cb?next=hdc_FAKEwrapped0123456789&state=keep",
+			want: "/cb?next=<redacted>&state=keep",
+		},
+		{
+			name: "literal under a credential name is redacted once",
+			in:   "/cb?access_token=ory_at_FAKEaccess0123456789&state=keep",
+			want: "/cb?access_token=<redacted>&state=keep",
+		},
+		{
+			name: "literal inside a JSON value of another field",
+			in:   `{"error":"invalid_grant","hint":"ory_dc_FAKEdevicecode0123 expired"}`,
+			want: `{"error":"invalid_grant","hint":"<redacted> expired"}`,
+		},
+		{
+			name: "suffix of exactly 10 characters is redacted, 9 stays",
+			in:   "hdc_0123456789 hdc_123456789",
+			want: "<redacted> hdc_123456789",
+		},
+		{
+			name: "short suffixes and other prefixes stay",
+			in:   "hdc_x dfh_123456789 ory_at_short ory_xx_FAKEnotatoken0123",
+			want: "hdc_x dfh_123456789 ory_at_short ory_xx_FAKEnotatoken0123",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Text(tc.in); got != tc.want {
+				t.Fatalf("Text(%q)\n got  %q\n want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
