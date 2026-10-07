@@ -67,10 +67,12 @@ func handleListUserOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxR
 				ClientName:       session.ConsentRequest.Client.ClientName,
 				ClientType:       oauth2Module.HydraClientTypeFromAuthMethod(session.ConsentRequest.Client.TokenEndpointAuthMethod),
 				ClientActive:     true,
-				Scopes:           append([]string(nil), session.GrantScope...),
+				Scopes:           append([]string{}, session.GrantScope...),
 				CreatedAt:        createdAt,
 				Revoked:          false,
 				TokenStats:       adminOAuthTokenStats{Exact: false},
+				FlowType:         session.FlowType(),
+				DeviceLabel:      session.DeviceLabel(),
 			})
 		}
 		resp := adminOAuthAuthorizationListResponse{GeneratedAt: adminNowUTC(), UserID: targetUser.ID, IncludeRevoked: false, Total: len(items), Items: items}

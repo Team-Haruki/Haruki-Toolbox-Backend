@@ -14,6 +14,7 @@ DELETE /api/user/:toolbox_user_id/authorize-social-platform/:id/
 DELETE /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
 DELETE /api/user/:toolbox_user_id/game-account/:server/:game_user_id
 DELETE /api/user/:toolbox_user_id/oauth2/authorizations/:client_id
+DELETE /api/user/:toolbox_user_id/oauth2/authorizations/:client_id/consents/:consent_request_id
 DELETE /api/user/:toolbox_user_id/social-platform/clear
 DELETE /api/webhook/:server/:data_type/:user_id
 DELETE /internal/mysekai-birthday-monitors/:subscription_id

@@ -22,6 +22,10 @@ type adminOAuthAuthorizationListItem struct {
 	CreatedAt        time.Time            `json:"createdAt"`
 	Revoked          bool                 `json:"revoked"`
 	TokenStats       adminOAuthTokenStats `json:"tokenStats"`
+	// FlowType is "device" or "browser"; DeviceLabel is "" for browser
+	// authorizations. Read-only: admins revoke per client, not per device.
+	FlowType    string `json:"flowType"`
+	DeviceLabel string `json:"deviceLabel"`
 }
 
 type adminOAuthAuthorizationListResponse struct {

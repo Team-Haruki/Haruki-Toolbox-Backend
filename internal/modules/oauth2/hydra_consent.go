@@ -11,6 +11,7 @@ import (
 
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 )
 
@@ -22,6 +23,9 @@ type HydraConsentClient struct {
 
 type HydraConsentRequest struct {
 	Client HydraConsentClient `json:"client"`
+	// RequestURL is the authorization URL that started the flow; a device
+	// flow's is Hydra's /oauth2/device/verify.
+	RequestURL string `json:"request_url"`
 }
 
 type HydraConsentSession struct {
@@ -29,6 +33,85 @@ type HydraConsentSession struct {
 	GrantScope       []string            `json:"grant_scope"`
 	HandledAt        *time.Time          `json:"handled_at"`
 	ConsentRequest   HydraConsentRequest `json:"consent_request"`
+	// Context is the context of the consent accept. Any JSON value decodes;
+	// FlowType and DeviceLabel read it leniently, so an unexpected shape never
+	// fails the session list.
+	Context jsontext.Value `json:"context"`
+}
+
+// Flow types of a consent session, as the authorization lists report them.
+const (
+	HydraConsentFlowTypeBrowser = "browser"
+	HydraConsentFlowTypeDevice  = "device"
+)
+
+// hydraConsentHarukiContext is the context.haruki block a device approval
+// writes (buildHydraConsentAcceptBody). Members stay raw so that a member of
+// an unexpected type is ignored instead of failing the decode.
+type hydraConsentHarukiContext struct {
+	Flow  jsontext.Value `json:"flow"`
+	Label jsontext.Value `json:"label"`
+}
+
+// harukiContext returns context.haruki, or false when the context is missing,
+// not an object, or has no object-valued haruki member.
+func (s HydraConsentSession) harukiContext() (hydraConsentHarukiContext, bool) {
+	var outer struct {
+		Haruki jsontext.Value `json:"haruki"`
+	}
+	if len(s.Context) == 0 || s.Context.Kind() != '{' || json.Unmarshal(s.Context, &outer) != nil {
+		return hydraConsentHarukiContext{}, false
+	}
+	if len(outer.Haruki) == 0 || outer.Haruki.Kind() != '{' {
+		return hydraConsentHarukiContext{}, false
+	}
+	var haruki hydraConsentHarukiContext
+	if json.Unmarshal(outer.Haruki, &haruki) != nil {
+		return hydraConsentHarukiContext{}, false
+	}
+	return haruki, true
+}
+
+// jsonStringValue returns value when it is a JSON string, and false otherwise.
+func jsonStringValue(value jsontext.Value) (string, bool) {
+	if len(value) == 0 || value.Kind() != '"' {
+		return "", false
+	}
+	var decoded string
+	if json.Unmarshal(value, &decoded) != nil {
+		return "", false
+	}
+	return decoded, true
+}
+
+// FlowType is "device" when the consent was granted through the device
+// flow, i.e. context.haruki.flow is "device" or the consent request's
+// request_url path ends with /oauth2/device/verify, and "browser" otherwise.
+func (s HydraConsentSession) FlowType() string {
+	if haruki, ok := s.harukiContext(); ok {
+		if flow, ok := jsonStringValue(haruki.Flow); ok && flow == HydraConsentFlowTypeDevice {
+			return HydraConsentFlowTypeDevice
+		}
+	}
+	if isDeviceFlowRequestURL(s.ConsentRequest.RequestURL) {
+		return HydraConsentFlowTypeDevice
+	}
+	return HydraConsentFlowTypeBrowser
+}
+
+// DeviceLabel is the label a device approval recorded in
+// context.haruki.label, cleaned as on the way in, and "" for a browser
+// authorization or a label that is missing or not a string.
+func (s HydraConsentSession) DeviceLabel() string {
+	if s.FlowType() != HydraConsentFlowTypeDevice {
+		return ""
+	}
+	haruki, ok := s.harukiContext()
+	if !ok {
+		return ""
+	}
+	label, _ := jsonStringValue(haruki.Label)
+	return sanitizeDeviceLabel(label)
 }
 
 func hydraConsentSessionKey(session HydraConsentSession) string {
