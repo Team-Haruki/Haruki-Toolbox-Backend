@@ -1,5 +1,11 @@
 # Static fallback structure for Hydra.
 # Shared runtime values are injected via docker-compose environment variables.
+#
+# Device authorization (RFC 8628) is configured ONLY through docker-compose env
+# (URLS_DEVICE_*, TTL_DEVICE_USER_CODE, OAUTH2_DEVICE_AUTHORIZATION_*), fed from
+# the DEVICE_FLOW_* variables so Hydra and the backend share one user_code
+# charset and length. Never add a user_code entropy preset here: the schema
+# makes the preset and length/character_set mutually exclusive (oneOf).
 
 serve:
   cookies:

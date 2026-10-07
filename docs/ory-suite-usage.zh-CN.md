@@ -91,8 +91,11 @@ Hydra 在当前项目里负责：
 - authorize / token / revoke / consent / login challenge
 - 管理端 OAuth 客户端 CRUD
 - access token introspection
+- 设备授权（RFC 8628）的底层机制：签发设备码与用户码、保存设备码行、兑换令牌。Hydra 的设备端点只由后端调用
 
 后端不是另起一套 OAuth2 server，而是提供一层兼容 / 编排逻辑，把业务用户状态和 Hydra 的授权流程拼接起来。
+
+设备授权是这种编排最重的一处：Hydra v25.4.0 的设备流程不限流、不保证单次批准、不把拒绝和过期告诉设备、也不清理过期的设备码行，所以 Hydra 自己的 `/oauth2/device/auth`、`/oauth2/device/verify`、`/oauth2/fallbacks/device` 不经 Oathkeeper 对外（公网 404）。设备调用后端的 `POST /api/oauth2/device/auth` 并轮询令牌端点兼容层 `POST /api/oauth2/token`；用户在前端 `/device` 页输入用户码，后端在 approve 请求内代替浏览器走完 Hydra 的 verify → login → consent 链。两份发现文档（`/.well-known/openid-configuration` 与 `/.well-known/oauth-authorization-server`）的 `device_authorization_endpoint` 和 `token_endpoint` 都由 Hydra 环境变量覆盖为后端地址（§11.3）。过期设备码行由 compose 中的 `hydra-device-janitor` 每小时分批删除。设备流程的端点与运维见 §10.1、§10.5。
 
 相关入口：
 
@@ -326,6 +329,23 @@ Hydra 在当前项目里负责：
 - 当数据响应暴露顶层 `_id` 时，会同时返回 `_idString`
 
 旧的 `GET /api/user/:toolbox_user_id/game-data/:server/:data_type/:user_id` 未正式接入前端，已由上述 `game-account` 入口替代。
+
+设备授权（RFC 8628）相关路径在 Oathkeeper 上的归属（`external/oathkeeper/access-rules.yml`，架构测试 `internal/architecture/oathkeeper_oauth2_device_rules_test.go` 守护，每条路径加方法恰好命中一条规则）：
+
+| 路径 | 方法 | 规则 | 认证 |
+| --- | --- | --- | --- |
+| `/api/oauth2/device/auth`、`/api/oauth2/token` | POST | `haruki-public-oauth-proxy` | noop（匿名；客户端认证由 Hydra 做） |
+| `/api/oauth2/device/lookup`、`/approve`、`/deny` | POST | `haruki-protected-oauth-consent` | cookie_session + header mutator |
+| `/api/user/:toolbox_user_id/oauth2/authorizations[/:client_id[/consents/:consent_request_id]]` | GET / DELETE | `haruki-protected-user-get` / `haruki-protected-user`（未新增规则） | cookie_session + header mutator |
+| `/oauth2/device/auth`、`/oauth2/device/verify`、`/oauth2/fallbacks/device`（Hydra） | 任意 | **无**（404） | — |
+| `/oauth2/token`（Hydra 直连，给写死地址的授权码客户端） | POST | `hydra-public-oauth`（不变） | noop |
+
+- `TestDeviceAuthRoutesToPublicProxyOnly`：`/api/oauth2/device/` 下只有 `device/auth` 可匿名访问，且只到 backend
+- `TestDeviceDecisionRoutesRequireCookieSession`：lookup / approve / deny 任何方法都不能匿名命中
+- `TestHydraDeviceEndpointsAreNotRouted`：Hydra 的设备路径任何方法都不命中规则；发现文档与 Hydra `/oauth2/token` 仍然路由
+- `TestPerDeviceRevokeRouteCovered`：按设备撤销由现有 `haruki-protected-user` 覆盖；路由清单（`api/testdata/routes.golden`）里每条 `/api/user/:toolbox_user_id/oauth2/authorizations…` 路由都必须恰好命中一条 cookie_session 规则
+
+**内部 API 不走 Oathkeeper。** backend 主端口 16666 上的 `/internal/*`（例如 Sekai Station 调用的 `POST /internal/oauth2/introspect`，§10.3.1）没有任何 Oathkeeper 规则，公网请求得到 404；它只在 tailnet（`${TAILSCALE_IP}:${BACKEND_PORT}`）和 compose 网络（`http://backend:16666`）上可达，并且每个请求仍要带内部 token。不要为 `/internal/*` 加规则，`TestInternalAPINotRoutedByOathkeeper` 会拒绝任何匹配 `/internal/` 的规则。
 
 兼容期内项目仍保留组卡推荐输入数据接口：
 
@@ -632,6 +652,47 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 - `HYDRA_CLIENT_SECRET`
 - `HYDRA_REQUEST_TIMEOUT_SECONDS`
 
+#### 设备授权（RFC 8628）的部署配置
+
+设备授权只通过 compose 环境变量配置，`external/hydra/hydra.yml` 不写任何设备相关的键（只有一段说明注释）。`.env.example` 在 `HYDRA_PUBLIC_BASE_URL` 之后有 10 个键：
+
+| 键 | 示例值 | 去向 |
+| --- | --- | --- |
+| `DEVICE_FLOW_USER_CODE_LENGTH` | `8` | Hydra `OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_LENGTH` 与 backend `OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH` |
+| `DEVICE_FLOW_USER_CODE_CHARSET` | `BCDFGHJKLMNPQRSTVWXZ` | Hydra `OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_CHARACTER_SET` 与 backend `OAUTH2_DEVICE_FLOW_USER_CODE_CHARSET` |
+| `DEVICE_FLOW_USER_CODE_TTL` | `10m` | Hydra `TTL_DEVICE_USER_CODE` 与 backend `OAUTH2_DEVICE_FLOW_USER_CODE_TTL` |
+| `DEVICE_FLOW_POLLING_INTERVAL` | `5s` | Hydra `OAUTH2_DEVICE_AUTHORIZATION_TOKEN_POLLING_INTERVAL`（后端下发 `max(interval, 5)`） |
+| `OAUTH2_DEVICE_FLOW_ENABLED` | `false` | backend 启动开关；还须打开运行时开关 `oauth2DeviceFlowEnabled` |
+| `OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST` | 空 | backend；CSV，空 = 所有持有设备授权许可的客户端 |
+| `OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS` | 空 | backend；CSV，空 = `origin(FRONTEND_URL)`。不要把 `oathkeeper.yml` 的占位 CORS 列表抄进来 |
+| `HYDRA_DEVICE_JANITOR_GRACE` | `"1 hour"` | 清理服务：只删过期超过该时长的行 |
+| `HYDRA_DEVICE_JANITOR_BATCH` | `5000` | 清理服务：每条 DELETE 最多删的行数 |
+| `HYDRA_DEVICE_JANITOR_INTERVAL_SECONDS` | `3600` | 清理服务：两轮之间的间隔 |
+
+`hydra` 服务另有 `URLS_DEVICE_VERIFICATION=${FRONTEND_PUBLIC_URL}/device`、`URLS_DEVICE_SUCCESS=${FRONTEND_PUBLIC_URL}/device/done`（代驱链只解析这两个 Location，从不请求），以及发现文档覆盖 `WEBFINGER_OIDC_DISCOVERY_DEVICE_AUTHORIZATION_URL=${BACKEND_PUBLIC_BASE_URL}/api/oauth2/device/auth`、`WEBFINGER_OIDC_DISCOVERY_TOKEN_URL=${BACKEND_PUBLIC_BASE_URL}/api/oauth2/token`。后者同时改变两份发现文档；`private_key_jwt` 的 audience 新旧令牌地址都接受，issuer、`authorization_endpoint` 不变。`backend` 服务另有 `OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL=${HYDRA_PUBLIC_BASE_URL}`（与 `HYDRA_BROWSER_URL` 今天取值相同但语义不同，所以单独传入）。
+
+硬性约束（`internal/architecture/ory_oidc_contract_test.go` 与 `config/compose_device_flow_test.go` 守护）：
+
+- 用户码只用 LENGTH + CHARACTER_SET，**永远不要**再设 Hydra 的 user_code 熵预设（`..._ENTROPY_PRESET`）：Hydra schema 中二者是 `oneOf`。字符集与长度只改 `DEVICE_FLOW_USER_CODE_*`，Hydra 与 backend 同时生效（§12.9）
+- 这 7 个 backend `OAUTH2_DEVICE_FLOW_*` 变量 compose 总会设置（空串也算设置），会覆盖 backend YAML 里 `oauth2.device_flow` 的同名键；要改就改 env
+- Hydra 不加 `--dev`、不配 `serve.public.tls`，issuer 保持 https，`hydra.yml` 保持 `serve.cookies.same_site_mode: Lax`；**不设置 `URLS_SELF_PUBLIC`**（device accept 的 `redirect_to` 由 PublicURL 构造；将来必须设置时 `OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL` 也改成同一 origin）
+- 重建 `hydra` 容器会让所有客户端的令牌签发与刷新短暂中断，`hydra-migrate` 随之重跑（空操作），安排在公告过的低峰窗口
+
+清理服务 `hydra-device-janitor`（`postgres:18-alpine`，复用 `HYDRA_DB_USER`，后端不持有 Hydra DSN）：
+
+- Hydra 只在成功签发时删除设备码行，从不清理过期行；该服务每 `HYDRA_DEVICE_JANITOR_INTERVAL_SECONDS` 秒一轮，每批 `LIMIT ${HYDRA_DEVICE_JANITOR_BATCH}` 删除 `expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval` 的行，直到一批不足 batch；每轮输出一行 `hydra-device-janitor: deleted=<n> remaining=<表行数>`，失败时输出 `hydra-device-janitor: delete failed` 并等下一轮
+- `expires_at` 是按 UTC 写入的 `timestamp without time zone`，所以拿 UTC 墙钟比较；该列无索引，靠 `LIMIT` 限住单条语句的锁和耗时；宽限期 ≥ 1 h 且只删已过期的行，不影响进行中的流程
+- command 必须是 `entrypoint: ["/bin/sh", "-c"]` 加单元素列表（`- |` 字面块），不得改成折叠写法（`>`），否则 SQL 引号会丢；脚本里的 `$` 一律写成 `$$` 交给容器内 shell；heredoc 用带引号的 `<<'SQL'`，结束符在块标量去缩进后位于第 0 列
+- 改动后用 `docker compose config --quiet` 校验，并 grep 渲染结果里原样的 `expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval`
+- 清理服务停掉时，手动用 psql 在 `hydra` 库执行同一段 SQL（参数写成字面量 `interval '1 hour'`、`LIMIT 5000`），重复到返回值小于 5000
+
+生产部署注意（生产编排目录 `toolbox-stack` 在 Toolbox 主机上，不在仓库里；以下按仓库文件同步过去）：
+
+- 生产 env 文件 `.portainer-env.sh` 由 `compose.sh` 以 shell 方式 source：含空格的值必须加引号（`HYDRA_DEVICE_JANITOR_GRACE="1 hour"`，否则 `hour` 被当成命令执行），不需要覆盖时直接省略该行，用 compose 里的默认值
+- 生产编排 compose 要手工合入本仓库 `docker-compose.yml` 的 hydra / backend 环境变量与 `hydra-device-janitor` 服务；生产 `hydra.yml` 也是手工同步的副本
+- 生产 access-rules 是单文件 bind mount、不热加载：替换前与线上文件 diff 并备份，替换后重启 Oathkeeper 容器
+- Hydra 与 backend 的字符集 / 长度变量必须在同一次 `up -d hydra backend` 中生效
+
 ## 12. 当前架构下的常见坑
 
 ### 12.1 忘记配置 `auth_proxy_session_header`
@@ -724,6 +785,36 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
   用户在该客户端下的流程全部被 Hydra 的会话列表跳过（`consent_skip=TRUE`，或
   `remember_for > 0` 且已过期）。客户端停用期间这些 token 被 bearer 中间件拦截，重新启用后
   恢复有效，「撤销全部授权」也撤不到。见 §10.4
+
+### 12.9 Hydra 与 backend 的用户码配置不一致
+
+后果：
+
+- 所有 `POST /api/oauth2/device/auth` 返回 500 `server_error`（日志 `charset_mismatch` 或 `ttl_mismatch`），
+  设备一律拿不到用户码；授权码流程不受影响，所以容易被当成 Hydra 偶发故障
+- 在 `hydra.yml` 或环境变量里再加 user_code 熵预设（`entropy_preset`）时，它与 compose 设置的 LENGTH + CHARACTER_SET
+  同时存在，违反 Hydra schema 的 `oneOf`，Hydra 配置校验失败、无法启动
+
+原因：
+
+- 字符集、长度、TTL 只改了 Hydra 或只改了 backend 一侧；或单独 `up -d` 了其中一个服务。backend 的启动校验与
+  运行时自检在两侧不一致时失败关闭，这是故意的
+- 正确做法：只改 `.env` 里的 `DEVICE_FLOW_USER_CODE_*`，同时重建 `hydra` 与 `backend`；Hydra 只用 LENGTH + CHARACTER_SET。见 §11.3
+
+### 12.10 把 Hydra 的设备端点接到 Oathkeeper 上，或发现文档没指向后端
+
+后果：
+
+- 给 `/oauth2/device/auth`、`/oauth2/device/verify` 或 `/oauth2/fallbacks/device` 加规则后，设备和浏览器可以绕开后端：
+  没有限流、同一用户码可被多个账号批准、拒绝与过期传不回设备，用户码进入 Hydra 主机的 URL
+- 漏设 `WEBFINGER_OIDC_DISCOVERY_DEVICE_AUTHORIZATION_URL` / `…_TOKEN_URL` 时，按发现文档配置的库会直接调用 Hydra：
+  device/auth 得到 Oathkeeper 的 404，或者把后端签发的 `hdc_…` 交给 Hydra `/oauth2/token`，只能得到 `invalid_grant`
+
+原因：
+
+- 设备流程的单次使用、限流、拒绝回传与过期语义都在后端实现，Hydra 的设备机制只由后端经内部地址调用
+- 正确做法：Hydra 的设备路径保持不路由（`TestHydraDeviceEndpointsAreNotRouted` 守护），两项发现文档覆盖都设为后端地址，
+  上线后核对两份 `.well-known` 文档的 `device_authorization_endpoint` 与 `token_endpoint`。见 §3.3、§9.1、§11.3
 
 ## 13. 对后续开发的建议
 

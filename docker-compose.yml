@@ -215,6 +215,22 @@ services:
       URLS_LOGOUT: ${FRONTEND_PUBLIC_URL}/logout
       SECRETS_SYSTEM_0: ${HYDRA_SYSTEM_SECRET}
       OIDC_SUBJECT_IDENTIFIERS_PAIRWISE_SALT: ${HYDRA_SUBJECT_SALT}
+      # Device authorization (RFC 8628). The backend drives Hydra's device
+      # endpoints itself; Oathkeeper never routes /oauth2/device/* or
+      # /oauth2/fallbacks/device. The verification/success URLs are only ever
+      # parsed by the backend's approval chain. Keep URLS_SELF_PUBLIC unset (or
+      # set OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL to the same origin).
+      URLS_DEVICE_VERIFICATION: ${FRONTEND_PUBLIC_URL}/device
+      URLS_DEVICE_SUCCESS: ${FRONTEND_PUBLIC_URL}/device/done
+      TTL_DEVICE_USER_CODE: ${DEVICE_FLOW_USER_CODE_TTL:-10m}
+      OAUTH2_DEVICE_AUTHORIZATION_TOKEN_POLLING_INTERVAL: ${DEVICE_FLOW_POLLING_INTERVAL:-5s}
+      OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_LENGTH: "${DEVICE_FLOW_USER_CODE_LENGTH:-8}"
+      OAUTH2_DEVICE_AUTHORIZATION_USER_CODE_CHARACTER_SET: ${DEVICE_FLOW_USER_CODE_CHARSET:-BCDFGHJKLMNPQRSTVWXZ}  # never also set ..._ENTROPY_PRESET (schema oneOf)
+      # Both discovery documents advertise the backend's device authorization
+      # endpoint and token compatibility layer; Hydra's own /oauth2/token stays
+      # routed for relying parties that hard-coded it.
+      WEBFINGER_OIDC_DISCOVERY_DEVICE_AUTHORIZATION_URL: ${BACKEND_PUBLIC_BASE_URL}/api/oauth2/device/auth
+      WEBFINGER_OIDC_DISCOVERY_TOKEN_URL: ${BACKEND_PUBLIC_BASE_URL}/api/oauth2/token
     volumes:
       - ${STACK_HOST_ROOT}/hydra/hydra.yml:/etc/config/hydra/hydra.yml:ro
 
@@ -250,6 +266,16 @@ services:
       HYDRA_PUBLIC_URL: http://hydra:4444
       HYDRA_BROWSER_URL: ${BACKEND_PUBLIC_BASE_URL}
       HYDRA_ADMIN_URL: http://hydra:4445
+      # Device authorization: the user-code charset, length and TTL come from
+      # the same DEVICE_FLOW_* variables as Hydra's; startup validation and the
+      # runtime self-check fail closed when the two sides drift.
+      OAUTH2_DEVICE_FLOW_ENABLED: "${OAUTH2_DEVICE_FLOW_ENABLED:-false}"
+      OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST: "${OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST:-}"
+      OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS: "${OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS:-}"
+      OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL: ${HYDRA_PUBLIC_BASE_URL}
+      OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH: "${DEVICE_FLOW_USER_CODE_LENGTH:-8}"
+      OAUTH2_DEVICE_FLOW_USER_CODE_CHARSET: ${DEVICE_FLOW_USER_CODE_CHARSET:-BCDFGHJKLMNPQRSTVWXZ}
+      OAUTH2_DEVICE_FLOW_USER_CODE_TTL: ${DEVICE_FLOW_USER_CODE_TTL:-10m}
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: "16666"
       BACKEND_PROFILING_ENABLED: ${BACKEND_PROFILING_ENABLED:-false}
@@ -301,6 +327,10 @@ services:
     # interfaces: the backend trusts Oathkeeper-injected identity headers gated by
     # a shared secret, so a caller reaching it off-proxy could forge identity and
     # impersonate any user/admin. Public traffic must go through Oathkeeper.
+    # The internal API (/internal/*, e.g. POST /internal/oauth2/introspect for
+    # Sekai Station) is served on this same port and has NO Oathkeeper rule: it
+    # is reachable only over the tailnet and the compose network, and still
+    # requires its internal token.
     ports:
       - "${TAILSCALE_IP}:${BACKEND_PORT}:16666"
     volumes:
@@ -359,6 +389,60 @@ services:
       KRATOS_PUBLIC_URL: http://kratos:4433
       HYDRA_ADMIN_URL: http://hydra:4445
       HYDRA_PUBLIC_URL: http://hydra:4444
+
+  # Hydra never deletes expired device-code rows (only redeemed ones), so this
+  # sidecar deletes rows expired for longer than the grace period, in batches,
+  # once an hour. The command MUST stay a one-element list run by /bin/sh -c:
+  # a folded (">") command scalar loses the SQL quotes. `$$` hands a literal `$`
+  # to the container shell; the quoted heredoc is not expanded by the shell, and
+  # the SQL terminator sits at column 0 once the block scalar is de-indented.
+  # expires_at is a UTC `timestamp without time zone`, hence the UTC wall clock.
+  hydra-device-janitor:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    networks:
+      - haruki-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      hydra-migrate:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: postgres
+      PGDATABASE: hydra
+      PGUSER: ${HYDRA_DB_USER}
+      PGPASSWORD: ${HYDRA_DB_PASSWORD}
+      JANITOR_GRACE: ${HYDRA_DEVICE_JANITOR_GRACE:-1 hour}
+      JANITOR_BATCH: ${HYDRA_DEVICE_JANITOR_BATCH:-5000}
+      JANITOR_INTERVAL_SECONDS: ${HYDRA_DEVICE_JANITOR_INTERVAL_SECONDS:-3600}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -u
+        while true; do
+          total=0
+          while true; do
+            n=$$(psql -X -v ON_ERROR_STOP=1 -At -v grace="$$JANITOR_GRACE" -v batch="$$JANITOR_BATCH" <<'SQL'
+        WITH doomed AS (
+          SELECT device_code_signature, nid FROM hydra_oauth2_device_auth_codes
+          WHERE expires_at IS NOT NULL
+            AND expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval
+          ORDER BY expires_at LIMIT :batch
+        ), d AS (
+          DELETE FROM hydra_oauth2_device_auth_codes t USING doomed
+          WHERE t.device_code_signature = doomed.device_code_signature AND t.nid = doomed.nid
+          RETURNING 1
+        )
+        SELECT count(*) FROM d;
+        SQL
+            ) || { echo "hydra-device-janitor: delete failed"; break; }
+            total=$$((total + n))
+            [ "$$n" -lt "$$JANITOR_BATCH" ] && break
+          done
+          left=$$(psql -X -At -c "SELECT count(*) FROM hydra_oauth2_device_auth_codes" || echo "?")
+          echo "hydra-device-janitor: deleted=$$total remaining=$$left"
+          sleep "$$JANITOR_INTERVAL_SECONDS"
+        done
 
 networks:
   haruki-net:

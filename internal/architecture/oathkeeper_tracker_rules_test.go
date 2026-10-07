@@ -17,9 +17,16 @@ type oathkeeperRule struct {
 		URL     string   `yaml:"url"`
 		Methods []string `yaml:"methods"`
 	} `yaml:"match"`
+	Upstream struct {
+		URL       string `yaml:"url"`
+		StripPath string `yaml:"strip_path"`
+	} `yaml:"upstream"`
 	Authenticators []struct {
 		Handler string `yaml:"handler"`
 	} `yaml:"authenticators"`
+	Mutators []struct {
+		Handler string `yaml:"handler"`
+	} `yaml:"mutators"`
 }
 
 // compileOathkeeperURL mirrors Oathkeeper's "regexp" matching strategy: text
