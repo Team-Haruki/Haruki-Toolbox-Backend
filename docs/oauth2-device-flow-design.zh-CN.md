@@ -24,7 +24,7 @@
 - **推荐方案：后端中介 + 服务端代驱（BFF）**，Hydra 的设备机制只由后端调用。设备调用后端代理 `POST /api/oauth2/device/auth`，拿到包装设备码和前端短验证地址 `https://haruki.seiunx.com/device`，Hydra 的 `/oauth2/device/*` 不路由。用户登录后在 `/device` 输入 8 位用户码，后端用 Redis Lua **认领**并展示审核卡；点「允许」时后端新建内存 Cookie 容器（jar），经内部 `http://hydra:4444` 同步走完 verify → device accept → login accept → consent accept → success，每一跳用流程标记绑定；点「拒绝」只写 Redis 状态，若已记录 `crid` 再按它撤销。`/api/oauth2/token` 改为令牌端点兼容层，非设备授权许可逐字节透传；发现文档的 `device_authorization_endpoint` 与 `token_endpoint` 从上线当天起都指向后端。回收器（后端 scheduler，每 60 s）撤销「已批准却从未兑换」的授权会话，清理服务（compose sidecar，每小时）删除过期设备码行。
 - **前置修复先行。** 客户端整体 PUT 抹字段、按客户端撤销返回 400、停用客户端仍能授权、日志不脱敏用户码、注册丢回跳等缺陷今天就影响授权码客户端；对应修复（JSON Patch 生命周期、逐 subject 撤销、active 拦截、脱敏、保留回跳，以及管理端展示新响应的前端配套）已在合并分支上完成，随整个功能一起合并上线（§12；2026-10-07 决定不再单独先行）。
 - **升级 Ory 解决不了问题**（§3.2）。生产继续用 v25.4.0、不打补丁；真实 Hydra 集成测试（BE-9）在 v25.4.0 与 v26.2.0 上各跑一遍，作为今后修改 `ORY_VERSION` 的门禁。
-- **规模：** Toolbox 侧 Phase 0–3 合计约 28.0 人日（后端 20.25、前端 6.25、运维 1.5），其中资源服务器内省 BE-12 1.5 人日；接入方侧 Haruki-Client 设备登录与 Bearer 提交约 2–3 人日，Sekai Station 后端改为调用内部 API 约 1 人日（§13）。原 Phase 4「Haruki Cloud 数据对齐」已删除。
+- **规模：** Toolbox 侧合计约 28.0 人日（后端 20.25、前端 6.25、运维 1.5），其中内部 API BE-12 1.5 人日；接入方侧 Haruki-Client 设备登录与 Bearer 提交约 2–3 人日，Sekai Station 后端改为调用内部 API 约 1 人日（§13）。原 Phase 4「Haruki Cloud 数据对齐」已删除。
 
 ## 2. 背景、目标与非目标
 
@@ -146,7 +146,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 | 步骤 | 调用方 → 被调方 | 方法与路径 | 认证 | 作用 / 预期 |
 | --- | --- | --- | --- | --- |
 | H1 | 设备 → 后端 | `POST API/api/oauth2/device/auth`，表单 `client_id`、`scope`、`device_label?` | 机密客户端 HTTP Basic，公共客户端只带 `client_id`；Oathkeeper `haruki-public-oauth-proxy`（noop） | 发起流程 |
-| H2 | 后端 → Hydra admin | `GET /admin/clients/{client_id}` | admin | 检查存在、`metadata.haruki.active`、设备授权许可、试点白名单、scope 策略、发码上限 |
+| H2 | 后端 → Hydra admin | `GET /admin/clients/{client_id}` | admin | 检查存在、`metadata.haruki.active`、设备授权许可、客户端白名单（可选，默认留空）、scope 策略、发码上限 |
 | H3 | 后端 → Hydra public | `POST /oauth2/device/auth`，表单只带 `client_id` 和 `scope`，转发原 `Authorization` | Hydra 认证客户端 | 200 `{Header, device_code: ory_dc_…, user_code, verification_uri, …, expires_in, interval}` |
 | H4 | 后端 → Redis → 设备 | Lua `deviceFlowCreateScript`，响应 200 | — | `{device_code: hdc_…, user_code: "BCDF-GHJK", verification_uri: FE/device, verification_uri_complete, expires_in, interval}`；状态 `pending` |
 | H5 | 设备 → 用户 | 在本地展示用户码与完整验证地址（Haruki-Client：只写控制台日志，**不经**机器人通道发送），同时开始轮询 | — | — |
@@ -227,7 +227,7 @@ sequenceDiagram
 | 浏览器跳转还是服务端驱动 | **服务端代驱（BFF）**：整段 Hydra 浏览器链路在 `POST /api/oauth2/device/approve` 内同步走完，每个请求一个内存 jar | 只有驱动方能把 login/consent 与用户码对应；同时避开 device CSRF Cookie 被覆盖、API 主机上的裸 JSON 页、应用内 webview Cookie 问题、verifier 重放、登录会话 skip；已实测（类生产） | 浏览器跳转：需暴露 `/oauth2/device/verify`，用户码进入 Hydra 主机 URL，consent 无法关联码；把 jar 存进 Redis 的 BFF：没必要 |
 | 设备授权端点 | 后端代理 `POST /api/oauth2/device/auth`，发现文档覆盖为它；Hydra 三条设备路径不路由 | Hydra 无法限流、不清理设备码、不看 `haruki.active`、`verification_uri` 写死在 API 主机 | Oathkeeper 直接暴露；两者同时暴露 |
 | 交给设备的 device_code | 包装设备码 `hdc_` + base64url(32 随机字节)；`ory_dc_` 以 AES-256-GCM 密封，密钥由 hdc 经 HKDF 派生 | Hydra 换不了 `hdc_`，所有轮询必经兼容层；Redis 转储换不出令牌 | 直接下发 `ory_dc_`：写死 Hydra 地址的轮询方会悄悄失去拒绝、过期、降速信号 |
-| 令牌端点与发现文档 | `/api/oauth2/token` 改为兼容层；**上线当天（Phase 1）** 设 `WEBFINGER_OIDC_DISCOVERY_TOKEN_URL=${BACKEND_PUBLIC_BASE_URL}/api/oauth2/token`；Hydra `/oauth2/token` 仍由 `hydra-public-oauth` 路由 | 否则按发现文档的客户端会把 `hdc_` 发给 Hydra；`private_key_jwt` 不受影响；非设备授权逐字节透传 | 推迟到 Phase 3 覆盖；用 Oathkeeper 改道 issuer 的 `/oauth2/token` |
+| 令牌端点与发现文档 | `/api/oauth2/token` 改为兼容层；**上线当天** 设 `WEBFINGER_OIDC_DISCOVERY_TOKEN_URL=${BACKEND_PUBLIC_BASE_URL}/api/oauth2/token`；Hydra `/oauth2/token` 仍由 `hydra-public-oauth` 路由 | 否则按发现文档的客户端会把 `hdc_` 发给 Hydra；`private_key_jwt` 不受影响；非设备授权逐字节透传 | 推迟到 Phase 3 覆盖；用 Oathkeeper 改道 issuer 的 `/oauth2/token` |
 | 轮询语义与过期 | 过早轮询本地 `slow_down`；其余**一律先转 Hydra** 认证客户端，再按流程状态改写；Hydra 200 但流程不可签发时不交出令牌并按 `crid` 撤销。从未批准的码在 `now ≥ exp` 起返回 `expired_token`（Hydra 会一直 pending） | RFC 6749 §3.2.1：先认证客户端再透露状态；代价是每活跃流程每 5 s 至多一次 Hydra 调用 | 不认证客户端、在本地回答；过期只靠客户端超时 |
 | 流程绑定 | 32 位 hex 的 `fid` 以 `haruki_dfl=<fid>` 附在首个 verify 上；之后每个 `redirect_to`、Location 与 login/consent 的 `request_url` 都须 `haruki_dfl==fid` 且 `client_id==cid` | 实测标记一路保留；同一（用户，客户端）的并发流程也不串 | 按（subject，客户端）绑定 |
 | 单次使用 | lookup 时 Lua **认领**（绑定 Toolbox 用户 + Kratos 会话哈希 + flowHandle，租约 300 s）；批准时 Lua **BeginApprove CAS**（`claimed → approving`，租约 30 s，nonce，最多 3 次），都在任何 Hydra 调用之前；可确定的失败恢复为 `claimed` | Hydra accept 不是单次的，Postgres 上竞争结果任意，`openid` 的 409 不够 | 依赖 `openid` 409；只在 accept 时加锁 |
@@ -239,7 +239,7 @@ sequenceDiagram
 | 登录与同意规则 | login accept `{subject: CurrentHydraSubject, remember:false, remember_for:0}`，不带 `acr`；login `skip==true` 直接 `failed`、不回显 skip 的 subject；consent accept `remember:false, remember_for:0`，忽略 consent skip | 共享会话的 skip 会带出他人 subject | 沿用 skip；记住设备授权 |
 | 通用 login/consent 端点 | 设备模式 challenge（`request_url` path 以 `/oauth2/device/verify` 结尾）在 accept、reject、GET 三类路径（含匿名的 login GET 与旧版 `authorize/consent` 拒绝分支）一律 403；consent 各路径先查 subject 归属，再判设备模式（accept 最后再查客户端 active），非本人只得到 subject 不符；所有流程不再转发 `acr`；通用 consent accept 拒绝停用客户端 | 纵深防御，并修复既有缺口；检查顺序保证不构成探测 | — |
 | Scope 策略 | 设备可用 `openid profile offline_access user:read bindings:read game-data:read`，加上**内部 scope**：`oauth2.internal_scopes` 中登记、且其 `grantable_clients` 包含本客户端（`station:room:write` 只给 `haruki-client`）；`game-data:write` 仍**只给** `metadata.haruki.device.allow_write=true` 的**公共**客户端；`email` 与 `audience` 参数一律拒绝；设备授权请求**必须包含** `user:read`；v1 不做升级认证 | 内部服务的权限只能落到指定客户端上；回显「已授权为 <name>」依赖 `user:read` | 任意客户端都能申请内部 scope；为每个接入方写死 scope |
-| 允许的客户端 | 公共与机密都可，须管理员创建并按客户端开通设备授权许可；另有试点白名单 `oauth2.device_flow.client_allowlist`（空 = 所有持有该许可的客户端） | 首个接入方 `haruki-client` 是公共客户端；通用能力也要覆盖机密客户端 | 只允许机密客户端；只允许官方公共客户端 |
+| 允许的客户端 | 公共与机密都可，须管理员创建并按客户端开通设备授权许可；另有客户端白名单（可选，默认留空） `oauth2.device_flow.client_allowlist`（空 = 所有持有该许可的客户端） | 首个接入方 `haruki-client` 是公共客户端；通用能力也要覆盖机密客户端 | 只允许机密客户端；只允许官方公共客户端 |
 | 总开关 | 三层：运行时 `oauth2DeviceFlowEnabled`（免重启，字段缺失视为**关闭**，读取出错返回 503）；按客户端去掉设备授权许可；启动配置 `oauth2.device_flow.enabled`。生效 = 启动 ∧ 运行时 | 单节点生产，重启即全站停服 | 只有启动配置 |
 | 设备标签 | 设备可带不可信的 `device_label`（≤ 64 rune，清洗），显示为「应用自述」；批准时可改；最终写入 consent `context.haruki.label` 与 `session.access_token.device_label`；批准后不能改名 | 两处都可见 | 本地标签表 |
 | 按设备撤销 | `DELETE /api/user/:toolbox_user_id/oauth2/authorizations/:client_id/consents/:consent_request_id`：先列出调用者自己的授权会话并要求 `(consent_request_id, client_id)` 匹配，否则 404 且**不调用 Hydra** | Hydra 对不存在的 ID 也返回 204，预检是唯一越权防线 | 只能按客户端撤销 |
@@ -274,7 +274,7 @@ sequenceDiagram
   1. Content-Type、大小、解析（不访问 Redis / Hydra）→ 功能闸门 `cfg.Active(ctx)`：明确关闭 ⇒ 400 `unauthorized_client`，运行时配置读取出错且无 1 s 内缓存值 ⇒ 503。
   2. H2 `GetHydraOAuthClient`，结果按 `client_id` 进程内缓存 5 s（存在与 404 都缓存）。404 ⇒ 计入只告警的 `auth-attempt:unknown-client`，401 `invalid_client`；Hydra admin 不可达 ⇒ 503。
   3. `auth-attempt:client:{hx(cid)}` 计数，**只告警不拒绝**：机密客户端的 secret 要到 H3 才由 Hydra 校验，按客户端拒绝会让带错误 secret 的匿名洪泛挡住真正的机密客户端。
-  4. 试点白名单、客户端 active、设备授权许可 → scope 策略（§6.6）→ `deviceRateReserveScript` 预占按客户端类型分开的全局池 `auth-issued:global:{public|confidential}` 与 `auth-issued:client:{hx}`。
+  4. 客户端白名单（可选，默认留空）、客户端 active、设备授权许可 → scope 策略（§6.6）→ `deviceRateReserveScript` 预占按客户端类型分开的全局池 `auth-issued:global:{public|confidential}` 与 `auth-issued:client:{hx}`。
   5. H3：经 `forwardHydraPublicRequest` 发送 `client_id=…&scope=…`（`client_id` 始终放进表单），转发原 `Authorization`。Hydra 非 200 ⇒ **释放两项预占**，原样透传状态码与 RFC JSON（含 `WWW-Authenticate`）。
   6. 解码（忽略 `Header`）并自检：`normalizeDeviceUserCode(user_code)` 须成功且等于原值，否则 500 并记 `charset_mismatch`；`expires_in` 不得超过配置的 `user_code_ttl` 5 s 以上，否则 500 并记 `ttl_mismatch`（环境漂移时失败关闭）→ 生成 `fid`、`hdc`、密封值 `wdc`，执行 `deviceFlowCreateScript` → 返回 200：
 
@@ -793,7 +793,7 @@ Go 类型 `config.OAuth2DeviceFlowConfig`，挂在 `OAuth2Config` 的 `DeviceFlo
 | --- | --- | --- |
 | 用户码暴力破解（RFC 8628 §5.1） | 20^8 码空间、10 min TTL；先登录；统一 `invalid_code`；三档失败预算在读索引前检查；首次 lookup 即认领；Hydra verify 不路由、错误码不送到 Hydra；启动预算校验 | 最坏约 0.74 次/年，只造成账号混淆 |
 | 设备码暴力破解（RFC 8628 §5.2） | `hdc_` 256 位；`ory_dc_` 密封不出服务端；未知 `hdc_` 本地 `invalid_grant`；Hydra 直连换不了 `hdc_` | 无 |
-| 设备可信度、仿冒地址与标签（RFC 8628 §5.3） | 固定第一方短地址；只有管理员登记并开通设备授权许可的客户端能发起，试点期另有白名单；审核卡信息来自管理端登记；设备标签清洗控制字符与双向覆盖字符、标为「应用自述」并按纯文本渲染 | 用户不核对域名仍可能在仿冒站泄露密码（所有 OAuth 流程共有）；措辞仿冒无法过滤 |
+| 设备可信度、仿冒地址与标签（RFC 8628 §5.3） | 固定第一方短地址；只有管理员登记并开通设备授权许可的客户端能发起，另有可选的客户端白名单（默认留空）；审核卡信息来自管理端登记；设备标签清洗控制字符与双向覆盖字符、标为「应用自述」并按纯文本渲染 | 用户不核对域名仍可能在仿冒站泄露密码（所有 OAuth 流程共有）；措辞仿冒无法过滤 |
 | 远程钓鱼（RFC 8628 §5.4）与非可视化传码（RFC 8628 §5.7） | 接入方契约要求只在本机展示用户码（不经聊天、不经任何第三方通道转发）、成功后回显账号名、`device_label` 不含个人标识；不自动提交、不自动同意；审核卡展示客户端、风险着色、发起时间、固定警告与代码核对；必须勾选确认（后端校验 `acknowledged`）；「不是我发起的」记 `phishing_signal`；`email` 永不授予，机密客户端只读，写入只给 `allow_write` 公共客户端并红色提示；`remember=false`；按设备撤销；每账号每天 20 次决定 | 服务端无法强制接入方遵守私聊要求；无视警告的用户仍会被钓鱼；公共客户端 `haruki-client` 的 `client_id` 任何人都能冒用：攻击者可诱骗用户批准，从而以受害者的身份向 Sekai Station 提交车牌；影响限于 `station:room:write`（审核卡按 `risk: write` 红色提示「以你的身份向 Sekai Station 提交」），受害者可按设备撤销，Station 可按 `user_id` 封禁 |
 | 会话窥视、抢先批准（RFC 8628 §5.5）；lookup 与 approve 之间换账号 | 首次 lookup 认领（用户、Kratos 会话哈希、句柄，租约 300 s）；只能由认领者在同一会话批准（不符 `session_changed` / `already_handled`）；设备必须回显「已授权为 <name>」（因此强制 `user:read`）；用户码只在本机展示 | 抢先者成功时受害者需重新开始，账号不受影响 |
 | 非机密客户端被冒用（RFC 8628 §5.6）与匿名洪泛 device/auth | 公共客户端默认只读；永不显示「官方」；每客户端配额；公共池与机密池分开；客户端查询在前（5 s 缓存），未知客户端直接 401 只计告警，只有签发预占能拒绝，错误 secret 在 H3 后立即释放；SafeLine 按 IP | 被冒用的公共客户端（或公共池）最多被阻断 10 min；机密客户端不受影响 |
@@ -854,11 +854,11 @@ Go 类型 `config.OAuth2DeviceFlowConfig`，挂在 `OAuth2Config` 的 `DeviceFlo
 
 | 范围 | 后端 | 前端 | 运维 | 合计 |
 | --- | --- | --- | --- | --- |
-| Phase 0–3 | 20.25 | 6.25 | 1.5 | **28.0 人日** |
+| 合计 | 20.25 | 6.25 | 1.5 | **28.0 人日** |
 | 接入方侧（不属于 Toolbox 排期） | Haruki-Client 车牌收集：设备登录、令牌本地保存与刷新、`Authorization: Bearer` 提交、迁移期保留旧签名开关，约 2–3 人日（Rust `oauth2` crate）；Sekai Station 后端：提交接口改为校验 `Authorization: Bearer`（调用内部 API），约 1 人日 | | | |
 
 - **合并顺序**：BE-1、BE-2、BE-4、FE-1 → BE-3（FE-1b 与 BE-2 / BE-3 同批）→ BE-5 → BE-6 → FE-2、BE-7 → BE-8、BE-10 → BE-9 → FE-3、FE-4 → BE-11；BE-12 在 BE-6 之后。全部完成后整体合并（2026-10-07 决定，不再分 PR 先行上线）。
-- **关键路径**：BE-2 → BE-3 → BE-6 → BE-7 → BE-8 → BE-9，合计 14.0 人日；BE-10 与 BE-8 并行。一名后端加一名前端约 3 个日历周开发，之后 2 周试点；后端 19.25 人日若由一人承担约需 3.9 周，要压到约 3 周，前端工程师需分担 BE-11 初稿与 BE-9 的 compose / workflow 脚手架，否则顺延约 1 周。
+- **关键路径**：BE-2 → BE-3 → BE-6 → BE-7 → BE-8 → BE-9，合计 14.0 人日；BE-10 与 BE-8 并行。一名后端加一名前端约 3 个日历周开发；后端 19.25 人日若由一人承担约需 3.9 周，要压到约 3 周，前端工程师需分担 BE-11 初稿与 BE-9 的 compose / workflow 脚手架，否则顺延约 1 周。
 - **通用门禁**：后端 `CI OK`（gofmt、`go mod tidy -diff`、vet、staticcheck、`go test -race`），golden diff 只含本 PR 新增路由，不新增 `HarukiToolboxRouterHelpers` / `DBManager` 字段、不读 `config.Cfg`；前端 lint 0 警告、check-imports、vue-tsc、bun test、build、Playwright、三语 i18n 键一致；对外行为有变化的 PR 同时更新上表「主要内容」中列出的文档（`webhook-integration` 不受影响）。
 - **测试约定**：每个测试自建 `httptest` Hydra 假服务、`Locals("userID")` 桩、miniredis、enttest sqlite；所有测试断言日志、Redis 键名和响应体中不出现原始用户码、包装设备码、Hydra 原始设备码和流程句柄。BE-9 的子测试：`PublicClientHappyPath`、`ConfidentialBasicOnlyClientID`、`TwoIdentitiesSingleWinner`、`DenyAccessDenied`、`ExpiryExpiredToken`、`SlowDown`、`HydraDirectTokenRejectsWrappedCode`、`PerDeviceRevokeKillsRefreshedATandRT`、`DisabledClientBlocked`、`DiscoveryAdvertisesBackendEndpoints`、`ReaperRevokesUnredeemed`、`ApprovedThenExpiredIsReaped`、`JanitorSQLDeletesOnlyExpired`、`GoXOAuth2Sample`（IT compose 不含清理服务，清理 SQL 由 Go 测试从生产 compose 中提取执行；`GoXOAuth2Sample` 的代码也是接入文档的 Go 示例）。
 
@@ -872,7 +872,7 @@ Go 类型 `config.OAuth2DeviceFlowConfig`，挂在 `OAuth2Config` 的 `DeviceFlo
 | --- | --- | --- | --- |
 | 运行时总开关 `oauth2DeviceFlowEnabled` | `PUT /api/admin/config/runtime`（需二次认证） | 否，秒级 | device/auth `unauthorized_client`；lookup / approve / deny 403 `feature_disabled`；兼容层对 `hdc_` `expired_token`；非设备授权许可与回收器不受影响；字段缺失视为关闭；读取出错统一 503 |
 | 启动开关 `OAUTH2_DEVICE_FLOW_ENABLED` | 改 env 后 `compose.sh up -d backend` | 是 | 同上；另外回收器不启动 |
-| 试点白名单 `OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST` | 同上（CSV） | 是 | 名单外客户端 `unauthorized_client`；空 = 全部持有许可的客户端 |
+| 客户端白名单（可选，默认留空） `OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST` | 同上（CSV） | 是 | 名单外客户端 `unauthorized_client`；空 = 全部持有许可的客户端 |
 | 单个客户端的设备授权许可 / 配额；停用客户端 | 管理端（JSON Patch；停用时逐 subject 撤销） | 否 | 只影响该客户端（device/auth 每次都走 H2，结果进程内缓存 5 s，改动最多 5 s 后生效）；停用还拦截已批准流程的兑换并撤销已有授权会话（列表找不到的授权只被拦截、不被撤销，见 §12 残余） |
 
 ### 14.2 上线前一次性预检（结果记入上线单）
@@ -887,7 +887,7 @@ Go 类型 `config.OAuth2DeviceFlowConfig`，挂在 `OAuth2Config` 的 `DeviceFlo
 8. 备份 hydra.yml、access-rules.yml、编排 compose、`.portainer-env.sh` 与 `GET /api/admin/config/runtime` 的结果。
 9. 边缘与统计：SafeLine 无需改动（已确认不挑战非浏览器 API POST、也不支持按路径规则）；EdgeOne `/api/oauth2/*` 不缓存；GA4 数据流「隐去数据 → 查询参数」加入 `user_code`、`login_challenge`、`consent_challenge`、`logout_challenge`、`device_challenge`。
 10. 记录当前 `BACKEND_IMAGE` 与运行中的镜像 digest（生产用 `…:latest` 且 compose 无 `pull_policy`，`latest` 会被覆盖）。
-11. `session_sign_token` 非空且 ≥ 16 字节。**2026-10-07 核对为空**：须在 Phase 1 之前的单独维护窗口设置（会改变会话签名与现有 Redis 哈希键，预计全员重新登录），见 §15 Q7；不要在 Phase 1 窗口里临时设置。
+11. `session_sign_token` 非空且 ≥ 16 字节。**2026-10-07 核对为空**：须在上线之前的单独维护窗口设置（会改变会话签名与现有 Redis 哈希键，预计全员重新登录），见 §15 Q7；不要在上线窗口里临时设置。
 12. 选 CDN 端点后在 `/device` 做一次 lookup，返回 200 而不是 401 或 403 `origin_rejected`（不符见 §15 Q7）。
 
 全部在上线窗口前完成；第 11 项须在更早的单独窗口完成。
