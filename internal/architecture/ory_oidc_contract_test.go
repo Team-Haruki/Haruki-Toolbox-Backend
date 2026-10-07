@@ -95,7 +95,7 @@ func loadComposeServices(t *testing.T, path string) map[string]composeService {
 }
 
 // TestOryDeviceFlowDeploymentContract pins the deployment side of the device
-// authorization grant (docs/oauth2-device-flow-design §10.1 / §10.4).
+// authorization grant (docs/ory-suite-usage.zh-CN.md §11.3).
 func TestOryDeviceFlowDeploymentContract(t *testing.T) {
 	root := repositoryRoot(t)
 	composePath := filepath.Join(root, "docker-compose.yml")

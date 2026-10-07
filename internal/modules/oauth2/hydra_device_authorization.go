@@ -215,7 +215,7 @@ type deviceAuthorizationRequest struct {
 }
 
 // parseDeviceAuthorizationRequest validates the request without touching Redis
-// or Hydra (design §6.2 step 1). It returns an invalid_request description.
+// or Hydra (ory-suite-usage §10.5.3 step 1). It returns an invalid_request description.
 func parseDeviceAuthorizationRequest(c fiber.Ctx) (deviceAuthorizationRequest, string) {
 	mediaType, _, err := mime.ParseMediaType(c.Get(fiber.HeaderContentType))
 	if err != nil || mediaType != formURLEncodedMediaType {
@@ -251,7 +251,7 @@ func parseDeviceAuthorizationRequest(c fiber.Ctx) (deviceAuthorizationRequest, s
 // handleHydraDeviceAuthorization proxies RFC 8628 device authorization
 // (POST /api/oauth2/device/auth) to Hydra, which cannot rate-limit, ignores
 // metadata.haruki.active and points verification_uri at the API host. The
-// order of checks is fixed by design §6.2: the client lookup comes first, and
+// order of checks is fixed by ory-suite-usage §10.5.3: the client lookup comes first, and
 // only the issuance reservation can refuse, so a flood naming a confidential
 // client with a wrong secret cannot lock the real client out.
 func handleHydraDeviceAuthorization(hydraConfig *harukiOAuth2.HydraConfig, cfg DeviceFlowConfig, store *deviceFlowStore) fiber.Handler {

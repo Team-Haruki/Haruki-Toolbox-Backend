@@ -16,7 +16,7 @@ import (
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
-// The server-driven device approval chain (design §9). Inside one approve
+// The server-driven device approval chain (ory-suite-usage §10.5.7). Inside one approve
 // request the backend walks Hydra's whole browser leg on the user's behalf:
 //
 //	H9b GET  verify?haruki_dfl=F          → 302 FE/device?device_challenge=X

@@ -14,7 +14,7 @@ import (
 // the backend's anonymous POST /api/oauth2/device/auth and poll
 // /api/oauth2/token, the /device page calls the session-guarded
 // lookup/approve/deny, and Hydra's own device endpoints are never routed.
-// These tests pin that gateway contract (docs/oauth2-device-flow-design §10.5).
+// These tests pin that gateway contract (docs/ory-suite-usage.zh-CN.md §9.1).
 
 const (
 	backendUpstream        = "http://backend:16666"

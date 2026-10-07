@@ -28,7 +28,7 @@ type oauthAuthorizationResponse struct {
 const (
 	oauthAuditActionRevokeConsent = "user.oauth.authorization.revoke_consent"
 
-	// updatedData.code of the per-device revocation (design §6.5).
+	// updatedData.code of the per-device revocation (ory-suite-usage §10.5.6).
 	oauthCodeAuthorizationNotFound = "authorization_not_found"
 	oauthCodeRevokeFailed          = "revoke_failed"
 )

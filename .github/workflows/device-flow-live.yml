@@ -1,7 +1,8 @@
 name: Device flow live
-# BE-9: the OAuth2 device flow against a real, non-dev Hydra on Postgres, for the Hydra
-# that production runs (v25.4.0) and the latest release (v26.2.0). Manual only and not a
-# required check: run it on the commit to deploy, and before any ORY_VERSION change.
+# The live OAuth2 device-flow test (docs/ory-suite-usage.zh-CN.md §11.3): the device flow
+# against a real, non-dev Hydra on Postgres, for the Hydra that production runs (v25.4.0)
+# and the latest release (v26.2.0). Manual only and not a required check: run it on the
+# commit to deploy, and before any ORY_VERSION change.
 
 on:
   workflow_dispatch:

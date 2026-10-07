@@ -205,7 +205,7 @@ OIDCScope "openid profile email"
 | 换 token 报 `invalid_client` | `client_id` / `client_secret` 不匹配，或 public client 误用了 secret |
 | 换 token 报 `invalid_grant` | `code` 已使用或已过期，或 `redirect_uri` 与授权时不一致 |
 | Discovery 的 `token_endpoint` 与以前不同 | 正常：现在是 `…/api/oauth2/token`，旧的 `/oauth2/token` 也照常可用，见 §1 |
-| 把 `device_code` 发到 `/oauth2/token` 得到 `invalid_grant` | 设备授权只能经 `/api/oauth2/device/auth` 发起、经 `/api/oauth2/token` 轮询；Hydra 直连地址不认识 Haruki 签发的设备码。设备授权接入见 [`oauth2-integration.zh-CN.md`](oauth2-integration.zh-CN.md) |
+| 把 `device_code` 发到 `/oauth2/token` 得到 `invalid_grant` | 设备授权只能经 `/api/oauth2/device/auth` 发起、经 `/api/oauth2/token` 轮询；Hydra 直连地址不认识 Haruki 签发的设备码。设备授权接入见 [`oauth2-integration.zh-CN.md`](oauth2-integration.zh-CN.md) §4A |
 | 请求 `/oauth2/device/auth` 或 `/oauth2/device/verify` 得到 404 | 这两个 Hydra 地址不对外开放；用 Discovery 公布的 `device_authorization_endpoint`，用户在 `https://haruki.seiunx.com/device` 输入代码 |
 | 公开客户端换 token 失败 | 没做 PKCE —— 公开客户端必须带 `code_verifier` |
 | 拿不到 `refresh_token` | scope 里没有 `offline_access` |

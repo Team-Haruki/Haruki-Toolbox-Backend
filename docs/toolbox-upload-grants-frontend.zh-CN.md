@@ -75,12 +75,12 @@ Content-Type: application/octet-stream
 
 ## 4. OAuth2 授权页面
 
-继续现有 login/consent 流程。game-data:write 的说明应包含「上传你拥有或获写授权的游戏账号数据」。game-data:read 与 write 独立展示；offline_access 说明后台持续授权用途。用户不授予 read 时不能暗中补选。
+继续现有 login/consent 流程。game-data:write 的说明应包含「上传你拥有或获写授权的游戏账号数据」；station:room:write 同样是写权限（「以你的身份向 Sekai Station 提交车牌」），同意页与设备审核卡都标红。game-data:read 与 write 独立展示；offline_access 说明后台持续授权用途。用户不授予 read 时不能暗中补选。
 
 login / consent 端点还有以下拒绝情形，页面沿用现有的失败提示即可，不需要新文案。需要区分时读 `updatedData.code`；`message` 只是给人看的英文短句，不作为判断依据：
 
 - consent accept（`POST /api/oauth2/consent/accept` 和旧版 `POST /api/oauth2/authorize/consent` 的同意分支）在 client 已被管理员停用或已删除时返回 403，`updatedData.code` 为 `client_disabled`；后端查询 client 失败时返回 503，`message` 为 `oauth2 client validation unavailable`，不带 `updatedData`。
-- login 与 consent 的查询、接受、拒绝端点遇到设备授权模式的 challenge 时返回 403，`updatedData.code` 为 `device_flow_challenge`。正常的浏览器授权不会出现这种 challenge。
+- login 与 consent 的查询、接受、拒绝端点遇到设备授权模式的 challenge 时返回 403，`updatedData.code` 为 `device_flow_challenge`。正常的浏览器授权不会出现这种 challenge：设备授权不经过这两个页面，由 `/device` 页面和后端的设备端点完成（接入方契约见 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A，`/device` 依赖的后端端点与错误码见 [Ory 套件使用说明](ory-suite-usage.zh-CN.md) §10.5.5）。
 - login accept 不接收 `acr`，传了也会被忽略；前端不应发送。
 
 OAuth2 应用可通过 `GET /api/oauth2/game-data/upload-targets` 获取可写目标，要求 game-data:write + bindings:read；响应见 [HarukiProxy 对接](harukiproxy-v3-client-integration.zh-CN.md)。该接口不会返回已保存的游戏数据。

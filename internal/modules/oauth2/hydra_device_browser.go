@@ -21,12 +21,12 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// The browser endpoints of the device flow (design §6.4): lookup claims a
+// The browser endpoints of the device flow (ory-suite-usage §10.5.5): lookup claims a
 // user code for the signed-in user and returns the review card; approve runs
 // the server-driven chain (hydra_device_verification.go); deny records the
 // refusal. They sit behind Oathkeeper's cookie_session rule and the session
 // guard, never answer 401 themselves (the frontend treats 401 as an expired
-// session), never relay Hydra's text, and answer the fixed codes of §6.5 in
+// session), never relay Hydra's text, and answer the fixed codes of §10.5.5 in
 // updatedData.code.
 
 const (
@@ -43,11 +43,11 @@ const (
 	deviceLabelSourceDevice   = "device"
 	deviceLabelSourceDefault  = "default"
 	// deviceLookupGlobalWarnPart: lookup-fail:global warns at a third of its
-	// hard cap (50 of 150, design §8.2).
+	// hard cap (50 of 150, ory-suite-usage §10.5.10).
 	deviceLookupGlobalWarnPart = 3
 )
 
-// Browser error codes (design §6.5; the table is fixed).
+// Browser error codes (ory-suite-usage §10.5.5; the table is fixed).
 const (
 	deviceCodeFeatureDisabled        = "feature_disabled"
 	deviceCodeUnsupportedMediaType   = "unsupported_media_type"
@@ -235,7 +235,7 @@ type deviceBrowserUser struct {
 }
 
 // guard applies the checks every browser endpoint starts with, in the order
-// of design §6.4: feature switch, JSON content type, Origin allowlist, body
+// of ory-suite-usage §10.5.5: feature switch, JSON content type, Origin allowlist, body
 // size. It returns handled=true when it already answered.
 func (h *deviceBrowserHandlers) guard(c fiber.Ctx) (bool, error) {
 	active, err := h.cfg.Active(c.Context())
@@ -355,7 +355,7 @@ func newDeviceFlowNonce() string {
 }
 
 // handleDeviceLookup is POST /api/oauth2/device/lookup: claim a user code
-// (design §6.4). Unknown, expired before claim, and taken-by-another-account
+// (ory-suite-usage §10.5.5). Unknown, expired before claim, and taken-by-another-account
 // codes all answer invalid_code and count toward the failure budget; a
 // malformed code does not.
 func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
@@ -512,7 +512,7 @@ func respondDeviceDecisionRefusal(c fiber.Ctx, code string) error {
 // DST); a fixed zone avoids depending on the host's tzdata.
 var deviceDefaultLabelZone = time.FixedZone("Asia/Shanghai", 8*60*60)
 
-// handleDeviceApprove is POST /api/oauth2/device/approve (design §6.4, §9).
+// handleDeviceApprove is POST /api/oauth2/device/approve (ory-suite-usage §10.5.5, §10.5.7).
 func (h *deviceBrowserHandlers) handleDeviceApprove(c fiber.Ctx) error {
 	if handled, err := h.guard(c); handled {
 		return err

@@ -10,7 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Result codes of the browser-side device-flow scripts (design §7.5).
+// Result codes of the browser-side device-flow scripts (ory-suite-usage §10.5.8).
 const (
 	deviceClaimNew           = "CLAIMED_NEW"
 	deviceClaimRenewed       = "CLAIMED_RENEWED"

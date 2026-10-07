@@ -90,7 +90,7 @@ Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `internal/platform
 - `docs/README.md` is the index, grouped by audience. Add new docs there. Docs about our own systems are kept only while the work is unfinished — delete them once it lands and move anything the code cannot state into a comment next to the code; the history stays in git. Docs for external integrators are kept regardless.
 - Links inside `docs/` must be repo-relative (`oauth2-integration.zh-CN.md`, `../internal/...`). Never commit an absolute path from your own machine.
 - When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
-- When changing OAuth2 client integration, update `docs/oauth2-integration.zh-CN.md` — one document covers public clients, confidential clients and the OAuth2 webhook.
+- When changing OAuth2 client integration, update `docs/oauth2-integration.zh-CN.md` — one document covers public clients, confidential clients, the device authorization grant (§4A) and the OAuth2 webhook.
 - When changing webhook behavior, update `docs/webhook-integration.zh-CN.md` (public API webhook) and §8 of `docs/oauth2-integration.zh-CN.md` (OAuth2 webhook).
 - When changing game account data grants or the accessible-accounts aggregate, update `docs/game-account-data-grants.zh-CN.md`, including the feature-to-capability table the frontend gates on.
 - When changing Afdian sponsor webhook/sync behavior, update `docs/afdian-sponsor-integration.zh-CN.md`.

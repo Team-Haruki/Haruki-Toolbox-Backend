@@ -42,7 +42,7 @@ func deviceClientUsable(cfg DeviceFlowConfig, client *HydraOAuthClient) bool {
 		HydraOAuthClientDeviceEnabled(client)
 }
 
-// checkDeviceScopePolicy applies the device scope policy (design §6.6) to a
+// checkDeviceScopePolicy applies the device scope policy (ory-suite-usage §10.5.11) to a
 // normalized scope list and returns the RFC 6749 error description on failure.
 // The flow scope must be non-empty, contain user:read (devices echo "authorized
 // as <name>"), avoid email, be registered on the client, and stay inside the

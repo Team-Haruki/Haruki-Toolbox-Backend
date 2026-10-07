@@ -4,7 +4,7 @@
 
 > **第三方客户端如何接入 Haruki Toolbox 的 OAuth2，以及如何把 Toolbox 作为 OIDC Provider 完成登录。**
 
-覆盖公开客户端（SPA / Web 前端）、保密客户端（Telegram Bot / 服务端后端）以及数据更新回调，不展开旧版本历史与内部实现。
+覆盖公开客户端（SPA / Web 前端）、保密客户端（Telegram Bot / 服务端后端）、没有浏览器的程序使用的设备授权（§4A）以及数据更新回调，不展开旧版本历史与内部实现。
 
 > 如果你**只想让用户用 Haruki 账号登录你的站点**、不需要读取游戏数据，请直接看
 > [`oidc-provider.zh-CN.md`](oidc-provider.zh-CN.md) —— 那篇只讲 OIDC，更短。
@@ -40,13 +40,14 @@ https://toolbox-api-direct.haruki.seiunx.com
 | --- | --- | --- |
 | Discovery | `/.well-known/openid-configuration` | 200 |
 | Authorization | `/oauth2/auth` | 302 |
-| Token | `/oauth2/token` | 可用 |
+| Token | `/api/oauth2/token`（Discovery 公布的 `token_endpoint`） | 可用 |
 | JWKS | `/.well-known/jwks.json` | 200，2 把 RS256 |
 | UserInfo | `/userinfo` | 可用 |
 | Revocation | `/oauth2/revoke` | 可用 |
 | End Session | `/oauth2/sessions/logout` | ✅ 可用，见下方 |
+| Device Authorization | `/api/oauth2/device/auth`（Discovery 公布的 `device_authorization_endpoint`） | 可用，见 §4A |
 
-OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码**。现有 `/api/oauth2/authorize` 与 `/api/oauth2/token` 仍作为兼容入口保留。
+OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码**。`/api/oauth2/authorize` 是浏览器入口（§3.1）。`/api/oauth2/token` 是 Discovery 公布的令牌端点：它是后端的令牌端点兼容层，授权码与刷新令牌请求原样转发给 Hydra、响应原样返回，只额外处理设备授权许可；以前写死的 Hydra 直连 `/oauth2/token` 对授权码与刷新令牌仍然可用，但设备授权只能用 `/api/oauth2/token`（§12.9）。
 
 > ⚠️ **Discovery 的 `scopes_supported` 与 `claims_supported` 不完整。** 它们分别只公布
 > `openid` / `offline_access` / `offline` 和 `sub`，这是 Hydra 的默认公告行为 —— 实际可用的
@@ -87,10 +88,13 @@ OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码
 | PKCE | **必须** | 可选（有后端时非必需） |
 | 浏览器授权流程 | 相同 | 相同 |
 | 差别所在 | — | **换 token 由你的后端完成,并携带 secret** |
+| 设备授权（§4A） | 可用：发给用户自行运行的程序（无法保密 secret）用它 | 可用：token 端点用 Basic |
 
 保密客户端在 Hydra 侧会被创建为 `token_endpoint_auth_method = client_secret_basic`，未指定授权类型时 `grant_types = ["authorization_code", "refresh_token"]`（见 [`hydra_clients.go`](../internal/modules/oauth2/hydra_clients.go)）。
 
 两种类型的浏览器授权流程**完全一致** —— 用户都要经过前端登录页和授权页。唯一的区别在第 5 节换 token 那一步。
+
+**没有浏览器、也没有回调地址的程序**（常驻进程、命令行工具、自行部署的机器人客户端）不是第三种客户端类型，而是另一种授权方式：设备授权（§4A）。程序显示一个短代码，用户在自己的浏览器里登录 Toolbox 并输入它；公开与保密客户端都可以由管理员开通（§10）。
 
 ---
 
@@ -240,11 +244,521 @@ state / telegram_user_id / created_at / expires_at / used=false
 
 授权回调完成后**立即标记为已使用**。
 
+## 4A. 设备授权（无头程序）
+
+没有浏览器、也没有回调地址的程序（常驻进程、命令行工具、由运行者自行部署的机器人客户端，例如 Haruki-Client 的车牌收集）用 OAuth 2.0 设备授权许可（[RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)）以 Toolbox 用户的身份取得令牌：程序向 Toolbox 申请一对代码并在本机显示，用户在**自己的**浏览器里打开 `https://haruki.seiunx.com/device`、登录 Toolbox、输入代码并批准；程序同时轮询令牌端点，直到拿到令牌或得到明确的结果。
+
+拿到的令牌与授权码流程签发的完全相同（`ory_at_…` 访问令牌；带 `offline_access` 时有刷新令牌；带 `openid` 时有 id_token），§7 的资源接口、§5.3 的刷新和 §6 的撤销照常使用。本节的要求是规范性的：接入方必须遵守，服务端无法替你强制其中的展示与保存要求。
+
+### 4A.1 前提与端点
+
+- **客户端由管理员登记**，并开通设备授权许可（`grantTypes` 含 `urn:ietf:params:oauth:grant-type:device_code`，§10）。发给用户自行运行的程序无法保密 secret，应登记为**公开客户端**（仅设备时 `redirectUris` 为空）；能安全保存 secret 的服务端程序可以用保密客户端。授权码与设备授权可以登记在同一个客户端上。
+- **scope**：客户端登记的 scope 与每次设备授权请求都必须含 `user:read`（程序要回显「已授权为 …」，4A.7）。经设备授权只能申请 `openid`、`profile`、`offline_access`、`user:read`、`bindings:read`、`game-data:read`、`station:room:write`，且都须已为该客户端登记；`email` 一律拒绝；`game-data:write` 只给 `devicePolicy.allowWrite=true` 的公开客户端；不支持 `audience` 参数。要长期使用就申请 `offline_access` 拿刷新令牌。
+- **地址**：基址固定为 `https://toolbox-api-direct.haruki.seiunx.com`，不要用 `toolbox-api-cdn`。两份发现文档（`/.well-known/openid-configuration` 与 `/.well-known/oauth-authorization-server`）同时公布 `device_authorization_endpoint = …/api/oauth2/device/auth` 与 `token_endpoint = …/api/oauth2/token`，按发现文档配置的库不需要改端点。Hydra 自己的 `/oauth2/device/*` 不对外开放（404）。
+- **客户端认证**（两个端点规则相同）：公开客户端只在表单里带 `client_id`；保密客户端用 HTTP Basic `base64(urlencode(client_id) ":" urlencode(client_secret))`（RFC 6749 §2.3.1），表单里的 `client_id` 可省，带了就必须与 Basic 用户名一致。
+
+### 4A.2 发起：`POST /api/oauth2/device/auth`
+
+请求体 `application/x-www-form-urlencoded`，不超过 4 KiB：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `client_id` | 公开客户端必填 | 保密客户端可省（见 4A.1） |
+| `scope` | 是 | 空格分隔；必须含 `user:read` |
+| `device_label` | 否 | 设备自述，显示在用户的审核卡和「已授权应用」里；控制字符与双向覆盖字符会被删除，截断到 64 个字符。内容要求见 4A.3 |
+
+其他参数一律忽略，不转发；同一参数出现两次、或带了 `audience`，返回 `invalid_request`。
+
+```bash
+curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/device/auth' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=<client_id>' \
+  --data-urlencode 'scope=user:read offline_access station:room:write' \
+  --data-urlencode 'device_label=Haruki-Client @ home-server'
+```
+
+成功返回 200（响应带 `Cache-Control: no-store`）：
+
+```json
+{
+  "device_code": "hdc_…",
+  "user_code": "BCDF-GHJK",
+  "verification_uri": "https://haruki.seiunx.com/device",
+  "verification_uri_complete": "https://haruki.seiunx.com/device?user_code=BCDF-GHJK",
+  "expires_in": 599,
+  "interval": 5
+}
+```
+
+- `device_code` 是不透明的 `hdc_…`，只能拿来轮询本服务的 `/api/oauth2/token`。它是秘密：只保存在内存或本机，不写日志。
+- `user_code` 是 8 个辅音字母，以 `XXXX-XXXX` 显示；用户输入时大小写、`-`、空格与全角字符都会被归一化。
+- `expires_in` 目前约 600 秒（代码 10 分钟有效）；`interval` 至少为 5。
+
+错误响应是 RFC 6749 的 `{"error","error_description"}`，同样带 `Cache-Control: no-store`：
+
+| HTTP | `error` | 原因 | 程序应该 |
+| --- | --- | --- | --- |
+| 400 | `invalid_request` | Content-Type 不是表单；body 超过 4 KiB 或无法解析；参数重复；缺 `client_id`；表单 `client_id` 与 Basic 用户名不一致；Basic 头格式错误；带了 `audience` | 修正请求，不要重试 |
+| 401 | `invalid_client` | 客户端不存在；保密客户端的 secret 错误 | 检查配置，不要重试 |
+| 400 | `unauthorized_client` | 设备授权未开放；客户端不在允许名单、已被停用或没有设备授权许可 | 联系管理员，不要循环重试 |
+| 400 | `invalid_scope` | scope 为空；缺 `user:read`（`error_description` 为 `user:read is required for device authorization`）；含 `email`；scope 未为该客户端登记；该 scope 不能经设备授权申请（如未开通 `allowWrite` 的 `game-data:write`） | 修正 scope |
+| 429 | `temporarily_unavailable`（附 `Retry-After`） | 该客户端或同类客户端 10 分钟内的发码数已达上限 | 等 `Retry-After` 秒后再发起 |
+| 503 | `temporarily_unavailable` | 服务暂时不可用（包括服务端读取开关配置出错） | 退避后重试，不是终止信号 |
+| 500 | `server_error` | 服务端配置异常 | 稍后重试；持续出现请联系管理员 |
+
+此外，Hydra 对客户端认证给出的其他 4xx 原样返回。
+
+### 4A.3 向用户展示（无头程序的展示要求）
+
+- 用户码与完整验证地址**只在本机输出**：控制台、本地日志或本机界面。**不得**经聊天、群消息、邮件或任何第三方通道转发（例如不能让机器人把代码发到 QQ 群或私聊）：转发出去的代码可以被别人拿去批准，这正是 RFC 8628 §5.4 的远程钓鱼。
+- 同时输出有效期（`expires_in`）和提示：「只有你本人刚刚启动本程序时才批准；不要把代码发给任何人」。
+- 不要输出 `device_code`，也不要尝试替用户在浏览器里自动完成批准。
+- `device_label` 由运行者自定义，用来让用户在审核卡和「已授权应用」里认出这台设备，例如默认取 `<程序名> @ <主机名>`。它**不得**包含 QQ 号、bot_id、邮箱等个人标识，也不得包含其他系统的标识或凭据；页面把它标为「应用自述」并按纯文本显示。
+
+### 4A.4 轮询：`POST /api/oauth2/token`
+
+```bash
+curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=urn:ietf:params:oauth:grant-type:device_code' \
+  -d 'device_code=hdc_…' \
+  -d 'client_id=<client_id>'
+```
+
+保密客户端改用 Basic（`-u`），表单里的 `client_id` 可省。轮询算法（必须遵守）：
+
+```text
+deadline = now + expires_in            # client-side enforcement (MUST)
+interval = max(interval, 5)
+loop:
+  sleep(interval)
+  if now >= deadline: return EXPIRED
+  r = POST /api/oauth2/token  grant_type=urn:ietf:params:oauth:grant-type:device_code, device_code, client_id (+Basic if confidential)
+  200                         → return tokens
+  400 authorization_pending   → continue
+  400 slow_down               → interval = r.interval or interval + 5   # sticky for all later polls
+  400 access_denied           → return DENIED
+  400 expired_token           → return EXPIRED
+  400 invalid_grant / invalid_request, 401 invalid_client → return FAILED (no retry)
+  429                         → sleep(Retry-After); continue
+  5xx / network               → interval = min(interval*2, 60); continue
+```
+
+| HTTP | `error` | 含义 | 程序应该 |
+| --- | --- | --- | --- |
+| 200 | — | 令牌响应，与 §5.2 相同 | 保存令牌（4A.6），停止轮询 |
+| 400 | `authorization_pending` | 用户还没有批准 | 按 `interval` 继续 |
+| 400 | `slow_down`（附 `interval`） | 轮询过快 | `interval` 取响应里的值（没有就 +5 秒），之后一直沿用 |
+| 400 | `access_denied` | 用户拒绝了；或批准后客户端被管理员停用 | 停止，告诉用户；需要时重新发起 4A.2 |
+| 400 | `expired_token` | 代码在 `expires_in` 内没有被批准；批准没能完成；无视 `slow_down` 超过 30 次；或设备授权已被关闭 | 停止；需要时重新发起 4A.2 |
+| 400 | `invalid_grant` | `device_code` 不认识（拼错、不是本服务签发、已经兑换过）或属于另一个客户端；授权已被用户撤销 | 停止，不要重试 |
+| 400 | `invalid_request` | 缺 `client_id` 或 `device_code`；参数重复；表单 `client_id` 与 Basic 用户名不一致 | 修正请求 |
+| 401 | `invalid_client` | 客户端认证失败 | 检查 secret，不要重试 |
+| 503 | `temporarily_unavailable` | 服务暂时不可用（包括服务端读取开关配置出错） | 按 5xx 退避后继续，不是终止信号 |
+| 5xx / 网络错误 | — | — | `interval = min(interval×2, 60)` 后继续，直到 `deadline` |
+
+- 第一次轮询前也要先等 `interval`。拿到令牌后立即停止：同一个 `device_code` 只能兑换一次，再轮询只会得到 `invalid_grant`。
+- 已拒绝、客户端已停用、已过期这些结果只在客户端认证通过之后才会告诉你；secret 错误的保密客户端只会看到 401。
+
+### 4A.5 服务端已吸收的差异，以及常见库
+
+- **已吸收**：响应里没有 Hydra 多出来的 `Header` 字段；`interval` 至少为 5；验证地址是前端的短地址 `https://haruki.seiunx.com/device`；用户码会被归一化；拒绝会作为 `access_denied`、过期会作为 `expired_token` 交给设备（Hydra 自己做不到）；限流用 429 `temporarily_unavailable` 加 `Retry-After`，不用 `slow_down`。这些都不需要接入方做特殊处理。
+- **`device_code` 不透明**：它是 Toolbox 签发的 `hdc_…`，不是 Hydra 的设备码。只能交给 `/api/oauth2/token`；直接发给 Hydra 的 `/oauth2/token` 只会得到 `invalid_grant`（§12.9）。
+- **`golang.org/x/oauth2`**（v0.37.0）：`DeviceAccessToken` 只在 `authorization_pending` / `slow_down` 时继续，遇到 429、5xx（包括 503）与网络错误立即返回；必须在外层按上面的算法退避，并在 `da.Expiry` 之前用同一个 `da` 再调用（4A.8 的 Go 示例就是这样做的）。`DeviceAuth` 不发送 client secret：保密客户端要自己发表单，或在 `ctx` 里放一个会补 Basic 头的 `*http.Client`。
+- **Rust `oauth2` crate**（5.0）：`exchange_device_access_token(…).request_async` 先立即轮询一次再按间隔等待，自己处理 `authorization_pending`、`slow_down` 和网络错误（间隔翻倍，上限用 `set_max_backoff_interval` 设为 60 秒），遇到 503 `temporarily_unavailable`、`server_error` 与非 JSON 的 5xx 立即返回，需要外层退避后用同一个 `details` 再调用。重新调用时 crate 从 `details.interval()` 重新计时，可能多收到一次 `slow_down`，无害。
+- **Python** 没有通行的设备授权库，按 4A.4 的算法自己写（4A.8 的 Python 示例）。
+
+### 4A.6 令牌保存、刷新与撤销
+
+- 刷新令牌只存在本机，与其他凭据分开保存：文件权限 0600，或系统密钥库。例如 Haruki-Client 存在工作目录下单独的 `toolbox_oauth.json`（0600），与 Haruki Cloud 凭据、`configs.yaml` 分开。令牌与 `device_code` 都不写日志。
+- 同一时刻最多一个刷新请求在途：刷新令牌每次刷新都会轮换，并有重用检测，重复使用旧的刷新令牌会让整条授权链上的令牌全部作废。
+- 刷新与授权码令牌相同（§5.3，公开客户端带 `client_id`，保密客户端用 Basic）。
+- 访问令牌返回 401 时，先串行刷新一次；刷新仍失败（如 `invalid_grant`）就重新发起设备授权（4A.2）。
+- 用户可以在「已授权应用」里按设备撤销；撤销后访问令牌立即失效，刷新得到 `invalid_grant`，按上一条重新发起。
+- 停用该功能或卸载程序时，用刷新令牌调 `POST /api/oauth2/revoke`（§6），然后删除本地记录。
+
+### 4A.7 回显账号，与其他认证分开
+
+- 拿到令牌后调用 `GET /api/oauth2/user/profile`（需要 `user:read`），并输出「已授权为 Toolbox 账号「<name>」」。用户据此确认批准的是自己的账号；这是 Toolbox 强制设备授权带 `user:read` 的原因。
+- 设备授权与其他系统的认证完全分开，不复用、不派生、不互相传递凭据。例如 Haruki-Client 的机器人功能（命令路由、调用 Haruki Cloud）使用 Haruki Cloud 的认证，车牌收集使用 Toolbox 设备授权：发码与展示不经机器人通道，`device_label` 里没有 bot_id 或 QQ 号，Toolbox 令牌只发给需要它的资源服务（Toolbox 的资源接口、Sekai Station），从不发给 Haruki Cloud。
+
+### 4A.8 示例
+
+三个示例都完成同一件事：发起设备授权、只在本机显示代码、按 4A.4 轮询并退避、回显账号名。
+
+**Rust**（`oauth2 = "5"`，默认 feature 自带 reqwest 0.12 与 rustls；另需 `tokio` 的 `macros`、`rt-multi-thread`、`time`，以及 `serde_json`）：
+
+```rust
+use std::error::Error;
+use std::time::{Duration, Instant};
+
+use oauth2::basic::{BasicClient, BasicErrorResponseType, BasicTokenResponse};
+use oauth2::{
+    ClientId, DeviceAuthorizationUrl, DeviceCodeErrorResponseType, RequestTokenError, Scope,
+    StandardDeviceAuthorizationResponse, TokenResponse, TokenUrl,
+};
+
+const BASE_URL: &str = "https://toolbox-api-direct.haruki.seiunx.com";
+
+/// 用 OAuth2 设备授权（RFC 8628）登录无头程序，返回令牌。
+///
+/// show 只能把用户码与完整验证地址输出到本机（控制台、本地日志或本地界面），
+/// 不得经聊天、群消息或任何第三方通道转发；同时提示有效期，以及
+/// 「只有你本人刚刚启动本程序时才批准」。
+///
+/// exchange_device_access_token 自己处理 authorization_pending 与 slow_down
+/// （间隔 +5 s）和网络错误（间隔翻倍）；其余回答立即返回。
+/// 503 / 500（temporarily_unavailable、server_error）与非 JSON 的 5xx
+/// 不是终止信号：在外层按 min(2×间隔, 60 s) 退避后，用同一个 details 继续，
+/// 直到 expires_in 用完。access_denied、expired_token、invalid_grant、
+/// invalid_client、invalid_request 是终止信号。
+async fn device_login(
+    client_id: &str,
+    scopes: &[&str],
+    label: &str,
+    show: impl Fn(&StandardDeviceAuthorizationResponse),
+) -> Result<BasicTokenResponse, Box<dyn Error>> {
+    // 公开客户端：没有 secret，crate 把 client_id 放进表单。
+    // 保密客户端加 .set_client_secret(ClientSecret::new(...))，crate 改用 Basic。
+    let client = BasicClient::new(ClientId::new(client_id.to_owned()))
+        .set_device_authorization_url(DeviceAuthorizationUrl::new(format!(
+            "{BASE_URL}/api/oauth2/device/auth"
+        ))?)
+        .set_token_uri(TokenUrl::new(format!("{BASE_URL}/api/oauth2/token"))?);
+    // 不跟随重定向（oauth2 crate 的建议，防 SSRF）。
+    let http = oauth2::reqwest::ClientBuilder::new()
+        .redirect(oauth2::reqwest::redirect::Policy::none())
+        .build()?;
+
+    let details: StandardDeviceAuthorizationResponse = client
+        .exchange_device_code()
+        .add_scopes(scopes.iter().map(|s| Scope::new((*s).to_owned())))
+        .add_extra_param("device_label", label)
+        .request_async(&http)
+        .await?;
+    show(&details);
+
+    let deadline = Instant::now() + details.expires_in();
+    let mut backoff = details.interval().max(Duration::from_secs(5));
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let result = client
+            .exchange_device_access_token(&details)
+            .set_max_backoff_interval(Duration::from_secs(60))
+            .request_async(&http, tokio::time::sleep, Some(remaining))
+            .await;
+        let retryable = match &result {
+            Err(RequestTokenError::ServerResponse(response)) => matches!(
+                response.error(),
+                DeviceCodeErrorResponseType::Basic(BasicErrorResponseType::Extension(code))
+                    if code == "temporarily_unavailable" || code == "server_error"
+            ),
+            Err(RequestTokenError::Parse(..)) => true, // 网关返回的非 JSON 5xx
+            _ => false,
+        };
+        if !retryable || Instant::now() + backoff >= deadline {
+            return Ok(result?);
+        }
+        backoff = (backoff * 2).min(Duration::from_secs(60));
+        tokio::time::sleep(backoff).await;
+    }
+}
+
+/// 令牌所代表的 Toolbox 账号名；程序必须把它显示出来。
+async fn authorized_account_name(access_token: &str) -> Result<String, Box<dyn Error>> {
+    let body = oauth2::reqwest::Client::new()
+        .get(format!("{BASE_URL}/api/oauth2/user/profile"))
+        .bearer_auth(access_token)
+        .send()
+        .await?
+        .error_for_status()?
+        .text()
+        .await?;
+    let profile: serde_json::Value = serde_json::from_str(&body)?;
+    Ok(profile["updatedData"]["name"].as_str().unwrap_or_default().to_owned())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let token = device_login(
+        "haruki-client",
+        &["user:read", "offline_access", "station:room:write"],
+        "Haruki-Client @ home-server",
+        |d| {
+            eprintln!(
+                "请在浏览器打开 {} 并输入代码 {}（{} 分钟内有效）",
+                d.verification_uri().as_str(),
+                d.user_code().secret(),
+                d.expires_in().as_secs() / 60
+            );
+            if let Some(complete) = d.verification_uri_complete() {
+                eprintln!("也可以直接打开 {}", complete.secret());
+            }
+            eprintln!("只有你本人刚刚启动本程序时才批准；不要把代码发给任何人。");
+        },
+    )
+    .await?;
+    let name = authorized_account_name(token.access_token().secret()).await?;
+    eprintln!("已授权为 Toolbox 账号「{name}」");
+    // 把 token.refresh_token() 与过期时间存到本机（0600），见 4A.6。
+    Ok(())
+}
+```
+
+**Go**（`golang.org/x/oauth2` v0.37.0）。下面的函数原样取自后端的真实 Hydra 集成测试（`internal/modules/oauth2/hydra_device_live_test.go`，在 v25.4.0 与 v26.2.0 上运行，并注入一次 503 验证退避），架构测试 `TestIntegrationDocGoSampleMatchesLiveTest` 保证这里与测试代码一致。示例与后端一样用 `encoding/json/v2`（Go 1.27）；改用 `encoding/json` 时把 `json.UnmarshalRead(resp.Body, &profile)` 换成 `json.NewDecoder(resp.Body).Decode(&profile)`：
+
+```go
+import (
+	"context"
+	json "encoding/json/v2"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"golang.org/x/oauth2"
+)
+
+// deviceLogin signs a headless program in with the OAuth2 device
+// authorization grant (RFC 8628) through golang.org/x/oauth2. It is the Go
+// example of the integration docs.
+//
+// conf names the Toolbox endpoints, https://toolbox-api-direct.haruki.seiunx.com
+// + /api/oauth2/device/auth and /api/oauth2/token (both are also in the
+// discovery document). For a public client leave ClientSecret empty and set
+// AuthStyle to oauth2.AuthStyleInParams, so client_id goes in the form and no
+// Basic header is sent; a confidential client must add its Basic credentials
+// itself (DeviceAuth never sends the secret), for example with an
+// *http.Client in ctx (oauth2.HTTPClient) whose transport sets them.
+//
+// show must print the user code and the complete verification URI on the
+// local console only, never through a chat or any other channel, with the
+// expiry and a warning to approve only a request the user just started.
+//
+// DeviceAccessToken keeps polling only on authorization_pending and slow_down;
+// it returns on anything else. A 429 (wait Retry-After), a 5xx such as 503
+// temporarily_unavailable, and a network error are not final: poll again with
+// the same da until da.Expiry, doubling the interval after a 5xx or a network
+// error. access_denied, expired_token, invalid_grant and invalid_client are
+// final.
+func deviceLogin(ctx context.Context, conf *oauth2.Config, label string, show func(*oauth2.DeviceAuthResponse)) (*oauth2.Token, error) {
+	da, err := conf.DeviceAuth(ctx, oauth2.SetAuthURLParam("device_label", label))
+	if err != nil {
+		return nil, fmt.Errorf("start device authorization: %w", err)
+	}
+	show(da)
+
+	interval := max(da.Interval, 5)
+	for {
+		// DeviceAccessToken waits da.Interval before every poll.
+		da.Interval = interval
+		token, err := conf.DeviceAccessToken(ctx, da)
+		if err == nil {
+			return token, nil
+		}
+		if ctx.Err() != nil || !time.Now().Before(da.Expiry) {
+			return nil, fmt.Errorf("device authorization expired: %w", err)
+		}
+		var retrieveErr *oauth2.RetrieveError
+		if !errors.As(err, &retrieveErr) {
+			interval = min(interval*2, 60) // network error
+			continue
+		}
+		switch status := retrieveErr.Response.StatusCode; {
+		case status == http.StatusTooManyRequests:
+			if err := sleepContext(ctx, retryAfter(retrieveErr.Response, interval)); err != nil {
+				return nil, err
+			}
+		case status >= http.StatusInternalServerError:
+			interval = min(interval*2, 60)
+		default:
+			return nil, err // access_denied, expired_token, invalid_grant, invalid_client
+		}
+	}
+}
+
+// authorizedAccountName returns the Toolbox account the token acts for; the
+// program must show it ("Authorized as Toolbox account <name>").
+func authorizedAccountName(ctx context.Context, conf *oauth2.Config, token *oauth2.Token, baseURL string) (string, error) {
+	resp, err := conf.Client(ctx, token).Get(baseURL + "/api/oauth2/user/profile")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("profile: HTTP %d", resp.StatusCode)
+	}
+	var profile struct {
+		UpdatedData struct {
+			Name string `json:"name"`
+		} `json:"updatedData"`
+	}
+	if err := json.UnmarshalRead(resp.Body, &profile); err != nil {
+		return "", err
+	}
+	return profile.UpdatedData.Name, nil
+}
+
+// retryAfter reads Retry-After in seconds, falling back to the poll interval.
+func retryAfter(resp *http.Response, fallbackSeconds int64) time.Duration {
+	if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	return time.Duration(fallbackSeconds) * time.Second
+}
+
+func sleepContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+```
+
+调用方式：
+
+```go
+conf := &oauth2.Config{
+	ClientID: "haruki-client",
+	Scopes:   []string{"user:read", "offline_access", "station:room:write"},
+	Endpoint: oauth2.Endpoint{
+		DeviceAuthURL: "https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/device/auth",
+		TokenURL:      "https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token",
+		AuthStyle:     oauth2.AuthStyleInParams,
+	},
+}
+tokens, err := deviceLogin(ctx, conf, "Haruki-Client @ home-server", func(da *oauth2.DeviceAuthResponse) {
+	fmt.Fprintf(os.Stderr, "请在浏览器打开 %s 并输入代码 %s（%s 前有效）\n", da.VerificationURI, da.UserCode, da.Expiry.Format(time.Kitchen))
+	fmt.Fprintln(os.Stderr, "只有你本人刚刚启动本程序时才批准；不要把代码发给任何人。")
+})
+if err != nil {
+	return err
+}
+name, err := authorizedAccountName(ctx, conf, tokens, "https://toolbox-api-direct.haruki.seiunx.com")
+if err != nil {
+	return err
+}
+fmt.Fprintf(os.Stderr, "已授权为 Toolbox 账号「%s」\n", name)
+```
+
+**Python**（`requests`）：
+
+```python
+import sys
+import time
+from urllib.parse import quote
+
+import requests
+
+BASE_URL = "https://toolbox-api-direct.haruki.seiunx.com"
+DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
+
+def device_login(client_id, scope, label, client_secret=None):
+    """用 OAuth2 设备授权（RFC 8628）登录，返回 (结果, 令牌)。
+
+    结果是 "ok"、"denied"、"expired" 或 "failed"。保密客户端传 client_secret，
+    用 Basic 认证（RFC 6749 §2.3.1：两部分先做 URL 编码）。
+    """
+    auth = (quote(client_id, safe=""), quote(client_secret, safe="")) if client_secret else None
+    client_form = {} if auth else {"client_id": client_id}
+
+    r = requests.post(
+        f"{BASE_URL}/api/oauth2/device/auth",
+        data={**client_form, "scope": scope, "device_label": label},
+        auth=auth,
+        timeout=15,
+    )
+    if r.status_code != 200:
+        # 4A.2 的错误表：429 / 503 稍后重试，其余先修正请求或联系管理员。
+        raise RuntimeError(f"device authorization failed: HTTP {r.status_code} {r.text}")
+    da = r.json()
+
+    # 只在本机输出；不得经聊天、群消息或任何第三方通道转发。
+    print(f"请在浏览器打开 {da['verification_uri']} 并输入代码 {da['user_code']}"
+          f"（{da['expires_in'] // 60} 分钟内有效）", file=sys.stderr)
+    print(f"也可以直接打开 {da['verification_uri_complete']}", file=sys.stderr)
+    print("只有你本人刚刚启动本程序时才批准；不要把代码发给任何人。", file=sys.stderr)
+
+    deadline = time.monotonic() + da["expires_in"]
+    interval = max(da.get("interval", 5), 5)
+    while True:
+        time.sleep(interval)
+        if time.monotonic() >= deadline:
+            return "expired", None
+        try:
+            r = requests.post(
+                f"{BASE_URL}/api/oauth2/token",
+                data={**client_form, "grant_type": DEVICE_GRANT, "device_code": da["device_code"]},
+                auth=auth,
+                timeout=15,
+            )
+        except requests.RequestException:
+            interval = min(interval * 2, 60)
+            continue
+        if r.status_code == 200:
+            return "ok", r.json()
+        if r.status_code == 429:
+            time.sleep(int(r.headers.get("Retry-After", interval)))
+            continue
+        if r.status_code >= 500:  # 含 503 temporarily_unavailable，不是终止信号
+            interval = min(interval * 2, 60)
+            continue
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        error = body.get("error")
+        if error == "authorization_pending":
+            continue
+        if error == "slow_down":
+            interval = body.get("interval", interval + 5)  # 之后的轮询一直沿用
+            continue
+        if error == "access_denied":
+            return "denied", None
+        if error == "expired_token":
+            return "expired", None
+        return "failed", None  # invalid_grant、invalid_request、invalid_client：不要重试
+
+
+def authorized_account_name(access_token):
+    """令牌所代表的 Toolbox 账号名；程序必须把它显示出来。"""
+    r = requests.get(
+        f"{BASE_URL}/api/oauth2/user/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    r.raise_for_status()
+    return r.json()["updatedData"]["name"]
+
+
+if __name__ == "__main__":
+    result, tokens = device_login("haruki-client", "user:read offline_access station:room:write",
+                                  "Haruki-Client @ home-server")
+    if result != "ok":
+        sys.exit(f"设备授权未完成：{result}")
+    print(f"已授权为 Toolbox 账号「{authorized_account_name(tokens['access_token'])}」", file=sys.stderr)
+```
+
+### 4A.9 用户那一侧
+
+接入方不需要实现，但可以据此写使用说明：
+
+- `/device` 页面必须先登录 Toolbox 才能输入代码；带 `?user_code=` 打开时只预填，不会自动提交。
+- 审核卡展示应用名与 `client_id`、申请的权限（写权限标红，例如 `station:room:write`）、应用自述（`device_label`）、发起时间与剩余时间、当前账号；公开客户端永远不显示「官方」，并提示「任何人都可以以此应用的名义发起请求」。用户必须勾选「我确认这是我本人刚刚在自己的设备或程序上发起的」才能允许，也可以点「拒绝」或「不是我发起的」。
+- 一个代码只能被一个账号批准一次；别的账号拿到同一个代码只会看到「代码无效、已过期或已被其他账号使用」。
+- 批准后，「已授权应用」按设备分别列出每一次设备授权（带标签），可以单独撤销某一台设备。
+
 ---
 
 ## 5. 换取与刷新 token
 
-端点：`POST https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token`（由 backend 代理到 Hydra token endpoint）
+端点：`POST https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token`（Discovery 公布的 `token_endpoint`；授权码与刷新令牌请求由 backend 原样转发给 Hydra token endpoint）。设备授权许可也用这个端点轮询，请求与错误码见 §4A.4。
 
 ### 5.1 公开客户端（PKCE）
 
@@ -304,7 +818,9 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token' \
 | 错误 | 通常原因 |
 | --- | --- |
 | `invalid_client` | `client_id` / `client_secret` 不匹配 |
-| `invalid_grant` | `code` 已使用、已过期，或 `redirect_uri` 不匹配 |
+| `invalid_grant` | `code` 已使用、已过期，或 `redirect_uri` 不匹配；刷新时：refresh token 已被使用过（重用会作废整条链）、已撤销或已过期 |
+
+设备授权轮询的错误码（`authorization_pending`、`slow_down`、`access_denied`、`expired_token` 等）见 §4A.4。
 
 ---
 
@@ -313,9 +829,14 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token' \
 ```bash
 curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
   -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'client_id=<client_id>' \
   -d 'token=<token>' \
   -d 'token_type_hint=refresh_token'
 ```
+
+撤销同样要认证客户端：公开客户端在表单里带 `client_id`（如上），保密客户端改用 Basic（`-u '<client_id>:<client_secret>'`）。撤销 refresh token 会让它所在授权签发的 access token 一并失效。设备授权取得的令牌用同一个端点撤销；程序停用该功能或被卸载时应当这样做（§4A.6）。
+
+用户自己也可以在 Toolbox 的「已授权应用」里撤销：按应用撤销会删除该应用的全部授权（浏览器授权与所有设备授权），按设备撤销只删除那一次设备授权。撤销后 access token 立即失效，刷新得到 `invalid_grant`。
 
 ---
 
@@ -406,6 +927,8 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 满足条件时发起回调。Hydra 查询失败或回调失败**不会影响上传响应**，只记录日志。
 
+设备授权（§4A）取得的授权同样是 Hydra consent session，按上面的条件触发回调；用户按设备撤销某一台设备后，只要该用户对该 client 还有别的有效授权，回调照常。已批准却从未兑换令牌的设备授权会在代码过期约 1 分钟后被服务端自动撤销，不会长期留在回调范围里。
+
 ### 8.2 上传来源不影响触发
 
 判断条件只看"这个账号的数据更新了"，不看是谁上传的。手动上传、代理上传、iOS 脚本，以及第三方客户端自己用 `game-data:write` 发起的代理上传（§7.4），走的是同一条处理链路，因此都会触发回调。
@@ -463,31 +986,44 @@ OAuth2 Webhook 不改变 OAuth2 game-data API 的响应格式，也不改变 pub
 ```text
 openid  profile  email  offline_access
 user:read  bindings:read  game-data:read  game-data:write
+station:room:write
 ```
 
-全部 scope 均已对外可用且被本文覆盖。
+全部 scope 均已对外可用且被本文覆盖，都要由管理员为你的 client 登记后才能申请（§10）。
 
-`game-data:write` 是其中唯一的**写**权限，申请时请注意：
+其中有两个**写**权限，同意页和设备授权的审核卡都会把它们标红：
 
-- 它允许你代表用户上传游戏数据（§7.4），只对用户**自己拥有**的绑定生效
+`game-data:write`：
+
+- 它允许你代表用户上传游戏数据（§7.4），只对用户**自己拥有**或获得写授权的绑定生效
 - **它不隐含 `game-data:read`**，两者需要分别申请
 - 同意页会向用户展示 "Upload game data on your behalf"，用户可以只授予读、不授予写
+- 经设备授权只能由 `devicePolicy.allowWrite=true` 的公开客户端申请（§10）
+
+`station:room:write`：
+
+- 以用户的身份向 Sekai Station 提交车牌（房间号）。向 Station 提交时以 `Authorization: Bearer <access_token>` 携带令牌
+- 它是公开可用的普通 scope：任何由管理员登记了它的 client 都可以申请，授权码流程与设备授权（§4A）都行；Sekai Station 接受**任何**有效且带此 scope 的 Toolbox 访问令牌，不限 client
+- 它只用于向 Station 提交，不给 Toolbox 自己的资源接口任何权限
+
+经设备授权（§4A）申请 scope 另有限制：必须含 `user:read`；只能申请 `openid`、`profile`、`offline_access`、`user:read`、`bindings:read`、`game-data:read`、`station:room:write`，以及上面条件下的 `game-data:write`；`email` 永远不会经设备授权授予。
 
 ---
 
 ## 10. 管理员创建 OAuth Client 需要什么
 
-需要提供 `clientId`、`name`、`clientType`、`scopes`，授权码客户端还要 `redirectUris`；可选 `postLogoutRedirectUris`、`grantTypes`、`devicePolicy`，其中：
+创建（`POST /api/admin/oauth-clients`）需要提供 `clientId`、`name`、`clientType`、`scopes`，授权码客户端还要 `redirectUris`；可选 `postLogoutRedirectUris`、`grantTypes`、`devicePolicy`。编辑（`PUT /api/admin/oauth-clients/:client_id`）的请求体相同但不带 `clientId`。其中：
 
+- `clientId` 只能含字母、数字、`.`、`_`、`-`
 - `clientType` 只能是 `public` 或 `confidential`
 - `grantTypes` 只能取 `authorization_code`、`refresh_token`、`urn:ietf:params:oauth:grant-type:device_code`（设备授权许可），并且必须含 `authorization_code` 或设备授权许可；`refresh_token` 只能与它们之一同时出现。创建时省略等于 `["authorization_code", "refresh_token"]`。`response_types` 由它推导：含 `authorization_code` 时为 `["code"]`，否则为空
 - `redirectUris` 必须是合法 URI，且**不能包含 fragment**。授权类型含 `authorization_code` 时必填；仅设备客户端可以为空或省略
 - `postLogoutRedirectUris`（RP 发起登出后的回跳地址）规则同 `redirectUris`，并且每一个都必须与某个 `redirectUris` 的 scheme、host、port 一致（Hydra 自身的规则），否则返回 400。`redirectUris` 为空（仅设备客户端）时它也必须为空
-- `scopes` 必须来自系统允许的 scope 集；含 `offline_access` 时授权类型必须含 `refresh_token`；授权类型含设备授权许可时 scope 必须含 `user:read`。设备授权许可永远不会授予 `email`，与它同时登记只记警告
+- `scopes` 必须来自 §9 的 scope 集；含 `offline_access` 时授权类型必须含 `refresh_token`；授权类型含设备授权许可时 scope 必须含 `user:read`。设备授权许可永远不会授予 `email`，与它同时登记只记警告
 - `devicePolicy` 是设备授权的按客户端策略，保存在 Hydra client 的 `metadata.haruki.device`：
-  - `firstParty`（默认 `false`）：授权页上的「官方」徽章，只对保密客户端显示
+  - `firstParty`（默认 `false`）：设备授权审核卡上的「官方」徽章，只对保密客户端显示（公开客户端的 `client_id` 任何人都能冒用）
   - `allowWrite`（默认 `false`）：允许经设备授权申请 `game-data:write`。只能给有设备授权许可、scope 含 `game-data:write` 的**公开**客户端
-  - `maxCodesPer10m`（默认 `60`，范围 1–600）：每 10 分钟最多为该客户端签发的设备码数
+  - `maxCodesPer10m`（默认 `60`，范围 1–600）：每 10 分钟最多为该客户端签发的设备码数，超过时 device/auth 返回 429（§4A.2）
 
 以下规则「看生效值」：编辑时省略 `grantTypes` / `devicePolicy` 就按客户端现有的值判断，所以编辑一个仅设备客户端而不传 `grantTypes`，不会因为 `redirectUris` 为空被拒绝。违反下列规则返回 400，`updatedData.code` 为：
 
@@ -502,7 +1038,7 @@ user:read  bindings:read  game-data:read  game-data:write
 | `device_write_requires_public_client` | `allowWrite=true`，但客户端不是公开客户端、没有设备授权许可或 scope 没有 `game-data:write` |
 | `invalid_device_policy` | `maxCodesPer10m` 不在 1–600 之间 |
 
-创建、编辑和列表的响应都带 `grantTypes`（Hydra 中登记的授权类型）、`deviceEnabled`（是否有设备授权许可）和 `devicePolicy`（未保存的项显示默认值）。登记设备授权许可只是让客户端具备资格，设备授权流程本身的接入方式另见后续文档。
+创建、编辑和列表的响应都带 `clientId`、`name`、`clientType`、`active`、`redirectUris`、`postLogoutRedirectUris`、`scopes`、`grantTypes`（Hydra 中登记的授权类型）、`deviceEnabled`（是否有设备授权许可）和 `devicePolicy`（未保存的项显示默认值）；创建保密客户端时另有只返回一次的 `clientSecret`。登记设备授权许可只是让客户端具备资格，客户端还要在全站设备授权开放时才能使用，接入方式见 §4A。
 
 服务端创建逻辑见 [`hydra_client_handlers.go`](../internal/modules/adminoauth/hydra_client_handlers.go)。
 
@@ -513,7 +1049,7 @@ user:read  bindings:read  game-data:read  game-data:write
 - 编辑时省略 `devicePolicy` 表示保留已保存的策略；传了就写入三项（省略的 `maxCodesPer10m` 按 60），`metadata.haruki.device` 下的其他键保留
 - 把公开客户端改成 `confidential` 时，更新响应会带一次性的 `clientSecret`，与创建时一样只返回这一次
 - 公开客户端没有 secret，对它调用 `rotate-secret` 返回 400，`updatedData.code` 为 `public_client_has_no_secret`
-- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用）。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
+- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用），Sekai Station 也不再接受它的令牌；设备授权立刻对它关闭：发起返回 `unauthorized_client`，已批准未兑换的流程兑换时返回 `access_denied`。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
 - 停用一旦生效就返回 200：`revokedSubjects` 是撤销成功的 subject 数，`failedSubjects` 列出撤销失败的 subject，`revocationComplete` 为 false 表示有一步失败、还有授权没撤销掉，这时对该客户端执行「撤销全部授权」补救。「撤销全部授权」部分失败时同样返回 200 和这三个字段；一条授权都没撤销成功时返回 500
 - 删除客户端时，它的授权和 token 由 Hydra 一并删除
 
@@ -541,6 +1077,20 @@ user:read  bindings:read  game-data:read  game-data:write
 }
 ```
 
+仅设备的公开客户端示例（例如 Haruki-Client 的车牌收集）：
+
+```json
+{
+  "clientId": "haruki-client",
+  "name": "Haruki-Client",
+  "clientType": "public",
+  "redirectUris": [],
+  "grantTypes": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+  "scopes": ["user:read", "offline_access", "station:room:write"],
+  "devicePolicy": {"firstParty": false, "allowWrite": false, "maxCodesPer10m": 60}
+}
+```
+
 保密客户端的响应会包含 **仅返回一次** 的 `clientSecret`：
 
 ```json
@@ -562,7 +1112,9 @@ user:read  bindings:read  game-data:read  game-data:write
 - **`client_secret` 只能保存在后端。** 不要写进 JS，不要写进浏览器可见配置，不要放进 Mini App 前端代码。
 - **严格校验 `redirect_uri`。** 换 token 时的值必须与授权时一致，并与后台注册值一致。
 - **`state` 必须一次性使用。** 不要只校验"存在"，还要校验是否过期、是否已消费、是否属于当前用户流程。
-- **refresh token 视为高敏感凭证。** 建议加密存储；泄露时立即轮换 client secret 并撤销 token。
+- **refresh token 视为高敏感凭证。** 建议加密存储；泄露时立即轮换 client secret 并撤销 token。同一时刻只发一个刷新请求：refresh token 每次刷新都会轮换，重复使用旧值会让整条授权链失效。
+- **设备授权的代码只在本机显示。** 用户码和验证地址不得经聊天、群消息或其他第三方通道转发；`device_label` 不放个人标识；拿到令牌后回显账号名（§4A.3、§4A.7）。
+- **不同系统的凭据互不传递。** Toolbox 令牌只发给需要它的资源服务，不发给其他系统，也不从其他系统的凭据派生（§4A.7）。
 
 ---
 
@@ -592,13 +1144,19 @@ token 交换会失败。
 
 浏览器前端直接持有 `client_secret` 是典型泄露风险。
 
-### 12.7 指望不用浏览器回调页
+### 12.7 没有浏览器回调页时硬套授权码流程，或在聊天里传代码
 
-当前服务端**不要默认当作已支持**：`device_code`、纯 `client_credentials` 获取用户资源、纯聊天窗口内完成授权。对 Telegram Bot 来说，这意味着**你必须提供一个浏览器授权回调页**，不能只靠 bot 消息对话完成 OAuth 登录。
+没有浏览器、也没有回调地址的程序用设备授权（§4A），不要自己拼一个回调页或去模拟浏览器。但设备授权**不是**「在聊天窗口里完成授权」：用户码只能在程序所在的机器上显示，不能让 bot 把代码发到群聊或私聊，否则任何拿到代码的人都可能被诱导去批准（§4A.3）。
+
+像 Telegram Bot 这样「用户在聊天里、bot 在服务器上」的场景，仍然要提供浏览器授权回调页，走授权码流程（§13）。纯 `client_credentials` 拿不到用户资源（§12.8）。
 
 ### 12.8 用 `client_credentials` 替代用户授权
 
 业务资源接口面向"用户授权后的 bearer token"，不是给 bot 自己拿一个机器 token 就能读所有用户数据。
+
+### 12.9 直连 Hydra 的 `/oauth2/token` 轮询设备码
+
+设备授权返回的 `device_code` 是 Toolbox 签发的 `hdc_…`，Hydra 不认识它：发给 Hydra 直连的 `/oauth2/token` 只会得到 `invalid_grant`，程序会以为授权失败，而且收不到拒绝、过期与降速信号。设备授权只能经 `/api/oauth2/device/auth` 发起、经 `/api/oauth2/token` 轮询；从 Discovery 读端点就不会出错（§4A.1）。同理，Hydra 的 `/oauth2/device/auth`、`/oauth2/device/verify` 不对外开放，请求它们得到 404。
 
 ---
 
@@ -635,6 +1193,10 @@ flowchart LR
 **保密客户端：**
 
 > 申请 `confidential` client，浏览器授权流程完全相同，但在你自己的后端回调页使用 `client_secret_basic` 换 token，并保存 refresh token 用于后续代表用户调用资源接口。
+
+**无头程序（设备授权）：**
+
+> 申请开通设备授权许可的 client（发给用户自行运行的程序用 `public`），调 `/api/oauth2/device/auth` 拿到代码并只在本机显示，用户在 `https://haruki.seiunx.com/device` 登录并批准，程序按 §4A.4 的算法轮询 `/api/oauth2/token`，拿到令牌后回显「已授权为 <账号名>」，refresh token 单独加密存放在本机。
 
 ## JSON 请求兼容性（Go 1.27）
 

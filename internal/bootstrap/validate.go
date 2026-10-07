@@ -102,7 +102,7 @@ func validateBotRegistrationConfig(cfg harukiConfig.Config) error {
 	return nil
 }
 
-// Device-flow brute-force budget (design §8.3): the expected number of user
+// Device-flow brute-force budget (docs/ory-suite-usage.zh-CN.md §10.5.10): the expected number of user
 // codes guessed per year in the worst case must stay at or below this.
 const (
 	deviceFlowBudgetMaxHitsPerYear = 1.0

@@ -1,10 +1,11 @@
 //go:build hydra_live
 
 // Live integration test of the OAuth2 device authorization grant (RFC 8628)
-// against a real, non-dev Ory Hydra on Postgres (BE-9 of the device-flow
-// design). It is the gate for changing ORY_VERSION: it re-proves the Hydra
-// behaviour the backend compensates for (design §3.1) and runs the backend's
-// device flow end to end on top of it.
+// against a real, non-dev Ory Hydra on Postgres. It is the gate for changing
+// ORY_VERSION (docs/ory-suite-usage.zh-CN.md §10.6.6, recipe in §11.3): it
+// re-proves the Hydra behaviour the backend compensates for (ory-suite-usage
+// §10.5.1, cited as §10.5.1 below) and runs the backend's device flow end to
+// end on top of it.
 //
 // The backend runs in process with the production route table
 // (api.RegisterRoutes): the auth-proxy session guard fed Oathkeeper's headers,
@@ -142,17 +143,17 @@ func livePublicClientHappyPath(t *testing.T, h *liveHydra) {
 	b := newLiveBackend(t, h)
 	client := b.createClient(liveClientSpec{scopes: []string{"openid", "profile", "offline_access", "user:read"}})
 
-	// Hydra's own answer (§3.1): form only, a stray "Header" member, an
+	// Hydra's own answer (§10.5.1): form only, a stray "Header" member, an
 	// ungrouped user code, Hydra's verification URI.
 	raw := h.deviceAuthDirect(t, client, "user:read")
 	if _, ok := raw["Header"]; !ok {
-		t.Errorf("§3.1: Hydra device/auth no longer serializes a Header member: %v", raw)
+		t.Errorf("§10.5.1: Hydra device/auth no longer serializes a Header member: %v", raw)
 	}
 	if raw["verification_uri"] != h.issuerURL+"/oauth2/device/verify" || !strings.HasPrefix(stringField(raw, "device_code"), "ory_dc_") {
-		t.Errorf("§3.1: unexpected Hydra device/auth answer %v", raw)
+		t.Errorf("§10.5.1: unexpected Hydra device/auth answer %v", raw)
 	}
 	if code := stringField(raw, "user_code"); len(code) != 8 || strings.Trim(code, liveUserCodeCharset) != "" {
-		t.Errorf("§3.1: Hydra user code %q is not 8 characters of the configured charset", code)
+		t.Errorf("§10.5.1: Hydra user code %q is not 8 characters of the configured charset", code)
 	}
 
 	label := "Haruki-Client @ live-host"
@@ -207,7 +208,7 @@ func livePublicClientHappyPath(t *testing.T, h *liveHydra) {
 		t.Fatalf("token answer lacks ory_at_/ory_rt_/id_token: %v", sortedKeys(tokens))
 	}
 	if rows := h.deviceCodeRows(t, client.id); rows != 1 {
-		t.Errorf("§3.1: device code rows after issuance = %d, want 1 (Hydra deletes only the redeemed row)", rows)
+		t.Errorf("§10.5.1: device code rows after issuance = %d, want 1 (Hydra deletes only the redeemed row)", rows)
 	}
 
 	// Device tokens are ordinary Hydra tokens; ext tells them apart.
@@ -218,7 +219,7 @@ func livePublicClientHappyPath(t *testing.T, h *liveHydra) {
 		t.Errorf("Hydra introspection = %v", introspection)
 	}
 	if _, ok := introspection["grant_type"]; ok {
-		t.Logf("§3.1: Hydra introspection now carries a grant type: %v", introspection["grant_type"])
+		t.Logf("§10.5.1: Hydra introspection now carries a grant type: %v", introspection["grant_type"])
 	}
 
 	profile := b.bearerGet(accessToken, "/api/oauth2/user/profile")
@@ -238,7 +239,7 @@ func livePublicClientHappyPath(t *testing.T, h *liveHydra) {
 	}
 	consentRequest, _ := session["consent_request"].(map[string]any)
 	if requestURL := stringField(consentRequest, "request_url"); !strings.Contains(requestURL, "/oauth2/device/verify") || strings.Contains(requestURL, "user_code") {
-		t.Errorf("§3.1: consent request_url = %q, want the verify URL without user_code", requestURL)
+		t.Errorf("§10.5.1: consent request_url = %q, want the verify URL without user_code", requestURL)
 	}
 	authorizations := b.userRequest(b.alice, http.MethodGet, "/api/user/"+b.alice.id+"/oauth2/authorizations")
 	expectStatus(t, authorizations, http.StatusOK)
@@ -258,10 +259,10 @@ func liveConfidentialBasicOnlyClientID(t *testing.T, h *liveHydra) {
 	b := newLiveBackend(t, h)
 	client := b.createClient(liveClientSpec{confidential: true, scopes: []string{"openid", "offline_access", "user:read"}})
 
-	// §3.1: with HTTP Basic, Hydra still wants client_id in the form.
+	// §10.5.1: with HTTP Basic, Hydra still wants client_id in the form.
 	basicOnly := h.postForm(t, h.publicURL+"/oauth2/device/auth", url.Values{"scope": {"user:read"}}, client.basic())
 	if basicOnly.status == http.StatusOK || !strings.Contains(strings.ToLower(string(basicOnly.body)), "mismatch") {
-		t.Errorf("§3.1: Hydra device/auth with Basic only answered %d %s, want the client_id mismatch error", basicOnly.status, basicOnly.body)
+		t.Errorf("§10.5.1: Hydra device/auth with Basic only answered %d %s, want the client_id mismatch error", basicOnly.status, basicOnly.body)
 	}
 	withForm := h.postForm(t, h.publicURL+"/oauth2/device/auth", url.Values{"scope": {"user:read"}, "client_id": {client.id}}, client.basic())
 	expectStatus(t, withForm, http.StatusOK)
@@ -283,7 +284,7 @@ func liveConfidentialBasicOnlyClientID(t *testing.T, h *liveHydra) {
 	}
 	expectStatus(t, b.approveHandle(b.alice, stringField(card, "flowHandle"), flow.userCode), http.StatusOK)
 
-	// §3.1: Hydra authenticates the client before looking at the code: an
+	// §10.5.1: Hydra authenticates the client before looking at the code: an
 	// approved code with a wrong secret is 401, and the backend relays it.
 	wrongFlow := *flow
 	wrongFlow.client = wrong
@@ -300,27 +301,27 @@ func liveTwoIdentitiesSingleWinner(t *testing.T, h *liveHydra) {
 	b := newLiveBackend(t, h)
 	client := b.createClient(liveClientSpec{scopes: []string{"offline_access", "user:read"}})
 
-	// §3.1: Hydra's device accept is not single use. One user code is
+	// §10.5.1: Hydra's device accept is not single use. One user code is
 	// accepted on two challenges.
 	raw := h.deviceAuthDirect(t, client, "user:read")
 	userCode := stringField(raw, "user_code")
 	for attempt := range 2 {
 		browser := newHydraBrowser(t, h)
 		challenge := browser.startDeviceChallenge()
-		// §3.1: non-dev cookies are Secure, and the device CSRF cookie has no
+		// §10.5.1: non-dev cookies are Secure, and the device CSRF cookie has no
 		// client suffix.
 		if secure, ok := browser.secure["ory_hydra_device_csrf"]; !ok || !secure {
-			t.Errorf("§3.1: verify set no Secure ory_hydra_device_csrf cookie (set: %v)", browser.secure)
+			t.Errorf("§10.5.1: verify set no Secure ory_hydra_device_csrf cookie (set: %v)", browser.secure)
 		}
 		status, redirectTo := h.acceptDevice(t, challenge, userCode)
 		if status != http.StatusOK {
-			t.Errorf("§3.1: device accept #%d of one user code = %d, want 200 (Hydra does not enforce single use)", attempt+1, status)
+			t.Errorf("§10.5.1: device accept #%d of one user code = %d, want 200 (Hydra does not enforce single use)", attempt+1, status)
 			continue
 		}
-		// §3.1: without user_code on the first verify, redirect_to carries
+		// §10.5.1: without user_code on the first verify, redirect_to carries
 		// only client_id and device_verifier.
 		if parsed, err := url.Parse(redirectTo); err != nil || !slices.Equal(slices.Sorted(maps.Keys(parsed.Query())), []string{"client_id", "device_verifier"}) || parsed.Query().Get("client_id") != client.id {
-			t.Errorf("§3.1: device accept redirect_to query = %v", parsed.Query())
+			t.Errorf("§10.5.1: device accept redirect_to query = %v", parsed.Query())
 		}
 	}
 
@@ -366,7 +367,7 @@ func liveDenyAccessDenied(t *testing.T, h *liveHydra) {
 	b := newLiveBackend(t, h)
 	client := b.createClient(liveClientSpec{scopes: []string{"offline_access", "user:read"}})
 
-	// §3.1: a login reject never reaches the device. The browser gets bare
+	// §10.5.1: a login reject never reaches the device. The browser gets bare
 	// JSON on the Hydra host, the device stays pending, and the same user
 	// code can still be accepted.
 	raw := h.deviceAuthDirect(t, client, "user:read")
@@ -381,11 +382,11 @@ func liveDenyAccessDenied(t *testing.T, h *liveHydra) {
 	expectStatus(t, rejected, http.StatusOK)
 	final := browser.get(stringField(rejected.json(t), "redirect_to"))
 	if final.status == http.StatusFound || final.status < 400 {
-		t.Errorf("§3.1: after a login reject Hydra answered %d (Location %q), want a bare error on the Hydra host", final.status, final.header.Get("Location"))
+		t.Errorf("§10.5.1: after a login reject Hydra answered %d (Location %q), want a bare error on the Hydra host", final.status, final.header.Get("Location"))
 	}
 	expectOAuthError(t, h.tokenDirect(t, client, stringField(raw, "device_code")), http.StatusBadRequest, "authorization_pending")
 	if status, _ := h.acceptDevice(t, newHydraBrowser(t, h).startDeviceChallenge(), stringField(raw, "user_code")); status != http.StatusOK {
-		t.Errorf("§3.1: the user code was not acceptable again after a reject (%d)", status)
+		t.Errorf("§10.5.1: the user code was not acceptable again after a reject (%d)", status)
 	}
 
 	// The backend records the refusal and the device sees access_denied.
@@ -422,7 +423,7 @@ func liveExpiryExpiredToken(t *testing.T, h *liveHydra) {
 
 	waitUntil(t, unclaimed.expiresAt().Add(time.Second))
 
-	// §3.1: Hydra keeps answering authorization_pending for a code that was
+	// §10.5.1: Hydra keeps answering authorization_pending for a code that was
 	// never approved, even past its expiry.
 	expectOAuthError(t, h.tokenDirect(t, client, stringField(raw, "device_code")), http.StatusBadRequest, "authorization_pending")
 	// The backend turns it into expired_token.
@@ -432,9 +433,9 @@ func liveExpiryExpiredToken(t *testing.T, h *liveHydra) {
 	expectBrowserCode(t, b.lookup(b.bob, unclaimed.userCode), http.StatusBadRequest, "invalid_code")
 	expectBrowserCode(t, b.approveHandle(b.alice, handle, claimed.userCode), http.StatusGone, "code_expired")
 
-	// §3.1: an expired user code is refused by device accept (400).
+	// §10.5.1: an expired user code is refused by device accept (400).
 	if status, _ := h.acceptDevice(t, newHydraBrowser(t, h).startDeviceChallenge(), stringField(raw, "user_code")); status != http.StatusBadRequest {
-		t.Errorf("§3.1: device accept of an expired user code = %d, want 400", status)
+		t.Errorf("§10.5.1: device accept of an expired user code = %d, want 400", status)
 	}
 }
 
@@ -442,7 +443,7 @@ func liveSlowDown(t *testing.T, h *liveHydra) {
 	b := newLiveBackend(t, h)
 	client := b.createClient(liveClientSpec{scopes: []string{"offline_access", "user:read"}})
 
-	// §3.1: Hydra never answers slow_down.
+	// §10.5.1: Hydra never answers slow_down.
 	raw := h.deviceAuthDirect(t, client, "user:read")
 	for range 3 {
 		expectOAuthError(t, h.tokenDirect(t, client, stringField(raw, "device_code")), http.StatusBadRequest, "authorization_pending")
@@ -476,7 +477,7 @@ func liveHydraDirectTokenRejectsWrappedCode(t *testing.T, h *liveHydra) {
 
 	for _, client := range []liveClient{public, confidential} {
 		flow, _ := b.deviceAuth(client, "user:read", "")
-		// §3.1: Hydra cannot redeem hdc_: 400 invalid_grant, not 5xx.
+		// §10.5.1: Hydra cannot redeem hdc_: 400 invalid_grant, not 5xx.
 		expectOAuthError(t, h.tokenDirect(t, client, flow.deviceCode), http.StatusBadRequest, "invalid_grant")
 		// The compatibility layer refuses a wrapped code presented by another client.
 		other := public
@@ -488,7 +489,7 @@ func liveHydraDirectTokenRejectsWrappedCode(t *testing.T, h *liveHydra) {
 	unknown := &liveFlow{client: public, deviceCode: "hdc_" + base64.RawURLEncoding.EncodeToString(randomBytes(32)), interval: 5}
 	expectOAuthError(t, b.pollNow(unknown), http.StatusBadRequest, "invalid_grant")
 
-	// §3.1: Hydra authenticates the client first: a wrong secret is 401 even
+	// §10.5.1: Hydra authenticates the client first: a wrong secret is 401 even
 	// for a valid ory_dc_ code.
 	raw := h.deviceAuthDirect(t, confidential, "user:read")
 	wrong := confidential
@@ -527,7 +528,7 @@ func livePerDeviceRevokeKillsRefreshedATandRT(t *testing.T, h *liveHydra) {
 	if revoked.updatedData(t)["revoked"] != true {
 		t.Errorf("revoke answer = %s", revoked.body)
 	}
-	// §3.1: revoking by consent_request_id kills the chain's AT and RT,
+	// §10.5.1: revoking by consent_request_id kills the chain's AT and RT,
 	// refreshed ones included.
 	for name, token := range map[string]string{"first access token": stringField(firstTokens, "access_token"), "refreshed access token": accessToken2} {
 		if h.introspect(t, token)["active"] != false {
@@ -566,15 +567,15 @@ func liveDisabledClientBlocked(t *testing.T, h *liveHydra) {
 		t.Fatalf("disable answer = %v", result)
 	}
 
-	// PF5: disabling really revokes: the access token is inactive and the
-	// refresh token no longer rotates.
+	// Disabling really revokes (ory-suite-usage §10.4): the access token is
+	// inactive and the refresh token no longer rotates.
 	if h.introspect(t, stringField(tokens, "access_token"))["active"] != false {
 		t.Error("the access token survived disabling the client")
 	}
 	expectOAuthError(t, b.refresh(client, stringField(tokens, "refresh_token")), http.StatusBadRequest, "invalid_grant")
-	// §3.1: Hydra does not look at metadata.haruki.active.
+	// §10.5.1: Hydra does not look at metadata.haruki.active.
 	if raw := h.postForm(t, h.publicURL+"/oauth2/device/auth", url.Values{"client_id": {client.id}, "scope": {"user:read"}}, ""); raw.status != http.StatusOK {
-		t.Errorf("§3.1: Hydra refused device/auth for a disabled client (%d %s); it used to ignore haruki.active", raw.status, raw.body)
+		t.Errorf("§10.5.1: Hydra refused device/auth for a disabled client (%d %s); it used to ignore haruki.active", raw.status, raw.body)
 	}
 
 	waitUntil(t, disabledAt.Add(liveClientCacheTTL))
@@ -598,7 +599,7 @@ func liveDiscoveryAdvertisesBackendEndpoints(t *testing.T, h *liveHydra) {
 		if discovery["device_authorization_endpoint"] != h.issuerURL+"/api/oauth2/device/auth" || discovery["token_endpoint"] != h.issuerURL+"/api/oauth2/token" {
 			t.Errorf("%s: device_authorization_endpoint = %v, token_endpoint = %v", document, discovery["device_authorization_endpoint"], discovery["token_endpoint"])
 		}
-		// §3.1: the WEBFINGER overrides move only those two endpoints.
+		// §10.5.1: the WEBFINGER overrides move only those two endpoints.
 		if discovery["issuer"] != h.issuerURL && discovery["issuer"] != h.issuerURL+"/" {
 			t.Errorf("%s: issuer = %v", document, discovery["issuer"])
 		}
@@ -613,7 +614,7 @@ func liveDiscoveryAdvertisesBackendEndpoints(t *testing.T, h *liveHydra) {
 	b := newLiveBackend(t, h)
 	client := b.createClient(liveClientSpec{scopes: []string{"user:read"}})
 	if raw := h.deviceAuthDirect(t, client, "user:read"); raw["verification_uri"] != h.issuerURL+"/oauth2/device/verify" {
-		t.Errorf("§3.1: Hydra verification_uri = %v", raw["verification_uri"])
+		t.Errorf("§10.5.1: Hydra verification_uri = %v", raw["verification_uri"])
 	}
 	if flow, _ := b.deviceAuth(client, "user:read", ""); flow.verificationURI != h.frontendURL+"/device" {
 		t.Errorf("backend verification_uri = %q", flow.verificationURI)
@@ -640,7 +641,7 @@ func liveReaperRevokesUnredeemed(t *testing.T, h *liveHydra) {
 	if b.unredeemedCount() != 0 || !strings.Contains(b.logs.String(), "event=reaped") {
 		t.Errorf("unredeemed flows = %d; reaped logged: %v", b.unredeemedCount(), strings.Contains(b.logs.String(), "event=reaped"))
 	}
-	// §3.1: the revocation cascaded to the device code row, so the late
+	// §10.5.1: the revocation cascaded to the device code row, so the late
 	// poll is Hydra's invalid_grant, which the backend reports as expired.
 	expectOAuthError(t, b.poll(flow), http.StatusBadRequest, "expired_token")
 }
@@ -658,9 +659,9 @@ func liveApprovedThenExpiredIsReaped(t *testing.T, h *liveHydra) {
 	if b.unredeemedCount() != 1 {
 		t.Fatalf("unredeemed flows after the late poll = %d, want 1 (left for the reaper)", b.unredeemedCount())
 	}
-	// §3.1: Hydra refuses the redemption but keeps the consent session.
+	// §10.5.1: Hydra refuses the redemption but keeps the consent session.
 	if h.consentSession(t, b.alice.identityID, consentRequestID) == nil {
-		t.Fatal("§3.1: Hydra dropped the consent session of an expired approved code by itself")
+		t.Fatal("§10.5.1: Hydra dropped the consent session of an expired approved code by itself")
 	}
 	waitFor(t, flow.expiresAt().Add(liveReaperGrace+15*time.Second), "the reaper to revoke the consent session", func() bool {
 		return h.consentSession(t, b.alice.identityID, consentRequestID) == nil
@@ -687,10 +688,10 @@ func liveJanitorSQLDeletesOnlyExpired(t *testing.T, h *liveHydra) {
 		t.Fatal(err)
 	}
 
-	// §3.1: expires_at is a timestamp without time zone, written in UTC.
+	// §10.5.1: expires_at is a timestamp without time zone, written in UTC.
 	var dataType string
 	if err := conn.QueryRow(t.Context(), `SELECT data_type FROM information_schema.columns WHERE table_name = 'hydra_oauth2_device_auth_codes' AND column_name = 'expires_at'`).Scan(&dataType); err != nil || dataType != "timestamp without time zone" {
-		t.Fatalf("§3.1: expires_at type = %q (%v)", dataType, err)
+		t.Fatalf("§10.5.1: expires_at type = %q (%v)", dataType, err)
 	}
 	var indexes []string
 	rows, err := conn.Query(t.Context(), `SELECT indexdef FROM pg_indexes WHERE tablename = 'hydra_oauth2_device_auth_codes'`)
@@ -701,7 +702,7 @@ func liveJanitorSQLDeletesOnlyExpired(t *testing.T, h *liveHydra) {
 		t.Fatal(err)
 	}
 	if slices.ContainsFunc(indexes, func(def string) bool { return strings.Contains(def, "expires_at") }) {
-		t.Logf("§3.1 changed: expires_at is now indexed: %v", indexes)
+		t.Logf("§10.5.1 changed: expires_at is now indexed: %v", indexes)
 	}
 
 	b := newLiveBackend(t, h)
@@ -715,7 +716,7 @@ func liveJanitorSQLDeletesOnlyExpired(t *testing.T, h *liveHydra) {
 	}
 	var skew float64
 	if err := conn.QueryRow(t.Context(), `SELECT abs(extract(epoch FROM expires_at - ((now() AT TIME ZONE 'UTC') + $2::interval))) FROM hydra_oauth2_device_auth_codes WHERE device_code_signature = $1`, signatures[5], fmt.Sprintf("%d seconds", int(h.ttl.Seconds()))).Scan(&skew); err != nil || skew > 30 {
-		t.Fatalf("§3.1: expires_at is %v s off the UTC wall clock + TTL (%v)", skew, err)
+		t.Fatalf("§10.5.1: expires_at is %v s off the UTC wall clock + TTL (%v)", skew, err)
 	}
 	backdate := func(signature, age string) {
 		t.Helper()
@@ -865,7 +866,7 @@ func liveStationScopeInternalIntrospect(t *testing.T, h *liveHydra) {
 	}
 }
 
-// --- The Go sample (oauth2-integration §4A) -----------------------------
+// --- The Go sample (oauth2-integration §4A.8) ---------------------------
 
 // deviceLogin signs a headless program in with the OAuth2 device
 // authorization grant (RFC 8628) through golang.org/x/oauth2. It is the Go
@@ -1133,9 +1134,9 @@ func (h *liveHydra) deviceCodeRows(t *testing.T, clientID string) int {
 }
 
 // hydraBrowser drives Hydra's browser leg directly, the way the backend's
-// chain does (§9): a name→value cookie jar replayed over plain http, and
+// chain does (§10.5.7): a name→value cookie jar replayed over plain http, and
 // issuer verify URLs rewritten to the public endpoint. It proves the Hydra
-// behaviour of §3.1 independently of the backend.
+// behaviour of §10.5.1 independently of the backend.
 type hydraBrowser struct {
 	t   *testing.T
 	h   *liveHydra

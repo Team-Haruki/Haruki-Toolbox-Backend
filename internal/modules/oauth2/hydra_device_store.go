@@ -14,7 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Device flow states (design §7.4). issued, denied, failed and expired are
+// Device flow states (ory-suite-usage §10.5.8). issued, denied, failed and expired are
 // terminal; approving, approved and unconfirmed form the "approved class" whose
 // tokens the token endpoint may hand out.
 const (
@@ -49,7 +49,7 @@ func isDeviceFlowApprovedClass(state string) bool {
 
 // Every script first applies the lazy expiry of pending and claimed flows
 // (now >= exp), with now passed in milliseconds as ARGV so tests control the
-// clock. Field names are fixed by design §7.3.
+// clock. Field names are fixed by ory-suite-usage §10.5.8.
 const deviceFlowLazyExpiryLua = `
 local function lazy_expire(flow, now)
   local st = redis.call('HGET', flow, 'st')
@@ -106,7 +106,7 @@ return {'FORWARD', st, f[1] or '0', f[2] or '', f[3] or ''}
 // deviceFlowSettleScript: KEYS flow, unredeemed, dc, crid; ARGV now ms, Hydra result
 // (ok, pending, expired_token, invalid_grant, other), client active ("1", "0",
 // or "" when not yet known), issued retention ms, fid. It returns
-// {action, state, crid, cby}; see deviceSettle* for the actions and design §6.3
+// {action, state, crid, cby}; see deviceSettle* for the actions and ory-suite-usage §10.5.4
 // for the table it implements. A "" client state in a branch that needs it
 // returns CHECK_CLIENT without writing anything.
 const deviceFlowSettleScript = deviceFlowLazyExpiryLua + `

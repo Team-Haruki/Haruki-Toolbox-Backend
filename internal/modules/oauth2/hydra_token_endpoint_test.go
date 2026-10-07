@@ -297,7 +297,7 @@ func TestTokenShimIssuesTokenForApprovedFlow(t *testing.T) {
 	}
 }
 
-// One case per row of the design §6.3 table not covered by a dedicated test.
+// One case per row of the ory-suite-usage §10.5.4 table not covered by a dedicated test.
 func TestTokenShimSettleTable(t *testing.T) {
 	cases := []struct {
 		name           string

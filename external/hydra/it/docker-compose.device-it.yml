@@ -1,4 +1,4 @@
-# Live Hydra for the device-flow integration test (BE-9):
+# Live Hydra for the device-flow integration test (docs/ory-suite-usage.zh-CN.md §11.3):
 #   internal/modules/oauth2/hydra_device_live_test.go (go test -tags hydra_live).
 #
 # Same shape as production (non-dev Hydra, Postgres 18, https issuer served over

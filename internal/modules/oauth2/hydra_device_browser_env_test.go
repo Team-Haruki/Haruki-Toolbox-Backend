@@ -38,7 +38,7 @@ const (
 )
 
 // fakeDeviceChain plays Hydra's browser leg of a device flow the way
-// Hydra v25.4.0 does in non-dev mode (design §3.1): Secure cookies that must
+// Hydra v25.4.0 does in non-dev mode (ory-suite-usage §10.5.1): Secure cookies that must
 // come back on the next hop or Hydra answers 403, the flow marker and
 // client_id carried through every redirect_to and request_url, and the final
 // consent verifier usable once.

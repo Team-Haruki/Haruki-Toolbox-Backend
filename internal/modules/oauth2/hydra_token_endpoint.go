@@ -34,7 +34,7 @@ var deviceSettleRetryBackoff = []time.Duration{50 * time.Millisecond, 150 * time
 // a form-encoded device_code grant is forwarded to Hydra byte for byte, exactly
 // as handleHydraPublicProxy does for /revoke. The device branch unwraps the
 // hdc_ code, applies slow_down locally and rewrites Hydra's answer by flow
-// state (design §6.3).
+// state (ory-suite-usage §10.5.4).
 func handleHydraTokenEndpoint(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, cfg DeviceFlowConfig, store *deviceFlowStore) fiber.Handler {
 	proxy := handleHydraPublicProxy(hydraConfig, deviceHydraTokenEndpointPath)
 	shim := &deviceTokenShim{apiHelper: apiHelper, hydraConfig: hydraConfig, cfg: cfg, store: store}

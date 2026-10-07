@@ -465,7 +465,7 @@ func (e *deviceTestEnv) field(flowID, name string) string {
 }
 
 // setFlow overwrites flow fields, e.g. to put a flow in a state only the
-// browser endpoints (BE-7) reach.
+// browser endpoints reach.
 func (e *deviceTestEnv) setFlow(flowID string, fieldValues ...string) {
 	e.t.Helper()
 	e.redis.HSet(e.flowKey(flowID), fieldValues...)

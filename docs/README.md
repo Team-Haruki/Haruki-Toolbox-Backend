@@ -9,7 +9,7 @@
 | 文档 | 回答什么问题 |
 | --- | --- |
 | [用 Haruki 账号登录](oidc-provider.zh-CN.md) | **想让用户用 Haruki 账号登录自己站点的外部服务商看这篇。**issuer、client 申请、ID Token 校验、登出，以及一处必须绕开的 Discovery 偏差 |
-| [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) | OAuth2 客户端接入：公开与保密两种客户端、授权码流程、token 与刷新、用户信息与绑定、游戏数据读取与**代理上传**、数据更新 Webhook、可申请的 scope |
+| [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) | OAuth2 客户端接入：公开与保密两种客户端、授权码流程、设备授权（无头程序）、token 与刷新、用户信息与绑定、游戏数据读取与**代理上传**、数据更新 Webhook、可申请的 scope |
 | [HarukiProxy v3 客户端对接](harukiproxy-v3-client-integration.zh-CN.md) | 给获授权客户端开发者：OAuth2、原始载荷、UA、updatedData 响应、重试、客户端改造及联调验收 |
 | [HarukiProxy 上传维护](harukiproxy-upload.zh-CN.md) | 后端配置、数据库迁移、管理统计、旧路径停用时间及生日材料监听 |
 | [Public API Webhook 接入](webhook-integration.zh-CN.md) | 基于 token 自行订阅具体游戏账号的旧版 webhook |
@@ -33,7 +33,7 @@
 | [游戏数据加密配置](game-data-crypto.zh-CN.md) | 按区服配置 crypto key/iv；9.0.0 配置迁移要求 |
 | [iOS 模块 URL 重写](ios-url-rewrite.zh-CN.md) | Surge/Loon/Stash 透明转发与 Quantumult X 307 兼容策略 |
 | [MYSEKAI 采集数据复原](mysekai-restore.zh-CN.md) | CN 6.4.0 schema、上传与历史读取、TW/KR 按区服切换及缓存发布要求 |
-| [Ory 套件使用说明](ory-suite-usage.zh-CN.md) | Kratos / Hydra / Oathkeeper 各自的职责、登录态验证方式、社交登录（Google / Apple）接入、可信代理与转发 IP 的取值规则、为什么大量旧接口返回 410 |
+| [Ory 套件使用说明](ory-suite-usage.zh-CN.md) | Kratos / Hydra / Oathkeeper 各自的职责、登录态验证方式、社交登录（Google / Apple）接入、可信代理与转发 IP 的取值规则、为什么大量旧接口返回 410；设备授权的架构与运维手册、内部令牌校验 API |
 | [爱发电赞助集成](afdian-sponsor-integration.zh-CN.md) | 赞助墙的 webhook 与同步行为 |
 
 ## 待实施设计
@@ -41,6 +41,5 @@
 | 文档 | 状态 |
 | --- | --- |
 | [数据 revision 与缓存失效设计](game-data-revision-design.zh-CN.md) | 同秒旧缓存复现、数据库版本原型、条件读取和分阶段发布约束；尚未接入生产 |
-| [OAuth2 设备授权（Device Code）设计](oauth2-device-flow-design.zh-CN.md) | 机器人 / CLI / 无头客户端的 RFC 8628 设备授权：后端代驱 Hydra、令牌端点兼容层、前置修复与分阶段上线。设计已评审；Phase 0 前置修复（BE-1～BE-4、FE-1、FE-1b）已提交为独立分支，待评审合并；落地后删除 |
 
 已完成的一次性迁移计划、调研流水账和旧部署记录不在此保留，可通过 Git 历史查阅。
