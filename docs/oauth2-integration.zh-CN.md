@@ -171,7 +171,7 @@ https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/authorize?response_type=
 GET https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/login?login_challenge=...
 ```
 
-返回 login request 的 JSON，前端应关心 `challenge`、`skip`、`subject`、`client`、`requested_scope`。
+返回 `{status, message, updatedData}`，login request 在 `updatedData` 中，前端应关心其中的 `challenge`、`skip`、`subject`、`client`、`requested_scope`。
 
 ### 第 6 步：用户未登录则先完成 Kratos 登录
 
@@ -191,7 +191,7 @@ POST https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/login/accept
 }
 ```
 
-返回结果含 `redirect_to`，前端执行 `window.location = redirect_to`。
+返回结果的 `updatedData.redirect_to` 即跳转地址，前端执行 `window.location = redirect_to`。
 
 ### 第 8 步：浏览器进入前端 consent 页面
 
@@ -221,7 +221,7 @@ POST https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/consent/accept
 }
 ```
 
-`grantScope` 必须是本次请求中允许的 scope 子集；最简单的做法是把后端返回的 `requested_scope` 原样回传。返回结果含 `redirect_to`。
+`grantScope` 必须是本次请求中允许的 scope 子集；最简单的做法是把后端返回的 `requested_scope` 原样回传。返回结果的 `updatedData.redirect_to` 即跳转地址。
 
 ### 第 11 步：浏览器回到客户端 `redirect_uri`
 
@@ -859,7 +859,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 - `GET /api/oauth2/game-data/:server/:data_type/:user_id`
 - 需要 scope：`game-data:read`
 
-该接口还会校验 token 对应的用户是否拥有这个绑定、绑定是否已验证通过。
+该接口还会校验 token 对应的用户拥有这个已验证的绑定，或持有当前所有者授予的有效读授权（见 §7.4）；不满足时返回 404。
 
 **响应兼容说明：**
 
@@ -991,13 +991,14 @@ station:room:write
 
 全部 scope 均已对外可用且被本文覆盖，都要由管理员为你的 client 登记后才能申请（§10）。
 
-其中有两个**写**权限，同意页和设备授权的审核卡都会把它们标红：
+其中有两个**写**权限。设备授权的审核卡会把它们标红并附写入警告；浏览器同意页与其他 scope 一样逐条列出，靠每条下方的说明文字提示用户：
 
 `game-data:write`：
 
 - 它允许你代表用户上传游戏数据（§7.4），只对用户**自己拥有**或获得写授权的绑定生效
 - **它不隐含 `game-data:read`**，两者需要分别申请
-- 同意页会向用户展示 "Upload game data on your behalf"，用户可以只授予读、不授予写
+- 同意页显示为「上传游戏数据」，下方说明「上传你拥有或获写授权的游戏账号数据。不包含读取已有数据的权限。」（英文界面："Upload game data" / "Upload data for game accounts you own or were granted write access to. Does not include reading existing data."）
+- 同意页不能逐项勾选，用户只能整体允许或拒绝；只需要读权限时，授权请求里不要带 `game-data:write`
 - 经设备授权只能由 `devicePolicy.allowWrite=true` 的公开客户端申请（§10）
 
 `station:room:write`：

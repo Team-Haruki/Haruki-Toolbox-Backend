@@ -105,7 +105,7 @@ Apple M4、Go 1.27.1、GOMAXPROCS=4，三次中位数，构造函数基准：
 
 1/4 容量构造耗时下降约 38%/40%；8 容量主要减少分配，耗时基本持平。16 容量的存储路径没有改变，表中小幅差异不能作为优化收益。3,000 行完整有序解码中，每行 1/4/8 字段分别减少 3,001 次分配（含根对象），但总耗时收益不稳定，8 字段样本略慢，不能外推 API 提速。
 
-旧 provider 测试迁入 provider 数据适配层，旧公开有序入口的测试迁入 msgpackcodec。生产与测试源码已无旧包导入；旧包删除属于 Go 源码 API 迁移，仓库外若有使用者需更新 import 和函数名。HTTP 对外协议保持不变。后续部署结果见文末记录。
+旧 provider 测试迁入 provider 数据适配层，旧公开有序入口的测试迁入 msgpackcodec。生产与测试源码已无旧包导入；旧包删除属于 Go 源码 API 迁移，仓库外若有使用者需更新 import 和函数名。HTTP 对外协议保持不变。
 
 `SekaiCryptor.UnpackOrdered` 直接接收解码返回的 map 指针，省去先构造空 map 再复制头部的步骤。provider 规则与 `NormalizeProviderResponse` 复用已有字段常量；没有新增 utils → platform 的反向依赖，也没有修改架构检查基线。
 

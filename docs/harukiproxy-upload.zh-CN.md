@@ -1,6 +1,6 @@
 # HarukiProxy 上传维护
 
-当前分支的 v3 使用 OAuth2 game-data:write，接收原始游戏载荷；不再读取 v3_secret/v3_unpack_key，不接受共享密钥作为 v3 身份。
+main（#94 已合并、尚未发布）的 v3 使用 OAuth2 game-data:write，接收原始游戏载荷；不再读取 v3_secret/v3_unpack_key，不接受共享密钥作为 v3 身份。预发布 v9.0.0-rc4/rc5 中的 v3 仍是固定密钥版本。
 
 - [客户端协议与联调](harukiproxy-v3-client-integration.zh-CN.md)
 - [Toolbox 前端读写授权对接](toolbox-upload-grants-frontend.zh-CN.md)
@@ -33,5 +33,6 @@ v2 在 **2026-11-01 00:00（UTC+8）** 返回 410，Sunset 头为 `Sat, 31 Oct 2
 按材料名配置监听时，支持 `diamond`（12）、`yuugiri` / `yugiri`（5）、
 `clover`（20）、`battery`（17，电池）、`amethyst` / `quartz`（11，紫水晶，
 主数据名称为闪耀石英），以及对应 `mysekai_material_<ID>` 名称。
-显式 `material_ids` 仍按 ID 过滤；事件继续返回 `matched_material_ids`，
-并保留命中位置、同一采集物的相关掉落与采集物信息。
+显式 `material_ids` 仍按 ID 过滤；事件继续返回 `matched_material_ids`；
+载荷只保留订阅材料的掉落，以及与这些掉落位置相同的采集点，
+不再附带同一采集点或同类采集物的其他掉落。

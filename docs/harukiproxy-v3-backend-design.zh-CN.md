@@ -4,11 +4,11 @@
 
 # HarukiProxy v3 后端对接与上传分析设计
 
-- 状态：后端已按本文实现，待部署及真实客户端联调；不代表生产已上线。
+- 状态：历史设计。UA 解析、渠道版本策略、上传日志字段、入口聚合与管理统计已按本文实现并沿用；固定密钥鉴权与外层 AES-GCM 从未正式发布（仅见于预发布 v9.0.0-rc4/rc5），已由 OAuth2 v3 取代（见文首说明）。
 - 日期：2026-10-05。
 - 后端基线：`d3895e4`。
 - 客户端核对来源：HarukiProxy 的 `src/upload_protocol.rs`。已核对 UA 生成、错误响应解析和请求重试入口；尚未进行 APK 与实际后端联调。
-- 现行协议：[HarukiProxy 上传](harukiproxy-upload.zh-CN.md)。实施后应同步更新该文档。
+- 现行协议：[HarukiProxy 上传](harukiproxy-upload.zh-CN.md)（已按 OAuth2 v3 更新）。
 
 ## 1. 目标与范围
 
@@ -23,7 +23,7 @@
 
 本期不增加安装 ID、设备指纹、客户端主动遥测接口或上传幂等协议；不调整 AES-GCM 请求体，不改变现有账号鉴权和 Ory 身份体系。工具箱页面属于后续前端对接，本期提供所需后端数据。
 
-## 2. 当前实现与差距
+## 2. 实施前的实现与差距（2026-10-05 基线）
 
 | 位置 | 当前行为 | 需要调整 |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ v3 仍在内部测试，按 2026-10-06 确认的新要求直接淘汰旧 UA，�
 
 ## 4. 上传请求协议
 
-### 4.1 路径和头
+### 4.1 路径和头（鉴权头已废弃：现行为 `Authorization: Bearer <access_token>`，见客户端对接文档）
 
 ```http
 POST /harukiproxy/v3/{server}/{user_id}/{data_type}/upload
@@ -113,7 +113,7 @@ v3 始终要求结构化 UA；单独的 `HarukiProxy/v3.0.0-preview.1+gabcdef1` 
 - 最低版本只在所属渠道内比较。不能将 SemVer 字典顺序当作 dev → preview → beta → rc 的发布顺序。
 - 构建信息保存用于排查，不参与版本优先级比较。
 
-### 4.4 请求体不变
+### 4.4 请求体不变（已废弃：OAuth2 v3 直接接收原始游戏载荷，不再做外层解密）
 
 ```text
 key  = SHA-256(UTF-8(trim(v3_unpack_key)))
@@ -180,9 +180,9 @@ haruki_proxy:
 | 400 | invalid_client_metadata | false | 修正 UA，不重复发送同一错误请求 |
 | 400 | client_version_unsupported | false | 客户端暂停并提示升级 |
 | 400 | client_channel_disabled | false | 客户端暂停并提示渠道不可用 |
-| 401 | invalid_client_credentials | false | 客户端暂停，认证失败不附带策略 |
+| 401 | invalid_client_credentials | false | 客户端暂停，认证失败不附带策略（已废弃：现行 v3 为 401 `invalid_token`、403 `insufficient_scope`；`invalid_client_credentials` 只剩 v2，且为 400） |
 | 403 | upload_not_allowed | false | 统一权限拒绝，不泄漏是否存在账号 |
-| 400 | payload_decryption_failed | false | 修正密钥、AAD 或请求体 |
+| 400 | payload_decryption_failed | false | 修正密钥、AAD 或请求体（现行 v3 不解密，只剩 v2 会返回） |
 | 400 | invalid_upload_payload | false | 参数/载荷非法或身份不匹配，不回显内部数据 |
 | 410 | protocol_retired | false | 停止旧入口请求 |
 | 429 | rate_limited | true | 携带已知等待时间的 Retry-After |
@@ -199,7 +199,7 @@ haruki_proxy:
 
 本规范保证到达应用路由的响应格式；边缘代理提前产生的 413、429、502 等响应可能没有结构化 updatedData。保留客户端已有 HTTP 状态降级处理，联调时验证真实代理链路。
 
-## 7. 处理流程与观测边界
+## 7. 处理流程与观测边界（其中「常量时间认证」「v3 解密」两步已由 OAuth2 令牌校验取代）
 
 ```text
 生成请求 ID 和开始时间
@@ -342,7 +342,7 @@ HarukiProxy 迁移视图增加：
 2. 对自动迁移开启/关闭两种部署进行验证。关闭自动迁移时提供可审阅的正式 DDL 和启动期 schema 检查；不通过运行时错误碰运气。
 3. 生产索引创建方式按表大小确定；大表考虑独立并发建索引，不能由普通事务迁移误执行。
 4. 数据库准备完成后发布后端，v3 立即要求新 UA；v2 继续按既有截止时间下架。
-5. 核验真实 Oathkeeper/反向代理允许新 UA、Secret 和响应 X-Request-ID 透传。
+5. 核验真实 Oathkeeper/反向代理允许新 UA、`Authorization` 头和响应 X-Request-ID 透传。
 6. 发布启用新 UA 的客户端构建，验证实际上传、错误响应与统计记录。
 7. 确认错误分类和重试风险后再启用客户端重试；新 UA 和重试分别灰度。
 8. 11 月截止后核验旧入口 410、v3 旧格式拒绝，继续保留历史日志。

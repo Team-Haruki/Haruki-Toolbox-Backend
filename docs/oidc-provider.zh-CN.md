@@ -109,7 +109,7 @@ uid    ← Haruki 本地用户 ID 的扩展 claim，仅为兼容既有 Toolbox A
 | `profile` | 增加 `name` |
 | `email` | 增加 `email`、`email_verified` |
 
-用户可以在授权页上只勾选一部分，所以**你的代码必须容忍 `name` 或 `email` 缺失**。
+授权页目前不能逐项勾选，用户只能整体允许或拒绝；但没有邮箱的账号即使授权了 `email` 也不会带 `email` claim，所以**你的代码必须容忍 `name` 或 `email` 缺失**。
 
 ---
 
@@ -213,7 +213,7 @@ OIDCScope "openid profile email"
 | 请求 `/oauth2/device/auth` 或 `/oauth2/device/verify` 得到 404 | 这两个 Hydra 地址不对外开放；用 Discovery 公布的 `device_authorization_endpoint`，用户在 `https://haruki.seiunx.com/device` 输入代码 |
 | 公开客户端换 token 失败 | 没做 PKCE —— 公开客户端必须带 `code_verifier` |
 | 拿不到 `refresh_token` | scope 里没有 `offline_access` |
-| 拿不到 `name` / `email` | 对应 scope 未登记，或用户在授权页上没有勾选 |
+| 拿不到 `name` / `email` | 授权请求没带 `profile` / `email`（或未为 client 登记），或账号本身没有邮箱 |
 | 登出报 `invalid_request` | 没带 `id_token_hint`,见 §5 |
 | 登出后没跳回来 | `post_logout_redirect_uri` 未登记或不匹配 |
 

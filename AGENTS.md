@@ -1,17 +1,27 @@
 # AGENTS.md
 
+本文件是本仓库给编码代理（Claude Code、Codex、Copilot 等）的唯一权威说明。`CLAUDE.md` 只指向这里；`.github/copilot-instructions.md` 是给 Copilot 代码评审用的精简摘要，与本文件冲突时以本文件为准。
+
 ## 项目概览
 
-Haruki Toolbox Backend 是一个基于 Go 1.27 的后端项目，核心技术栈包括：
+Haruki Toolbox Backend（module `github.com/Team-Haruki/Haruki-Toolbox-Backend`）收集用户上传的 suite / mysekai 游戏数据并提供公开 API。项目基于 Go 1.27（版本以 `go.mod` 为准），核心技术栈包括：
 
-- Fiber：HTTP 路由与中间件
+- Fiber v3：HTTP 路由与中间件
 - Ent：PostgreSQL schema 与 ORM
 - 游戏数据：独立 PostgreSQL pool 存储 suite / mysekai；MongoDB 已退役，仅保留 BSON 兼容工具
 - Redis：缓存、验证码状态、限流状态、会话辅助状态
 - Ory Kratos：浏览器身份体系与自助认证流程
 - Ory Hydra：OAuth2 / OIDC
+- Ory Oathkeeper：浏览器受保护 API 的身份代理
 
-默认本地配置文件为 `haruki-toolbox-configs.yaml`。
+默认本地配置文件为 `haruki-toolbox-configs.yaml`（YAML，支持 `${ENV_VAR}` 插值；可用 `HARUKI_CONFIG_PATH` 指定路径，未指定时从工作目录逐级向上查找）。全部字段见 `haruki-toolbox-configs.example.yaml`，环境变量覆盖见 `config/env.go`。
+
+## 构建与运行
+
+```bash
+go build -o haruki-toolbox-backend ./main.go   # 构建
+go run ./main.go                                # 运行（需要 haruki-toolbox-configs.yaml）
+```
 
 ## 当前仓库结构
 
@@ -21,17 +31,20 @@ Haruki Toolbox Backend 是一个基于 Go 1.27 的后端项目，核心技术栈
 
 - `main.go`
 - `api/`
+- `cmd/`（辅助命令行工具，目前只有 `nuverse-restore-compare`）
 - `config/`
+- `data/`（suite 复原用的 Avro schema，随发布包和镜像分发）
 - `ent/`
 - `internal/`
 - `utils/`
+- `version/`（构建时由 `-ldflags -X` 注入版本信息）
 - `.github/copilot-instructions.md`
 - `docs/`（架构说明、Ory 文档、API 对接文档）
-- `external/oathkeeper/`（Oathkeeper access rules）
+- `external/`（Kratos / Hydra / Oathkeeper 配置；`external/oathkeeper/` 含 access rules，`external/hydra/it/` 是真实 Hydra 集成测试用的 compose）
 
 请不要在没有明确需求的情况下重新引入以下类型的内容：
 
-- 部署快照目录
+- 部署快照目录（如 `deploy/`）
 - 一次性迁移脚本目录
 - 本地构建产物
 - 调试缓存目录
@@ -40,12 +53,31 @@ Haruki Toolbox Backend 是一个基于 Go 1.27 的后端项目，核心技术栈
 ## 分层规则
 
 - `main.go` 只负责加载配置并进入启动流程。
-- `api/` 只负责注册路由，不承载业务逻辑。
-- `internal/bootstrap/` 负责启动装配、依赖初始化、配置校验。
-- `internal/modules/...` 放业务处理逻辑。
-- `internal/platform/...` 放跨模块复用但偏业务的平台能力。
+- `api/`（`api/route.go`）只负责注册路由，不承载业务逻辑。
+- `internal/bootstrap/` 负责启动装配、依赖初始化、配置校验、Fiber 设置。
+- `internal/modules/<name>/` 放业务处理逻辑（handler 与模块内逻辑）。
+- `internal/platform/...` 放跨模块复用但偏业务的平台能力（`api`、`authheader`、`filtering`、`identity`、`mailnotify`、`oauth2`、`pagination`、`runtimeconfig`、`timeutil`、`upload`）。
 - `utils/...` 放基础设施、通用 helper、外部系统适配器；`utils/codec/` 放通用编解码，`utils/game/` 放游戏协议和结构复原。
-- `internal/platform/api`、`upload`、`oauth2` 分别承载共享 API/会话能力、上传编排和 OAuth2 集成；`utils` 不得反向依赖平台层。
+- `internal/platform/api`、`upload`、`oauth2` 分别承载共享 API/会话能力、上传编排和 OAuth2 集成；`utils` 不得反向依赖平台层（`internal/architecture` 的 `TestUtilsDoNotImportPlatform`）。
+- handler 保持薄，复杂逻辑下沉到模块或 helper。
+
+## 常用包
+
+- `internal/platform/api/` — `SessionHandler`、`HarukiToolboxRouterHelpers`、路由中间件
+- `internal/platform/oauth2/` — Hydra 客户端（`HydraConfig`，含 `DoWithoutRedirect`）、scope、bearer 中间件与共享的 `IntrospectAccessToken`
+- `internal/modules/oauth2/` — Hydra 路由兼容层、令牌端点兼容层、设备授权（`hydra_device_*.go`，含回收器）与内部令牌校验 API
+- `utils/database/` — `HarukiToolboxDBManager`，汇总下列客户端
+- `utils/database/postgresql/` — Toolbox 主库 Ent 客户端（生成）
+- `utils/database/neopg/` — Bot 数据库 Ent 客户端（生成）
+- `utils/database/gamedata/` — suite / mysekai 游戏数据的独立 PostgreSQL pool 与读写（含上传字段名校验和大小上限）
+- `utils/database/redis/` — Redis 客户端与 `KeyBuilder`
+- `internal/modules/admincore/` — 管理端共享逻辑（含角色层级守卫 `EnsureAdminCanManageTargetUser`、`CurrentAdminActor`）
+- `internal/modules/usercore/` — 用户端共享逻辑
+- `internal/modules/harukibotneo/` — HarukiBot NEO 注册与凭据重置（状态、发信、注册/重置）
+- `internal/modules/sponsor/` + `adminsponsor/` — 爱发电赞助墙（公开读取 + webhook；爱发电 webhook 无签名，真实性靠 URL secret 和/或经爱发电 API 回查订单）与管理端
+- `utils/codec/msgpackcodec/` — 面向不可信上传数据的有界 MessagePack 解码与 JSON 转换（`ValidateMaxDepth` 校验深度、按长度封顶）；`utils/orderedmap/` 是其 OrderedMap 存储
+
+优先复用 `SessionHandler`、`admincore`、`usercore` 与 `internal/platform/oauth2/`，不要另起平行 helper。
 
 ## Ory 相关工作准则
 
@@ -120,7 +152,7 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - **Auth Proxy 身份只信 Oathkeeper 注入的 subject 头，不信客户端头。** auth-proxy 模式下身份必须经 `resolveKratosIdentity` 从 `X-Kratos-Identity-Id` 解析；**绝不**把客户端自带的 `X-User-Id` 当权威——若存在必须等于解析结果，否则拒绝。后端**只能**经 Oathkeeper 访问（不要把后端端口发布到公网，绑内网/Tailscale 接口可以）。信任密钥是整个身份伪造边界：用 `crypto/subtle.ConstantTimeCompare` 比较；启动时拒绝占位值或 <16 字符；oathkeeper mutator 必须注入全部信任头（含会话 id）并清除 `X-User-Id`。
 - **所有密钥常量时间比较。** 共享密钥、token、OTP、验证码一律 `crypto/subtle.ConstantTimeCompare`，禁用 `==`/`!=`。
 - **对象级鉴权（防 IDOR）。** 每个 per-user 对象的读写都要 scope 到已认证本人或由数据解析出的属主，绝不信 body/param 里的 id。管理员对目标用户的**读取和**写入都必须过 `admincore.EnsureAdminCanManageTargetUser`（角色层级）——读取也要（detail/role/activity/system-logs）。绕过 Oathkeeper 的 token 网关端点（`/api/private/*`、harukiproxy、社交验证、`/internal/*`）每请求自鉴权，是最高价值攻击面。
-- **不可信上传解析。** 上传体用**公开**的 Project Sekai 客户端密钥解密，解出的内容即攻击者可控：解码前校验嵌套深度（`msgpackcodec.ValidateMaxDepth`），拒绝含 `.`/`$` 的 Mongo 字段名，按剩余长度封顶分配。Go 栈溢出是 fatal，`recover()` 救不了。
+- **不可信上传解析。** 上传体用**公开**的 Project Sekai 客户端密钥解密，解出的内容即攻击者可控：解码前校验嵌套深度（`msgpackcodec.ValidateMaxDepth`），按剩余长度封顶分配；写入游戏数据库前拒绝含 `.`/`$`、NUL 或非法 UTF-8 的字段名（`gamedata.ValidateUploadFieldNames`，MongoDB 退役后仍保留），并按 `gamedata.Limits` 限制单键与整行大小。Go 栈溢出是 fatal，`recover()` 救不了。
 - **限流/计数原子化。** attempt 计数与限流用原子 `IncrementWithTTL`，禁用 GetCache 后 SetCache（竞态会绕过上限）。`c.IP()` 只在 `EnableIPValidation` 开启且 `trusted_proxies` 收窄到真实边缘代理时才可信。
 - **SSRF。** 对用户提供 URL 的出站请求（webhook 回调）必须在 **dial 时**重新解析并拒绝私网/链路本地 IP、pin 已校验 IP，而不只是事前校验 DNS（防 rebinding）。
 - **OAuth2 bearer。** introspection 固定 `access_token` 类型，拒绝已禁用 client 的 token，禁用 client 时要真正吊销其 token/consent（不只改 metadata）。
@@ -155,6 +187,7 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - 涉及 Ent schema 时：
   - Toolbox: `go generate ./ent/toolbox`
   - Bot: `go generate ./ent/bot`
+- 真实 Hydra 的设备授权测试（`internal/modules/oauth2/hydra_device_live_test.go`，build tag `hydra_live`）不在 `go test ./...` 里，需要真实 Hydra：本地步骤见 `docs/ory-suite-usage.zh-CN.md` §11.3，CI 见下文 `Device flow live`
 
 Ory 相关改动尤其建议关注：
 
@@ -177,6 +210,21 @@ Ory 相关改动尤其建议关注：
 - OAuth2 客户端对接
 - Webhook 对接
 - 新增或移除公开/受保护端点
+
+具体落点：
+
+- Ory 行为、认证流程、OAuth2 流程、Auth Proxy header 约定 → `docs/ory-suite-usage.zh-CN.md`（设备授权：架构 §10.5、运维 §10.6、内部令牌校验 API §10.3.1、部署 §11.3）
+- OAuth2 客户端对接 → `docs/oauth2-integration.zh-CN.md`（一份文档覆盖公开客户端、保密客户端、设备授权 §4A 与 OAuth2 Webhook）；只做 OIDC 登录的 RP 能看到的变化（Discovery、端点、登出）另同步 `docs/oidc-provider.zh-CN.md`
+- Webhook 行为 → `docs/webhook-integration.zh-CN.md`（Public API webhook）与 `docs/oauth2-integration.zh-CN.md` §8（OAuth2 webhook）
+- 游戏账号数据授权或可访问账号聚合 → `docs/game-account-data-grants.zh-CN.md`，含前端门控用的功能与能力对照表
+- 爱发电赞助 webhook / 同步 → `docs/afdian-sponsor-integration.zh-CN.md`
+- 新增或移除公开/受保护端点 → `external/oathkeeper/access-rules.yml`；auth-proxy header 约定同时在 `external/oathkeeper/oathkeeper.yml`（header mutator）
+
+文档维护约定：
+
+- 关于本项目自身系统的文档只在工作未完成时保留：落地后删除，代码无法表达的内容改为写在相关代码旁的注释里，历史留在 git。给外部集成方的文档始终保留。
+- `docs/` 内的链接一律用仓库相对路径（`oauth2-integration.zh-CN.md`、`../internal/...`），不要提交本机绝对路径。
+- 修改代理规则时先改本文件；`.github/copilot-instructions.md` 只是摘要，涉及其中条目时同步更新，`CLAUDE.md` 保持只指向本文件。
 
 当前文档：
 
@@ -227,7 +275,7 @@ Rules:
 - No trailing period.
 - Keep the subject at or below roughly 70 characters.
 - **Agent attribution uses the standard Git `Co-authored-by:` trailer in the commit body, not a free-form `Agent:` line.** This makes GitHub render the co-author avatar on the commit page. The trailer must be on its own line, separated from the subject by a blank line, in the form `Co-authored-by: <Display Name> <email>`. Suggested values per agent:
-  - Claude (any 4.x): `Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>` (substitute the actual model, e.g. `Claude Sonnet 4.6`, `Claude Haiku 4.5`)
+  - Claude: `Co-authored-by: Claude Opus 5.5 <noreply@anthropic.com>` (substitute the actual model, e.g. `Claude Opus 4.8`, `Claude Sonnet 4.6`)
   - Codex: `Co-authored-by: Codex <noreply@openai.com>`
   - Copilot: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 
@@ -248,13 +296,15 @@ The files in `.github/workflows` are thin callers:
 
 - `ci.yml` (`CI`) runs on `main` pushes, pull requests targeting `main`, and manual
   dispatch:
-  - `go-ci`: `gofmt`, `go mod tidy -diff`, `go build` / `go vet` (`-mod=readonly`),
-    `go tool staticcheck` (the `tool` directive in `go.mod`), then the tests **once**:
-    `go test -race -count=1 ./...` with coverage. Go caches are written only from `main`.
-  - `sonar` scans that coverage (skipped green on Dependabot/fork PRs); `SONAR_TOKEN` is
+  - `Go` (`go-ci` template, jobs `Lint` and `Test`): `gofmt`, `go mod tidy -diff`,
+    `go build` / `go vet` (`-mod=readonly`), `go tool staticcheck` (the `tool` directive in
+    `go.mod`), then the tests **once**: `go test -race -count=1 ./...` with coverage. Go
+    caches are written only from `main`.
+  - `Sonar` scans that coverage (skipped green on Dependabot/fork PRs); `SONAR_TOKEN` is
     only passed to the scan.
-  - `docker` does not wait for the tests. PRs build only, and only when Go sources, `data/`,
-    `go.mod`/`go.sum`, the Dockerfile, the example config or the workflows change. On
+  - `Docker` does not wait for the tests. PRs build only, and only when Go sources, `data/`,
+    `external/`, `go.mod`/`go.sum`, the Dockerfile, `.dockerignore`, the example config or
+    the workflows change (`pr-paths` in `ci.yml`). On
     `main` it runs in parallel with the tests and pushes the immutable
     `ghcr.io/team-haruki/haruki-toolbox-backend:sha-<full sha>` and `:sha-<7 chars>` as
     soon as the build finishes. The `Docker tags` job (`docker-retag.yml`, after `CI OK`)
@@ -262,17 +312,19 @@ The files in `.github/workflows` are thin callers:
     whose `CI OK` passed. Main images carry `VERSION=main-<sha7>`, `GIT_SHA` and
     `BUILD_DATE` = the commit time. Images are `linux/amd64` only. The registry
     `:buildcache` keeps the module download layer.
-  - The aggregate job **`CI OK`** is the only required status check.
+  - `Workflow lint` runs the `actionlint` template on the workflow files.
+  - The aggregate job **`CI OK`** (needs `Go`, `Sonar`, `Docker`, `Workflow lint`) is the
+    only required status check.
 - `release.yml` (`Release`): bump `Version` in `version/version.go` in a PR (9.0.0 is in
-  the rc phase: `v9.0.0-rc3`, `v9.0.0-rc4`, ...) → merge and wait for `CI OK` on `main` →
-  push the same tag (`v9.0.0-rc4`). `release-gate` (`version-source: go`) refuses a tag
+  the rc phase: `v9.0.0-rcN`, the current one is in `version/version.go`) → merge and wait
+  for `CI OK` on `main` → push the same tag (e.g. `v9.0.0-rc6`). `release-gate` (`version-source: go`) refuses a tag
   that differs from `version/version.go` and waits for `CI OK` on the tagged commit; then
   `go-release` builds `HarukiToolboxBackend-linux-amd64.tar.gz` and
   `HarukiToolboxBackend-linux-arm64.tar.gz` (binary, `data/` and
   `haruki-toolbox-configs.example.yaml` at the archive root; CGO off, `-trimpath`,
   `Version=<tag>`, `Commit=<sha>`, `BuildDate=<commit time>`); the image is **built** (not
   promoted from `main`, because the version is compiled in) with `VERSION=<tag>` and tagged
-  `:<version>` (e.g. `:9.0.0-rc3`, which production pulls; stable tags also get
+  `:<version>` (e.g. `:9.0.0-rc6`, which production pulls; stable tags also get
   `:<major>.<minor>` and, for the highest one, `:latest`); and the GitHub Release is
   published with `SHA256SUMS-<tag>.txt` (`-rc` tags as pre-releases that never become
   "latest"). Manual dispatch is a dry run: it builds the binaries with the version from

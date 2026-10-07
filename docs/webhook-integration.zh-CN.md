@@ -77,8 +77,7 @@ X-Haruki-Suite-Webhook-Token: <token>
 ```json
 {
   "status": 200,
-  "message": "Registered webhook push user successfully.",
-  "updatedData": null
+  "message": "Registered webhook push user successfully."
 }
 ```
 
@@ -105,8 +104,7 @@ X-Haruki-Suite-Webhook-Token: <token>
 ```json
 {
   "status": 200,
-  "message": "Unregistered webhook push user successfully.",
-  "updatedData": null
+  "message": "Unregistered webhook push user successfully."
 }
 ```
 

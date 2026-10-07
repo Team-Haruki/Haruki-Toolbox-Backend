@@ -1,8 +1,8 @@
 # 上传 OAuth2 与游戏账号读写授权方案
 
-状态：已按确认范围实现于工作分支，等待部署与客户端联调。日期：2026-10-06。
+状态：已按确认范围实现并合并到 main（#94，2026-10-06），尚未进入发布版本，等待部署与客户端联调。日期：2026-10-06。
 
-本方案调整尚未发布的 HarukiProxy v3 鉴权方向，并统一手动、脚本、HarukiProxy 和通用 OAuth2 上传入口的账号权限；iOS 模块代理明确排除。此前的 v3 UA、请求 ID、错误码和统计设计继续沿用；固定客户端 secret、外层固定密钥加密和“OAuth2 只能上传本人账号”的约定由本方案替代。实现后的接口以 [HarukiProxy 对接](harukiproxy-v3-client-integration.zh-CN.md) 和 [前端对接](toolbox-upload-grants-frontend.zh-CN.md) 为准，不代表生产已切换。
+本方案调整仅在预发布 v9.0.0-rc4/rc5 中出现、未正式发布的 HarukiProxy v3 鉴权方向，并统一手动、脚本、HarukiProxy 和通用 OAuth2 上传入口的账号权限；iOS 模块代理明确排除。此前的 v3 UA、请求 ID、错误码和统计设计继续沿用；固定客户端 secret、外层固定密钥加密和“OAuth2 只能上传本人账号”的约定由本方案替代。实现后的接口以 [HarukiProxy 对接](harukiproxy-v3-client-integration.zh-CN.md) 和 [前端对接](toolbox-upload-grants-frontend.zh-CN.md) 为准，不代表生产已切换。
 
 ## 1. 目标与边界
 
@@ -19,7 +19,7 @@
 
 `POST /api/oauth2/game-data/:server/:data_type/:user_id`
 
-该入口当前调用读取权限查询后显式拒绝 ViaGrant，因此需要改为独立的写权限判定，不能简单删除拒绝分支。现有 GameAccountDataGrant 按所有者、被授权者、区服、游戏账号、数据类型唯一，只有 expires_at，没有读写动作。已有授权支持 suite / mysekai / profile，其中 profile 为实时读取能力。
+实施前，该入口调用读取权限查询后显式拒绝 ViaGrant，因此需要改为独立的写权限判定，不能简单删除拒绝分支；GameAccountDataGrant 按所有者、被授权者、区服、游戏账号、数据类型唯一，只有 expires_at，没有读写动作。现已改为独立的写权限判定，并增加 can_read / can_write。已有授权支持 suite / mysekai / profile，其中 profile 为实时读取能力。
 
 上传公共流程还包含所有权和账号策略判断，必须同步改造，避免入口放行后被底层“必须本人”规则拦截，或底层绕过入口的授权检查。iOS 模块代理未传入工具箱操作者是现有设计，不作为待修复缺口。公共流程改造应显式区分其服务端入口模式，保持该代理路径现有行为；不得把“操作者为空”做成其他上传入口可利用的权限绕过。
 
@@ -60,7 +60,7 @@ OAuth2 subject 始终表示实际操作者 A，不变成 B。目标所有者 B �
 
 ### 3.3 数据库访问与平台层职责
 
-数据库层提供带显式 action 的权限查询，例如 ResolveGameAccountDataAccess(actor, server, gameID, dataType, action, now)。现有读取 helper 保留为 read 包装，逐步迁移调用者，禁止默认把“存在 grant”视为读写都允许。
+数据库层提供带显式 action 的权限查询：`CanAccessGameAccountData`（read）与 `CanWriteGameAccountData`（write），二者共用 `gameAccountDataAccess`。现有读取 helper 保留为 read 包装，逐步迁移调用者，禁止默认把“存在 grant”视为读写都允许。
 
 返回可信的权限决策：actor、当前 owner、目标、action、owner/grant 来源、grant ID、有效期。平台上传层对本次改造范围内的入口统一应用该决策与封禁、区服、数据类型策略，各入口仅适配身份、传输及元数据。iOS 模块代理通过独立的服务端入口模式保留现有处理，不伪造工具箱操作者或授权决策。
 
@@ -131,7 +131,7 @@ HarukiProxy v3 可保留现有路径作为薄适配器，复用通用 OAuth2 上
 
 授权列表返回 permissions。现有 accessible-game-accounts 默认仍返回可读账号及原 capabilities，避免旧前端因只写账号出现而误判可读。
 
-增加 action=write 查询模式：返回可写账号及独立 writeCapabilities，仅含必要的目标标识和有效期，不返回游戏数据或所有者私人信息。OAuth2 提供同等账号发现能力；需 bindings:read，并按 action 额外验证 game-data:write。列表仅作选择器提示，上传时重新鉴权。
+增加 action=write 查询模式：返回可写账号及独立 writeCapabilities，仅含必要的目标标识和有效期，不返回游戏数据或所有者私人信息。OAuth2 通过 `GET /api/oauth2/game-data/upload-targets` 提供同等的可写账号发现，同时要求 bindings:read 与 game-data:write。列表仅作选择器提示，上传时重新鉴权。
 
 已有 recommend 派生能力保持由读取权限推导；write 不产生 recommend/profile/read 能力。游戏数据读取端、OAuth2 webhook 订阅与投递均继续检查 read，不得通过 write 间接订阅数据。
 
@@ -149,7 +149,7 @@ HarukiProxy v3 可保留现有路径作为薄适配器，复用通用 OAuth2 上
 | 写入前暂时不可用 | 503 | 仅 retryable=true 时有限重试 |
 | 提交结果不确定 | 500 或网络中断 | 不声明安全重试；按现有有限策略避免盲目重复提交 |
 
-审计保留 owner_user_id 与 actor_user_id，不把被授权者记作账号所有者。增加 authorization_source、grant_id 快照、oauth_client_id 和 auth_method；继续保存 request ID、上传来源、版本平台、失败阶段等字段。授权记录删除后审计快照仍可追溯，不级联删除历史。
+审计用 toolbox_user_id 记录数据所属用户、actor_user_id 记录实际操作者，不把被授权者记作账号所有者。增加 authorization_source、grant_id 快照、oauth_client_id 和 auth_method；继续保存 request ID、上传来源、版本平台、失败阶段等字段。授权记录删除后审计快照仍可追溯，不级联删除历史。
 
 所有者可以看到谁向自己的账号提交了数据；操作者只能看到自己的提交回执和必要结果。管理员查询必须同时考虑涉及的账号所有者和操作者，避免普通管理员看到超级管理员参与的敏感记录。不得记录 token、游戏会话凭据或原始敏感头。
 
@@ -157,7 +157,7 @@ upload_method 表示上传方式，auth_method 对本次改造入口表示 brows
 
 ## 8. 迁移与发布
 
-当前状态：先前 v3 统计增量字段已迁移到生产，后端仍为旧版本。PR #94 尚未合并；其固定密钥 v3 方案不能按原计划发布。本方案无需回退已添加的统计字段。
+当前状态：先前 v3 统计增量字段已迁移到生产；本方案已随 #94 合并到 main，但尚未进入发布版本，生产后端仍为旧版本。#92 的固定密钥 v3（见于预发布 v9.0.0-rc4/rc5）不再按原计划发布。本方案无需回退已添加的统计字段。
 
 实施顺序：
 

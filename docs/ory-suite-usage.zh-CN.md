@@ -15,7 +15,7 @@
 
 - 启动装配：`internal/bootstrap/run.go`
 - 路由总装配：`api/route.go`
-- Kratos / Auth Proxy 会话处理：`internal/platform/api/session_handler.go`
+- Kratos / Auth Proxy 会话处理：`internal/platform/api/session_handler.go`（`VerifySessionToken` 在 `session_verify.go`，Auth Proxy 解析在 `session_auth_proxy.go`）
 - Hydra 路由兼容层：`internal/modules/oauth2/hydra_routes.go`
 - Hydra token introspection：`internal/platform/oauth2/middleware.go`
 
@@ -51,14 +51,14 @@ Kratos 在当前项目里承担这些职责：
 
 项目在配置层面强制把浏览器身份提供者固定为 `kratos`。相关字段在：
 
-- `config/config.go`
+- `config/types.go`（字段定义；默认值在 `config/defaults.go`，环境变量覆盖在 `config/env.go`）
 - `user_system.auth_provider`
 - `user_system.kratos_public_url`
 - `user_system.kratos_admin_url`
 - `user_system.kratos_session_header`
 - `user_system.kratos_session_cookie`
 
-启动时会做强校验，见 `internal/bootstrap/run.go`：
+启动时会做强校验，见 `internal/bootstrap/validate.go` 的 `validateUserSystemConfig`（由 `internal/bootstrap/run.go` 的 `Build` 调用）：
 
 - `user_system.kratos_public_url` 不能为空
 - `user_system.kratos_admin_url` 不能为空
@@ -211,7 +211,7 @@ Hydra 在当前项目里负责：
 示例：
 
 - `internal/modules/userauth/route.go`
-- `internal/modules/userpasswordreset/resetpassword.go`
+- `internal/modules/userpasswordreset/routes.go`、`send_handler.go`、`apply_handler.go`
 - `internal/modules/userprofile/account.go`
 - `internal/modules/userauth/managed_identity.go`
 
@@ -952,7 +952,7 @@ compose 总会设置 7 个 backend `OAUTH2_DEVICE_FLOW_*` 变量（空串也算�
 
 #### 10.6.3 上线步骤（一次上线，不做暗发布与试点）
 
-合并分支 `feat/oauth2-device-flow`（后端与前端各一个）整体合入后，在一个提前公告的凌晨低峰窗口里一次上线；提前 48 小时站内公告，并通知已登记的第三方：令牌端点地址会变为 `…/api/oauth2/token`，无需改动（backend 的可用性从此影响这些 RP 的刷新）。
+后端（#97）与前端（Haruki-Toolbox #104）的 `feat/oauth2-device-flow` 均已合入 main；在一个提前公告的凌晨低峰窗口里一次上线；提前 48 小时站内公告，并通知已登记的第三方：令牌端点地址会变为 `…/api/oauth2/token`，无需改动（backend 的可用性从此影响这些 RP 的刷新）。
 
 **预检**（窗口前或窗口开头完成，结果记入上线单）：
 
@@ -1139,6 +1139,8 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 **不要填 Docker、LAN 或 Tailscale 网段。** 那等于信任该网段内的每个容器和节点，
 其中任何一个都能伪造 `X-Forwarded-For`。不确定边缘代理地址时就保持 `false`：
 限流会退化成按 Oathkeeper 这一个地址计数，粗糙但不会被绕过。
+开启后若 `BACKEND_TRUSTED_PROXIES` 为空、含空值或填了网段（不是 `/32`、`/128`），
+或 `BACKEND_PROXY_HEADER` 为空，backend 会拒绝启动。
 
 ### 11.3 Hydra 相关
 
@@ -1272,13 +1274,16 @@ done
 
 后果：
 
-- 所有以 IP 为键的限流、尝试计数、验证码次数上限全部失效
-- 表面上一切正常，日志里的来源 IP 也「看起来对」
+- `BACKEND_ENABLE_TRUST_PROXY=true` 而 `BACKEND_TRUSTED_PROXIES` 为空、含空值或填了网段
+  （不是 `/32`、`/128`）时，backend 启动校验直接拒绝启动
+- 若填的是单个地址但不是真正的边缘代理（例如某个容器或节点的 IP），该地址就能伪造
+  `X-Forwarded-For`，经它转发的请求上所有以 IP 为键的限流、尝试计数、验证码次数上限全部失效，
+  表面上一切正常，日志里的来源 IP 也「看起来对」
 
 原因：
 
-- `BACKEND_ENABLE_TRUST_PROXY=true` 而 `BACKEND_TRUSTED_PROXIES` 为空或填了网段时，
-  `X-Forwarded-For` 变成客户端可控输入，攻击者每次请求换一个伪造 IP 即可绕过上限
+- 启动校验（`internal/bootstrap/validate.go` 的 `validateBackendConfig`）只拦得住空值和网段，
+  拦不住填错的单个地址
 
 见 §11.2。
 

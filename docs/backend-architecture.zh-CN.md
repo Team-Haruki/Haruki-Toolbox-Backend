@@ -26,13 +26,16 @@ utils/database/neopg/            Bot Ent 生成产物（迁移期保持位置不
 | --- | --- |
 | `internal/platform/api` | HTTP 公共响应、会话验证、身份集成、审计及游戏数据访问；`data`、`ios` 为子包 |
 | `internal/platform/upload` | 游戏上传预处理、Suite 复原编排、同步与通知 |
+| `internal/platform/runtimeconfig` | Redis 中可由管理员修改的运行期设置（如 `oauth2DeviceFlowEnabled`） |
+| `internal/platform/mailnotify` | 有界的通知邮件派发 |
+| `internal/platform/{authheader,filtering,identity,pagination,timeutil}` | bearer 头解析、CSV 过滤值、邮箱规范化、分页与时间范围工具 |
 | `internal/platform/oauth2` | Hydra 客户端（含不跟随重定向的 `DoWithoutRedirect`）、token introspection（bearer 中间件与内部 API 共用 `IntrospectAccessToken`）、scope 定义与鉴权中间件 |
 | `utils/game/sekai`、`utils/game/sekaiapi` | 游戏客户端加解密、协议处理及 SekaiAPI 适配 |
 | `utils/game/nuverserestore` | 统一 AVSC 加载、Suite/MYSEKAI 复原、compact 列式展开及离线对照工具 |
 | `utils/codec/{jsoncodec,jsonvalue,msgpackcodec}` | 通用 JSON/MessagePack 编解码与 JSON 值操作 |
 | `utils/orderedmap` | 通用有序容器 |
 | `utils/database` | 数据库连接、游戏数据存储、Redis 及 Ent 生成代码 |
-| `utils/{http,smtp,cloudflare,logger,background,perfstats,perfdebug}` | 网络、邮件、外部适配、日志与运行期基础设施 |
+| `utils/{http,smtp,cloudflare,logger,background,perfstats,perfdebug,redact}` | 网络、邮件、外部适配、日志、日志脱敏与运行期基础设施 |
 
 ### OAuth2 设备授权的代码落点
 
@@ -63,10 +66,12 @@ RFC 8628 设备授权集中在 `internal/modules/oauth2`，不另建模块；行
 ```text
 main -> bootstrap -> api -> modules -> platform
                          \---------------> utils
+              \--------------------------> modules
               \--------------------------> platform
               \--------------------------> utils
 ```
 
+- `internal/bootstrap` 可以 import 业务模块，用于构造模块配置、启动模块的长期任务（如 `StartDeviceFlowReaper`）及注入依赖；反向禁止。
 - `main.go` 不创建数据库、外部客户端或业务 handler。
 - `api/` 只组合路由，不实现用例。
 - 业务模块可以依赖 `internal/platform` 和 `utils`，但不应通过反向 import 暴露自身能力。
@@ -75,7 +80,7 @@ main -> bootstrap -> api -> modules -> platform
 - 跨域调用依赖由消费方定义的窄接口，通过 `internal/bootstrap` 注入；不得新增可变包级回调或服务定位器字段。
 - 业务代码不直接依赖另一个模块的 HTTP handler、Fiber 路由或响应类型。
 
-仓库中的架构测试会守卫 `utils/**`、`internal/platform/**` 不反向依赖 `internal/modules/**`。
+仓库中的架构测试（`internal/architecture`）守卫：`utils/**`、`internal/platform/**` 不 import `internal/modules/**`；`utils/**` 不 import `internal/platform/**`；`api`、`internal/modules`、`internal/platform`、`utils` 不新增全局 `config.Cfg` 读取（遗留读取按白名单只减不增）；`HarukiToolboxRouterHelpers` 与 `HarukiToolboxDBManager` 不新增字段。
 
 ## 3. Composition root 与生命周期
 
