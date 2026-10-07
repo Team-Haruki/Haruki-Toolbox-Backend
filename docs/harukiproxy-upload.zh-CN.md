@@ -8,7 +8,7 @@
 
 ## 配置与部署
 
-启用 Hydra 并配置现有客户端禁用检查。HarukiProxy 使用已登记的公开 OAuth2 client，需 game-data:write；上传目标查询另需 bindings:read，自动刷新另需 offline_access。原生回调必须先登记并联调。
+启用 Hydra 并配置现有客户端禁用检查。HarukiProxy 使用已登记的公开 OAuth2 client，需 game-data:write；上传目标查询另需 bindings:read，自动刷新另需 offline_access。原生回调必须先登记并联调。无浏览器的部署若改走设备授权，该 client 还要登记设备授权许可、`devicePolicy.allowWrite=true` 和 user:read scope，并且全站设备授权处于开启状态（[OAuth2 接入](oauth2-integration.zh-CN.md) §10，开关见 [Ory 套件使用说明](ory-suite-usage.zh-CN.md) §10.6.2）。
 
 haruki_proxy.v3_client_policy 保留渠道与最低版本设置；v3 必须携带平台 UA，默认允许 stable/preview/beta/rc/dev 的 3.0.0 对应版本。旧 secret/unpack_key 仅服务过渡期 v2，不能作为 OAuth2 故障降级。
 

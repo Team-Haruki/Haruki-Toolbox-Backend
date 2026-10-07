@@ -23,6 +23,8 @@ go test ./internal/platform/api ./internal/platform/oauth2              # target
 go test ./...                                   # full suite (use for cross-module changes)
 ```
 
+The live Hydra device-flow test (`internal/modules/oauth2/hydra_device_live_test.go`, build tag `hydra_live`) is not part of `go test ./...`; it needs a real Hydra (recipe in `docs/ory-suite-usage.zh-CN.md` §11.3, CI workflow `Device flow live`).
+
 ## Code Generation (Ent)
 
 Ent schemas are split into two databases:
@@ -55,6 +57,8 @@ Handlers should stay thin. Complex logic belongs in the module or a helper, not 
 - When `auth_proxy_enabled` is true: trusted header validation and `auth_proxy_session_header` must be preserved. Sensitive admin ops must use proxy-session-level identity, not just `user_id` or `kratos_identity_id`.
 - Hydra subject strategy: prefer `kratos_identity_id`, fallback to local `users.id`. Do not break backward compatibility of `CurrentHydraSubject`, `CurrentHydraSubjects`, `HydraSubjectsForUser`, or introspection subject mapping.
 - Session/auth logic lives in the `internal/platform/api/session_*.go` family (`session_handler.go` holds `SessionHandler` + config; resolution is split into `session_verify.go`, `session_auth_proxy.go`, `session_kratos_*.go`) — do not duplicate session parsing or Kratos whoami calls in business modules.
+- The OAuth2 device authorization grant (RFC 8628) is backend-mediated (`internal/modules/oauth2/hydra_device_*.go`, `hydra_token_endpoint.go`; architecture in `docs/ory-suite-usage.zh-CN.md` §10.5, operations in §10.6). Keep: Hydra's `/oauth2/device/*` and `/oauth2/fallbacks/device` unrouted in Oathkeeper; devices call only `POST /api/oauth2/device/auth` and `POST /api/oauth2/token`, and lookup/approve/deny stay behind the cookie-session rule (`internal/architecture/oathkeeper_oauth2_device_rules_test.go`); `/api/oauth2/token` forwards every non-device grant to Hydra byte for byte (`TestTokenShimNonDeviceGrantVerbatim`) and both discovery documents point `token_endpoint` / `device_authorization_endpoint` at the backend (`TestOryDeviceFlowDeploymentContract`); Hydra and the backend take the user-code charset, length and TTL from the same `DEVICE_FLOW_USER_CODE_*` variables, never a Hydra entropy preset; a missing runtime field `oauth2DeviceFlowEnabled` means off; raw user codes, `hdc_…`, `ory_dc_…` and `dfh_…` never appear in Redis key names (HMAC keyed by `user_system.session_sign_token`) or logs (`utils/redact`).
+- `POST /internal/oauth2/introspect` (for Sekai Station) is served on the backend port only, never gets an Oathkeeper rule (`TestInternalAPINotRoutedByOathkeeper`), and is documented only in `docs/ory-suite-usage.zh-CN.md` §10.3.1, never in third-party integration docs.
 
 ## Security Invariants
 
@@ -72,7 +76,8 @@ These encode hard-won rules from prior security audits. Do **not** regress them.
 ## Key Utility Packages
 
 - `internal/platform/api/` — `SessionHandler`, `HarukiToolboxRouterHelpers`, route middleware
-- `internal/platform/oauth2/` — OAuth2 scope handling, token helpers
+- `internal/platform/oauth2/` — Hydra client (`HydraConfig`, incl. `DoWithoutRedirect`), scopes, bearer middleware and the shared `IntrospectAccessToken`
+- `internal/modules/oauth2/` — Hydra route compatibility layer, token endpoint shim, device flow (`hydra_device_*.go`, reaper included) and the internal introspection API
 - `utils/database/` — Database manager interfaces
 - `utils/database/mongo/` — MongoDB client and operations
 - `utils/database/redis/` — Redis client
@@ -89,8 +94,8 @@ Prefer reusing `SessionHandler`, `admincore`, `usercore`, and `internal/platform
 
 - `docs/README.md` is the index, grouped by audience. Add new docs there. Docs about our own systems are kept only while the work is unfinished — delete them once it lands and move anything the code cannot state into a comment next to the code; the history stays in git. Docs for external integrators are kept regardless.
 - Links inside `docs/` must be repo-relative (`oauth2-integration.zh-CN.md`, `../internal/...`). Never commit an absolute path from your own machine.
-- When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md`.
-- When changing OAuth2 client integration, update `docs/oauth2-integration.zh-CN.md` — one document covers public clients, confidential clients, the device authorization grant (§4A) and the OAuth2 webhook.
+- When changing Ory behavior, auth flows, OAuth2 flows, or auth proxy header conventions, update `docs/ory-suite-usage.zh-CN.md` (device flow: architecture §10.5, operations §10.6, internal introspection API §10.3.1, deployment §11.3).
+- When changing OAuth2 client integration, update `docs/oauth2-integration.zh-CN.md` — one document covers public clients, confidential clients, the device authorization grant (§4A) and the OAuth2 webhook. The Go functions of its §4A.8 sample (`deviceLogin`, `authorizedAccountName`, `retryAfter`, `sleepContext`, with their doc comments) must match the same functions in `internal/modules/oauth2/hydra_device_live_test.go` verbatim (`TestIntegrationDocGoSampleMatchesLiveTest`). Changes visible to login-only relying parties (discovery, endpoints, logout) also go into `docs/oidc-provider.zh-CN.md`.
 - When changing webhook behavior, update `docs/webhook-integration.zh-CN.md` (public API webhook) and §8 of `docs/oauth2-integration.zh-CN.md` (OAuth2 webhook).
 - When changing game account data grants or the accessible-accounts aggregate, update `docs/game-account-data-grants.zh-CN.md`, including the feature-to-capability table the frontend gates on.
 - When changing Afdian sponsor webhook/sync behavior, update `docs/afdian-sponsor-integration.zh-CN.md`.
@@ -170,6 +175,12 @@ The files in `.github/workflows` are thin callers:
   published with `SHA256SUMS-<tag>.txt` (`-rc` tags as pre-releases that never become
   "latest"). Manual dispatch is a dry run: it builds the binaries with the version from
   `version/version.go` and publishes nothing, also when started on a tag.
+- `device-flow-live.yml` (`Device flow live`) is manual dispatch only and not a required
+  check: a custom matrix job (the `go-ci` template cannot start Hydra) that brings up
+  `external/hydra/it/docker-compose.device-it.yml` with Hydra `v25.4.0` and `v26.2.0` and runs
+  the `hydra_live`-tagged OAuth2 device-flow test against each. Run it on the commit to
+  deploy and before changing `ORY_VERSION`; the local recipe is in
+  `docs/ory-suite-usage.zh-CN.md` §11.3.
 - Dockerfile: modules are downloaded in their own layer; `VERSION`, `GIT_SHA` and
   `BUILD_DATE` are declared right before `go build` (and after the runtime stage's `RUN`),
   so their per-commit values no longer invalidate the earlier layers; the builder

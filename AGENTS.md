@@ -102,6 +102,17 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 
 避免在各业务模块里复制一套会话解析、Kratos whoami 查询、header 信任逻辑。
 
+### 6. OAuth2 设备授权（RFC 8628）由后端中介
+
+设备授权的代码集中在 `internal/modules/oauth2`（`hydra_device_*.go`、`hydra_token_endpoint.go`），架构见 `docs/ory-suite-usage.zh-CN.md` §10.5，配置与运维见 §10.6。改动时保持：
+
+- Hydra 的 `/oauth2/device/*`、`/oauth2/fallbacks/device` 不加 Oathkeeper 规则；设备只调用后端的 `POST /api/oauth2/device/auth` 与 `POST /api/oauth2/token`，lookup / approve / deny 走 cookie_session 规则（`internal/architecture/oathkeeper_oauth2_device_rules_test.go`）
+- `/api/oauth2/token` 是令牌端点兼容层：非设备授权许可的请求逐字节转发给 Hydra（`TestTokenShimNonDeviceGrantVerbatim`）；两份发现文档的 `token_endpoint` 与 `device_authorization_endpoint` 由 compose 中的 Hydra 环境变量指向后端（`TestOryDeviceFlowDeploymentContract`）
+- Hydra 与 backend 的用户码字符集、长度、TTL 只来自 `.env` 的 `DEVICE_FLOW_USER_CODE_*`，不设 Hydra 的 user_code 熵预设
+- 运行时总开关 `oauth2DeviceFlowEnabled` 字段缺失视为关闭，不要改成缺省开启
+- 原始用户码、`hdc_…`、`ory_dc_…`、`dfh_…` 不进入 Redis 键名与日志：键名经 `KeyBuilder` 用 `user_system.session_sign_token` 做 HMAC，日志经 `utils/redact` 脱敏
+- `POST /internal/oauth2/introspect`（Sekai Station 用）只在 backend 端口上、不加 Oathkeeper 规则（`TestInternalAPINotRoutedByOathkeeper`），只写在 `docs/ory-suite-usage.zh-CN.md` §10.3.1，不写进对外接入文档
+
 ## 安全不变量
 
 以下规则源自历次安全审计，**不得回退**：
@@ -150,6 +161,9 @@ Ory 相关改动尤其建议关注：
 - `internal/platform/api/session_handler*_test.go`
 - `internal/platform/oauth2/*_test.go`
 - 对应业务模块的 route / managed identity 测试
+- `internal/architecture/` 中的 Oathkeeper 规则与 Ory 部署契约测试（改 `access-rules.yml`、`docker-compose.yml`、`hydra.yml`、`.env.example` 时）
+- `TestIntegrationDocGoSampleMatchesLiveTest`：`docs/oauth2-integration.zh-CN.md` §4A.8 Go 示例里的 `deviceLogin`、`authorizedAccountName`、`retryAfter`、`sleepContext`（连同注释）必须与 `internal/modules/oauth2/hydra_device_live_test.go` 中的同名函数逐字一致，改一处就要改另一处
+- 设备授权或 `ORY_VERSION` 的改动：在待部署的 commit 上手动触发 `Device flow live`（见下文 GitHub Actions）
 
 ## 文档规则
 
@@ -167,9 +181,11 @@ Ory 相关改动尤其建议关注：
 当前文档：
 
 - `docs/README.md` — 文档索引，按读者分组；新增文档在这里登记
-- `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明
-- `docs/oauth2-integration.zh-CN.md` — OAuth2 / OIDC 接入(公开 + 保密客户端 + 设备授权 + Webhook)
+- `docs/ory-suite-usage.zh-CN.md` — Ory 总体说明（含设备授权架构 §10.5、运维 §10.6、内部令牌校验 API §10.3.1、部署配置 §11.3）
+- `docs/oauth2-integration.zh-CN.md` — OAuth2 / OIDC 接入(公开 + 保密客户端 + 设备授权 §4A + Webhook)
+- `docs/oidc-provider.zh-CN.md` — 只做 OIDC 登录的外部 RP 接入（令牌端点地址变化见 §1）
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
+- `docs/game-account-data-grants.zh-CN.md` — 游戏账号数据读写授权与可访问账号聚合（含前端门控用的功能与能力对照表）
 - `docs/afdian-sponsor-integration.zh-CN.md` — 爱发电赞助 webhook/同步对接
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 - `external/oathkeeper/oathkeeper.yml` — Oathkeeper auth-proxy header mutator 约定

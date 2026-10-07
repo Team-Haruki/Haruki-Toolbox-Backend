@@ -3,7 +3,8 @@
 本文档面向**外部服务商** —— 你有自己的网站或应用，想让用户用 Haruki 账号登录，不需要读取游戏数据。
 
 如果你要的是读取用户的游戏数据、绑定信息或代理上传，那不是这篇，见
-[`oauth2-integration.zh-CN.md`](oauth2-integration.zh-CN.md)。
+[`oauth2-integration.zh-CN.md`](oauth2-integration.zh-CN.md)。没有浏览器、也没有回调地址的程序
+（命令行工具、常驻进程）也不是这篇：它们用设备授权，见同一文档 §4A。
 
 Haruki Toolbox 是一个标准的 OpenID Connect Provider，底层是 Ory Hydra。你可以用任何成熟的
 OIDC 客户端库接入，不需要为 Haruki 写特殊代码 —— **除了 §4 那一处偏差**。
@@ -43,6 +44,9 @@ https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration
 它是 Haruki 后端的令牌端点兼容层，授权码与刷新令牌请求原样转发给 Hydra、响应原样返回，只额外处理设备授权许可。
 以前写死在配置里的 `/oauth2/token` 仍然可用，不需要改；`private_key_jwt` 的 `aud` 写两个地址中的任何一个都会被接受。
 Issuer、`authorization_endpoint`、`jwks_uri` 与 `userinfo_endpoint` 不变。
+`/.well-known/oauth-authorization-server`（RFC 8414）与上面的 Discovery 公布同样的 `token_endpoint` 和
+`device_authorization_endpoint`；`grant_types_supported` 里出现设备授权许可
+`urn:ietf:params:oauth:grant-type:device_code`，只表示服务端支持，client 要由管理员单独开通才能使用，登录场景不需要它。
 
 ---
 

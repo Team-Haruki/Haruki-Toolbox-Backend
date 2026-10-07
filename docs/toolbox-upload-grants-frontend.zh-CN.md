@@ -83,6 +83,8 @@ login / consent 端点还有以下拒绝情形，页面沿用现有的失败提�
 - login 与 consent 的查询、接受、拒绝端点遇到设备授权模式的 challenge 时返回 403，`updatedData.code` 为 `device_flow_challenge`。正常的浏览器授权不会出现这种 challenge：设备授权不经过这两个页面，由 `/device` 页面和后端的设备端点完成（接入方契约见 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A，`/device` 依赖的后端端点与错误码见 [Ory 套件使用说明](ory-suite-usage.zh-CN.md) §10.5.5）。
 - login accept 不接收 `acr`，传了也会被忽略；前端不应发送。
 
+设备授权的两处页面不在本文展开：`/device` 输入代码与审核卡（调用 `POST /api/oauth2/device/lookup`、`approve`、`deny`，契约见 [Ory 套件使用说明](ory-suite-usage.zh-CN.md) §10.5.5）；「已授权应用」里每一项带 `flowType`（`device` / `browser`）与 `deviceLabel`，设备授权可以用 `DELETE /api/user/:toolbox_user_id/oauth2/authorizations/:client_id/consents/:consent_request_id` 单独撤销（Ory 套件使用说明 §10.5.6）。审核卡和设备标签的展示要求见 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A.9。
+
 OAuth2 应用可通过 `GET /api/oauth2/game-data/upload-targets` 获取可写目标，要求 game-data:write + bindings:read；响应见 [HarukiProxy 对接](harukiproxy-v3-client-integration.zh-CN.md)。该接口不会返回已保存的游戏数据。
 
 ## 5. 管理统计页面对接设计

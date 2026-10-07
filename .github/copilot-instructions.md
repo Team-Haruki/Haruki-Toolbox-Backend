@@ -25,6 +25,17 @@
 - 如果启用了 auth proxy，必须保留 `user_system.auth_proxy_session_header`
 - 管理员敏感操作的重认证必须使用“会话级标识”，不要只靠 `user_id` 或 `kratos_identity_id`
 
+## OAuth2 设备授权（RFC 8628）
+
+设备授权由后端中介，代码在 `internal/modules/oauth2`（`hydra_device_*.go`、`hydra_token_endpoint.go`），架构见 `docs/ory-suite-usage.zh-CN.md` §10.5，运维见 §10.6。
+
+- Hydra 的 `/oauth2/device/*`、`/oauth2/fallbacks/device` 不加 Oathkeeper 规则；设备只调用 `POST /api/oauth2/device/auth` 与 `POST /api/oauth2/token`，lookup / approve / deny 走 cookie_session 规则
+- `/api/oauth2/token` 对非设备授权许可逐字节转发给 Hydra；两份发现文档的 `token_endpoint` 与 `device_authorization_endpoint` 由 Hydra 环境变量指向后端
+- Hydra 与 backend 的用户码字符集、长度、TTL 只来自 `DEVICE_FLOW_USER_CODE_*`，不设 Hydra 的 user_code 熵预设
+- 运行时总开关 `oauth2DeviceFlowEnabled` 字段缺失视为关闭
+- 原始用户码、`hdc_…`、`ory_dc_…`、`dfh_…` 不进入 Redis 键名（`KeyBuilder` 用 `user_system.session_sign_token` 做 HMAC）与日志（`utils/redact`）
+- `POST /internal/oauth2/introspect`（Sekai Station 用）不加 Oathkeeper 规则，只写在 `docs/ory-suite-usage.zh-CN.md` §10.3.1，不写进对外接入文档
+
 ## 安全不变量（不得回退，源自历次安全审计）
 
 - **Auth Proxy 身份只信 Oathkeeper 注入的 `X-Kratos-Identity-Id`，不信客户端 `X-User-Id`**；若客户端带了 `X-User-Id` 必须等于解析结果否则拒绝。后端只能经 Oathkeeper 访问，端口别发布到公网；信任密钥用 `subtle.ConstantTimeCompare` 比较且启动校验非占位/≥16 字符。
@@ -59,17 +70,25 @@ Bot 数据库使用独立 DSN（`haruki_bot.db_url`）。不要随意手改生�
   - `internal/platform/api/session_handler*_test.go`
   - `internal/platform/oauth2/*_test.go`
   - 对应模块测试
+  - `internal/architecture/` 中的 Oathkeeper 规则与 Ory 部署契约测试（改 `access-rules.yml`、`docker-compose.yml`、`hydra.yml`、`.env.example` 时）
+- `TestIntegrationDocGoSampleMatchesLiveTest` 要求 `docs/oauth2-integration.zh-CN.md` §4A.8 Go 示例里的 `deviceLogin`、`authorizedAccountName`、`retryAfter`、`sleepContext`（连同注释）与 `internal/modules/oauth2/hydra_device_live_test.go` 逐字一致
+- 设备授权或 `ORY_VERSION` 改动：在待部署的 commit 上手动触发 `Device flow live`
 - 跨模块变更时运行 `go test ./...`
 
 ## 文档同步
 
 涉及 Ory 行为、认证流程、Auth Proxy header、OAuth2 流程变化时，同步更新：
 
-- `docs/ory-suite-usage.zh-CN.md`
+- `docs/ory-suite-usage.zh-CN.md`（设备授权：架构 §10.5、运维 §10.6、内部令牌校验 API §10.3.1、部署 §11.3）
 
 涉及 OAuth2 客户端对接变化时，同步更新：
 
-- `docs/oauth2-integration.zh-CN.md`
+- `docs/oauth2-integration.zh-CN.md`（公开 + 保密客户端、设备授权 §4A、OAuth2 Webhook）
+- 只做 OIDC 登录的 RP 能看到的变化（Discovery、端点、登出）另同步 `docs/oidc-provider.zh-CN.md`
+
+涉及游戏账号数据授权或可访问账号聚合变化时，同步更新：
+
+- `docs/game-account-data-grants.zh-CN.md`（含前端按其门控的功能与能力对照表）
 
 涉及 Webhook 对接变化时，同步更新：
 
@@ -157,6 +176,12 @@ The files in `.github/workflows` are thin callers:
   published with `SHA256SUMS-<tag>.txt` (`-rc` tags as pre-releases that never become
   "latest"). Manual dispatch is a dry run: it builds the binaries with the version from
   `version/version.go` and publishes nothing, also when started on a tag.
+- `device-flow-live.yml` (`Device flow live`) is manual dispatch only and not a required
+  check: a custom matrix job (the `go-ci` template cannot start Hydra) that brings up
+  `external/hydra/it/docker-compose.device-it.yml` with Hydra `v25.4.0` and `v26.2.0` and runs
+  the `hydra_live`-tagged OAuth2 device-flow test against each. Run it on the commit to
+  deploy and before changing `ORY_VERSION`; the local recipe is in
+  `docs/ory-suite-usage.zh-CN.md` §11.3.
 - Dockerfile: modules are downloaded in their own layer; `VERSION`, `GIT_SHA` and
   `BUILD_DATE` are declared right before `go build` (and after the runtime stage's `RUN`),
   so their per-commit values no longer invalidate the earlier layers; the builder

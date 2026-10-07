@@ -134,15 +134,19 @@ GET /api/user/:toolbox_user_id/accessible-game-accounts
 
 OAuth2 入口仍要求 token scope 包含 `game-data:read`。授权不会改变 public API、private token API、Redis 数据缓存 key 或 Mongo 数据形状。
 
-## 授权是只读的
+## 读与写分开授权
 
-**授权只赋予读取权限，不赋予写入权限。**
+**read 只赋予读取，write 只赋予上传，两者互不隐含。** suite / mysekai 可以分别授予 read、write 或两者，profile 只有 read。
 
-`POST /api/oauth2/game-data/:server/:data_type/:user_id`（代理上传，需 `game-data:write`）只对用户**自己拥有**的绑定生效。被授权方持有再合法的 token，对通过授权拿到的账号发起上传也会得到 `403`。
+`POST /api/oauth2/game-data/:server/:data_type/:user_id`（代理上传，需 `game-data:write`）对用户自己拥有的绑定，以及当前所有者授予了有效 write 的账号生效；只有 read 的被授权方发起上传会得到 `403`，与「账号不存在」不作区分。
 
 | 访问来源 | 读取 | 上传 |
 |---|---|---|
 | 自己拥有的绑定 | ✅ | ✅ |
-| 通过授权获得 | ✅ | ❌ `403` |
+| read 授权 | ✅ | ❌ `403` |
+| write 授权 | ❌ | ✅ |
+| read + write 授权 | ✅ | ✅ |
 
-理由：授权的语义是"让你看我的数据"，而不是"让你改我的数据"。如果两者不分，被授权方就能覆盖 granter 的存档，而 granter 在共享数据时并没有同意这件事。
+理由：「让你看我的数据」和「让你改我的数据」是两件事。所有者只授予 read 时，被授权方不能覆盖其存档；write 必须由所有者单独授予。上传权限的完整规则见 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §7.4。
+
+经设备授权（[OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §4A）取得的令牌与授权码令牌相同，上面的读写规则照常适用；能否经设备授权申请到 `game-data:write` 另由该文档 §9 的 scope 限制决定。

@@ -16,7 +16,7 @@
 | 结构体字段名 | 按 JSON 标签精确匹配；未知字段一般继续忽略，catalog 显式拒绝 |
 | 顶层尾随 JSON 值 | Unmarshal/UnmarshalRead 拒绝多个值 |
 | HTTP 与通用缓存的 nil map/slice | jsoncodec 显式保留 null；空集合保持空集合 |
-| 运行时 nil allowlist | 仍写 null；webhookEnabled 的 nil 省略、false 保留 |
+| 运行时 nil allowlist | 仍写 null；webhookEnabled 与 oauth2DeviceFlowEnabled 的 nil 省略、false 保留。两者缺省语义相反：webhookEnabled 缺失视为开启，oauth2DeviceFlowEnabled 缺失视为关闭（[Ory 套件使用说明](ory-suite-usage.zh-CN.md) §10.6.2） |
 | 零数值、布尔值、nil 指针的省略 | 显式 omitzero 标签；空集合继续使用 omitempty |
 | 动态游戏/赞助 JSON 的数字 | jsonvalue.Numbers 保留原文，避免 any/float64 损坏大整数 |
 | 原始 JSON 片段 | jsontext.Value；有序解析保留数字原文及字段顺序 |
