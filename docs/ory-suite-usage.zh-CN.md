@@ -479,23 +479,61 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 供我们自己的服务（目前是 Sekai Station 后端）校验 Toolbox 访问令牌。它不是对外接口，不写进 OAuth2 接入文档。
 
 - **可达性**：挂在 backend 主端口 16666 上，Oathkeeper 没有任何匹配 `/internal/` 的规则，公网请求得到 Oathkeeper 的 404（架构测试 `TestInternalAPINotRoutedByOathkeeper` 守护，不要给 `/internal/*` 加规则）。调用方经 tailnet 调 `http://100.80.207.86:16666/internal/oauth2/introspect`，或作为容器加入 `haruki-toolbox-services_haruki-net` 调 `http://backend:16666/internal/oauth2/introspect`。
-- **认证**：请求头 `Authorization: Bearer <internal token>`。后端 YAML 只存 token 的 SHA-256：`oauth2.internal_api.token_sha256`（64 位十六进制，env `OAUTH2_INTERNAL_API_TOKEN_SHA256`），按常数时间比较；缺失或不符返回 401 `{"error":"unauthorized"}` 并记一条 WARN（不记 token）。该值为空时路由不注册（404）；非空但不是 64 位十六进制时后端拒绝启动。tailnet 上的其他节点也能连到 16666，所以内部 token 不能省。
-- **请求与响应**：`application/x-www-form-urlencoded` 的 `token=<access_token>` 或 JSON `{"token":"…"}`（格式不对返回 400 `{"error":"invalid_request"}`）。后端调 Hydra admin 内省，与 bearer 中间件同一套规则（`internal/platform/oauth2/introspect.go`）：非 active、不是 `access_token`、已过期、subject 找不到本地用户或用户被封禁、客户端已停用或已删除（客户端查询有 5 s 进程内缓存）都返回 `{"active":false}`；否则返回 `active`、`user_id`（本地 `users.id`，字符串）、`client_id`、`scope`（令牌被授予的全部 scope）、`exp`、`iat`，设备授权令牌另有 `device_label`。从不返回用户名、邮箱或 Hydra 原始字段；结果不缓存（响应带 `Cache-Control: no-store`），撤销对下一次调用立即生效。Hydra 或数据库不可用时返回 503 `{"error":"temporarily_unavailable"}`。
-- **Station 的接受规则**：`active==true` 且 `scope` 含 `station:room:write`，不看 `client_id`（该 scope 是普通 scope，任何由管理员登记了它的客户端都可以申请）。Station 只信 `active`、`scope`、`user_id`、`client_id`、`exp`；需要展示名时另调 `/api/oauth2/user/profile`（前提是令牌带 `user:read`）。
-- **调用方缓存**：后端不缓存，Station 可以按令牌的 SHA-256 缓存 `active:true` 不超过 60 s，`active:false` 不缓存，所以撤销最多 60 s 后在 Station 生效。
-- **调用路径**：Station 与 backend 同机部署时加入 compose 网络调 `http://backend:16666`，不同机时经 tailnet 调。
+- **认证**：调用方二选一，只带**一个** `Authorization` 头：
+  - `Authorization: Bearer <internal token>`（原有方式，继续可用）；
+  - HTTP Basic `<client_id>:<internal token>`，即 RFC 7662 / RFC 6749 §2.3.1 标准客户端（例如 Go 的 `req.SetBasicAuth(clientID, secret)`）的做法。用户名必须等于 `oauth2.internal_api.client_id`（默认 `station`，env `OAUTH2_INTERNAL_API_CLIENT_ID`），密码就是内部 token。用户名和密码按字面比较、不做 form-urldecode（与 Go `net/http` 的 `BasicAuth()` 一致；默认 client_id 与十六进制 token 编码前后相同）。
+
+  后端 YAML 只存 token 的 SHA-256：`oauth2.internal_api.token_sha256`（64 位十六进制，env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）；Bearer token 与 Basic 密码走同一个哈希、常数时间比较，Basic 用户名也常数时间比较（两项都比完再判定）。缺失、不符、Basic 格式错误（不是标准 base64、没有冒号、用户名或密码为空）、Bearer 与 Basic 同时出现（或任意两个 `Authorization` 头）、不认识的认证方案，一律返回 401 `{"error":"unauthorized"}` 并记一条 WARN，日志只带原因（`missing` / `multiple` / `unsupported_scheme` / `malformed` / `client_mismatch` / `mismatch`），从不记凭据或用户名。`token_sha256` 为空时路由不注册（404），其余两项不检查；非空时 `token_sha256` 不是 64 位十六进制、`client_id` 为空或含冒号/控制字符/首尾空白、`audience` 为空列表或含空项，后端都拒绝启动。tailnet 上的其他节点也能连到 16666，所以内部 token 不能省。
+- **请求**：`application/x-www-form-urlencoded` 的 `token=<access_token>`（RFC 7662 形式，可附 `token_type_hint`）或 JSON `{"token":"…"}`（格式不对返回 400 `{"error":"invalid_request"}`）。`token_type_hint` 不论取什么值都忽略：RFC 7662 §2.1 允许服务端忽略它，并要求按提示找不到时继续查其他类型，而这里只有 access token 才可能 active，提示不会改变结果（带 `refresh_token` 提示传 refresh token 照样是 `{"active":false}`）。
+- **响应**：后端调 Hydra admin 内省，与 bearer 中间件同一套规则（`internal/platform/oauth2/introspect.go`）：非 active、不是 `access_token`、已过期、subject 找不到本地用户或用户被封禁、客户端已停用或已删除（客户端查询有 5 s 进程内缓存）都返回 `{"active":false}`（只有这一个字段）。否则返回：
+
+  | 字段 | 含义 |
+  | --- | --- |
+  | `active` | `true` |
+  | `sub` | 本地 `users.id`（字符串），与 `user_id` 相同；**不是** Hydra 的 subject（Kratos identity ID） |
+  | `user_id` | 同上，保留给旧调用方 |
+  | `client_id` | 申请令牌的 OAuth 客户端 |
+  | `aud` | JSON 数组，取自 `oauth2.internal_api.audience`（默认 `["station"]`，env `OAUTH2_INTERNAL_API_AUDIENCE`，逗号分隔） |
+  | `scope` | 令牌被授予的全部 scope，空格分隔 |
+  | `token_type` | 固定 `"Bearer"`（RFC 7662 的 `token_type` 是 RFC 6749 §7.1 的令牌类型；“是 access token”这一点由 active 本身保证） |
+  | `exp` / `iat` | Unix 秒 |
+  | `device_label` | 仅设备授权令牌 |
+
+  **`aud` 为什么是配置值**：这个端点只为它唯一的内部调用方担保令牌，`aud` 写的是“这份答复给谁用”，即调用方自己的名字，而不是照抄 Hydra 授予的 audience（设备流程与授权码流程的令牌通常没有 audience）。换调用方或多个调用方共用时改 `audience` 列表。**不返回 `iss`**：配置里没有稳定、与 Hydra 令牌 `iss` 逐字一致的公开 issuer 字段，RFC 7662 客户端（包括 Station）只在 `iss` 存在时才比较。也从不返回 `nbf`、用户名、邮箱或其他 Hydra 原始字段。结果不缓存（响应带 `Cache-Control: no-store`），撤销对下一次调用立即生效。Hydra 或数据库不可用时返回 503 `{"error":"temporarily_unavailable"}`。
+- **Station 的接受规则**（`station-backend` `internal/auth/oauth/introspection.go`）：HTTP 200 且 `active==true`；`exp`/`nbf` 有则必须有效；`aud`（字符串或数组）含 Station 配置的 `audience`；`iss` 有则必须等于 Station 配置的 `issuer`；`sub` 非空且不超过 128 字节；`scope` 含 `required_scopes` 的每一项。非 200（包括内部 token 不对得到的 401）在 Station 一侧是 503「验证服务不可用」，`active:false` 是 401，缺 scope 是 403。`sub` 是 Station 的提交者统计通道，所以必须是稳定的本地 `users.id`。Station 不看 `client_id`（`station:room:write` 是普通 scope，任何由管理员登记了它的客户端都可以申请）；需要展示名时另调 `/api/oauth2/user/profile`（前提是令牌带 `user:read`）。`TestInternalIntrospectServesStationClient` 按 Station 的原样代码（请求构造、响应校验、`authorize()`）经真实 HTTP 调用本端点，Station 改了校验逻辑时同步更新它。
+- **Station 配置**（Station 的 `config.yaml`）：
+
+  ```yaml
+  auth:
+    oauth:
+      enabled: true
+      mode: introspection
+      # introspection 模式下 Station 仍要求一个合法的 http(s) issuer URL。
+      # 本端点不返回 iss，Station 只在 iss 存在时比较，所以这里只需合法；
+      # 填 Toolbox 的 OIDC issuer（Hydra 公开地址），它是令牌真正的签发方。
+      issuer: https://toolbox-api-direct.haruki.seiunx.com
+      audience: station                      # 必须在 oauth2.internal_api.audience 里
+      introspection_url: http://100.80.207.86:16666/internal/oauth2/introspect
+      client_id: station                     # 必须等于 oauth2.internal_api.client_id
+      client_secret_env: TOOLBOX_INTROSPECTION_SECRET   # 环境变量里放内部 token 原文
+      required_scopes: [station:room:write]
+  ```
+
+  Station 与 backend 同机部署、加入 compose 网络时把 `introspection_url` 换成 `http://backend:16666/internal/oauth2/introspect`。
+- **调用方缓存**：后端不缓存，Station 当前实现也不缓存（每次提交调用一次）。若调用方要缓存，按令牌的 SHA-256 缓存 `active:true` 不超过 60 s、`active:false` 不缓存，撤销最多 60 s 后生效。
 - **生成与配置 token**：
   ```bash
-  TOKEN=$(openssl rand -hex 32)           # 只交给 Station 后端的配置，不进仓库、不打印到日志
+  TOKEN=$(openssl rand -hex 32)           # 只放进 Station 的环境变量 TOOLBOX_INTROSPECTION_SECRET，不进仓库、不打印到日志
   printf %s "$TOKEN" | sha256sum          # 输出的 64 位十六进制写进 backend YAML 的 oauth2.internal_api.token_sha256
   ```
   后端只保存哈希，backend 配置泄漏也拿不到可用的 token。
-- **轮换**：生成新 token → 把新哈希写进 backend YAML（或 env）并重启 backend → 把新 token 写进 Station 后端配置并重启 Station。两步之间 Station 的调用会得到 401（只支持一个哈希），所以放在同一个维护窗口里连续完成。怀疑泄漏时立即轮换：持有内部 token 的 tailnet 节点能校验任意令牌（拿不到令牌本身）。
+- **轮换**：生成新 token → 把新哈希写进 backend YAML（或 env）并重启 backend → 把新 token 写进 Station 的 `TOOLBOX_INTROSPECTION_SECRET` 并重启 Station。两步之间 Station 的调用会得到 401（只支持一个哈希；Station 侧表现为 503），所以放在同一个维护窗口里连续完成。怀疑泄漏时立即轮换：持有内部 token 的 tailnet 节点能校验任意令牌（拿不到令牌本身）。
 
 实现位于：
 
 - `internal/modules/oauth2/internal_introspect.go`
 - `internal/platform/oauth2/introspect.go`
+- `internal/modules/oauth2/internal_introspect_station_test.go`（Station 客户端回放）
 
 ### 10.4 管理端 OAuth Client 管理
 
@@ -897,7 +935,7 @@ compose 总会设置 7 个 backend `OAUTH2_DEVICE_FLOW_*` 变量（空串也算�
 5. `user_code_ttl` 可解析且在 1–30 min，并通过 §10.5.10 的预算公式。
 6. `user_system.session_sign_token`（env `SESSION_SIGN_TOKEN`）trim 后至少 16 个字符。
 
-内部 API 的配置 `oauth2.internal_api.token_sha256`（env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）见 §10.3.1：空 = 路由不注册；非空但不是 64 位十六进制时拒绝启动。
+内部 API 的配置见 §10.3.1：`oauth2.internal_api.token_sha256`（env `OAUTH2_INTERNAL_API_TOKEN_SHA256`）空 = 路由不注册，非空但不是 64 位十六进制时拒绝启动；`client_id`（默认 `station`，env `OAUTH2_INTERNAL_API_CLIENT_ID`）与 `audience`（默认 `["station"]`，env `OAUTH2_INTERNAL_API_AUDIENCE`，逗号分隔）只在启用时校验，填空回落到默认值。
 
 **`session_sign_token` 是什么**：它**不是**会话签名密钥（`NewSessionHandler` 忽略该参数，登录会话由 Kratos 管理），现在唯一的用途是 Redis 键名里邮箱、QQ 等标识的 HMAC 化名密钥，设备流程的 `hx` 也用它。生产在上线前为空（YAML 无该键，env 未设）。设置或更改它只会让当时进行中的邮箱验证码、重置链接、QQ 验证码与设备流程作废、限流计数归零，**不会让任何人掉登录**。所以在上线部署时直接生成写入（§10.6.3），之后不再更改、不打印。
 
@@ -928,7 +966,7 @@ compose 总会设置 7 个 backend `OAUTH2_DEVICE_FLOW_*` 变量（空串也算�
 8. 备份 `hydra.yml`、`access-rules.yml`、编排 compose、`.portainer-env.sh` 与 `GET /api/admin/config/runtime` 的结果。
 9. 边缘与统计：SafeLine 不需要改；EdgeOne 对 `/api/oauth2/*` 设「不缓存」；GA4 数据流「隐去数据 → 查询参数」加入 `user_code`、`login_challenge`、`consent_challenge`、`logout_challenge`、`device_challenge`。
 10. 记录当前 `BACKEND_IMAGE` 与运行中镜像的 digest（生产用 `…:latest` 且没有 `pull_policy`，`latest` 会被覆盖）。
-11. 生成内部 API token（§10.3.1）：`openssl rand -hex 32` 得到的 token 只交给 Sekai Station 后端的配置，它的 SHA-256 写进 backend YAML `oauth2.internal_api.token_sha256`；都不打印、不进仓库。
+11. 生成内部 API token（§10.3.1）：`openssl rand -hex 32` 得到的 token 只放进 Sekai Station 的环境变量（`client_secret_env` 指向的 `TOOLBOX_INTROSPECTION_SECRET`），它的 SHA-256 写进 backend YAML `oauth2.internal_api.token_sha256`；都不打印、不进仓库。Station 的 `auth.oauth` 照 §10.3.1 的配置块填写（`client_id`/`audience` 与 backend 的 `oauth2.internal_api` 默认值一致）。
 
 **窗口内，先做前置修复冒烟**（同一批代码里的客户端 JSON Patch、逐 subject 撤销、停用拦截等修复）：
 
