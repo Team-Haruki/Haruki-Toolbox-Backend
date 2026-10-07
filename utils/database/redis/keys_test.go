@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -202,5 +203,72 @@ func TestKeyBuilderKeepsSecretsInstanceScoped(t *testing.T) {
 	}
 	if got := first.BuildEmailVerifyKey("sensitive@example.COM"); got != firstKey {
 		t.Fatalf("normalization changed: %q != %q", got, firstKey)
+	}
+}
+
+func TestBuildOAuth2DeviceKeys(t *testing.T) {
+	t.Parallel()
+
+	b := NewKeyBuilder("device-flow-test-secret")
+	hx := b.hashExactIdentifier
+	const (
+		fid    = "0123456789abcdef0123456789abcdef"
+		hdc    = "hdc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdEf"
+		code   = "BCDFGHJK"
+		handle = "dfh_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdEf"
+		cid    = "haruki-client"
+		uid    = "12345"
+	)
+	cases := []struct {
+		name string
+		got  string
+		want string
+		raw  string
+	}{
+		{"flow", b.BuildOAuth2DeviceFlowKey(fid), "haruki:oauth2-device:flow:" + fid, ""},
+		{"dc", b.BuildOAuth2DeviceCodeIndexKey(hdc), "haruki:oauth2-device:dc:" + hx("dc", hdc), hdc},
+		{"uc", b.BuildOAuth2DeviceUserCodeIndexKey(code), "haruki:oauth2-device:uc:" + hx("uc", code), code},
+		{"fh", b.BuildOAuth2DeviceFlowHandleIndexKey(handle), "haruki:oauth2-device:fh:" + hx("fh", handle), handle},
+		{"unredeemed", b.BuildOAuth2DeviceUnredeemedKey(), "haruki:oauth2-device:unredeemed", ""},
+		{"auth-attempt unknown", b.BuildOAuth2DeviceAuthAttemptUnknownClientKey(), "haruki:rate-limit:oauth2-device:auth-attempt:unknown-client", ""},
+		{"auth-attempt client", b.BuildOAuth2DeviceAuthAttemptClientKey(cid), "haruki:rate-limit:oauth2-device:auth-attempt:client:" + hx("cid", cid), cid},
+		{"auth-issued public", b.BuildOAuth2DeviceAuthIssuedPoolKey("public"), "haruki:rate-limit:oauth2-device:auth-issued:global:public", ""},
+		{"auth-issued confidential", b.BuildOAuth2DeviceAuthIssuedPoolKey("confidential"), "haruki:rate-limit:oauth2-device:auth-issued:global:confidential", ""},
+		{"auth-issued client", b.BuildOAuth2DeviceAuthIssuedClientKey(cid), "haruki:rate-limit:oauth2-device:auth-issued:client:" + hx("cid", cid), cid},
+		{"lookup user", b.BuildOAuth2DeviceLookupUserKey(uid), "haruki:rate-limit:oauth2-device:lookup:user:" + hx("uid", uid), ""},
+		{"lookup-fail user", b.BuildOAuth2DeviceLookupFailUserKey(uid), "haruki:rate-limit:oauth2-device:lookup-fail:user:" + hx("uid", uid), ""},
+		{"lookup-fail user-day", b.BuildOAuth2DeviceLookupFailUserDayKey(uid), "haruki:rate-limit:oauth2-device:lookup-fail:user-day:" + hx("uid", uid), ""},
+		{"lookup-fail global", b.BuildOAuth2DeviceLookupFailGlobalKey(), "haruki:rate-limit:oauth2-device:lookup-fail:global", ""},
+		{"decision user-day", b.BuildOAuth2DeviceDecisionUserDayKey(uid), "haruki:rate-limit:oauth2-device:decision:user-day:" + hx("uid", uid), ""},
+	}
+	for _, tc := range cases {
+		if tc.got != tc.want {
+			t.Errorf("%s key = %q, want %q", tc.name, tc.got, tc.want)
+		}
+		if tc.raw != "" && strings.Contains(tc.got, tc.raw) {
+			t.Errorf("%s key %q contains the raw identifier", tc.name, tc.got)
+		}
+	}
+}
+
+func TestHashExactIdentifierKeepsCaseAndWhitespace(t *testing.T) {
+	t.Parallel()
+
+	for _, b := range []KeyBuilder{{}, NewKeyBuilder("device-flow-test-secret")} {
+		if b.hashExactIdentifier("dc", "AbC") == b.hashExactIdentifier("dc", "abc") {
+			t.Fatal("hashExactIdentifier must be case-sensitive")
+		}
+		if b.hashExactIdentifier("dc", " abc") == b.hashExactIdentifier("dc", "abc") {
+			t.Fatal("hashExactIdentifier must not trim")
+		}
+		if b.hashExactIdentifier("dc", "abc") == b.hashExactIdentifier("uc", "abc") {
+			t.Fatal("hashExactIdentifier must separate domains")
+		}
+		if b.HashOAuth2DeviceIdentifier("uc", "BCDFGHJK") != b.hashExactIdentifier("uc", "BCDFGHJK") {
+			t.Fatal("HashOAuth2DeviceIdentifier must equal hashExactIdentifier")
+		}
+	}
+	if NewKeyBuilder("secret-a-0123456789").hashExactIdentifier("dc", "abc") == NewKeyBuilder("secret-b-0123456789").hashExactIdentifier("dc", "abc") {
+		t.Fatal("hashExactIdentifier must depend on the secret")
 	}
 }

@@ -177,6 +177,74 @@ func TestHandleUpdateRuntimeConfig(t *testing.T) {
 	if len(helper.GetAllowedKeys()) != 2 {
 		t.Fatalf("public api keys not updated: %#v", helper.GetAllowedKeys())
 	}
+	// The device flow switch was never written, so its effective value is off.
+	if got := decodeRuntimeConfigResponse(t, resp); got.OAuth2DeviceFlowEnabled == nil || *got.OAuth2DeviceFlowEnabled {
+		t.Fatalf("oauth2DeviceFlowEnabled = %v, want false", got.OAuth2DeviceFlowEnabled)
+	}
+}
+
+type runtimeConfigTestView struct {
+	OAuth2DeviceFlowEnabled *bool `json:"oauth2DeviceFlowEnabled"`
+}
+
+// decodeRuntimeConfigResponse returns updatedData; a nil switch means the
+// response omitted the field.
+func decodeRuntimeConfigResponse(t *testing.T, resp *http.Response) runtimeConfigTestView {
+	t.Helper()
+	var decoded struct {
+		UpdatedData runtimeConfigTestView `json:"updatedData"`
+	}
+	if err := json.UnmarshalRead(resp.Body, &decoded); err != nil {
+		t.Fatalf("decode runtime config response: %v", err)
+	}
+	return decoded.UpdatedData
+}
+
+func TestHandleUpdateRuntimeConfigDeviceFlowSwitch(t *testing.T) {
+	helper, redisManager := newAdminConfigRedisHelper(t)
+	other := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{Redis: redisManager}}
+
+	app := fiber.New()
+	app.Put("/", handleUpdateRuntimeConfig(helper))
+	app.Get("/", handleGetRuntimeConfig(helper))
+	put := func(body string) runtimeConfigTestView {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader([]byte(body)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test returned error: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
+		}
+		return decodeRuntimeConfigResponse(t, resp)
+	}
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := decodeRuntimeConfigResponse(t, resp).OAuth2DeviceFlowEnabled; got == nil || *got {
+		t.Fatalf("GET before any write = %v, want false", got)
+	}
+
+	if got := put(`{"oauth2DeviceFlowEnabled":true}`).OAuth2DeviceFlowEnabled; got == nil || !*got {
+		t.Fatalf("PUT true answered %v", got)
+	}
+	if !other.GetOAuth2DeviceFlowEnabled() {
+		t.Fatal("another instance does not see the switch on")
+	}
+	// Omitting the field keeps it.
+	if got := put(`{"privateApiUserAgent":"agent"}`).OAuth2DeviceFlowEnabled; got == nil || !*got {
+		t.Fatalf("PUT without the field answered %v, want true", got)
+	}
+	if got := put(`{"oauth2DeviceFlowEnabled":false}`).OAuth2DeviceFlowEnabled; got == nil || *got {
+		t.Fatalf("PUT false answered %v", got)
+	}
+	if other.GetOAuth2DeviceFlowEnabled() {
+		t.Fatal("another instance still sees the switch on")
+	}
 }
 
 func newAdminConfigRedisHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *harukiRedis.HarukiRedisManager) {

@@ -21,6 +21,7 @@ func defaultConfig() Config {
 		OAuth2: OAuth2Config{
 			Provider:                  "hydra",
 			HydraRequestTimeoutSecond: 10,
+			DeviceFlow:                defaultOAuth2DeviceFlowConfig(),
 		},
 		UserSystem: UserSystemConfig{
 			AuthProvider:                 "kratos",
@@ -51,6 +52,41 @@ func defaultConfig() Config {
 		Subscription: SubscriptionConfig{
 			UserAgent:            "Haruki-Toolbox-Backend",
 			RequestTimeoutSecond: 5,
+		},
+	}
+}
+
+// defaultOAuth2DeviceFlowConfig mirrors the compose defaults of
+// DEVICE_FLOW_USER_CODE_* so Hydra and the backend agree out of the box.
+func defaultOAuth2DeviceFlowConfig() OAuth2DeviceFlowConfig {
+	return OAuth2DeviceFlowConfig{
+		Enabled:                      false,
+		UserCodeCharset:              "BCDFGHJKLMNPQRSTVWXZ",
+		UserCodeLength:               8,
+		UserCodeTTL:                  "10m",
+		MinPollIntervalSeconds:       5,
+		ClaimTTLSeconds:              300,
+		ApproveLeaseSeconds:          30,
+		ApprovalTimeoutSeconds:       15,
+		MinRemainingSecondsToApprove: 30,
+		MaxApproveAttempts:           3,
+		RecordGraceSeconds:           1800,
+		ReaperIntervalSeconds:        60,
+		ReaperGraceSeconds:           60,
+		Limits: OAuth2DeviceFlowLimits{
+			AuthAttemptUnknownClientWarnPer10m: 6000,
+			AuthAttemptClientWarnMultiplier:    10,
+			AuthIssuedGlobalPer10m:             1200,
+			AuthIssuedPublicPer10m:             600,
+			AuthIssuedConfidentialPer10m:       600,
+			AuthIssuedClientDefaultPer10m:      60,
+			LookupUserPer10m:                   30,
+			LookupFailUserPer10m:               5,
+			LookupFailUserPerDay:               20,
+			LookupFailGlobalPer10m:             150,
+			DecisionUserPerDay:                 20,
+			MaxSlowDown:                        30,
+			MaxIntervalSeconds:                 60,
 		},
 	}
 }

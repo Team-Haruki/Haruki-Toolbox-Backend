@@ -20,6 +20,8 @@ type Update struct {
 	HarukiProxyUnpackKey *string
 	WebhookJWTSecret     *string
 	WebhookEnabled       *bool
+	// OAuth2DeviceFlowEnabled is the runtime switch of the device flow.
+	OAuth2DeviceFlowEnabled *bool
 }
 
 // Snapshot is the persisted runtime configuration contract. Its JSON field
@@ -40,6 +42,11 @@ type Snapshot struct {
 	HarukiProxyUnpackKey string   `json:"harukiProxyUnpackKey"`
 	WebhookJWTSecret     string   `json:"webhookJwtSecret"`
 	WebhookEnabled       *bool    `json:"webhookEnabled,omitzero"`
+	// OAuth2DeviceFlowEnabled nil means OFF, unlike WebhookEnabled: the switch
+	// fails closed when the field is lost (a seed snapshot from startup config,
+	// a write by an older binary, Redis losing a recent PUT false), so a switch
+	// turned off during an incident is never silently turned back on.
+	OAuth2DeviceFlowEnabled *bool `json:"oauth2DeviceFlowEnabled,omitzero"`
 }
 
 // Store distributes mutable settings between backend instances.
@@ -179,6 +186,16 @@ func applyUpdate(snapshot *Snapshot, update Update) {
 		enabled := *update.WebhookEnabled
 		snapshot.WebhookEnabled = &enabled
 	}
+	if update.OAuth2DeviceFlowEnabled != nil {
+		enabled := *update.OAuth2DeviceFlowEnabled
+		snapshot.OAuth2DeviceFlowEnabled = &enabled
+	}
+}
+
+// OAuth2DeviceFlowSwitchOn reports the runtime device-flow switch; a missing
+// field is off.
+func (s Snapshot) OAuth2DeviceFlowSwitchOn() bool {
+	return s.OAuth2DeviceFlowEnabled != nil && *s.OAuth2DeviceFlowEnabled
 }
 
 func cloneSnapshot(snapshot Snapshot) Snapshot {
@@ -186,6 +203,10 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 	if snapshot.WebhookEnabled != nil {
 		enabled := *snapshot.WebhookEnabled
 		snapshot.WebhookEnabled = &enabled
+	}
+	if snapshot.OAuth2DeviceFlowEnabled != nil {
+		enabled := *snapshot.OAuth2DeviceFlowEnabled
+		snapshot.OAuth2DeviceFlowEnabled = &enabled
 	}
 	return snapshot
 }

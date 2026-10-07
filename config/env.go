@@ -159,6 +159,23 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := overrideInt(&cfg.OAuth2.HydraRequestTimeoutSecond, "HYDRA_REQUEST_TIMEOUT_SECONDS"); err != nil {
 		return err
 	}
+	if err := overrideBool(&cfg.OAuth2.DeviceFlow.Enabled, "OAUTH2_DEVICE_FLOW_ENABLED"); err != nil {
+		return err
+	}
+	if err := overrideCSV(&cfg.OAuth2.DeviceFlow.ClientAllowlist, "OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST"); err != nil {
+		return err
+	}
+	overrideString(&cfg.OAuth2.DeviceFlow.VerificationURL, "OAUTH2_DEVICE_FLOW_VERIFICATION_URL")
+	overrideString(&cfg.OAuth2.DeviceFlow.HydraIssuerURL, "OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL")
+	if err := overrideCSV(&cfg.OAuth2.DeviceFlow.AllowedOrigins, "OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS"); err != nil {
+		return err
+	}
+	overrideString(&cfg.OAuth2.DeviceFlow.UserCodeCharset, "OAUTH2_DEVICE_FLOW_USER_CODE_CHARSET")
+	if err := overrideInt(&cfg.OAuth2.DeviceFlow.UserCodeLength, "OAUTH2_DEVICE_FLOW_USER_CODE_LENGTH"); err != nil {
+		return err
+	}
+	// Parsed by startup validation, so a bad value only matters when enabled.
+	overrideString(&cfg.OAuth2.DeviceFlow.UserCodeTTL, "OAUTH2_DEVICE_FLOW_USER_CODE_TTL")
 
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")
