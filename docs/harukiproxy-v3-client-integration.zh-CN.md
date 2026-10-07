@@ -1,6 +1,6 @@
 # HarukiProxy v3 客户端对接：OAuth2 上传
 
-适用：本分支实现的 OAuth2 v3 协议。上线前须完成数据库迁移及后端部署；不能据此认定生产已切换。固定密钥 v3 从未正式发布，不提供兼容降级。
+适用：main 已合并（#94）、尚未进入任何发布版本的 OAuth2 v3 协议（最新预发布 v9.0.0-rc5 不含）。上线前须完成数据库迁移及后端部署；不能据此认定生产已切换。固定密钥 v3 从未正式发布，不提供兼容降级。
 
 ## 1. 客户端必须调整的内容
 
@@ -79,7 +79,7 @@ Content-Type: application/octet-stream
 ```
 
 ```json
-{"status":403,"message":"failed to process upload","updatedData":{"error_code":"upload_not_allowed","request_id":"<服务端 UUID>","retryable":false}}
+{"status":403,"message":"upload not allowed","updatedData":{"error_code":"upload_not_allowed","request_id":"<服务端 UUID>","retryable":false}}
 ```
 
 成功和失败均从 X-Request-ID 或 updatedData.request_id 提取请求 ID；服务端生成 ID，不信任客户端自带值。使用 HTTP 状态与 error_code，不依赖 message 文案。网关/网络错误不保证 JSON。

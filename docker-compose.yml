@@ -267,8 +267,10 @@ services:
       HYDRA_BROWSER_URL: ${BACKEND_PUBLIC_BASE_URL}
       HYDRA_ADMIN_URL: http://hydra:4445
       # Device authorization: the user-code charset, length and TTL come from
-      # the same DEVICE_FLOW_* variables as Hydra's; startup validation and the
-      # runtime self-check fail closed when the two sides drift.
+      # the same DEVICE_FLOW_* variables as Hydra's. Startup validation only
+      # checks the backend's own values; drift from Hydra is caught per request
+      # by the device/auth self-check (charset_mismatch / ttl_mismatch), which
+      # fails closed with server_error.
       OAUTH2_DEVICE_FLOW_ENABLED: "${OAUTH2_DEVICE_FLOW_ENABLED:-false}"
       OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST: "${OAUTH2_DEVICE_FLOW_CLIENT_ALLOWLIST:-}"
       OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS: "${OAUTH2_DEVICE_FLOW_ALLOWED_ORIGINS:-}"
