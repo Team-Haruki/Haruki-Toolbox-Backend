@@ -17,7 +17,7 @@
 - 启用 auth proxy 时保留 trusted header 校验与 `user_system.auth_proxy_session_header`；管理员敏感操作用代理会话级标识，不要只靠 `user_id` 或 `kratos_identity_id`
 - 不破坏 Hydra subject 兼容（优先 `kratos_identity_id`，兼容旧 `users.id`）
 - 设备授权（RFC 8628）由后端中介：Hydra 的 `/oauth2/device/*` 不加 Oathkeeper 规则；`/api/oauth2/token` 对非设备授权许可逐字节转发；用户码配置只来自 `DEVICE_FLOW_USER_CODE_*`；`oauth2DeviceFlowEnabled` 缺失即关闭；原始用户码与 `hdc_…`、`ory_dc_…`、`dfh_…` 不进 Redis 键名与日志
-- `POST /internal/oauth2/introspect` 不加 Oathkeeper 规则，不写进对外接入文档
+- `/internal/*` 内部路由不加 Oathkeeper 规则，不写进本仓库的任何文档
 
 ## 安全不变量（不得回退）
 
@@ -35,6 +35,7 @@
 - 先跑触达包测试，跨模块改动跑 `go test ./...`
 - 改 `access-rules.yml`、`docker-compose.yml`、`hydra.yml`、`.env.example` 时关注 `internal/architecture/` 的契约测试
 - `docs/oauth2-integration.zh-CN.md` §4A.8 的 Go 示例必须与 `internal/modules/oauth2/hydra_device_live_test.go` 同名函数逐字一致
-- 改 Ory / OAuth2 / Webhook / 端点行为时同步 `docs/` 与 `external/oathkeeper/`，具体落点见 `AGENTS.md`「文档规则」
+- 改 Ory / OAuth2 / Webhook / 端点行为时同步 `docs/` 与 `external/oathkeeper/`，具体落点见 `AGENTS.md`「文档规则」；部署、运维、内部接口的变化写进私有运维文档
+- `docs/` 是公开的：不写私网 / tailnet IP、内部主机名、生产路径、生产容器名、密钥位置、`/internal/*` 接口或运维手册
 - 提交标题格式 `[Feat|Fix|Chore|Docs] Imperative description`；代理署名用正文末尾的 `Co-authored-by:` trailer（Copilot：`Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`）
 - CI 唯一必需检查是 `CI OK`；工作流约定见 `AGENTS.md`「GitHub Actions workflows」
