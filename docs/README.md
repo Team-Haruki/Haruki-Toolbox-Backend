@@ -41,5 +41,6 @@
 | 文档 | 状态 |
 | --- | --- |
 | [数据 revision 与缓存失效设计](game-data-revision-design.zh-CN.md) | 同秒旧缓存复现、数据库版本原型、条件读取和分阶段发布约束；尚未接入生产 |
+| [OAuth2 设备授权（Device Code）设计](oauth2-device-flow-design.zh-CN.md) | 机器人 / CLI / 无头客户端的 RFC 8628 设备授权：后端代驱 Hydra、令牌端点兼容层、前置修复与分阶段上线。设计已评审；Phase 0 前置修复（BE-1～BE-4、FE-1、FE-1b）已提交为独立分支，待评审合并；落地后删除 |
 
 已完成的一次性迁移计划、调研流水账和旧部署记录不在此保留，可通过 Git 历史查阅。
