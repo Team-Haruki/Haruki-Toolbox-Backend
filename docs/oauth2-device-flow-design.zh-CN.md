@@ -118,7 +118,7 @@
 | SafeLine 能否按路径设 CC 与挑战豁免 | **不支持**（运维确认） | 不做边缘按路径限流；预算完全由后端承担（§8.2、§8.3） |
 | EdgeOne `toolbox-api-cdn` 不缓存 `/api/oauth2/*`、转发 `Cookie` 与 `Origin` | **可调整回源与缓存配置**（运维确认） | 设备页仍固定走 direct（§15 Q6），EdgeOne 只需加「不缓存」兜底 |
 | Kratos 注册是否限制一次性邮箱 | **不限制**（运维确认；注册须验证邮箱） | 每账号每天 20 次失败的上限可被多开账号绕过，安全底线仍由全局预算保证（≈ 0.74 次/年），但「打满全局熔断让所有人 10 分钟无法输码」的 DoS 成本很低，告警必须有人值守（§15 Q1） |
-| 生产 `session_sign_token` 非空且 ≥ 16 字节 | **不满足：为空**（YAML 无该键，env `SESSION_SIGN_TOKEN` 未设） | 设备流程的 HMAC 键依赖它，启动校验会拒绝空值；设置它同时改变会话签名与现有 Redis 哈希键（大概率全员重新登录），须单独安排维护窗口（§15 Q7） |
+| 生产 `session_sign_token` 非空且 ≥ 16 字节 | **不满足：为空**（YAML 无该键，env `SESSION_SIGN_TOKEN` 未设） | 它**不是**会话签名密钥（`NewSessionHandler` 忽略该参数，登录会话由 Kratos 管理），现在唯一的用途是 Redis 键名中邮箱 / QQ 等标识的 HMAC 化名密钥（`hashNormalizedIdentifier`），设备流程的 `hashExactIdentifier` 也用它。设置它只会让当时进行中的邮箱验证码、重置链接、QQ 验证码作废、限流计数归零，**不会让任何人掉登录**。决定：上线部署时直接 `openssl rand -hex 32` 生成并写入，之后不再更改、不打印 |
 | 生产 Redis `maxmemory` / `maxmemory-policy` | 未核对 | 方案不依赖，只作记录 |
 | 新用户注册 → 邮箱验证 →「继续」回到 `return_to` 的完整往返（FE-1） | 待验证 | Phase 0 冒烟在生产 Kratos 上走一遍 |
 | Sekai Station 的部署 | **已确认**：我们的资产，独立进程（目前与 Toolbox 后端同机） | 经 tailnet 或容器网络调用内部 API，不需要公开接口与第三方凭据 |
@@ -886,15 +886,15 @@ Go 类型 `config.OAuth2DeviceFlowConfig`，挂在 `OAuth2Config` 的 `DeviceFlo
 8. 备份 hydra.yml、access-rules.yml、编排 compose、`.portainer-env.sh` 与 `GET /api/admin/config/runtime` 的结果。
 9. 边缘与统计：SafeLine 无需改动（已确认不挑战非浏览器 API POST、也不支持按路径规则）；EdgeOne `/api/oauth2/*` 不缓存；GA4 数据流「隐去数据 → 查询参数」加入 `user_code`、`login_challenge`、`consent_challenge`、`logout_challenge`、`device_challenge`。
 10. 记录当前 `BACKEND_IMAGE` 与运行中的镜像 digest（生产用 `…:latest` 且 compose 无 `pull_policy`，`latest` 会被覆盖）。
-11. `session_sign_token` 非空且 ≥ 16 字节。**2026-10-07 核对为空**：须在上线之前的单独维护窗口设置（会改变会话签名与现有 Redis 哈希键，预计全员重新登录），见 §15 Q7；不要在上线窗口里临时设置。
+11. `session_sign_token` 非空且 ≥ 16 字节。**2026-10-07 核对为空**：在上线窗口里用 `openssl rand -hex 32` 生成，写入 backend YAML `user_system.session_sign_token`（或 env `SESSION_SIGN_TOKEN`），随 backend 重启生效；不打印、不进仓库，之后不再更改（每次更改都会让进行中的验证码与设备流程失效）。
 12. 选 CDN 端点后在 `/device` 做一次 lookup，返回 200 而不是 401 或 403 `origin_rejected`（不符见 §15 Q7）。
 
-全部在上线窗口前完成；第 11 项须在更早的单独窗口完成。
+全部在上线窗口前或窗口开头完成。
 
 ### 14.3 分阶段
 
 - **前置修复冒烟**（代码已在合并分支上，随整体合并一起部署；上线窗口里先跑本组冒烟）：backend 镜像改为本次发布的不可变标签（`ghcr.io/team-haruki/haruki-toolbox-backend:sha-<短 commit>` 或 release 标签，或保持 `latest` 但先 `compose.sh pull backend`）后 `up -d backend`，用 `docker inspect` 确认新 digest；前端发布 9.5.1（含 FE-1 与 FE-1b）。冒烟：临时授权码客户端 `phase0-smoke` 拿到 RT → 停用期望 200、`revokedSubjects ≥ 1`、`failedSubjects=[]`、`revocationComplete=true` → RT 刷新得到 `invalid_grant`；另一客户端在轮换、编辑、停用、恢复前后 GET，`grant_types`、lifespans、`post_logout_redirect_uris` 与未知 metadata 不变；把公共客户端编辑为机密时管理端显示一次性 secret，且该 secret 能通过客户端认证；公共客户端轮换得到 400（`updatedData.code=public_client_has_no_secret`），管理端不再提供该按钮；默认选项删除成功；新账号从带 `redirect` 的登录页注册、验证邮箱后点「继续」回到原地址（§15 F11）。回补：在 `toolbox` 库（不是 `hydra` 库）的 `system_logs` 中查 action 为 `admin.oauth_client.active.update`、`.update`、`.rotate_secret`、`.revoke`、`.delete`、`.restore` 且 `result='failure'` 的记录，重做失败的停用、删除与撤销全部（部署之后停用即使撤销不完整也记 `success`，改看元数据 `revocationComplete=false`，补救方式是撤销全部）。出口：冒烟通过，授权码登录与经 `/api/oauth2/token` 的刷新无回归。
-- **上线（一次完成，2026-10-07 决定不做暗发布与试点）**：前提是合并分支整体合入、`session_sign_token` 已在此前的单独窗口设好（§14.2 第 11 项）。提前公告 → 更新编排 compose（hydra / backend 环境变量、清理服务）、在 env 写入设备流程相关键（`OAUTH2_DEVICE_FLOW_ENABLED=true`，白名单留空）与 backend YAML 的 `oauth2.internal_api.token_sha256`，并把 `BACKEND_IMAGE` 改为本次发布的不可变 digest → `compose.sh config --quiet` 无报错，且能 grep 到原样的 `expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval` → 同步 hydra.yml → `compose.sh up -d hydra hydra-device-janitor backend` 并用 `docker inspect` 确认 backend 为新 digest → 确认发现文档 `token_endpoint` 为 `…/api/oauth2/token` → 替换 access-rules 并重启 Oathkeeper → 管理端创建 `haruki-client`（公共、仅设备，scope `user:read offline_access station:room:write`，`maxCodesPer10m=60`）→ `PUT {"oauth2DeviceFlowEnabled":true}` → 部署 Station 后端新版本（只接受 Bearer）→ 发布删除了旧签名代码的 Haruki-Client 新版→ 执行探针（全部通过才算完成）：
+- **上线（一次完成，2026-10-07 决定不做暗发布与试点）**：前提是合并分支整体合入；`session_sign_token` 在本窗口内按 §14.2 第 11 项生成写入。提前公告 → 更新编排 compose（hydra / backend 环境变量、清理服务）、在 env 写入设备流程相关键（`OAUTH2_DEVICE_FLOW_ENABLED=true`，白名单留空）与 backend YAML 的 `oauth2.internal_api.token_sha256`，并把 `BACKEND_IMAGE` 改为本次发布的不可变 digest → `compose.sh config --quiet` 无报错，且能 grep 到原样的 `expires_at < (now() AT TIME ZONE 'UTC') - :'grace'::interval` → 同步 hydra.yml → `compose.sh up -d hydra hydra-device-janitor backend` 并用 `docker inspect` 确认 backend 为新 digest → 确认发现文档 `token_endpoint` 为 `…/api/oauth2/token` → 替换 access-rules 并重启 Oathkeeper → 管理端创建 `haruki-client`（公共、仅设备，scope `user:read offline_access station:room:write`，`maxCodesPer10m=60`）→ `PUT {"oauth2DeviceFlowEnabled":true}` → 部署 Station 后端新版本（只接受 Bearer）→ 发布删除了旧签名代码的 Haruki-Client 新版→ 执行探针（全部通过才算完成）：
 
 | # | 探针 | 期望 |
 | --- | --- | --- |
@@ -956,7 +956,7 @@ Go 类型 `config.OAuth2DeviceFlowConfig`，挂在 `OAuth2Config` 的 `DeviceFlo
 | Q4 | Station 后端调用内部 API 的路径：tailnet 地址 `100.80.207.86:16666` 还是同一 compose 网络的 `backend:16666` | 同机部署时走 compose 网络；不同机时走 tailnet | BE-12 前 |
 | Q5 | Haruki-Client 侧：用户码只写控制台日志是否足够（无界面部署靠 `docker logs` 查看）；令牌保存位置（工作目录单独文件 `toolbox_oauth.json`，权限 0600，与 Cloud 凭据、`configs.yaml` 分开）；设备标签取值（运行者在配置里自定义，默认 `Haruki-Client @ <hostname>`） | 按左列 | Haruki-Client 改造前 |
 | Q6 | 设备页 XHR 是否固定走 direct 端点（EdgeOne 已确认可调，但多一个依赖） | 是：call-api 支持按请求覆盖 `baseURL`，设备端点固定 direct；FE-3 约 +0.25 人日 | 上线前 |
-| Q7 | 生产 `session_sign_token` 为空：何时、由谁在单独维护窗口设置（预计全员重新登录） | 上线前一周的凌晨窗口，提前公告「需要重新登录」 | 上线前 |
+| Q7 | ~~生产 `session_sign_token` 的设置窗口~~ | **已定**：不需要单独窗口；上线部署时生成随机串写入（只影响进行中的验证码，不掉登录） | — |
 | Q8 | `golang.org/x/oauth2` 放主 go.mod 还是独立 module（BE-9 集成测试用） | 放主 go.mod（只有测试引用，不进产物） | BE-9 前 |
 
 ## 16. 接入方契约要点（BE-11 原样写入 oauth2-integration §4A）
