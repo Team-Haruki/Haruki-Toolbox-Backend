@@ -11,8 +11,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var clientSleep = time.Sleep
-
 type appVersionPayload struct {
 	AppVersion   string `json:"appVersion"`
 	AppHash      string `json:"appHash"`
@@ -76,7 +74,9 @@ func (c *HarukiSekaiClient) getCookies(ctx context.Context, retries int) error {
 
 	for i := range retries {
 		if i > 0 {
-			clientSleep(time.Duration(i) * 500 * time.Millisecond)
+			if err := pause(ctx, retryBackoff(i)); err != nil {
+				return NewAuthError("getCookies", "interrupted before retrying", err)
+			}
 		}
 		status, headers, _, err := c.httpClient.RequestWithHeaders(ctx, httpMethodPost, url, nil, nil)
 		if err != nil {
@@ -122,7 +122,9 @@ func (c *HarukiSekaiClient) parseAppVersion(ctx context.Context, retries int) er
 
 	for i := range retries {
 		if i > 0 {
-			clientSleep(time.Duration(i) * 500 * time.Millisecond)
+			if err := pause(ctx, retryBackoff(i)); err != nil {
+				return NewAuthError("parseAppVersion", "interrupted before retrying", err)
+			}
 		}
 		status, _, body, err := c.httpClient.Request(ctx, httpMethodGet, c.versionURL, nil, nil)
 		if err != nil {
@@ -186,13 +188,23 @@ func (c *HarukiSekaiClient) Init(ctx context.Context) error {
 	if err := c.InheritAccount(ctx, true); err != nil {
 		return err
 	}
-	clientSleep(1 * time.Second)
+	if err := pause(ctx, c.pacing.AfterInheritCheck); err != nil {
+		return NewAuthError("inherit", "interrupted before the executing inherit call", err)
+	}
 	if err := c.InheritAccount(ctx, false); err != nil {
 		return err
 	}
-	clientSleep(2 * time.Second)
+	if err := pause(ctx, c.pacing.BeforeLogin); err != nil {
+		return NewAuthError("login", "interrupted before login", err)
+	}
 	if err := c.Login(ctx); err != nil {
 		return err
 	}
 	return nil
+}
+
+// retryBackoff is the wait before retry attempt i (1-based) of the cookie and
+// version requests.
+func retryBackoff(attempt int) time.Duration {
+	return time.Duration(attempt) * 500 * time.Millisecond
 }

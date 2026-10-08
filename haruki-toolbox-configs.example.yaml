@@ -231,6 +231,16 @@ sekai_client:
     Host: ""
   en_server_inherit_client_headers:
     Host: ""
+  # Pauses between game API calls during an inherit, in milliseconds. The
+  # defaults below are the pacing the inherit flow has always used, modelled on
+  # the real client; shortening them may get accounts flagged by the game's
+  # anti-cheat, so change them only deliberately. 0 or omitted keeps the
+  # default. A pause ends early when the inherit is cancelled or hits its
+  # run deadline.
+  inherit_pacing:
+    after_inherit_check_ms: 1000 # env SEKAI_INHERIT_PAUSE_AFTER_CHECK_MS; between the checking and the executing inherit call
+    before_login_ms: 2000 # env SEKAI_INHERIT_PAUSE_BEFORE_LOGIN_MS; between the executing inherit call and the login
+    suite_followup_ms: 1000 # env SEKAI_INHERIT_PAUSE_SUITE_FOLLOWUP_MS; each of the three pauses around the suite follow-up calls
 
 
 haruki_bot:

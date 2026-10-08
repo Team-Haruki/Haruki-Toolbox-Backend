@@ -26,6 +26,9 @@ type Dependencies struct {
 	SuiteRestoreService       *harukiDataHandler.SuiteRestoreService
 	ServerCryptor             harukiSekai.ServerCryptor
 	Proxy                     string
+	// InheritPacing sets the pauses between game API calls of an inherit;
+	// unset fields keep the defaults.
+	InheritPacing harukiSekai.InheritPacing
 	// HydraConfig gates the delegated OAuth2 upload route. When nil that route
 	// is not registered at all, so a deployment without Hydra simply does not
 	// expose it.

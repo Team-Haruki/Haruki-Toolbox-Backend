@@ -183,6 +183,16 @@ func applyEnvOverrides(cfg *Config) error {
 		return err
 	}
 
+	if err := overrideInt(&cfg.SekaiClient.InheritPacing.AfterInheritCheckMS, "SEKAI_INHERIT_PAUSE_AFTER_CHECK_MS"); err != nil {
+		return err
+	}
+	if err := overrideInt(&cfg.SekaiClient.InheritPacing.BeforeLoginMS, "SEKAI_INHERIT_PAUSE_BEFORE_LOGIN_MS"); err != nil {
+		return err
+	}
+	if err := overrideInt(&cfg.SekaiClient.InheritPacing.SuiteFollowupMS, "SEKAI_INHERIT_PAUSE_SUITE_FOLLOWUP_MS"); err != nil {
+		return err
+	}
+
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")
 

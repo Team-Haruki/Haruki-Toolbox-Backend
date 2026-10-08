@@ -23,8 +23,9 @@ func NewSekaiDataRetriever(
 	inherit harukiUtils.InheritInformation,
 	uploadType harukiUtils.UploadDataType,
 	serverCryptor ServerCryptor,
+	pacing InheritPacing,
 ) *HarukiSekaiDataRetriever {
-	client, err := newRetrieverClient(server, inherit, serverCryptor)
+	client, err := newRetrieverClient(server, inherit, serverCryptor, pacing)
 	if err != nil {
 		logger := harukiLogger.NewLoggerFromGlobal("SekaiDataRetriever")
 		msg := fmt.Sprintf("failed to build retriever client: %v", err)
@@ -50,6 +51,7 @@ func newRetrieverClient(
 	server harukiUtils.SupportedInheritUploadServer,
 	inherit harukiUtils.InheritInformation,
 	serverCryptor ServerCryptor,
+	pacing InheritPacing,
 ) (*HarukiSekaiClient, error) {
 	serverConfig, err := GetServerConfig(server)
 	if err != nil {
@@ -65,6 +67,7 @@ func newRetrieverClient(
 		Headers:         serverConfig.Headers,
 		Proxy:           harukiConfig.Cfg.Proxy,
 		InheritJWTToken: serverConfig.InheritJWTToken,
+		Pacing:          pacing,
 	}), nil
 }
 

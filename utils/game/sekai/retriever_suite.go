@@ -3,7 +3,6 @@ package sekai
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
 func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, error) {
@@ -27,7 +26,10 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 		return nil, NewDataRetrievalError("suite", "api_response", r.ErrorMessage, nil)
 	}
 
-	r.runSuiteFollowupCalls(ctx)
+	if err := r.runSuiteFollowupCalls(ctx); err != nil {
+		r.logger.Warnf("Suite retrieval interrupted: %v", err)
+		return nil, NewDataRetrievalError("suite", "pause", "interrupted between suite calls", err)
+	}
 
 	unpackedMap, err := unpackResponseToMap(r.client.serverCryptor, suite, r.client.server)
 	if err != nil {
@@ -47,15 +49,22 @@ func (r *HarukiSekaiDataRetriever) RetrieveSuite(ctx context.Context) ([]byte, e
 	return nil, NewDataRetrievalError("suite", "status", fmt.Sprintf("unexpected status code: %d", status), nil)
 }
 
-func (r *HarukiSekaiDataRetriever) runSuiteFollowupCalls(ctx context.Context) {
-	retrieverSleep(1 * time.Second)
-
+// runSuiteFollowupCalls makes the calls the real client makes after the suite
+// request, paced like it. Their failures are not critical; only the context
+// ending during a pause stops the inherit.
+func (r *HarukiSekaiDataRetriever) runSuiteFollowupCalls(ctx context.Context) error {
+	wait := r.client.pacing.SuiteFollowup
+	if err := pause(ctx, wait); err != nil {
+		return err
+	}
 	if err := callAndIgnoreError(ctx, r.client, suiteFollowupPath(r.client.userID), httpMethodGet, nil); err != nil {
 		r.logger.Warnf("Follow-up suite call failed (non-critical): %v", err)
 	}
-	retrieverSleep(1 * time.Second)
+	if err := pause(ctx, wait); err != nil {
+		return err
+	}
 	if err := callAndIgnoreError(ctx, r.client, retrieverSystemPath, httpMethodGet, nil); err != nil {
 		r.logger.Warnf("System call failed (non-critical): %v", err)
 	}
-	retrieverSleep(1 * time.Second)
+	return pause(ctx, wait)
 }

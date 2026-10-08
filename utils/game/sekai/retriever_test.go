@@ -21,6 +21,7 @@ func TestNewSekaiDataRetriever_InvalidServer(t *testing.T) {
 		harukiUtils.InheritInformation{},
 		harukiUtils.UploadDataTypeSuite,
 		ServerCryptor{},
+		InheritPacing{},
 	)
 	if !r.isErrorExist {
 		t.Fatalf("retriever should be in error state for unsupported server")
@@ -182,13 +183,10 @@ func TestRetrieverRunIgnoresFinalHomeRefreshFailure(t *testing.T) {
 
 func withFastRetrieverSleeps(t *testing.T) {
 	t.Helper()
-	originalClientSleep := clientSleep
-	originalRetrieverSleep := retrieverSleep
-	clientSleep = func(time.Duration) {}
-	retrieverSleep = func(time.Duration) {}
+	originalPause := pause
+	pause = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
 	t.Cleanup(func() {
-		clientSleep = originalClientSleep
-		retrieverSleep = originalRetrieverSleep
+		pause = originalPause
 	})
 }
 

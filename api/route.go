@@ -80,6 +80,7 @@ type Dependencies struct {
 	SuiteRestoreService  *harukiHandler.SuiteRestoreService
 	ServerCryptor        harukiSekai.ServerCryptor
 	UploadProxy          string
+	InheritPacing        harukiSekai.InheritPacing
 }
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -104,6 +105,7 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 		DataSync:                  dependencies.DataSync,
 		ServerCryptor:             dependencies.ServerCryptor,
 		Proxy:                     dependencies.UploadProxy,
+		InheritPacing:             dependencies.InheritPacing,
 	})
 	iosModule.RegisterIOSRoutes(apiHelper, dependencies.IOSEndpoints)
 	oauth2Module.RegisterOAuth2Routes(apiHelper, oauth2Module.RouteOptions{

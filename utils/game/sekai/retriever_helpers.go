@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 )
-
-var retrieverSleep = time.Sleep
 
 const (
 	retrieverSuiteLoginQuery    = "?isLogin=true"
