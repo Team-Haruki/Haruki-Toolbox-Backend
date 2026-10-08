@@ -86,6 +86,14 @@ func (h *DataHandler) writeGameData(
 			total, server, dataType, gameUserID,
 		)
 	}
+	// No ids here: the line exists to measure how often the change gate skips
+	// a rewrite, per region.
+	if stats.UnchangedColumns > 0 {
+		h.Logger.Debugf(
+			"game-data write kept %d unchanged column(s), %d bytes (server=%s dataType=%s)",
+			stats.UnchangedColumns, stats.UnchangedBytes, server, dataType,
+		)
+	}
 	if len(stats.AliasConflicts) > 0 {
 		h.Logger.Debugf(
 			"game-data write saw %d alias conflict(s) (server=%s dataType=%s gameUserId=%d)",
