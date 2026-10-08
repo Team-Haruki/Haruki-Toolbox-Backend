@@ -10,6 +10,7 @@ import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/redact"
 )
 
 var uploadAuditSemaphore = make(chan struct{}, 64)
@@ -27,14 +28,17 @@ func buildUploadAuditErrorMessage(err error, result *harukiUtils.HandleDataResul
 			}
 		}
 		if len(parts) > 0 {
-			message := strings.Join(parts, " ")
+			message := redact.Text(strings.Join(parts, " "))
 			return &message
 		}
 	}
 	if err == nil {
 		return nil
 	}
-	trimmed := strings.TrimSpace(err.Error())
+	// The message is stored and shown to admins. Errors from the inherit flow
+	// are redacted where they are built; this is the backstop for any that are
+	// not.
+	trimmed := redact.Text(strings.TrimSpace(err.Error()))
 	if trimmed == "" {
 		return nil
 	}

@@ -76,3 +76,73 @@ func TestAccessLogRedactsCredentialPaths(t *testing.T) {
 		}
 	}
 }
+
+// Transfer (inherit) credentials must not reach the access log whichever tag
+// would carry them: a game-API-shaped /inherit/user/{id} path, query
+// parameters, or a ${body} tag logging the inherit submit payload. Game user
+// IDs in data paths are the resource key every public URL carries and stay
+// readable.
+func TestAccessLogRedactsInheritCredentials(t *testing.T) {
+	t.Parallel()
+
+	logPath := filepath.Join(t.TempDir(), "access.log")
+	var cfg harukiConfig.Config
+	cfg.Backend.AccessLog = "${method} ${path} ${url} ${body}\n"
+	cfg.Backend.AccessLogPath = logPath
+
+	app := fiber.New()
+	closeLog, err := configureAccessLog(app, cfg)
+	if err != nil {
+		t.Fatalf("configureAccessLog: %v", err)
+	}
+	app.All("/*", func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+
+	const (
+		inheritID       = "FAKEinheritID0006"
+		inheritPassword = "FAKEinheritPW0006"
+		gameUserID      = "12345678901234567"
+	)
+	requests := []struct {
+		target string
+		body   string
+	}{
+		{"/api/inherit/user/" + inheritID + "?isExecuteInherit=False", ""},
+		{"/api/inherit/jp/suite/submit?inherit_id=" + inheritID + "&inheritPassword=" + inheritPassword + "&keep=1", ""},
+		{"/api/inherit/jp/mysekai/submit", `{"inherit_id":"` + inheritID + `","inherit_password":"` + inheritPassword + `"}`},
+		{"/api/public/jp/suite/" + gameUserID, ""},
+	}
+	for _, r := range requests {
+		req := httptest.NewRequest(fiber.MethodPost, r.target, strings.NewReader(r.body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request %s: %v", r.target, err)
+		}
+		_ = resp.Body.Close()
+	}
+	if err := closeLog(); err != nil {
+		t.Fatalf("close access log: %v", err)
+	}
+
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read access log: %v", err)
+	}
+	out := string(raw)
+	for _, secret := range []string{inheritID, inheritPassword} {
+		if strings.Contains(out, secret) {
+			t.Fatalf("access log leaked %q:\n%s", secret, out)
+		}
+	}
+	for _, want := range []string{
+		"/api/inherit/user/<redacted>?isExecuteInherit=False",
+		"inherit_id=<redacted>&inheritPassword=<redacted>&keep=1",
+		`{"inherit_id":"<redacted>","inherit_password":"<redacted>"}`,
+		"/api/inherit/jp/mysekai/submit",
+		"/api/public/jp/suite/" + gameUserID,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("access log missing %q:\n%s", want, out)
+		}
+	}
+}

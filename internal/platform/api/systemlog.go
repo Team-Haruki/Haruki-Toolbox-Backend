@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/redact"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -76,7 +77,10 @@ func WriteSystemLog(ctx context.Context, apiHelper *HarukiToolboxRouterHelpers, 
 		builder.SetMethod(strings.ToUpper(trimAndLimit(*entry.Method, 16)))
 	}
 	if entry.Path != nil {
-		builder.SetPath(trimAndLimit(*entry.Path, 512))
+		// Route paths can carry credentials (iOS upload codes, the Afdian
+		// callback secret); redact before trimming so a cut cannot split one
+		// past the pattern that recognises it.
+		builder.SetPath(trimAndLimit(redact.Text(*entry.Path), 512))
 	}
 	if entry.RequestID != nil {
 		builder.SetRequestID(trimAndLimit(*entry.RequestID, 128))
