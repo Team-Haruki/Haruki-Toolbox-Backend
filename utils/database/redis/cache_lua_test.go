@@ -142,26 +142,29 @@ func TestClearCacheRemovesAllGameDataQueryVariants(t *testing.T) {
 	manager, _ := newTestRedisManager(t)
 	ctx := context.Background()
 
-	// Same data address with different surfaces and query hashes should all be invalidated.
+	// Same data address with different surfaces, query hashes and generations
+	// should all be invalidated.
 	keys := []string{
-		BuildGameDataCacheKey("public", "jp", "suite", 123, ""),
-		BuildGameDataCacheKey("public", "jp", "suite", 123, "upload_time"),
-		BuildGameDataCacheKey("private", "jp", "suite", 123, "userProfile"),
-		BuildGameDataCacheKey("oauth2", "jp", "suite", 123, "userProfile,userGamedata"),
+		BuildVersionedGameDataCacheKey("public", "jp", "suite", 123, "", 1),
+		BuildVersionedGameDataCacheKey("public", "jp", "suite", 123, "upload_time", 1) + ":a=digest",
+		BuildVersionedGameDataCacheKey("private", "jp", "suite", 123, "userProfile", 2),
+		BuildVersionedGameDataCacheKey("oauth2", "jp", "suite", 123, "userProfile,userGamedata", 2, "cn-6.4.0"),
 	}
 	for _, key := range keys {
-		if err := manager.Redis.Set(ctx, key, "v", time.Minute).Err(); err != nil {
+		if err := manager.SetGameDataBodyCache(ctx, "jp", "suite", 123, key, "v", time.Minute); err != nil {
 			t.Fatalf("seed redis value error: %v", err)
 		}
 	}
 
-	untouchedKeys := []string{
-		BuildGameDataCacheKey("public", "jp", "suite", 999, "userProfile"),
-		BuildGameDataCacheKey("public", "en", "suite", 123, "userProfile"),
-		BuildGameDataCacheKey("public", "jp", "mysekai", 123, "userProfile"),
-	}
-	for _, key := range untouchedKeys {
-		if err := manager.Redis.Set(ctx, key, "keep", time.Minute).Err(); err != nil {
+	untouched := []struct {
+		server, dataType string
+		userID           int64
+	}{{"jp", "suite", 999}, {"en", "suite", 123}, {"jp", "mysekai", 123}}
+	var untouchedKeys []string
+	for _, doc := range untouched {
+		key := BuildVersionedGameDataCacheKey("public", doc.server, doc.dataType, doc.userID, "userProfile", 1)
+		untouchedKeys = append(untouchedKeys, key)
+		if err := manager.SetGameDataBodyCache(ctx, doc.server, doc.dataType, doc.userID, key, "keep", time.Minute); err != nil {
 			t.Fatalf("seed untouched redis value error: %v", err)
 		}
 	}
@@ -197,12 +200,14 @@ func TestClearUploadedGameDataCachesClearsMysekaiForBirthdayParty(t *testing.T) 
 	manager, _ := newTestRedisManager(t)
 	ctx := context.Background()
 
-	birthdayKey := BuildGameDataCacheKey("private", "jp", "mysekai_birthday_party", 123, "userMysekaiHarvestMaps")
-	mysekaiKey := BuildGameDataCacheKey("public", "jp", "mysekai", 123, "updatedResources")
-	suiteKey := BuildGameDataCacheKey("public", "jp", "suite", 123, "userProfile")
+	birthdayKey := BuildVersionedGameDataCacheKey("private", "jp", "mysekai_birthday_party", 123, "userMysekaiHarvestMaps", 1)
+	mysekaiKey := BuildVersionedGameDataCacheKey("public", "jp", "mysekai", 123, "updatedResources", 1)
+	suiteKey := BuildVersionedGameDataCacheKey("public", "jp", "suite", 123, "userProfile", 1)
 
-	for _, key := range []string{birthdayKey, mysekaiKey, suiteKey} {
-		if err := manager.Redis.Set(ctx, key, "v", time.Minute).Err(); err != nil {
+	for _, seed := range []struct{ dataType, key string }{
+		{"mysekai_birthday_party", birthdayKey}, {"mysekai", mysekaiKey}, {"suite", suiteKey},
+	} {
+		if err := manager.SetGameDataBodyCache(ctx, "jp", seed.dataType, 123, seed.key, "v", time.Minute); err != nil {
 			t.Fatalf("seed redis value error: %v", err)
 		}
 	}

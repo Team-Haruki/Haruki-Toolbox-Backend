@@ -2,6 +2,7 @@ package usergamebindings
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -10,9 +11,13 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/data"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/circuitbreaker"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekaiapi"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
+	"golang.org/x/sync/singleflight"
 )
 
 // ownedGameAccountReadTimeout bounds the owned-account data read (PG access
@@ -49,9 +54,8 @@ func buildAllowedKeySet(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (
 
 func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Bound the PG access check and game-data reads; the profile branch keeps the
-		// request context because it proxies an upstream game-API call with its
-		// own client-side timeout.
+		// Bound the PG access check and game-data reads; the profile branch sets its
+		// own per-server deadline for the upstream game-API call.
 		ctx, cancel := context.WithTimeout(c.Context(), ownedGameAccountReadTimeout)
 		defer cancel()
 
@@ -142,12 +146,79 @@ func ownedGameAccountNotModified(
 	return confirmed && data.CheckNotModified(c, dataType, requestKey, publicKeyFiltered, publicAllowedKeys, stamp)
 }
 
+// profileCacheIOTimeout bounds the Redis read and write around a profile view;
+// a slow cache falls through to the live call.
+const profileCacheIOTimeout = time.Second
+
+// profileViewGroup collapses concurrent views of one game account's profile into
+// a single Sekai API call. Callers join only after their own access check, and
+// the profile is the same for every authorized viewer.
+var profileViewGroup singleflight.Group
+
+type profileViewResult struct {
+	result *sekaiapi.HarukiSekaiAPIResult
+	body   []byte
+	err    error
+}
+
+func (r profileViewResult) cacheable() bool {
+	return r.err == nil && r.result != nil && r.result.ServerAvailable && r.result.AccountExists && r.result.Body && len(r.body) > 0
+}
+
+// sendOwnedGameAccountProfile must only run after CanAccessGameAccountData has
+// allowed the caller: the cache below is shared by every authorized viewer of
+// the account and holds successful responses only.
 func sendOwnedGameAccountProfile(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr string, server harukiUtils.SupportedDataUploadServer) error {
 	if apiHelper == nil || apiHelper.SekaiAPIClient == nil {
 		return harukiAPIHelper.ErrorInternal(c, "profile service unavailable")
 	}
+	client := apiHelper.SekaiAPIClient
+	cacheKey := harukiRedis.BuildSekaiAPIProfileCacheKey(string(server), gameUserIDStr)
+	cache, cacheTTL := profileCache(apiHelper)
+	if cache != nil {
+		readCtx, cancel := context.WithTimeout(c.Context(), profileCacheIOTimeout)
+		cached, found, err := cache.GetRawCacheBytes(readCtx, cacheKey)
+		cancel()
+		if err == nil && found && len(cached) > 0 {
+			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+			return c.Send(cached)
+		}
+	}
 
-	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(c.Context(), gameUserIDStr, string(server))
+	v, _, _ := profileViewGroup.Do(cacheKey, func() (any, error) {
+		// Detached from the leader's request: the result serves every joined caller.
+		ctx, cancel := context.WithTimeout(context.Background(), client.ProfileViewTimeout(string(server)))
+		defer cancel()
+		resultInfo, body, err := client.GetUserProfile(ctx, gameUserIDStr, string(server))
+		view := profileViewResult{result: resultInfo, body: body, err: err}
+		if cache != nil && view.cacheable() {
+			writeCtx, cancelWrite := context.WithTimeout(context.Background(), profileCacheIOTimeout)
+			defer cancelWrite()
+			if wErr := cache.SetRawCacheBytes(writeCtx, cacheKey, body, cacheTTL); wErr != nil {
+				harukiLogger.Warnf("Failed to cache game account profile: %v", wErr)
+			}
+		}
+		return view, nil
+	})
+	view := v.(profileViewResult)
+	return respondOwnedGameAccountProfile(c, view.result, view.body, view.err)
+}
+
+// profileCache returns the Redis cache for profile views, or nil when it is
+// disabled or Redis is not configured.
+func profileCache(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (*harukiRedis.HarukiRedisManager, time.Duration) {
+	ttl := apiHelper.SekaiAPIClient.ProfileCacheTTL()
+	if ttl <= 0 || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil || apiHelper.DBManager.Redis.Redis == nil {
+		return nil, 0
+	}
+	return apiHelper.DBManager.Redis, ttl
+}
+
+func respondOwnedGameAccountProfile(c fiber.Ctx, resultInfo *sekaiapi.HarukiSekaiAPIResult, body []byte, err error) error {
+	var circuitOpen *sekaiapi.CircuitOpenError
+	if errors.As(err, &circuitOpen) {
+		c.Set(fiber.HeaderRetryAfter, strconv.Itoa(circuitbreaker.RetryAfterSeconds(circuitOpen.RetryAfter)))
+	}
 	if err != nil {
 		if resultInfo != nil {
 			if !resultInfo.ServerAvailable {

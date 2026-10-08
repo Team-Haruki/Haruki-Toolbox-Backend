@@ -164,6 +164,13 @@ backend:
   # BACKEND_PROFILING_ENABLED, BACKEND_PROFILING_INTERVAL_SECONDS.
   profiling_enabled: false
   profiling_interval_seconds: 15
+  # HTTP server timeouts. read covers one request's headers and body (uploads
+  # are up to ~25 MB, so keep room for slow links); write starts after the
+  # handler returns, so long handlers such as inherit are not affected; idle
+  # bounds a keep-alive connection waiting for its next request.
+  read_timeout_seconds: 120
+  write_timeout_seconds: 60
+  idle_timeout_seconds: 120
 
 third_party_data_provider:
   endpoint_8823: ""
@@ -178,6 +185,15 @@ third_party_data_provider:
 sekai_api:
   api_endpoint: ""
   api_token: ""
+  # Deadline for an owned-account profile view; a per-server entry overrides it.
+  # TW is never bounded below 5 s (its healthy tail reaches past 4 s).
+  profile_view_timeout_seconds: 5
+  profile_view_timeout_seconds_by_server: {}
+  # Deadline for the game-account binding verification lookup.
+  verify_timeout_seconds: 10
+  # Successful profile views are reused for this long (per server + game UID,
+  # only after the caller's access check). Negative disables the cache.
+  profile_cache_ttl_seconds: 60
 
 haruki_proxy:
   # v3 uses OAuth2 game-data:write; no shared client/encryption key.

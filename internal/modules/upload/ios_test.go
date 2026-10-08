@@ -3,10 +3,12 @@ package upload
 import (
 	"context"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
@@ -43,7 +45,7 @@ func TestIOSUploadChunkStoreConcurrentPersistAccounting(t *testing.T) {
 		}
 	}
 
-	metaKey, chunkDataKey, _ := iosUploadRedisKeys(uploadKey)
+	metaKey, chunkIndexKey, _ := iosUploadRedisKeys(uploadKey)
 	rawSize, err := client.HGet(ctx, metaKey, "size").Result()
 	if err != nil {
 		t.Fatalf("HGet(size) returned error: %v", err)
@@ -55,7 +57,7 @@ func TestIOSUploadChunkStoreConcurrentPersistAccounting(t *testing.T) {
 	if want := int64(totalChunks * len(chunk)); size != want {
 		t.Fatalf("stored size = %d, want %d", size, want)
 	}
-	count, err := client.HLen(ctx, chunkDataKey).Result()
+	count, err := client.HLen(ctx, chunkIndexKey).Result()
 	if err != nil {
 		t.Fatalf("HLen returned error: %v", err)
 	}
@@ -180,16 +182,17 @@ func TestIOSUploadChunkStoreLifecycle(t *testing.T) {
 	if len(chunks) != 2 {
 		t.Fatalf("len(chunks) = %d, want 2", len(chunks))
 	}
-	if got := string(chunks[0].Data) + string(chunks[1].Data); got != "abcd" && got != "cdab" {
+	if got := string(chunks[0].Data) + string(chunks[1].Data); got != "abcd" {
 		t.Fatalf("unexpected chunk payloads: %#v", chunks)
 	}
 
-	if err := clearIOSUploadChunks(ctx, client, uploadKey); err != nil {
+	if err := clearIOSUploadChunks(ctx, client, uploadKey, 2); err != nil {
 		t.Fatalf("clearIOSUploadChunks returned error: %v", err)
 	}
 
-	metaKey, chunkDataKey, claimKey := iosUploadRedisKeys(uploadKey)
-	exists, err := client.Exists(ctx, metaKey, chunkDataKey, claimKey).Result()
+	metaKey, chunkIndexKey, claimKey := iosUploadRedisKeys(uploadKey)
+	keys := append([]string{metaKey, chunkIndexKey, claimKey}, iosUploadChunkPartKeys(uploadKey, 2)...)
+	exists, err := client.Exists(ctx, keys...).Result()
 	if err != nil {
 		t.Fatalf("Exists returned error: %v", err)
 	}
@@ -281,4 +284,106 @@ func newIOSUploadRedisClient(t *testing.T) *goredis.Client {
 		_ = client.Close()
 	})
 	return client
+}
+
+// Chunks may arrive in any order; assembly must return them in index order, each
+// read from its own key so no single Redis reply carries the whole upload.
+func TestIOSUploadChunkStoreLoadsPartsInIndexOrder(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
+
+	const total = 5
+	var last iosUploadChunkPersistResult
+	for _, idx := range []int{3, 0, 4, 2, 1} {
+		var err error
+		last, err = persistIOSUploadChunk(ctx, client, uploadKey, total, idx, []byte{byte('a' + idx)})
+		if err != nil {
+			t.Fatalf("persistIOSUploadChunk(%d) returned error: %v", idx, err)
+		}
+	}
+	if last.State != iosUploadChunkStateCompleteClaimed || last.Count != total || last.Size != total {
+		t.Fatalf("final persist result = %#v", last)
+	}
+	for i, key := range iosUploadChunkPartKeys(uploadKey, total) {
+		kind, err := client.Type(ctx, key).Result()
+		if err != nil || kind != "string" {
+			t.Fatalf("chunk %d stored as %q (err %v), want its own string key", i, kind, err)
+		}
+		if ttl := client.PTTL(ctx, key).Val(); ttl <= 0 || ttl > iosChunkPartTTL {
+			t.Fatalf("chunk %d TTL = %s, want within (0, %s]", i, ttl, iosChunkPartTTL)
+		}
+	}
+
+	chunks, err := loadIOSUploadChunks(ctx, client, uploadKey, total)
+	if err != nil {
+		t.Fatalf("loadIOSUploadChunks returned error: %v", err)
+	}
+	for i, chunk := range chunks {
+		if chunk.ChunkIndex != i || string(chunk.Data) != string(rune('a'+i)) {
+			t.Fatalf("chunk %d = %#v", i, chunk)
+		}
+	}
+}
+
+func TestIOSUploadChunkStoreResendReplacesChunkSize(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
+
+	if _, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, 0, []byte("abcd")); err != nil {
+		t.Fatal(err)
+	}
+	result, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, 0, []byte("xy"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State != iosUploadChunkStateIncomplete || result.Count != 1 || result.Size != 2 {
+		t.Fatalf("resent chunk result = %#v, want the old length replaced", result)
+	}
+}
+
+func TestIOSUploadChunkStoreReportsMissingPart(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := context.Background()
+	uploadKey := buildChunkUploadKey("toolbox-user", harukiUtils.SupportedDataUploadServerJP, 123456, "upload-id")
+
+	for idx := range 2 {
+		if _, err := persistIOSUploadChunk(ctx, client, uploadKey, 2, idx, []byte("ab")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := client.Del(ctx, harukiRedis.BuildIOSUploadChunkPartKey(uploadKey, 1)).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadIOSUploadChunks(ctx, client, uploadKey, 2); err == nil || !strings.Contains(err.Error(), "chunk 1 of 2 is missing") {
+		t.Fatalf("loadIOSUploadChunks error = %v, want the missing chunk reported", err)
+	}
+	if _, err := loadIOSUploadChunks(ctx, client, uploadKey, 0); err == nil {
+		t.Fatal("loadIOSUploadChunks accepted a zero chunk count")
+	}
+}
+
+func TestIOSUploadChunkStoreNilClient(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	if _, err := persistIOSUploadChunk(ctx, nil, "k", 1, 0, []byte("a")); err == nil {
+		t.Fatal("persist accepted a nil client")
+	}
+	if _, err := loadIOSUploadChunks(ctx, nil, "k", 1); err == nil {
+		t.Fatal("load accepted a nil client")
+	}
+	if err := clearIOSUploadChunks(ctx, nil, "k", 1); err == nil {
+		t.Fatal("clear accepted a nil client")
+	}
+	if err := resetIOSUploadClaim(ctx, nil, "k"); err == nil {
+		t.Fatal("reset accepted a nil client")
+	}
 }

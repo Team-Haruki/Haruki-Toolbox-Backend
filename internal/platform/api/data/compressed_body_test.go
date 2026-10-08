@@ -95,7 +95,7 @@ func TestCompressGameDataBodyEmptyAfterReuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, encoding, err := negotiateStoredBody(stored, "")
+	body, encoding, err := negotiateStoredBody([]byte(stored), "")
 	if err != nil || encoding != "" || len(body) != 0 {
 		t.Fatalf("empty round trip: bytes=%d encoding=%q err=%v", len(body), encoding, err)
 	}
@@ -134,11 +134,11 @@ func TestNegotiateStoredBodyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompressGameDataBody error: %v", err)
 	}
-	if !isGzipEntry(stored) {
+	if !isGzipEntry([]byte(stored)) {
 		t.Fatalf("compressed entry not recognized by sniffer")
 	}
 
-	body, encoding, err := negotiateStoredBody(stored, "gzip, br")
+	body, encoding, err := negotiateStoredBody([]byte(stored), "gzip, br")
 	if err != nil {
 		t.Fatalf("negotiate (gzip client) error: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestNegotiateStoredBodyRoundTrip(t *testing.T) {
 		t.Fatalf("gzip client should receive stored bytes verbatim with gzip encoding, got encoding=%q", encoding)
 	}
 
-	body, encoding, err = negotiateStoredBody(stored, "")
+	body, encoding, err = negotiateStoredBody([]byte(stored), "")
 	if err != nil {
 		t.Fatalf("negotiate (identity client) error: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestNegotiateStoredBodyRoundTrip(t *testing.T) {
 		t.Fatalf("identity client should receive decompressed plain body, got encoding=%q body=%q", encoding, body)
 	}
 
-	body, encoding, err = negotiateStoredBody(plain, "gzip")
+	body, encoding, err = negotiateStoredBody([]byte(plain), "gzip")
 	if err != nil {
 		t.Fatalf("negotiate (legacy plain entry) error: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestNegotiateStoredBodyRoundTrip(t *testing.T) {
 		t.Fatalf("legacy plain entry should pass through unchanged, got encoding=%q", encoding)
 	}
 
-	if _, _, err := negotiateStoredBody("\x1f\x8bcorrupt", ""); err == nil {
+	if _, _, err := negotiateStoredBody([]byte("\x1f\x8bcorrupt"), ""); err == nil {
 		t.Fatalf("corrupt compressed entry should surface an error")
 	}
 }

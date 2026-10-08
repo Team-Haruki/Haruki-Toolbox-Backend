@@ -225,7 +225,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			logger.Errorf("Failed to load completed upload chunks for %s: %v", uploadKey, err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to assemble upload chunks")
 		}
-		if err := clearIOSUploadChunks(ctx, redisClient, uploadKey); err != nil {
+		if err := clearIOSUploadChunks(ctx, redisClient, uploadKey, header.TotalChunks); err != nil {
 			logger.Warnf("Failed to clear completed upload chunks for %s: %v", uploadKey, err)
 		}
 

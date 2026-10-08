@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestGetQueryHash(t *testing.T) {
@@ -51,7 +52,7 @@ func TestBuildVersionedGameDataCacheKey(t *testing.T) {
 	t.Parallel()
 
 	got := BuildVersionedGameDataCacheKey("public", "jp", "suite", 123, "", 1752600000)
-	want := BuildGameDataCacheKey("public", "jp", "suite", 123, "") + ":v=1752600000"
+	want := BuildGameDataCacheKey("public", "jp", "suite", 123, "") + ":v2=1752600000"
 	if got != want {
 		t.Fatalf("versioned key = %q, want %q", got, want)
 	}
@@ -75,7 +76,7 @@ func TestClearCacheDeletesStampMemo(t *testing.T) {
 	ctx := context.Background()
 	bodyKey := BuildVersionedGameDataCacheKey("public", "jp", "suite", 321, "", 1752600000)
 	memoKey := BuildGameDataStampMemoKey("jp", "suite", 321)
-	if err := srv.Set(bodyKey, "cached-body"); err != nil {
+	if err := manager.SetGameDataBodyCache(ctx, "jp", "suite", 321, bodyKey, "cached-body", time.Minute); err != nil {
 		t.Fatalf("seed body: %v", err)
 	}
 	if err := srv.Set(memoKey, "1752600000"); err != nil {
@@ -99,7 +100,7 @@ func TestGameDataCacheSeparatesHarvestProfiles(t *testing.T) {
 	if off == on {
 		t.Fatal("profile switch reused old response cache")
 	}
-	if off != BuildGameDataCacheKey("private", "tw", "mysekai", 42, "updatedResources")+":v=123" {
+	if off != BuildGameDataCacheKey("private", "tw", "mysekai", 42, "updatedResources")+":v2=123" {
 		t.Fatal("disabled profile changed cache contract")
 	}
 }

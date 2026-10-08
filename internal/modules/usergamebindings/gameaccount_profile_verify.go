@@ -43,7 +43,11 @@ func classifyGameAccountProfileError(resultInfo *sekaiapi.HarukiSekaiAPIResult, 
 	return fmt.Errorf("%w: %v", errGameAccountProfileRequestFailed, err)
 }
 
+// verifyGameAccountOwnership always calls the Sekai API and never reads the
+// profile view cache: it checks the profile comment the user has just edited.
 func verifyGameAccountOwnership(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, gameUserIDStr, serverStr, expectedCode string) error {
+	ctx, cancel := context.WithTimeout(ctx, apiHelper.SekaiAPIClient.VerifyTimeout())
+	defer cancel()
 	resultInfo, body, err := apiHelper.SekaiAPIClient.GetUserProfile(ctx, gameUserIDStr, serverStr)
 	if err != nil {
 		return classifyGameAccountProfileError(resultInfo, err)

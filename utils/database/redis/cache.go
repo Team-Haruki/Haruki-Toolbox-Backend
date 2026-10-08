@@ -104,10 +104,16 @@ func BuildGameDataCacheKey(surface, server, dataType string, userID int64, reque
 	return buildCacheKey(gameDataNamespace, pathBuilder.String(), queryString)
 }
 
+// gameDataBodyVersionTag prefixes the generation segment of a versioned body
+// key. "v2" marks bodies written together with their per-document index entry
+// (see SetGameDataBodyCache); the "v=" bodies of earlier releases were never
+// indexed, so ClearCache could not reach them, and readers no longer look them
+// up. They expire by TTL or volatile-lru.
+const gameDataBodyVersionTag = ":v2="
+
 // BuildVersionedGameDataCacheKey keys a cached body by the document generation
-// that produced it (the stored upload_time). The version segment sits after
-// query=, so the per-user clear pattern in ClearCache still matches every
-// generation.
+// that produced it (the stored upload_time). Bodies must be written with
+// SetGameDataBodyCache so ClearCache can find every generation of a document.
 func BuildVersionedGameDataCacheKey(surface, server, dataType string, userID int64, requestKey string, uploadTime int64, harvestFingerprint ...string) string {
 	profile := ""
 	if len(harvestFingerprint) > 0 {
@@ -117,7 +123,21 @@ func BuildVersionedGameDataCacheKey(surface, server, dataType string, userID int
 	if profile != "" {
 		suffix = ":harvest=" + profile + "-1"
 	}
-	return BuildGameDataCacheKey(surface, server, dataType, userID, requestKey) + ":v=" + strconv.FormatInt(uploadTime, 10) + suffix
+	return BuildGameDataCacheKey(surface, server, dataType, userID, requestKey) + gameDataBodyVersionTag + strconv.FormatInt(uploadTime, 10) + suffix
+}
+
+// isGameDataBodyKey reports whether key is a cached game-data body (any
+// surface), as opposed to a stamp or index key in the same namespace.
+func isGameDataBodyKey(key string) bool {
+	return strings.HasPrefix(key, gameDataNamespace+":") && strings.Contains(key, ":query=")
+}
+
+// BuildGameDataBodyIndexKey addresses the set of every body key cached for one
+// stored document, across surfaces, ?key= filters and generations. It lives in
+// the game_data namespace so the allowlist ClearNamespace wipes it with the
+// bodies.
+func BuildGameDataBodyIndexKey(server, dataType string, userID int64) string {
+	return buildStampKey(":idx:", server, dataType, userID)
 }
 
 // BuildGameDataStampMemoKey addresses the short-lived upload_time memo for one
@@ -255,12 +275,67 @@ func (r *HarukiRedisManager) GetRawCache(ctx context.Context, key string) (strin
 	return val, true, nil
 }
 
-func (r *HarukiRedisManager) SetRawCache(ctx context.Context, key string, value string, ttl time.Duration) error {
+// GetRawCacheBytes is GetRawCache for callers that send the value straight to
+// a response: go-redis hands back its string's bytes without another copy. The
+// slice must be treated as read-only.
+func (r *HarukiRedisManager) GetRawCacheBytes(ctx context.Context, key string) ([]byte, bool, error) {
+	if r == nil || r.Redis == nil {
+		return nil, false, fmt.Errorf("redis client is nil")
+	}
+	val, err := r.Redis.Get(ctx, key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil, false, nil
+	}
+	if err != nil {
+		harukiLogger.Errorf("Failed to get raw redis cache for key %s: %v", key, err)
+		return nil, false, err
+	}
+	return val, true, nil
+}
+
+func (r *HarukiRedisManager) SetRawCacheBytes(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if r == nil || r.Redis == nil {
 		return fmt.Errorf("redis client is nil")
 	}
 	if err := r.Redis.Set(ctx, key, value, ttl).Err(); err != nil {
 		harukiLogger.Errorf("Failed to set raw redis cache for key %s: %v", key, err)
+		return err
+	}
+	return nil
+}
+
+func (r *HarukiRedisManager) SetRawCache(ctx context.Context, key string, value string, ttl time.Duration) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	if isGameDataBodyKey(key) {
+		// An unindexed body would survive ClearCache until its TTL.
+		return fmt.Errorf("game data body key %s must be written with SetGameDataBodyCache", key)
+	}
+	if err := r.Redis.Set(ctx, key, value, ttl).Err(); err != nil {
+		harukiLogger.Errorf("Failed to set raw redis cache for key %s: %v", key, err)
+		return err
+	}
+	return nil
+}
+
+// SetGameDataBodyCache stores a game-data response body under key and records
+// key in the document's index set in the same transaction, so ClearCache can
+// drop every cached body of the document without scanning the keyspace. The
+// index lives at least as long as the longest body TTL; members whose bodies
+// already expired are harmless and go with the next clear.
+func (r *HarukiRedisManager) SetGameDataBodyCache(ctx context.Context, server, dataType string, userID int64, key, body string, ttl time.Duration) error {
+	if r == nil || r.Redis == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	indexTTL := max(ttl, GameDataCacheTTL)
+	indexKey := BuildGameDataBodyIndexKey(server, dataType, userID)
+	pipe := r.Redis.TxPipeline()
+	pipe.Set(ctx, key, body, ttl)
+	pipe.SAdd(ctx, indexKey, key)
+	pipe.Expire(ctx, indexKey, indexTTL)
+	if _, err := pipe.Exec(ctx); err != nil {
+		harukiLogger.Errorf("Failed to set game data body cache for key %s: %v", key, err)
 		return err
 	}
 	return nil
@@ -340,43 +415,38 @@ func (r *HarukiRedisManager) ClearNamespace(ctx context.Context, namespace strin
 	return nil
 }
 
+// gameDataClearBatch caps the keys per UNLINK when clearing a document.
+const gameDataClearBatch = 500
+
+// ClearCache drops one stored document's stamp keys and every cached body of it.
+// The stamp keys go first, in the same transaction that takes and resets the
+// body index: the memo is the freshness authority, so the next read re-resolves
+// the current generation from the database even if the body UNLINKs below fail.
+// A body written after the transaction starts a fresh index, so it is cleared by
+// the next ClearCache, not lost.
 func (r *HarukiRedisManager) ClearCache(ctx context.Context, dataType, server string, userID int64) error {
 	if r == nil || r.Redis == nil {
 		return fmt.Errorf("redis client is nil")
 	}
-	// Drop the stamp keys FIRST: the memo is the freshness authority, so the
-	// next read re-resolves the current generation from the database even if the
-	// (slower, SCAN-based) body sweep below fails midway.
-	if err := r.Redis.Unlink(ctx,
-		BuildGameDataStampMemoKey(server, dataType, userID),
-		BuildGameDataStampFallbackKey(server, dataType, userID),
-	).Err(); err != nil {
-		return fmt.Errorf("clear game data stamp keys failed: %w", err)
+	indexKey := BuildGameDataBodyIndexKey(server, dataType, userID)
+	var members *redis.StringSliceCmd
+	if _, err := r.Redis.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Unlink(ctx,
+			BuildGameDataStampMemoKey(server, dataType, userID),
+			BuildGameDataStampFallbackKey(server, dataType, userID),
+		)
+		members = pipe.SMembers(ctx, indexKey)
+		pipe.Unlink(ctx, indexKey)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("clear game data stamp and index keys failed: %w", err)
 	}
-	return r.clearCachePattern(ctx, fmt.Sprintf("%s:*:%s:%s:%d:query=*", gameDataNamespace, server, dataType, userID))
-}
-
-func (r *HarukiRedisManager) clearCachePattern(ctx context.Context, pattern string) error {
-	if r == nil || r.Redis == nil {
-		return fmt.Errorf("redis client is nil")
-	}
-	// COUNT 1000 + UNLINK keep the full-keyspace SCAN sweep cheap enough to run
-	// in the upload path: fewer round trips against a 7-day keyspace, and
-	// reclamation happens off the Redis main thread.
-	var cursor uint64
-	for {
-		keys, nextCursor, err := r.Redis.Scan(ctx, cursor, pattern, 1000).Result()
-		if err != nil {
-			return fmt.Errorf("clear redis cache scan failed: %w", err)
-		}
-		if len(keys) > 0 {
-			if err := r.Redis.Unlink(ctx, keys...).Err(); err != nil {
-				return fmt.Errorf("clear redis cache delete failed: %w", err)
-			}
-		}
-		cursor = nextCursor
-		if cursor == 0 {
-			break
+	keys := members.Val()
+	for len(keys) > 0 {
+		batch := keys[:min(len(keys), gameDataClearBatch)]
+		keys = keys[len(batch):]
+		if err := r.Redis.Unlink(ctx, batch...).Err(); err != nil {
+			return fmt.Errorf("clear game data body keys failed: %w", err)
 		}
 	}
 	return nil

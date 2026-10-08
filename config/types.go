@@ -140,6 +140,14 @@ type BackendConfig struct {
 	ProfilingEnabled bool `yaml:"profiling_enabled"`
 	// ProfilingIntervalSeconds is how often the stats sampler logs (default 15s).
 	ProfilingIntervalSeconds int `yaml:"profiling_interval_seconds"`
+	// ReadTimeoutSeconds bounds reading one request, headers and body (default
+	// 120). IdleTimeoutSeconds bounds waiting for the next request on a keep-alive
+	// connection (default 120). WriteTimeoutSeconds bounds writing the response,
+	// starting after the handler returns (default 60). Zero or negative selects
+	// the default.
+	ReadTimeoutSeconds  int `yaml:"read_timeout_seconds"`
+	WriteTimeoutSeconds int `yaml:"write_timeout_seconds"`
+	IdleTimeoutSeconds  int `yaml:"idle_timeout_seconds"`
 }
 
 type SMTPConfig struct {
@@ -227,6 +235,16 @@ type SekaiInheritPacingConfig struct {
 type SekaiAPIConfig struct {
 	APIEndpoint string `yaml:"api_endpoint"`
 	APIToken    string `yaml:"api_token"`
+	// ProfileViewTimeoutSeconds bounds an owned-account profile view (default 5).
+	ProfileViewTimeoutSeconds int `yaml:"profile_view_timeout_seconds"`
+	// ProfileViewTimeoutSecondsByServer overrides it per server ("tw": 6). TW is
+	// never bounded below 5 s.
+	ProfileViewTimeoutSecondsByServer map[string]int `yaml:"profile_view_timeout_seconds_by_server"`
+	// VerifyTimeoutSeconds bounds the binding verification lookup (default 10).
+	VerifyTimeoutSeconds int `yaml:"verify_timeout_seconds"`
+	// ProfileCacheTTLSeconds is how long a successful profile view is reused
+	// (default 60; negative disables the cache).
+	ProfileCacheTTLSeconds int `yaml:"profile_cache_ttl_seconds"`
 }
 
 type OthersConfig struct {

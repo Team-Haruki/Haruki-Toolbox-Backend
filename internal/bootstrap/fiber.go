@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 
@@ -19,14 +20,49 @@ import (
 // requestHeaderBufferSize bounds the request line plus all headers. Fiber's
 // 4 KiB default answers 431 to Hydra consent/login redirects: the challenge in
 // the query is ~2.5 KiB and the browser adds Kratos and Hydra CSRF cookies on
-// top of the identity headers Oathkeeper injects. fasthttp grows the buffer
-// only up to this size when a request needs it.
+// top of the identity headers Oathkeeper injects. fasthttp allocates a reader
+// of this size per connection (pooled) and answers 431 when the header block
+// does not fit.
 const requestHeaderBufferSize = 32 << 10
 
+// Server timeout defaults (backend.*_timeout_seconds). fasthttp applies them as
+// follows, which is why handler run time is not limited by any of them:
+//   - read: from the first byte of a request until its body is read;
+//   - write: from the moment the handler returns until the response is written;
+//   - idle: between requests on a keep-alive connection.
+//
+// Without them a stalled client holds its connection, read buffer and request
+// body indefinitely, and Shutdown cannot reap idle keep-alive connections.
+const (
+	defaultServerReadTimeout  = 120 * time.Second
+	defaultServerWriteTimeout = 60 * time.Second
+	defaultServerIdleTimeout  = 120 * time.Second
+)
+
+// iOS proxy responses are the game server's encrypted octet-stream bodies:
+// compressing them burns CPU and makes them slightly larger.
+var uncompressedPathPrefixes = []string{"/ios/proxy/", "/api/ios/proxy/"}
+
 func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
-	app := fiber.New(fiber.Config{
+	app := fiber.New(fiberConfig(cfg))
+
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed, Next: skipCompression}))
+	app.Use(cspMiddleware(cfg))
+
+	closeAccessLogFile, err := configureAccessLog(app, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return app, closeAccessLogFile, nil
+}
+
+func fiberConfig(cfg harukiConfig.Config) fiber.Config {
+	return fiber.Config{
 		BodyLimit:      100 * 1024 * 1024,
 		ReadBufferSize: requestHeaderBufferSize,
+		ReadTimeout:    secondsOrDefault(cfg.Backend.ReadTimeoutSeconds, defaultServerReadTimeout),
+		WriteTimeout:   secondsOrDefault(cfg.Backend.WriteTimeoutSeconds, defaultServerWriteTimeout),
+		IdleTimeout:    secondsOrDefault(cfg.Backend.IdleTimeoutSeconds, defaultServerIdleTimeout),
 		JSONEncoder:    jsoncodec.Marshal,
 		JSONDecoder:    jsoncodec.Unmarshal,
 		ProxyHeader:    cfg.Backend.ProxyHeader,
@@ -39,16 +75,24 @@ func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 		// keys, audit logs, and upstream X-Forwarded-For). Deployments must also
 		// keep trusted_proxies scoped to the actual edge proxy, not broad ranges.
 		EnableIPValidation: true,
-	})
-
-	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
-	app.Use(cspMiddleware(cfg))
-
-	closeAccessLogFile, err := configureAccessLog(app, cfg)
-	if err != nil {
-		return nil, nil, err
 	}
-	return app, closeAccessLogFile, nil
+}
+
+func secondsOrDefault(seconds int, fallback time.Duration) time.Duration {
+	if seconds <= 0 {
+		return fallback
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func skipCompression(c fiber.Ctx) bool {
+	path := c.Path()
+	for _, prefix := range uncompressedPathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func cspMiddleware(cfg harukiConfig.Config) fiber.Handler {

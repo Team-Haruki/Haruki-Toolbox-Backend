@@ -96,7 +96,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			if dataType == harukiUtils.UploadDataTypeSuite {
 				readKey += ":a=" + data.PublicAllowlistDigest(suiteAllowedKeys)
 			}
-			if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, readKey); cErr == nil && found {
+			if cached, found, cErr := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, readKey); cErr == nil && found {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
 					return nil
 				} else {
@@ -186,7 +186,7 @@ func loadOAuth2GameData(
 			cacheCtx, cancelCache := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancelCache()
 			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, gameUserID, stamp) {
-				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, writeKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
+				if cErr := apiHelper.DBManager.Redis.SetGameDataBodyCache(cacheCtx, string(server), string(dataType), gameUserID, writeKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
 					harukiLogger.Warnf("Failed to write OAuth2 game data cache: %v", cErr)
 				}
 			}
