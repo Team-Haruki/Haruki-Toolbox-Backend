@@ -114,6 +114,32 @@ func PrivateBodyFromPostgres(
 	return body, nil
 }
 
+// PrivateProfileBodyFromPostgres renders a server-defined private profile: the
+// whole private document minus the omitted keys, read without their columns.
+// It shares PrivateBodyFromPostgres's 404 rule: only a missing row is 404.
+func PrivateProfileBodyFromPostgres(
+	ctx context.Context,
+	store *harukiGameData.Store,
+	userID int64,
+	server string,
+	omit []string,
+) ([]byte, error) {
+	row, err := store.FetchWithout(ctx, userID, server, omit)
+	if err != nil {
+		if errors.Is(err, harukiGameData.ErrNoRow) {
+			return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
+		}
+		harukiLogger.Errorf("Failed to fetch game data: %v", err)
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get user data")
+	}
+	body, err := row.PrivateBodyWithout(omit)
+	if err != nil {
+		harukiLogger.Errorf("Failed to render private profile body: %v", err)
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get user data")
+	}
+	return body, nil
+}
+
 // EncodeGameDataBody turns a game-data handler result into response bytes.
 //
 // It exists because of one sharp edge: the PostgreSQL path returns an ALREADY
