@@ -33,7 +33,8 @@ const (
 	KeyModuleUpload     = "upload"
 	KeyActionIOS        = "ios"
 	KeyActionChunkMeta  = "chunk-meta"
-	KeyActionChunkData  = "chunk-data"
+	KeyActionChunkIndex = "chunk-index"
+	KeyActionChunkPart  = "chunk-part"
 	KeyActionChunkClaim = "chunk-claim"
 
 	KeyModuleRateLimit         = "rate-limit"
@@ -50,6 +51,9 @@ const (
 	// the device-flow namespace under KeyModuleRateLimit.
 	KeyModuleOAuth2Device = "oauth2-device"
 	KeyActionOAuth2Device = "oauth2-device"
+
+	KeyModuleSekaiAPI = "sekai-api"
+	KeyActionProfile  = "profile"
 
 	KeyModuleMysekaiBirthday = "mysekai-birthday"
 	KeyActionMonitor         = "monitor"
@@ -225,12 +229,29 @@ func BuildIOSUploadChunkMetaKey(uploadKey string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkMeta, uploadKey)
 }
 
-func BuildIOSUploadChunkDataKey(uploadKey string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkData, uploadKey)
+// BuildIOSUploadChunkIndexKey addresses the hash of chunk index -> stored
+// length for one chunked upload; the chunk bodies live under
+// BuildIOSUploadChunkPartKey.
+func BuildIOSUploadChunkIndexKey(uploadKey string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkIndex, uploadKey)
+}
+
+// BuildIOSUploadChunkPartKey addresses one chunk body. The index is the last
+// segment, so an upload ID containing ':' cannot collide with another chunk.
+func BuildIOSUploadChunkPartKey(uploadKey string, chunkIndex int) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkPart, uploadKey, strconv.Itoa(chunkIndex))
 }
 
 func BuildIOSUploadChunkClaimKey(uploadKey string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleUpload, KeyActionIOS, KeyActionChunkClaim, uploadKey)
+}
+
+// BuildSekaiAPIProfileCacheKey addresses the short-lived cache of one game
+// account's Sekai API profile. It is keyed only by what the upstream call is
+// keyed by (server + game UID): the profile is the same for every authorized
+// viewer, so access must be checked before the cache is read.
+func BuildSekaiAPIProfileCacheKey(server, gameUserID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSekaiAPI, KeyActionProfile, server, gameUserID)
 }
 
 func BuildRuntimeConfigKey() string {

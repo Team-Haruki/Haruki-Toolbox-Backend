@@ -163,6 +163,21 @@ func BenchmarkGameDataBodyServe(b *testing.B) {
 				b.ReportMetric(float64(len(stored)), "stored-B")
 				b.ReportMetric(float64(wire), "wire-B")
 			})
+			// The cache-hit path proper: the entry arrives as []byte from
+			// GetRawCacheBytes and is sent without a copy.
+			b.Run(label+"/bytes-"+tc.name, func(b *testing.B) {
+				stored := []byte(tc.stored)
+				handler := newGameDataBenchmarkApp(func(c fiber.Ctx) error { return ServeGameDataBody(c, stored) })
+				var ctx fasthttp.RequestCtx
+				wire := 0
+				b.ReportAllocs()
+				b.SetBytes(int64(len(encoded)))
+				for b.Loop() {
+					wire = serveOnce(b, handler, &ctx, tc.acceptEncoding)
+				}
+				b.ReportMetric(float64(len(stored)), "stored-B")
+				b.ReportMetric(float64(wire), "wire-B")
+			})
 		}
 		for _, tc := range []struct {
 			name           string

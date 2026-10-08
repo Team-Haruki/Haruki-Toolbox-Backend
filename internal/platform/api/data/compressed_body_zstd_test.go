@@ -79,7 +79,7 @@ func TestCompressGameDataBodyZstdConcurrentReuse(t *testing.T) {
 	// Verify only after every call has finished, so a returned entry that
 	// aliased a pooled buffer would have been overwritten by now.
 	for index, result := range results {
-		if !isZstdEntry(result.stored) {
+		if !isZstdEntry([]byte(result.stored)) {
 			t.Fatalf("entry %d not recognized as zstd", index)
 		}
 		if got := decodeZstdForTest(t, []byte(result.stored)); got != result.plain {
@@ -182,7 +182,7 @@ func TestNegotiateStoredBodyZstd(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			body, encoding, err := negotiateStoredBody(tc.stored, tc.acceptEncoding)
+			body, encoding, err := negotiateStoredBody([]byte(tc.stored), tc.acceptEncoding)
 			if err != nil {
 				t.Fatalf("negotiate error: %v", err)
 			}
@@ -192,7 +192,7 @@ func TestNegotiateStoredBodyZstd(t *testing.T) {
 		})
 	}
 
-	if _, _, err := negotiateStoredBody("\x28\xb5\x2f\xfdcorrupt", ""); err == nil {
+	if _, _, err := negotiateStoredBody([]byte("\x28\xb5\x2f\xfdcorrupt"), ""); err == nil {
 		t.Fatal("corrupt zstd entry should surface an error so the caller refetches")
 	}
 }

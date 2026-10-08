@@ -69,7 +69,7 @@ func acquireApplicationResources(cfg harukiConfig.Config, owner *Application) (*
 	resources.logger.Infof("Build commit: %s, built at: %s", harukiVersion.Commit, harukiVersion.BuildDate)
 	resources.logger.Infof("Powered By Haruki Dev Team")
 
-	resources.sekaiAPIClient = harukiSekaiAPIClient.NewHarukiSekaiAPIClient(cfg.SekaiAPI.APIEndpoint, cfg.SekaiAPI.APIToken)
+	resources.sekaiAPIClient = harukiSekaiAPIClient.NewHarukiSekaiAPIClientWithOptions(cfg.SekaiAPI.APIEndpoint, cfg.SekaiAPI.APIToken, sekaiAPIOptions(cfg.SekaiAPI))
 
 	resources.redisClient = harukiRedis.NewRedisClient(cfg.Redis, cfg.UserSystem.SessionSignToken)
 	owner.addResourceCloser("Redis", resources.redisClient.Close)
@@ -233,4 +233,19 @@ func (r *applicationResources) acquireBotDatabase(cfg harukiConfig.Config, owner
 	}
 	r.databaseManager.BotDB = botClient
 	return nil
+}
+
+// sekaiAPIOptions converts the seconds-based config into client options; zero
+// values fall through to the client defaults.
+func sekaiAPIOptions(cfg harukiConfig.SekaiAPIConfig) harukiSekaiAPIClient.Options {
+	byServer := make(map[string]time.Duration, len(cfg.ProfileViewTimeoutSecondsByServer))
+	for server, seconds := range cfg.ProfileViewTimeoutSecondsByServer {
+		byServer[server] = time.Duration(seconds) * time.Second
+	}
+	return harukiSekaiAPIClient.Options{
+		ProfileViewTimeout:         time.Duration(cfg.ProfileViewTimeoutSeconds) * time.Second,
+		ProfileViewTimeoutByServer: byServer,
+		VerifyTimeout:              time.Duration(cfg.VerifyTimeoutSeconds) * time.Second,
+		ProfileCacheTTL:            time.Duration(cfg.ProfileCacheTTLSeconds) * time.Second,
+	}
 }

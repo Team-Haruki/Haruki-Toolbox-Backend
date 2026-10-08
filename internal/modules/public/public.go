@@ -100,7 +100,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			if dataType == harukiUtils.UploadDataTypeSuite {
 				readKey += ":a=" + data.PublicAllowlistDigest(suiteAllowedKeys)
 			}
-			if cached, found, err := apiHelper.DBManager.Redis.GetRawCache(ctx, readKey); err == nil && found {
+			if cached, found, err := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, readKey); err == nil && found {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
 					return nil
 				} else {
@@ -196,7 +196,7 @@ func loadPublicGameData(
 			cacheCtx, cancelCache := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancelCache()
 			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, userID, stamp) {
-				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, writeKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
+				if cErr := apiHelper.DBManager.Redis.SetGameDataBodyCache(cacheCtx, string(server), string(dataType), userID, writeKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
 					harukiLogger.Warnf("Failed to write public game data cache: %v", cErr)
 				}
 			}

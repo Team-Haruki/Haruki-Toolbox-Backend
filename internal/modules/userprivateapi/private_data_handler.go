@@ -189,7 +189,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if stamp > 0 {
 			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey(privateCacheSurface(requestKey), string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
 			cacheStart := time.Now()
-			cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey)
+			cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, cacheKey)
 			dCache = time.Since(cacheStart)
 			if cErr == nil && cacheFound {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
@@ -276,7 +276,7 @@ func loadPrivateData(
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, userID, stamp) {
-				if cErr := apiHelper.DBManager.Redis.SetRawCache(cacheCtx, cacheKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
+				if cErr := apiHelper.DBManager.Redis.SetGameDataBodyCache(cacheCtx, string(server), string(dataType), userID, cacheKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
 					harukiLogger.Warnf("Failed to write private game data cache: %v", cErr)
 				}
 			}

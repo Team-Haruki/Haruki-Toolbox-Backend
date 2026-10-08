@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -12,7 +13,16 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// iosChunkUploadTTL is the sliding lifetime of an upload's meta and index: every
+// chunk renews it, so an upload stays open while its chunks keep arriving.
 const iosChunkUploadTTL = 5 * time.Minute
+
+// iosChunkPartTTL is the lifetime of one stored chunk body. A chunk cannot renew
+// the bodies of chunks stored before it (they are separate keys), so it gets a
+// multiple of the sliding window. iOS scripts send all chunks within seconds;
+// an upload whose chunks span longer than this fails at assembly with a missing
+// chunk, as one idle for longer than iosChunkUploadTTL always has.
+const iosChunkPartTTL = 3 * iosChunkUploadTTL
 
 const (
 	iosUploadChunkStateIncomplete int64 = iota
@@ -34,43 +44,62 @@ type iosUploadChunkPersistResult struct {
 // means: (a) concurrent uploaders no longer serialize behind one slow command
 // for ALL users, (b) the size accounting stays correct across multiple backend
 // replicas, and (c) the old chunk body is never transferred just to learn its
-// length (HSTRLEN is O(1)).
+// length (the index hash stores it).
 //
-// KEYS[1]=meta hash  KEYS[2]=chunk-data hash  KEYS[3]=claim key
-// ARGV[1]=totalChunks ARGV[2]=chunkIndex ARGV[3]=chunkData ARGV[4]=maxSize ARGV[5]=ttlMs
+// Each chunk body is its own string key. Earlier releases kept all bodies in
+// one hash, and reading it back with HGETALL returned the whole multi-MB upload
+// in one command, blocking Redis for 10-24 ms; assembly now reads the chunks
+// with one GET each. Uploads that were in flight across the deploy that changed
+// this layout cannot complete (their earlier chunks are in the old hash, which
+// expires within iosChunkUploadTTL): the client re-sends the data on its next
+// game request.
+//
+// KEYS[1]=meta hash  KEYS[2]=chunk index hash  KEYS[3]=this chunk's key  KEYS[4]=claim key
+// ARGV[1]=totalChunks ARGV[2]=chunkIndex ARGV[3]=chunkData ARGV[4]=maxSize
+// ARGV[5]=ttlMs ARGV[6]=partTtlMs
 // Reply: {state, count, size} matching iosUploadChunkPersistResult; a stored
-// meta field that fails tonumber() is treated as inconsistent/absent rather
-// than erroring — only this script ever writes those fields.
+// meta or index field that fails tonumber() is treated as absent rather than
+// erroring — only this script ever writes those fields.
 var persistIOSUploadChunkScript = goredis.NewScript(`
 local total = redis.call('HGET', KEYS[1], 'total')
 if total and total ~= '' and tonumber(total) ~= tonumber(ARGV[1]) then
   return {-1, 0, 0}
 end
 local size = tonumber(redis.call('HGET', KEYS[1], 'size') or 0) or 0
-local oldLen = redis.call('HSTRLEN', KEYS[2], ARGV[2])
-local newSize = size - oldLen + string.len(ARGV[3])
+local oldLen = tonumber(redis.call('HGET', KEYS[2], ARGV[2]) or 0) or 0
+local newLen = string.len(ARGV[3])
+local newSize = size - oldLen + newLen
 if newSize > tonumber(ARGV[4]) then
   return {-2, redis.call('HLEN', KEYS[2]), size}
 end
 redis.call('HSET', KEYS[1], 'total', ARGV[1], 'size', tostring(newSize))
-redis.call('HSET', KEYS[2], ARGV[2], ARGV[3])
+redis.call('HSET', KEYS[2], ARGV[2], tostring(newLen))
+redis.call('SET', KEYS[3], ARGV[3], 'PX', ARGV[6])
 redis.call('PEXPIRE', KEYS[1], ARGV[5])
 redis.call('PEXPIRE', KEYS[2], ARGV[5])
 local count = redis.call('HLEN', KEYS[2])
 if count ~= tonumber(ARGV[1]) then
-  redis.call('DEL', KEYS[3])
+  redis.call('DEL', KEYS[4])
   return {0, count, newSize}
 end
-if redis.call('SET', KEYS[3], '1', 'NX', 'PX', ARGV[5]) then
+if redis.call('SET', KEYS[4], '1', 'NX', 'PX', ARGV[5]) then
   return {1, count, newSize}
 end
 return {2, count, newSize}
 `)
 
-func iosUploadRedisKeys(uploadKey string) (metaKey string, chunkDataKey string, claimKey string) {
+func iosUploadRedisKeys(uploadKey string) (metaKey string, chunkIndexKey string, claimKey string) {
 	return harukiRedis.BuildIOSUploadChunkMetaKey(uploadKey),
-		harukiRedis.BuildIOSUploadChunkDataKey(uploadKey),
+		harukiRedis.BuildIOSUploadChunkIndexKey(uploadKey),
 		harukiRedis.BuildIOSUploadChunkClaimKey(uploadKey)
+}
+
+func iosUploadChunkPartKeys(uploadKey string, totalChunks int) []string {
+	keys := make([]string, totalChunks)
+	for i := range keys {
+		keys[i] = harukiRedis.BuildIOSUploadChunkPartKey(uploadKey, i)
+	}
+	return keys
 }
 
 func persistIOSUploadChunk(
@@ -85,14 +114,15 @@ func persistIOSUploadChunk(
 		return iosUploadChunkPersistResult{}, fmt.Errorf("redis client is nil")
 	}
 
-	metaKey, chunkDataKey, claimKey := iosUploadRedisKeys(uploadKey)
+	metaKey, chunkIndexKey, claimKey := iosUploadRedisKeys(uploadKey)
 	vals, err := persistIOSUploadChunkScript.Run(ctx, redisClient,
-		[]string{metaKey, chunkDataKey, claimKey},
+		[]string{metaKey, chunkIndexKey, harukiRedis.BuildIOSUploadChunkPartKey(uploadKey, chunkIndex), claimKey},
 		totalChunks,
 		strconv.Itoa(chunkIndex),
 		chunkData,
 		maxDataChunksSize,
 		iosChunkUploadTTL.Milliseconds(),
+		iosChunkPartTTL.Milliseconds(),
 	).Int64Slice()
 	if err != nil {
 		return iosUploadChunkPersistResult{}, err
@@ -107,6 +137,10 @@ func persistIOSUploadChunk(
 	}, nil
 }
 
+// loadIOSUploadChunks reads every chunk of a claimed upload in index order with
+// pipelined GETs, so no single Redis command carries the whole upload. No lock is
+// needed: the claim SETNX in the persist script elects a single assembler, and
+// the claim is only granted once every chunk is stored.
 func loadIOSUploadChunks(
 	ctx context.Context,
 	redisClient *goredis.Client,
@@ -116,43 +150,42 @@ func loadIOSUploadChunks(
 	if redisClient == nil {
 		return nil, fmt.Errorf("redis client is nil")
 	}
+	if totalChunks <= 0 {
+		return nil, fmt.Errorf("invalid chunk count %d", totalChunks)
+	}
 
-	_, chunkDataKey, _ := iosUploadRedisKeys(uploadKey)
-
-	// No lock needed: the claim SETNX in the persist script elects a single
-	// assembler, and HGETALL is atomic so it observes a consistent chunk set.
-	rawChunks, err := redisClient.HGetAll(ctx, chunkDataKey).Result()
-	if err != nil {
+	pipe := redisClient.Pipeline()
+	cmds := make([]*goredis.StringCmd, totalChunks)
+	for i, key := range iosUploadChunkPartKeys(uploadKey, totalChunks) {
+		cmds[i] = pipe.Get(ctx, key)
+	}
+	// A missing chunk surfaces as redis.Nil on its own command below.
+	if _, err := pipe.Exec(ctx); err != nil && !errors.Is(err, goredis.Nil) {
 		return nil, err
 	}
-	if len(rawChunks) != totalChunks {
-		return nil, fmt.Errorf("chunk count mismatch: got %d want %d", len(rawChunks), totalChunks)
-	}
 
-	chunks := make([]harukiUtils.DataChunk, 0, len(rawChunks))
-	for rawIndex, rawData := range rawChunks {
-		chunkIndex, err := strconv.Atoi(rawIndex)
+	chunks := make([]harukiUtils.DataChunk, totalChunks)
+	for i, cmd := range cmds {
+		data, err := cmd.Bytes()
+		if errors.Is(err, goredis.Nil) {
+			return nil, fmt.Errorf("chunk %d of %d is missing", i, totalChunks)
+		}
 		if err != nil {
-			return nil, fmt.Errorf("parse chunk index %q: %w", rawIndex, err)
+			return nil, err
 		}
-		if chunkIndex < 0 || chunkIndex >= totalChunks {
-			return nil, fmt.Errorf("chunk index %d out of range", chunkIndex)
-		}
-		chunks = append(chunks, harukiUtils.DataChunk{
-			ChunkIndex: chunkIndex,
-			Data:       []byte(rawData),
-		})
+		chunks[i] = harukiUtils.DataChunk{ChunkIndex: i, Data: data}
 	}
 	return chunks, nil
 }
 
-func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string) error {
+func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client is nil")
 	}
 
-	metaKey, chunkDataKey, claimKey := iosUploadRedisKeys(uploadKey)
-	return redisClient.Del(ctx, metaKey, chunkDataKey, claimKey).Err()
+	metaKey, chunkIndexKey, claimKey := iosUploadRedisKeys(uploadKey)
+	keys := append([]string{metaKey, chunkIndexKey, claimKey}, iosUploadChunkPartKeys(uploadKey, max(totalChunks, 0))...)
+	return redisClient.Unlink(ctx, keys...).Err()
 }
 
 func resetIOSUploadClaim(ctx context.Context, redisClient *goredis.Client, uploadKey string) error {

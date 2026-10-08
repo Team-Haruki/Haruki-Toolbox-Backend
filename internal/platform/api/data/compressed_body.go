@@ -160,12 +160,19 @@ func CompressGameDataBodyZstd(encoded []byte) (string, error) {
 	return string(out), nil
 }
 
+// StoredGameDataBody is a cached game-data entry: the string the miss path
+// produced, or the bytes a cache hit read from Redis (GetRawCacheBytes).
+type StoredGameDataBody interface {
+	string | []byte
+}
+
 // ServeGameDataBody writes a stored cache entry as the JSON response,
 // negotiating the transfer form against the client's Accept-Encoding. It
 // returns an error only when a compressed entry cannot be decoded; callers
-// treat that as a cache miss and rematerialize.
-func ServeGameDataBody(c fiber.Ctx, stored string) error {
-	body, encoding, err := negotiateStoredBody(stored, c.Get(fiber.HeaderAcceptEncoding))
+// treat that as a cache miss and rematerialize. A []byte entry is sent as is,
+// without a copy, so it must not be modified afterwards.
+func ServeGameDataBody[B StoredGameDataBody](c fiber.Ctx, stored B) error {
+	body, encoding, err := negotiateStoredBody([]byte(stored), c.Get(fiber.HeaderAcceptEncoding))
 	if err != nil {
 		return err
 	}
@@ -182,27 +189,28 @@ func ServeGameDataBody(c fiber.Ctx, stored string) error {
 // negotiateStoredBody resolves a stored entry to the bytes and
 // Content-Encoding to send for the given Accept-Encoding header. A compressed
 // entry the client does not accept is decoded to plain JSON, which the
-// compress middleware then encodes however that client asked.
-func negotiateStoredBody(stored, acceptEncoding string) (body []byte, encoding string, err error) {
+// compress middleware then encodes however that client asked. The entry
+// itself is returned, not copied, when it can be sent as stored.
+func negotiateStoredBody(stored []byte, acceptEncoding string) (body []byte, encoding string, err error) {
 	switch storedEncoding(stored) {
 	case encodingGzip:
 		if acceptsGzip(acceptEncoding) {
-			return []byte(stored), encodingGzip, nil
+			return stored, encodingGzip, nil
 		}
 		plain, err := gunzipStoredBody(stored)
 		return plain, "", err
 	case encodingZstd:
 		if acceptsZstd(acceptEncoding) {
-			return []byte(stored), encodingZstd, nil
+			return stored, encodingZstd, nil
 		}
 		plain, err := unzstdStoredBody(stored)
 		return plain, "", err
 	default:
-		return []byte(stored), "", nil
+		return stored, "", nil
 	}
 }
 
-func storedEncoding(stored string) string {
+func storedEncoding(stored []byte) string {
 	switch {
 	case isGzipEntry(stored):
 		return encodingGzip
@@ -213,16 +221,16 @@ func storedEncoding(stored string) string {
 	}
 }
 
-func isGzipEntry(stored string) bool {
+func isGzipEntry(stored []byte) bool {
 	return len(stored) >= 2 && stored[0] == 0x1f && stored[1] == 0x8b
 }
 
-func isZstdEntry(stored string) bool {
+func isZstdEntry(stored []byte) bool {
 	return len(stored) >= 4 && stored[0] == 0x28 && stored[1] == 0xb5 && stored[2] == 0x2f && stored[3] == 0xfd
 }
 
-func gunzipStoredBody(stored string) ([]byte, error) {
-	r, err := gzip.NewReader(strings.NewReader(stored))
+func gunzipStoredBody(stored []byte) ([]byte, error) {
+	r, err := gzip.NewReader(bytes.NewReader(stored))
 	if err != nil {
 		return nil, err
 	}
@@ -236,14 +244,14 @@ func gunzipStoredBody(stored string) ([]byte, error) {
 	return plain, nil
 }
 
-func unzstdStoredBody(stored string) ([]byte, error) {
+func unzstdStoredBody(stored []byte) ([]byte, error) {
 	pooled := gameDataZstdDecoderPool.Get()
 	decoder, ok := pooled.(*zstd.Decoder)
 	if !ok {
 		return nil, pooled.(error)
 	}
 	defer gameDataZstdDecoderPool.Put(decoder)
-	return decoder.DecodeAll([]byte(stored), nil)
+	return decoder.DecodeAll(stored, nil)
 }
 
 // acceptsGzip reports whether an Accept-Encoding header admits gzip: a gzip

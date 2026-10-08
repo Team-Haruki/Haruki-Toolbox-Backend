@@ -135,9 +135,19 @@ func TestBuildKeys(t *testing.T) {
 			want: "haruki:upload:ios:chunk-meta:toolbox-user|jp|123456|upload-id",
 		},
 		{
-			name: "ios upload chunk data",
-			got:  BuildIOSUploadChunkDataKey("toolbox-user|jp|123456|upload-id"),
-			want: "haruki:upload:ios:chunk-data:toolbox-user|jp|123456|upload-id",
+			name: "ios upload chunk index",
+			got:  BuildIOSUploadChunkIndexKey("toolbox-user|jp|123456|upload-id"),
+			want: "haruki:upload:ios:chunk-index:toolbox-user|jp|123456|upload-id",
+		},
+		{
+			name: "ios upload chunk part",
+			got:  BuildIOSUploadChunkPartKey("toolbox-user|jp|123456|upload-id", 7),
+			want: "haruki:upload:ios:chunk-part:toolbox-user|jp|123456|upload-id:7",
+		},
+		{
+			name: "sekai api profile cache",
+			got:  BuildSekaiAPIProfileCacheKey("tw", "123456"),
+			want: "haruki:sekai-api:profile:tw:123456",
 		},
 		{
 			name: "ios upload chunk claim",
