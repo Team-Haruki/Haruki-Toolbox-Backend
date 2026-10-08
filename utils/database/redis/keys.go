@@ -36,8 +36,9 @@ const (
 	KeyActionChunkData  = "chunk-data"
 	KeyActionChunkClaim = "chunk-claim"
 
-	KeyModuleRateLimit     = "rate-limit"
-	KeyActionUploadIngress = "upload-ingress"
+	KeyModuleRateLimit         = "rate-limit"
+	KeyActionUploadIngress     = "upload-ingress"
+	KeyActionBotSecurityIngest = "bot-security-ingest"
 
 	KeyModulePublicAPI = "public-api"
 	KeyActionCache     = "cache"
@@ -204,6 +205,19 @@ func BuildUploadIngressRateLimitKey(windowUnix int64, bucket string) string {
 		KeyActionUploadIngress,
 		strconv.FormatInt(windowUnix, 10),
 		bucket,
+	)
+}
+
+// BuildBotSecurityIngestRateLimitKey counts bot security alerts accepted
+// from one caller address in one fixed window.
+func BuildBotSecurityIngestRateLimitKey(windowUnix int64, clientIP string) string {
+	return buildKey(
+		KeyPrefixHaruki,
+		KeyModuleRateLimit,
+		KeyActionBotSecurityIngest,
+		strconv.FormatInt(windowUnix, 10),
+		KeyDimensionIP,
+		clientIP,
 	)
 }
 

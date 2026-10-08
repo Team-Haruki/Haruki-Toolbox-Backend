@@ -8,6 +8,7 @@ import (
 
 	harukiAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/api"
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
 	iosModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/ios"
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
@@ -51,6 +52,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		return nil, err
 	}
 	if err := validateOAuth2InternalAPIConfig(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateBotSecurityConfig(cfg); err != nil {
 		return nil, err
 	}
 
@@ -173,6 +177,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		HydraConfig:         hydraConfig,
 		OAuth2DeviceFlow:    deviceFlowConfig,
 		OAuth2InternalAPI:   newOAuth2InternalAPIConfig(cfg),
+		BotSecurityIngest:   newBotSecurityIngestConfig(cfg),
 		OAuth2AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		UploadHTTPClient:    harukiHttp.NewClient(strings.TrimSpace(cfg.Proxy), 15*time.Second),
 		UploadLogger:        harukiLogger.NewLoggerFromGlobal("SekaiDataHandler"),
@@ -304,4 +309,12 @@ func newOAuth2DeviceFlowConfig(cfg harukiConfig.Config, logger *harukiLogger.Log
 func newOAuth2InternalAPIConfig(cfg harukiConfig.Config) oauth2Module.InternalAPIConfig {
 	internalAPI, _ := oauth2Module.ParseInternalAPIConfig(internalAPISettings(cfg))
 	return internalAPI
+}
+
+// newBotSecurityIngestConfig turns bot_security.ingest_token_sha256 into the
+// module's configuration. validateBotSecurityConfig has already refused an
+// invalid value, so the error is always nil here.
+func newBotSecurityIngestConfig(cfg harukiConfig.Config) botSecurityModule.IngestConfig {
+	ingest, _ := botSecurityModule.ParseIngestConfig(cfg.BotSecurity.IngestTokenSHA256)
+	return ingest
 }

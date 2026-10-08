@@ -19,6 +19,8 @@ DELETE /api/user/:toolbox_user_id/social-platform/clear
 DELETE /api/webhook/:server/:data_type/:user_id
 DELETE /internal/mysekai-birthday-monitors/:subscription_id
 DELETE /webhook/:server/:data_type/:user_id
+GET /api/admin/bot-security/alerts
+GET /api/admin/bot-security/summary
 GET /api/admin/config/public-api-keys
 GET /api/admin/config/runtime
 GET /api/admin/content/friend-groups
@@ -95,6 +97,7 @@ GET /ios/proxy/:server/suite/user/:user_id
 GET /ios/script/:upload_code/haruki-toolbox.js
 GET /public/:server/:data_type/:user_id
 GET /webhook/subscribers
+PATCH /api/admin/bot-security/alerts/:alert_id
 PATCH /api/user/:toolbox_user_id/game-account/:server/:game_user_id
 POST /api/admin/config/game-data-cache/purge
 POST /api/admin/content/friend-groups
@@ -164,6 +167,7 @@ POST /api/user/reset-password/send
 POST /api/verify-social-platform
 POST /harukiproxy/:server/:user_id/:data_type/upload
 POST /harukiproxy/v3/:server/:user_id/:data_type/upload
+POST /internal/bot-security/alerts
 POST /internal/mysekai-birthday-events/:event_id/ack
 POST /internal/oauth2/introspect
 POST /ios/proxy/:server/user/:user_id/mysekai

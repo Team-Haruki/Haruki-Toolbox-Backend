@@ -238,6 +238,13 @@ haruki_bot:
   enable_registration: false
   credential_sign_token: "" # must match Haruki-Cloud's credential_sign_token
 
+# Bot security alerts raised by Haruki Cloud. Cloud posts each alert to the
+# backend port with "Authorization: Bearer <ingest token>"; there is no
+# Oathkeeper rule for it. Store only the token's SHA-256 here
+# (printf %s "$TOKEN" | sha256sum). Admins read the alerts under /api/admin.
+bot_security:
+  ingest_token_sha256: "" # env BOT_SECURITY_INGEST_TOKEN_SHA256; 64 hex characters; empty = ingest disabled
+
 subscription:
   hmes_internal_base_url: "http://haruki-hmes:7910"
   hmes_internal_token: ""

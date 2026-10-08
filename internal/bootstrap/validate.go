@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
@@ -319,4 +320,11 @@ func internalAPISettings(cfg harukiConfig.Config) oauth2Module.InternalAPISettin
 		ClientID:    internalAPI.ClientID,
 		Audience:    internalAPI.Audience,
 	}
+}
+
+// validateBotSecurityConfig checks bot_security.ingest_token_sha256: empty
+// disables alert ingestion; otherwise it must be 64 hex characters.
+func validateBotSecurityConfig(cfg harukiConfig.Config) error {
+	_, err := botSecurityModule.ParseIngestConfig(cfg.BotSecurity.IngestTokenSHA256)
+	return err
 }

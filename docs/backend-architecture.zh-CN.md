@@ -59,6 +59,10 @@ RFC 8628 设备授权集中在 `internal/modules/oauth2`，不另建模块；行
 
 `utils` 根暂保留共享类型和枚举。包迁移直接更新调用方，不保留旧路径转发包；修改 Go 导入路径不改变 HTTP、配置、存储或加密协议。测试数据随包迁移，仓库 `data/` 中的发布 schema 路径保持不变。
 
+### Bot 安全告警的代码落点
+
+`internal/modules/botsecurity` 是一个完整业务域：Haruki Cloud 推送的 bot 安全告警（阈值越线）由内部接口接收并去重写入 Toolbox 库的 `bot_security_alerts`（不对外、不经 Oathkeeper，只在配置了 `bot_security.ingest_token_sha256` 时注册）；管理端在 `/api/admin/bot-security` 下列出、处理与汇总告警，告警所属 bot 的主人 QQ 按页批量从 Bot 库查询，Bot 库不可用时只置空、不让列表失败。
+
 ## 2. 依赖方向
 
 允许的核心依赖方向如下：

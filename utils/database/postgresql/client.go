@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/botsecurityalert"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
@@ -43,6 +44,8 @@ type Client struct {
 	Schema *migrate.Schema
 	// AuthorizeSocialPlatformInfo is the client for interacting with the AuthorizeSocialPlatformInfo builders.
 	AuthorizeSocialPlatformInfo *AuthorizeSocialPlatformInfoClient
+	// BotSecurityAlert is the client for interacting with the BotSecurityAlert builders.
+	BotSecurityAlert *BotSecurityAlertClient
 	// FriendLink is the client for interacting with the FriendLink builders.
 	FriendLink *FriendLinkClient
 	// GameAccountBinding is the client for interacting with the GameAccountBinding builders.
@@ -91,6 +94,7 @@ func NewClient(opts ...Option) *Client {
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.AuthorizeSocialPlatformInfo = NewAuthorizeSocialPlatformInfoClient(c.config)
+	c.BotSecurityAlert = NewBotSecurityAlertClient(c.config)
 	c.FriendLink = NewFriendLinkClient(c.config)
 	c.GameAccountBinding = NewGameAccountBindingClient(c.config)
 	c.GameAccountDataGrant = NewGameAccountDataGrantClient(c.config)
@@ -202,6 +206,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ctx:                         ctx,
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
+		BotSecurityAlert:            NewBotSecurityAlertClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		GameAccountDataGrant:        NewGameAccountDataGrantClient(cfg),
@@ -240,6 +245,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ctx:                         ctx,
 		config:                      cfg,
 		AuthorizeSocialPlatformInfo: NewAuthorizeSocialPlatformInfoClient(cfg),
+		BotSecurityAlert:            NewBotSecurityAlertClient(cfg),
 		FriendLink:                  NewFriendLinkClient(cfg),
 		GameAccountBinding:          NewGameAccountBindingClient(cfg),
 		GameAccountDataGrant:        NewGameAccountDataGrantClient(cfg),
@@ -287,11 +293,11 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding,
-		c.GameAccountDataGrant, c.Group, c.GroupList, c.IOSScriptCode,
-		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
-		c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User,
-		c.WebhookEndpoint, c.WebhookSubscription,
+		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
+		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
+		c.IOSScriptCode, c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule,
+		c.SocialPlatformInfo, c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage,
+		c.UploadLog, c.User, c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -301,11 +307,11 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.AuthorizeSocialPlatformInfo, c.FriendLink, c.GameAccountBinding,
-		c.GameAccountDataGrant, c.Group, c.GroupList, c.IOSScriptCode,
-		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
-		c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User,
-		c.WebhookEndpoint, c.WebhookSubscription,
+		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
+		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
+		c.IOSScriptCode, c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule,
+		c.SocialPlatformInfo, c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage,
+		c.UploadLog, c.User, c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -316,6 +322,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
 	case *AuthorizeSocialPlatformInfoMutation:
 		return c.AuthorizeSocialPlatformInfo.mutate(ctx, m)
+	case *BotSecurityAlertMutation:
+		return c.BotSecurityAlert.mutate(ctx, m)
 	case *FriendLinkMutation:
 		return c.FriendLink.mutate(ctx, m)
 	case *GameAccountBindingMutation:
@@ -503,6 +511,139 @@ func (c *AuthorizeSocialPlatformInfoClient) mutate(ctx context.Context, m *Autho
 		return (&AuthorizeSocialPlatformInfoDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown AuthorizeSocialPlatformInfo mutation op: %q", m.Op())
+	}
+}
+
+// BotSecurityAlertClient is a client for the BotSecurityAlert schema.
+type BotSecurityAlertClient struct {
+	config
+}
+
+// NewBotSecurityAlertClient returns a client for the BotSecurityAlert from the given config.
+func NewBotSecurityAlertClient(c config) *BotSecurityAlertClient {
+	return &BotSecurityAlertClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `botsecurityalert.Hooks(f(g(h())))`.
+func (c *BotSecurityAlertClient) Use(hooks ...Hook) {
+	c.hooks.BotSecurityAlert = append(c.hooks.BotSecurityAlert, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `botsecurityalert.Intercept(f(g(h())))`.
+func (c *BotSecurityAlertClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BotSecurityAlert = append(c.inters.BotSecurityAlert, interceptors...)
+}
+
+// Create returns a builder for creating a BotSecurityAlert entity.
+func (c *BotSecurityAlertClient) Create() *BotSecurityAlertCreate {
+	mutation := newBotSecurityAlertMutation(c.config, OpCreate)
+	return &BotSecurityAlertCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BotSecurityAlert entities.
+func (c *BotSecurityAlertClient) CreateBulk(builders ...*BotSecurityAlertCreate) *BotSecurityAlertCreateBulk {
+	return &BotSecurityAlertCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BotSecurityAlertClient) MapCreateBulk(slice any, setFunc func(*BotSecurityAlertCreate, int)) *BotSecurityAlertCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BotSecurityAlertCreateBulk{err: fmt.Errorf("calling to BotSecurityAlertClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BotSecurityAlertCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BotSecurityAlertCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BotSecurityAlert.
+func (c *BotSecurityAlertClient) Update() *BotSecurityAlertUpdate {
+	mutation := newBotSecurityAlertMutation(c.config, OpUpdate)
+	return &BotSecurityAlertUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BotSecurityAlertClient) UpdateOne(_m *BotSecurityAlert) *BotSecurityAlertUpdateOne {
+	mutation := newBotSecurityAlertMutation(c.config, OpUpdateOne, withBotSecurityAlert(_m))
+	return &BotSecurityAlertUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BotSecurityAlertClient) UpdateOneID(id int) *BotSecurityAlertUpdateOne {
+	mutation := newBotSecurityAlertMutation(c.config, OpUpdateOne, withBotSecurityAlertID(id))
+	return &BotSecurityAlertUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BotSecurityAlert.
+func (c *BotSecurityAlertClient) Delete() *BotSecurityAlertDelete {
+	mutation := newBotSecurityAlertMutation(c.config, OpDelete)
+	return &BotSecurityAlertDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BotSecurityAlertClient) DeleteOne(_m *BotSecurityAlert) *BotSecurityAlertDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BotSecurityAlertClient) DeleteOneID(id int) *BotSecurityAlertDeleteOne {
+	builder := c.Delete().Where(botsecurityalert.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BotSecurityAlertDeleteOne{builder}
+}
+
+// Query returns a query builder for BotSecurityAlert.
+func (c *BotSecurityAlertClient) Query() *BotSecurityAlertQuery {
+	return &BotSecurityAlertQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBotSecurityAlert},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BotSecurityAlert entity by its id.
+func (c *BotSecurityAlertClient) Get(ctx context.Context, id int) (*BotSecurityAlert, error) {
+	return c.Query().Where(botsecurityalert.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BotSecurityAlertClient) GetX(ctx context.Context, id int) *BotSecurityAlert {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BotSecurityAlertClient) Hooks() []Hook {
+	return c.hooks.BotSecurityAlert
+}
+
+// Interceptors returns the client interceptors.
+func (c *BotSecurityAlertClient) Interceptors() []Interceptor {
+	return c.inters.BotSecurityAlert
+}
+
+func (c *BotSecurityAlertClient) mutate(ctx context.Context, m *BotSecurityAlertMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BotSecurityAlertCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BotSecurityAlertUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BotSecurityAlertUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BotSecurityAlertDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown BotSecurityAlert mutation op: %q", m.Op())
 	}
 }
 
@@ -3175,14 +3316,14 @@ func (c *WebhookSubscriptionClient) mutate(ctx context.Context, m *WebhookSubscr
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding,
+		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
 		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
 		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
 		WebhookSubscription []ent.Hook
 	}
 	inters struct {
-		AuthorizeSocialPlatformInfo, FriendLink, GameAccountBinding,
+		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
 		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
 		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,

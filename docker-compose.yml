@@ -324,6 +324,7 @@ services:
       HARUKI_BOT_DB_URL: ${HARUKI_BOT_DB_URL}
       HARUKI_BOT_ENABLE_REGISTRATION: ${HARUKI_BOT_ENABLE_REGISTRATION:-false}
       HARUKI_BOT_CREDENTIAL_SIGN_TOKEN: ${HARUKI_BOT_CREDENTIAL_SIGN_TOKEN}
+      BOT_SECURITY_INGEST_TOKEN_SHA256: ${BOT_SECURITY_INGEST_TOKEN_SHA256:-}
     # SECURITY: bind the backend port ONLY to the private-network interface
     # (${TAILSCALE_IP}) so internal services can reach it over the private
     # network, while it stays unreachable from the public internet. NEVER publish it on 0.0.0.0 / all

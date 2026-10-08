@@ -74,6 +74,7 @@ go run ./main.go                                # 运行（需要 haruki-toolbox
 - `internal/modules/admincore/` — 管理端共享逻辑（含角色层级守卫 `EnsureAdminCanManageTargetUser`、`CurrentAdminActor`）
 - `internal/modules/usercore/` — 用户端共享逻辑
 - `internal/modules/harukibotneo/` — HarukiBot NEO 注册与凭据重置（状态、发信、注册/重置）
+- `internal/modules/botsecurity/` — Haruki Cloud 推送的 bot 安全告警：内部接收（`bot_security.ingest_token_sha256`，未配置不注册路由）与 `/api/admin/bot-security` 管理端；主人 QQ 从 Bot 库按页批量解析，Bot 库不可用时置空
 - `internal/modules/sponsor/` + `adminsponsor/` — 爱发电赞助墙（公开读取 + webhook；爱发电 webhook 无签名，真实性靠 URL secret 和/或经爱发电 API 回查订单）与管理端
 - `utils/codec/msgpackcodec/` — 面向不可信上传数据的有界 MessagePack 解码与 JSON 转换（`ValidateMaxDepth` 校验深度、按长度封顶）；`utils/orderedmap/` 是其 OrderedMap 存储
 

@@ -157,6 +157,16 @@ type HarukiBotConfig struct {
 	CredentialSignToken string `yaml:"credential_sign_token"`
 }
 
+// BotSecurityConfig configures the collection of bot security alerts that
+// Haruki Cloud raises when a bot or source crosses a threshold.
+type BotSecurityConfig struct {
+	// IngestTokenSHA256 is the hex SHA-256 (64 characters) of the bearer
+	// token Cloud sends to POST /internal/bot-security/alerts; the token
+	// itself never goes into backend config. Empty leaves the route
+	// unregistered.
+	IngestTokenSHA256 string `yaml:"ingest_token_sha256"`
+}
+
 type SubscriptionConfig struct {
 	HMESInternalBaseURL  string `yaml:"hmes_internal_base_url"`
 	HMESInternalToken    string `yaml:"hmes_internal_token"`
@@ -330,6 +340,7 @@ type Config struct {
 	RestoreSuite           RestoreSuiteConfig              `yaml:"restore_suite"`
 	HarukiBot              HarukiBotConfig                 `yaml:"haruki_bot"`
 	Subscription           SubscriptionConfig              `yaml:"subscription"`
+	BotSecurity            BotSecurityConfig               `yaml:"bot_security"`
 }
 
 var Cfg Config
