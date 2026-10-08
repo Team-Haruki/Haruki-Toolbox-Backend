@@ -142,7 +142,7 @@ func (r *Row) MysekaiBody(keys []string) ([]byte, error) {
 	out = append(out, '{')
 	first := true
 	for _, key := range keys {
-		v, ok, err := r.RawValue(key)
+		v, ok, err := r.servedValue(key, true)
 		if err != nil {
 			return nil, err
 		}
@@ -171,13 +171,15 @@ func appendIDString(dst []byte, first *bool, key string, raw []byte) []byte {
 }
 
 // PrivateBody renders the private-surface body: the whole row including `_id`
-// and `server`, or a projection of it.
+// and `server`, or a projection of it. A projected userGamedata is filtered
+// exactly like the whole document's: a key filter selects what is returned,
+// never how much of userGamedata is exposed.
 func (r *Row) PrivateBody(keys []string) ([]byte, error) {
 	if len(keys) == 0 {
 		return r.wholeDocument(true)
 	}
 	if len(keys) == 1 {
-		v, ok, err := r.RawValue(keys[0])
+		v, ok, err := r.servedValue(keys[0], false)
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +194,7 @@ func (r *Row) PrivateBody(keys []string) ([]byte, error) {
 	out = append(out, '{')
 	first := true
 	for _, key := range keys {
-		v, ok, err := r.RawValue(key)
+		v, ok, err := r.servedValue(key, true)
 		if err != nil {
 			return nil, err
 		}
@@ -268,6 +270,15 @@ func (r *Row) wholeDocument(withIdentity bool) ([]byte, error) {
 	extraFlattened := r.extraFlattenedChildren()
 	for _, k := range r.extraTopLevelKeys() {
 		v, _ := r.extraMember(k)
+		if k == userGamedataKey {
+			// Only reachable for a store whose catalog has no userGamedata
+			// column (mysekai); the suite column is filtered above.
+			filtered, err := filterUserGamedata(v, true)
+			if err != nil {
+				return nil, err
+			}
+			v = filtered
+		}
 		out = appendMember(out, &first, k, v)
 	}
 
@@ -327,6 +338,37 @@ func (r *Row) extraTopLevelKeys() []string {
 	return out
 }
 
+// servedValue is RawValue for a key a response is about to serve: it applies
+// the userGamedata field filter, so no projection can return the stored object
+// whole. nested selects the userIdString synthesis (see filterUserGamedata).
+// Keys other than userGamedata pass through untouched.
+func (r *Row) servedValue(key string, nested bool) ([]byte, bool, error) {
+	v, ok, err := r.RawValue(key)
+	if err != nil || !ok || !r.isUserGamedata(key) {
+		return v, ok, err
+	}
+	filtered, err := filterUserGamedata(v, nested)
+	if err != nil {
+		return nil, false, err
+	}
+	return filtered, true, nil
+}
+
+// isUserGamedata reports whether key reads the userGamedata value: its column,
+// under any catalog alias, or an `extra` member of that name in a store whose
+// catalog has no such column.
+func (r *Row) isUserGamedata(key string) bool {
+	e, place := r.cat.Resolve(key)
+	switch place {
+	case catalog.PlaceColumn:
+		return e.Key == userGamedataKey
+	case catalog.PlaceUnknown:
+		return key == userGamedataKey
+	default:
+		return false
+	}
+}
+
 // userGamedata returns the stored userGamedata object filtered to the seven
 // fields the API serves.
 func (r *Row) userGamedata(nested bool) ([]byte, bool, error) {
@@ -338,9 +380,20 @@ func (r *Row) userGamedata(nested bool) ([]byte, bool, error) {
 	if !ok {
 		return nil, false, nil
 	}
+	filtered, err := filterUserGamedata(raw, nested)
+	if err != nil {
+		return nil, false, err
+	}
+	return filtered, true, nil
+}
+
+// filterUserGamedata reduces a stored userGamedata object to the seven fields
+// the API serves. Every surface and every projection goes through it: the
+// rest of the object is account-identifying.
+func filterUserGamedata(raw []byte, nested bool) ([]byte, error) {
 	var m map[string]jsontext.Value
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, false, fmt.Errorf("gamedata: decode %s: %w", userGamedataKey, err)
+		return nil, fmt.Errorf("gamedata: decode %s: %w", userGamedataKey, err)
 	}
 	out := make([]byte, 0, 256)
 	out = append(out, '{')
@@ -362,7 +415,7 @@ func (r *Row) userGamedata(nested bool) ([]byte, bool, error) {
 			}
 		}
 	}
-	return append(out, '}'), true, nil
+	return append(out, '}'), nil
 }
 
 func quoteJSONString(s string) []byte {

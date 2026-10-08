@@ -31,6 +31,27 @@ const privateReadTimeout = 3 * time.Second
 // ~60ms so it only fires on genuinely contended reads.
 const privateReadSlowThreshold = 500 * time.Millisecond
 
+// Cache-key surfaces for private bodies. Keyed (?key=) bodies live under their
+// own surface, versioned by how they are rendered: entries written before keyed
+// renders filtered userGamedata carry the whole stored object, and the old
+// "private" surface would keep serving them until their TTL ran out. The
+// split also keeps a whitespace-only ?key= (which the cache key trims to
+// nothing but which renders null) from sharing the full document's entry.
+const (
+	privateCacheSurfaceFull  = "private"
+	privateCacheSurfaceKeyed = "private-keyed-v2"
+)
+
+// privateCacheSurface picks the cache-key surface for a private request. The
+// test is the one renderPrivateData uses to choose between the whole document
+// and a projection, so a key and its body never disagree on which they are.
+func privateCacheSurface(requestKey string) string {
+	if requestKey == "" {
+		return privateCacheSurfaceFull
+	}
+	return privateCacheSurfaceKeyed
+}
+
 // privateDataGroup collapses concurrent cache misses for the same cacheKey into a
 // single game-data read + render + cache write, so a same-key burst does not stampede
 // the database with duplicate full-document pulls.
@@ -166,7 +187,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		}
 		var cacheKey string
 		if stamp > 0 {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("private", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey(privateCacheSurface(requestKey), string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
 			cacheStart := time.Now()
 			cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCache(ctx, cacheKey)
 			dCache = time.Since(cacheStart)
