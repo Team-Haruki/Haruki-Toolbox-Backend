@@ -183,20 +183,45 @@ type HarukiProxyConfig struct {
 }
 
 type SekaiClientConfig struct {
-	ENServerAPIHost              string            `yaml:"en_server_api_host"`
-	JPServerAPIHost              string            `yaml:"jp_server_api_host"`
-	TWServerAPIHost              string            `yaml:"tw_server_api_host"`
-	TWServerAPIHost2             string            `yaml:"tw_server_api_host_2"`
-	KRServerAPIHost              string            `yaml:"kr_server_api_host"`
-	KRServerAPIHost2             string            `yaml:"kr_server_api_host_2"`
-	CNServerAPIHost              string            `yaml:"cn_server_api_host"`
-	CNServerAPIHost2             string            `yaml:"cn_server_api_host_2"`
-	JPServerInheritToken         string            `yaml:"jp_server_inherit_token"`
-	ENServerInheritToken         string            `yaml:"en_server_inherit_token"`
-	JPServerAppVersionUrl        string            `yaml:"jp_server_app_version_url"`
-	ENServerAppVersionUrl        string            `yaml:"en_server_app_version_url"`
-	JPServerInheritClientHeaders map[string]string `yaml:"jp_server_inherit_client_headers"`
-	ENServerInheritClientHeaders map[string]string `yaml:"en_server_inherit_client_headers"`
+	ENServerAPIHost              string                   `yaml:"en_server_api_host"`
+	JPServerAPIHost              string                   `yaml:"jp_server_api_host"`
+	TWServerAPIHost              string                   `yaml:"tw_server_api_host"`
+	TWServerAPIHost2             string                   `yaml:"tw_server_api_host_2"`
+	KRServerAPIHost              string                   `yaml:"kr_server_api_host"`
+	KRServerAPIHost2             string                   `yaml:"kr_server_api_host_2"`
+	CNServerAPIHost              string                   `yaml:"cn_server_api_host"`
+	CNServerAPIHost2             string                   `yaml:"cn_server_api_host_2"`
+	JPServerInheritToken         string                   `yaml:"jp_server_inherit_token"`
+	ENServerInheritToken         string                   `yaml:"en_server_inherit_token"`
+	JPServerAppVersionUrl        string                   `yaml:"jp_server_app_version_url"`
+	ENServerAppVersionUrl        string                   `yaml:"en_server_app_version_url"`
+	JPServerInheritClientHeaders map[string]string        `yaml:"jp_server_inherit_client_headers"`
+	ENServerInheritClientHeaders map[string]string        `yaml:"en_server_inherit_client_headers"`
+	InheritPacing                SekaiInheritPacingConfig `yaml:"inherit_pacing"`
+}
+
+// Default inherit pauses, in milliseconds. They are the pacing the inherit
+// flow has used since its first release, modelled on the real client. Do not
+// shorten them here: whether the game servers tolerate faster pacing is an
+// open owner decision (anti-cheat risk), to be made per deployment through
+// the config.
+const (
+	DefaultInheritPauseAfterCheckMS    = 1000
+	DefaultInheritPauseBeforeLoginMS   = 2000
+	DefaultInheritPauseSuiteFollowupMS = 1000
+)
+
+// SekaiInheritPacingConfig sets the pauses an inherit makes between game API
+// calls, in milliseconds. A value of 0 or less keeps the default.
+type SekaiInheritPacingConfig struct {
+	// AfterInheritCheckMS separates the checking inherit call
+	// (isExecuteInherit=False) from the executing one.
+	AfterInheritCheckMS int `yaml:"after_inherit_check_ms"`
+	// BeforeLoginMS separates the executing inherit call from the login.
+	BeforeLoginMS int `yaml:"before_login_ms"`
+	// SuiteFollowupMS is each of the three pauses around the follow-up calls
+	// after the suite request.
+	SuiteFollowupMS int `yaml:"suite_followup_ms"`
 }
 
 type SekaiAPIConfig struct {

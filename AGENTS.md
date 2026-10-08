@@ -176,6 +176,8 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - 优先使用项目 logger helper
 - 全局 logger 应遵循当前启动时设置的 log level 和 writer
 - 避免在包级提前固化旧日志配置
+- 凭据不进日志：项目 logger、access log（`redact.Writer`）、system log 的 path 与上传审计的错误信息都经 `utils/redact` 脱敏。引继 ID 与引继密码一律替换为 `<redacted>`；知道确切值的调用方（Sekai 客户端）把它传给 `redact.Text` / `redact.Error`
+- 游戏用户 ID 一般可以出现在日志里（公开数据 URL 本身就带它，上传失败日志把它作为结构化字段）。例外是引继流程：引继解析出的 ID 在 Sekai 客户端的日志与 `APIError` 里经 `redact.MaskIDs` / `redact.IDsInError` 换成 `redact.Fingerprint`（进程内随机密钥的 HMAC，只能在同一进程内关联，不可逆），上传审计行另行记录原值
 
 ## 测试规则
 

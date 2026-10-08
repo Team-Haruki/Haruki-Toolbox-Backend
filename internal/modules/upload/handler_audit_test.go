@@ -273,3 +273,26 @@ func uniqueUploadAuditSQLiteDSN(t *testing.T, name string) string {
 	t.Helper()
 	return fmt.Sprintf("file:%s-%s?mode=memory&cache=shared&_fk=1", name, strings.ReplaceAll(t.Name(), "/", "-"))
 }
+
+// The upload audit error message is stored and shown to admins, so it is
+// redacted whichever branch builds it.
+func TestBuildUploadAuditErrorMessageRedacts(t *testing.T) {
+	t.Parallel()
+
+	const inheritID = "FAKEinheritID0008"
+	errMsg := buildUploadAuditErrorMessage(errors.New("sekai API error: POST /inherit/user/"+inheritID+"?isExecuteInherit=False returned status 403"), nil)
+	if errMsg == nil || strings.Contains(*errMsg, inheritID) || !strings.Contains(*errMsg, "/inherit/user/<redacted>") {
+		t.Fatalf("error branch = %v", errMsg)
+	}
+
+	status := 500
+	detail := `upstream said {"inherit_password":"FAKEinheritPW0008"}`
+	resultMsg := buildUploadAuditErrorMessage(nil, &harukiUtils.HandleDataResult{Status: &status, ErrorMessage: &detail})
+	if resultMsg == nil || strings.Contains(*resultMsg, "FAKEinheritPW0008") || !strings.HasPrefix(*resultMsg, "status=500 ") {
+		t.Fatalf("result branch = %v", resultMsg)
+	}
+
+	if got := buildUploadAuditErrorMessage(nil, nil); got != nil {
+		t.Fatalf("no error = %q, want nil", *got)
+	}
+}

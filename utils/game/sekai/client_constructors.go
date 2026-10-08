@@ -15,6 +15,8 @@ type ClientConfig struct {
 	Headers         map[string]string
 	Proxy           string
 	InheritJWTToken string
+	// Pacing sets the inherit pauses; unset (zero) fields keep the defaults.
+	Pacing InheritPacing
 }
 
 func NewSekaiClient(cfg struct {
@@ -52,6 +54,7 @@ func NewSekaiClientWithConfig(cfg ClientConfig) *HarukiSekaiClient {
 		inheritJWTToken: cfg.InheritJWTToken,
 		httpClient:      httpClient,
 		logger:          harukiLogger.NewLoggerFromGlobal("SekaiClient"),
+		pacing:          cfg.Pacing.withDefaults(),
 	}
 }
 

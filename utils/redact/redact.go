@@ -7,9 +7,17 @@
 // authorization user codes, device codes and flow handles travel in query
 // strings and JSON bodies. Go's *url.Error repeats the full request URL, so
 // any outbound failure would otherwise copy those values into the log.
+//
+// Identifiers that are not credentials but should still not be readable in a
+// given log line, such as the game user ID an inherit resolves to, are masked
+// with Fingerprint instead, which keeps repeats of one ID recognisable.
 package redact
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/url"
@@ -121,19 +129,72 @@ func replaceSecret(s, secret string) string {
 // changes after that, the result wraps err: Error() is redacted and Unwrap()
 // returns err, so errors.Is / errors.As classification keeps working.
 func Error(err error, secrets ...string) error {
+	return rewriteError(err, func(s string) string { return Text(s, secrets...) })
+}
+
+// IDsInError is Error for MaskIDs: every id in err's message, and in the URL of
+// a *url.Error in its chain, is replaced by its Fingerprint.
+func IDsInError(err error, ids ...string) error {
+	return rewriteError(err, func(s string) string { return MaskIDs(s, ids...) })
+}
+
+func rewriteError(err error, rewrite func(string) string) error {
 	if err == nil {
 		return nil
 	}
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) && urlErr != nil {
-		urlErr.URL = Text(urlErr.URL, secrets...)
+		urlErr.URL = rewrite(urlErr.URL)
 	}
 	msg := err.Error()
-	redacted := Text(msg, secrets...)
+	redacted := rewrite(msg)
 	if redacted == msg {
 		return err
 	}
 	return &redactedError{msg: redacted, err: err}
+}
+
+// fingerprintKey keys Fingerprint. It is random per process: identifiers such
+// as game user IDs are structured enough to enumerate, so an unkeyed hash of
+// one could be reversed by hashing candidates. The cost is that fingerprints
+// only correlate within one process lifetime, which is what reading a single
+// failing request across its log lines needs.
+var fingerprintKey = newFingerprintKey()
+
+func newFingerprintKey() []byte {
+	key := make([]byte, 32)
+	// crypto/rand.Read never returns an error on supported platforms (Go 1.24+
+	// crashes the program instead), so the key is always random.
+	_, _ = rand.Read(key)
+	return key
+}
+
+// fingerprintHexLen is the number of hex digits a fingerprint keeps: 32 bits
+// tell apart the handful of identifiers in flight at once, and are far too
+// few to carry the identifier itself.
+const fingerprintHexLen = 8
+
+// Fingerprint returns a short, non-reversible stand-in for an identifier that
+// should not appear in a log line but whose repeats are worth correlating:
+// "<redacted:" + 8 hex digits + ">". The same id yields the same fingerprint
+// for the life of the process.
+func Fingerprint(id string) string {
+	mac := hmac.New(sha256.New, fingerprintKey)
+	_, _ = mac.Write([]byte(id))
+	return "<redacted:" + hex.EncodeToString(mac.Sum(nil))[:fingerprintHexLen] + ">"
+}
+
+// MaskIDs replaces every verbatim occurrence of each id in s with its
+// Fingerprint. Like the exact-value scrubbing in Text it ignores ids shorter
+// than six characters, which could match unrelated text.
+func MaskIDs(s string, ids ...string) string {
+	for _, id := range ids {
+		if len(id) < minExactSecretLen || !strings.Contains(s, id) {
+			continue
+		}
+		s = strings.ReplaceAll(s, id, Fingerprint(id))
+	}
+	return s
 }
 
 type redactedError struct {

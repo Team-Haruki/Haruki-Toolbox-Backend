@@ -92,6 +92,7 @@ type Client struct {
 	errorMessage    string
 	httpClient      *harukiHttp.Client
 	logger          *harukiLogger.Logger
+	pacing          InheritPacing
 }
 
 type HarukiSekaiClient = Client

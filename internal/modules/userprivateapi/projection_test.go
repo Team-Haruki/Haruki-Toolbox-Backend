@@ -49,3 +49,24 @@ func TestBuildKeyProjectionNeverExcludesID(t *testing.T) {
 		}
 	}
 }
+
+// Keyed bodies live under their own cache surface, so an entry written before
+// keyed renders filtered userGamedata can never be served again, and a
+// whitespace-only key (trimmed to nothing in the cache key) cannot share the
+// full document's entry.
+func TestPrivateCacheSurface(t *testing.T) {
+	if got := privateCacheSurface(""); got != privateCacheSurfaceFull {
+		t.Fatalf("full document surface = %q", got)
+	}
+	if privateCacheSurfaceFull != "private" {
+		t.Fatalf("full-document surface changed to %q; that drops every warm full body", privateCacheSurfaceFull)
+	}
+	for _, key := range []string{"userGamedata", "userCards,userGamedata", " ", " , "} {
+		if got := privateCacheSurface(key); got != privateCacheSurfaceKeyed {
+			t.Fatalf("privateCacheSurface(%q) = %q, want %q", key, got, privateCacheSurfaceKeyed)
+		}
+	}
+	if privateCacheSurfaceKeyed == "private" {
+		t.Fatal("keyed surface must differ from the pre-filter one")
+	}
+}

@@ -191,7 +191,8 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		ServerCryptor: harukiSekai.NewServerCryptor(harukiSekai.ServerCryptorConfig{
 			Regions: cfg.CryptoRegions(),
 		}),
-		UploadProxy: cfg.Proxy,
+		UploadProxy:   cfg.Proxy,
+		InheritPacing: harukiSekai.InheritPacingFromConfig(cfg.SekaiClient.InheritPacing),
 		UserProfileConfig: userProfileModule.NewConfig(userProfileModule.ConfigOptions{
 			AvatarSaveDir: cfg.UserSystem.AvatarSaveDir,
 			AvatarBaseURL: cfg.UserSystem.AvatarURL,

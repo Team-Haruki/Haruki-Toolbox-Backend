@@ -59,7 +59,7 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 				inheritBreaker.RecordResult(server, breakerToken, true)
 			}
 		}()
-		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType, dependencies.ServerCryptor)
+		retriever := harukiSekai.NewSekaiDataRetriever(server, *data, uploadType, dependencies.ServerCryptor, dependencies.InheritPacing)
 		result, err := retriever.Run(ctx)
 		inheritBreaker.RecordResult(server, breakerToken, inheritFailureIsUpstreamDegradation(err))
 		breakerRecorded = true

@@ -57,7 +57,35 @@ func defaultConfig() Config {
 			UserAgent:            "Haruki-Toolbox-Backend",
 			RequestTimeoutSecond: 5,
 		},
+		SekaiClient: SekaiClientConfig{
+			InheritPacing: DefaultSekaiInheritPacingConfig(),
+		},
 	}
+}
+
+// DefaultSekaiInheritPacingConfig returns the default inherit pauses.
+func DefaultSekaiInheritPacingConfig() SekaiInheritPacingConfig {
+	return SekaiInheritPacingConfig{
+		AfterInheritCheckMS: DefaultInheritPauseAfterCheckMS,
+		BeforeLoginMS:       DefaultInheritPauseBeforeLoginMS,
+		SuiteFollowupMS:     DefaultInheritPauseSuiteFollowupMS,
+	}
+}
+
+// Normalized returns p with every unset (0 or less) pause replaced by its
+// default.
+func (p SekaiInheritPacingConfig) Normalized() SekaiInheritPacingConfig {
+	d := DefaultSekaiInheritPacingConfig()
+	if p.AfterInheritCheckMS <= 0 {
+		p.AfterInheritCheckMS = d.AfterInheritCheckMS
+	}
+	if p.BeforeLoginMS <= 0 {
+		p.BeforeLoginMS = d.BeforeLoginMS
+	}
+	if p.SuiteFollowupMS <= 0 {
+		p.SuiteFollowupMS = d.SuiteFollowupMS
+	}
+	return p
 }
 
 // defaultOAuth2DeviceFlowConfig mirrors the compose defaults of
@@ -120,6 +148,7 @@ func normalizeConfigDefaults(cfg *Config) error {
 	if cfg.Backend.ShutdownTimeout <= 0 {
 		cfg.Backend.ShutdownTimeout = 10
 	}
+	cfg.SekaiClient.InheritPacing = cfg.SekaiClient.InheritPacing.Normalized()
 	if cfg.Backend.ProfilingIntervalSeconds <= 0 {
 		cfg.Backend.ProfilingIntervalSeconds = 15
 	}
