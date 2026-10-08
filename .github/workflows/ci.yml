@@ -73,7 +73,7 @@ jobs:
     uses: seiunx-dev/ci-templates/.github/workflows/actionlint.yml@v1
 
   ci-ok:
-    name: CI OK # the only required status check
+    name: CI OK # aggregate status for branch protection; not currently enforced
     if: always()
     needs: [go, sonar, docker, workflows]
     runs-on: ubuntu-latest
