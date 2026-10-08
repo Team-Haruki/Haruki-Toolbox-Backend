@@ -36,6 +36,7 @@ utils/database/neopg/            Bot Ent 生成产物（迁移期保持位置不
 | `utils/orderedmap` | 通用有序容器 |
 | `utils/database` | 数据库连接、游戏数据存储、Redis 及 Ent 生成代码 |
 | `utils/{http,smtp,cloudflare,logger,background,perfstats,perfdebug,redact}` | 网络、邮件、外部适配、日志、日志脱敏与运行期基础设施 |
+| `utils/circuitbreaker` | 按 key（通常是游戏服务器）独立计数的上游熔断器，供引继上传与 SekaiAPI 资料查询使用 |
 
 ### OAuth2 设备授权的代码落点
 

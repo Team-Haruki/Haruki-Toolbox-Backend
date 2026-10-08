@@ -38,4 +38,4 @@
 - 改 Ory / OAuth2 / Webhook / 端点行为时同步 `docs/` 与 `external/oathkeeper/`，具体落点见 `AGENTS.md`「文档规则」；部署、运维、内部接口的变化写进私有运维文档
 - `docs/` 是公开的：不写私网 / tailnet IP、内部主机名、生产路径、生产容器名、密钥位置、`/internal/*` 接口或运维手册
 - 提交标题格式 `[Feat|Fix|Chore|Docs] Imperative description`；代理署名用正文末尾的 `Co-authored-by:` trailer（Copilot：`Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`）
-- CI 唯一必需检查是 `CI OK`；工作流约定见 `AGENTS.md`「GitHub Actions workflows」
+- CI 的汇总检查是 `CI OK`；`main` 没有分支保护或规则集，GitHub 不会据此拦截合并，合并前自行确认它通过；工作流约定见 `AGENTS.md`「GitHub Actions workflows」

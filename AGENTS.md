@@ -318,7 +318,9 @@ The files in `.github/workflows` are thin callers:
     `:buildcache` keeps the module download layer.
   - `Workflow lint` runs the `actionlint` template on the workflow files.
   - The aggregate job **`CI OK`** (needs `Go`, `Sonar`, `Docker`, `Workflow lint`) is the
-    only required status check.
+    single status that sums up CI. `main` has no branch protection or rulesets, so GitHub
+    does not block a merge on it: confirm it is green before merging. It is enforced only
+    downstream, by `release-gate` on tags and by the `Docker tags` job that moves `:main`.
 - `release.yml` (`Release`): bump `Version` in `version/version.go` in a PR (9.0.0 is in
   the rc phase: `v9.0.0-rcN`, the current one is in `version/version.go`) → merge and wait
   for `CI OK` on `main` → push the same tag (e.g. `v9.0.0-rc6`). `release-gate` (`version-source: go`) refuses a tag
@@ -333,8 +335,8 @@ The files in `.github/workflows` are thin callers:
   published with `SHA256SUMS-<tag>.txt` (`-rc` tags as pre-releases that never become
   "latest"). Manual dispatch is a dry run: it builds the binaries with the version from
   `version/version.go` and publishes nothing, also when started on a tag.
-- `device-flow-live.yml` (`Device flow live`) is manual dispatch only and not a required
-  check: a custom matrix job (the `go-ci` template cannot start Hydra) that brings up
+- `device-flow-live.yml` (`Device flow live`) is manual dispatch only and not part of
+  `CI OK`: a custom matrix job (the `go-ci` template cannot start Hydra) that brings up
   `external/hydra/it/docker-compose.device-it.yml` with Hydra `v25.4.0` and `v26.2.0` and runs
   the `hydra_live`-tagged OAuth2 device-flow test against each. Run it on the commit to
   deploy and before changing `ORY_VERSION`; the local recipe is in
