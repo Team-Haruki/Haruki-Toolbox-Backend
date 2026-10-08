@@ -134,6 +134,26 @@ Suite / MYSEKAI 由独立 PostgreSQL pool 读写；`game_data.url`（或 `GAME_D
 
 游戏数据的 revision 与缓存一致性改造尚未落地；在此之前，条件读取以 unix 秒精度的 `upload_time` 为准，同一秒内的多次上传无法区分。
 
+#### 私有数据接口的服务端视图（`profile`）
+
+私有 token 接口 `GET /api/private/game-data/:server/suite/:user_id` 接受 `profile=<名称>`，返回服务端定义的视图：完整私有文档减去该视图的拒绝列表。目前只有 `cloud`，拒绝 `userCostume3dStatuses` 与 `userCostume3dShopItems`（Haruki Cloud 不读这两项，它们占 JP 压缩响应约 47%、CN/TW 约 23%）。
+
+- 视图按完整文档渲染，不是 key 投影：保留 `extra` 中的未编目键（新游戏版本的键先落在这里），行中不存在的键省略而不是返回 `null`，`userGamedata` 照常只返回七个允许字段；被拒绝键在 `extra` 中的 compact 别名同样不返回。读库时不选择被拒绝的列。
+- 鉴权与完整文档完全相同：先由已验证绑定解析数据属主，授权查询带 `UserIDEQ(owner)`。`profile` 只在查询参数层面校验，不改变任何鉴权分支。
+- 缓存：每个文档版本一份规范条目，surface 段为 `private-profile-<名称>-<拒绝列表摘要>`（不含 `:`；与完整文档一样经 `SetGameDataBodyCache` 写入该文档的缓存索引 `game_data:idx:…`），TTL 与完整文档相同（7 天，新版本窗口内 5 分钟）。上传清理完整文档缓存时一并清理；拒绝列表变化时摘要变化，读者直接换到新条目。任意 `?key=` 组合仍是 6 小时上限。
+- `known_upload_time` 条件读取（304 + `X-Upload-Time`）与 zstd 直通（`Content-Encoding: zstd`）和完整文档一致。
+- 未知名称、与 `key` 同时使用、或用于 `suite` 以外的数据类型，返回 400。
+- 新增视图只改 `internal/modules/userprivateapi/profile.go` 的注册表；拒绝列表只放消费方确定不读的键。
+
+#### suite 大列的变更门
+
+suite 上传的 upsert 对每列执行 `COALESCE(EXCLUDED.c, t.c)`，值未变也会重新校验、压缩、写 TOAST 和 WAL。`writer.go` 的 `changeGatedSuiteKeys` 列出的列（目前是 `user_costume3d_statuses_j`、`user_costume3d_shop_items_j`，约占 JP 行存储的 62%）在写入事务内先以 `SELECT sha256(convert_to(col::text, 'UTF8')) ... FOR UPDATE` 读取已存值摘要，与本次最终编码字节（复原、拒绝键丢弃、别名与目录解析之后）的摘要相同时传 NULL，由 COALESCE 保留原 TOAST 指针。
+
+- 不存摘要列，摘要每次从已存值现算，因此手工修复、`WriteMigrate` 重建或目录变化都不会留下过期摘要。
+- 门内列用排序键编码（`json.Deterministic`）：上传解码为 Go map，默认编码的键顺序每次不同，不排序摘要永远不相等。其它列编码不变。
+- 历史合并键（`userEvents` 等）与全部 mysekai 列不能加入：前者要与已存值合并，后者的扁平子列由 `EXCLUDED` 硬赋值，传 NULL 会清空。
+- 行锁保证比较与 upsert 之间没有其它写入；行不存在或列为 NULL 时照常写入。加入新列前先确认它在两次上传之间通常不变，否则只多付一次摘要读取。
+
 性能工作优先减少重复解析、展开、查询和复制；引继等待及代理上游耗时不计入后处理优化收益。对照测试应保持投影、压缩协商、缓存状态和响应体积一致，分别记录延迟分位与分配量，不能将微基准结果直接当作生产 API 收益。
 
 ## 7. 契约与安全边界

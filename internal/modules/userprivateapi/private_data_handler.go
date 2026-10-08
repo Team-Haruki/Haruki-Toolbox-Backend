@@ -104,6 +104,13 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiApiHelper.ErrorBadRequest(c, "invalid user_id")
 		}
+		// A profile changes only what is rendered: it is resolved here, from the
+		// query alone, and every ownership and authorization check below runs
+		// unchanged for it.
+		profile, profileErr := resolvePrivateProfile(c.Query(queryPrivateProfile), c.Query("key"), dataType)
+		if profileErr != "" {
+			return harukiApiHelper.ErrorBadRequest(c, profileErr)
+		}
 		// Resolve the data owner from the verified binding first; the authorization
 		// check below must be scoped to that owner, so the two queries cannot run
 		// concurrently.
@@ -187,7 +194,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		}
 		var cacheKey string
 		if stamp > 0 {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey(privateCacheSurface(requestKey), string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey(profile.cacheSurface(requestKey), string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
 			cacheStart := time.Now()
 			cached, cacheFound, cErr := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, cacheKey)
 			dCache = time.Since(cacheStart)
@@ -202,7 +209,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 			}
 		}
 		loadStart := time.Now()
-		body, found, err := loadPrivateData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp)
+		body, found, err := loadPrivateData(apiHelper, cacheKey, server, dataType, userID, requestKey, profile, stamp)
 		dLoad = time.Since(loadStart)
 		if lookupErr := mapPrivateDataQueryError(err); lookupErr != nil {
 			harukiLogger.Errorf("Failed to query private user data (server=%s,user_id=%s,data_type=%s): %v", server, userIDStr, dataType, err)
@@ -233,6 +240,7 @@ func loadPrivateData(
 	dataType harukiUtils.UploadDataType,
 	userID int64,
 	requestKey string,
+	profile *privateProfile,
 	stamp int64,
 ) (string, bool, error) {
 	type payload struct {
@@ -243,14 +251,14 @@ func loadPrivateData(
 	// loadPublicGameData: coalesce all concurrent misses for one
 	// document+filter regardless of which cache generation each caller
 	// resolved.
-	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(userID, 10) + "\x00" + requestKey
+	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(userID, 10) + "\x00" + requestKey + profile.flightSuffix()
 	v, err, _ := privateDataGroup.Do(flightKey, func() (any, error) {
 		// Detach from any single caller's request lifetime: this fetch serves every
 		// coalesced waiter, so a leader disconnecting must not fail the others. It is
 		// still bounded so it cannot run away.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), privateReadTimeout)
 		defer cancel()
-		encoded, found, encErr := renderPrivateData(fetchCtx, apiHelper, server, dataType, userID, requestKey)
+		encoded, found, encErr := renderPrivateData(fetchCtx, apiHelper, server, dataType, userID, requestKey, profile)
 		if encErr != nil {
 			return nil, encErr
 		}
@@ -313,11 +321,18 @@ func renderPrivateData(
 	dataType harukiUtils.UploadDataType,
 	userID int64,
 	requestKey string,
+	profile *privateProfile,
 ) ([]byte, bool, error) {
 	gd := apiHelper.DBManager.GameData
 	store := gd.Suite()
 	if dataType != harukiUtils.UploadDataTypeSuite {
 		store = gd.Mysekai()
+	}
+	if profile != nil {
+		// A profile body is the full private document minus the profile's
+		// deny list, so it shares the full body's shape and 404 rule.
+		body, err := data.PrivateProfileBodyFromPostgres(ctx, store, userID, string(server), profile.omit)
+		return privateRenderResult(body, err)
 	}
 	var renderKeys []string
 	var fetchKeys []string
@@ -328,6 +343,12 @@ func renderPrivateData(
 		}
 	}
 	body, err := data.PrivateBodyFromPostgres(ctx, store, userID, string(server), fetchKeys, renderKeys)
+	return privateRenderResult(body, err)
+}
+
+// privateRenderResult maps a rendered body onto (body, found, err): a 404 from
+// the read means the row is absent, anything else is a failure.
+func privateRenderResult(body []byte, err error) ([]byte, bool, error) {
 	if err != nil {
 		if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusNotFound {
 			return nil, false, nil

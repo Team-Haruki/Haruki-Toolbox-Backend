@@ -209,9 +209,50 @@ func (r *Row) PrivateBody(keys []string) ([]byte, error) {
 	return append(out, '}'), nil
 }
 
+// PrivateBodyWithout renders the private-surface whole document minus the
+// omitted top-level keys: the body of a server-defined private profile.
+//
+// It is the whole-document render, not a projection, on purpose. A key list
+// would drop `extra` members (keys this build has no column for, which is
+// where a new game version's keys land), render keys absent from the row as
+// null, and need its own userGamedata filter. Here every key the row carries is
+// emitted exactly as the full private body emits it, absent keys stay omitted,
+// and userGamedata goes through the same seven-field filter.
+//
+// An omitted key also removes its compact alias from `extra`: when an upload
+// carried both spellings, the losing one is parked there under the alias name
+// and would otherwise come back through the extra splice.
+func (r *Row) PrivateBodyWithout(omit []string) ([]byte, error) {
+	return r.documentWithout(true, r.omitSet(omit))
+}
+
+// omitSet expands omitted keys to every document name that serves them: the
+// key itself plus, for a catalogued key, its primary key and aliases.
+func (r *Row) omitSet(keys []string) map[string]bool {
+	if len(keys) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(keys)*2)
+	for _, k := range keys {
+		out[k] = true
+		if e, place := r.cat.Resolve(k); place == catalog.PlaceColumn {
+			out[e.Key] = true
+			for _, a := range e.Aliases {
+				out[a] = true
+			}
+		}
+	}
+	return out
+}
+
 // wholeDocument renders every key this row carries. withIdentity includes `_id`
 // and `server`, which the private surface returns and the public ones do not.
 func (r *Row) wholeDocument(withIdentity bool) ([]byte, error) {
+	return r.documentWithout(withIdentity, nil)
+}
+
+// documentWithout is wholeDocument skipping the keys in omit (nil omits none).
+func (r *Row) documentWithout(withIdentity bool, omit map[string]bool) ([]byte, error) {
 	out := make([]byte, 0, 4096)
 	out = append(out, '{')
 	first := true
@@ -237,6 +278,9 @@ func (r *Row) wholeDocument(withIdentity bool) ([]byte, error) {
 
 	for i := range r.cat.Entries {
 		e := &r.cat.Entries[i]
+		if omit[e.Key] {
+			continue
+		}
 		v, present, err := r.columnValue(e)
 		if err != nil {
 			return nil, err
@@ -269,6 +313,9 @@ func (r *Row) wholeDocument(withIdentity bool) ([]byte, error) {
 	// flattened parent, whose unknown children rejoin their siblings.
 	extraFlattened := r.extraFlattenedChildren()
 	for _, k := range r.extraTopLevelKeys() {
+		if omit[k] {
+			continue
+		}
 		v, _ := r.extraMember(k)
 		if k == userGamedataKey {
 			// Only reachable for a store whose catalog has no userGamedata

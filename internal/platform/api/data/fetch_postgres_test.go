@@ -7,6 +7,10 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiDatabase "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	harukiGameData "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
+
+	"github.com/gofiber/fiber/v3"
 )
 
 // The PostgreSQL read path hands back an ALREADY RENDERED body as []byte.
@@ -70,5 +74,19 @@ func TestUploadTimeWithNoStoreConfiguredIsAnErrorNotASilentFalse(t *testing.T) {
 	}
 	if found {
 		t.Fatal("found=true with no store")
+	}
+}
+
+// The profile read keeps the private surface's 404 rule: only a missing row
+// is 404, any other read failure is a 500.
+func TestPrivateProfileBodyFromPostgresErrors(t *testing.T) {
+	store := harukiGameData.NewStore(&harukiGameData.Pool{}, catalog.Suite())
+	_, err := PrivateProfileBodyFromPostgres(t.Context(), store, 1, "xx", nil)
+	if fe, ok := err.(*fiber.Error); !ok || fe.Code != fiber.StatusNotFound {
+		t.Fatalf("missing row: err = %v, want 404", err)
+	}
+	_, err = PrivateProfileBodyFromPostgres(t.Context(), nil, 1, "jp", nil)
+	if fe, ok := err.(*fiber.Error); !ok || fe.Code != fiber.StatusInternalServerError {
+		t.Fatalf("read failure: err = %v, want 500", err)
 	}
 }

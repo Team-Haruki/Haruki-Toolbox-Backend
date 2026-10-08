@@ -91,6 +91,53 @@ func (s *Store) Fetch(ctx context.Context, userID int64, server string, keys []s
 	}
 
 	cols, entries := s.selectFor(keys)
+	return s.fetchSelected(ctx, userID, server, code, cols, entries)
+}
+
+// FetchWithout reads one row with every column except those serving the
+// omitted keys, plus `extra`. It is the read behind a server-defined private
+// profile: the omitted columns are the large ones the profile never serves, so
+// not selecting them saves their detoast and transfer, not just their render.
+func (s *Store) FetchWithout(ctx context.Context, userID int64, server string, omit []string) (*Row, error) {
+	if s == nil || s.pool == nil {
+		return nil, fmt.Errorf("gamedata: nil store")
+	}
+	code, ok := catalog.ServerCode(server)
+	if !ok {
+		// Every caller validated the region; an unknown one has no row.
+		return nil, ErrNoRow
+	}
+	cols, entries := s.selectWithout(omit)
+	return s.fetchSelected(ctx, userID, server, code, cols, entries)
+}
+
+// selectWithout returns every data column except those the omitted keys
+// resolve to, then `extra`, in pinned catalog order so one omit list always
+// produces one prepared statement.
+func (s *Store) selectWithout(omit []string) (quoted []string, plain []string) {
+	skip := make(map[string]bool, len(omit))
+	for _, k := range omit {
+		if e, place := s.cat.Resolve(k); place == catalog.PlaceColumn {
+			skip[e.Column] = true
+		}
+	}
+	quoted = make([]string, 0, len(s.cat.Entries)+1)
+	plain = make([]string, 0, len(s.cat.Entries)+1)
+	for i := range s.cat.Entries {
+		col := s.cat.Entries[i].Column
+		if skip[col] {
+			continue
+		}
+		quoted = append(quoted, catalog.QuoteIdent(col))
+		plain = append(plain, col)
+	}
+	quoted = append(quoted, catalog.QuoteIdent(catalog.ExtraColumn))
+	plain = append(plain, catalog.ExtraColumn)
+	return quoted, plain
+}
+
+// fetchSelected runs the row read for an already-resolved column list.
+func (s *Store) fetchSelected(ctx context.Context, userID int64, server string, code int16, cols, entries []string) (*Row, error) {
 	sql := fmt.Sprintf(
 		`SELECT %s, %s FROM %s WHERE %s = $1 AND %s = $2`,
 		catalog.QuoteIdent(catalog.ColUploadTime),

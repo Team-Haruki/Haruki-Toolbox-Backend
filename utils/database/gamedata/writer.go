@@ -1,9 +1,12 @@
 package gamedata
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -58,6 +61,13 @@ type WriteStats struct {
 	Columns int
 	// Bytes is the encoded size of everything written.
 	Bytes int
+	// UnchangedColumns counts change-gated columns (see changeGatedSuiteKeys)
+	// whose encoded value equalled the stored one, so the statement left the
+	// stored value in place. They are still counted in Columns and Bytes,
+	// which describe what the upload carried.
+	UnchangedColumns int
+	// UnchangedBytes is the encoded size of those columns.
+	UnchangedBytes int
 }
 
 // Write persists one upload.
@@ -203,7 +213,7 @@ func (s *Store) encode(data map[string]any, mode WriteMode, stats *WriteStats) (
 			continue
 		}
 
-		b, err := encodeJSON(value)
+		b, err := s.encodeColumnValue(mode, e.Column, value)
 		if err != nil {
 			return nil, err
 		}
@@ -356,11 +366,146 @@ func (s *Store) writeSuite(ctx context.Context, userID int64, code int16, enc *e
 		stats.Columns = len(enc.columns)
 	}
 
+	if gated := s.gatedColumns(enc); len(gated) > 0 {
+		stored, err := readColumnDigests(ctx, tx, s.cat.Table, userID, code, gated)
+		if err != nil {
+			return err
+		}
+		skipUnchangedColumns(enc, gated, stored, stats)
+	}
+
 	sql, args := s.upsertStatement(userID, code, enc, clearNone)
 	if _, err := tx.Exec(ctx, sql, args...); err != nil {
 		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
 	}
 	return tx.Commit(ctx)
+}
+
+// changeGatedSuiteKeys are the suite keys whose column is rewritten only when
+// its value changed.
+//
+// Every suite upload carries nearly every column, and the upsert's
+// COALESCE(EXCLUDED.c, t.c) writes each one again: PostgreSQL re-validates,
+// re-compresses and re-TOASTs about 1 MB per JP row, and WAL-logs all of it.
+// When EXCLUDED.c is NULL instead, COALESCE yields the stored datum and the
+// update reuses its TOAST pointer: nothing is compressed, chunked or logged.
+//
+// The list is deliberately short. These two columns are about 62% of a JP
+// row's stored bytes, and their elements carry no counters or view
+// timestamps, so they are usually identical between uploads. Columns that
+// change whenever the player plays would pay the digest read for nothing.
+// The three history keys are merged against the stored side and must never be
+// gated, and mysekai is not gated at all: its flattened children are
+// hard-assigned from EXCLUDED, so a NULL there would clear them.
+var changeGatedSuiteKeys = []string{"userCostume3dShopItems", "userCostume3dStatuses"}
+
+// isGatedColumn reports whether a suite column is on the change gate.
+func (s *Store) isGatedColumn(col string) bool {
+	for _, k := range changeGatedSuiteKeys {
+		if e, place := s.cat.Resolve(k); place == catalog.PlaceColumn && e.Column == col {
+			return true
+		}
+	}
+	return false
+}
+
+// encodeColumnValue encodes one column value. A change-gated suite column is
+// encoded with sorted object keys: uploads decode to plain Go maps, whose
+// iteration order is random, so the default encoding of the same value
+// differs from one upload to the next and its digest would never match. Every
+// other column keeps the default encoding; only the gated columns pay for the
+// sort, and their key order carried no meaning before.
+func (s *Store) encodeColumnValue(mode WriteMode, col string, v any) ([]byte, error) {
+	if mode != WriteSuite || !s.isGatedColumn(col) {
+		return encodeJSON(v)
+	}
+	b, err := json.Marshal(v, json.Deterministic(true))
+	if err != nil {
+		return nil, fmt.Errorf("gamedata: encode value: %w", err)
+	}
+	return b, nil
+}
+
+// gatedColumns returns, in a stable order, the change-gated columns this
+// upload carries a value for.
+func (s *Store) gatedColumns(enc *encoded) []string {
+	out := make([]string, 0, len(changeGatedSuiteKeys))
+	for _, k := range changeGatedSuiteKeys {
+		if gamemerge.IsMergedKey(k) {
+			continue
+		}
+		e, place := s.cat.Resolve(k)
+		if place != catalog.PlaceColumn {
+			continue
+		}
+		if enc.columns[e.Column] == nil {
+			continue
+		}
+		out = append(out, e.Column)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// readColumnDigests reads the SHA-256 of each stored gated column and locks the
+// row (FOR UPDATE), so no other write can change it between this comparison
+// and the upsert in the same transaction. A missing row or a NULL column
+// yields no digest, which makes the caller write the value.
+//
+// The digest covers exactly the stored bytes: a json column keeps its input
+// text verbatim, and the writer stores the encoded bytes it compares against.
+// Any mismatch, including one caused by a different encoding, only ever errs
+// toward writing. No digest is stored, so nothing can go stale: a manual
+// repair, a migration rewrite or a catalog change is compared like any other
+// value.
+func readColumnDigests(ctx context.Context, tx pgx.Tx, table string, userID int64, code int16, cols []string) (map[string][]byte, error) {
+	exprs := make([]string, len(cols))
+	for i, c := range cols {
+		exprs[i] = fmt.Sprintf("sha256(convert_to(%s::text, 'UTF8'))", catalog.QuoteIdent(c))
+	}
+	sql := fmt.Sprintf(`SELECT %s FROM %s WHERE %s = $1 AND %s = $2 FOR UPDATE`,
+		strings.Join(exprs, ", "), catalog.QuoteIdent(table),
+		catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer))
+
+	digests := make([][]byte, len(cols))
+	dest := make([]any, len(cols))
+	for i := range digests {
+		dest[i] = &digests[i]
+	}
+	out := make(map[string][]byte, len(cols))
+	if err := tx.QueryRow(ctx, sql, userID, code).Scan(dest...); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, nil
+		}
+		return nil, fmt.Errorf("gamedata: read column digests: %w", err)
+	}
+	for i, c := range cols {
+		if digests[i] != nil {
+			out[c] = digests[i]
+		}
+	}
+	return out, nil
+}
+
+// skipUnchangedColumns clears the value of every gated column whose encoded
+// bytes hash to the stored digest. The column stays in the statement with a
+// NULL parameter, so COALESCE keeps the stored value and the statement shape
+// (and its prepared statement) does not depend on what changed.
+func skipUnchangedColumns(enc *encoded, gated []string, stored map[string][]byte, stats *WriteStats) {
+	for _, col := range gated {
+		want, ok := stored[col]
+		if !ok {
+			continue
+		}
+		b := enc.columns[col]
+		sum := sha256.Sum256(b)
+		if !bytes.Equal(sum[:], want) {
+			continue
+		}
+		enc.columns[col] = nil
+		stats.UnchangedColumns++
+		stats.UnchangedBytes += len(b)
+	}
 }
 
 func mergeHistory(key string, stored, uploaded any) []any {
