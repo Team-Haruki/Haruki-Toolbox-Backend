@@ -93,3 +93,20 @@ func TestWriteGrantSchemaRequiresBothPermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestSponsorDurationSchemaValidation(t *testing.T) {
+	for _, present := range []bool{true, false} {
+		client, mock := newBootstrapSQLMockClient(t)
+		mock.ExpectQuery(regexp.QuoteMeta(checkSponsorDurationSchemaSQL)).WillReturnRows(sqlmock.NewRows([]string{"ok"}).AddRow(present))
+		err := validateSponsorDurationSchema(context.Background(), client)
+		if (err == nil) != present {
+			t.Fatalf("present=%v: %v", present, err)
+		}
+		if err != nil {
+			assertSchemaHint(t, err, "sponsor_afdian_orders", "sponsor duration schema migration")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

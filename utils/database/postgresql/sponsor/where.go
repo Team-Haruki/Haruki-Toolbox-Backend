@@ -129,6 +129,36 @@ func PlanExpiresAt(v time.Time) predicate.Sponsor {
 	return predicate.Sponsor(sql.FieldEQ(FieldPlanExpiresAt, v))
 }
 
+// AfdianExpiresAt applies equality check predicate on the "afdian_expires_at" field. It's identical to AfdianExpiresAtEQ.
+func AfdianExpiresAt(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianExpiresAt, v))
+}
+
+// AfdianDurationMonths applies equality check predicate on the "afdian_duration_months" field. It's identical to AfdianDurationMonthsEQ.
+func AfdianDurationMonths(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianDurationMonths, v))
+}
+
+// AfdianReportedExpiresAt applies equality check predicate on the "afdian_reported_expires_at" field. It's identical to AfdianReportedExpiresAtEQ.
+func AfdianReportedExpiresAt(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedAt applies equality check predicate on the "afdian_reported_at" field. It's identical to AfdianReportedAtEQ.
+func AfdianReportedAt(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianReportedAt, v))
+}
+
+// HasDuration applies equality check predicate on the "has_duration" field. It's identical to HasDurationEQ.
+func HasDuration(v bool) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldHasDuration, v))
+}
+
+// DurationSplitAt applies equality check predicate on the "duration_split_at" field. It's identical to DurationSplitAtEQ.
+func DurationSplitAt(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldDurationSplitAt, v))
+}
+
 // SupportCount applies equality check predicate on the "support_count" field. It's identical to SupportCountEQ.
 func SupportCount(v int) predicate.Sponsor {
 	return predicate.Sponsor(sql.FieldEQ(FieldSupportCount, v))
@@ -902,6 +932,256 @@ func PlanExpiresAtIsNil() predicate.Sponsor {
 // PlanExpiresAtNotNil applies the NotNil predicate on the "plan_expires_at" field.
 func PlanExpiresAtNotNil() predicate.Sponsor {
 	return predicate.Sponsor(sql.FieldNotNull(FieldPlanExpiresAt))
+}
+
+// AfdianExpiresAtEQ applies the EQ predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianExpiresAt, v))
+}
+
+// AfdianExpiresAtNEQ applies the NEQ predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtNEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNEQ(FieldAfdianExpiresAt, v))
+}
+
+// AfdianExpiresAtIn applies the In predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIn(FieldAfdianExpiresAt, vs...))
+}
+
+// AfdianExpiresAtNotIn applies the NotIn predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtNotIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotIn(FieldAfdianExpiresAt, vs...))
+}
+
+// AfdianExpiresAtGT applies the GT predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtGT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGT(FieldAfdianExpiresAt, v))
+}
+
+// AfdianExpiresAtGTE applies the GTE predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtGTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGTE(FieldAfdianExpiresAt, v))
+}
+
+// AfdianExpiresAtLT applies the LT predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtLT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLT(FieldAfdianExpiresAt, v))
+}
+
+// AfdianExpiresAtLTE applies the LTE predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtLTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLTE(FieldAfdianExpiresAt, v))
+}
+
+// AfdianExpiresAtIsNil applies the IsNil predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtIsNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIsNull(FieldAfdianExpiresAt))
+}
+
+// AfdianExpiresAtNotNil applies the NotNil predicate on the "afdian_expires_at" field.
+func AfdianExpiresAtNotNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotNull(FieldAfdianExpiresAt))
+}
+
+// AfdianDurationMonthsEQ applies the EQ predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsEQ(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianDurationMonths, v))
+}
+
+// AfdianDurationMonthsNEQ applies the NEQ predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsNEQ(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNEQ(FieldAfdianDurationMonths, v))
+}
+
+// AfdianDurationMonthsIn applies the In predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsIn(vs ...int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIn(FieldAfdianDurationMonths, vs...))
+}
+
+// AfdianDurationMonthsNotIn applies the NotIn predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsNotIn(vs ...int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotIn(FieldAfdianDurationMonths, vs...))
+}
+
+// AfdianDurationMonthsGT applies the GT predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsGT(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGT(FieldAfdianDurationMonths, v))
+}
+
+// AfdianDurationMonthsGTE applies the GTE predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsGTE(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGTE(FieldAfdianDurationMonths, v))
+}
+
+// AfdianDurationMonthsLT applies the LT predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsLT(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLT(FieldAfdianDurationMonths, v))
+}
+
+// AfdianDurationMonthsLTE applies the LTE predicate on the "afdian_duration_months" field.
+func AfdianDurationMonthsLTE(v int) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLTE(FieldAfdianDurationMonths, v))
+}
+
+// AfdianReportedExpiresAtEQ applies the EQ predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedExpiresAtNEQ applies the NEQ predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtNEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNEQ(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedExpiresAtIn applies the In predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIn(FieldAfdianReportedExpiresAt, vs...))
+}
+
+// AfdianReportedExpiresAtNotIn applies the NotIn predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtNotIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotIn(FieldAfdianReportedExpiresAt, vs...))
+}
+
+// AfdianReportedExpiresAtGT applies the GT predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtGT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGT(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedExpiresAtGTE applies the GTE predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtGTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGTE(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedExpiresAtLT applies the LT predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtLT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLT(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedExpiresAtLTE applies the LTE predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtLTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLTE(FieldAfdianReportedExpiresAt, v))
+}
+
+// AfdianReportedExpiresAtIsNil applies the IsNil predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtIsNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIsNull(FieldAfdianReportedExpiresAt))
+}
+
+// AfdianReportedExpiresAtNotNil applies the NotNil predicate on the "afdian_reported_expires_at" field.
+func AfdianReportedExpiresAtNotNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotNull(FieldAfdianReportedExpiresAt))
+}
+
+// AfdianReportedAtEQ applies the EQ predicate on the "afdian_reported_at" field.
+func AfdianReportedAtEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldAfdianReportedAt, v))
+}
+
+// AfdianReportedAtNEQ applies the NEQ predicate on the "afdian_reported_at" field.
+func AfdianReportedAtNEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNEQ(FieldAfdianReportedAt, v))
+}
+
+// AfdianReportedAtIn applies the In predicate on the "afdian_reported_at" field.
+func AfdianReportedAtIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIn(FieldAfdianReportedAt, vs...))
+}
+
+// AfdianReportedAtNotIn applies the NotIn predicate on the "afdian_reported_at" field.
+func AfdianReportedAtNotIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotIn(FieldAfdianReportedAt, vs...))
+}
+
+// AfdianReportedAtGT applies the GT predicate on the "afdian_reported_at" field.
+func AfdianReportedAtGT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGT(FieldAfdianReportedAt, v))
+}
+
+// AfdianReportedAtGTE applies the GTE predicate on the "afdian_reported_at" field.
+func AfdianReportedAtGTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGTE(FieldAfdianReportedAt, v))
+}
+
+// AfdianReportedAtLT applies the LT predicate on the "afdian_reported_at" field.
+func AfdianReportedAtLT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLT(FieldAfdianReportedAt, v))
+}
+
+// AfdianReportedAtLTE applies the LTE predicate on the "afdian_reported_at" field.
+func AfdianReportedAtLTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLTE(FieldAfdianReportedAt, v))
+}
+
+// AfdianReportedAtIsNil applies the IsNil predicate on the "afdian_reported_at" field.
+func AfdianReportedAtIsNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIsNull(FieldAfdianReportedAt))
+}
+
+// AfdianReportedAtNotNil applies the NotNil predicate on the "afdian_reported_at" field.
+func AfdianReportedAtNotNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotNull(FieldAfdianReportedAt))
+}
+
+// HasDurationEQ applies the EQ predicate on the "has_duration" field.
+func HasDurationEQ(v bool) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldHasDuration, v))
+}
+
+// HasDurationNEQ applies the NEQ predicate on the "has_duration" field.
+func HasDurationNEQ(v bool) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNEQ(FieldHasDuration, v))
+}
+
+// DurationSplitAtEQ applies the EQ predicate on the "duration_split_at" field.
+func DurationSplitAtEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldEQ(FieldDurationSplitAt, v))
+}
+
+// DurationSplitAtNEQ applies the NEQ predicate on the "duration_split_at" field.
+func DurationSplitAtNEQ(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNEQ(FieldDurationSplitAt, v))
+}
+
+// DurationSplitAtIn applies the In predicate on the "duration_split_at" field.
+func DurationSplitAtIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIn(FieldDurationSplitAt, vs...))
+}
+
+// DurationSplitAtNotIn applies the NotIn predicate on the "duration_split_at" field.
+func DurationSplitAtNotIn(vs ...time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotIn(FieldDurationSplitAt, vs...))
+}
+
+// DurationSplitAtGT applies the GT predicate on the "duration_split_at" field.
+func DurationSplitAtGT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGT(FieldDurationSplitAt, v))
+}
+
+// DurationSplitAtGTE applies the GTE predicate on the "duration_split_at" field.
+func DurationSplitAtGTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldGTE(FieldDurationSplitAt, v))
+}
+
+// DurationSplitAtLT applies the LT predicate on the "duration_split_at" field.
+func DurationSplitAtLT(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLT(FieldDurationSplitAt, v))
+}
+
+// DurationSplitAtLTE applies the LTE predicate on the "duration_split_at" field.
+func DurationSplitAtLTE(v time.Time) predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldLTE(FieldDurationSplitAt, v))
+}
+
+// DurationSplitAtIsNil applies the IsNil predicate on the "duration_split_at" field.
+func DurationSplitAtIsNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldIsNull(FieldDurationSplitAt))
+}
+
+// DurationSplitAtNotNil applies the NotNil predicate on the "duration_split_at" field.
+func DurationSplitAtNotNil() predicate.Sponsor {
+	return predicate.Sponsor(sql.FieldNotNull(FieldDurationSplitAt))
 }
 
 // SupportCountEQ applies the EQ predicate on the "support_count" field.

@@ -154,6 +154,7 @@ func TestPrepareToolboxDatabaseValidatesAndCleansUpManualSchema(t *testing.T) {
 	}
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM information_schema.columns").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 	mock.ExpectQuery(regexp.QuoteMeta(uploadLogColumnsSQL)).WillReturnRows(uploadRows)
+	mock.ExpectQuery(regexp.QuoteMeta(checkSponsorDurationSchemaSQL)).WillReturnRows(sqlmock.NewRows([]string{"ok"}).AddRow(true))
 	mock.ExpectExec("DELETE FROM").WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 2))
 
 	if err := prepareToolboxDatabase(cfg, client, logger); err != nil {

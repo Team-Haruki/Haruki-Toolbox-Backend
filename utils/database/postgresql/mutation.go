@@ -26,6 +26,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -57,6 +59,8 @@ const (
 	TypeRiskRule                    = "RiskRule"
 	TypeSocialPlatformInfo          = "SocialPlatformInfo"
 	TypeSponsor                     = "Sponsor"
+	TypeSponsorAfdianOrder          = "SponsorAfdianOrder"
+	TypeSponsorManualDuration       = "SponsorManualDuration"
 	TypeSystemLog                   = "SystemLog"
 	TypeTicket                      = "Ticket"
 	TypeTicketMessage               = "TicketMessage"
@@ -9088,35 +9092,42 @@ func (m *SocialPlatformInfoMutation) ResetEdge(name string) error {
 // SponsorMutation represents an operation that mutates the Sponsor nodes in the graph.
 type SponsorMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *string
-	afdian_user_id       *string
-	out_trade_no         *string
-	name                 *string
-	avatar               *string
-	plan_id              *string
-	plan_name            *string
-	plan_rank            *int
-	addplan_rank         *int
-	plan_pay_months      *int
-	addplan_pay_months   *int
-	message              *string
-	source               *sponsor.Source
-	is_active            *bool
-	afdian_sync_disabled *bool
-	paid_at              *time.Time
-	plan_expires_at      *time.Time
-	support_count        *int
-	addsupport_count     *int
-	total_amount         *string
-	raw                  *map[string]interface{}
-	created_at           *time.Time
-	updated_at           *time.Time
-	clearedFields        map[string]struct{}
-	done                 bool
-	oldValue             func(context.Context) (*Sponsor, error)
-	predicates           []predicate.Sponsor
+	op                         Op
+	typ                        string
+	id                         *string
+	afdian_user_id             *string
+	out_trade_no               *string
+	name                       *string
+	avatar                     *string
+	plan_id                    *string
+	plan_name                  *string
+	plan_rank                  *int
+	addplan_rank               *int
+	plan_pay_months            *int
+	addplan_pay_months         *int
+	message                    *string
+	source                     *sponsor.Source
+	is_active                  *bool
+	afdian_sync_disabled       *bool
+	paid_at                    *time.Time
+	plan_expires_at            *time.Time
+	afdian_expires_at          *time.Time
+	afdian_duration_months     *int
+	addafdian_duration_months  *int
+	afdian_reported_expires_at *time.Time
+	afdian_reported_at         *time.Time
+	has_duration               *bool
+	duration_split_at          *time.Time
+	support_count              *int
+	addsupport_count           *int
+	total_amount               *string
+	raw                        *map[string]interface{}
+	created_at                 *time.Time
+	updated_at                 *time.Time
+	clearedFields              map[string]struct{}
+	done                       bool
+	oldValue                   func(context.Context) (*Sponsor, error)
+	predicates                 []predicate.Sponsor
 }
 
 var _ ent.Mutation = (*SponsorMutation)(nil)
@@ -9898,6 +9909,294 @@ func (m *SponsorMutation) ResetPlanExpiresAt() {
 	delete(m.clearedFields, sponsor.FieldPlanExpiresAt)
 }
 
+// SetAfdianExpiresAt sets the "afdian_expires_at" field.
+func (m *SponsorMutation) SetAfdianExpiresAt(t time.Time) {
+	m.afdian_expires_at = &t
+}
+
+// AfdianExpiresAt returns the value of the "afdian_expires_at" field in the mutation.
+func (m *SponsorMutation) AfdianExpiresAt() (r time.Time, exists bool) {
+	v := m.afdian_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianExpiresAt returns the old "afdian_expires_at" field's value of the Sponsor entity.
+// If the Sponsor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorMutation) OldAfdianExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianExpiresAt: %w", err)
+	}
+	return oldValue.AfdianExpiresAt, nil
+}
+
+// ClearAfdianExpiresAt clears the value of the "afdian_expires_at" field.
+func (m *SponsorMutation) ClearAfdianExpiresAt() {
+	m.afdian_expires_at = nil
+	m.clearedFields[sponsor.FieldAfdianExpiresAt] = struct{}{}
+}
+
+// AfdianExpiresAtCleared returns if the "afdian_expires_at" field was cleared in this mutation.
+func (m *SponsorMutation) AfdianExpiresAtCleared() bool {
+	_, ok := m.clearedFields[sponsor.FieldAfdianExpiresAt]
+	return ok
+}
+
+// ResetAfdianExpiresAt resets all changes to the "afdian_expires_at" field.
+func (m *SponsorMutation) ResetAfdianExpiresAt() {
+	m.afdian_expires_at = nil
+	delete(m.clearedFields, sponsor.FieldAfdianExpiresAt)
+}
+
+// SetAfdianDurationMonths sets the "afdian_duration_months" field.
+func (m *SponsorMutation) SetAfdianDurationMonths(i int) {
+	m.afdian_duration_months = &i
+	m.addafdian_duration_months = nil
+}
+
+// AfdianDurationMonths returns the value of the "afdian_duration_months" field in the mutation.
+func (m *SponsorMutation) AfdianDurationMonths() (r int, exists bool) {
+	v := m.afdian_duration_months
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianDurationMonths returns the old "afdian_duration_months" field's value of the Sponsor entity.
+// If the Sponsor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorMutation) OldAfdianDurationMonths(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianDurationMonths is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianDurationMonths requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianDurationMonths: %w", err)
+	}
+	return oldValue.AfdianDurationMonths, nil
+}
+
+// AddAfdianDurationMonths adds i to the "afdian_duration_months" field.
+func (m *SponsorMutation) AddAfdianDurationMonths(i int) {
+	if m.addafdian_duration_months != nil {
+		*m.addafdian_duration_months += i
+	} else {
+		m.addafdian_duration_months = &i
+	}
+}
+
+// AddedAfdianDurationMonths returns the value that was added to the "afdian_duration_months" field in this mutation.
+func (m *SponsorMutation) AddedAfdianDurationMonths() (r int, exists bool) {
+	v := m.addafdian_duration_months
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAfdianDurationMonths resets all changes to the "afdian_duration_months" field.
+func (m *SponsorMutation) ResetAfdianDurationMonths() {
+	m.afdian_duration_months = nil
+	m.addafdian_duration_months = nil
+}
+
+// SetAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field.
+func (m *SponsorMutation) SetAfdianReportedExpiresAt(t time.Time) {
+	m.afdian_reported_expires_at = &t
+}
+
+// AfdianReportedExpiresAt returns the value of the "afdian_reported_expires_at" field in the mutation.
+func (m *SponsorMutation) AfdianReportedExpiresAt() (r time.Time, exists bool) {
+	v := m.afdian_reported_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianReportedExpiresAt returns the old "afdian_reported_expires_at" field's value of the Sponsor entity.
+// If the Sponsor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorMutation) OldAfdianReportedExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianReportedExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianReportedExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianReportedExpiresAt: %w", err)
+	}
+	return oldValue.AfdianReportedExpiresAt, nil
+}
+
+// ClearAfdianReportedExpiresAt clears the value of the "afdian_reported_expires_at" field.
+func (m *SponsorMutation) ClearAfdianReportedExpiresAt() {
+	m.afdian_reported_expires_at = nil
+	m.clearedFields[sponsor.FieldAfdianReportedExpiresAt] = struct{}{}
+}
+
+// AfdianReportedExpiresAtCleared returns if the "afdian_reported_expires_at" field was cleared in this mutation.
+func (m *SponsorMutation) AfdianReportedExpiresAtCleared() bool {
+	_, ok := m.clearedFields[sponsor.FieldAfdianReportedExpiresAt]
+	return ok
+}
+
+// ResetAfdianReportedExpiresAt resets all changes to the "afdian_reported_expires_at" field.
+func (m *SponsorMutation) ResetAfdianReportedExpiresAt() {
+	m.afdian_reported_expires_at = nil
+	delete(m.clearedFields, sponsor.FieldAfdianReportedExpiresAt)
+}
+
+// SetAfdianReportedAt sets the "afdian_reported_at" field.
+func (m *SponsorMutation) SetAfdianReportedAt(t time.Time) {
+	m.afdian_reported_at = &t
+}
+
+// AfdianReportedAt returns the value of the "afdian_reported_at" field in the mutation.
+func (m *SponsorMutation) AfdianReportedAt() (r time.Time, exists bool) {
+	v := m.afdian_reported_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianReportedAt returns the old "afdian_reported_at" field's value of the Sponsor entity.
+// If the Sponsor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorMutation) OldAfdianReportedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianReportedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianReportedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianReportedAt: %w", err)
+	}
+	return oldValue.AfdianReportedAt, nil
+}
+
+// ClearAfdianReportedAt clears the value of the "afdian_reported_at" field.
+func (m *SponsorMutation) ClearAfdianReportedAt() {
+	m.afdian_reported_at = nil
+	m.clearedFields[sponsor.FieldAfdianReportedAt] = struct{}{}
+}
+
+// AfdianReportedAtCleared returns if the "afdian_reported_at" field was cleared in this mutation.
+func (m *SponsorMutation) AfdianReportedAtCleared() bool {
+	_, ok := m.clearedFields[sponsor.FieldAfdianReportedAt]
+	return ok
+}
+
+// ResetAfdianReportedAt resets all changes to the "afdian_reported_at" field.
+func (m *SponsorMutation) ResetAfdianReportedAt() {
+	m.afdian_reported_at = nil
+	delete(m.clearedFields, sponsor.FieldAfdianReportedAt)
+}
+
+// SetHasDuration sets the "has_duration" field.
+func (m *SponsorMutation) SetHasDuration(b bool) {
+	m.has_duration = &b
+}
+
+// HasDuration returns the value of the "has_duration" field in the mutation.
+func (m *SponsorMutation) HasDuration() (r bool, exists bool) {
+	v := m.has_duration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasDuration returns the old "has_duration" field's value of the Sponsor entity.
+// If the Sponsor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorMutation) OldHasDuration(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasDuration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasDuration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasDuration: %w", err)
+	}
+	return oldValue.HasDuration, nil
+}
+
+// ResetHasDuration resets all changes to the "has_duration" field.
+func (m *SponsorMutation) ResetHasDuration() {
+	m.has_duration = nil
+}
+
+// SetDurationSplitAt sets the "duration_split_at" field.
+func (m *SponsorMutation) SetDurationSplitAt(t time.Time) {
+	m.duration_split_at = &t
+}
+
+// DurationSplitAt returns the value of the "duration_split_at" field in the mutation.
+func (m *SponsorMutation) DurationSplitAt() (r time.Time, exists bool) {
+	v := m.duration_split_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationSplitAt returns the old "duration_split_at" field's value of the Sponsor entity.
+// If the Sponsor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorMutation) OldDurationSplitAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationSplitAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationSplitAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationSplitAt: %w", err)
+	}
+	return oldValue.DurationSplitAt, nil
+}
+
+// ClearDurationSplitAt clears the value of the "duration_split_at" field.
+func (m *SponsorMutation) ClearDurationSplitAt() {
+	m.duration_split_at = nil
+	m.clearedFields[sponsor.FieldDurationSplitAt] = struct{}{}
+}
+
+// DurationSplitAtCleared returns if the "duration_split_at" field was cleared in this mutation.
+func (m *SponsorMutation) DurationSplitAtCleared() bool {
+	_, ok := m.clearedFields[sponsor.FieldDurationSplitAt]
+	return ok
+}
+
+// ResetDurationSplitAt resets all changes to the "duration_split_at" field.
+func (m *SponsorMutation) ResetDurationSplitAt() {
+	m.duration_split_at = nil
+	delete(m.clearedFields, sponsor.FieldDurationSplitAt)
+}
+
 // SetSupportCount sets the "support_count" field.
 func (m *SponsorMutation) SetSupportCount(i int) {
 	m.support_count = &i
@@ -10158,7 +10457,7 @@ func (m *SponsorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SponsorMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 25)
 	if m.afdian_user_id != nil {
 		fields = append(fields, sponsor.FieldAfdianUserID)
 	}
@@ -10200,6 +10499,24 @@ func (m *SponsorMutation) Fields() []string {
 	}
 	if m.plan_expires_at != nil {
 		fields = append(fields, sponsor.FieldPlanExpiresAt)
+	}
+	if m.afdian_expires_at != nil {
+		fields = append(fields, sponsor.FieldAfdianExpiresAt)
+	}
+	if m.afdian_duration_months != nil {
+		fields = append(fields, sponsor.FieldAfdianDurationMonths)
+	}
+	if m.afdian_reported_expires_at != nil {
+		fields = append(fields, sponsor.FieldAfdianReportedExpiresAt)
+	}
+	if m.afdian_reported_at != nil {
+		fields = append(fields, sponsor.FieldAfdianReportedAt)
+	}
+	if m.has_duration != nil {
+		fields = append(fields, sponsor.FieldHasDuration)
+	}
+	if m.duration_split_at != nil {
+		fields = append(fields, sponsor.FieldDurationSplitAt)
 	}
 	if m.support_count != nil {
 		fields = append(fields, sponsor.FieldSupportCount)
@@ -10252,6 +10569,18 @@ func (m *SponsorMutation) Field(name string) (ent.Value, bool) {
 		return m.PaidAt()
 	case sponsor.FieldPlanExpiresAt:
 		return m.PlanExpiresAt()
+	case sponsor.FieldAfdianExpiresAt:
+		return m.AfdianExpiresAt()
+	case sponsor.FieldAfdianDurationMonths:
+		return m.AfdianDurationMonths()
+	case sponsor.FieldAfdianReportedExpiresAt:
+		return m.AfdianReportedExpiresAt()
+	case sponsor.FieldAfdianReportedAt:
+		return m.AfdianReportedAt()
+	case sponsor.FieldHasDuration:
+		return m.HasDuration()
+	case sponsor.FieldDurationSplitAt:
+		return m.DurationSplitAt()
 	case sponsor.FieldSupportCount:
 		return m.SupportCount()
 	case sponsor.FieldTotalAmount:
@@ -10299,6 +10628,18 @@ func (m *SponsorMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldPaidAt(ctx)
 	case sponsor.FieldPlanExpiresAt:
 		return m.OldPlanExpiresAt(ctx)
+	case sponsor.FieldAfdianExpiresAt:
+		return m.OldAfdianExpiresAt(ctx)
+	case sponsor.FieldAfdianDurationMonths:
+		return m.OldAfdianDurationMonths(ctx)
+	case sponsor.FieldAfdianReportedExpiresAt:
+		return m.OldAfdianReportedExpiresAt(ctx)
+	case sponsor.FieldAfdianReportedAt:
+		return m.OldAfdianReportedAt(ctx)
+	case sponsor.FieldHasDuration:
+		return m.OldHasDuration(ctx)
+	case sponsor.FieldDurationSplitAt:
+		return m.OldDurationSplitAt(ctx)
 	case sponsor.FieldSupportCount:
 		return m.OldSupportCount(ctx)
 	case sponsor.FieldTotalAmount:
@@ -10416,6 +10757,48 @@ func (m *SponsorMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPlanExpiresAt(v)
 		return nil
+	case sponsor.FieldAfdianExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianExpiresAt(v)
+		return nil
+	case sponsor.FieldAfdianDurationMonths:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianDurationMonths(v)
+		return nil
+	case sponsor.FieldAfdianReportedExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianReportedExpiresAt(v)
+		return nil
+	case sponsor.FieldAfdianReportedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianReportedAt(v)
+		return nil
+	case sponsor.FieldHasDuration:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasDuration(v)
+		return nil
+	case sponsor.FieldDurationSplitAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationSplitAt(v)
+		return nil
 	case sponsor.FieldSupportCount:
 		v, ok := value.(int)
 		if !ok {
@@ -10465,6 +10848,9 @@ func (m *SponsorMutation) AddedFields() []string {
 	if m.addplan_pay_months != nil {
 		fields = append(fields, sponsor.FieldPlanPayMonths)
 	}
+	if m.addafdian_duration_months != nil {
+		fields = append(fields, sponsor.FieldAfdianDurationMonths)
+	}
 	if m.addsupport_count != nil {
 		fields = append(fields, sponsor.FieldSupportCount)
 	}
@@ -10480,6 +10866,8 @@ func (m *SponsorMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPlanRank()
 	case sponsor.FieldPlanPayMonths:
 		return m.AddedPlanPayMonths()
+	case sponsor.FieldAfdianDurationMonths:
+		return m.AddedAfdianDurationMonths()
 	case sponsor.FieldSupportCount:
 		return m.AddedSupportCount()
 	}
@@ -10504,6 +10892,13 @@ func (m *SponsorMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddPlanPayMonths(v)
+		return nil
+	case sponsor.FieldAfdianDurationMonths:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAfdianDurationMonths(v)
 		return nil
 	case sponsor.FieldSupportCount:
 		v, ok := value.(int)
@@ -10549,6 +10944,18 @@ func (m *SponsorMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(sponsor.FieldPlanExpiresAt) {
 		fields = append(fields, sponsor.FieldPlanExpiresAt)
+	}
+	if m.FieldCleared(sponsor.FieldAfdianExpiresAt) {
+		fields = append(fields, sponsor.FieldAfdianExpiresAt)
+	}
+	if m.FieldCleared(sponsor.FieldAfdianReportedExpiresAt) {
+		fields = append(fields, sponsor.FieldAfdianReportedExpiresAt)
+	}
+	if m.FieldCleared(sponsor.FieldAfdianReportedAt) {
+		fields = append(fields, sponsor.FieldAfdianReportedAt)
+	}
+	if m.FieldCleared(sponsor.FieldDurationSplitAt) {
+		fields = append(fields, sponsor.FieldDurationSplitAt)
 	}
 	if m.FieldCleared(sponsor.FieldTotalAmount) {
 		fields = append(fields, sponsor.FieldTotalAmount)
@@ -10599,6 +11006,18 @@ func (m *SponsorMutation) ClearField(name string) error {
 		return nil
 	case sponsor.FieldPlanExpiresAt:
 		m.ClearPlanExpiresAt()
+		return nil
+	case sponsor.FieldAfdianExpiresAt:
+		m.ClearAfdianExpiresAt()
+		return nil
+	case sponsor.FieldAfdianReportedExpiresAt:
+		m.ClearAfdianReportedExpiresAt()
+		return nil
+	case sponsor.FieldAfdianReportedAt:
+		m.ClearAfdianReportedAt()
+		return nil
+	case sponsor.FieldDurationSplitAt:
+		m.ClearDurationSplitAt()
 		return nil
 	case sponsor.FieldTotalAmount:
 		m.ClearTotalAmount()
@@ -10655,6 +11074,24 @@ func (m *SponsorMutation) ResetField(name string) error {
 		return nil
 	case sponsor.FieldPlanExpiresAt:
 		m.ResetPlanExpiresAt()
+		return nil
+	case sponsor.FieldAfdianExpiresAt:
+		m.ResetAfdianExpiresAt()
+		return nil
+	case sponsor.FieldAfdianDurationMonths:
+		m.ResetAfdianDurationMonths()
+		return nil
+	case sponsor.FieldAfdianReportedExpiresAt:
+		m.ResetAfdianReportedExpiresAt()
+		return nil
+	case sponsor.FieldAfdianReportedAt:
+		m.ResetAfdianReportedAt()
+		return nil
+	case sponsor.FieldHasDuration:
+		m.ResetHasDuration()
+		return nil
+	case sponsor.FieldDurationSplitAt:
+		m.ResetDurationSplitAt()
 		return nil
 	case sponsor.FieldSupportCount:
 		m.ResetSupportCount()
@@ -10721,6 +11158,1958 @@ func (m *SponsorMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *SponsorMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Sponsor edge %s", name)
+}
+
+// SponsorAfdianOrderMutation represents an operation that mutates the SponsorAfdianOrder nodes in the graph.
+type SponsorAfdianOrderMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *string
+	sponsor_id      *string
+	afdian_user_id  *string
+	plan_id         *string
+	plan_title      *string
+	product_type    *int
+	addproduct_type *int
+	month           *int
+	addmonth        *int
+	status          *int
+	addstatus       *int
+	total_amount    *string
+	show_amount     *string
+	remark          *string
+	paid_at         *time.Time
+	created_at      *time.Time
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*SponsorAfdianOrder, error)
+	predicates      []predicate.SponsorAfdianOrder
+}
+
+var _ ent.Mutation = (*SponsorAfdianOrderMutation)(nil)
+
+// sponsorafdianorderOption allows management of the mutation configuration using functional options.
+type sponsorafdianorderOption func(*SponsorAfdianOrderMutation)
+
+// newSponsorAfdianOrderMutation creates new mutation for the SponsorAfdianOrder entity.
+func newSponsorAfdianOrderMutation(c config, op Op, opts ...sponsorafdianorderOption) *SponsorAfdianOrderMutation {
+	m := &SponsorAfdianOrderMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSponsorAfdianOrder,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSponsorAfdianOrderID sets the ID field of the mutation.
+func withSponsorAfdianOrderID(id string) sponsorafdianorderOption {
+	return func(m *SponsorAfdianOrderMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SponsorAfdianOrder
+		)
+		m.oldValue = func(ctx context.Context) (*SponsorAfdianOrder, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SponsorAfdianOrder.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSponsorAfdianOrder sets the old SponsorAfdianOrder of the mutation.
+func withSponsorAfdianOrder(node *SponsorAfdianOrder) sponsorafdianorderOption {
+	return func(m *SponsorAfdianOrderMutation) {
+		m.oldValue = func(context.Context) (*SponsorAfdianOrder, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SponsorAfdianOrderMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SponsorAfdianOrderMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SponsorAfdianOrder entities.
+func (m *SponsorAfdianOrderMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SponsorAfdianOrderMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SponsorAfdianOrderMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SponsorAfdianOrder.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSponsorID sets the "sponsor_id" field.
+func (m *SponsorAfdianOrderMutation) SetSponsorID(s string) {
+	m.sponsor_id = &s
+}
+
+// SponsorID returns the value of the "sponsor_id" field in the mutation.
+func (m *SponsorAfdianOrderMutation) SponsorID() (r string, exists bool) {
+	v := m.sponsor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorID returns the old "sponsor_id" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldSponsorID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorID: %w", err)
+	}
+	return oldValue.SponsorID, nil
+}
+
+// ResetSponsorID resets all changes to the "sponsor_id" field.
+func (m *SponsorAfdianOrderMutation) ResetSponsorID() {
+	m.sponsor_id = nil
+}
+
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (m *SponsorAfdianOrderMutation) SetAfdianUserID(s string) {
+	m.afdian_user_id = &s
+}
+
+// AfdianUserID returns the value of the "afdian_user_id" field in the mutation.
+func (m *SponsorAfdianOrderMutation) AfdianUserID() (r string, exists bool) {
+	v := m.afdian_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianUserID returns the old "afdian_user_id" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldAfdianUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianUserID: %w", err)
+	}
+	return oldValue.AfdianUserID, nil
+}
+
+// ResetAfdianUserID resets all changes to the "afdian_user_id" field.
+func (m *SponsorAfdianOrderMutation) ResetAfdianUserID() {
+	m.afdian_user_id = nil
+}
+
+// SetPlanID sets the "plan_id" field.
+func (m *SponsorAfdianOrderMutation) SetPlanID(s string) {
+	m.plan_id = &s
+}
+
+// PlanID returns the value of the "plan_id" field in the mutation.
+func (m *SponsorAfdianOrderMutation) PlanID() (r string, exists bool) {
+	v := m.plan_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanID returns the old "plan_id" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldPlanID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanID: %w", err)
+	}
+	return oldValue.PlanID, nil
+}
+
+// ResetPlanID resets all changes to the "plan_id" field.
+func (m *SponsorAfdianOrderMutation) ResetPlanID() {
+	m.plan_id = nil
+}
+
+// SetPlanTitle sets the "plan_title" field.
+func (m *SponsorAfdianOrderMutation) SetPlanTitle(s string) {
+	m.plan_title = &s
+}
+
+// PlanTitle returns the value of the "plan_title" field in the mutation.
+func (m *SponsorAfdianOrderMutation) PlanTitle() (r string, exists bool) {
+	v := m.plan_title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanTitle returns the old "plan_title" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldPlanTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanTitle: %w", err)
+	}
+	return oldValue.PlanTitle, nil
+}
+
+// ResetPlanTitle resets all changes to the "plan_title" field.
+func (m *SponsorAfdianOrderMutation) ResetPlanTitle() {
+	m.plan_title = nil
+}
+
+// SetProductType sets the "product_type" field.
+func (m *SponsorAfdianOrderMutation) SetProductType(i int) {
+	m.product_type = &i
+	m.addproduct_type = nil
+}
+
+// ProductType returns the value of the "product_type" field in the mutation.
+func (m *SponsorAfdianOrderMutation) ProductType() (r int, exists bool) {
+	v := m.product_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProductType returns the old "product_type" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldProductType(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProductType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProductType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProductType: %w", err)
+	}
+	return oldValue.ProductType, nil
+}
+
+// AddProductType adds i to the "product_type" field.
+func (m *SponsorAfdianOrderMutation) AddProductType(i int) {
+	if m.addproduct_type != nil {
+		*m.addproduct_type += i
+	} else {
+		m.addproduct_type = &i
+	}
+}
+
+// AddedProductType returns the value that was added to the "product_type" field in this mutation.
+func (m *SponsorAfdianOrderMutation) AddedProductType() (r int, exists bool) {
+	v := m.addproduct_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProductType resets all changes to the "product_type" field.
+func (m *SponsorAfdianOrderMutation) ResetProductType() {
+	m.product_type = nil
+	m.addproduct_type = nil
+}
+
+// SetMonth sets the "month" field.
+func (m *SponsorAfdianOrderMutation) SetMonth(i int) {
+	m.month = &i
+	m.addmonth = nil
+}
+
+// Month returns the value of the "month" field in the mutation.
+func (m *SponsorAfdianOrderMutation) Month() (r int, exists bool) {
+	v := m.month
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMonth returns the old "month" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldMonth(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMonth is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMonth requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMonth: %w", err)
+	}
+	return oldValue.Month, nil
+}
+
+// AddMonth adds i to the "month" field.
+func (m *SponsorAfdianOrderMutation) AddMonth(i int) {
+	if m.addmonth != nil {
+		*m.addmonth += i
+	} else {
+		m.addmonth = &i
+	}
+}
+
+// AddedMonth returns the value that was added to the "month" field in this mutation.
+func (m *SponsorAfdianOrderMutation) AddedMonth() (r int, exists bool) {
+	v := m.addmonth
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMonth resets all changes to the "month" field.
+func (m *SponsorAfdianOrderMutation) ResetMonth() {
+	m.month = nil
+	m.addmonth = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *SponsorAfdianOrderMutation) SetStatus(i int) {
+	m.status = &i
+	m.addstatus = nil
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *SponsorAfdianOrderMutation) Status() (r int, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldStatus(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// AddStatus adds i to the "status" field.
+func (m *SponsorAfdianOrderMutation) AddStatus(i int) {
+	if m.addstatus != nil {
+		*m.addstatus += i
+	} else {
+		m.addstatus = &i
+	}
+}
+
+// AddedStatus returns the value that was added to the "status" field in this mutation.
+func (m *SponsorAfdianOrderMutation) AddedStatus() (r int, exists bool) {
+	v := m.addstatus
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *SponsorAfdianOrderMutation) ResetStatus() {
+	m.status = nil
+	m.addstatus = nil
+}
+
+// SetTotalAmount sets the "total_amount" field.
+func (m *SponsorAfdianOrderMutation) SetTotalAmount(s string) {
+	m.total_amount = &s
+}
+
+// TotalAmount returns the value of the "total_amount" field in the mutation.
+func (m *SponsorAfdianOrderMutation) TotalAmount() (r string, exists bool) {
+	v := m.total_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalAmount returns the old "total_amount" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldTotalAmount(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalAmount: %w", err)
+	}
+	return oldValue.TotalAmount, nil
+}
+
+// ResetTotalAmount resets all changes to the "total_amount" field.
+func (m *SponsorAfdianOrderMutation) ResetTotalAmount() {
+	m.total_amount = nil
+}
+
+// SetShowAmount sets the "show_amount" field.
+func (m *SponsorAfdianOrderMutation) SetShowAmount(s string) {
+	m.show_amount = &s
+}
+
+// ShowAmount returns the value of the "show_amount" field in the mutation.
+func (m *SponsorAfdianOrderMutation) ShowAmount() (r string, exists bool) {
+	v := m.show_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldShowAmount returns the old "show_amount" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldShowAmount(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldShowAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldShowAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldShowAmount: %w", err)
+	}
+	return oldValue.ShowAmount, nil
+}
+
+// ResetShowAmount resets all changes to the "show_amount" field.
+func (m *SponsorAfdianOrderMutation) ResetShowAmount() {
+	m.show_amount = nil
+}
+
+// SetRemark sets the "remark" field.
+func (m *SponsorAfdianOrderMutation) SetRemark(s string) {
+	m.remark = &s
+}
+
+// Remark returns the value of the "remark" field in the mutation.
+func (m *SponsorAfdianOrderMutation) Remark() (r string, exists bool) {
+	v := m.remark
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRemark returns the old "remark" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldRemark(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRemark is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRemark requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRemark: %w", err)
+	}
+	return oldValue.Remark, nil
+}
+
+// ResetRemark resets all changes to the "remark" field.
+func (m *SponsorAfdianOrderMutation) ResetRemark() {
+	m.remark = nil
+}
+
+// SetPaidAt sets the "paid_at" field.
+func (m *SponsorAfdianOrderMutation) SetPaidAt(t time.Time) {
+	m.paid_at = &t
+}
+
+// PaidAt returns the value of the "paid_at" field in the mutation.
+func (m *SponsorAfdianOrderMutation) PaidAt() (r time.Time, exists bool) {
+	v := m.paid_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaidAt returns the old "paid_at" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldPaidAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaidAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaidAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaidAt: %w", err)
+	}
+	return oldValue.PaidAt, nil
+}
+
+// ResetPaidAt resets all changes to the "paid_at" field.
+func (m *SponsorAfdianOrderMutation) ResetPaidAt() {
+	m.paid_at = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SponsorAfdianOrderMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SponsorAfdianOrderMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SponsorAfdianOrderMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SponsorAfdianOrderMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SponsorAfdianOrderMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SponsorAfdianOrder entity.
+// If the SponsorAfdianOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorAfdianOrderMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SponsorAfdianOrderMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the SponsorAfdianOrderMutation builder.
+func (m *SponsorAfdianOrderMutation) Where(ps ...predicate.SponsorAfdianOrder) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SponsorAfdianOrderMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SponsorAfdianOrderMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SponsorAfdianOrder, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SponsorAfdianOrderMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SponsorAfdianOrderMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SponsorAfdianOrder).
+func (m *SponsorAfdianOrderMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SponsorAfdianOrderMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.sponsor_id != nil {
+		fields = append(fields, sponsorafdianorder.FieldSponsorID)
+	}
+	if m.afdian_user_id != nil {
+		fields = append(fields, sponsorafdianorder.FieldAfdianUserID)
+	}
+	if m.plan_id != nil {
+		fields = append(fields, sponsorafdianorder.FieldPlanID)
+	}
+	if m.plan_title != nil {
+		fields = append(fields, sponsorafdianorder.FieldPlanTitle)
+	}
+	if m.product_type != nil {
+		fields = append(fields, sponsorafdianorder.FieldProductType)
+	}
+	if m.month != nil {
+		fields = append(fields, sponsorafdianorder.FieldMonth)
+	}
+	if m.status != nil {
+		fields = append(fields, sponsorafdianorder.FieldStatus)
+	}
+	if m.total_amount != nil {
+		fields = append(fields, sponsorafdianorder.FieldTotalAmount)
+	}
+	if m.show_amount != nil {
+		fields = append(fields, sponsorafdianorder.FieldShowAmount)
+	}
+	if m.remark != nil {
+		fields = append(fields, sponsorafdianorder.FieldRemark)
+	}
+	if m.paid_at != nil {
+		fields = append(fields, sponsorafdianorder.FieldPaidAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, sponsorafdianorder.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, sponsorafdianorder.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SponsorAfdianOrderMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case sponsorafdianorder.FieldSponsorID:
+		return m.SponsorID()
+	case sponsorafdianorder.FieldAfdianUserID:
+		return m.AfdianUserID()
+	case sponsorafdianorder.FieldPlanID:
+		return m.PlanID()
+	case sponsorafdianorder.FieldPlanTitle:
+		return m.PlanTitle()
+	case sponsorafdianorder.FieldProductType:
+		return m.ProductType()
+	case sponsorafdianorder.FieldMonth:
+		return m.Month()
+	case sponsorafdianorder.FieldStatus:
+		return m.Status()
+	case sponsorafdianorder.FieldTotalAmount:
+		return m.TotalAmount()
+	case sponsorafdianorder.FieldShowAmount:
+		return m.ShowAmount()
+	case sponsorafdianorder.FieldRemark:
+		return m.Remark()
+	case sponsorafdianorder.FieldPaidAt:
+		return m.PaidAt()
+	case sponsorafdianorder.FieldCreatedAt:
+		return m.CreatedAt()
+	case sponsorafdianorder.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SponsorAfdianOrderMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case sponsorafdianorder.FieldSponsorID:
+		return m.OldSponsorID(ctx)
+	case sponsorafdianorder.FieldAfdianUserID:
+		return m.OldAfdianUserID(ctx)
+	case sponsorafdianorder.FieldPlanID:
+		return m.OldPlanID(ctx)
+	case sponsorafdianorder.FieldPlanTitle:
+		return m.OldPlanTitle(ctx)
+	case sponsorafdianorder.FieldProductType:
+		return m.OldProductType(ctx)
+	case sponsorafdianorder.FieldMonth:
+		return m.OldMonth(ctx)
+	case sponsorafdianorder.FieldStatus:
+		return m.OldStatus(ctx)
+	case sponsorafdianorder.FieldTotalAmount:
+		return m.OldTotalAmount(ctx)
+	case sponsorafdianorder.FieldShowAmount:
+		return m.OldShowAmount(ctx)
+	case sponsorafdianorder.FieldRemark:
+		return m.OldRemark(ctx)
+	case sponsorafdianorder.FieldPaidAt:
+		return m.OldPaidAt(ctx)
+	case sponsorafdianorder.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case sponsorafdianorder.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SponsorAfdianOrder field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SponsorAfdianOrderMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case sponsorafdianorder.FieldSponsorID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorID(v)
+		return nil
+	case sponsorafdianorder.FieldAfdianUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianUserID(v)
+		return nil
+	case sponsorafdianorder.FieldPlanID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanID(v)
+		return nil
+	case sponsorafdianorder.FieldPlanTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanTitle(v)
+		return nil
+	case sponsorafdianorder.FieldProductType:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProductType(v)
+		return nil
+	case sponsorafdianorder.FieldMonth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMonth(v)
+		return nil
+	case sponsorafdianorder.FieldStatus:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case sponsorafdianorder.FieldTotalAmount:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalAmount(v)
+		return nil
+	case sponsorafdianorder.FieldShowAmount:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetShowAmount(v)
+		return nil
+	case sponsorafdianorder.FieldRemark:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRemark(v)
+		return nil
+	case sponsorafdianorder.FieldPaidAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaidAt(v)
+		return nil
+	case sponsorafdianorder.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case sponsorafdianorder.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorAfdianOrder field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SponsorAfdianOrderMutation) AddedFields() []string {
+	var fields []string
+	if m.addproduct_type != nil {
+		fields = append(fields, sponsorafdianorder.FieldProductType)
+	}
+	if m.addmonth != nil {
+		fields = append(fields, sponsorafdianorder.FieldMonth)
+	}
+	if m.addstatus != nil {
+		fields = append(fields, sponsorafdianorder.FieldStatus)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SponsorAfdianOrderMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case sponsorafdianorder.FieldProductType:
+		return m.AddedProductType()
+	case sponsorafdianorder.FieldMonth:
+		return m.AddedMonth()
+	case sponsorafdianorder.FieldStatus:
+		return m.AddedStatus()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SponsorAfdianOrderMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case sponsorafdianorder.FieldProductType:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProductType(v)
+		return nil
+	case sponsorafdianorder.FieldMonth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMonth(v)
+		return nil
+	case sponsorafdianorder.FieldStatus:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddStatus(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorAfdianOrder numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SponsorAfdianOrderMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SponsorAfdianOrderMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SponsorAfdianOrderMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown SponsorAfdianOrder nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SponsorAfdianOrderMutation) ResetField(name string) error {
+	switch name {
+	case sponsorafdianorder.FieldSponsorID:
+		m.ResetSponsorID()
+		return nil
+	case sponsorafdianorder.FieldAfdianUserID:
+		m.ResetAfdianUserID()
+		return nil
+	case sponsorafdianorder.FieldPlanID:
+		m.ResetPlanID()
+		return nil
+	case sponsorafdianorder.FieldPlanTitle:
+		m.ResetPlanTitle()
+		return nil
+	case sponsorafdianorder.FieldProductType:
+		m.ResetProductType()
+		return nil
+	case sponsorafdianorder.FieldMonth:
+		m.ResetMonth()
+		return nil
+	case sponsorafdianorder.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case sponsorafdianorder.FieldTotalAmount:
+		m.ResetTotalAmount()
+		return nil
+	case sponsorafdianorder.FieldShowAmount:
+		m.ResetShowAmount()
+		return nil
+	case sponsorafdianorder.FieldRemark:
+		m.ResetRemark()
+		return nil
+	case sponsorafdianorder.FieldPaidAt:
+		m.ResetPaidAt()
+		return nil
+	case sponsorafdianorder.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case sponsorafdianorder.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorAfdianOrder field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SponsorAfdianOrderMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SponsorAfdianOrderMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SponsorAfdianOrderMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SponsorAfdianOrderMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SponsorAfdianOrderMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SponsorAfdianOrderMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SponsorAfdianOrderMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SponsorAfdianOrder unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SponsorAfdianOrderMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SponsorAfdianOrder edge %s", name)
+}
+
+// SponsorManualDurationMutation represents an operation that mutates the SponsorManualDuration nodes in the graph.
+type SponsorManualDurationMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	sponsor_id    *string
+	amount        *int
+	addamount     *int
+	unit          *sponsormanualduration.Unit
+	starts_at     *time.Time
+	note          *string
+	origin        *sponsormanualduration.Origin
+	created_by    *string
+	created_at    *time.Time
+	updated_by    *string
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*SponsorManualDuration, error)
+	predicates    []predicate.SponsorManualDuration
+}
+
+var _ ent.Mutation = (*SponsorManualDurationMutation)(nil)
+
+// sponsormanualdurationOption allows management of the mutation configuration using functional options.
+type sponsormanualdurationOption func(*SponsorManualDurationMutation)
+
+// newSponsorManualDurationMutation creates new mutation for the SponsorManualDuration entity.
+func newSponsorManualDurationMutation(c config, op Op, opts ...sponsormanualdurationOption) *SponsorManualDurationMutation {
+	m := &SponsorManualDurationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSponsorManualDuration,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSponsorManualDurationID sets the ID field of the mutation.
+func withSponsorManualDurationID(id int) sponsormanualdurationOption {
+	return func(m *SponsorManualDurationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SponsorManualDuration
+		)
+		m.oldValue = func(ctx context.Context) (*SponsorManualDuration, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SponsorManualDuration.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSponsorManualDuration sets the old SponsorManualDuration of the mutation.
+func withSponsorManualDuration(node *SponsorManualDuration) sponsormanualdurationOption {
+	return func(m *SponsorManualDurationMutation) {
+		m.oldValue = func(context.Context) (*SponsorManualDuration, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SponsorManualDurationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SponsorManualDurationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SponsorManualDurationMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SponsorManualDurationMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SponsorManualDuration.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSponsorID sets the "sponsor_id" field.
+func (m *SponsorManualDurationMutation) SetSponsorID(s string) {
+	m.sponsor_id = &s
+}
+
+// SponsorID returns the value of the "sponsor_id" field in the mutation.
+func (m *SponsorManualDurationMutation) SponsorID() (r string, exists bool) {
+	v := m.sponsor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorID returns the old "sponsor_id" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldSponsorID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorID: %w", err)
+	}
+	return oldValue.SponsorID, nil
+}
+
+// ResetSponsorID resets all changes to the "sponsor_id" field.
+func (m *SponsorManualDurationMutation) ResetSponsorID() {
+	m.sponsor_id = nil
+}
+
+// SetAmount sets the "amount" field.
+func (m *SponsorManualDurationMutation) SetAmount(i int) {
+	m.amount = &i
+	m.addamount = nil
+}
+
+// Amount returns the value of the "amount" field in the mutation.
+func (m *SponsorManualDurationMutation) Amount() (r int, exists bool) {
+	v := m.amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmount returns the old "amount" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldAmount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+	}
+	return oldValue.Amount, nil
+}
+
+// AddAmount adds i to the "amount" field.
+func (m *SponsorManualDurationMutation) AddAmount(i int) {
+	if m.addamount != nil {
+		*m.addamount += i
+	} else {
+		m.addamount = &i
+	}
+}
+
+// AddedAmount returns the value that was added to the "amount" field in this mutation.
+func (m *SponsorManualDurationMutation) AddedAmount() (r int, exists bool) {
+	v := m.addamount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAmount resets all changes to the "amount" field.
+func (m *SponsorManualDurationMutation) ResetAmount() {
+	m.amount = nil
+	m.addamount = nil
+}
+
+// SetUnit sets the "unit" field.
+func (m *SponsorManualDurationMutation) SetUnit(s sponsormanualduration.Unit) {
+	m.unit = &s
+}
+
+// Unit returns the value of the "unit" field in the mutation.
+func (m *SponsorManualDurationMutation) Unit() (r sponsormanualduration.Unit, exists bool) {
+	v := m.unit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUnit returns the old "unit" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldUnit(ctx context.Context) (v sponsormanualduration.Unit, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUnit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUnit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUnit: %w", err)
+	}
+	return oldValue.Unit, nil
+}
+
+// ResetUnit resets all changes to the "unit" field.
+func (m *SponsorManualDurationMutation) ResetUnit() {
+	m.unit = nil
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (m *SponsorManualDurationMutation) SetStartsAt(t time.Time) {
+	m.starts_at = &t
+}
+
+// StartsAt returns the value of the "starts_at" field in the mutation.
+func (m *SponsorManualDurationMutation) StartsAt() (r time.Time, exists bool) {
+	v := m.starts_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartsAt returns the old "starts_at" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldStartsAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartsAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartsAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartsAt: %w", err)
+	}
+	return oldValue.StartsAt, nil
+}
+
+// ResetStartsAt resets all changes to the "starts_at" field.
+func (m *SponsorManualDurationMutation) ResetStartsAt() {
+	m.starts_at = nil
+}
+
+// SetNote sets the "note" field.
+func (m *SponsorManualDurationMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *SponsorManualDurationMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *SponsorManualDurationMutation) ResetNote() {
+	m.note = nil
+}
+
+// SetOrigin sets the "origin" field.
+func (m *SponsorManualDurationMutation) SetOrigin(s sponsormanualduration.Origin) {
+	m.origin = &s
+}
+
+// Origin returns the value of the "origin" field in the mutation.
+func (m *SponsorManualDurationMutation) Origin() (r sponsormanualduration.Origin, exists bool) {
+	v := m.origin
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrigin returns the old "origin" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldOrigin(ctx context.Context) (v sponsormanualduration.Origin, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrigin is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrigin requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrigin: %w", err)
+	}
+	return oldValue.Origin, nil
+}
+
+// ResetOrigin resets all changes to the "origin" field.
+func (m *SponsorManualDurationMutation) ResetOrigin() {
+	m.origin = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *SponsorManualDurationMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *SponsorManualDurationMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *SponsorManualDurationMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SponsorManualDurationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SponsorManualDurationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SponsorManualDurationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *SponsorManualDurationMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *SponsorManualDurationMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldUpdatedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *SponsorManualDurationMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[sponsormanualduration.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *SponsorManualDurationMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[sponsormanualduration.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *SponsorManualDurationMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, sponsormanualduration.FieldUpdatedBy)
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SponsorManualDurationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SponsorManualDurationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SponsorManualDuration entity.
+// If the SponsorManualDuration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SponsorManualDurationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SponsorManualDurationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the SponsorManualDurationMutation builder.
+func (m *SponsorManualDurationMutation) Where(ps ...predicate.SponsorManualDuration) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SponsorManualDurationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SponsorManualDurationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SponsorManualDuration, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SponsorManualDurationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SponsorManualDurationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SponsorManualDuration).
+func (m *SponsorManualDurationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SponsorManualDurationMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.sponsor_id != nil {
+		fields = append(fields, sponsormanualduration.FieldSponsorID)
+	}
+	if m.amount != nil {
+		fields = append(fields, sponsormanualduration.FieldAmount)
+	}
+	if m.unit != nil {
+		fields = append(fields, sponsormanualduration.FieldUnit)
+	}
+	if m.starts_at != nil {
+		fields = append(fields, sponsormanualduration.FieldStartsAt)
+	}
+	if m.note != nil {
+		fields = append(fields, sponsormanualduration.FieldNote)
+	}
+	if m.origin != nil {
+		fields = append(fields, sponsormanualduration.FieldOrigin)
+	}
+	if m.created_by != nil {
+		fields = append(fields, sponsormanualduration.FieldCreatedBy)
+	}
+	if m.created_at != nil {
+		fields = append(fields, sponsormanualduration.FieldCreatedAt)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, sponsormanualduration.FieldUpdatedBy)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, sponsormanualduration.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SponsorManualDurationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case sponsormanualduration.FieldSponsorID:
+		return m.SponsorID()
+	case sponsormanualduration.FieldAmount:
+		return m.Amount()
+	case sponsormanualduration.FieldUnit:
+		return m.Unit()
+	case sponsormanualduration.FieldStartsAt:
+		return m.StartsAt()
+	case sponsormanualduration.FieldNote:
+		return m.Note()
+	case sponsormanualduration.FieldOrigin:
+		return m.Origin()
+	case sponsormanualduration.FieldCreatedBy:
+		return m.CreatedBy()
+	case sponsormanualduration.FieldCreatedAt:
+		return m.CreatedAt()
+	case sponsormanualduration.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case sponsormanualduration.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SponsorManualDurationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case sponsormanualduration.FieldSponsorID:
+		return m.OldSponsorID(ctx)
+	case sponsormanualduration.FieldAmount:
+		return m.OldAmount(ctx)
+	case sponsormanualduration.FieldUnit:
+		return m.OldUnit(ctx)
+	case sponsormanualduration.FieldStartsAt:
+		return m.OldStartsAt(ctx)
+	case sponsormanualduration.FieldNote:
+		return m.OldNote(ctx)
+	case sponsormanualduration.FieldOrigin:
+		return m.OldOrigin(ctx)
+	case sponsormanualduration.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case sponsormanualduration.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case sponsormanualduration.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case sponsormanualduration.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SponsorManualDuration field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SponsorManualDurationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case sponsormanualduration.FieldSponsorID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorID(v)
+		return nil
+	case sponsormanualduration.FieldAmount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmount(v)
+		return nil
+	case sponsormanualduration.FieldUnit:
+		v, ok := value.(sponsormanualduration.Unit)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUnit(v)
+		return nil
+	case sponsormanualduration.FieldStartsAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartsAt(v)
+		return nil
+	case sponsormanualduration.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	case sponsormanualduration.FieldOrigin:
+		v, ok := value.(sponsormanualduration.Origin)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrigin(v)
+		return nil
+	case sponsormanualduration.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case sponsormanualduration.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case sponsormanualduration.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case sponsormanualduration.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorManualDuration field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SponsorManualDurationMutation) AddedFields() []string {
+	var fields []string
+	if m.addamount != nil {
+		fields = append(fields, sponsormanualduration.FieldAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SponsorManualDurationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case sponsormanualduration.FieldAmount:
+		return m.AddedAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SponsorManualDurationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case sponsormanualduration.FieldAmount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorManualDuration numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SponsorManualDurationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(sponsormanualduration.FieldUpdatedBy) {
+		fields = append(fields, sponsormanualduration.FieldUpdatedBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SponsorManualDurationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SponsorManualDurationMutation) ClearField(name string) error {
+	switch name {
+	case sponsormanualduration.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorManualDuration nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SponsorManualDurationMutation) ResetField(name string) error {
+	switch name {
+	case sponsormanualduration.FieldSponsorID:
+		m.ResetSponsorID()
+		return nil
+	case sponsormanualduration.FieldAmount:
+		m.ResetAmount()
+		return nil
+	case sponsormanualduration.FieldUnit:
+		m.ResetUnit()
+		return nil
+	case sponsormanualduration.FieldStartsAt:
+		m.ResetStartsAt()
+		return nil
+	case sponsormanualduration.FieldNote:
+		m.ResetNote()
+		return nil
+	case sponsormanualduration.FieldOrigin:
+		m.ResetOrigin()
+		return nil
+	case sponsormanualduration.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case sponsormanualduration.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case sponsormanualduration.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case sponsormanualduration.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SponsorManualDuration field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SponsorManualDurationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SponsorManualDurationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SponsorManualDurationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SponsorManualDurationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SponsorManualDurationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SponsorManualDurationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SponsorManualDurationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SponsorManualDuration unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SponsorManualDurationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SponsorManualDuration edge %s", name)
 }
 
 // SystemLogMutation represents an operation that mutates the SystemLog nodes in the graph.

@@ -12,6 +12,11 @@ func RegisterAdminSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	sponsors := adminGroup.Group("/sponsors", adminCoreModule.RequireAdmin(apiHelper))
 
 	sponsors.Get("", handleAdminListSponsors(apiHelper))
+	sponsors.Post("", handleAdminCreateSponsor(apiHelper))
+	sponsors.Get("/:sponsor_id", handleAdminGetSponsor(apiHelper))
 	sponsors.Put("/:sponsor_id", handleAdminUpdateSponsor(apiHelper))
+	sponsors.Post("/:sponsor_id/manual-durations", handleAdminCreateManualDuration(apiHelper))
+	sponsors.Put("/:sponsor_id/manual-durations/:entry_id", handleAdminUpdateManualDuration(apiHelper))
+	sponsors.Delete("/:sponsor_id/manual-durations/:entry_id", handleAdminDeleteManualDuration(apiHelper))
 	sponsors.Post("/sync/afdian", adminCoreModule.RequireSuperAdmin(apiHelper), handleAdminSyncAfdianSponsors(apiHelper, afdianConfig))
 }

@@ -42,6 +42,18 @@ const (
 	FieldPaidAt = "paid_at"
 	// FieldPlanExpiresAt holds the string denoting the plan_expires_at field in the database.
 	FieldPlanExpiresAt = "plan_expires_at"
+	// FieldAfdianExpiresAt holds the string denoting the afdian_expires_at field in the database.
+	FieldAfdianExpiresAt = "afdian_expires_at"
+	// FieldAfdianDurationMonths holds the string denoting the afdian_duration_months field in the database.
+	FieldAfdianDurationMonths = "afdian_duration_months"
+	// FieldAfdianReportedExpiresAt holds the string denoting the afdian_reported_expires_at field in the database.
+	FieldAfdianReportedExpiresAt = "afdian_reported_expires_at"
+	// FieldAfdianReportedAt holds the string denoting the afdian_reported_at field in the database.
+	FieldAfdianReportedAt = "afdian_reported_at"
+	// FieldHasDuration holds the string denoting the has_duration field in the database.
+	FieldHasDuration = "has_duration"
+	// FieldDurationSplitAt holds the string denoting the duration_split_at field in the database.
+	FieldDurationSplitAt = "duration_split_at"
 	// FieldSupportCount holds the string denoting the support_count field in the database.
 	FieldSupportCount = "support_count"
 	// FieldTotalAmount holds the string denoting the total_amount field in the database.
@@ -73,6 +85,12 @@ var Columns = []string{
 	FieldAfdianSyncDisabled,
 	FieldPaidAt,
 	FieldPlanExpiresAt,
+	FieldAfdianExpiresAt,
+	FieldAfdianDurationMonths,
+	FieldAfdianReportedExpiresAt,
+	FieldAfdianReportedAt,
+	FieldHasDuration,
+	FieldDurationSplitAt,
 	FieldSupportCount,
 	FieldTotalAmount,
 	FieldRaw,
@@ -111,6 +129,10 @@ var (
 	DefaultIsActive bool
 	// DefaultAfdianSyncDisabled holds the default value on creation for the "afdian_sync_disabled" field.
 	DefaultAfdianSyncDisabled bool
+	// DefaultAfdianDurationMonths holds the default value on creation for the "afdian_duration_months" field.
+	DefaultAfdianDurationMonths int
+	// DefaultHasDuration holds the default value on creation for the "has_duration" field.
+	DefaultHasDuration bool
 	// DefaultSupportCount holds the default value on creation for the "support_count" field.
 	DefaultSupportCount int
 	// TotalAmountValidator is a validator for the "total_amount" field. It is called by the builders before save.
@@ -229,6 +251,36 @@ func ByPaidAt(opts ...sql.OrderTermOption) OrderOption {
 // ByPlanExpiresAt orders the results by the plan_expires_at field.
 func ByPlanExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPlanExpiresAt, opts...).ToFunc()
+}
+
+// ByAfdianExpiresAt orders the results by the afdian_expires_at field.
+func ByAfdianExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianExpiresAt, opts...).ToFunc()
+}
+
+// ByAfdianDurationMonths orders the results by the afdian_duration_months field.
+func ByAfdianDurationMonths(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianDurationMonths, opts...).ToFunc()
+}
+
+// ByAfdianReportedExpiresAt orders the results by the afdian_reported_expires_at field.
+func ByAfdianReportedExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianReportedExpiresAt, opts...).ToFunc()
+}
+
+// ByAfdianReportedAt orders the results by the afdian_reported_at field.
+func ByAfdianReportedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianReportedAt, opts...).ToFunc()
+}
+
+// ByHasDuration orders the results by the has_duration field.
+func ByHasDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHasDuration, opts...).ToFunc()
+}
+
+// ByDurationSplitAt orders the results by the duration_split_at field.
+func ByDurationSplitAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDurationSplitAt, opts...).ToFunc()
 }
 
 // BySupportCount orders the results by the support_count field.

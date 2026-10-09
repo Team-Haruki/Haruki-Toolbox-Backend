@@ -28,6 +28,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -68,6 +70,10 @@ type Client struct {
 	SocialPlatformInfo *SocialPlatformInfoClient
 	// Sponsor is the client for interacting with the Sponsor builders.
 	Sponsor *SponsorClient
+	// SponsorAfdianOrder is the client for interacting with the SponsorAfdianOrder builders.
+	SponsorAfdianOrder *SponsorAfdianOrderClient
+	// SponsorManualDuration is the client for interacting with the SponsorManualDuration builders.
+	SponsorManualDuration *SponsorManualDurationClient
 	// SystemLog is the client for interacting with the SystemLog builders.
 	SystemLog *SystemLogClient
 	// Ticket is the client for interacting with the Ticket builders.
@@ -106,6 +112,8 @@ func (c *Client) init() {
 	c.RiskRule = NewRiskRuleClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
 	c.Sponsor = NewSponsorClient(c.config)
+	c.SponsorAfdianOrder = NewSponsorAfdianOrderClient(c.config)
+	c.SponsorManualDuration = NewSponsorManualDurationClient(c.config)
 	c.SystemLog = NewSystemLogClient(c.config)
 	c.Ticket = NewTicketClient(c.config)
 	c.TicketMessage = NewTicketMessageClient(c.config)
@@ -218,6 +226,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
 		Sponsor:                     NewSponsorClient(cfg),
+		SponsorAfdianOrder:          NewSponsorAfdianOrderClient(cfg),
+		SponsorManualDuration:       NewSponsorManualDurationClient(cfg),
 		SystemLog:                   NewSystemLogClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
 		TicketMessage:               NewTicketMessageClient(cfg),
@@ -257,6 +267,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		RiskRule:                    NewRiskRuleClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
 		Sponsor:                     NewSponsorClient(cfg),
+		SponsorAfdianOrder:          NewSponsorAfdianOrderClient(cfg),
+		SponsorManualDuration:       NewSponsorManualDurationClient(cfg),
 		SystemLog:                   NewSystemLogClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
 		TicketMessage:               NewTicketMessageClient(cfg),
@@ -296,8 +308,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule,
-		c.SocialPlatformInfo, c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage,
-		c.UploadLog, c.User, c.WebhookEndpoint, c.WebhookSubscription,
+		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
+		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
+		c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -310,8 +323,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule,
-		c.SocialPlatformInfo, c.Sponsor, c.SystemLog, c.Ticket, c.TicketMessage,
-		c.UploadLog, c.User, c.WebhookEndpoint, c.WebhookSubscription,
+		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
+		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
+		c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -346,6 +360,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SocialPlatformInfo.mutate(ctx, m)
 	case *SponsorMutation:
 		return c.Sponsor.mutate(ctx, m)
+	case *SponsorAfdianOrderMutation:
+		return c.SponsorAfdianOrder.mutate(ctx, m)
+	case *SponsorManualDurationMutation:
+		return c.SponsorManualDuration.mutate(ctx, m)
 	case *SystemLogMutation:
 		return c.SystemLog.mutate(ctx, m)
 	case *TicketMutation:
@@ -2222,6 +2240,272 @@ func (c *SponsorClient) mutate(ctx context.Context, m *SponsorMutation) (Value, 
 	}
 }
 
+// SponsorAfdianOrderClient is a client for the SponsorAfdianOrder schema.
+type SponsorAfdianOrderClient struct {
+	config
+}
+
+// NewSponsorAfdianOrderClient returns a client for the SponsorAfdianOrder from the given config.
+func NewSponsorAfdianOrderClient(c config) *SponsorAfdianOrderClient {
+	return &SponsorAfdianOrderClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sponsorafdianorder.Hooks(f(g(h())))`.
+func (c *SponsorAfdianOrderClient) Use(hooks ...Hook) {
+	c.hooks.SponsorAfdianOrder = append(c.hooks.SponsorAfdianOrder, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sponsorafdianorder.Intercept(f(g(h())))`.
+func (c *SponsorAfdianOrderClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SponsorAfdianOrder = append(c.inters.SponsorAfdianOrder, interceptors...)
+}
+
+// Create returns a builder for creating a SponsorAfdianOrder entity.
+func (c *SponsorAfdianOrderClient) Create() *SponsorAfdianOrderCreate {
+	mutation := newSponsorAfdianOrderMutation(c.config, OpCreate)
+	return &SponsorAfdianOrderCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SponsorAfdianOrder entities.
+func (c *SponsorAfdianOrderClient) CreateBulk(builders ...*SponsorAfdianOrderCreate) *SponsorAfdianOrderCreateBulk {
+	return &SponsorAfdianOrderCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SponsorAfdianOrderClient) MapCreateBulk(slice any, setFunc func(*SponsorAfdianOrderCreate, int)) *SponsorAfdianOrderCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SponsorAfdianOrderCreateBulk{err: fmt.Errorf("calling to SponsorAfdianOrderClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SponsorAfdianOrderCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SponsorAfdianOrderCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SponsorAfdianOrder.
+func (c *SponsorAfdianOrderClient) Update() *SponsorAfdianOrderUpdate {
+	mutation := newSponsorAfdianOrderMutation(c.config, OpUpdate)
+	return &SponsorAfdianOrderUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SponsorAfdianOrderClient) UpdateOne(_m *SponsorAfdianOrder) *SponsorAfdianOrderUpdateOne {
+	mutation := newSponsorAfdianOrderMutation(c.config, OpUpdateOne, withSponsorAfdianOrder(_m))
+	return &SponsorAfdianOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SponsorAfdianOrderClient) UpdateOneID(id string) *SponsorAfdianOrderUpdateOne {
+	mutation := newSponsorAfdianOrderMutation(c.config, OpUpdateOne, withSponsorAfdianOrderID(id))
+	return &SponsorAfdianOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SponsorAfdianOrder.
+func (c *SponsorAfdianOrderClient) Delete() *SponsorAfdianOrderDelete {
+	mutation := newSponsorAfdianOrderMutation(c.config, OpDelete)
+	return &SponsorAfdianOrderDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SponsorAfdianOrderClient) DeleteOne(_m *SponsorAfdianOrder) *SponsorAfdianOrderDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SponsorAfdianOrderClient) DeleteOneID(id string) *SponsorAfdianOrderDeleteOne {
+	builder := c.Delete().Where(sponsorafdianorder.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SponsorAfdianOrderDeleteOne{builder}
+}
+
+// Query returns a query builder for SponsorAfdianOrder.
+func (c *SponsorAfdianOrderClient) Query() *SponsorAfdianOrderQuery {
+	return &SponsorAfdianOrderQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSponsorAfdianOrder},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SponsorAfdianOrder entity by its id.
+func (c *SponsorAfdianOrderClient) Get(ctx context.Context, id string) (*SponsorAfdianOrder, error) {
+	return c.Query().Where(sponsorafdianorder.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SponsorAfdianOrderClient) GetX(ctx context.Context, id string) *SponsorAfdianOrder {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SponsorAfdianOrderClient) Hooks() []Hook {
+	return c.hooks.SponsorAfdianOrder
+}
+
+// Interceptors returns the client interceptors.
+func (c *SponsorAfdianOrderClient) Interceptors() []Interceptor {
+	return c.inters.SponsorAfdianOrder
+}
+
+func (c *SponsorAfdianOrderClient) mutate(ctx context.Context, m *SponsorAfdianOrderMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SponsorAfdianOrderCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SponsorAfdianOrderUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SponsorAfdianOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SponsorAfdianOrderDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown SponsorAfdianOrder mutation op: %q", m.Op())
+	}
+}
+
+// SponsorManualDurationClient is a client for the SponsorManualDuration schema.
+type SponsorManualDurationClient struct {
+	config
+}
+
+// NewSponsorManualDurationClient returns a client for the SponsorManualDuration from the given config.
+func NewSponsorManualDurationClient(c config) *SponsorManualDurationClient {
+	return &SponsorManualDurationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `sponsormanualduration.Hooks(f(g(h())))`.
+func (c *SponsorManualDurationClient) Use(hooks ...Hook) {
+	c.hooks.SponsorManualDuration = append(c.hooks.SponsorManualDuration, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `sponsormanualduration.Intercept(f(g(h())))`.
+func (c *SponsorManualDurationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SponsorManualDuration = append(c.inters.SponsorManualDuration, interceptors...)
+}
+
+// Create returns a builder for creating a SponsorManualDuration entity.
+func (c *SponsorManualDurationClient) Create() *SponsorManualDurationCreate {
+	mutation := newSponsorManualDurationMutation(c.config, OpCreate)
+	return &SponsorManualDurationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SponsorManualDuration entities.
+func (c *SponsorManualDurationClient) CreateBulk(builders ...*SponsorManualDurationCreate) *SponsorManualDurationCreateBulk {
+	return &SponsorManualDurationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SponsorManualDurationClient) MapCreateBulk(slice any, setFunc func(*SponsorManualDurationCreate, int)) *SponsorManualDurationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SponsorManualDurationCreateBulk{err: fmt.Errorf("calling to SponsorManualDurationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SponsorManualDurationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SponsorManualDurationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SponsorManualDuration.
+func (c *SponsorManualDurationClient) Update() *SponsorManualDurationUpdate {
+	mutation := newSponsorManualDurationMutation(c.config, OpUpdate)
+	return &SponsorManualDurationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SponsorManualDurationClient) UpdateOne(_m *SponsorManualDuration) *SponsorManualDurationUpdateOne {
+	mutation := newSponsorManualDurationMutation(c.config, OpUpdateOne, withSponsorManualDuration(_m))
+	return &SponsorManualDurationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SponsorManualDurationClient) UpdateOneID(id int) *SponsorManualDurationUpdateOne {
+	mutation := newSponsorManualDurationMutation(c.config, OpUpdateOne, withSponsorManualDurationID(id))
+	return &SponsorManualDurationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SponsorManualDuration.
+func (c *SponsorManualDurationClient) Delete() *SponsorManualDurationDelete {
+	mutation := newSponsorManualDurationMutation(c.config, OpDelete)
+	return &SponsorManualDurationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SponsorManualDurationClient) DeleteOne(_m *SponsorManualDuration) *SponsorManualDurationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SponsorManualDurationClient) DeleteOneID(id int) *SponsorManualDurationDeleteOne {
+	builder := c.Delete().Where(sponsormanualduration.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SponsorManualDurationDeleteOne{builder}
+}
+
+// Query returns a query builder for SponsorManualDuration.
+func (c *SponsorManualDurationClient) Query() *SponsorManualDurationQuery {
+	return &SponsorManualDurationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSponsorManualDuration},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SponsorManualDuration entity by its id.
+func (c *SponsorManualDurationClient) Get(ctx context.Context, id int) (*SponsorManualDuration, error) {
+	return c.Query().Where(sponsormanualduration.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SponsorManualDurationClient) GetX(ctx context.Context, id int) *SponsorManualDuration {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SponsorManualDurationClient) Hooks() []Hook {
+	return c.hooks.SponsorManualDuration
+}
+
+// Interceptors returns the client interceptors.
+func (c *SponsorManualDurationClient) Interceptors() []Interceptor {
+	return c.inters.SponsorManualDuration
+}
+
+func (c *SponsorManualDurationClient) mutate(ctx context.Context, m *SponsorManualDurationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SponsorManualDurationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SponsorManualDurationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SponsorManualDurationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SponsorManualDurationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown SponsorManualDuration mutation op: %q", m.Op())
+	}
+}
+
 // SystemLogClient is a client for the SystemLog schema.
 type SystemLogClient struct {
 	config
@@ -3319,14 +3603,14 @@ type (
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
 		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
-		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
-		WebhookSubscription []ent.Hook
+		SponsorAfdianOrder, SponsorManualDuration, SystemLog, Ticket, TicketMessage,
+		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
 	}
 	inters struct {
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
 		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
-		SystemLog, Ticket, TicketMessage, UploadLog, User, WebhookEndpoint,
-		WebhookSubscription []ent.Interceptor
+		SponsorAfdianOrder, SponsorManualDuration, SystemLog, Ticket, TicketMessage,
+		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Interceptor
 	}
 )

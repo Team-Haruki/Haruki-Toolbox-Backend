@@ -1,15 +1,7 @@
 package sponsor
 
 import (
-	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/hex"
-	json "encoding/json/v2"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,32 +19,9 @@ import (
 const (
 	defaultSponsorPlanName = "爱发电赞助"
 	oneTimePlanName        = "一次性赞助"
+	customPlanName         = "自选方案"
 	anonymousSponsorName   = "匿名赞助者"
 )
-
-type parsedAfdianSponsor struct {
-	ID            string
-	AfdianUserID  string
-	OutTradeNo    string
-	Name          string
-	Avatar        string
-	PlanID        string
-	PlanName      string
-	PlanRank      int
-	PlanPayMonths *int
-	Message       string
-	Source        string
-	PaidAt        *time.Time
-	PlanExpiresAt *time.Time
-	SupportCount  int
-	TotalAmount   string
-	Raw           map[string]any
-}
-
-type AfdianSyncResult struct {
-	Imported int `json:"imported"`
-	Skipped  int `json:"skipped"`
-}
 
 func stringPtrValue(value *string) string {
 	if value == nil {
@@ -77,37 +46,51 @@ func stringPointerOrNil(value string) *string {
 	return &value
 }
 
-func intPointerOrNil(value int) *int {
-	if value <= 0 {
-		return nil
+// SponsorCategory is the category of a stored sponsor row at now. It is the
+// one entry point every reader uses (public wall, admin list, migration
+// report). A row that still carries the legacy single expiry (not yet split,
+// see SplitLegacySponsorDurations) counts as having had duration when it has
+// an expiry or a plan month.
+func SponsorCategory(row *postgresql.Sponsor, now time.Time) Category {
+	hasDuration := row.HasDuration
+	if row.DurationSplitAt == nil {
+		hasDuration = row.PlanPayMonths != nil || row.PlanExpiresAt != nil
 	}
-	return &value
+	return CategoryFor(hasDuration, row.PlanExpiresAt, now)
 }
 
-func normalizePlanName(planName string, payMonths *int, expiresAt *time.Time) string {
-	planName = strings.TrimSpace(planName)
+// DisplayPlanName is the tier label shown for a sponsor. "一次性赞助" is only a
+// fallback label for the one-time category; a stored copy of it on a sponsor
+// with duration is the leftover of the pre-split bug and is not shown.
+func DisplayPlanName(row *postgresql.Sponsor, category Category) string {
+	planName := strings.TrimSpace(stringPtrValue(row.PlanName))
+	if planName == oneTimePlanName && category != CategoryOneTime {
+		planName = ""
+	}
 	if planName != "" {
 		return planName
 	}
-	if payMonths == nil && expiresAt == nil {
+	if category == CategoryOneTime {
 		return oneTimePlanName
 	}
 	return defaultSponsorPlanName
 }
 
-func DefaultPlanName(payMonths *int, expiresAt *time.Time) string {
-	return normalizePlanName("", payMonths, expiresAt)
-}
-
-func sponsorItemFromRow(row *postgresql.Sponsor) SponsorItem {
-	planName := normalizePlanName(stringPtrValue(row.PlanName), row.PlanPayMonths, row.PlanExpiresAt)
+// DisplayName is the public name, with the anonymous fallback.
+func DisplayName(row *postgresql.Sponsor) string {
 	name := strings.TrimSpace(stringPtrValue(row.Name))
 	if name == "" {
-		name = anonymousSponsorName
+		return anonymousSponsorName
 	}
+	return name
+}
+
+func sponsorItemFromRow(row *postgresql.Sponsor, now time.Time) SponsorItem {
+	category := SponsorCategory(row, now)
+	planName := DisplayPlanName(row, category)
 	return SponsorItem{
 		ID:     row.ID,
-		Name:   name,
+		Name:   DisplayName(row),
 		Avatar: stringPtrValue(row.Avatar),
 		Plan: &SponsorPlan{
 			ID:        stringPtrValue(row.PlanID),
@@ -124,7 +107,8 @@ func sponsorItemFromRow(row *postgresql.Sponsor) SponsorItem {
 		PlanPayMonths:      row.PlanPayMonths,
 		Message:            stringPtrValue(row.Message),
 		Source:             string(row.Source),
-		IsActive:           row.IsActive,
+		Category:           category,
+		IsActive:           category == CategoryCurrent,
 		AfdianSyncDisabled: row.AfdianSyncDisabled,
 		TotalAmount:        amountStringToFloat(row.TotalAmount),
 		Month:              row.PlanPayMonths,
@@ -145,6 +129,8 @@ func amountStringToFloat(amount *string) *float64 {
 	return &value
 }
 
+// BuildSponsorPageResponse builds the public wall. Categories are mutually
+// exclusive, so activeCount + pastCount + oneTimeCount == supporterCount.
 func BuildSponsorPageResponse(rows []*postgresql.Sponsor, now time.Time) SponsorPageResponse {
 	items := make([]SponsorItem, 0, len(rows))
 	summary := SponsorSummary{
@@ -152,16 +138,13 @@ func BuildSponsorPageResponse(rows []*postgresql.Sponsor, now time.Time) Sponsor
 		GeneratedAt:    now.UTC(),
 	}
 	for _, row := range rows {
-		item := sponsorItemFromRow(row)
-		if item.PlanExpiresAt != nil && item.PlanExpiresAt.Before(now) {
-			item.IsActive = false
-		}
-		if item.IsActive {
+		item := sponsorItemFromRow(row, now)
+		switch item.Category {
+		case CategoryCurrent:
 			summary.ActiveCount++
-		} else {
+		case CategoryFormer:
 			summary.PastCount++
-		}
-		if item.PlanPayMonths == nil && item.PlanExpiresAt == nil {
+		default:
 			summary.OneTimeCount++
 		}
 		items = append(items, item)
@@ -215,6 +198,11 @@ func stableSponsorID(afdianUserID string, outTradeNo string) string {
 	return "sponsor_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
+// NewManualSponsorID is the id of a supporter an admin enters by hand.
+func NewManualSponsorID() string {
+	return "manual_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+}
+
 func parseAmountRank(amount string) int {
 	value, err := strconv.ParseFloat(strings.TrimSpace(amount), 64)
 	if err != nil || value <= 0 {
@@ -259,22 +247,6 @@ func parseUnixTime(raw any) *time.Time {
 		}
 	}
 	return nil
-}
-
-// activeForExpiry is the single activity rule shared by the webhook parser, the
-// query-sponsor parser and the upsert: a sponsor without an expiry (one-time
-// order or no plan) stays active permanently; a sponsor with an expiry is active
-// only while that expiry lies in the future.
-func activeForExpiry(expiresAt *time.Time, now time.Time) bool {
-	return expiresAt == nil || expiresAt.After(now)
-}
-
-func calculateExpiresAt(paidAt *time.Time, months *int) *time.Time {
-	if paidAt == nil || months == nil || *months <= 0 {
-		return nil
-	}
-	expiresAt := paidAt.AddDate(0, *months, 0)
-	return &expiresAt
 }
 
 func readString(record map[string]any, keys ...string) string {
@@ -329,454 +301,4 @@ func readMap(record map[string]any, keys ...string) map[string]any {
 		}
 	}
 	return nil
-}
-
-// afdianOrderStatusPaid is the only order status Afdian documents as a
-// completed payment (交易成功). Anything else (0 = unpaid, 1 = pending) must not
-// create or refresh a sponsor.
-const afdianOrderStatusPaid = 2
-
-func parseAfdianOrder(order map[string]any, now time.Time) (parsedAfdianSponsor, bool) {
-	if readInt(order, "status") != afdianOrderStatusPaid {
-		return parsedAfdianSponsor{}, false
-	}
-
-	afdianUserID := readString(order, "user_id", "userId")
-	outTradeNo := readString(order, "out_trade_no", "outTradeNo")
-	month := intPointerOrNil(readInt(order, "month", "months"))
-	paidAt := parseUnixTime(order["paid_at"])
-	if paidAt == nil {
-		paidAt = parseUnixTime(order["create_time"])
-	}
-	if paidAt == nil {
-		paidAt = parseUnixTime(order["created_at"])
-	}
-	if paidAt == nil {
-		paidAt = &now
-	}
-
-	planID := readString(order, "plan_id", "planId")
-	planName := readString(order, "plan_name", "planName", "title")
-	totalAmount := readString(order, "total_amount", "totalAmount", "show_amount", "showAmount", "amount")
-	expiresAt := calculateExpiresAt(paidAt, month)
-	if planID == "" {
-		month = nil
-		expiresAt = nil
-		planName = normalizePlanName(planName, nil, nil)
-	}
-
-	return parsedAfdianSponsor{
-		ID:            stableSponsorID(afdianUserID, outTradeNo),
-		AfdianUserID:  afdianUserID,
-		OutTradeNo:    outTradeNo,
-		PlanID:        planID,
-		PlanName:      normalizePlanName(planName, month, expiresAt),
-		PlanRank:      parseAmountRank(totalAmount),
-		PlanPayMonths: month,
-		Message:       readString(order, "remark", "message", "memo"),
-		Source:        "afdian",
-		PaidAt:        paidAt,
-		PlanExpiresAt: expiresAt,
-		SupportCount:  1,
-		TotalAmount:   totalAmount,
-		Raw:           order,
-	}, true
-}
-
-func parseAfdianSponsorItem(item map[string]any, now time.Time) (parsedAfdianSponsor, bool) {
-	user := readMap(item, "user", "sponsor", "supporter")
-	plan := readMap(item, "current_plan", "currentPlan", "plan")
-	afdianUserID := readString(user, "user_id", "userId", "id")
-	if afdianUserID == "" {
-		afdianUserID = readString(item, "user_id", "userId", "id")
-	}
-	if afdianUserID == "" {
-		return parsedAfdianSponsor{}, false
-	}
-
-	month := intPointerOrNil(readInt(plan, "pay_month", "payMonth", "month", "months"))
-	paidAt := parseUnixTime(item["last_pay_time"])
-	if paidAt == nil {
-		paidAt = parseUnixTime(item["first_pay_time"])
-	}
-	if paidAt == nil {
-		paidAt = parseUnixTime(item["create_time"])
-	}
-	// query-sponsor only reports an expiry while the plan is current; once it
-	// lapses the item carries none, so activity cannot be judged here alone.
-	// upsertParsedSponsor combines this with the stored expiry.
-	expiresAt := parseUnixTime(plan["expire_time"])
-	if expiresAt == nil {
-		expiresAt = parseUnixTime(plan["expires_at"])
-	}
-	totalAmount := readString(item, "all_sum_amount", "total_amount", "totalAmount", "show_amount", "showAmount", "amount")
-	planPrice := readString(plan, "price", "show_price", "showPrice")
-	planRank := parseAmountRank(planPrice)
-	if planRank == 0 {
-		planRank = parseAmountRank(totalAmount)
-	}
-	planName := normalizePlanName(readString(plan, "name", "title", "plan_name", "planName"), month, expiresAt)
-
-	return parsedAfdianSponsor{
-		ID:            stableSponsorID(afdianUserID, ""),
-		AfdianUserID:  afdianUserID,
-		Name:          readString(user, "name", "nickname", "user_name", "userName"),
-		Avatar:        readString(user, "avatar", "avatar_url", "avatarUrl"),
-		PlanID:        readString(plan, "plan_id", "planId", "id"),
-		PlanName:      planName,
-		PlanRank:      planRank,
-		PlanPayMonths: month,
-		Message:       readString(item, "remark", "message", "memo"),
-		Source:        "afdian",
-		PaidAt:        paidAt,
-		PlanExpiresAt: expiresAt,
-		SupportCount:  readInt(item, "support_count", "supportCount"),
-		TotalAmount:   totalAmount,
-		Raw:           item,
-	}, true
-}
-
-// UpsertParsedSponsor creates or refreshes the sponsor row for item. is_active is
-// always derived from the expiry that ends up stored (see activeForExpiry), so a
-// sync pass deactivates a lapsed plan and a later payment that pushes the expiry
-// forward reactivates it. now is the instant the expiry is judged against.
-func UpsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, now time.Time, incrementCount bool) (*postgresql.Sponsor, error) {
-	for attempt := 0; attempt < 3; attempt++ {
-		row, err := upsertParsedSponsor(ctx, db, item, now, incrementCount, true)
-		if !errors.Is(err, errSponsorUpdateConflict) {
-			return row, err
-		}
-	}
-	return nil, errSponsorUpdateConflict
-}
-
-var errSponsorUpdateConflict = errors.New("sponsor changed during update; retry required")
-
-func upsertParsedSponsor(ctx context.Context, db *postgresql.Client, item parsedAfdianSponsor, now time.Time, incrementCount bool, allowRetry bool) (*postgresql.Sponsor, error) {
-	existing, err := db.Sponsor.Query().Where(sponsorSchema.IDEQ(item.ID)).Only(ctx)
-	if err != nil && postgresql.IsNotFound(err) && item.OutTradeNo != "" {
-		existing, err = db.Sponsor.Query().Where(sponsorSchema.OutTradeNoEQ(item.OutTradeNo)).Only(ctx)
-	}
-	if err != nil && !postgresql.IsNotFound(err) {
-		return nil, err
-	}
-
-	if existing == nil || postgresql.IsNotFound(err) {
-		create := db.Sponsor.Create().
-			SetID(item.ID).
-			SetSource(sponsorSchema.Source(item.Source)).
-			SetIsActive(activeForExpiry(item.PlanExpiresAt, now)).
-			SetAfdianSyncDisabled(false).
-			SetPlanRank(item.PlanRank).
-			SetSupportCount(maxInt(item.SupportCount, 1)).
-			SetRaw(item.Raw)
-		setSponsorCreateFields(create, item)
-		saved, createErr := create.Save(ctx)
-		if createErr != nil && allowRetry && postgresql.IsConstraintError(createErr) {
-			// A concurrent sync/webhook created the same record between our lookup
-			// and insert; re-resolve and fall through to the update path.
-			return upsertParsedSponsor(ctx, db, item, now, incrementCount, false)
-		}
-		return saved, createErr
-	}
-
-	// An admin can pin a sponsor with afdian_sync_disabled so neither the periodic
-	// sync nor webhooks overwrite it. Leave the record completely untouched.
-	if existing.AfdianSyncDisabled {
-		return existing, nil
-	}
-
-	// Ignore snapshots/orders older than the latest stored payment. A delayed
-	// sync must not undo a renewal, even after a conflict is retried.
-	if item.PaidAt != nil && existing.PaidAt != nil && item.PaidAt.Before(*existing.PaidAt) {
-		return existing, nil
-	}
-
-	// SetNillablePlanExpiresAt(nil) below leaves the stored expiry in place, so
-	// judge activity against the expiry that will actually remain on the row:
-	// the incoming one when Afdian reports it, otherwise the stored one. Trusting
-	// only the incoming item would keep a lapsed plan active forever because
-	// query-sponsor stops reporting expire_time once the plan has ended.
-	effectiveExpiresAt := item.PlanExpiresAt
-	if effectiveExpiresAt == nil {
-		effectiveExpiresAt = existing.PlanExpiresAt
-	}
-	update := existing.Update().
-		Where(sponsorSchema.UpdatedAtEQ(existing.UpdatedAt), sponsorSchema.AfdianSyncDisabledEQ(false)).
-		SetIsActive(activeForExpiry(effectiveExpiresAt, now)).
-		SetPlanRank(item.PlanRank).
-		SetRaw(item.Raw)
-	setSponsorUpdateFields(update, item)
-	if incrementCount && item.OutTradeNo != "" && item.OutTradeNo != stringPtrValue(existing.OutTradeNo) {
-		update.SetSupportCount(existing.SupportCount + 1)
-	} else if item.SupportCount > 0 {
-		update.SetSupportCount(item.SupportCount)
-	}
-	// Compare-and-swap guards the read-derived expiry and activity together,
-	// including an administrator pin applied between the SELECT and UPDATE.
-	saved, err := update.Save(ctx)
-	if postgresql.IsNotFound(err) {
-		return nil, errSponsorUpdateConflict
-	}
-	return saved, err
-}
-
-func setSponsorCreateFields(create *postgresql.SponsorCreate, item parsedAfdianSponsor) {
-	create.SetNillableAfdianUserID(stringPointerOrNil(trimLimit(item.AfdianUserID, 128)))
-	create.SetNillableOutTradeNo(stringPointerOrNil(trimLimit(item.OutTradeNo, 128)))
-	create.SetNillableName(stringPointerOrNil(trimLimit(item.Name, 128)))
-	create.SetNillableAvatar(stringPointerOrNil(trimLimit(item.Avatar, 500)))
-	create.SetNillablePlanID(stringPointerOrNil(trimLimit(item.PlanID, 128)))
-	create.SetNillablePlanName(stringPointerOrNil(trimLimit(item.PlanName, 128)))
-	create.SetNillablePlanPayMonths(item.PlanPayMonths)
-	create.SetNillableMessage(stringPointerOrNil(trimLimit(item.Message, 1000)))
-	create.SetNillablePaidAt(item.PaidAt)
-	create.SetNillablePlanExpiresAt(item.PlanExpiresAt)
-	create.SetNillableTotalAmount(stringPointerOrNil(trimLimit(item.TotalAmount, 32)))
-}
-
-func setSponsorUpdateFields(update *postgresql.SponsorUpdateOne, item parsedAfdianSponsor) {
-	update.SetNillableAfdianUserID(stringPointerOrNil(trimLimit(item.AfdianUserID, 128)))
-	update.SetNillableOutTradeNo(stringPointerOrNil(trimLimit(item.OutTradeNo, 128)))
-	update.SetNillablePaidAt(item.PaidAt)
-	update.SetNillablePlanExpiresAt(item.PlanExpiresAt)
-	update.SetNillableTotalAmount(stringPointerOrNil(trimLimit(item.TotalAmount, 32)))
-	update.SetNillablePlanPayMonths(item.PlanPayMonths)
-	update.SetSource(sponsorSchema.Source(item.Source))
-	update.SetNillableName(stringPointerOrNil(trimLimit(item.Name, 128)))
-	update.SetNillableAvatar(stringPointerOrNil(trimLimit(item.Avatar, 500)))
-	update.SetNillablePlanID(stringPointerOrNil(trimLimit(item.PlanID, 128)))
-	update.SetNillablePlanName(stringPointerOrNil(trimLimit(item.PlanName, 128)))
-	update.SetNillableMessage(stringPointerOrNil(trimLimit(item.Message, 1000)))
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func ParseAfdianWebhookPayload(payload map[string]any, now time.Time) (parsedAfdianSponsor, bool) {
-	data := readMap(payload, "data")
-	if data == nil {
-		data = payload
-	}
-	order := readMap(data, "order")
-	if order == nil {
-		order = readMap(payload, "order")
-	}
-	if order == nil {
-		return parsedAfdianSponsor{}, false
-	}
-	return parseAfdianOrder(order, now)
-}
-
-// ErrAfdianNotConfigured signals that the Afdian API credentials required to
-// reach the open API (e.g. to verify a webhook order) are missing.
-var ErrAfdianNotConfigured = errors.New("afdian user_id or api token is not configured")
-
-func afdianHTTPClient(cfg AfdianConfig) *http.Client {
-	return &http.Client{Timeout: cfg.timeout()}
-}
-
-func afdianBaseURL(cfg AfdianConfig) string {
-	return cfg.baseURL()
-}
-
-// VerifyAfdianOrder re-queries the Afdian open API for the given out_trade_no and
-// returns the authoritative, parsed order. Webhook payloads carry no signature, so
-// callers must use this to confirm an order is real before trusting it. Returns
-// ErrAfdianNotConfigured when API credentials are missing, or found=false when the
-// order does not exist on Afdian's side (likely forged).
-func VerifyAfdianOrder(ctx context.Context, cfg AfdianConfig, outTradeNo string, now time.Time) (parsedAfdianSponsor, bool, error) {
-	outTradeNo = strings.TrimSpace(outTradeNo)
-	if outTradeNo == "" {
-		return parsedAfdianSponsor{}, false, nil
-	}
-	if !cfg.credentialsConfigured() {
-		return parsedAfdianSponsor{}, false, ErrAfdianNotConfigured
-	}
-
-	order, found, err := queryAfdianOrderByTradeNo(ctx, afdianHTTPClient(cfg), afdianBaseURL(cfg), cfg, outTradeNo)
-	if err != nil || !found {
-		return parsedAfdianSponsor{}, false, err
-	}
-	parsed, ok := parseAfdianOrder(order, now)
-	if !ok {
-		return parsedAfdianSponsor{}, false, nil
-	}
-	return parsed, true, nil
-}
-
-func queryAfdianOrderByTradeNo(ctx context.Context, client *http.Client, baseURL string, cfg AfdianConfig, outTradeNo string) (map[string]any, bool, error) {
-	paramsBytes, err := json.Marshal(map[string]any{"out_trade_no": outTradeNo})
-	if err != nil {
-		return nil, false, err
-	}
-	params := string(paramsBytes)
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	body := map[string]any{
-		"user_id": cfg.userID,
-		"params":  params,
-		"ts":      ts,
-		"sign":    afdianSign(cfg.apiToken, params, ts, cfg.userID),
-	}
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, false, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/query-order", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, false, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, false, err
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
-	if err != nil {
-		return nil, false, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, false, fmt.Errorf("afdian api returned status %d", resp.StatusCode)
-	}
-
-	var payload map[string]any
-
-	if err := json.UnmarshalRead(bytes.NewReader(respBody), &payload, jsonvalue.Numbers); err != nil {
-		return nil, false, err
-	}
-	if ec := readInt(payload, "ec"); ec != 0 && ec != 200 {
-		return nil, false, fmt.Errorf("afdian api returned ec %d", ec)
-	}
-	data := readMap(payload, "data")
-	if data == nil {
-		return nil, false, nil
-	}
-	listRaw, ok := data["list"].([]any)
-	if !ok {
-		return nil, false, nil
-	}
-	for _, raw := range listRaw {
-		order, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		if readString(order, "out_trade_no", "outTradeNo") == outTradeNo {
-			return order, true, nil
-		}
-	}
-	return nil, false, nil
-}
-
-func SyncAfdianSponsors(ctx context.Context, db *postgresql.Client, cfg AfdianConfig, now time.Time) (AfdianSyncResult, error) {
-	if !cfg.credentialsConfigured() {
-		return AfdianSyncResult{}, ErrAfdianNotConfigured
-	}
-	client := afdianHTTPClient(cfg)
-	baseURL := afdianBaseURL(cfg)
-
-	result := AfdianSyncResult{}
-	for page := 1; page <= 100; page++ {
-		items, totalPage, err := queryAfdianSponsorPage(ctx, client, baseURL, cfg, page)
-		if err != nil {
-			return result, err
-		}
-		for _, raw := range items {
-			parsed, ok := parseAfdianSponsorItem(raw, now)
-			if !ok {
-				result.Skipped++
-				continue
-			}
-			if _, err := UpsertParsedSponsor(ctx, db, parsed, now, false); err != nil {
-				return result, err
-			}
-			result.Imported++
-		}
-		if totalPage <= page || len(items) == 0 {
-			break
-		}
-	}
-	return result, nil
-}
-
-func queryAfdianSponsorPage(ctx context.Context, client *http.Client, baseURL string, cfg AfdianConfig, page int) ([]map[string]any, int, error) {
-	paramsBytes, err := json.Marshal(map[string]any{
-		"page": page,
-	})
-	if err != nil {
-		return nil, 0, err
-	}
-	params := string(paramsBytes)
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	body := map[string]any{
-		"user_id": cfg.userID,
-		"params":  params,
-		"ts":      ts,
-		"sign":    afdianSign(cfg.apiToken, params, ts, cfg.userID),
-	}
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/query-sponsor", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
-	if err != nil {
-		return nil, 0, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, 0, fmt.Errorf("afdian api returned status %d", resp.StatusCode)
-	}
-
-	var payload map[string]any
-
-	if err := json.UnmarshalRead(bytes.NewReader(respBody), &payload, jsonvalue.Numbers); err != nil {
-		return nil, 0, err
-	}
-	if ec := readInt(payload, "ec"); ec != 0 && ec != 200 {
-		return nil, 0, fmt.Errorf("afdian api returned ec %d", ec)
-	}
-	data := readMap(payload, "data")
-	if data == nil {
-		return nil, 0, nil
-	}
-	totalPage := readInt(data, "total_page", "totalPage")
-	if totalPage <= 0 {
-		totalPage = page
-	}
-	listRaw, ok := data["list"].([]any)
-	if !ok {
-		return nil, totalPage, nil
-	}
-	items := make([]map[string]any, 0, len(listRaw))
-	for _, raw := range listRaw {
-		if item, ok := raw.(map[string]any); ok {
-			items = append(items, item)
-		}
-	}
-	return items, totalPage, nil
-}
-
-func afdianSign(token string, params string, ts string, userID string) string {
-	// Afdian's published API protocol requires this exact MD5 signature format.
-	// It authenticates a compatibility request and is not used for password
-	// storage, content integrity, or any protocol we control.
-	sum := md5.Sum([]byte(token + "params" + params + "ts" + ts + "user_id" + userID)) // NOSONAR
-	return hex.EncodeToString(sum[:])
 }

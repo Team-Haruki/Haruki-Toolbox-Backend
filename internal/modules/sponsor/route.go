@@ -108,7 +108,7 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 			parsed = verified
 		}
 
-		if _, err := UpsertParsedSponsor(c.Context(), apiHelper.DBManager.DB, parsed, now, true); err != nil {
+		if _, err := RecordAfdianOrder(c.Context(), apiHelper.DBManager.DB, parsed, now); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"ec": 500,
 				"em": "failed to save sponsor order",
