@@ -68,6 +68,27 @@ func validateStartsAt(startsAt time.Time, now time.Time) error {
 	return nil
 }
 
+// checkNoFutureGap refuses a set of entries in which one would start in the
+// future after a gap (see LeavesFutureGap). candidate replaces the entry with
+// the same id, or is added when its id is 0.
+func checkNoFutureGap(ctx context.Context, db *postgresql.Client, row *postgresql.Sponsor, candidate ManualDurationFacts, now time.Time) error {
+	durations, err := LoadSponsorDurations(ctx, db, row)
+	if err != nil {
+		return err
+	}
+	entries := make([]ManualDurationFacts, 0, len(durations.Manual)+1)
+	for _, entry := range durations.Manual {
+		if candidate.ID == 0 || entry.ID != candidate.ID {
+			entries = append(entries, entry)
+		}
+	}
+	entries = append(entries, candidate)
+	if LeavesFutureGap(durations.Afdian.End, entries, now) {
+		return ErrInvalidManualDuration
+	}
+	return nil
+}
+
 func loadSplitSponsor(ctx context.Context, db *postgresql.Client, sponsorID string) (*postgresql.Sponsor, error) {
 	row, err := db.Sponsor.Get(ctx, sponsorID)
 	if err != nil {
@@ -82,7 +103,8 @@ func loadSplitSponsor(ctx context.Context, db *postgresql.Client, sponsorID stri
 // AddManualDuration records manual time for a sponsor and recomputes it.
 // starts_at defaults to now.
 func AddManualDuration(ctx context.Context, db *postgresql.Client, sponsorID string, input ManualDurationInput, actor string, now time.Time) (*postgresql.SponsorManualDuration, error) {
-	if _, err := loadSplitSponsor(ctx, db, sponsorID); err != nil {
+	row, err := loadSplitSponsor(ctx, db, sponsorID)
+	if err != nil {
 		return nil, err
 	}
 	if input.Amount == nil || input.Unit == nil || input.Note == nil {
@@ -101,6 +123,9 @@ func AddManualDuration(ctx context.Context, db *postgresql.Client, sponsorID str
 		startsAt = input.StartsAt.UTC()
 	}
 	if err := validateStartsAt(startsAt, now); err != nil {
+		return nil, err
+	}
+	if err := checkNoFutureGap(ctx, db, row, ManualDurationFacts{Amount: *input.Amount, Unit: unit, StartsAt: startsAt}, now); err != nil {
 		return nil, err
 	}
 	entry, err := db.SponsorManualDuration.Create().
@@ -136,7 +161,8 @@ func loadManualEntry(ctx context.Context, db *postgresql.Client, sponsorID strin
 // UpdateManualDuration edits an entry (migrated ones included) and
 // recomputes the sponsor.
 func UpdateManualDuration(ctx context.Context, db *postgresql.Client, sponsorID string, entryID int, input ManualDurationInput, actor string, now time.Time) (*postgresql.SponsorManualDuration, error) {
-	if _, err := loadSplitSponsor(ctx, db, sponsorID); err != nil {
+	row, err := loadSplitSponsor(ctx, db, sponsorID)
+	if err != nil {
 		return nil, err
 	}
 	entry, err := loadManualEntry(ctx, db, sponsorID, entryID)
@@ -166,12 +192,16 @@ func UpdateManualDuration(ctx context.Context, db *postgresql.Client, sponsorID 
 		}
 		update.SetNote(note)
 	}
+	startsAt := entry.StartsAt
 	if input.StartsAt != nil {
-		startsAt := input.StartsAt.UTC()
+		startsAt = input.StartsAt.UTC()
 		if err := validateStartsAt(startsAt, now); err != nil {
 			return nil, err
 		}
 		update.SetStartsAt(startsAt)
+	}
+	if err := checkNoFutureGap(ctx, db, row, ManualDurationFacts{ID: entry.ID, Amount: amount, Unit: unit, StartsAt: startsAt}, now); err != nil {
+		return nil, err
 	}
 	saved, err := update.Save(ctx)
 	if err != nil {

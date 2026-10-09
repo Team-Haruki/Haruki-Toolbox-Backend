@@ -250,6 +250,39 @@ func ComputeEffectiveExpiry(afdianEnd *time.Time, entries []ManualDurationFacts)
 	return cursor
 }
 
+// LeavesFutureGap reports whether some manual entry would start after now
+// and after the end of everything before it. The effective expiry would then
+// lie in the future although the sponsor is not covered until that start, so
+// such entries are refused (CategoryFor only looks at the expiry).
+func LeavesFutureGap(afdianEnd *time.Time, entries []ManualDurationFacts, now time.Time) bool {
+	sorted := append([]ManualDurationFacts(nil), entries...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if !sorted[i].StartsAt.Equal(sorted[j].StartsAt) {
+			return sorted[i].StartsAt.Before(sorted[j].StartsAt)
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
+	var cursor *time.Time
+	if afdianEnd != nil {
+		end := afdianEnd.UTC()
+		cursor = &end
+	}
+	for _, entry := range sorted {
+		if entry.Length() <= 0 {
+			continue
+		}
+		start := entry.StartsAt.UTC()
+		if cursor != nil && !start.After(*cursor) {
+			start = *cursor
+		} else if start.After(now) {
+			return true
+		}
+		end := start.Add(entry.Length())
+		cursor = &end
+	}
+	return false
+}
+
 // CategoryFor decides the category from the merged duration. A sponsor whose
 // effective expiry equals now has expired.
 func CategoryFor(hasDuration bool, effectiveExpiresAt *time.Time, now time.Time) Category {

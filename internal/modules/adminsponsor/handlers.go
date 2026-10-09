@@ -75,16 +75,25 @@ func loadSponsorOr404(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRoute
 	return row, nil
 }
 
-func respondDetail(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, sponsorID string, message string) error {
+// respondDetail builds the sponsor detail and writes the audit entry for
+// action: success (with meta) only once the detail is built, failure when
+// building it fails.
+func respondDetail(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, action, sponsorID, message string, meta map[string]any) error {
+	resp, err := loadAdminSponsorDetail(c, apiHelper, sponsorID)
+	if err != nil {
+		auditFailure(c, apiHelper, action, sponsorID, "build_sponsor_detail_failed", meta)
+		return harukiAPIHelper.ErrorInternal(c, adminSponsorQueryFailedMessage)
+	}
+	adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminSponsorTargetType, sponsorID, harukiAPIHelper.SystemLogResultSuccess, meta)
+	return harukiAPIHelper.Responses.SuccessResponse(c, message, &resp)
+}
+
+func loadAdminSponsorDetail(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, sponsorID string) (adminSponsorDetailResponse, error) {
 	row, err := apiHelper.DBManager.DB.Sponsor.Get(c.Context(), sponsorID)
 	if err != nil {
-		return harukiAPIHelper.ErrorInternal(c, adminSponsorQueryFailedMessage)
+		return adminSponsorDetailResponse{}, err
 	}
-	resp, err := buildAdminSponsorDetail(c.Context(), apiHelper.DBManager.DB, row, time.Now().UTC())
-	if err != nil {
-		return harukiAPIHelper.ErrorInternal(c, adminSponsorQueryFailedMessage)
-	}
-	return harukiAPIHelper.Responses.SuccessResponse(c, message, &resp)
+	return buildAdminSponsorDetail(c.Context(), apiHelper.DBManager.DB, row, time.Now().UTC())
 }
 
 func handleAdminGetSponsor(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -93,8 +102,7 @@ func handleAdminGetSponsor(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		if row == nil {
 			return err
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionDetail, adminSponsorTargetType, row.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return respondDetail(c, apiHelper, row.ID, "success")
+		return respondDetail(c, apiHelper, adminSponsorActionDetail, row.ID, "success", nil)
 	}
 }
 
@@ -128,8 +136,7 @@ func handleAdminCreateSponsor(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			auditFailure(c, apiHelper, adminSponsorActionCreate, "new", "create_sponsor_failed", nil)
 			return harukiAPIHelper.ErrorInternal(c, "failed to create sponsor")
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionCreate, adminSponsorTargetType, row.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
-		return respondDetail(c, apiHelper, row.ID, "sponsor created")
+		return respondDetail(c, apiHelper, adminSponsorActionCreate, row.ID, "sponsor created", nil)
 	}
 }
 
@@ -220,6 +227,14 @@ func handleAdminUpdateSponsor(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 	}
 }
 
+func manualEntryMeta(entry *postgresql.SponsorManualDuration) map[string]any {
+	return map[string]any{
+		adminSponsorManualEntryMetaKey: entry.ID,
+		"amount":                       entry.Amount,
+		"unit":                         string(entry.Unit),
+	}
+}
+
 func parseManualPayload(c fiber.Ctx) (sharedSponsor.ManualDurationInput, error) {
 	var payload adminManualDurationPayload
 	if err := c.Bind().Body(&payload); err != nil {
@@ -262,7 +277,7 @@ func respondManualError(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "duration migration has not run for this sponsor yet; run an Afdian sync first", nil)
 	case errors.Is(err, sharedSponsor.ErrInvalidManualDuration):
 		auditFailure(c, apiHelper, action, sponsorID, "invalid_manual_duration", meta)
-		return harukiAPIHelper.ErrorBadRequest(c, "invalid manual duration: amount must be positive, unit day or month, note required (max 500)")
+		return harukiAPIHelper.ErrorBadRequest(c, "invalid manual duration: amount must be positive, unit day or month, note required (max 500), and it may not start in the future after a gap")
 	default:
 		auditFailure(c, apiHelper, action, sponsorID, "manual_duration_failed", meta)
 		return harukiAPIHelper.ErrorInternal(c, adminSponsorManualFailedMessage)
@@ -285,12 +300,7 @@ func handleAdminCreateManualDuration(apiHelper *harukiAPIHelper.HarukiToolboxRou
 		if err != nil {
 			return respondManualError(c, apiHelper, adminSponsorActionManualCreate, sponsorID, 0, err)
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionManualCreate, adminSponsorTargetType, sponsorID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			adminSponsorManualEntryMetaKey: entry.ID,
-			"amount":                       entry.Amount,
-			"unit":                         string(entry.Unit),
-		})
-		return respondDetail(c, apiHelper, sponsorID, "manual duration added")
+		return respondDetail(c, apiHelper, adminSponsorActionManualCreate, sponsorID, "manual duration added", manualEntryMeta(entry))
 	}
 }
 
@@ -314,12 +324,7 @@ func handleAdminUpdateManualDuration(apiHelper *harukiAPIHelper.HarukiToolboxRou
 		if err != nil {
 			return respondManualError(c, apiHelper, adminSponsorActionManualUpdate, sponsorID, entryID, err)
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionManualUpdate, adminSponsorTargetType, sponsorID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
-			adminSponsorManualEntryMetaKey: entry.ID,
-			"amount":                       entry.Amount,
-			"unit":                         string(entry.Unit),
-		})
-		return respondDetail(c, apiHelper, sponsorID, "manual duration updated")
+		return respondDetail(c, apiHelper, adminSponsorActionManualUpdate, sponsorID, "manual duration updated", manualEntryMeta(entry))
 	}
 }
 
@@ -333,8 +338,7 @@ func handleAdminDeleteManualDuration(apiHelper *harukiAPIHelper.HarukiToolboxRou
 		if err := sharedSponsor.DeleteManualDuration(c.Context(), apiHelper.DBManager.DB, sponsorID, entryID, time.Now().UTC()); err != nil {
 			return respondManualError(c, apiHelper, adminSponsorActionManualDelete, sponsorID, entryID, err)
 		}
-		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionManualDelete, adminSponsorTargetType, sponsorID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{adminSponsorManualEntryMetaKey: entryID})
-		return respondDetail(c, apiHelper, sponsorID, "manual duration deleted")
+		return respondDetail(c, apiHelper, adminSponsorActionManualDelete, sponsorID, "manual duration deleted", map[string]any{adminSponsorManualEntryMetaKey: entryID})
 	}
 }
 
@@ -344,8 +348,12 @@ func handleAdminSyncAfdianSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		// runs any pending duration split.
 		result, err := sharedSponsor.SyncAfdianSponsors(c.Context(), apiHelper.DBManager.DB, afdianConfig, time.Now().UTC(), sharedSponsor.SyncOptions{Full: true})
 		if err != nil {
+			// The error can carry upstream details; it stays in the audit log.
 			auditFailure(c, apiHelper, adminSponsorActionSyncAfdian, "afdian", "afdian_sync_failed", map[string]any{"error": err.Error()})
-			return harukiAPIHelper.ErrorBadRequest(c, "failed to sync afdian sponsors: "+err.Error())
+			if errors.Is(err, sharedSponsor.ErrAfdianNotConfigured) {
+				return harukiAPIHelper.ErrorBadRequest(c, "afdian api credentials are not configured")
+			}
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadGateway, "failed to sync afdian sponsors", nil)
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminSponsorActionSyncAfdian, adminSponsorTargetType, "afdian", harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"imported":   result.Imported,

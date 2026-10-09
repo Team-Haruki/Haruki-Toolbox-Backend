@@ -183,3 +183,32 @@ func TestCategoryForMixedAndManualOnlySponsors(t *testing.T) {
 		t.Fatalf("manual entry recorded today: %s", got)
 	}
 }
+
+func TestLeavesFutureGap(t *testing.T) {
+	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
+	day := 24 * time.Hour
+	afdianEnd := now.Add(10 * day)
+	lapsed := now.Add(-10 * day)
+	entry := func(id int, start time.Time) ManualDurationFacts {
+		return ManualDurationFacts{ID: id, Amount: 5, Unit: ManualUnitDay, StartsAt: start}
+	}
+	cases := []struct {
+		name    string
+		end     *time.Time
+		entries []ManualDurationFacts
+		want    bool
+	}{
+		{"recorded today after a lapse", &lapsed, []ManualDurationFacts{entry(1, now)}, false},
+		{"future start inside Afdian time", &afdianEnd, []ManualDurationFacts{entry(1, now.Add(5*day))}, false},
+		{"future start right at the Afdian end", &afdianEnd, []ManualDurationFacts{entry(1, afdianEnd)}, false},
+		{"future start after a lapse", &lapsed, []ManualDurationFacts{entry(1, now.Add(day))}, true},
+		{"future start after the Afdian end", &afdianEnd, []ManualDurationFacts{entry(1, afdianEnd.Add(day))}, true},
+		{"manual only, future start", nil, []ManualDurationFacts{entry(1, now.Add(time.Hour))}, true},
+		{"chained entries stay contiguous", &afdianEnd, []ManualDurationFacts{entry(1, now), entry(2, afdianEnd.Add(3*day))}, false},
+	}
+	for _, tc := range cases {
+		if got := LeavesFutureGap(tc.end, tc.entries, now); got != tc.want {
+			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
