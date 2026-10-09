@@ -38,7 +38,7 @@ func legacyFixture() []legacyFixtureRow {
 	day := 24 * time.Hour
 	paid := func(daysAgo int) time.Time { return fixtureNow.Add(-time.Duration(daysAgo) * day) }
 	end := func(start time.Time, months int) time.Time {
-		return truncateToAfdianDay(start.Add(time.Duration(months*31) * day))
+		return startOfAfdianDay(start).Add(time.Duration(months*31) * day)
 	}
 	return []legacyFixtureRow{
 		{

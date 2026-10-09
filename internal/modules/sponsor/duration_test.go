@@ -46,48 +46,129 @@ func TestComputeAfdianPeriodCountsThirtyOneDaysToMidnightUTC8(t *testing.T) {
 	}
 }
 
-func TestComputeAfdianPeriodStacksRenewalsAndRestartsAfterGap(t *testing.T) {
-	first := time.Date(2026, 1, 1, 10, 0, 0, 0, utc8)
-	renewal := time.Date(2026, 1, 15, 10, 0, 0, 0, utc8) // while active: stacks
-	lapsed := time.Date(2026, 6, 1, 10, 0, 0, 0, utc8)   // after a gap: restarts
-	orders := []AfdianOrderFacts{
-		durationOrder("c", "", 0, 2, lapsed), // 自选方案, out of order on purpose
-		durationOrder("a", "plan", 0, 1, first),
-		durationOrder("b", "plan", 0, 3, renewal),
-		durationOrder("x", "plan", 1, 1, renewal), // sale item: no time
-	}
-	period := ComputeAfdianPeriod(orders, AfdianReport{})
-	want := time.Date(2026, 6, 1, 0, 0, 0, 0, utc8).Add(62 * 24 * time.Hour)
-	if period.End == nil || !period.End.Equal(want) {
-		t.Fatalf("end = %v, want %v", period.End, want)
-	}
-	if period.Months != 6 || period.DurationOrders != 3 || period.OneTimeOrders != 1 {
-		t.Fatalf("months=%d duration=%d one-time=%d", period.Months, period.DurationOrders, period.OneTimeOrders)
-	}
+// afdianDays is n days of Afdian validity.
+func afdianDays(n int) time.Duration { return time.Duration(n) * 24 * time.Hour }
 
-	// Without the gap the two first orders run back to back: 1 + 3 months.
-	stacked := ComputeAfdianPeriod(orders[1:3], AfdianReport{})
-	wantStacked := time.Date(2026, 1, 1, 0, 0, 0, 0, utc8).Add(4 * 31 * 24 * time.Hour)
-	if stacked.End == nil || !stacked.End.Equal(wantStacked) {
-		t.Fatalf("stacked end = %v, want %v", stacked.End, wantStacked)
+// The fixtures below are anonymised copies of the patterns in Afdian's own
+// order export; each want is the export's 有效期结束 + 1 s (ends are exclusive).
+func TestComputeAfdianPeriodMatchesAfdianValidity(t *testing.T) {
+	day := func(y int, m time.Month, d, h int) time.Time { return time.Date(y, m, d, h, 17, 5, 0, utc8) }
+	midnight := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, utc8) }
+	cases := []struct {
+		name   string
+		orders []AfdianOrderFacts
+		want   time.Time
+		months int
+	}{
+		{
+			name: "same-plan early renewal continues the running order",
+			orders: []AfdianOrderFacts{
+				durationOrder("a1", "plan-a", 0, 3, day(2026, 5, 16, 9)),
+				durationOrder("a2", "plan-a", 0, 3, day(2026, 7, 30, 21)),
+			},
+			want:   midnight(2026, 5, 16).Add(afdianDays(186)),
+			months: 6,
+		},
+		{
+			name: "6m then 1m of the same plan continue across months",
+			orders: []AfdianOrderFacts{
+				durationOrder("b1", "plan-b", 0, 6, day(2026, 5, 15, 22)),
+				durationOrder("b2", "plan-b", 0, 1, day(2026, 9, 1, 8)),
+			},
+			want:   midnight(2026, 5, 15).Add(afdianDays(217)),
+			months: 7,
+		},
+		{
+			name: "two 自选方案 orders on the same day share one validity",
+			orders: []AfdianOrderFacts{
+				durationOrder("c1", "", 0, 1, day(2026, 5, 18, 10)),
+				durationOrder("c2", "", 0, 1, day(2026, 5, 18, 11)),
+			},
+			want:   midnight(2026, 5, 18).Add(afdianDays(31)),
+			months: 2,
+		},
+		{
+			name: "a 自选方案 order while a fixed plan runs starts on its own day",
+			orders: []AfdianOrderFacts{
+				durationOrder("d1", "plan-a", 0, 1, day(2026, 5, 18, 9)),
+				durationOrder("d2", "", 0, 1, day(2026, 6, 8, 12)),
+			},
+			want:   midnight(2026, 6, 8).Add(afdianDays(31)),
+			months: 2,
+		},
+		{
+			name: "fixed 1m and 自选方案 36m on the same day: the later end wins",
+			orders: []AfdianOrderFacts{
+				durationOrder("e1", "plan-c", 0, 1, day(2026, 5, 15, 9)),
+				durationOrder("e2", "", 0, 36, day(2026, 5, 15, 9).Add(time.Minute)),
+			},
+			want:   midnight(2026, 5, 15).Add(afdianDays(36 * 31)),
+			months: 37,
+		},
+		{
+			name: "a renewal after the plan lapsed restarts on its payment day",
+			orders: []AfdianOrderFacts{
+				durationOrder("f1", "plan-a", 0, 1, day(2026, 1, 1, 9)),
+				durationOrder("f2", "plan-a", 0, 2, day(2026, 6, 1, 23)),
+			},
+			want:   midnight(2026, 6, 1).Add(afdianDays(62)),
+			months: 3,
+		},
+		{
+			name: "a different plan does not continue the running one",
+			orders: []AfdianOrderFacts{
+				durationOrder("g1", "plan-a", 0, 3, day(2026, 5, 1, 9)),
+				durationOrder("g2", "plan-b", 0, 1, day(2026, 5, 10, 9)),
+			},
+			want:   midnight(2026, 5, 1).Add(afdianDays(93)),
+			months: 4,
+		},
+		{
+			name: "a sale-plan order grants no time",
+			orders: []AfdianOrderFacts{
+				durationOrder("h1", "plan-a", 0, 1, day(2026, 5, 1, 9)),
+				durationOrder("h2", "item", afdianProductTypeForSale, 1, day(2026, 5, 2, 9)),
+			},
+			want:   midnight(2026, 5, 1).Add(afdianDays(31)),
+			months: 1,
+		},
+	}
+	for _, tc := range cases {
+		// Input order must not matter: payment time decides.
+		reversed := make([]AfdianOrderFacts, 0, len(tc.orders))
+		for i := len(tc.orders) - 1; i >= 0; i-- {
+			reversed = append(reversed, tc.orders[i])
+		}
+		period := ComputeAfdianPeriod(reversed, AfdianReport{})
+		if period.End == nil || !period.End.Equal(tc.want) {
+			t.Errorf("%s: end = %v, want %v", tc.name, period.End, tc.want.UTC())
+		}
+		if period.Months != tc.months {
+			t.Errorf("%s: months = %d, want %d", tc.name, period.Months, tc.months)
+		}
 	}
 }
 
-func TestComputeAfdianPeriodPrefersFreshAfdianReport(t *testing.T) {
+func TestComputeAfdianPeriodUsesOnlyALaterFreshReport(t *testing.T) {
 	paidAt := time.Date(2026, 1, 1, 10, 0, 0, 0, utc8)
 	orders := []AfdianOrderFacts{durationOrder("a", "plan", 0, 1, paidAt)}
-	reported := time.Date(2026, 3, 1, 0, 0, 0, 0, utc8)
+	derived := time.Date(2026, 2, 1, 0, 0, 0, 0, utc8)
+	later := time.Date(2026, 3, 1, 0, 0, 0, 0, utc8)
+	earlier := time.Date(2026, 1, 20, 0, 0, 0, 0, utc8)
+	fresh := timePtr(paidAt.Add(time.Hour))
 
-	fresh := ComputeAfdianPeriod(orders, AfdianReport{ExpiresAt: &reported, ObservedAt: timePtr(paidAt.Add(time.Hour))})
-	if fresh.End == nil || !fresh.End.Equal(reported) {
-		t.Fatalf("fresh report: end = %v, want reported %v", fresh.End, reported)
+	if got := ComputeAfdianPeriod(orders, AfdianReport{ExpiresAt: &later, ObservedAt: fresh}); !got.End.Equal(later) {
+		t.Fatalf("later fresh report: %v, want %v", got.End, later)
 	}
-	// Observed before the newest order was paid: it misses that order.
-	stale := ComputeAfdianPeriod(orders, AfdianReport{ExpiresAt: &reported, ObservedAt: timePtr(paidAt.Add(-time.Hour))})
-	if stale.End == nil || stale.End.Equal(reported) {
-		t.Fatalf("stale report: end = %v, want order-derived", stale.End)
+	if got := ComputeAfdianPeriod(orders, AfdianReport{ExpiresAt: &earlier, ObservedAt: fresh}); !got.End.Equal(derived) {
+		t.Fatalf("earlier report must not cut the order-derived time: %v", got.End)
 	}
-	// One-time orders only: no time at all.
+	if got := ComputeAfdianPeriod(orders, AfdianReport{ExpiresAt: &later, ObservedAt: timePtr(paidAt.Add(-time.Hour))}); !got.End.Equal(derived) {
+		t.Fatalf("stale report used: %v", got.End)
+	}
+	if got := ComputeAfdianPeriod(nil, AfdianReport{ExpiresAt: &later, ObservedAt: fresh}); got.HasDuration() {
+		t.Fatalf("a report without duration orders granted time: %+v", got)
+	}
 	none := ComputeAfdianPeriod([]AfdianOrderFacts{durationOrder("b", "", 1, 1, paidAt)}, AfdianReport{})
 	if none.HasDuration() || none.OneTimeOrders != 1 {
 		t.Fatalf("one-time only: %+v", none)

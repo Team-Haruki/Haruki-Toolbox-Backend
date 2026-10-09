@@ -141,7 +141,9 @@ func TestRecordAfdianOrderStacksCustomPlanOrders(t *testing.T) {
 	renewal := first.AddDate(0, 1, 0)
 	row := recordOrder(t, db, orderJSON("custom-user", "o2", "", 0, 2, renewal), renewal)
 
-	want := truncateToAfdianDay(first.Add(5 * 31 * 24 * time.Hour))
+	// 自选方案 orders do not continue each other: the later one runs from its
+	// own payment day, and the sponsor's time ends with the later-ending one.
+	want := startOfAfdianDay(first).Add(3 * 31 * 24 * time.Hour)
 	if row.PlanExpiresAt == nil || !row.PlanExpiresAt.Equal(want) {
 		t.Fatalf("effective expiry = %v, want %v", row.PlanExpiresAt, want)
 	}
@@ -181,7 +183,7 @@ func TestLapsedPlanBecomesFormerNotOneTime(t *testing.T) {
 	db := openSponsorDB(t)
 	paidAt := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	recordOrder(t, db, orderJSON("lapsed-user", "o1", "plan", 0, 1, paidAt), paidAt)
-	plan := map[string]any{"plan_id": "plan", "name": "支持一下", "pay_month": float64(1), "product_type": float64(0), "expire_time": float64(truncateToAfdianDay(paidAt.Add(31 * 24 * time.Hour)).Unix())}
+	plan := map[string]any{"plan_id": "plan", "name": "支持一下", "pay_month": float64(1), "product_type": float64(0), "expire_time": float64(startOfAfdianDay(paidAt).Add(31 * 24 * time.Hour).Unix())}
 	if err := UpsertAfdianSponsorProfile(ctx, db, sponsorItem("lapsed-user", plan, paidAt), paidAt.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +438,7 @@ func TestSyncAfdianSponsorsFetchesOrdersAndProfiles(t *testing.T) {
 	db := openSponsorDB(t)
 	paidAt := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	syncAt := paidAt.AddDate(0, 2, 0)
-	renewedEnd := truncateToAfdianDay(syncAt.Add(31 * 24 * time.Hour))
+	renewedEnd := startOfAfdianDay(syncAt).Add(31 * 24 * time.Hour)
 
 	orders := []map[string]any{
 		orderJSON("renewed-user", "o3", "plan", 0, 1, syncAt),
@@ -471,7 +473,7 @@ func TestSyncAfdianSponsorsFetchesOrdersAndProfiles(t *testing.T) {
 				{"user":{"user_id":"renewed-user","name":"B"},"all_sum_amount":"10.00","last_pay_time":%d,"current_plan":{"plan_id":"plan","name":"月度赞助","pay_month":1,"product_type":0,"expire_time":%d}},
 				{"user":{"user_id":"custom-user","name":"C"},"all_sum_amount":"30.00","last_pay_time":%d,"current_plan":{"name":"自选方案","expire_time":%d}},
 				{"user":{"user_id":"shop-user","name":"D"},"all_sum_amount":"9.00","last_pay_time":%d,"current_plan":{"name":""}}
-			]}}`, paidAt.Unix(), syncAt.Unix(), renewedEnd.Unix(), paidAt.Unix(), truncateToAfdianDay(paidAt.Add(6*31*24*time.Hour)).Unix(), paidAt.Unix())
+			]}}`, paidAt.Unix(), syncAt.Unix(), renewedEnd.Unix(), paidAt.Unix(), startOfAfdianDay(paidAt).Add(6*31*24*time.Hour).Unix(), paidAt.Unix())
 		default:
 			http.NotFound(w, r)
 		}

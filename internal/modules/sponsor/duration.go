@@ -80,7 +80,9 @@ type AfdianOrderFacts struct {
 //
 //   - status != 2: not a completed payment, ignored;
 //   - product_type == 1 (售卖方案, a sale/merchandise plan): one-time;
-//   - month <= 0: one-time, there is no time to grant;
+//   - month <= 0: one-time, there is no time to grant. A defensive fallback
+//     only: Afdian's 自选方案 has a one-month minimum, so a sale plan is the
+//     only real source of an order without time;
 //   - otherwise (常规方案, product_type 0 or absent): duration of `month`
 //     months. This includes 自选方案 orders, whose plan_id is empty: the sponsor
 //     chooses both the amount and the number of months, and the order's own
@@ -126,17 +128,32 @@ type AfdianReport struct {
 	ObservedAt *time.Time
 }
 
-// ComputeAfdianPeriod recomputes the Afdian time from the order history, the
-// way Afdian computes a plan's expiry: duration orders are applied in payment
-// order, each starting at the later of its payment time and the end of the
-// previous one, adding 31 days per month, and the end is truncated to 00:00
-// UTC+8. (Checked against every live current_plan.expire_time when this was
-// written: the orders reproduce Afdian's expiry to the second in all but one
-// case.)
+// ComputeAfdianPeriod recomputes the Afdian time from the order history with
+// the validity rule Afdian itself applies. The rule was read off the
+// 有效期开始 / 有效期结束 columns of the creator dashboard's order export
+// and reproduces every exported order's validity exactly:
 //
-// When Afdian has reported an expiry that was observed after the newest
-// duration order was paid, that report already accounts for every order and
-// is used instead, so Afdian stays authoritative about its own time.
+//   - each duration order is valid for month × 31 days;
+//   - in payment order, an order continues the previous one (starts the
+//     second after it ends) only when both carry the same non-empty plan_id
+//     and the previous order is still valid when this one is paid;
+//   - otherwise it starts at 00:00 UTC+8 of its payment day: a 自选方案 order
+//     (empty plan_id, see ClassifyAfdianOrder), a different plan, or a renewal
+//     after the previous order lapsed;
+//   - the sponsor's Afdian time ends with the latest-ending order, so orders
+//     that overlap do not add up.
+//
+// Ends are exclusive: Afdian shows 23:59:59 of the last day and reports
+// current_plan.expire_time as 00:00 of the next day, which is the value kept
+// here. Orders are sorted by create_time, the only time query-order returns;
+// it lies seconds before the payment and on the same day.
+//
+// A plan expiry Afdian reported (query-sponsor current_plan.expire_time)
+// after the newest duration order was paid is used only when it is later than
+// the order-derived end. The rule makes the two equal for every live sponsor,
+// so this is a safety net for changes the order list cannot show (such as a
+// plan upgrade); an earlier report is ignored, because current_plan covers a
+// single plan while the rule takes the latest end over all plans.
 func ComputeAfdianPeriod(orders []AfdianOrderFacts, report AfdianReport) AfdianPeriod {
 	sorted := append([]AfdianOrderFacts(nil), orders...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -147,6 +164,8 @@ func ComputeAfdianPeriod(orders []AfdianOrderFacts, report AfdianReport) AfdianP
 	})
 
 	var period AfdianPeriod
+	var previous *AfdianOrderFacts
+	var previousEnd time.Time
 	for i := range sorted {
 		order := sorted[i]
 		switch ClassifyAfdianOrder(order) {
@@ -156,22 +175,24 @@ func ComputeAfdianPeriod(orders []AfdianOrderFacts, report AfdianReport) AfdianP
 		case AfdianOrderIgnored:
 			continue
 		}
-		start := order.PaidAt
-		if period.End != nil && period.End.After(start) {
-			start = *period.End
+		start := startOfAfdianDay(order.PaidAt)
+		if previous != nil && order.PlanID != "" && order.PlanID == previous.PlanID && previousEnd.After(order.PaidAt) {
+			start = previousEnd
 		}
-		end := truncateToAfdianDay(start.Add(time.Duration(order.Month) * afdianMonthDays * 24 * time.Hour))
-		period.End = &end
+		end := start.Add(time.Duration(order.Month) * afdianMonthDays * 24 * time.Hour)
+		if period.End == nil || end.After(*period.End) {
+			period.End = &end
+		}
+		previous, previousEnd = &sorted[i], end
 		period.Months += order.Month
 		period.DurationOrders++
 		period.LatestDuration = &sorted[i]
 	}
 
-	if report.ExpiresAt != nil && report.ObservedAt != nil {
-		if period.LatestDuration == nil || !report.ObservedAt.Before(period.LatestDuration.PaidAt) {
-			reported := report.ExpiresAt.UTC()
-			period.End = &reported
-		}
+	if report.ExpiresAt != nil && report.ObservedAt != nil && period.LatestDuration != nil &&
+		!report.ObservedAt.Before(period.LatestDuration.PaidAt) && report.ExpiresAt.After(*period.End) {
+		reported := *report.ExpiresAt
+		period.End = &reported
 	}
 	if period.End != nil {
 		end := period.End.UTC()
@@ -180,7 +201,7 @@ func ComputeAfdianPeriod(orders []AfdianOrderFacts, report AfdianReport) AfdianP
 	return period
 }
 
-func truncateToAfdianDay(t time.Time) time.Time {
+func startOfAfdianDay(t time.Time) time.Time {
 	local := t.In(afdianExpiryZone)
 	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, afdianExpiryZone).UTC()
 }
