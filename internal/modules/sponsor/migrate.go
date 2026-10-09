@@ -67,7 +67,7 @@ type DurationSplitReport struct {
 	MigratedEntries          int                 `json:"migratedEntries"`
 	Cases                    []DurationSplitCase `json:"cases"`
 	Categories               map[Category]int    `json:"categories"`
-	LegacyCategories         map[Category]int    `json:"legacyCategories"`
+	LegacyCategories         map[string]int      `json:"legacyCategories"`
 	// MislabeledOneTime counts rows stored with the plan name "一次性赞助"
 	// although they have duration: the sponsors requirement 2 was about.
 	MislabeledOneTime int `json:"mislabeledOneTime"`
@@ -76,10 +76,10 @@ type DurationSplitReport struct {
 // String renders the report for the dry-run test and logs.
 func (r DurationSplitReport) String() string {
 	return fmt.Sprintf(
-		"rows=%d already_split=%d split=%d skipped_incomplete_history=%d migrated_entries=%d (under_one_day=%d) mislabeled_one_time=%d\n  before: current=%d former=%d one_time=%d\n  after:  current=%d former=%d one_time=%d",
+		"rows=%d already_split=%d split=%d skipped_incomplete_history=%d migrated_entries=%d (under_one_day=%d) mislabeled_one_time=%d\n  old wall: duration=%d past=%d one_time=%d\n  after:    current=%d former=%d",
 		r.Rows, r.AlreadySplit, r.Split, r.SkippedIncompleteHistory, r.MigratedEntries, r.underOneDay(), r.MislabeledOneTime,
-		r.LegacyCategories[CategoryCurrent], r.LegacyCategories[CategoryFormer], r.LegacyCategories[CategoryOneTime],
-		r.Categories[CategoryCurrent], r.Categories[CategoryFormer], r.Categories[CategoryOneTime],
+		r.LegacyCategories[legacyWallDuration], r.LegacyCategories[legacyWallPast], r.LegacyCategories[legacyWallOneTime],
+		r.Categories[CategoryCurrent], r.Categories[CategoryFormer],
 	)
 }
 
@@ -93,28 +93,35 @@ func (r DurationSplitReport) underOneDay() int {
 	return n
 }
 
+// Sections of the pre-split public wall, for the report only.
+const (
+	legacyWallDuration = "duration"
+	legacyWallPast     = "past"
+	legacyWallOneTime  = "one_time"
+)
+
 // legacyWallCategory is how the pre-split public wall sorted a row: a stored
 // "一次性赞助"/"自选方案" plan name meant one-time, a manual source or an
 // expired/missing expiry meant the past list, the rest was the duration list.
-func legacyWallCategory(row *postgresql.Sponsor, now time.Time) Category {
+func legacyWallCategory(row *postgresql.Sponsor, now time.Time) string {
 	planName := stringPtrValue(row.PlanName)
-	if planName == oneTimePlanName || planName == customPlanName {
-		return CategoryOneTime
+	if planName == legacyOneTimePlanName || planName == customPlanName {
+		return legacyWallOneTime
 	}
 	switch row.Source {
 	case sponsorSchema.SourceManual, sponsorSchema.SourceLegacy, sponsorSchema.SourceImported:
-		return CategoryFormer
+		return legacyWallPast
 	}
 	if row.PlanExpiresAt == nil || !row.PlanExpiresAt.After(now) {
-		return CategoryFormer
+		return legacyWallPast
 	}
-	return CategoryCurrent
+	return legacyWallDuration
 }
 
 // SplitLegacySponsorDurations splits every unsplit row; see the comment at
 // the top of this file.
 func SplitLegacySponsorDurations(ctx context.Context, db *postgresql.Client, now time.Time, opts SplitOptions) (DurationSplitReport, error) {
-	report := DurationSplitReport{Categories: map[Category]int{}, LegacyCategories: map[Category]int{}}
+	report := DurationSplitReport{Categories: map[Category]int{}, LegacyCategories: map[string]int{}}
 	rows, err := db.Sponsor.Query().Order(sponsorSchema.ByID()).All(ctx)
 	if err != nil {
 		return report, err
@@ -137,7 +144,7 @@ func SplitLegacySponsorDurations(ctx context.Context, db *postgresql.Client, now
 		if err != nil {
 			return report, err
 		}
-		if durations.HasDuration && stringPtrValue(row.PlanName) == oneTimePlanName {
+		if durations.HasDuration && stringPtrValue(row.PlanName) == legacyOneTimePlanName {
 			report.MislabeledOneTime++
 		}
 		entry, splitCase := planMigratedEntry(row, durations.EffectiveExpiresAt)
@@ -148,7 +155,7 @@ func SplitLegacySponsorDurations(ctx context.Context, db *postgresql.Client, now
 			durations.EffectiveExpiresAt = ComputeEffectiveExpiry(durations.Afdian.End, durations.Manual)
 			durations.HasDuration = true
 		}
-		report.Categories[CategoryFor(durations.HasDuration, durations.EffectiveExpiresAt, now)]++
+		report.Categories[CategoryFor(durations.EffectiveExpiresAt, now)]++
 		if opts.DryRun {
 			report.Split++
 			continue

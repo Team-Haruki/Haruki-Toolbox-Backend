@@ -38,7 +38,7 @@ func legacyFixture() []legacyFixtureRow {
 	day := 24 * time.Hour
 	paid := func(daysAgo int) time.Time { return fixtureNow.Add(-time.Duration(daysAgo) * day) }
 	end := func(start time.Time, months int) time.Time {
-		return truncateToAfdianDay(start.Add(time.Duration(months*31) * day))
+		return startOfAfdianDay(start).Add(time.Duration(months*31) * day)
 	}
 	return []legacyFixtureRow{
 		{
@@ -50,7 +50,7 @@ func legacyFixture() []legacyFixtureRow {
 		{
 			// Lapsed duration sponsor stored with the "一次性赞助" label
 			// (requirement 2): becomes former, no migrated time.
-			id: "afdian_lapsed", afdianUser: true, source: "afdian", planName: oneTimePlanName, months: intPtr(1),
+			id: "afdian_lapsed", afdianUser: true, source: "afdian", planName: legacyOneTimePlanName, months: intPtr(1),
 			paidAt: timePtr(paid(120)), expiresAt: timePtr(end(paid(120), 1)),
 			orders: []map[string]any{withPlanTitle(orderJSON("lapsed", "l1", "plan", 0, 1, paid(120)), "支持一下")},
 		},
@@ -69,13 +69,13 @@ func legacyFixture() []legacyFixtureRow {
 		},
 		{
 			// 自选方案 sponsor the old code labelled one-time.
-			id: "afdian_custom", afdianUser: true, source: "afdian", planName: oneTimePlanName,
+			id: "afdian_custom", afdianUser: true, source: "afdian", planName: legacyOneTimePlanName,
 			paidAt: timePtr(paid(5)),
 			orders: []map[string]any{orderJSON("custom", "s1", "", 0, 3, paid(5))},
 		},
 		{
 			// Only a sale-plan purchase: stays one-time.
-			id: "afdian_shop", afdianUser: true, source: "afdian", planName: oneTimePlanName,
+			id: "afdian_shop", afdianUser: true, source: "afdian", planName: legacyOneTimePlanName,
 			paidAt: timePtr(paid(30)),
 			orders: []map[string]any{orderJSON("shop", "p1", "item", 1, 1, paid(30))},
 		},
@@ -148,7 +148,7 @@ func TestSplitLegacySponsorDurationsDryRun(t *testing.T) {
 	if report.Rows != 9 || report.Split != 9 || report.MigratedEntries != 4 || report.MislabeledOneTime != 2 {
 		t.Fatalf("report = %s", report)
 	}
-	want := map[Category]int{CategoryCurrent: 4, CategoryFormer: 3, CategoryOneTime: 2}
+	want := map[Category]int{CategoryCurrent: 4, CategoryFormer: 5}
 	for category, n := range want {
 		if report.Categories[category] != n {
 			t.Fatalf("after: %s = %d, want %d (%v)", category, report.Categories[category], n, report.Categories)

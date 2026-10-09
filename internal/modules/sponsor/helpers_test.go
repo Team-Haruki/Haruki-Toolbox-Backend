@@ -141,7 +141,9 @@ func TestRecordAfdianOrderStacksCustomPlanOrders(t *testing.T) {
 	renewal := first.AddDate(0, 1, 0)
 	row := recordOrder(t, db, orderJSON("custom-user", "o2", "", 0, 2, renewal), renewal)
 
-	want := truncateToAfdianDay(first.Add(5 * 31 * 24 * time.Hour))
+	// 自选方案 orders do not continue each other: the later one runs from its
+	// own payment day, and the sponsor's time ends with the later-ending one.
+	want := startOfAfdianDay(first).Add(3 * 31 * 24 * time.Hour)
 	if row.PlanExpiresAt == nil || !row.PlanExpiresAt.Equal(want) {
 		t.Fatalf("effective expiry = %v, want %v", row.PlanExpiresAt, want)
 	}
@@ -158,17 +160,18 @@ func TestRecordAfdianOrderStacksCustomPlanOrders(t *testing.T) {
 	}
 }
 
-func TestOneTimeOnlySponsorIsOneTime(t *testing.T) {
+func TestSalePlanOnlySponsorIsFormer(t *testing.T) {
 	db := openSponsorDB(t)
 	paidAt := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	row := recordOrder(t, db, orderJSON("shop-user", "o1", "item", afdianProductTypeForSale, 1, paidAt), paidAt)
 	if row.HasDuration || row.PlanExpiresAt != nil {
 		t.Fatalf("sale order granted time: %+v", row)
 	}
-	if got := SponsorCategory(row, paidAt); got != CategoryOneTime {
-		t.Fatalf("category = %s, want one_time", got)
+	// They supported once: former, never a separate one-time category.
+	if got := SponsorCategory(row, paidAt); got != CategoryFormer {
+		t.Fatalf("category = %s, want former", got)
 	}
-	if got := DisplayPlanName(row, CategoryOneTime); got != oneTimePlanName {
+	if got := DisplayPlanName(row); got != defaultSponsorPlanName {
 		t.Fatalf("plan name = %q", got)
 	}
 }
@@ -181,7 +184,7 @@ func TestLapsedPlanBecomesFormerNotOneTime(t *testing.T) {
 	db := openSponsorDB(t)
 	paidAt := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	recordOrder(t, db, orderJSON("lapsed-user", "o1", "plan", 0, 1, paidAt), paidAt)
-	plan := map[string]any{"plan_id": "plan", "name": "支持一下", "pay_month": float64(1), "product_type": float64(0), "expire_time": float64(truncateToAfdianDay(paidAt.Add(31 * 24 * time.Hour)).Unix())}
+	plan := map[string]any{"plan_id": "plan", "name": "支持一下", "pay_month": float64(1), "product_type": float64(0), "expire_time": float64(startOfAfdianDay(paidAt).Add(31 * 24 * time.Hour).Unix())}
 	if err := UpsertAfdianSponsorProfile(ctx, db, sponsorItem("lapsed-user", plan, paidAt), paidAt.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
@@ -204,15 +207,15 @@ func TestLapsedPlanBecomesFormerNotOneTime(t *testing.T) {
 		t.Fatalf("the last reported expiry must be kept after the plan lapses")
 	}
 	resp := BuildSponsorPageResponse([]*postgresql.Sponsor{row}, later)
-	if resp.Summary.PastCount != 1 || resp.Summary.OneTimeCount != 0 || resp.Supporters[0].Category != CategoryFormer {
+	if resp.Summary.PastCount != 1 || resp.Summary.ActiveCount != 0 || resp.Supporters[0].Category != CategoryFormer {
 		t.Fatalf("summary = %+v category = %s", resp.Summary, resp.Supporters[0].Category)
 	}
 }
 
 func TestDisplayPlanNameHidesLegacyOneTimeLabel(t *testing.T) {
-	label := oneTimePlanName
+	label := legacyOneTimePlanName
 	row := &postgresql.Sponsor{PlanName: &label}
-	if got := DisplayPlanName(row, CategoryFormer); got != defaultSponsorPlanName {
+	if got := DisplayPlanName(row); got != defaultSponsorPlanName {
 		t.Fatalf("former sponsor shows %q", got)
 	}
 }
@@ -297,13 +300,13 @@ func TestSponsorPageSummaryIsMutuallyExclusive(t *testing.T) {
 		{ID: "current", HasDuration: true, PlanExpiresAt: &future, DurationSplitAt: &split},
 		{ID: "former", HasDuration: true, PlanExpiresAt: &past, DurationSplitAt: &split},
 		{ID: "exactly-now", HasDuration: true, PlanExpiresAt: &now, DurationSplitAt: &split},
-		{ID: "one-time", DurationSplitAt: &split},
+		{ID: "no-time", DurationSplitAt: &split},
 		// Legacy row awaiting the split: judged by its single expiry.
 		{ID: "legacy", PlanExpiresAt: &past},
 	}
 	resp := BuildSponsorPageResponse(rows, now)
 	s := resp.Summary
-	if s.ActiveCount != 1 || s.PastCount != 3 || s.OneTimeCount != 1 || s.ActiveCount+s.PastCount+s.OneTimeCount != s.SupporterCount {
+	if s.ActiveCount != 1 || s.PastCount != 4 || s.ActiveCount+s.PastCount != s.SupporterCount {
 		t.Fatalf("summary = %+v", s)
 	}
 	for _, item := range resp.Supporters {
@@ -372,7 +375,7 @@ func TestManualOnlySponsor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := SponsorCategory(row, now); got != CategoryOneTime {
+	if got := SponsorCategory(row, now); got != CategoryFormer {
 		t.Fatalf("no time yet: %s", got)
 	}
 	amount, unit, note := 2, "month", "QQ 红包"
@@ -436,7 +439,7 @@ func TestSyncAfdianSponsorsFetchesOrdersAndProfiles(t *testing.T) {
 	db := openSponsorDB(t)
 	paidAt := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	syncAt := paidAt.AddDate(0, 2, 0)
-	renewedEnd := truncateToAfdianDay(syncAt.Add(31 * 24 * time.Hour))
+	renewedEnd := startOfAfdianDay(syncAt).Add(31 * 24 * time.Hour)
 
 	orders := []map[string]any{
 		orderJSON("renewed-user", "o3", "plan", 0, 1, syncAt),
@@ -471,7 +474,7 @@ func TestSyncAfdianSponsorsFetchesOrdersAndProfiles(t *testing.T) {
 				{"user":{"user_id":"renewed-user","name":"B"},"all_sum_amount":"10.00","last_pay_time":%d,"current_plan":{"plan_id":"plan","name":"月度赞助","pay_month":1,"product_type":0,"expire_time":%d}},
 				{"user":{"user_id":"custom-user","name":"C"},"all_sum_amount":"30.00","last_pay_time":%d,"current_plan":{"name":"自选方案","expire_time":%d}},
 				{"user":{"user_id":"shop-user","name":"D"},"all_sum_amount":"9.00","last_pay_time":%d,"current_plan":{"name":""}}
-			]}}`, paidAt.Unix(), syncAt.Unix(), renewedEnd.Unix(), paidAt.Unix(), truncateToAfdianDay(paidAt.Add(6*31*24*time.Hour)).Unix(), paidAt.Unix())
+			]}}`, paidAt.Unix(), syncAt.Unix(), renewedEnd.Unix(), paidAt.Unix(), startOfAfdianDay(paidAt).Add(6*31*24*time.Hour).Unix(), paidAt.Unix())
 		default:
 			http.NotFound(w, r)
 		}
@@ -490,7 +493,7 @@ func TestSyncAfdianSponsorsFetchesOrdersAndProfiles(t *testing.T) {
 		"afdian_lapsed-user":  CategoryFormer,
 		"afdian_renewed-user": CategoryCurrent,
 		"afdian_custom-user":  CategoryCurrent,
-		"afdian_shop-user":    CategoryOneTime,
+		"afdian_shop-user":    CategoryFormer,
 	}
 	for id, category := range want {
 		row, err := db.Sponsor.Get(ctx, id)

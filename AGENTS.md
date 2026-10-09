@@ -75,7 +75,7 @@ go run ./main.go                                # 运行（需要 haruki-toolbox
 - `internal/modules/usercore/` — 用户端共享逻辑
 - `internal/modules/harukibotneo/` — HarukiBot NEO 注册与凭据重置（状态、发信、注册/重置）
 - `internal/modules/botsecurity/` — Haruki Cloud 推送的 bot 安全告警：内部接收（`bot_security.ingest_token_sha256`，未配置不注册路由）与 `/api/admin/bot-security` 管理端；主人 QQ 从 Bot 库按页批量解析，Bot 库不可用时置空
-- `internal/modules/sponsor/` + `adminsponsor/` — 爱发电赞助墙（公开读取 + webhook；爱发电 webhook 无签名，真实性靠 URL secret 和/或经爱发电 API 回查订单）与管理端。赞助时长分两个来源：爱发电时长由 `sponsor_afdian_orders` 中的订单重算，手动时长是管理员录入的 `sponsor_manual_durations` 条目（带备注、录入人），实际到期 = 爱发电时长之后依次接上手动条目。订单分类（`ClassifyAfdianOrder`）、两源合并（`ComputeAfdianPeriod` / `ComputeEffectiveExpiry`）与「当前 / 曾经 / 一次性」分类（`SponsorCategory`）只在 `sponsor/duration.go` 与 `helpers.go` 各有一处，公开接口直接下发 `category`，不要在别处（包括前端）另行推导；`sponsors.plan_expires_at`、`is_active`、`has_duration` 等只是重算出的缓存。手动条目、备注与订单金额只出现在管理端接口
+- `internal/modules/sponsor/` + `adminsponsor/` — 爱发电赞助墙（公开读取 + webhook；爱发电 webhook 无签名，真实性靠 URL secret 和/或经爱发电 API 回查订单）与管理端。赞助时长分两个来源：爱发电时长由 `sponsor_afdian_orders` 中的订单重算，手动时长是管理员录入的 `sponsor_manual_durations` 条目（带备注、录入人），实际到期 = 爱发电时长之后依次接上手动条目。订单分类（`ClassifyAfdianOrder`）、两源合并（`ComputeAfdianPeriod` / `ComputeEffectiveExpiry`）与「当前 / 曾经」分类（`SponsorCategory`，实际到期在未来即当前，其余一律为曾经）只在 `sponsor/duration.go` 与 `helpers.go` 各有一处，公开接口直接下发 `category`，不要在别处（包括前端）另行推导；`sponsors.plan_expires_at`、`is_active`、`has_duration` 等只是重算出的缓存。手动条目、备注与订单金额只出现在管理端接口
 - `utils/codec/msgpackcodec/` — 面向不可信上传数据的有界 MessagePack 解码与 JSON 转换（`ValidateMaxDepth` 校验深度、按长度封顶）；`utils/orderedmap/` 是其 OrderedMap 存储
 
 优先复用 `SessionHandler`、`admincore`、`usercore` 与 `internal/platform/oauth2/`，不要另起平行 helper。

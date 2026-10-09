@@ -41,7 +41,7 @@ func buildAdminSponsorItem(row *postgresql.Sponsor, now time.Time) adminSponsorI
 		ID:                       row.ID,
 		Name:                     sharedSponsor.DisplayName(row),
 		Avatar:                   stringPtrValue(row.Avatar),
-		PlanName:                 sharedSponsor.DisplayPlanName(row, category),
+		PlanName:                 sharedSponsor.DisplayPlanName(row),
 		Message:                  stringPtrValue(row.Message),
 		Source:                   string(row.Source),
 		Category:                 string(category),
@@ -64,7 +64,7 @@ func orderKindLabel(kind sharedSponsor.AfdianOrderKind) string {
 	case sharedSponsor.AfdianOrderDuration:
 		return "duration"
 	case sharedSponsor.AfdianOrderOneTime:
-		return "one_time"
+		return "no_time"
 	default:
 		return "ignored"
 	}

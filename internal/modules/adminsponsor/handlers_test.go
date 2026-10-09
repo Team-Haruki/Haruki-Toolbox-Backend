@@ -115,7 +115,7 @@ func TestAdminSponsorManualDurationFlow(t *testing.T) {
 
 	created := decode[adminSponsorDetailResponse](t, env.do(t, http.MethodPost, "/api/admin/sponsors", "admin-1", `{"name":"线下赞助者","planName":"感谢"}`))
 	id := created.Sponsor.ID
-	if created.Sponsor.Category != string(sharedSponsor.CategoryOneTime) || created.Sponsor.Source != "manual" {
+	if created.Sponsor.Category != string(sharedSponsor.CategoryFormer) || created.Sponsor.Source != "manual" {
 		t.Fatalf("created sponsor = %+v", created.Sponsor)
 	}
 	base := "/api/admin/sponsors/" + id
@@ -157,7 +157,7 @@ func TestAdminSponsorManualDurationFlow(t *testing.T) {
 
 	expectStatus(t, env.do(t, http.MethodDelete, base+"/manual-durations/999", "admin-1", ""), fiber.StatusNotFound)
 	afterDelete := decode[adminSponsorDetailResponse](t, env.do(t, http.MethodDelete, entryPath, "admin-1", ""))
-	if len(afterDelete.ManualDurations) != 0 || afterDelete.Sponsor.Category != string(sharedSponsor.CategoryOneTime) {
+	if len(afterDelete.ManualDurations) != 0 || afterDelete.Sponsor.Category != string(sharedSponsor.CategoryFormer) {
 		t.Fatalf("after delete: %+v", afterDelete)
 	}
 }
@@ -174,7 +174,7 @@ func TestAdminSponsorUpdateIgnoresDerivedFields(t *testing.T) {
 	if got.Name != "B" || got.Source != "legacy" || !got.AfdianSyncDisabled || got.PaidAt == nil {
 		t.Fatalf("profile not saved: %+v", got)
 	}
-	if got.IsActive || got.PlanExpiresAt != nil || got.Category != string(sharedSponsor.CategoryOneTime) {
+	if got.IsActive || got.PlanExpiresAt != nil || got.Category != string(sharedSponsor.CategoryFormer) {
 		t.Fatalf("derived fields were taken from the request: %+v", got)
 	}
 
