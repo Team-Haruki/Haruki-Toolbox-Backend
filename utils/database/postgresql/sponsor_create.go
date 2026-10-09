@@ -216,6 +216,90 @@ func (_c *SponsorCreate) SetNillablePlanExpiresAt(v *time.Time) *SponsorCreate {
 	return _c
 }
 
+// SetAfdianExpiresAt sets the "afdian_expires_at" field.
+func (_c *SponsorCreate) SetAfdianExpiresAt(v time.Time) *SponsorCreate {
+	_c.mutation.SetAfdianExpiresAt(v)
+	return _c
+}
+
+// SetNillableAfdianExpiresAt sets the "afdian_expires_at" field if the given value is not nil.
+func (_c *SponsorCreate) SetNillableAfdianExpiresAt(v *time.Time) *SponsorCreate {
+	if v != nil {
+		_c.SetAfdianExpiresAt(*v)
+	}
+	return _c
+}
+
+// SetAfdianDurationMonths sets the "afdian_duration_months" field.
+func (_c *SponsorCreate) SetAfdianDurationMonths(v int) *SponsorCreate {
+	_c.mutation.SetAfdianDurationMonths(v)
+	return _c
+}
+
+// SetNillableAfdianDurationMonths sets the "afdian_duration_months" field if the given value is not nil.
+func (_c *SponsorCreate) SetNillableAfdianDurationMonths(v *int) *SponsorCreate {
+	if v != nil {
+		_c.SetAfdianDurationMonths(*v)
+	}
+	return _c
+}
+
+// SetAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field.
+func (_c *SponsorCreate) SetAfdianReportedExpiresAt(v time.Time) *SponsorCreate {
+	_c.mutation.SetAfdianReportedExpiresAt(v)
+	return _c
+}
+
+// SetNillableAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field if the given value is not nil.
+func (_c *SponsorCreate) SetNillableAfdianReportedExpiresAt(v *time.Time) *SponsorCreate {
+	if v != nil {
+		_c.SetAfdianReportedExpiresAt(*v)
+	}
+	return _c
+}
+
+// SetAfdianReportedAt sets the "afdian_reported_at" field.
+func (_c *SponsorCreate) SetAfdianReportedAt(v time.Time) *SponsorCreate {
+	_c.mutation.SetAfdianReportedAt(v)
+	return _c
+}
+
+// SetNillableAfdianReportedAt sets the "afdian_reported_at" field if the given value is not nil.
+func (_c *SponsorCreate) SetNillableAfdianReportedAt(v *time.Time) *SponsorCreate {
+	if v != nil {
+		_c.SetAfdianReportedAt(*v)
+	}
+	return _c
+}
+
+// SetHasDuration sets the "has_duration" field.
+func (_c *SponsorCreate) SetHasDuration(v bool) *SponsorCreate {
+	_c.mutation.SetHasDuration(v)
+	return _c
+}
+
+// SetNillableHasDuration sets the "has_duration" field if the given value is not nil.
+func (_c *SponsorCreate) SetNillableHasDuration(v *bool) *SponsorCreate {
+	if v != nil {
+		_c.SetHasDuration(*v)
+	}
+	return _c
+}
+
+// SetDurationSplitAt sets the "duration_split_at" field.
+func (_c *SponsorCreate) SetDurationSplitAt(v time.Time) *SponsorCreate {
+	_c.mutation.SetDurationSplitAt(v)
+	return _c
+}
+
+// SetNillableDurationSplitAt sets the "duration_split_at" field if the given value is not nil.
+func (_c *SponsorCreate) SetNillableDurationSplitAt(v *time.Time) *SponsorCreate {
+	if v != nil {
+		_c.SetDurationSplitAt(*v)
+	}
+	return _c
+}
+
 // SetSupportCount sets the "support_count" field.
 func (_c *SponsorCreate) SetSupportCount(v int) *SponsorCreate {
 	_c.mutation.SetSupportCount(v)
@@ -335,6 +419,14 @@ func (_c *SponsorCreate) defaults() {
 		v := sponsor.DefaultAfdianSyncDisabled
 		_c.mutation.SetAfdianSyncDisabled(v)
 	}
+	if _, ok := _c.mutation.AfdianDurationMonths(); !ok {
+		v := sponsor.DefaultAfdianDurationMonths
+		_c.mutation.SetAfdianDurationMonths(v)
+	}
+	if _, ok := _c.mutation.HasDuration(); !ok {
+		v := sponsor.DefaultHasDuration
+		_c.mutation.SetHasDuration(v)
+	}
 	if _, ok := _c.mutation.SupportCount(); !ok {
 		v := sponsor.DefaultSupportCount
 		_c.mutation.SetSupportCount(v)
@@ -402,6 +494,12 @@ func (_c *SponsorCreate) check() error {
 	}
 	if _, ok := _c.mutation.AfdianSyncDisabled(); !ok {
 		return &ValidationError{Name: "afdian_sync_disabled", err: errors.New(`postgresql: missing required field "Sponsor.afdian_sync_disabled"`)}
+	}
+	if _, ok := _c.mutation.AfdianDurationMonths(); !ok {
+		return &ValidationError{Name: "afdian_duration_months", err: errors.New(`postgresql: missing required field "Sponsor.afdian_duration_months"`)}
+	}
+	if _, ok := _c.mutation.HasDuration(); !ok {
+		return &ValidationError{Name: "has_duration", err: errors.New(`postgresql: missing required field "Sponsor.has_duration"`)}
 	}
 	if _, ok := _c.mutation.SupportCount(); !ok {
 		return &ValidationError{Name: "support_count", err: errors.New(`postgresql: missing required field "Sponsor.support_count"`)}
@@ -512,6 +610,30 @@ func (_c *SponsorCreate) createSpec() (*Sponsor, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.PlanExpiresAt(); ok {
 		_spec.SetField(sponsor.FieldPlanExpiresAt, field.TypeTime, value)
 		_node.PlanExpiresAt = &value
+	}
+	if value, ok := _c.mutation.AfdianExpiresAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianExpiresAt, field.TypeTime, value)
+		_node.AfdianExpiresAt = &value
+	}
+	if value, ok := _c.mutation.AfdianDurationMonths(); ok {
+		_spec.SetField(sponsor.FieldAfdianDurationMonths, field.TypeInt, value)
+		_node.AfdianDurationMonths = value
+	}
+	if value, ok := _c.mutation.AfdianReportedExpiresAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianReportedExpiresAt, field.TypeTime, value)
+		_node.AfdianReportedExpiresAt = &value
+	}
+	if value, ok := _c.mutation.AfdianReportedAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianReportedAt, field.TypeTime, value)
+		_node.AfdianReportedAt = &value
+	}
+	if value, ok := _c.mutation.HasDuration(); ok {
+		_spec.SetField(sponsor.FieldHasDuration, field.TypeBool, value)
+		_node.HasDuration = value
+	}
+	if value, ok := _c.mutation.DurationSplitAt(); ok {
+		_spec.SetField(sponsor.FieldDurationSplitAt, field.TypeTime, value)
+		_node.DurationSplitAt = &value
 	}
 	if value, ok := _c.mutation.SupportCount(); ok {
 		_spec.SetField(sponsor.FieldSupportCount, field.TypeInt, value)

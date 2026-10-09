@@ -186,6 +186,10 @@ func prepareToolboxDatabase(cfg harukiConfig.Config, entClient *dbManager.Client
 		cancelUploadSchema()
 		return err
 	}
+	if err := validateSponsorDurationSchema(uploadSchemaCtx, entClient); err != nil {
+		cancelUploadSchema()
+		return err
+	}
 	cancelUploadSchema()
 	grantsCleanupCtx, cancelGrantsCleanup := startupContext()
 	if deleted, err := entClient.CleanupExpiredGameAccountDataGrants(grantsCleanupCtx, time.Now().UTC()); err != nil {

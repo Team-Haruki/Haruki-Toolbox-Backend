@@ -298,6 +298,121 @@ func (_u *SponsorUpdate) ClearPlanExpiresAt() *SponsorUpdate {
 	return _u
 }
 
+// SetAfdianExpiresAt sets the "afdian_expires_at" field.
+func (_u *SponsorUpdate) SetAfdianExpiresAt(v time.Time) *SponsorUpdate {
+	_u.mutation.SetAfdianExpiresAt(v)
+	return _u
+}
+
+// SetNillableAfdianExpiresAt sets the "afdian_expires_at" field if the given value is not nil.
+func (_u *SponsorUpdate) SetNillableAfdianExpiresAt(v *time.Time) *SponsorUpdate {
+	if v != nil {
+		_u.SetAfdianExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianExpiresAt clears the value of the "afdian_expires_at" field.
+func (_u *SponsorUpdate) ClearAfdianExpiresAt() *SponsorUpdate {
+	_u.mutation.ClearAfdianExpiresAt()
+	return _u
+}
+
+// SetAfdianDurationMonths sets the "afdian_duration_months" field.
+func (_u *SponsorUpdate) SetAfdianDurationMonths(v int) *SponsorUpdate {
+	_u.mutation.ResetAfdianDurationMonths()
+	_u.mutation.SetAfdianDurationMonths(v)
+	return _u
+}
+
+// SetNillableAfdianDurationMonths sets the "afdian_duration_months" field if the given value is not nil.
+func (_u *SponsorUpdate) SetNillableAfdianDurationMonths(v *int) *SponsorUpdate {
+	if v != nil {
+		_u.SetAfdianDurationMonths(*v)
+	}
+	return _u
+}
+
+// AddAfdianDurationMonths adds value to the "afdian_duration_months" field.
+func (_u *SponsorUpdate) AddAfdianDurationMonths(v int) *SponsorUpdate {
+	_u.mutation.AddAfdianDurationMonths(v)
+	return _u
+}
+
+// SetAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field.
+func (_u *SponsorUpdate) SetAfdianReportedExpiresAt(v time.Time) *SponsorUpdate {
+	_u.mutation.SetAfdianReportedExpiresAt(v)
+	return _u
+}
+
+// SetNillableAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field if the given value is not nil.
+func (_u *SponsorUpdate) SetNillableAfdianReportedExpiresAt(v *time.Time) *SponsorUpdate {
+	if v != nil {
+		_u.SetAfdianReportedExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianReportedExpiresAt clears the value of the "afdian_reported_expires_at" field.
+func (_u *SponsorUpdate) ClearAfdianReportedExpiresAt() *SponsorUpdate {
+	_u.mutation.ClearAfdianReportedExpiresAt()
+	return _u
+}
+
+// SetAfdianReportedAt sets the "afdian_reported_at" field.
+func (_u *SponsorUpdate) SetAfdianReportedAt(v time.Time) *SponsorUpdate {
+	_u.mutation.SetAfdianReportedAt(v)
+	return _u
+}
+
+// SetNillableAfdianReportedAt sets the "afdian_reported_at" field if the given value is not nil.
+func (_u *SponsorUpdate) SetNillableAfdianReportedAt(v *time.Time) *SponsorUpdate {
+	if v != nil {
+		_u.SetAfdianReportedAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianReportedAt clears the value of the "afdian_reported_at" field.
+func (_u *SponsorUpdate) ClearAfdianReportedAt() *SponsorUpdate {
+	_u.mutation.ClearAfdianReportedAt()
+	return _u
+}
+
+// SetHasDuration sets the "has_duration" field.
+func (_u *SponsorUpdate) SetHasDuration(v bool) *SponsorUpdate {
+	_u.mutation.SetHasDuration(v)
+	return _u
+}
+
+// SetNillableHasDuration sets the "has_duration" field if the given value is not nil.
+func (_u *SponsorUpdate) SetNillableHasDuration(v *bool) *SponsorUpdate {
+	if v != nil {
+		_u.SetHasDuration(*v)
+	}
+	return _u
+}
+
+// SetDurationSplitAt sets the "duration_split_at" field.
+func (_u *SponsorUpdate) SetDurationSplitAt(v time.Time) *SponsorUpdate {
+	_u.mutation.SetDurationSplitAt(v)
+	return _u
+}
+
+// SetNillableDurationSplitAt sets the "duration_split_at" field if the given value is not nil.
+func (_u *SponsorUpdate) SetNillableDurationSplitAt(v *time.Time) *SponsorUpdate {
+	if v != nil {
+		_u.SetDurationSplitAt(*v)
+	}
+	return _u
+}
+
+// ClearDurationSplitAt clears the value of the "duration_split_at" field.
+func (_u *SponsorUpdate) ClearDurationSplitAt() *SponsorUpdate {
+	_u.mutation.ClearDurationSplitAt()
+	return _u
+}
+
 // SetSupportCount sets the "support_count" field.
 func (_u *SponsorUpdate) SetSupportCount(v int) *SponsorUpdate {
 	_u.mutation.ResetSupportCount()
@@ -551,6 +666,39 @@ func (_u *SponsorUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.PlanExpiresAtCleared() {
 		_spec.ClearField(sponsor.FieldPlanExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianExpiresAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianExpiresAtCleared() {
+		_spec.ClearField(sponsor.FieldAfdianExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianDurationMonths(); ok {
+		_spec.SetField(sponsor.FieldAfdianDurationMonths, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAfdianDurationMonths(); ok {
+		_spec.AddField(sponsor.FieldAfdianDurationMonths, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AfdianReportedExpiresAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianReportedExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianReportedExpiresAtCleared() {
+		_spec.ClearField(sponsor.FieldAfdianReportedExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianReportedAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianReportedAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianReportedAtCleared() {
+		_spec.ClearField(sponsor.FieldAfdianReportedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.HasDuration(); ok {
+		_spec.SetField(sponsor.FieldHasDuration, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DurationSplitAt(); ok {
+		_spec.SetField(sponsor.FieldDurationSplitAt, field.TypeTime, value)
+	}
+	if _u.mutation.DurationSplitAtCleared() {
+		_spec.ClearField(sponsor.FieldDurationSplitAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.SupportCount(); ok {
 		_spec.SetField(sponsor.FieldSupportCount, field.TypeInt, value)
@@ -866,6 +1014,121 @@ func (_u *SponsorUpdateOne) ClearPlanExpiresAt() *SponsorUpdateOne {
 	return _u
 }
 
+// SetAfdianExpiresAt sets the "afdian_expires_at" field.
+func (_u *SponsorUpdateOne) SetAfdianExpiresAt(v time.Time) *SponsorUpdateOne {
+	_u.mutation.SetAfdianExpiresAt(v)
+	return _u
+}
+
+// SetNillableAfdianExpiresAt sets the "afdian_expires_at" field if the given value is not nil.
+func (_u *SponsorUpdateOne) SetNillableAfdianExpiresAt(v *time.Time) *SponsorUpdateOne {
+	if v != nil {
+		_u.SetAfdianExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianExpiresAt clears the value of the "afdian_expires_at" field.
+func (_u *SponsorUpdateOne) ClearAfdianExpiresAt() *SponsorUpdateOne {
+	_u.mutation.ClearAfdianExpiresAt()
+	return _u
+}
+
+// SetAfdianDurationMonths sets the "afdian_duration_months" field.
+func (_u *SponsorUpdateOne) SetAfdianDurationMonths(v int) *SponsorUpdateOne {
+	_u.mutation.ResetAfdianDurationMonths()
+	_u.mutation.SetAfdianDurationMonths(v)
+	return _u
+}
+
+// SetNillableAfdianDurationMonths sets the "afdian_duration_months" field if the given value is not nil.
+func (_u *SponsorUpdateOne) SetNillableAfdianDurationMonths(v *int) *SponsorUpdateOne {
+	if v != nil {
+		_u.SetAfdianDurationMonths(*v)
+	}
+	return _u
+}
+
+// AddAfdianDurationMonths adds value to the "afdian_duration_months" field.
+func (_u *SponsorUpdateOne) AddAfdianDurationMonths(v int) *SponsorUpdateOne {
+	_u.mutation.AddAfdianDurationMonths(v)
+	return _u
+}
+
+// SetAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field.
+func (_u *SponsorUpdateOne) SetAfdianReportedExpiresAt(v time.Time) *SponsorUpdateOne {
+	_u.mutation.SetAfdianReportedExpiresAt(v)
+	return _u
+}
+
+// SetNillableAfdianReportedExpiresAt sets the "afdian_reported_expires_at" field if the given value is not nil.
+func (_u *SponsorUpdateOne) SetNillableAfdianReportedExpiresAt(v *time.Time) *SponsorUpdateOne {
+	if v != nil {
+		_u.SetAfdianReportedExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianReportedExpiresAt clears the value of the "afdian_reported_expires_at" field.
+func (_u *SponsorUpdateOne) ClearAfdianReportedExpiresAt() *SponsorUpdateOne {
+	_u.mutation.ClearAfdianReportedExpiresAt()
+	return _u
+}
+
+// SetAfdianReportedAt sets the "afdian_reported_at" field.
+func (_u *SponsorUpdateOne) SetAfdianReportedAt(v time.Time) *SponsorUpdateOne {
+	_u.mutation.SetAfdianReportedAt(v)
+	return _u
+}
+
+// SetNillableAfdianReportedAt sets the "afdian_reported_at" field if the given value is not nil.
+func (_u *SponsorUpdateOne) SetNillableAfdianReportedAt(v *time.Time) *SponsorUpdateOne {
+	if v != nil {
+		_u.SetAfdianReportedAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianReportedAt clears the value of the "afdian_reported_at" field.
+func (_u *SponsorUpdateOne) ClearAfdianReportedAt() *SponsorUpdateOne {
+	_u.mutation.ClearAfdianReportedAt()
+	return _u
+}
+
+// SetHasDuration sets the "has_duration" field.
+func (_u *SponsorUpdateOne) SetHasDuration(v bool) *SponsorUpdateOne {
+	_u.mutation.SetHasDuration(v)
+	return _u
+}
+
+// SetNillableHasDuration sets the "has_duration" field if the given value is not nil.
+func (_u *SponsorUpdateOne) SetNillableHasDuration(v *bool) *SponsorUpdateOne {
+	if v != nil {
+		_u.SetHasDuration(*v)
+	}
+	return _u
+}
+
+// SetDurationSplitAt sets the "duration_split_at" field.
+func (_u *SponsorUpdateOne) SetDurationSplitAt(v time.Time) *SponsorUpdateOne {
+	_u.mutation.SetDurationSplitAt(v)
+	return _u
+}
+
+// SetNillableDurationSplitAt sets the "duration_split_at" field if the given value is not nil.
+func (_u *SponsorUpdateOne) SetNillableDurationSplitAt(v *time.Time) *SponsorUpdateOne {
+	if v != nil {
+		_u.SetDurationSplitAt(*v)
+	}
+	return _u
+}
+
+// ClearDurationSplitAt clears the value of the "duration_split_at" field.
+func (_u *SponsorUpdateOne) ClearDurationSplitAt() *SponsorUpdateOne {
+	_u.mutation.ClearDurationSplitAt()
+	return _u
+}
+
 // SetSupportCount sets the "support_count" field.
 func (_u *SponsorUpdateOne) SetSupportCount(v int) *SponsorUpdateOne {
 	_u.mutation.ResetSupportCount()
@@ -1149,6 +1412,39 @@ func (_u *SponsorUpdateOne) sqlSave(ctx context.Context) (_node *Sponsor, err er
 	}
 	if _u.mutation.PlanExpiresAtCleared() {
 		_spec.ClearField(sponsor.FieldPlanExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianExpiresAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianExpiresAtCleared() {
+		_spec.ClearField(sponsor.FieldAfdianExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianDurationMonths(); ok {
+		_spec.SetField(sponsor.FieldAfdianDurationMonths, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAfdianDurationMonths(); ok {
+		_spec.AddField(sponsor.FieldAfdianDurationMonths, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AfdianReportedExpiresAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianReportedExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianReportedExpiresAtCleared() {
+		_spec.ClearField(sponsor.FieldAfdianReportedExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianReportedAt(); ok {
+		_spec.SetField(sponsor.FieldAfdianReportedAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianReportedAtCleared() {
+		_spec.ClearField(sponsor.FieldAfdianReportedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.HasDuration(); ok {
+		_spec.SetField(sponsor.FieldHasDuration, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DurationSplitAt(); ok {
+		_spec.SetField(sponsor.FieldDurationSplitAt, field.TypeTime, value)
+	}
+	if _u.mutation.DurationSplitAtCleared() {
+		_spec.ClearField(sponsor.FieldDurationSplitAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.SupportCount(); ok {
 		_spec.SetField(sponsor.FieldSupportCount, field.TypeInt, value)

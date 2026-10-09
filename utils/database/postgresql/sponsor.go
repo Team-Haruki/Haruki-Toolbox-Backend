@@ -46,6 +46,18 @@ type Sponsor struct {
 	PaidAt *time.Time `json:"paid_at,omitzero"`
 	// PlanExpiresAt holds the value of the "plan_expires_at" field.
 	PlanExpiresAt *time.Time `json:"plan_expires_at,omitzero"`
+	// AfdianExpiresAt holds the value of the "afdian_expires_at" field.
+	AfdianExpiresAt *time.Time `json:"afdian_expires_at,omitzero"`
+	// AfdianDurationMonths holds the value of the "afdian_duration_months" field.
+	AfdianDurationMonths int `json:"afdian_duration_months,omitzero"`
+	// AfdianReportedExpiresAt holds the value of the "afdian_reported_expires_at" field.
+	AfdianReportedExpiresAt *time.Time `json:"afdian_reported_expires_at,omitzero"`
+	// AfdianReportedAt holds the value of the "afdian_reported_at" field.
+	AfdianReportedAt *time.Time `json:"afdian_reported_at,omitzero"`
+	// HasDuration holds the value of the "has_duration" field.
+	HasDuration bool `json:"has_duration,omitzero"`
+	// DurationSplitAt holds the value of the "duration_split_at" field.
+	DurationSplitAt *time.Time `json:"duration_split_at,omitzero"`
 	// SupportCount holds the value of the "support_count" field.
 	SupportCount int `json:"support_count,omitzero"`
 	// TotalAmount holds the value of the "total_amount" field.
@@ -66,13 +78,13 @@ func (*Sponsor) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case sponsor.FieldRaw:
 			values[i] = new([]byte)
-		case sponsor.FieldIsActive, sponsor.FieldAfdianSyncDisabled:
+		case sponsor.FieldIsActive, sponsor.FieldAfdianSyncDisabled, sponsor.FieldHasDuration:
 			values[i] = new(sql.NullBool)
-		case sponsor.FieldPlanRank, sponsor.FieldPlanPayMonths, sponsor.FieldSupportCount:
+		case sponsor.FieldPlanRank, sponsor.FieldPlanPayMonths, sponsor.FieldAfdianDurationMonths, sponsor.FieldSupportCount:
 			values[i] = new(sql.NullInt64)
 		case sponsor.FieldID, sponsor.FieldAfdianUserID, sponsor.FieldOutTradeNo, sponsor.FieldName, sponsor.FieldAvatar, sponsor.FieldPlanID, sponsor.FieldPlanName, sponsor.FieldMessage, sponsor.FieldSource, sponsor.FieldTotalAmount:
 			values[i] = new(sql.NullString)
-		case sponsor.FieldPaidAt, sponsor.FieldPlanExpiresAt, sponsor.FieldCreatedAt, sponsor.FieldUpdatedAt:
+		case sponsor.FieldPaidAt, sponsor.FieldPlanExpiresAt, sponsor.FieldAfdianExpiresAt, sponsor.FieldAfdianReportedExpiresAt, sponsor.FieldAfdianReportedAt, sponsor.FieldDurationSplitAt, sponsor.FieldCreatedAt, sponsor.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -188,6 +200,46 @@ func (_m *Sponsor) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.PlanExpiresAt = new(time.Time)
 				*_m.PlanExpiresAt = value.Time
+			}
+		case sponsor.FieldAfdianExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_expires_at", values[i])
+			} else if value.Valid {
+				_m.AfdianExpiresAt = new(time.Time)
+				*_m.AfdianExpiresAt = value.Time
+			}
+		case sponsor.FieldAfdianDurationMonths:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_duration_months", values[i])
+			} else if value.Valid {
+				_m.AfdianDurationMonths = int(value.Int64)
+			}
+		case sponsor.FieldAfdianReportedExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_reported_expires_at", values[i])
+			} else if value.Valid {
+				_m.AfdianReportedExpiresAt = new(time.Time)
+				*_m.AfdianReportedExpiresAt = value.Time
+			}
+		case sponsor.FieldAfdianReportedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_reported_at", values[i])
+			} else if value.Valid {
+				_m.AfdianReportedAt = new(time.Time)
+				*_m.AfdianReportedAt = value.Time
+			}
+		case sponsor.FieldHasDuration:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field has_duration", values[i])
+			} else if value.Valid {
+				_m.HasDuration = value.Bool
+			}
+		case sponsor.FieldDurationSplitAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field duration_split_at", values[i])
+			} else if value.Valid {
+				_m.DurationSplitAt = new(time.Time)
+				*_m.DurationSplitAt = value.Time
 			}
 		case sponsor.FieldSupportCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -317,6 +369,32 @@ func (_m *Sponsor) String() string {
 	builder.WriteString(", ")
 	if v := _m.PlanExpiresAt; v != nil {
 		builder.WriteString("plan_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.AfdianExpiresAt; v != nil {
+		builder.WriteString("afdian_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("afdian_duration_months=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AfdianDurationMonths))
+	builder.WriteString(", ")
+	if v := _m.AfdianReportedExpiresAt; v != nil {
+		builder.WriteString("afdian_reported_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.AfdianReportedAt; v != nil {
+		builder.WriteString("afdian_reported_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("has_duration=")
+	builder.WriteString(fmt.Sprintf("%v", _m.HasDuration))
+	builder.WriteString(", ")
+	if v := _m.DurationSplitAt; v != nil {
+		builder.WriteString("duration_split_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

@@ -38,6 +38,10 @@ type Tx struct {
 	SocialPlatformInfo *SocialPlatformInfoClient
 	// Sponsor is the client for interacting with the Sponsor builders.
 	Sponsor *SponsorClient
+	// SponsorAfdianOrder is the client for interacting with the SponsorAfdianOrder builders.
+	SponsorAfdianOrder *SponsorAfdianOrderClient
+	// SponsorManualDuration is the client for interacting with the SponsorManualDuration builders.
+	SponsorManualDuration *SponsorManualDurationClient
 	// SystemLog is the client for interacting with the SystemLog builders.
 	SystemLog *SystemLogClient
 	// Ticket is the client for interacting with the Ticket builders.
@@ -196,6 +200,8 @@ func (tx *Tx) init() {
 	tx.RiskRule = NewRiskRuleClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)
 	tx.Sponsor = NewSponsorClient(tx.config)
+	tx.SponsorAfdianOrder = NewSponsorAfdianOrderClient(tx.config)
+	tx.SponsorManualDuration = NewSponsorManualDurationClient(tx.config)
 	tx.SystemLog = NewSystemLogClient(tx.config)
 	tx.Ticket = NewTicketClient(tx.config)
 	tx.TicketMessage = NewTicketMessageClient(tx.config)

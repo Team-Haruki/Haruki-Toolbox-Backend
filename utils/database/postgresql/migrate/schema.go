@@ -417,6 +417,12 @@ var (
 		{Name: "afdian_sync_disabled", Type: field.TypeBool, Default: false},
 		{Name: "paid_at", Type: field.TypeTime, Nullable: true},
 		{Name: "plan_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "afdian_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "afdian_duration_months", Type: field.TypeInt, Default: 0},
+		{Name: "afdian_reported_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "afdian_reported_at", Type: field.TypeTime, Nullable: true},
+		{Name: "has_duration", Type: field.TypeBool, Default: false},
+		{Name: "duration_split_at", Type: field.TypeTime, Nullable: true},
 		{Name: "support_count", Type: field.TypeInt, Default: 1},
 		{Name: "total_amount", Type: field.TypeString, Nullable: true, Size: 32},
 		{Name: "raw", Type: field.TypeJSON, Nullable: true},
@@ -447,12 +453,74 @@ var (
 			{
 				Name:    "sponsor_plan_rank_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{SponsorsColumns[7], SponsorsColumns[18]},
+				Columns: []*schema.Column{SponsorsColumns[7], SponsorsColumns[24]},
 			},
 			{
 				Name:    "sponsor_plan_expires_at",
 				Unique:  false,
 				Columns: []*schema.Column{SponsorsColumns[14]},
+			},
+		},
+	}
+	// SponsorAfdianOrdersColumns holds the columns for the "sponsor_afdian_orders" table.
+	SponsorAfdianOrdersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, Size: 128},
+		{Name: "sponsor_id", Type: field.TypeString, Size: 128},
+		{Name: "afdian_user_id", Type: field.TypeString, Size: 128},
+		{Name: "plan_id", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "plan_title", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "product_type", Type: field.TypeInt, Default: 0},
+		{Name: "month", Type: field.TypeInt, Default: 0},
+		{Name: "status", Type: field.TypeInt, Default: 0},
+		{Name: "total_amount", Type: field.TypeString, Size: 32, Default: ""},
+		{Name: "show_amount", Type: field.TypeString, Size: 32, Default: ""},
+		{Name: "remark", Type: field.TypeString, Size: 1000, Default: ""},
+		{Name: "paid_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// SponsorAfdianOrdersTable holds the schema information for the "sponsor_afdian_orders" table.
+	SponsorAfdianOrdersTable = &schema.Table{
+		Name:       "sponsor_afdian_orders",
+		Columns:    SponsorAfdianOrdersColumns,
+		PrimaryKey: []*schema.Column{SponsorAfdianOrdersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sponsorafdianorder_sponsor_id_paid_at",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorAfdianOrdersColumns[1], SponsorAfdianOrdersColumns[11]},
+			},
+			{
+				Name:    "sponsorafdianorder_afdian_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorAfdianOrdersColumns[2]},
+			},
+		},
+	}
+	// SponsorManualDurationsColumns holds the columns for the "sponsor_manual_durations" table.
+	SponsorManualDurationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "sponsor_id", Type: field.TypeString, Size: 128},
+		{Name: "amount", Type: field.TypeInt},
+		{Name: "unit", Type: field.TypeEnum, Enums: []string{"day", "month"}},
+		{Name: "starts_at", Type: field.TypeTime},
+		{Name: "note", Type: field.TypeString, Size: 500},
+		{Name: "origin", Type: field.TypeEnum, Enums: []string{"admin", "migration"}, Default: "admin"},
+		{Name: "created_by", Type: field.TypeString, Size: 128},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// SponsorManualDurationsTable holds the schema information for the "sponsor_manual_durations" table.
+	SponsorManualDurationsTable = &schema.Table{
+		Name:       "sponsor_manual_durations",
+		Columns:    SponsorManualDurationsColumns,
+		PrimaryKey: []*schema.Column{SponsorManualDurationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sponsormanualduration_sponsor_id_starts_at",
+				Unique:  false,
+				Columns: []*schema.Column{SponsorManualDurationsColumns[1], SponsorManualDurationsColumns[4]},
 			},
 		},
 	}
@@ -778,6 +846,8 @@ var (
 		RiskRulesTable,
 		SocialPlatformInfosTable,
 		SponsorsTable,
+		SponsorAfdianOrdersTable,
+		SponsorManualDurationsTable,
 		SystemLogsTable,
 		TicketsTable,
 		TicketMessagesTable,
@@ -816,6 +886,12 @@ func init() {
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 	SponsorsTable.Annotation = &entsql.Annotation{
 		Table: "sponsors",
+	}
+	SponsorAfdianOrdersTable.Annotation = &entsql.Annotation{
+		Table: "sponsor_afdian_orders",
+	}
+	SponsorManualDurationsTable.Annotation = &entsql.Annotation{
+		Table: "sponsor_manual_durations",
 	}
 	SystemLogsTable.Annotation = &entsql.Annotation{
 		Table: "system_logs",

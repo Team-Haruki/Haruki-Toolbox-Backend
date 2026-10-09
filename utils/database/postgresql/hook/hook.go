@@ -165,6 +165,30 @@ func (f SponsorFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgre
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SponsorMutation", m)
 }
 
+// The SponsorAfdianOrderFunc type is an adapter to allow the use of ordinary
+// function as SponsorAfdianOrder mutator.
+type SponsorAfdianOrderFunc func(context.Context, *postgresql.SponsorAfdianOrderMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SponsorAfdianOrderFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.SponsorAfdianOrderMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SponsorAfdianOrderMutation", m)
+}
+
+// The SponsorManualDurationFunc type is an adapter to allow the use of ordinary
+// function as SponsorManualDuration mutator.
+type SponsorManualDurationFunc func(context.Context, *postgresql.SponsorManualDurationMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SponsorManualDurationFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.SponsorManualDurationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SponsorManualDurationMutation", m)
+}
+
 // The SystemLogFunc type is an adapter to allow the use of ordinary
 // function as SystemLog mutator.
 type SystemLogFunc func(context.Context, *postgresql.SystemLogMutation) (postgresql.Value, error)

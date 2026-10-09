@@ -19,6 +19,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -390,20 +392,28 @@ func init() {
 	sponsorDescAfdianSyncDisabled := sponsorFields[12].Descriptor()
 	// sponsor.DefaultAfdianSyncDisabled holds the default value on creation for the afdian_sync_disabled field.
 	sponsor.DefaultAfdianSyncDisabled = sponsorDescAfdianSyncDisabled.Default.(bool)
+	// sponsorDescAfdianDurationMonths is the schema descriptor for afdian_duration_months field.
+	sponsorDescAfdianDurationMonths := sponsorFields[16].Descriptor()
+	// sponsor.DefaultAfdianDurationMonths holds the default value on creation for the afdian_duration_months field.
+	sponsor.DefaultAfdianDurationMonths = sponsorDescAfdianDurationMonths.Default.(int)
+	// sponsorDescHasDuration is the schema descriptor for has_duration field.
+	sponsorDescHasDuration := sponsorFields[19].Descriptor()
+	// sponsor.DefaultHasDuration holds the default value on creation for the has_duration field.
+	sponsor.DefaultHasDuration = sponsorDescHasDuration.Default.(bool)
 	// sponsorDescSupportCount is the schema descriptor for support_count field.
-	sponsorDescSupportCount := sponsorFields[15].Descriptor()
+	sponsorDescSupportCount := sponsorFields[21].Descriptor()
 	// sponsor.DefaultSupportCount holds the default value on creation for the support_count field.
 	sponsor.DefaultSupportCount = sponsorDescSupportCount.Default.(int)
 	// sponsorDescTotalAmount is the schema descriptor for total_amount field.
-	sponsorDescTotalAmount := sponsorFields[16].Descriptor()
+	sponsorDescTotalAmount := sponsorFields[22].Descriptor()
 	// sponsor.TotalAmountValidator is a validator for the "total_amount" field. It is called by the builders before save.
 	sponsor.TotalAmountValidator = sponsorDescTotalAmount.Validators[0].(func(string) error)
 	// sponsorDescCreatedAt is the schema descriptor for created_at field.
-	sponsorDescCreatedAt := sponsorFields[18].Descriptor()
+	sponsorDescCreatedAt := sponsorFields[24].Descriptor()
 	// sponsor.DefaultCreatedAt holds the default value on creation for the created_at field.
 	sponsor.DefaultCreatedAt = sponsorDescCreatedAt.Default.(func() time.Time)
 	// sponsorDescUpdatedAt is the schema descriptor for updated_at field.
-	sponsorDescUpdatedAt := sponsorFields[19].Descriptor()
+	sponsorDescUpdatedAt := sponsorFields[25].Descriptor()
 	// sponsor.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	sponsor.DefaultUpdatedAt = sponsorDescUpdatedAt.Default.(func() time.Time)
 	// sponsor.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -426,6 +436,188 @@ func init() {
 			return nil
 		}
 	}()
+	sponsorafdianorderFields := schema.SponsorAfdianOrder{}.Fields()
+	_ = sponsorafdianorderFields
+	// sponsorafdianorderDescSponsorID is the schema descriptor for sponsor_id field.
+	sponsorafdianorderDescSponsorID := sponsorafdianorderFields[1].Descriptor()
+	// sponsorafdianorder.SponsorIDValidator is a validator for the "sponsor_id" field. It is called by the builders before save.
+	sponsorafdianorder.SponsorIDValidator = func() func(string) error {
+		validators := sponsorafdianorderDescSponsorID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(sponsor_id string) error {
+			for _, fn := range fns {
+				if err := fn(sponsor_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// sponsorafdianorderDescAfdianUserID is the schema descriptor for afdian_user_id field.
+	sponsorafdianorderDescAfdianUserID := sponsorafdianorderFields[2].Descriptor()
+	// sponsorafdianorder.AfdianUserIDValidator is a validator for the "afdian_user_id" field. It is called by the builders before save.
+	sponsorafdianorder.AfdianUserIDValidator = func() func(string) error {
+		validators := sponsorafdianorderDescAfdianUserID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(afdian_user_id string) error {
+			for _, fn := range fns {
+				if err := fn(afdian_user_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// sponsorafdianorderDescPlanID is the schema descriptor for plan_id field.
+	sponsorafdianorderDescPlanID := sponsorafdianorderFields[3].Descriptor()
+	// sponsorafdianorder.DefaultPlanID holds the default value on creation for the plan_id field.
+	sponsorafdianorder.DefaultPlanID = sponsorafdianorderDescPlanID.Default.(string)
+	// sponsorafdianorder.PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
+	sponsorafdianorder.PlanIDValidator = sponsorafdianorderDescPlanID.Validators[0].(func(string) error)
+	// sponsorafdianorderDescPlanTitle is the schema descriptor for plan_title field.
+	sponsorafdianorderDescPlanTitle := sponsorafdianorderFields[4].Descriptor()
+	// sponsorafdianorder.DefaultPlanTitle holds the default value on creation for the plan_title field.
+	sponsorafdianorder.DefaultPlanTitle = sponsorafdianorderDescPlanTitle.Default.(string)
+	// sponsorafdianorder.PlanTitleValidator is a validator for the "plan_title" field. It is called by the builders before save.
+	sponsorafdianorder.PlanTitleValidator = sponsorafdianorderDescPlanTitle.Validators[0].(func(string) error)
+	// sponsorafdianorderDescProductType is the schema descriptor for product_type field.
+	sponsorafdianorderDescProductType := sponsorafdianorderFields[5].Descriptor()
+	// sponsorafdianorder.DefaultProductType holds the default value on creation for the product_type field.
+	sponsorafdianorder.DefaultProductType = sponsorafdianorderDescProductType.Default.(int)
+	// sponsorafdianorderDescMonth is the schema descriptor for month field.
+	sponsorafdianorderDescMonth := sponsorafdianorderFields[6].Descriptor()
+	// sponsorafdianorder.DefaultMonth holds the default value on creation for the month field.
+	sponsorafdianorder.DefaultMonth = sponsorafdianorderDescMonth.Default.(int)
+	// sponsorafdianorderDescStatus is the schema descriptor for status field.
+	sponsorafdianorderDescStatus := sponsorafdianorderFields[7].Descriptor()
+	// sponsorafdianorder.DefaultStatus holds the default value on creation for the status field.
+	sponsorafdianorder.DefaultStatus = sponsorafdianorderDescStatus.Default.(int)
+	// sponsorafdianorderDescTotalAmount is the schema descriptor for total_amount field.
+	sponsorafdianorderDescTotalAmount := sponsorafdianorderFields[8].Descriptor()
+	// sponsorafdianorder.DefaultTotalAmount holds the default value on creation for the total_amount field.
+	sponsorafdianorder.DefaultTotalAmount = sponsorafdianorderDescTotalAmount.Default.(string)
+	// sponsorafdianorder.TotalAmountValidator is a validator for the "total_amount" field. It is called by the builders before save.
+	sponsorafdianorder.TotalAmountValidator = sponsorafdianorderDescTotalAmount.Validators[0].(func(string) error)
+	// sponsorafdianorderDescShowAmount is the schema descriptor for show_amount field.
+	sponsorafdianorderDescShowAmount := sponsorafdianorderFields[9].Descriptor()
+	// sponsorafdianorder.DefaultShowAmount holds the default value on creation for the show_amount field.
+	sponsorafdianorder.DefaultShowAmount = sponsorafdianorderDescShowAmount.Default.(string)
+	// sponsorafdianorder.ShowAmountValidator is a validator for the "show_amount" field. It is called by the builders before save.
+	sponsorafdianorder.ShowAmountValidator = sponsorafdianorderDescShowAmount.Validators[0].(func(string) error)
+	// sponsorafdianorderDescRemark is the schema descriptor for remark field.
+	sponsorafdianorderDescRemark := sponsorafdianorderFields[10].Descriptor()
+	// sponsorafdianorder.DefaultRemark holds the default value on creation for the remark field.
+	sponsorafdianorder.DefaultRemark = sponsorafdianorderDescRemark.Default.(string)
+	// sponsorafdianorder.RemarkValidator is a validator for the "remark" field. It is called by the builders before save.
+	sponsorafdianorder.RemarkValidator = sponsorafdianorderDescRemark.Validators[0].(func(string) error)
+	// sponsorafdianorderDescCreatedAt is the schema descriptor for created_at field.
+	sponsorafdianorderDescCreatedAt := sponsorafdianorderFields[12].Descriptor()
+	// sponsorafdianorder.DefaultCreatedAt holds the default value on creation for the created_at field.
+	sponsorafdianorder.DefaultCreatedAt = sponsorafdianorderDescCreatedAt.Default.(func() time.Time)
+	// sponsorafdianorderDescUpdatedAt is the schema descriptor for updated_at field.
+	sponsorafdianorderDescUpdatedAt := sponsorafdianorderFields[13].Descriptor()
+	// sponsorafdianorder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	sponsorafdianorder.DefaultUpdatedAt = sponsorafdianorderDescUpdatedAt.Default.(func() time.Time)
+	// sponsorafdianorder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	sponsorafdianorder.UpdateDefaultUpdatedAt = sponsorafdianorderDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// sponsorafdianorderDescID is the schema descriptor for id field.
+	sponsorafdianorderDescID := sponsorafdianorderFields[0].Descriptor()
+	// sponsorafdianorder.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	sponsorafdianorder.IDValidator = func() func(string) error {
+		validators := sponsorafdianorderDescID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(id string) error {
+			for _, fn := range fns {
+				if err := fn(id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	sponsormanualdurationFields := schema.SponsorManualDuration{}.Fields()
+	_ = sponsormanualdurationFields
+	// sponsormanualdurationDescSponsorID is the schema descriptor for sponsor_id field.
+	sponsormanualdurationDescSponsorID := sponsormanualdurationFields[0].Descriptor()
+	// sponsormanualduration.SponsorIDValidator is a validator for the "sponsor_id" field. It is called by the builders before save.
+	sponsormanualduration.SponsorIDValidator = func() func(string) error {
+		validators := sponsormanualdurationDescSponsorID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(sponsor_id string) error {
+			for _, fn := range fns {
+				if err := fn(sponsor_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// sponsormanualdurationDescAmount is the schema descriptor for amount field.
+	sponsormanualdurationDescAmount := sponsormanualdurationFields[1].Descriptor()
+	// sponsormanualduration.AmountValidator is a validator for the "amount" field. It is called by the builders before save.
+	sponsormanualduration.AmountValidator = sponsormanualdurationDescAmount.Validators[0].(func(int) error)
+	// sponsormanualdurationDescNote is the schema descriptor for note field.
+	sponsormanualdurationDescNote := sponsormanualdurationFields[4].Descriptor()
+	// sponsormanualduration.NoteValidator is a validator for the "note" field. It is called by the builders before save.
+	sponsormanualduration.NoteValidator = func() func(string) error {
+		validators := sponsormanualdurationDescNote.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(note string) error {
+			for _, fn := range fns {
+				if err := fn(note); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// sponsormanualdurationDescCreatedBy is the schema descriptor for created_by field.
+	sponsormanualdurationDescCreatedBy := sponsormanualdurationFields[6].Descriptor()
+	// sponsormanualduration.CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
+	sponsormanualduration.CreatedByValidator = func() func(string) error {
+		validators := sponsormanualdurationDescCreatedBy.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(created_by string) error {
+			for _, fn := range fns {
+				if err := fn(created_by); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// sponsormanualdurationDescCreatedAt is the schema descriptor for created_at field.
+	sponsormanualdurationDescCreatedAt := sponsormanualdurationFields[7].Descriptor()
+	// sponsormanualduration.DefaultCreatedAt holds the default value on creation for the created_at field.
+	sponsormanualduration.DefaultCreatedAt = sponsormanualdurationDescCreatedAt.Default.(func() time.Time)
+	// sponsormanualdurationDescUpdatedBy is the schema descriptor for updated_by field.
+	sponsormanualdurationDescUpdatedBy := sponsormanualdurationFields[8].Descriptor()
+	// sponsormanualduration.UpdatedByValidator is a validator for the "updated_by" field. It is called by the builders before save.
+	sponsormanualduration.UpdatedByValidator = sponsormanualdurationDescUpdatedBy.Validators[0].(func(string) error)
+	// sponsormanualdurationDescUpdatedAt is the schema descriptor for updated_at field.
+	sponsormanualdurationDescUpdatedAt := sponsormanualdurationFields[9].Descriptor()
+	// sponsormanualduration.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	sponsormanualduration.DefaultUpdatedAt = sponsormanualdurationDescUpdatedAt.Default.(func() time.Time)
+	// sponsormanualduration.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	sponsormanualduration.UpdateDefaultUpdatedAt = sponsormanualdurationDescUpdatedAt.UpdateDefault.(func() time.Time)
 	systemlogFields := schema.SystemLog{}.Fields()
 	_ = systemlogFields
 	// systemlogDescEventTime is the schema descriptor for event_time field.

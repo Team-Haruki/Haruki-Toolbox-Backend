@@ -45,6 +45,12 @@ type SocialPlatformInfo func(*sql.Selector)
 // Sponsor is the predicate function for sponsor builders.
 type Sponsor func(*sql.Selector)
 
+// SponsorAfdianOrder is the predicate function for sponsorafdianorder builders.
+type SponsorAfdianOrder func(*sql.Selector)
+
+// SponsorManualDuration is the predicate function for sponsormanualduration builders.
+type SponsorManualDuration func(*sql.Selector)
+
 // SystemLog is the predicate function for systemlog builders.
 type SystemLog func(*sql.Selector)
 
