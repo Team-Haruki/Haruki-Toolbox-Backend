@@ -136,7 +136,7 @@ func saveRecomputed(ctx context.Context, db *postgresql.Client, row *postgresql.
 		Where(sponsorSchema.UpdatedAtEQ(row.UpdatedAt)).
 		SetAfdianDurationMonths(d.Afdian.Months).
 		SetHasDuration(d.HasDuration).
-		SetIsActive(CategoryFor(d.HasDuration, d.EffectiveExpiresAt, now) == CategoryCurrent)
+		SetIsActive(CategoryFor(d.EffectiveExpiresAt, now) == CategoryCurrent)
 	if d.Afdian.End != nil {
 		update.SetAfdianExpiresAt(*d.Afdian.End)
 	} else {
@@ -160,7 +160,7 @@ func saveRecomputed(ctx context.Context, db *postgresql.Client, row *postgresql.
 	// "一次性赞助". It is replaced by the plan of the newest duration order
 	// (or cleared, which shows the default label). Pinned profiles were never
 	// overwritten, so they are kept.
-	if !row.AfdianSyncDisabled && d.HasDuration && stringPtrValue(row.PlanName) == oneTimePlanName {
+	if !row.AfdianSyncDisabled && d.HasDuration && stringPtrValue(row.PlanName) == legacyOneTimePlanName {
 		if d.LatestPlanName != "" {
 			update.SetPlanName(d.LatestPlanName)
 		} else {

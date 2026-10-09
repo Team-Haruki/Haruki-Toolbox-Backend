@@ -18,9 +18,11 @@ import (
 
 const (
 	defaultSponsorPlanName = "爱发电赞助"
-	oneTimePlanName        = "一次性赞助"
-	customPlanName         = "自选方案"
-	anonymousSponsorName   = "匿名赞助者"
+	// legacyOneTimePlanName is the label the pre-split code wrote over the
+	// plan name of every lapsed sponsor.
+	legacyOneTimePlanName = "一次性赞助"
+	customPlanName        = "自选方案"
+	anonymousSponsorName  = "匿名赞助者"
 )
 
 func stringPtrValue(value *string) string {
@@ -48,30 +50,22 @@ func stringPointerOrNil(value string) *string {
 
 // SponsorCategory is the category of a stored sponsor row at now. It is the
 // one entry point every reader uses (public wall, admin list, migration
-// report). A row that still carries the legacy single expiry (not yet split,
-// see SplitLegacySponsorDurations) counts as having had duration when it has
-// an expiry or a plan month.
+// report). plan_expires_at is the effective expiry, or the legacy single
+// expiry on a row the split has not reached yet.
 func SponsorCategory(row *postgresql.Sponsor, now time.Time) Category {
-	hasDuration := row.HasDuration
-	if row.DurationSplitAt == nil {
-		hasDuration = row.PlanPayMonths != nil || row.PlanExpiresAt != nil
-	}
-	return CategoryFor(hasDuration, row.PlanExpiresAt, now)
+	return CategoryFor(row.PlanExpiresAt, now)
 }
 
-// DisplayPlanName is the tier label shown for a sponsor. "一次性赞助" is only a
-// fallback label for the one-time category; a stored copy of it on a sponsor
-// with duration is the leftover of the pre-split bug and is not shown.
-func DisplayPlanName(row *postgresql.Sponsor, category Category) string {
+// DisplayPlanName is the tier label shown for a sponsor. A stored
+// "一次性赞助" is the leftover of the pre-split bug (a lapsed plan was renamed
+// to it) and is never shown.
+func DisplayPlanName(row *postgresql.Sponsor) string {
 	planName := strings.TrimSpace(stringPtrValue(row.PlanName))
-	if planName == oneTimePlanName && category != CategoryOneTime {
+	if planName == legacyOneTimePlanName {
 		planName = ""
 	}
 	if planName != "" {
 		return planName
-	}
-	if category == CategoryOneTime {
-		return oneTimePlanName
 	}
 	return defaultSponsorPlanName
 }
@@ -87,7 +81,7 @@ func DisplayName(row *postgresql.Sponsor) string {
 
 func sponsorItemFromRow(row *postgresql.Sponsor, now time.Time) SponsorItem {
 	category := SponsorCategory(row, now)
-	planName := DisplayPlanName(row, category)
+	planName := DisplayPlanName(row)
 	return SponsorItem{
 		ID:     row.ID,
 		Name:   DisplayName(row),
@@ -129,8 +123,8 @@ func amountStringToFloat(amount *string) *float64 {
 	return &value
 }
 
-// BuildSponsorPageResponse builds the public wall. Categories are mutually
-// exclusive, so activeCount + pastCount + oneTimeCount == supporterCount.
+// BuildSponsorPageResponse builds the public wall. Every supporter is current
+// or former, so activeCount + pastCount == supporterCount.
 func BuildSponsorPageResponse(rows []*postgresql.Sponsor, now time.Time) SponsorPageResponse {
 	items := make([]SponsorItem, 0, len(rows))
 	summary := SponsorSummary{
@@ -139,13 +133,10 @@ func BuildSponsorPageResponse(rows []*postgresql.Sponsor, now time.Time) Sponsor
 	}
 	for _, row := range rows {
 		item := sponsorItemFromRow(row, now)
-		switch item.Category {
-		case CategoryCurrent:
+		if item.Category == CategoryCurrent {
 			summary.ActiveCount++
-		case CategoryFormer:
+		} else {
 			summary.PastCount++
-		default:
-			summary.OneTimeCount++
 		}
 		items = append(items, item)
 	}

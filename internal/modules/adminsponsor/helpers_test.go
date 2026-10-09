@@ -47,7 +47,7 @@ func TestAdminSponsorDetailShowsBothSources(t *testing.T) {
 	for _, order := range detail.Afdian.Orders {
 		kinds[order.OutTradeNo] = order.Kind
 	}
-	if kinds["o1"] != "duration" || kinds["o2"] != "one_time" {
+	if kinds["o1"] != "duration" || kinds["o2"] != "no_time" {
 		t.Fatalf("order kinds = %v", kinds)
 	}
 	if len(detail.ManualDurations) != 1 || detail.ManualDurations[0].CreatedBy != "admin-1" || detail.ManualDurations[0].Note != note {

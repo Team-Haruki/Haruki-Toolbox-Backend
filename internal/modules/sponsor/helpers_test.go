@@ -160,17 +160,18 @@ func TestRecordAfdianOrderStacksCustomPlanOrders(t *testing.T) {
 	}
 }
 
-func TestOneTimeOnlySponsorIsOneTime(t *testing.T) {
+func TestSalePlanOnlySponsorIsFormer(t *testing.T) {
 	db := openSponsorDB(t)
 	paidAt := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	row := recordOrder(t, db, orderJSON("shop-user", "o1", "item", afdianProductTypeForSale, 1, paidAt), paidAt)
 	if row.HasDuration || row.PlanExpiresAt != nil {
 		t.Fatalf("sale order granted time: %+v", row)
 	}
-	if got := SponsorCategory(row, paidAt); got != CategoryOneTime {
-		t.Fatalf("category = %s, want one_time", got)
+	// They supported once: former, never a separate one-time category.
+	if got := SponsorCategory(row, paidAt); got != CategoryFormer {
+		t.Fatalf("category = %s, want former", got)
 	}
-	if got := DisplayPlanName(row, CategoryOneTime); got != oneTimePlanName {
+	if got := DisplayPlanName(row); got != defaultSponsorPlanName {
 		t.Fatalf("plan name = %q", got)
 	}
 }
@@ -206,15 +207,15 @@ func TestLapsedPlanBecomesFormerNotOneTime(t *testing.T) {
 		t.Fatalf("the last reported expiry must be kept after the plan lapses")
 	}
 	resp := BuildSponsorPageResponse([]*postgresql.Sponsor{row}, later)
-	if resp.Summary.PastCount != 1 || resp.Summary.OneTimeCount != 0 || resp.Supporters[0].Category != CategoryFormer {
+	if resp.Summary.PastCount != 1 || resp.Summary.ActiveCount != 0 || resp.Supporters[0].Category != CategoryFormer {
 		t.Fatalf("summary = %+v category = %s", resp.Summary, resp.Supporters[0].Category)
 	}
 }
 
 func TestDisplayPlanNameHidesLegacyOneTimeLabel(t *testing.T) {
-	label := oneTimePlanName
+	label := legacyOneTimePlanName
 	row := &postgresql.Sponsor{PlanName: &label}
-	if got := DisplayPlanName(row, CategoryFormer); got != defaultSponsorPlanName {
+	if got := DisplayPlanName(row); got != defaultSponsorPlanName {
 		t.Fatalf("former sponsor shows %q", got)
 	}
 }
@@ -299,13 +300,13 @@ func TestSponsorPageSummaryIsMutuallyExclusive(t *testing.T) {
 		{ID: "current", HasDuration: true, PlanExpiresAt: &future, DurationSplitAt: &split},
 		{ID: "former", HasDuration: true, PlanExpiresAt: &past, DurationSplitAt: &split},
 		{ID: "exactly-now", HasDuration: true, PlanExpiresAt: &now, DurationSplitAt: &split},
-		{ID: "one-time", DurationSplitAt: &split},
+		{ID: "no-time", DurationSplitAt: &split},
 		// Legacy row awaiting the split: judged by its single expiry.
 		{ID: "legacy", PlanExpiresAt: &past},
 	}
 	resp := BuildSponsorPageResponse(rows, now)
 	s := resp.Summary
-	if s.ActiveCount != 1 || s.PastCount != 3 || s.OneTimeCount != 1 || s.ActiveCount+s.PastCount+s.OneTimeCount != s.SupporterCount {
+	if s.ActiveCount != 1 || s.PastCount != 4 || s.ActiveCount+s.PastCount != s.SupporterCount {
 		t.Fatalf("summary = %+v", s)
 	}
 	for _, item := range resp.Supporters {
@@ -374,7 +375,7 @@ func TestManualOnlySponsor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := SponsorCategory(row, now); got != CategoryOneTime {
+	if got := SponsorCategory(row, now); got != CategoryFormer {
 		t.Fatalf("no time yet: %s", got)
 	}
 	amount, unit, note := 2, "month", "QQ 红包"
@@ -492,7 +493,7 @@ func TestSyncAfdianSponsorsFetchesOrdersAndProfiles(t *testing.T) {
 		"afdian_lapsed-user":  CategoryFormer,
 		"afdian_renewed-user": CategoryCurrent,
 		"afdian_custom-user":  CategoryCurrent,
-		"afdian_shop-user":    CategoryOneTime,
+		"afdian_shop-user":    CategoryFormer,
 	}
 	for id, category := range want {
 		row, err := db.Sponsor.Get(ctx, id)

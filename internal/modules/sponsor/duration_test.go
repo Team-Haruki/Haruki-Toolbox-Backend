@@ -214,18 +214,17 @@ func TestComputeEffectiveExpiryStacksManualAfterAfdian(t *testing.T) {
 func TestCategoryForBoundaries(t *testing.T) {
 	now := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	cases := []struct {
-		name        string
-		hasDuration bool
-		expires     *time.Time
-		want        Category
+		name    string
+		expires *time.Time
+		want    Category
 	}{
-		{"expires in the future", true, timePtr(now.Add(time.Second)), CategoryCurrent},
-		{"expires exactly now", true, timePtr(now), CategoryFormer},
-		{"expired", true, timePtr(now.Add(-time.Second)), CategoryFormer},
-		{"only one-time orders", false, nil, CategoryOneTime},
+		{"expires in the future", timePtr(now.Add(time.Second)), CategoryCurrent},
+		{"expires exactly now", timePtr(now), CategoryFormer},
+		{"expired", timePtr(now.Add(-time.Second)), CategoryFormer},
+		{"never had time (sale-plan orders only)", nil, CategoryFormer},
 	}
 	for _, tc := range cases {
-		if got := CategoryFor(tc.hasDuration, tc.expires, now); got != tc.want {
+		if got := CategoryFor(tc.expires, now); got != tc.want {
 			t.Errorf("%s: %s, want %s", tc.name, got, tc.want)
 		}
 	}
@@ -240,27 +239,27 @@ func TestCategoryForMixedAndManualOnlySponsors(t *testing.T) {
 		durationOrder("sub", "plan", 0, 1, paidAt),
 		durationOrder("item", "plan", 1, 1, now.Add(-time.Hour)),
 	}, AfdianReport{})
-	if got := CategoryFor(mixed.HasDuration(), ComputeEffectiveExpiry(mixed.End, nil), now); got != CategoryFormer {
+	if got := CategoryFor(ComputeEffectiveExpiry(mixed.End, nil), now); got != CategoryFormer {
 		t.Fatalf("mixed: %s", got)
 	}
 
 	// Manual time only, still running, then lapsed.
 	entry := []ManualDurationFacts{{ID: 1, Amount: 30, Unit: ManualUnitDay, StartsAt: now.Add(-24 * time.Hour)}}
-	if got := CategoryFor(true, ComputeEffectiveExpiry(nil, entry), now); got != CategoryCurrent {
+	if got := CategoryFor(ComputeEffectiveExpiry(nil, entry), now); got != CategoryCurrent {
 		t.Fatalf("manual-only running: %s", got)
 	}
-	if got := CategoryFor(true, ComputeEffectiveExpiry(nil, entry), now.AddDate(0, 2, 0)); got != CategoryFormer {
+	if got := CategoryFor(ComputeEffectiveExpiry(nil, entry), now.AddDate(0, 2, 0)); got != CategoryFormer {
 		t.Fatalf("manual-only lapsed: %s", got)
 	}
 
 	// Expired Afdian time extended by manual time: current.
 	extended := ComputeEffectiveExpiry(mixed.End, []ManualDurationFacts{{ID: 2, Amount: 1, Unit: ManualUnitMonth, StartsAt: paidAt}})
-	if got := CategoryFor(true, extended, now); got != CategoryFormer {
+	if got := CategoryFor(extended, now); got != CategoryFormer {
 		// paidAt+31d floored, +31d: still before now (3 months later).
 		t.Fatalf("extended but still expired: %s", got)
 	}
 	extendedNow := ComputeEffectiveExpiry(mixed.End, []ManualDurationFacts{{ID: 2, Amount: 1, Unit: ManualUnitMonth, StartsAt: now}})
-	if got := CategoryFor(true, extendedNow, now); got != CategoryCurrent {
+	if got := CategoryFor(extendedNow, now); got != CategoryCurrent {
 		t.Fatalf("manual entry recorded today: %s", got)
 	}
 }

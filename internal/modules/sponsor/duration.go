@@ -17,7 +17,7 @@ import (
 // The effective expiry (ComputeEffectiveExpiry) is the Afdian time followed by
 // the manual entries in sequence, so the total time is the Afdian time plus the
 // manual time with no overlap lost. SponsorCategory turns it into one of three
-// mutually exclusive categories. These functions are the only place that
+// two categories. These functions are the only place that
 // classifies orders, merges the sources or decides a category; the public
 // wall, the admin list and the migration all call them.
 
@@ -27,12 +27,10 @@ type Category string
 const (
 	// CategoryCurrent (当前赞助): the effective expiry is still in the future.
 	CategoryCurrent Category = "current"
-	// CategoryFormer (曾经赞助): has had duration (Afdian or manual) but the
-	// effective expiry is at or before now.
+	// CategoryFormer (曾经赞助): everyone else. The effective expiry is at or
+	// before now, or there never was any time (a sale-plan-only buyer or a
+	// hand-entered supporter without manual time): they supported once.
 	CategoryFormer Category = "former"
-	// CategoryOneTime (一次性赞助): never had any duration, only one-time
-	// purchases (or a hand-entered supporter without time).
-	CategoryOneTime Category = "one_time"
 )
 
 // AfdianOrderKind is how an Afdian order counts toward duration.
@@ -304,14 +302,12 @@ func LeavesFutureGap(afdianEnd *time.Time, entries []ManualDurationFacts, now ti
 	return false
 }
 
-// CategoryFor decides the category from the merged duration. A sponsor whose
-// effective expiry equals now has expired.
-func CategoryFor(hasDuration bool, effectiveExpiresAt *time.Time, now time.Time) Category {
+// CategoryFor decides the category from the effective expiry: current while
+// it lies in the future, former otherwise. A sponsor whose effective expiry
+// equals now has expired.
+func CategoryFor(effectiveExpiresAt *time.Time, now time.Time) Category {
 	if effectiveExpiresAt != nil && effectiveExpiresAt.After(now) {
 		return CategoryCurrent
 	}
-	if hasDuration || effectiveExpiresAt != nil {
-		return CategoryFormer
-	}
-	return CategoryOneTime
+	return CategoryFormer
 }

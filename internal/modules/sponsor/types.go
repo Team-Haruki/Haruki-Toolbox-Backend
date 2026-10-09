@@ -35,12 +35,11 @@ type SponsorPlan struct {
 	ExpiresAt *time.Time `json:"expiresAt,omitzero"`
 }
 
-// SponsorSummary counts the three mutually exclusive categories: activeCount
-// is "current", pastCount "former" and oneTimeCount "one_time".
+// SponsorSummary counts the two categories: activeCount is "current" and
+// pastCount "former".
 type SponsorSummary struct {
 	SupporterCount int       `json:"supporterCount"`
 	ActiveCount    int       `json:"activeCount"`
-	OneTimeCount   int       `json:"oneTimeCount"`
 	PastCount      int       `json:"pastCount"`
 	GeneratedAt    time.Time `json:"generatedAt"`
 }
