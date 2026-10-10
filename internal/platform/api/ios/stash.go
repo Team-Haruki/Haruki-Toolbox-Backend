@@ -2,6 +2,8 @@ package ios
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -18,9 +20,14 @@ import (
 // entry under the top-level `script-providers` key, which holds the URL
 // (https://stash.wiki/script/manage-script). Script options follow
 // https://stash.wiki/script/rewrite-requests.
+//
+// Stash merges every enabled override into one configuration, and mappings
+// merge by key. Provider names therefore embed a hash of the script URL, so two
+// generated overrides (different upload codes, endpoints or chunk sizes) never
+// replace each other's provider.
 
 const (
-	stashScriptProviderName     = "haruki-toolbox-upload"
+	stashScriptProviderPrefix   = "haruki-toolbox-upload-"
 	stashScriptProviderInterval = 86400
 	stashScriptMaxSize          = 100000000
 	stashScriptTimeout          = 60
@@ -75,22 +82,14 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) (string, error) {
 	}
 	override.HTTP.URLRewrite = append(override.HTTP.URLRewrite, `^https:\/\/submit\.backtrace\.io\/ - reject`)
 
-	providerByURL := make(map[string]string)
 	for _, rule := range rs.ScriptRules {
-		provider, ok := providerByURL[rule.Target]
-		if !ok {
-			provider = stashScriptProviderName
-			if len(providerByURL) > 0 {
-				provider = fmt.Sprintf("%s-%d", stashScriptProviderName, len(providerByURL)+1)
-			}
-			providerByURL[rule.Target] = provider
-			if override.ScriptProviders == nil {
-				override.ScriptProviders = make(map[string]stashScriptProvider)
-			}
-			override.ScriptProviders[provider] = stashScriptProvider{
-				URL:      rule.Target,
-				Interval: stashScriptProviderInterval,
-			}
+		provider := stashScriptProviderName(rule.Target)
+		if override.ScriptProviders == nil {
+			override.ScriptProviders = make(map[string]stashScriptProvider)
+		}
+		override.ScriptProviders[provider] = stashScriptProvider{
+			URL:      rule.Target,
+			Interval: stashScriptProviderInterval,
 		}
 		override.HTTP.Script = append(override.HTTP.Script, stashScript{
 			Match:       rule.Pattern,
@@ -113,4 +112,9 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) (string, error) {
 		return "", fmt.Errorf("encode stash override: %w", err)
 	}
 	return buf.String(), nil
+}
+
+func stashScriptProviderName(scriptURL string) string {
+	sum := sha256.Sum256([]byte(scriptURL))
+	return stashScriptProviderPrefix + hex.EncodeToString(sum[:6])
 }

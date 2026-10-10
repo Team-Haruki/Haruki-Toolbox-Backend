@@ -2,6 +2,7 @@ package ios
 
 import (
 	"bytes"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -272,5 +273,43 @@ func TestStashServedAsStoverride(t *testing.T) {
 	}
 	if got := ProxyAppStash.ContentType(); !strings.HasPrefix(got, "text/yaml") || !strings.Contains(got, "charset=utf-8") {
 		t.Fatalf("content type = %q", got)
+	}
+}
+
+func TestStashScriptProviderNamesAreDistinctPerScriptURL(t *testing.T) {
+	useStashTestHosts(t)
+	providers := func(code string, chunk int, endpoint string) map[string]stashScriptProvider {
+		req := &ModuleRequest{
+			UploadCode:  code,
+			Regions:     []harukiUtils.SupportedDataUploadServer{harukiUtils.SupportedDataUploadServerJP},
+			DataTypes:   []DataType{DataTypeSuite},
+			App:         ProxyAppStash,
+			Mode:        UploadModeScript,
+			ChunkSizeMB: chunk,
+		}
+		out, err := GenerateModule(req, "https://toolbox.example", endpoint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var override stashOverride
+		if err := yaml.Unmarshal([]byte(out), &override); err != nil {
+			t.Fatal(err)
+		}
+		return override.ScriptProviders
+	}
+	a := providers("code-a", 1, "direct")
+	if again := providers("code-a", 1, "direct"); !maps.Equal(a, again) {
+		t.Fatalf("provider names must be stable: %v vs %v", a, again)
+	}
+	for _, other := range []map[string]stashScriptProvider{
+		providers("code-b", 1, "direct"),
+		providers("code-a", 2, "direct"),
+		providers("code-a", 1, "cdn"),
+	} {
+		for name := range other {
+			if _, clash := a[name]; clash {
+				t.Fatalf("provider %q is shared by overrides with different script URLs", name)
+			}
+		}
 	}
 }
