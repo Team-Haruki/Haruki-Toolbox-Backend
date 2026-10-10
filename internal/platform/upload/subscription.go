@@ -58,9 +58,7 @@ func (h *DataHandler) processBirthdaySubscription(userID int64, server utils.Sup
 		return
 	}
 	h.Logger.Infof("birthday subscription event stored: event=%s subscription=%s version=%s empty_result=%t matched_material_ids=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, event.EmptyResult, event.MatchedMaterialIDs)
-	if err := h.notifyHMESBirthdayEvent(ctx, event); err != nil {
-		h.Logger.Warnf("birthday subscription HMES notify failed: event=%s subscription=%s err=%v", event.EventID, event.SubscriptionID, err)
-	}
+	h.deliverBirthdayEvent(event)
 }
 
 func (h *DataHandler) birthdayRedis() *harukiRedis.HarukiRedisManager {
