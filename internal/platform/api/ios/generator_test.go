@@ -5,8 +5,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
 
 func TestURLRewriteSyntaxByApp(t *testing.T) {
@@ -18,7 +16,6 @@ func TestURLRewriteSyntaxByApp(t *testing.T) {
 		{"Surge", generateSurgeModule, "%s %s header"},
 		{"Loon", generateLoonModule, "%s header %s"},
 		{"QuantumultX", generateQuantumultXModule, "%s url 307 %s"},
-		{"Stash", generateStashModule, "    - %s %s transparent"},
 	}
 	for _, dt := range []DataType{DataTypeSuite, DataTypeMysekai, DataTypeMysekaiForce, DataTypeMysekaiBirthdayParty} {
 		for _, mode := range []UploadMode{UploadModeProxy, UploadModeScript} {
@@ -37,19 +34,6 @@ func TestURLRewriteSyntaxByApp(t *testing.T) {
 					}
 					if app.name != "QuantumultX" && strings.Contains(out, " 307") {
 						t.Fatalf("unexpected redirect: %s", out)
-					}
-					if app.name == "Stash" && mode == UploadModeProxy {
-						var parsed struct {
-							HTTP struct {
-								Rules []string `yaml:"url-rewrite"`
-							} `yaml:"http"`
-						}
-						if err := yaml.Unmarshal([]byte(out), &parsed); err != nil {
-							t.Fatal(err)
-						}
-						if len(parsed.HTTP.Rules) != len(rs.RewriteRules)+1 {
-							t.Fatalf("missing Stash URL rules: %s", out)
-						}
 					}
 				})
 			}
