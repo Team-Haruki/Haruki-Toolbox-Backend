@@ -36,7 +36,7 @@ func GenerateModule(req *ModuleRequest, endpoint string, endpointType string) (s
 	case ProxyAppQuantumultX:
 		return generateQuantumultXModule(req, ruleSet), nil
 	case ProxyAppStash:
-		return generateStashModule(req, ruleSet), nil
+		return generateStashModule(req, ruleSet)
 	default:
 		return "", fmt.Errorf("unsupported proxy app: %s", req.App)
 	}
@@ -128,44 +128,5 @@ func generateQuantumultXModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ url reject\n")
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("hostname = %s, submit.backtrace.io\n", strings.Join(rs.Hostnames, ", ")))
-	return sb.String()
-}
-
-func generateStashModule(req *ModuleRequest, rs *RuleSet) string {
-	var sb strings.Builder
-	name, desc := generateModuleNameAndDesc(req)
-	sb.WriteString(fmt.Sprintf("name: %s\n", name))
-	sb.WriteString(fmt.Sprintf("desc: %s\n", desc))
-	sb.WriteString(fmt.Sprintf("# date: %s\n", time.Now().Format("2006-01-02")))
-	sb.WriteString("\n")
-	sb.WriteString("http:\n")
-	if len(rs.RewriteRules) > 0 || len(rs.ScriptRules) > 0 {
-		sb.WriteString("  url-rewrite:\n")
-		for _, rule := range rs.RewriteRules {
-			target := rule.Target
-			if rule.RuleType == "redirect" || rule.RuleType == "rewrite" {
-				sb.WriteString(fmt.Sprintf("    - %s %s transparent\n", rule.Pattern, target))
-			}
-		}
-		sb.WriteString("    - ^https:\\/\\/submit\\.backtrace\\.io\\/ - reject\n")
-	}
-	if len(rs.ScriptRules) > 0 {
-		sb.WriteString("  script:\n")
-		for i, rule := range rs.ScriptRules {
-			sb.WriteString(fmt.Sprintf("    - match: \"%s\"\n", rule.Pattern))
-			sb.WriteString(fmt.Sprintf("      name: haruki-upload-%d\n", i+1))
-			sb.WriteString("      type: response\n")
-			sb.WriteString("      require-body: true\n")
-			sb.WriteString("      binary-body-mode: true\n")
-			sb.WriteString("      max-size: 100000000\n")
-			sb.WriteString("      timeout: 60\n")
-			sb.WriteString(fmt.Sprintf("      script-path: \"%s\"\n", rule.Target))
-		}
-	}
-	sb.WriteString("  mitm:\n")
-	for _, h := range rs.Hostnames {
-		sb.WriteString(fmt.Sprintf("    - \"%s\"\n", h))
-	}
-	sb.WriteString("    - \"submit.backtrace.io\"\n")
 	return sb.String()
 }
