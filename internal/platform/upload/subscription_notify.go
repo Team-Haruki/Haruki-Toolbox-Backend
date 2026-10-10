@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 )
 
 // errBirthdaySubscriptionStale marks a notification the receiver refused with
@@ -38,7 +40,7 @@ func (h *DataHandler) deliverBirthdayEvent(event *BirthdayMonitorEvent) {
 	}
 	h.Logger.Infof("birthday subscription notify failed, scheduling retry: event=%s subscription=%s version=%s attempt=1 err=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, err)
 	if !h.submitBackgroundTask("birthday-subscription-notify-retry", func() {
-		h.retryBirthdayEventNotify(event, delays)
+		h.retryBirthdayEventNotify(event, delays, err)
 	}) {
 		h.Logger.Warnf("birthday subscription notify retry dropped: shutdown in progress event=%s subscription=%s version=%s attempts=1 err=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, err)
 	}
@@ -46,12 +48,21 @@ func (h *DataHandler) deliverBirthdayEvent(event *BirthdayMonitorEvent) {
 
 // retryBirthdayEventNotify waits for each delay in turn and retries the
 // notification until it succeeds, the subscription turns out to be stale, or
-// the schedule is exhausted. Attempt 1 already happened in the caller.
-func (h *DataHandler) retryBirthdayEventNotify(event *BirthdayMonitorEvent, delays []time.Duration) {
-	var err error
+// the schedule is exhausted. Attempt 1 already happened in the caller and
+// failed with err. When the application starts shutting down during a
+// backoff, the event is dropped so the retry does not hold up the drain.
+func (h *DataHandler) retryBirthdayEventNotify(event *BirthdayMonitorEvent, delays []time.Duration, err error) {
+	shutdown := harukiBackground.ShutdownSignal(h.BackgroundTasks)
 	attempt := 1
 	for i, delay := range delays {
-		time.Sleep(delay)
+		timer := time.NewTimer(delay)
+		select {
+		case <-timer.C:
+		case <-shutdown:
+			timer.Stop()
+			h.Logger.Warnf("birthday subscription notify retry dropped: shutdown in progress event=%s subscription=%s version=%s attempts=%d err=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, attempt, err)
+			return
+		}
 		attempt++
 		err = h.notifyBirthdayEventAttempt(event)
 		if h.finishBirthdayNotifyAttempt(event, attempt, err) {

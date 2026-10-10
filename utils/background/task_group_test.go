@@ -111,3 +111,54 @@ func TestInlineRunnerRunsBeforeReturning(t *testing.T) {
 		t.Fatal("inline task did not finish before Go returned")
 	}
 }
+
+func TestTaskGroupShuttingDownClosesWhenShutdownSeals(t *testing.T) {
+	t.Parallel()
+
+	group := NewTaskGroup(nil)
+	signal := ShutdownSignal(group)
+	select {
+	case <-signal:
+		t.Fatal("shutdown signalled before Shutdown")
+	default:
+	}
+
+	release := make(chan struct{})
+	if !group.Go("blocked", func() { <-release }) {
+		t.Fatal("task was rejected")
+	}
+	shutdownErr := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		shutdownErr <- group.Shutdown(ctx)
+	}()
+	select {
+	case <-signal:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown signal was not closed while draining")
+	}
+	close(release)
+	if err := <-shutdownErr; err != nil {
+		t.Fatalf("Shutdown returned error: %v", err)
+	}
+	// A repeated Shutdown must not close the signal twice.
+	if err := group.Shutdown(context.Background()); err != nil {
+		t.Fatalf("second Shutdown returned error: %v", err)
+	}
+}
+
+func TestShutdownSignalForRunnersWithoutShutdown(t *testing.T) {
+	t.Parallel()
+
+	if ShutdownSignal(nil) != nil {
+		t.Fatal("nil runner must not signal shutdown")
+	}
+	if ShutdownSignal(InlineRunner{}) != nil {
+		t.Fatal("bare InlineRunner must not signal shutdown")
+	}
+	parent := make(chan struct{})
+	if ShutdownSignal(InlineRunner{Shutdown: parent}) != (<-chan struct{})(parent) {
+		t.Fatal("InlineRunner must report its parent's shutdown signal")
+	}
+}

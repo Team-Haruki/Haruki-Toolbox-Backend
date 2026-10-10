@@ -253,7 +253,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			// follow-up audit/fanout work inside this tracked parent so it cannot
 			// race task-group shutdown by attempting nested admission later.
 			innerDependencies := dependencies
-			innerDependencies.BackgroundTasks = harukiBackground.InlineRunner{}
+			innerDependencies.BackgroundTasks = harukiBackground.InlineRunner{Shutdown: harukiBackground.ShutdownSignal(dependencies.BackgroundTasks)}
 			innerDependencies.ValidateUploadIdentity = func(ctx context.Context) error {
 				current, err := apiHelper.DBManager.DB.IOSScriptCode.Get(ctx, codeID)
 				if postgresql.IsNotFound(err) {

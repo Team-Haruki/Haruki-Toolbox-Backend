@@ -314,10 +314,65 @@ func TestProcessBirthdaySubscriptionDoesNotWaitForRetries(t *testing.T) {
 	}
 	assertNotifyRequests(t, server, 1)
 
+	// The retry runs on its own once the delay elapses. Shutting down first
+	// would drop it, so wait for the second request before draining.
+	deadline := time.Now().Add(10 * time.Second)
+	for server.requests.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := tasks.Shutdown(ctx); err != nil {
 		t.Fatalf("drain retry task: %v", err)
 	}
 	assertNotifyRequests(t, server, 2)
+}
+
+// TestRetryStopsWhenShutdownBeginsDuringBackoff checks that a pending retry
+// does not hold up the task-group drain: shutdown during the backoff drops
+// the event promptly and logs it.
+func TestRetryStopsWhenShutdownBeginsDuringBackoff(t *testing.T) {
+	t.Parallel()
+	server := newNotifyTestServer(t, respondWithStatuses(http.StatusInternalServerError))
+	tasks := background.NewTaskGroup(nil)
+	logs := &lockedBuffer{}
+	h := newNotifyTestHandler(server.URL, tasks, []time.Duration{time.Hour, time.Hour, time.Hour}, logs)
+
+	h.deliverBirthdayEvent(testBirthdayEvent())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	if err := tasks.Shutdown(ctx); err != nil {
+		t.Fatalf("drain did not finish while a retry was backing off: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("drain took %v", elapsed)
+	}
+	assertNotifyRequests(t, server, 1)
+	if output := logs.String(); !strings.Contains(output, "[WARNING]") || !strings.Contains(output, "retry dropped: shutdown in progress event=event-1 subscription=subscription-1 version=v1 attempts=1") {
+		t.Fatalf("expected the dropped retry to be logged at Warn: %s", output)
+	}
+}
+
+// TestInlineRetryObservesParentShutdown covers the iOS path, where the retry
+// runs inline inside an already tracked parent task.
+func TestInlineRetryObservesParentShutdown(t *testing.T) {
+	t.Parallel()
+	server := newNotifyTestServer(t, respondWithStatuses(http.StatusInternalServerError))
+	parentShutdown := make(chan struct{})
+	close(parentShutdown)
+	h := newNotifyTestHandler(server.URL, background.InlineRunner{Shutdown: parentShutdown}, []time.Duration{time.Hour}, &lockedBuffer{})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.deliverBirthdayEvent(testBirthdayEvent())
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("inline retry ignored the parent's shutdown")
+	}
+	assertNotifyRequests(t, server, 1)
 }

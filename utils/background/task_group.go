@@ -12,6 +12,24 @@ type Runner interface {
 	Go(name string, task func()) bool
 }
 
+// ShutdownNotifier is implemented by runners that can tell long-lived tasks,
+// such as a retry loop waiting out a backoff, that shutdown has started. The
+// returned channel is closed once the runner stops accepting work; a nil
+// channel means shutdown is never signalled.
+type ShutdownNotifier interface {
+	ShuttingDown() <-chan struct{}
+}
+
+// ShutdownSignal returns runner's shutdown channel, or nil when runner cannot
+// signal shutdown. Receiving from a nil channel blocks forever, so callers can
+// select on the result unconditionally.
+func ShutdownSignal(runner Runner) <-chan struct{} {
+	if notifier, ok := runner.(ShutdownNotifier); ok {
+		return notifier.ShuttingDown()
+	}
+	return nil
+}
+
 // PanicHandler observes a panic recovered at a task boundary.
 type PanicHandler func(name string, recovered any)
 
@@ -24,6 +42,7 @@ type TaskGroup struct {
 	accepting    bool
 	active       int
 	drained      chan struct{}
+	shuttingDown chan struct{}
 	panicHandler PanicHandler
 }
 
@@ -34,6 +53,7 @@ func NewTaskGroup(panicHandler PanicHandler) *TaskGroup {
 	return &TaskGroup{
 		accepting:    true,
 		drained:      drained,
+		shuttingDown: make(chan struct{}),
 		panicHandler: panicHandler,
 	}
 }
@@ -96,6 +116,9 @@ func (g *TaskGroup) Shutdown(ctx context.Context) error {
 	}
 
 	g.mu.Lock()
+	if g.accepting && g.shuttingDown != nil {
+		close(g.shuttingDown)
+	}
 	g.accepting = false
 	drained := g.drained
 	g.mu.Unlock()
@@ -108,11 +131,32 @@ func (g *TaskGroup) Shutdown(ctx context.Context) error {
 	}
 }
 
+// ShuttingDown returns a channel that is closed when Shutdown seals the group,
+// so admitted tasks that wait (for example between retries) can stop early
+// instead of holding up the drain.
+func (g *TaskGroup) ShuttingDown() <-chan struct{} {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.shuttingDown
+}
+
 // InlineRunner runs accepted work in the caller. It is used by an already
 // tracked parent task when all of its follow-up work must remain inside that
 // parent's lifetime instead of attempting admission after shutdown has sealed
 // the application task group.
-type InlineRunner struct{}
+type InlineRunner struct {
+	// Shutdown, when set, is reported by ShuttingDown so inline work can
+	// observe the parent's shutdown (see ShutdownSignal).
+	Shutdown <-chan struct{}
+}
+
+// ShuttingDown returns the parent's shutdown channel, or nil when unset.
+func (r InlineRunner) ShuttingDown() <-chan struct{} {
+	return r.Shutdown
+}
 
 func (InlineRunner) Go(_ string, task func()) bool {
 	if task == nil {
