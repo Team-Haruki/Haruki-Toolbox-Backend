@@ -121,8 +121,19 @@ function HarukiUploadClient() {
         }
         return response
     }
+    // Stash reads $httpClient options strictly: every header value must be a
+    // string (a number or boolean fails with "invalid script HTTP request ...
+    // expected a string"). Surge and the others coerce on their own.
+    const stringifyHeaders = (options) => {
+        if (options && options.headers) {
+            for (const k of Object.keys(options.headers)) options.headers[k] = String(options.headers[k])
+        }
+        return options
+    }
     const get = (options, callback) => {
-        options.headers['User-Agent'] = 'HarukiScriptClient/v1.0.0'
+        options.headers['User-Agent'] = 'HarukiScriptClient/v1.0.1'
+        if (isSurge) options.headers['X-Surge-Skip-Scripting'] = 'false'
+        stringifyHeaders(options)
         if (isQuanX) {
             if (typeof options == "string") options = {
                 url: options
@@ -136,7 +147,6 @@ function HarukiUploadClient() {
             }, reason => callback(reason.error, null, null))
         }
         if (isSurge) {
-            options.headers['X-Surge-Skip-Scripting'] = false
             $httpClient.get(options, (error, response, body) => {
                 callback(error, adapterStatus(response), body)
             })
@@ -162,8 +172,10 @@ function HarukiUploadClient() {
         }
     }
     const post = (options, callback) => {
-        options.headers['User-Agent'] = 'HarukiScriptClient/v1.0.0'
+        options.headers['User-Agent'] = 'HarukiScriptClient/v1.0.1'
         if (options.body) options.headers['Content-Type'] = 'application/octet-stream'
+        if (isSurge) options.headers['X-Surge-Skip-Scripting'] = 'false'
+        stringifyHeaders(options)
         if (isQuanX) {
             if (typeof options == "string") options = {
                 url: options
@@ -177,7 +189,6 @@ function HarukiUploadClient() {
             }, reason => callback(reason.error, null, null))
         }
         if (isSurge) {
-            options.headers['X-Surge-Skip-Scripting'] = false
             $httpClient.post(options, (error, response, body) => {
                 callback(error, adapterStatus(response), body)
             })
@@ -246,7 +257,7 @@ function HarukiUploadClient() {
 // Generated at {{GENERATE_DATE}}
 const $ = HarukiUploadClient();
 const scriptName = "haruki_toolbox_uploader.js";
-const version = "1.0.0";
+const version = "1.0.1";
 
 const upload_id = Math.random().toString(36).substr(2, 9);
 const upload_url = "{{UPLOAD_URL}}";
@@ -284,8 +295,8 @@ function sendChunk(index) {
             "X-Script-Version": version,
             "X-Original-Url": url,
             "X-Upload-Id": upload_id,
-            "X-Chunk-Index": index,
-            "X-Total-Chunks": totalChunks,
+            "X-Chunk-Index": String(index),
+            "X-Total-Chunks": String(totalChunks),
             "X-Upload-Code": "{{UPLOAD_CODE}}",
             "Content-Type": "application/octet-stream",
         },
