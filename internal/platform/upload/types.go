@@ -22,6 +22,10 @@ type OAuth2WebhookAuthorizer interface {
 
 const defaultBirthdaySubscriptionRequestTimeout = 5 * time.Second
 
+// defaultBirthdayNotifyRetryDelays is the wait before each retry of a failed
+// birthday event notification, after the first attempt.
+var defaultBirthdayNotifyRetryDelays = []time.Duration{time.Second, 5 * time.Second, 15 * time.Second}
+
 // BirthdaySubscriptionConfig contains the immutable outbound-notification
 // settings used while processing uploaded birthday data. Keeping this value on
 // each DataHandler prevents one server instance from observing another
@@ -31,6 +35,10 @@ type BirthdaySubscriptionConfig struct {
 	hmesInternalToken   string
 	userAgent           string
 	requestTimeout      time.Duration
+	// notifyRetryDelays overrides defaultBirthdayNotifyRetryDelays when set;
+	// tests use it to run the retry schedule in milliseconds. It is a pointer
+	// so the config stays comparable.
+	notifyRetryDelays *[]time.Duration
 }
 
 type BirthdaySubscriptionConfigOptions struct {
@@ -54,6 +62,13 @@ func (c BirthdaySubscriptionConfig) timeout() time.Duration {
 		return defaultBirthdaySubscriptionRequestTimeout
 	}
 	return c.requestTimeout
+}
+
+func (c BirthdaySubscriptionConfig) retryDelays() []time.Duration {
+	if c.notifyRetryDelays == nil {
+		return defaultBirthdayNotifyRetryDelays
+	}
+	return *c.notifyRetryDelays
 }
 
 type DataHandler struct {
