@@ -35,6 +35,7 @@ import (
 	userPrivateAPIModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprivateapi"
 	userProfileModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
+	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	userTicketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usertickets"
 	webhookModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/webhook"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -61,6 +62,7 @@ type Dependencies struct {
 	TurnstileVerifier         TurnstileVerifier
 	UserDataBuilder           harukiAPIHelper.UserDataBuilder
 	AfdianConfig              sponsorModule.AfdianConfig
+	AfdianOAuth               userSponsorModule.OAuthConfig
 	MiscAssets                miscModule.AssetsConfig
 	TicketNotifications       ticketsModule.NotificationConfig
 	HydraConfig               *harukiOAuth2.HydraConfig
@@ -154,6 +156,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 }
 
 func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
+	userSponsorModule.RegisterRoutes(apiHelper, dependencies.AfdianOAuth)
 	userModule.RegisterUserRoutes(apiHelper)
 	userInfoModule.RegisterUserInfoRoutes(apiHelper, dependencies.UserDataBuilder)
 	userPrivateAPIModule.RegisterUserPrivateAPIRoutes(apiHelper)

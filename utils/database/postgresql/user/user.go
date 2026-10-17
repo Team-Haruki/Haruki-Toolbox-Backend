@@ -20,6 +20,10 @@ const (
 	FieldEmail = "email"
 	// FieldAvatarPath holds the string denoting the avatar_path field in the database.
 	FieldAvatarPath = "avatar_path"
+	// FieldAfdianUserID holds the string denoting the afdian_user_id field in the database.
+	FieldAfdianUserID = "afdian_user_id"
+	// FieldAfdianBoundAt holds the string denoting the afdian_bound_at field in the database.
+	FieldAfdianBoundAt = "afdian_bound_at"
 	// FieldAllowCnMysekai holds the string denoting the allow_cn_mysekai field in the database.
 	FieldAllowCnMysekai = "allow_cn_mysekai"
 	// FieldTicketEmailNotificationsEnabled holds the string denoting the ticket_email_notifications_enabled field in the database.
@@ -98,6 +102,8 @@ var Columns = []string{
 	FieldName,
 	FieldEmail,
 	FieldAvatarPath,
+	FieldAfdianUserID,
+	FieldAfdianBoundAt,
 	FieldAllowCnMysekai,
 	FieldTicketEmailNotificationsEnabled,
 	FieldRole,
@@ -118,6 +124,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// AfdianUserIDValidator is a validator for the "afdian_user_id" field. It is called by the builders before save.
+	AfdianUserIDValidator func(string) error
 	// DefaultAllowCnMysekai holds the default value on creation for the "allow_cn_mysekai" field.
 	DefaultAllowCnMysekai bool
 	// DefaultTicketEmailNotificationsEnabled holds the default value on creation for the "ticket_email_notifications_enabled" field.
@@ -176,6 +184,16 @@ func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 // ByAvatarPath orders the results by the avatar_path field.
 func ByAvatarPath(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAvatarPath, opts...).ToFunc()
+}
+
+// ByAfdianUserID orders the results by the afdian_user_id field.
+func ByAfdianUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianUserID, opts...).ToFunc()
+}
+
+// ByAfdianBoundAt orders the results by the afdian_bound_at field.
+func ByAfdianBoundAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianBoundAt, opts...).ToFunc()
 }
 
 // ByAllowCnMysekai orders the results by the allow_cn_mysekai field.

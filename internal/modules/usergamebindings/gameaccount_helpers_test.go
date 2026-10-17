@@ -138,6 +138,7 @@ func TestSaveGameAccountBindingTransfersOwnerAndClearsOldGrants(t *testing.T) {
 		SetSuite(&harukiSchema.SuiteDataPrivacySettings{AllowPublicApi: true}).
 		SetMysekai(&harukiSchema.MysekaiDataPrivacySettings{AllowPublicApi: true}).
 		SetUserID("old-owner").
+		SetSponsorFrameID("previous-frame").
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("create binding returned error: %v", err)
@@ -179,6 +180,9 @@ func TestSaveGameAccountBindingTransfersOwnerAndClearsOldGrants(t *testing.T) {
 		Only(ctx)
 	if err != nil {
 		t.Fatalf("query updated binding returned error: %v", err)
+	}
+	if updated.SponsorFrameID != nil {
+		t.Fatal("transferred account retained previous owner frame")
 	}
 	if updated.Edges.User == nil || updated.Edges.User.ID != "new-owner" {
 		t.Fatalf("updated owner = %+v, want new-owner", updated.Edges.User)

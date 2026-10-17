@@ -1,0 +1,839 @@
+[
+  {
+    "id": "icon_user_avatar_frame_activity_1",
+    "name": {
+      "zh-CN": "终末地 · 活动 1",
+      "zh-TW": "終末地 · 活動 1",
+      "en-US": "Endfield · Event 1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_activity_2",
+    "name": {
+      "zh-CN": "终末地 · 活动 2",
+      "zh-TW": "終末地 · 活動 2",
+      "en-US": "Endfield · Event 2"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_2-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_2-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_2-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_2/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_activity_3",
+    "name": {
+      "zh-CN": "终末地 · 活动 3",
+      "zh-TW": "終末地 · 活動 3",
+      "en-US": "Endfield · Event 3"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_3-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_3-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_3-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_3/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_activity_4",
+    "name": {
+      "zh-CN": "终末地 · 活动 4",
+      "zh-TW": "終末地 · 活動 4",
+      "en-US": "Endfield · Event 4"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_4-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_4-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_4-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_4/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_activity_5",
+    "name": {
+      "zh-CN": "终末地 · 活动 5",
+      "zh-TW": "終末地 · 活動 5",
+      "en-US": "Endfield · Event 5"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_5-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_5-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_5-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_5/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_activity_6",
+    "name": {
+      "zh-CN": "终末地 · 活动 6",
+      "zh-TW": "終末地 · 活動 6",
+      "en-US": "Endfield · Event 6"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_6-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_6-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_6-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_6/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_activity_7",
+    "name": {
+      "zh-CN": "终末地 · 活动 7",
+      "zh-TW": "終末地 · 活動 7",
+      "en-US": "Endfield · Event 7"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_activity_7-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_activity_7-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_activity_7-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_activity_7/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_bp_1",
+    "name": {
+      "zh-CN": "终末地 · 通行证 1",
+      "zh-TW": "終末地 · 通行證 1",
+      "en-US": "Endfield · Pass 1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_bp_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_bp_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_bp_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_bp_1_1",
+    "name": {
+      "zh-CN": "终末地 · 通行证 1_1",
+      "zh-TW": "終末地 · 通行證 1_1",
+      "en-US": "Endfield · Pass 1_1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_bp_1_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_bp_1_2",
+    "name": {
+      "zh-CN": "终末地 · 通行证 1_2",
+      "zh-TW": "終末地 · 通行證 1_2",
+      "en-US": "Endfield · Pass 1_2"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_bp_1_2-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_2-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_2-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_2/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_bp_1_3",
+    "name": {
+      "zh-CN": "终末地 · 通行证 1_3",
+      "zh-TW": "終末地 · 通行證 1_3",
+      "en-US": "Endfield · Pass 1_3"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_bp_1_3-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_3-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_3-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_3/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_bp_1_4",
+    "name": {
+      "zh-CN": "终末地 · 通行证 1_4",
+      "zh-TW": "終末地 · 通行證 1_4",
+      "en-US": "Endfield · Pass 1_4"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_bp_1_4-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_4-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_4-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_4/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_bp_1_5",
+    "name": {
+      "zh-CN": "终末地 · 通行证 1_5",
+      "zh-TW": "終末地 · 通行證 1_5",
+      "en-US": "Endfield · Pass 1_5"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_bp_1_5-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_5-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_bp_1_5-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_bp_1_5/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_1",
+    "name": {
+      "zh-CN": "终末地 · 频道 1",
+      "zh-TW": "終末地 · 頻道 1",
+      "en-US": "Endfield · Channel 1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_2",
+    "name": {
+      "zh-CN": "终末地 · 频道 2",
+      "zh-TW": "終末地 · 頻道 2",
+      "en-US": "Endfield · Channel 2"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_2-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_2-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_2-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_2/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_3",
+    "name": {
+      "zh-CN": "终末地 · 频道 3",
+      "zh-TW": "終末地 · 頻道 3",
+      "en-US": "Endfield · Channel 3"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_3-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_3-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_3-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_3/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_4",
+    "name": {
+      "zh-CN": "终末地 · 频道 4",
+      "zh-TW": "終末地 · 頻道 4",
+      "en-US": "Endfield · Channel 4"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_4-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_4-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_4-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_4/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_5",
+    "name": {
+      "zh-CN": "终末地 · 频道 5",
+      "zh-TW": "終末地 · 頻道 5",
+      "en-US": "Endfield · Channel 5"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_5-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_5-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_5-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_5/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_6",
+    "name": {
+      "zh-CN": "终末地 · 频道 6",
+      "zh-TW": "終末地 · 頻道 6",
+      "en-US": "Endfield · Channel 6"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_6-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_6-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_6-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_6/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_7",
+    "name": {
+      "zh-CN": "终末地 · 频道 7",
+      "zh-TW": "終末地 · 頻道 7",
+      "en-US": "Endfield · Channel 7"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_7-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_7-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_7-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_7/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_v1d3_1",
+    "name": {
+      "zh-CN": "终末地 · 频道 v1d3_1",
+      "zh-TW": "終末地 · 頻道 v1d3_1",
+      "en-US": "Endfield · Channel v1d3_1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_v1d3_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d3_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d3_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d3_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_v1d4_1",
+    "name": {
+      "zh-CN": "终末地 · 频道 v1d4_1",
+      "zh-TW": "終末地 · 頻道 v1d4_1",
+      "en-US": "Endfield · Channel v1d4_1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_v1d4_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d4_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d4_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_v1d4_2",
+    "name": {
+      "zh-CN": "终末地 · 频道 v1d4_2",
+      "zh-TW": "終末地 · 頻道 v1d4_2",
+      "en-US": "Endfield · Channel v1d4_2"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_v1d4_2-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d4_2-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d4_2-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d4_2/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_v1d5_1",
+    "name": {
+      "zh-CN": "终末地 · 频道 v1d5_1",
+      "zh-TW": "終末地 · 頻道 v1d5_1",
+      "en-US": "Endfield · Channel v1d5_1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_v1d5_2",
+    "name": {
+      "zh-CN": "终末地 · 频道 v1d5_2",
+      "zh-TW": "終末地 · 頻道 v1d5_2",
+      "en-US": "Endfield · Channel v1d5_2"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_2-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_2-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_2-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_2/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_channel_v1d5_3",
+    "name": {
+      "zh-CN": "终末地 · 频道 v1d5_3",
+      "zh-TW": "終末地 · 頻道 v1d5_3",
+      "en-US": "Endfield · Channel v1d5_3"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_3-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_3-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_channel_v1d5_3-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_channel_v1d5_3/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_endfield_1",
+    "name": {
+      "zh-CN": "终末地 1",
+      "zh-TW": "終末地 1",
+      "en-US": "Endfield 1"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_endfield_1-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_endfield_1-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_endfield_1-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_1/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "icon_user_avatar_frame_endfield_2",
+    "name": {
+      "zh-CN": "终末地 2",
+      "zh-TW": "終末地 2",
+      "en-US": "Endfield 2"
+    },
+    "thumbnail": "/sponsor-frames/icon_user_avatar_frame_endfield_2-panel.png",
+    "panelPreview": "/sponsor-frames/icon_user_avatar_frame_endfield_2-panel.png",
+    "profilePreview": "/sponsor-frames/icon_user_avatar_frame_endfield_2-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/icon_user_avatar_frame_endfield_2/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "rgb_coiled_dragon",
+    "name": {
+      "zh-CN": "RGB 盘龙",
+      "zh-TW": "RGB 盤龍",
+      "en-US": "RGB Dragon"
+    },
+    "thumbnail": "/sponsor-frames/rgb_coiled_dragon-panel.png",
+    "panelPreview": "/sponsor-frames/rgb_coiled_dragon-panel.png",
+    "profilePreview": "/sponsor-frames/rgb_coiled_dragon-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_coiled_dragon/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "rgb_thunder",
+    "name": {
+      "zh-CN": "RGB 雷霆",
+      "zh-TW": "RGB 雷霆",
+      "en-US": "RGB Thunder"
+    },
+    "thumbnail": "/sponsor-frames/rgb_thunder-panel.png",
+    "panelPreview": "/sponsor-frames/rgb_thunder-panel.png",
+    "profilePreview": "/sponsor-frames/rgb_thunder-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/endfield_avatars_20261001/rgb_thunder/vertical/frame_rightbottom.png"
+    }
+  },
+  {
+    "id": "gif_laughing_yellow_20261001",
+    "name": {
+      "zh-CN": "黄色笑脸",
+      "zh-TW": "黃色笑臉",
+      "en-US": "Laughing Yellow"
+    },
+    "thumbnail": "/sponsor-frames/gif_laughing_yellow_20261001-panel.png",
+    "panelPreview": "/sponsor-frames/gif_laughing_yellow_20261001-panel.png",
+    "profilePreview": "/sponsor-frames/gif_laughing_yellow_20261001-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/gif_laughing_yellow_20261001/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/gif_laughing_yellow_20261001/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/gif_laughing_yellow_20261001/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/gif_laughing_yellow_20261001/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/gif_laughing_yellow_20261001/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/gif_laughing_yellow_20261001/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_rightbottom.png"
+    }
+  }
+]

@@ -18,6 +18,8 @@ const (
 	FieldGameUserID = "game_user_id"
 	// FieldVerified holds the string denoting the verified field in the database.
 	FieldVerified = "verified"
+	// FieldSponsorFrameID holds the string denoting the sponsor_frame_id field in the database.
+	FieldSponsorFrameID = "sponsor_frame_id"
 	// FieldIsDefault holds the string denoting the is_default field in the database.
 	FieldIsDefault = "is_default"
 	// FieldSuite holds the string denoting the suite field in the database.
@@ -43,6 +45,7 @@ var Columns = []string{
 	FieldServer,
 	FieldGameUserID,
 	FieldVerified,
+	FieldSponsorFrameID,
 	FieldIsDefault,
 	FieldSuite,
 	FieldMysekai,
@@ -72,6 +75,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultVerified holds the default value on creation for the "verified" field.
 	DefaultVerified bool
+	// SponsorFrameIDValidator is a validator for the "sponsor_frame_id" field. It is called by the builders before save.
+	SponsorFrameIDValidator func(string) error
 	// DefaultIsDefault holds the default value on creation for the "is_default" field.
 	DefaultIsDefault bool
 )
@@ -97,6 +102,11 @@ func ByGameUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByVerified orders the results by the verified field.
 func ByVerified(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldVerified, opts...).ToFunc()
+}
+
+// BySponsorFrameID orders the results by the sponsor_frame_id field.
+func BySponsorFrameID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSponsorFrameID, opts...).ToFunc()
 }
 
 // ByIsDefault orders the results by the is_default field.

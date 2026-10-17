@@ -49,6 +49,9 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 
 	overrideString(&cfg.Afdian.UserID, "AFDIAN_USER_ID")
+	overrideString(&cfg.Afdian.OAuthClientID, "AFDIAN_OAUTH_CLIENT_ID")
+	overrideString(&cfg.Afdian.OAuthClientSecret, "AFDIAN_OAUTH_CLIENT_SECRET")
+	overrideString(&cfg.Afdian.OAuthRedirectURI, "AFDIAN_OAUTH_REDIRECT_URI")
 	overrideString(&cfg.Afdian.APIToken, "AFDIAN_API_TOKEN", "AFDIAN_API_KEY")
 	overrideString(&cfg.Afdian.APIBaseURL, "AFDIAN_API_BASE_URL")
 	overrideString(&cfg.Afdian.WebhookSecret, "AFDIAN_WEBHOOK_SECRET")

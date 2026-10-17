@@ -117,6 +117,7 @@ var (
 		{Name: "server", Type: field.TypeString},
 		{Name: "game_user_id", Type: field.TypeString},
 		{Name: "verified", Type: field.TypeBool, Default: false},
+		{Name: "sponsor_frame_id", Type: field.TypeString, Nullable: true, Size: 128},
 		{Name: "is_default", Type: field.TypeBool, Default: false},
 		{Name: "suite", Type: field.TypeJSON, Nullable: true},
 		{Name: "mysekai", Type: field.TypeJSON, Nullable: true},
@@ -130,7 +131,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "game_account_bindings_users_game_account_bindings",
-				Columns:    []*schema.Column{GameAccountBindingsColumns[7]},
+				Columns:    []*schema.Column{GameAccountBindingsColumns[8]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -144,7 +145,7 @@ var (
 			{
 				Name:    "gameaccountbinding_user_game_account_bindings",
 				Unique:  false,
-				Columns: []*schema.Column{GameAccountBindingsColumns[7]},
+				Columns: []*schema.Column{GameAccountBindingsColumns[8]},
 			},
 		},
 	}
@@ -743,6 +744,8 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "email", Type: field.TypeString, Unique: true},
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
+		{Name: "afdian_user_id", Type: field.TypeString, Unique: true, Nullable: true, Size: 128},
+		{Name: "afdian_bound_at", Type: field.TypeTime, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
 		{Name: "ticket_email_notifications_enabled", Type: field.TypeBool, Default: false},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
@@ -760,12 +763,12 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[10]},
+				Columns: []*schema.Column{UsersColumns[12]},
 			},
 			{
 				Name:    "user_role_banned",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[6], UsersColumns[7]},
+				Columns: []*schema.Column{UsersColumns[8], UsersColumns[9]},
 			},
 		},
 	}

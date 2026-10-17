@@ -81,6 +81,46 @@ func (_u *UserUpdate) ClearAvatarPath() *UserUpdate {
 	return _u
 }
 
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (_u *UserUpdate) SetAfdianUserID(v string) *UserUpdate {
+	_u.mutation.SetAfdianUserID(v)
+	return _u
+}
+
+// SetNillableAfdianUserID sets the "afdian_user_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAfdianUserID(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetAfdianUserID(*v)
+	}
+	return _u
+}
+
+// ClearAfdianUserID clears the value of the "afdian_user_id" field.
+func (_u *UserUpdate) ClearAfdianUserID() *UserUpdate {
+	_u.mutation.ClearAfdianUserID()
+	return _u
+}
+
+// SetAfdianBoundAt sets the "afdian_bound_at" field.
+func (_u *UserUpdate) SetAfdianBoundAt(v time.Time) *UserUpdate {
+	_u.mutation.SetAfdianBoundAt(v)
+	return _u
+}
+
+// SetNillableAfdianBoundAt sets the "afdian_bound_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAfdianBoundAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetAfdianBoundAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianBoundAt clears the value of the "afdian_bound_at" field.
+func (_u *UserUpdate) ClearAfdianBoundAt() *UserUpdate {
+	_u.mutation.ClearAfdianBoundAt()
+	return _u
+}
+
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
 func (_u *UserUpdate) SetAllowCnMysekai(v bool) *UserUpdate {
 	_u.mutation.SetAllowCnMysekai(v)
@@ -425,6 +465,11 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdate) check() error {
+	if v, ok := _u.mutation.AfdianUserID(); ok {
+		if err := user.AfdianUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Role(); ok {
 		if err := user.RoleValidator(v); err != nil {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
@@ -456,6 +501,18 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AvatarPathCleared() {
 		_spec.ClearField(user.FieldAvatarPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianUserID(); ok {
+		_spec.SetField(user.FieldAfdianUserID, field.TypeString, value)
+	}
+	if _u.mutation.AfdianUserIDCleared() {
+		_spec.ClearField(user.FieldAfdianUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianBoundAt(); ok {
+		_spec.SetField(user.FieldAfdianBoundAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianBoundAtCleared() {
+		_spec.ClearField(user.FieldAfdianBoundAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
@@ -790,6 +847,46 @@ func (_u *UserUpdateOne) SetNillableAvatarPath(v *string) *UserUpdateOne {
 // ClearAvatarPath clears the value of the "avatar_path" field.
 func (_u *UserUpdateOne) ClearAvatarPath() *UserUpdateOne {
 	_u.mutation.ClearAvatarPath()
+	return _u
+}
+
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (_u *UserUpdateOne) SetAfdianUserID(v string) *UserUpdateOne {
+	_u.mutation.SetAfdianUserID(v)
+	return _u
+}
+
+// SetNillableAfdianUserID sets the "afdian_user_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAfdianUserID(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetAfdianUserID(*v)
+	}
+	return _u
+}
+
+// ClearAfdianUserID clears the value of the "afdian_user_id" field.
+func (_u *UserUpdateOne) ClearAfdianUserID() *UserUpdateOne {
+	_u.mutation.ClearAfdianUserID()
+	return _u
+}
+
+// SetAfdianBoundAt sets the "afdian_bound_at" field.
+func (_u *UserUpdateOne) SetAfdianBoundAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetAfdianBoundAt(v)
+	return _u
+}
+
+// SetNillableAfdianBoundAt sets the "afdian_bound_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAfdianBoundAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetAfdianBoundAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianBoundAt clears the value of the "afdian_bound_at" field.
+func (_u *UserUpdateOne) ClearAfdianBoundAt() *UserUpdateOne {
+	_u.mutation.ClearAfdianBoundAt()
 	return _u
 }
 
@@ -1150,6 +1247,11 @@ func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdateOne) check() error {
+	if v, ok := _u.mutation.AfdianUserID(); ok {
+		if err := user.AfdianUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Role(); ok {
 		if err := user.RoleValidator(v); err != nil {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
@@ -1198,6 +1300,18 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.AvatarPathCleared() {
 		_spec.ClearField(user.FieldAvatarPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianUserID(); ok {
+		_spec.SetField(user.FieldAfdianUserID, field.TypeString, value)
+	}
+	if _u.mutation.AfdianUserIDCleared() {
+		_spec.ClearField(user.FieldAfdianUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianBoundAt(); ok {
+		_spec.SetField(user.FieldAfdianBoundAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianBoundAtCleared() {
+		_spec.ClearField(user.FieldAfdianBoundAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)

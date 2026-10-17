@@ -308,7 +308,7 @@
 
 - id: haruki-protected-user-get
   match:
-    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|accessible-game-accounts/?|game-account-grants/received/?|game-account-grants/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
+    url: <http|https>://<[^/]+>/api/user/<me/?|[^/]+/(afdian/?|sponsor-frames/?|get-settings/?|activity-logs/?|oauth2/authorizations/?|tickets/?|tickets/[^/]+/?|social-platform/verification-status/[^/]+/?|accessible-game-accounts/?|game-account-grants/received/?|game-account-grants/?|game-account/[^/]+/[^/]+/(recommend-data|suite|mysekai|profile)/?)>
     methods: [GET]
   upstream:
     url: http://backend:16666
@@ -321,7 +321,7 @@
 
 - id: haruki-protected-user-post
   match:
-    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform(/[^/]+)?/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
+    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<afdian/(authorize|callback)/?|ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform(/[^/]+)?/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
     methods: [POST]
   upstream:
     url: http://backend:16666

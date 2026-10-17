@@ -68,6 +68,11 @@ func Verified(v bool) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldEQ(FieldVerified, v))
 }
 
+// SponsorFrameID applies equality check predicate on the "sponsor_frame_id" field. It's identical to SponsorFrameIDEQ.
+func SponsorFrameID(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldEQ(FieldSponsorFrameID, v))
+}
+
 // IsDefault applies equality check predicate on the "is_default" field. It's identical to IsDefaultEQ.
 func IsDefault(v bool) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldEQ(FieldIsDefault, v))
@@ -211,6 +216,81 @@ func VerifiedEQ(v bool) predicate.GameAccountBinding {
 // VerifiedNEQ applies the NEQ predicate on the "verified" field.
 func VerifiedNEQ(v bool) predicate.GameAccountBinding {
 	return predicate.GameAccountBinding(sql.FieldNEQ(FieldVerified, v))
+}
+
+// SponsorFrameIDEQ applies the EQ predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDEQ(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldEQ(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDNEQ applies the NEQ predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDNEQ(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldNEQ(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDIn applies the In predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDIn(vs ...string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldIn(FieldSponsorFrameID, vs...))
+}
+
+// SponsorFrameIDNotIn applies the NotIn predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDNotIn(vs ...string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldNotIn(FieldSponsorFrameID, vs...))
+}
+
+// SponsorFrameIDGT applies the GT predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDGT(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldGT(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDGTE applies the GTE predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDGTE(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldGTE(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDLT applies the LT predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDLT(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldLT(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDLTE applies the LTE predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDLTE(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldLTE(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDContains applies the Contains predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDContains(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldContains(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDHasPrefix applies the HasPrefix predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDHasPrefix(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldHasPrefix(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDHasSuffix applies the HasSuffix predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDHasSuffix(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldHasSuffix(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDIsNil applies the IsNil predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDIsNil() predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldIsNull(FieldSponsorFrameID))
+}
+
+// SponsorFrameIDNotNil applies the NotNil predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDNotNil() predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldNotNull(FieldSponsorFrameID))
+}
+
+// SponsorFrameIDEqualFold applies the EqualFold predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDEqualFold(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldEqualFold(FieldSponsorFrameID, v))
+}
+
+// SponsorFrameIDContainsFold applies the ContainsFold predicate on the "sponsor_frame_id" field.
+func SponsorFrameIDContainsFold(v string) predicate.GameAccountBinding {
+	return predicate.GameAccountBinding(sql.FieldContainsFold(FieldSponsorFrameID, v))
 }
 
 // IsDefaultEQ applies the EQ predicate on the "is_default" field.

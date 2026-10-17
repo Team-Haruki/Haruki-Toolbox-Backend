@@ -2864,21 +2864,22 @@ func (m *FriendLinkMutation) ResetEdge(name string) error {
 // GameAccountBindingMutation represents an operation that mutates the GameAccountBinding nodes in the graph.
 type GameAccountBindingMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int
-	server        *string
-	game_user_id  *string
-	verified      *bool
-	is_default    *bool
-	suite         **schema.SuiteDataPrivacySettings
-	mysekai       **schema.MysekaiDataPrivacySettings
-	clearedFields map[string]struct{}
-	user          *string
-	cleareduser   bool
-	done          bool
-	oldValue      func(context.Context) (*GameAccountBinding, error)
-	predicates    []predicate.GameAccountBinding
+	op               Op
+	typ              string
+	id               *int
+	server           *string
+	game_user_id     *string
+	verified         *bool
+	sponsor_frame_id *string
+	is_default       *bool
+	suite            **schema.SuiteDataPrivacySettings
+	mysekai          **schema.MysekaiDataPrivacySettings
+	clearedFields    map[string]struct{}
+	user             *string
+	cleareduser      bool
+	done             bool
+	oldValue         func(context.Context) (*GameAccountBinding, error)
+	predicates       []predicate.GameAccountBinding
 }
 
 var _ ent.Mutation = (*GameAccountBindingMutation)(nil)
@@ -3085,6 +3086,55 @@ func (m *GameAccountBindingMutation) OldVerified(ctx context.Context) (v bool, e
 // ResetVerified resets all changes to the "verified" field.
 func (m *GameAccountBindingMutation) ResetVerified() {
 	m.verified = nil
+}
+
+// SetSponsorFrameID sets the "sponsor_frame_id" field.
+func (m *GameAccountBindingMutation) SetSponsorFrameID(s string) {
+	m.sponsor_frame_id = &s
+}
+
+// SponsorFrameID returns the value of the "sponsor_frame_id" field in the mutation.
+func (m *GameAccountBindingMutation) SponsorFrameID() (r string, exists bool) {
+	v := m.sponsor_frame_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorFrameID returns the old "sponsor_frame_id" field's value of the GameAccountBinding entity.
+// If the GameAccountBinding object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GameAccountBindingMutation) OldSponsorFrameID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorFrameID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorFrameID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorFrameID: %w", err)
+	}
+	return oldValue.SponsorFrameID, nil
+}
+
+// ClearSponsorFrameID clears the value of the "sponsor_frame_id" field.
+func (m *GameAccountBindingMutation) ClearSponsorFrameID() {
+	m.sponsor_frame_id = nil
+	m.clearedFields[gameaccountbinding.FieldSponsorFrameID] = struct{}{}
+}
+
+// SponsorFrameIDCleared returns if the "sponsor_frame_id" field was cleared in this mutation.
+func (m *GameAccountBindingMutation) SponsorFrameIDCleared() bool {
+	_, ok := m.clearedFields[gameaccountbinding.FieldSponsorFrameID]
+	return ok
+}
+
+// ResetSponsorFrameID resets all changes to the "sponsor_frame_id" field.
+func (m *GameAccountBindingMutation) ResetSponsorFrameID() {
+	m.sponsor_frame_id = nil
+	delete(m.clearedFields, gameaccountbinding.FieldSponsorFrameID)
 }
 
 // SetIsDefault sets the "is_default" field.
@@ -3294,7 +3344,7 @@ func (m *GameAccountBindingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GameAccountBindingMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.server != nil {
 		fields = append(fields, gameaccountbinding.FieldServer)
 	}
@@ -3303,6 +3353,9 @@ func (m *GameAccountBindingMutation) Fields() []string {
 	}
 	if m.verified != nil {
 		fields = append(fields, gameaccountbinding.FieldVerified)
+	}
+	if m.sponsor_frame_id != nil {
+		fields = append(fields, gameaccountbinding.FieldSponsorFrameID)
 	}
 	if m.is_default != nil {
 		fields = append(fields, gameaccountbinding.FieldIsDefault)
@@ -3327,6 +3380,8 @@ func (m *GameAccountBindingMutation) Field(name string) (ent.Value, bool) {
 		return m.GameUserID()
 	case gameaccountbinding.FieldVerified:
 		return m.Verified()
+	case gameaccountbinding.FieldSponsorFrameID:
+		return m.SponsorFrameID()
 	case gameaccountbinding.FieldIsDefault:
 		return m.IsDefault()
 	case gameaccountbinding.FieldSuite:
@@ -3348,6 +3403,8 @@ func (m *GameAccountBindingMutation) OldField(ctx context.Context, name string) 
 		return m.OldGameUserID(ctx)
 	case gameaccountbinding.FieldVerified:
 		return m.OldVerified(ctx)
+	case gameaccountbinding.FieldSponsorFrameID:
+		return m.OldSponsorFrameID(ctx)
 	case gameaccountbinding.FieldIsDefault:
 		return m.OldIsDefault(ctx)
 	case gameaccountbinding.FieldSuite:
@@ -3383,6 +3440,13 @@ func (m *GameAccountBindingMutation) SetField(name string, value ent.Value) erro
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetVerified(v)
+		return nil
+	case gameaccountbinding.FieldSponsorFrameID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorFrameID(v)
 		return nil
 	case gameaccountbinding.FieldIsDefault:
 		v, ok := value.(bool)
@@ -3435,6 +3499,9 @@ func (m *GameAccountBindingMutation) AddField(name string, value ent.Value) erro
 // mutation.
 func (m *GameAccountBindingMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(gameaccountbinding.FieldSponsorFrameID) {
+		fields = append(fields, gameaccountbinding.FieldSponsorFrameID)
+	}
 	if m.FieldCleared(gameaccountbinding.FieldSuite) {
 		fields = append(fields, gameaccountbinding.FieldSuite)
 	}
@@ -3455,6 +3522,9 @@ func (m *GameAccountBindingMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *GameAccountBindingMutation) ClearField(name string) error {
 	switch name {
+	case gameaccountbinding.FieldSponsorFrameID:
+		m.ClearSponsorFrameID()
+		return nil
 	case gameaccountbinding.FieldSuite:
 		m.ClearSuite()
 		return nil
@@ -3477,6 +3547,9 @@ func (m *GameAccountBindingMutation) ResetField(name string) error {
 		return nil
 	case gameaccountbinding.FieldVerified:
 		m.ResetVerified()
+		return nil
+	case gameaccountbinding.FieldSponsorFrameID:
+		m.ResetSponsorFrameID()
 		return nil
 	case gameaccountbinding.FieldIsDefault:
 		m.ResetIsDefault()
@@ -18603,6 +18676,8 @@ type UserMutation struct {
 	name                                     *string
 	email                                    *string
 	avatar_path                              *string
+	afdian_user_id                           *string
+	afdian_bound_at                          *time.Time
 	allow_cn_mysekai                         *bool
 	ticket_email_notifications_enabled       *bool
 	role                                     *user.Role
@@ -18855,6 +18930,104 @@ func (m *UserMutation) AvatarPathCleared() bool {
 func (m *UserMutation) ResetAvatarPath() {
 	m.avatar_path = nil
 	delete(m.clearedFields, user.FieldAvatarPath)
+}
+
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (m *UserMutation) SetAfdianUserID(s string) {
+	m.afdian_user_id = &s
+}
+
+// AfdianUserID returns the value of the "afdian_user_id" field in the mutation.
+func (m *UserMutation) AfdianUserID() (r string, exists bool) {
+	v := m.afdian_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianUserID returns the old "afdian_user_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldAfdianUserID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianUserID: %w", err)
+	}
+	return oldValue.AfdianUserID, nil
+}
+
+// ClearAfdianUserID clears the value of the "afdian_user_id" field.
+func (m *UserMutation) ClearAfdianUserID() {
+	m.afdian_user_id = nil
+	m.clearedFields[user.FieldAfdianUserID] = struct{}{}
+}
+
+// AfdianUserIDCleared returns if the "afdian_user_id" field was cleared in this mutation.
+func (m *UserMutation) AfdianUserIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldAfdianUserID]
+	return ok
+}
+
+// ResetAfdianUserID resets all changes to the "afdian_user_id" field.
+func (m *UserMutation) ResetAfdianUserID() {
+	m.afdian_user_id = nil
+	delete(m.clearedFields, user.FieldAfdianUserID)
+}
+
+// SetAfdianBoundAt sets the "afdian_bound_at" field.
+func (m *UserMutation) SetAfdianBoundAt(t time.Time) {
+	m.afdian_bound_at = &t
+}
+
+// AfdianBoundAt returns the value of the "afdian_bound_at" field in the mutation.
+func (m *UserMutation) AfdianBoundAt() (r time.Time, exists bool) {
+	v := m.afdian_bound_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianBoundAt returns the old "afdian_bound_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldAfdianBoundAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianBoundAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianBoundAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianBoundAt: %w", err)
+	}
+	return oldValue.AfdianBoundAt, nil
+}
+
+// ClearAfdianBoundAt clears the value of the "afdian_bound_at" field.
+func (m *UserMutation) ClearAfdianBoundAt() {
+	m.afdian_bound_at = nil
+	m.clearedFields[user.FieldAfdianBoundAt] = struct{}{}
+}
+
+// AfdianBoundAtCleared returns if the "afdian_bound_at" field was cleared in this mutation.
+func (m *UserMutation) AfdianBoundAtCleared() bool {
+	_, ok := m.clearedFields[user.FieldAfdianBoundAt]
+	return ok
+}
+
+// ResetAfdianBoundAt resets all changes to the "afdian_bound_at" field.
+func (m *UserMutation) ResetAfdianBoundAt() {
+	m.afdian_bound_at = nil
+	delete(m.clearedFields, user.FieldAfdianBoundAt)
 }
 
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
@@ -19476,7 +19649,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 12)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -19485,6 +19658,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.avatar_path != nil {
 		fields = append(fields, user.FieldAvatarPath)
+	}
+	if m.afdian_user_id != nil {
+		fields = append(fields, user.FieldAfdianUserID)
+	}
+	if m.afdian_bound_at != nil {
+		fields = append(fields, user.FieldAfdianBoundAt)
 	}
 	if m.allow_cn_mysekai != nil {
 		fields = append(fields, user.FieldAllowCnMysekai)
@@ -19521,6 +19700,10 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Email()
 	case user.FieldAvatarPath:
 		return m.AvatarPath()
+	case user.FieldAfdianUserID:
+		return m.AfdianUserID()
+	case user.FieldAfdianBoundAt:
+		return m.AfdianBoundAt()
 	case user.FieldAllowCnMysekai:
 		return m.AllowCnMysekai()
 	case user.FieldTicketEmailNotificationsEnabled:
@@ -19550,6 +19733,10 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldEmail(ctx)
 	case user.FieldAvatarPath:
 		return m.OldAvatarPath(ctx)
+	case user.FieldAfdianUserID:
+		return m.OldAfdianUserID(ctx)
+	case user.FieldAfdianBoundAt:
+		return m.OldAfdianBoundAt(ctx)
 	case user.FieldAllowCnMysekai:
 		return m.OldAllowCnMysekai(ctx)
 	case user.FieldTicketEmailNotificationsEnabled:
@@ -19593,6 +19780,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAvatarPath(v)
+		return nil
+	case user.FieldAfdianUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianUserID(v)
+		return nil
+	case user.FieldAfdianBoundAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianBoundAt(v)
 		return nil
 	case user.FieldAllowCnMysekai:
 		v, ok := value.(bool)
@@ -19676,6 +19877,12 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldAvatarPath) {
 		fields = append(fields, user.FieldAvatarPath)
 	}
+	if m.FieldCleared(user.FieldAfdianUserID) {
+		fields = append(fields, user.FieldAfdianUserID)
+	}
+	if m.FieldCleared(user.FieldAfdianBoundAt) {
+		fields = append(fields, user.FieldAfdianBoundAt)
+	}
 	if m.FieldCleared(user.FieldBanReason) {
 		fields = append(fields, user.FieldBanReason)
 	}
@@ -19702,6 +19909,12 @@ func (m *UserMutation) ClearField(name string) error {
 	case user.FieldAvatarPath:
 		m.ClearAvatarPath()
 		return nil
+	case user.FieldAfdianUserID:
+		m.ClearAfdianUserID()
+		return nil
+	case user.FieldAfdianBoundAt:
+		m.ClearAfdianBoundAt()
+		return nil
 	case user.FieldBanReason:
 		m.ClearBanReason()
 		return nil
@@ -19727,6 +19940,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldAvatarPath:
 		m.ResetAvatarPath()
+		return nil
+	case user.FieldAfdianUserID:
+		m.ResetAfdianUserID()
+		return nil
+	case user.FieldAfdianBoundAt:
+		m.ResetAfdianBoundAt()
 		return nil
 	case user.FieldAllowCnMysekai:
 		m.ResetAllowCnMysekai()

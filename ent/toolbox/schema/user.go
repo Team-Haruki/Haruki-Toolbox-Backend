@@ -18,6 +18,9 @@ func (User) Fields() []ent.Field {
 		field.String("id").NotEmpty().Unique().Immutable(),
 		field.String("email").Unique(),
 		field.String("avatar_path").Optional().Nillable(),
+		// Only populated by the server-side Afdian authorization-code exchange.
+		field.String("afdian_user_id").MaxLen(128).Optional().Nillable().Unique(),
+		field.Time("afdian_bound_at").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
 		field.Bool("ticket_email_notifications_enabled").Default(false),
 		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),

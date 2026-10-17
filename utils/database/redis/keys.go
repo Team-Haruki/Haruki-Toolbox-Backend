@@ -68,6 +68,15 @@ type KeyBuilder struct {
 	identifierHashSecret string
 }
 
+// BuildAfdianOAuthStateKey keeps the raw OAuth state out of keys and logs.
+func (b KeyBuilder) BuildAfdianOAuthStateKey(state string) string {
+	return "afdian:oauth:state:" + b.hashExactIdentifier("afdian-state", state)
+}
+
+func (b KeyBuilder) BuildAfdianOAuthRateKey(userID string) string {
+	return "afdian:oauth:rate:" + b.hashExactIdentifier("afdian-user", userID)
+}
+
 func NewKeyBuilder(identifierHashSecret string) KeyBuilder {
 	return KeyBuilder{identifierHashSecret: identifierHashSecret}
 }

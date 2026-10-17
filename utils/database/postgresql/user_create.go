@@ -51,6 +51,34 @@ func (_c *UserCreate) SetNillableAvatarPath(v *string) *UserCreate {
 	return _c
 }
 
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (_c *UserCreate) SetAfdianUserID(v string) *UserCreate {
+	_c.mutation.SetAfdianUserID(v)
+	return _c
+}
+
+// SetNillableAfdianUserID sets the "afdian_user_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAfdianUserID(v *string) *UserCreate {
+	if v != nil {
+		_c.SetAfdianUserID(*v)
+	}
+	return _c
+}
+
+// SetAfdianBoundAt sets the "afdian_bound_at" field.
+func (_c *UserCreate) SetAfdianBoundAt(v time.Time) *UserCreate {
+	_c.mutation.SetAfdianBoundAt(v)
+	return _c
+}
+
+// SetNillableAfdianBoundAt sets the "afdian_bound_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAfdianBoundAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetAfdianBoundAt(*v)
+	}
+	return _c
+}
+
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
 func (_c *UserCreate) SetAllowCnMysekai(v bool) *UserCreate {
 	_c.mutation.SetAllowCnMysekai(v)
@@ -314,6 +342,11 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.Email(); !ok {
 		return &ValidationError{Name: "email", err: errors.New(`postgresql: missing required field "User.email"`)}
 	}
+	if v, ok := _c.mutation.AfdianUserID(); ok {
+		if err := user.AfdianUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
 	}
@@ -382,6 +415,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AvatarPath(); ok {
 		_spec.SetField(user.FieldAvatarPath, field.TypeString, value)
 		_node.AvatarPath = &value
+	}
+	if value, ok := _c.mutation.AfdianUserID(); ok {
+		_spec.SetField(user.FieldAfdianUserID, field.TypeString, value)
+		_node.AfdianUserID = &value
+	}
+	if value, ok := _c.mutation.AfdianBoundAt(); ok {
+		_spec.SetField(user.FieldAfdianBoundAt, field.TypeTime, value)
+		_node.AfdianBoundAt = &value
 	}
 	if value, ok := _c.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)

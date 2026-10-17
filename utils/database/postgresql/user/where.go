@@ -80,6 +80,16 @@ func AvatarPath(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAvatarPath, v))
 }
 
+// AfdianUserID applies equality check predicate on the "afdian_user_id" field. It's identical to AfdianUserIDEQ.
+func AfdianUserID(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAfdianUserID, v))
+}
+
+// AfdianBoundAt applies equality check predicate on the "afdian_bound_at" field. It's identical to AfdianBoundAtEQ.
+func AfdianBoundAt(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAfdianBoundAt, v))
+}
+
 // AllowCnMysekai applies equality check predicate on the "allow_cn_mysekai" field. It's identical to AllowCnMysekaiEQ.
 func AllowCnMysekai(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAllowCnMysekai, v))
@@ -313,6 +323,131 @@ func AvatarPathEqualFold(v string) predicate.User {
 // AvatarPathContainsFold applies the ContainsFold predicate on the "avatar_path" field.
 func AvatarPathContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldAvatarPath, v))
+}
+
+// AfdianUserIDEQ applies the EQ predicate on the "afdian_user_id" field.
+func AfdianUserIDEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDNEQ applies the NEQ predicate on the "afdian_user_id" field.
+func AfdianUserIDNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDIn applies the In predicate on the "afdian_user_id" field.
+func AfdianUserIDIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAfdianUserID, vs...))
+}
+
+// AfdianUserIDNotIn applies the NotIn predicate on the "afdian_user_id" field.
+func AfdianUserIDNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAfdianUserID, vs...))
+}
+
+// AfdianUserIDGT applies the GT predicate on the "afdian_user_id" field.
+func AfdianUserIDGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDGTE applies the GTE predicate on the "afdian_user_id" field.
+func AfdianUserIDGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDLT applies the LT predicate on the "afdian_user_id" field.
+func AfdianUserIDLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDLTE applies the LTE predicate on the "afdian_user_id" field.
+func AfdianUserIDLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDContains applies the Contains predicate on the "afdian_user_id" field.
+func AfdianUserIDContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDHasPrefix applies the HasPrefix predicate on the "afdian_user_id" field.
+func AfdianUserIDHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDHasSuffix applies the HasSuffix predicate on the "afdian_user_id" field.
+func AfdianUserIDHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDIsNil applies the IsNil predicate on the "afdian_user_id" field.
+func AfdianUserIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldAfdianUserID))
+}
+
+// AfdianUserIDNotNil applies the NotNil predicate on the "afdian_user_id" field.
+func AfdianUserIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldAfdianUserID))
+}
+
+// AfdianUserIDEqualFold applies the EqualFold predicate on the "afdian_user_id" field.
+func AfdianUserIDEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldAfdianUserID, v))
+}
+
+// AfdianUserIDContainsFold applies the ContainsFold predicate on the "afdian_user_id" field.
+func AfdianUserIDContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldAfdianUserID, v))
+}
+
+// AfdianBoundAtEQ applies the EQ predicate on the "afdian_bound_at" field.
+func AfdianBoundAtEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAfdianBoundAt, v))
+}
+
+// AfdianBoundAtNEQ applies the NEQ predicate on the "afdian_bound_at" field.
+func AfdianBoundAtNEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAfdianBoundAt, v))
+}
+
+// AfdianBoundAtIn applies the In predicate on the "afdian_bound_at" field.
+func AfdianBoundAtIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAfdianBoundAt, vs...))
+}
+
+// AfdianBoundAtNotIn applies the NotIn predicate on the "afdian_bound_at" field.
+func AfdianBoundAtNotIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAfdianBoundAt, vs...))
+}
+
+// AfdianBoundAtGT applies the GT predicate on the "afdian_bound_at" field.
+func AfdianBoundAtGT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGT(FieldAfdianBoundAt, v))
+}
+
+// AfdianBoundAtGTE applies the GTE predicate on the "afdian_bound_at" field.
+func AfdianBoundAtGTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldAfdianBoundAt, v))
+}
+
+// AfdianBoundAtLT applies the LT predicate on the "afdian_bound_at" field.
+func AfdianBoundAtLT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLT(FieldAfdianBoundAt, v))
+}
+
+// AfdianBoundAtLTE applies the LTE predicate on the "afdian_bound_at" field.
+func AfdianBoundAtLTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldAfdianBoundAt, v))
+}
+
+// AfdianBoundAtIsNil applies the IsNil predicate on the "afdian_bound_at" field.
+func AfdianBoundAtIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldAfdianBoundAt))
+}
+
+// AfdianBoundAtNotNil applies the NotNil predicate on the "afdian_bound_at" field.
+func AfdianBoundAtNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldAfdianBoundAt))
 }
 
 // AllowCnMysekaiEQ applies the EQ predicate on the "allow_cn_mysekai" field.

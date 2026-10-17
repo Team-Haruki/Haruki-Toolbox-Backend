@@ -47,6 +47,20 @@ func (_c *GameAccountBindingCreate) SetNillableVerified(v *bool) *GameAccountBin
 	return _c
 }
 
+// SetSponsorFrameID sets the "sponsor_frame_id" field.
+func (_c *GameAccountBindingCreate) SetSponsorFrameID(v string) *GameAccountBindingCreate {
+	_c.mutation.SetSponsorFrameID(v)
+	return _c
+}
+
+// SetNillableSponsorFrameID sets the "sponsor_frame_id" field if the given value is not nil.
+func (_c *GameAccountBindingCreate) SetNillableSponsorFrameID(v *string) *GameAccountBindingCreate {
+	if v != nil {
+		_c.SetSponsorFrameID(*v)
+	}
+	return _c
+}
+
 // SetIsDefault sets the "is_default" field.
 func (_c *GameAccountBindingCreate) SetIsDefault(v bool) *GameAccountBindingCreate {
 	_c.mutation.SetIsDefault(v)
@@ -148,6 +162,11 @@ func (_c *GameAccountBindingCreate) check() error {
 	if _, ok := _c.mutation.Verified(); !ok {
 		return &ValidationError{Name: "verified", err: errors.New(`postgresql: missing required field "GameAccountBinding.verified"`)}
 	}
+	if v, ok := _c.mutation.SponsorFrameID(); ok {
+		if err := gameaccountbinding.SponsorFrameIDValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_frame_id", err: fmt.Errorf(`postgresql: validator failed for field "GameAccountBinding.sponsor_frame_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.IsDefault(); !ok {
 		return &ValidationError{Name: "is_default", err: errors.New(`postgresql: missing required field "GameAccountBinding.is_default"`)}
 	}
@@ -188,6 +207,10 @@ func (_c *GameAccountBindingCreate) createSpec() (*GameAccountBinding, *sqlgraph
 	if value, ok := _c.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
 		_node.Verified = value
+	}
+	if value, ok := _c.mutation.SponsorFrameID(); ok {
+		_spec.SetField(gameaccountbinding.FieldSponsorFrameID, field.TypeString, value)
+		_node.SponsorFrameID = &value
 	}
 	if value, ok := _c.mutation.IsDefault(); ok {
 		_spec.SetField(gameaccountbinding.FieldIsDefault, field.TypeBool, value)

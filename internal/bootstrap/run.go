@@ -16,6 +16,7 @@ import (
 	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	userProfileModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
+	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
@@ -167,6 +168,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		TurnstileVerifier:         turnstileVerifier,
 		UserDataBuilder:           harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
 		AfdianConfig:              afdianConfig,
+		AfdianOAuth:               userSponsorModule.OAuthConfig{ClientID: cfg.Afdian.OAuthClientID, ClientSecret: cfg.Afdian.OAuthClientSecret, RedirectURI: cfg.Afdian.OAuthRedirectURI},
 		MiscAssets: miscModule.NewAssetsConfig(miscModule.AssetsConfigOptions{
 			AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		}),

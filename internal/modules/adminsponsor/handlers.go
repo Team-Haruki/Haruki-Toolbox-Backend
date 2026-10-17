@@ -11,6 +11,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -44,10 +45,25 @@ func handleAdminListSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		now := time.Now().UTC()
 		items := make([]adminSponsorItem, 0, len(rows))
+		boundIDs, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.AfdianUserIDNotNil()).Select(userSchema.FieldAfdianUserID).Strings(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query sponsor bindings")
+		}
+		bound := make(map[string]bool, len(boundIDs))
+		for _, id := range boundIDs {
+			bound[id] = true
+		}
+		boundCount := 0
 		for _, row := range rows {
-			items = append(items, buildAdminSponsorItem(row, now))
+			item := buildAdminSponsorItem(row, now)
+			item.ToolboxBound = row.AfdianUserID != nil && bound[*row.AfdianUserID]
+			if item.ToolboxBound {
+				boundCount++
+			}
+			items = append(items, item)
 		}
 		resp := adminSponsorListResponse{
+			BoundCount:  boundCount,
 			GeneratedAt: now,
 			Total:       len(items),
 			Items:       items,
