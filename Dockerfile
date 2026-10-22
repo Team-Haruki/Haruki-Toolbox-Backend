@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS builder
 WORKDIR /app
 # Modules in their own layer: it only changes with go.mod/go.sum, and CI keeps it in the
 # registry build cache.
