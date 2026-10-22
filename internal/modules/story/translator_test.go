@@ -3,6 +3,7 @@ package story
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -195,5 +196,30 @@ func TestTranslateIncludesTextEffectsInTimelineOrder(t *testing.T) {
 	}
 	if got.Effects["0"] != "zh:放課後の教室" || len(got.Effects) != 1 || got.Lines[1] != "zh:うん" {
 		t.Fatalf("effects = %v lines = %v", got.Effects, got.Lines)
+	}
+}
+
+func TestLLMRetriesServerErrors(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			http.Error(w, "busy", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	l := &llmClient{baseURL: srv.URL, model: "m", timeout: 5 * time.Second, client: srv.Client(), retries: 2, backoff: time.Millisecond}
+	got, _, err := l.complete(context.Background(), "sys", "user")
+	if err != nil || got != "ok" || calls.Load() != 2 {
+		t.Fatalf("got %q err %v calls %d", got, err, calls.Load())
+	}
+	l.retries = 0
+	calls.Store(0)
+	_, _, err = l.complete(context.Background(), "sys", "user")
+	var retryable errRetryable
+	if !errors.As(err, &retryable) || retryable.Error() == "" || errors.Unwrap(retryable) == nil {
+		t.Fatalf("err = %v", err)
 	}
 }
