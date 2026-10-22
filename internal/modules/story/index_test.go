@@ -28,12 +28,20 @@ func TestBuildAssetIndex(t *testing.T) {
 		"ondemand/scenario/movie/01_leoneed_ed1/leoneed_ed1_logoanimation_se_fix.mp4",
 		"ondemand/scenario/movie/01_leoneed_ed1/moviebundlebuilddata.json",
 		"ondemand/movie/idol_opening/idol.mp4",
+		"startapp/live2d/model/v2/sub/v2_20mizuki_culture_back/v2_20mizuki_culture_back_t04.model3",
+		"startapp/live2d/model/v2/main/20_mizuki/v2_20mizuki_culture/v2_20mizuki_culture_t08.model3",
+		"startapp/live2d/motion/v2/main/20_mizuki/v2_20mizuki_motion_base/motion/w-normal-pose01.motion3.json",
+		"startapp/live2d/motion/v2/sub/v2_20mizuki_back_motion_base/motion/w-back16-sigh.motion3.json",
 		"startapp/sound/scenario/se/se_pack00001_b/se_door.mp3",
 		"startapp/sound/scenario/se/se/se_door.mp3",
 		"startapp/sound/scenario/se/se_pack00001/se_bell.mp3",
 	}
 	idx := buildAssetIndex(keys, time.Unix(0, 0))
 	an := idx.Models["10an_normal"]
+	if back, front := idx.Models["v2_20mizuki_culture_back"], idx.Models["v2_20mizuki_culture"]; back.MotionBase != "startapp/live2d/motion/v2/sub/v2_20mizuki_back_motion_base" ||
+		front.MotionBase != "startapp/live2d/motion/v2/main/20_mizuki/v2_20mizuki_motion_base" {
+		t.Fatalf("back/front motion bases = %q / %q", back.MotionBase, front.MotionBase)
+	}
 	if saki := idx.Models["v2_02saki_casual"]; saki.Model3 != "v2_02saki_clothes_t10.model3" || saki.Physics != "" {
 		t.Fatalf("saki = %+v (newest model3, and no physics of another version)", saki)
 	}

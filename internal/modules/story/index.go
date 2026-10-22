@@ -56,7 +56,8 @@ var listingPrefixes = []string{modelPrefix, motionPrefix, moviePrefix, movie2Pre
 // index. Motion libraries are matched to costumes by the longest
 // "<name>_motion_base" whose name prefixes the costume; a v2 costume without
 // its own library falls back to the v1 one ("v2_clb01_21miku" →
-// "clb01_21miku_motion_base").
+// "clb01_21miku_motion_base"), and a "…_back" costume takes the matching
+// "<name>_back" library.
 func buildAssetIndex(keys []string, now time.Time) *AssetIndex {
 	type modelDir struct {
 		model3, physics []string
@@ -126,13 +127,28 @@ func buildAssetIndex(keys []string, now time.Time) *AssetIndex {
 		}
 		return prefixes[i] < prefixes[j]
 	})
-	matchBase := func(costume string) string {
+	matchPrefix := func(costume string) string {
 		for _, c := range []string{costume, strings.TrimPrefix(costume, "v2_")} {
 			for _, p := range prefixes {
 				if strings.HasPrefix(c, p) {
-					return bases[p]
+					return p
 				}
 			}
+		}
+		return ""
+	}
+	matchBase := func(costume string) string {
+		// back-view models ("v2_20mizuki_culture_back") use the character's
+		// back library ("v2_20mizuki_back_motion_base")
+		if front, ok := strings.CutSuffix(costume, "_back"); ok {
+			if p := matchPrefix(front); p != "" {
+				if dir, ok := bases[p+"_back"]; ok {
+					return dir
+				}
+			}
+		}
+		if p := matchPrefix(costume); p != "" {
+			return bases[p]
 		}
 		return ""
 	}
