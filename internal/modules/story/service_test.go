@@ -3,7 +3,6 @@ package story
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -147,51 +146,6 @@ func fakeSekai(t *testing.T) *httptest.Server {
 	return srv
 }
 
-// fakeBucket answers ListObjectsV2 for the JP asset index, two keys a page.
-func fakeBucket(t *testing.T) *httptest.Server {
-	keys := []string{
-		"jp-assets/startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_t05.model3",
-		"jp-assets/startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_t05.physics3",
-		"jp-assets/startapp/live2d/motion/v1/main/10_an/10an_motion_base/motion/w-normal-pose01.motion3.json",
-		"jp-assets/ondemand/movie/op/op.mp4",
-		"jp-assets/startapp/sound/scenario/se/se/se_door.mp3",
-	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/pjsk-assets" || r.URL.Query().Get("list-type") != "2" || !strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 ") {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		prefix := r.URL.Query().Get("prefix")
-		var match []string
-		for _, k := range keys {
-			if strings.HasPrefix(k, prefix) {
-				match = append(match, k)
-			}
-		}
-		start := 0
-		if tok := r.URL.Query().Get("continuation-token"); tok != "" {
-			_, _ = fmt.Sscan(tok, &start)
-		}
-		end := min(start+2, len(match))
-		type content struct{ Key string }
-		out := struct {
-			XMLName               xml.Name `xml:"ListBucketResult"`
-			Contents              []content
-			IsTruncated           bool
-			NextContinuationToken string
-		}{IsTruncated: end < len(match)}
-		for _, k := range match[start:end] {
-			out.Contents = append(out.Contents, content{k})
-		}
-		if out.IsTruncated {
-			out.NextContinuationToken = fmt.Sprint(end)
-		}
-		_ = xml.NewEncoder(w).Encode(out)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
-}
-
 // recordingLLM "translates" every line to "zh:<text>" and records the user
 // prompts; a prompt containing failOn gets a 400.
 func recordingLLM(t *testing.T, failOn string) (*httptest.Server, func() []string) {
@@ -233,10 +187,9 @@ func recordingLLM(t *testing.T, failOn string) (*httptest.Server, func() []strin
 	}
 }
 
-func testConfig(sekai, bucket, llm string) config.StoryConfig {
+func testConfig(sekai, llm string) config.StoryConfig {
 	return config.StoryConfig{
 		Enabled: true, RegistryBaseURL: sekai, AssetBaseURL: sekai,
-		Index: config.StoryIndexConfig{S3Endpoint: bucket, AccessKeyID: "AK", SecretAccessKey: "SK"},
 		Translation: config.StoryTranslateConfig{
 			Enabled: llm != "", LLMBaseURL: llm, LLMAPIKey: "k", LLMModel: "m", LLMTimeoutSeconds: 5,
 		},
@@ -250,14 +203,14 @@ func TestNewValidatesConfig(t *testing.T) {
 	if _, err := New(config.StoryConfig{Enabled: true}, nil, testLogger()); err == nil {
 		t.Fatal("missing URLs accepted")
 	}
-	cfg := testConfig("http://x", "", "")
+	cfg := testConfig("http://x", "")
 	cfg.Translation.Enabled = true
 	if _, err := New(cfg, nil, testLogger()); err == nil {
 		t.Fatal("translation without an LLM accepted")
 	}
-	s, err := New(testConfig("http://x", "", ""), nil, testLogger())
-	if err != nil || s.index != nil || s.tr != nil {
-		t.Fatalf("index/translation should be off: %+v %v", s, err)
+	s, err := New(testConfig("http://x", ""), nil, testLogger())
+	if err != nil || s.tr != nil {
+		t.Fatalf("translation should be off: %+v %v", s, err)
 	}
 }
 
@@ -317,10 +270,9 @@ func TestGlossaryNamesAndHarvestedSpeakers(t *testing.T) {
 
 func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 	sekai := fakeSekai(t)
-	bucket := fakeBucket(t)
 	llm, prompts := recordingLLM(t, "SPECIAL")
 	db := newStoryDB(t)
-	s, err := New(testConfig(sekai.URL, bucket.URL, llm.URL), db, testLogger())
+	s, err := New(testConfig(sekai.URL, llm.URL), db, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,19 +302,11 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 		t.Fatalf("second run called the model again: %d", len(prompts()))
 	}
 
-	if err := s.index.refresh(ctx); err != nil {
-		t.Fatal(err)
-	}
-
 	app := fiber.New()
 	RegisterRoutes(&harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app}, s)
 	app.Post("/retranslate/:scenario_id", s.handleRetranslate)
-	get := func(path string, header ...string) (*http.Response, map[string]any) {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		if len(header) == 2 {
-			req.Header.Set(header[0], header[1])
-		}
-		resp, err := app.Test(req)
+	get := func(path string) (*http.Response, map[string]any) {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, path, nil))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -389,16 +333,6 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 		t.Fatalf("list = %d %v", resp.StatusCode, body)
 	}
 
-	resp, body = get("/api/misc/story/jp-index")
-	etag := resp.Header.Get("ETag")
-	models, _ := body["models"].(map[string]any)
-	if resp.StatusCode != http.StatusOK || etag == "" || models["10an_normal"] == nil || body["se"].(map[string]any)["se_door"] == nil {
-		t.Fatalf("index = %d %v", resp.StatusCode, body)
-	}
-	if resp, _ = get("/api/misc/story/jp-index", "If-None-Match", etag); resp.StatusCode != http.StatusNotModified {
-		t.Fatalf("conditional index = %d", resp.StatusCode)
-	}
-
 	// re-translate: the row goes away and the next run redoes it
 	req := httptest.NewRequest(http.MethodPost, "/retranslate/event_02_02", nil)
 	if resp, err := app.Test(req); err != nil || resp.StatusCode != http.StatusOK {
@@ -413,39 +347,23 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 	}
 }
 
-func TestIndexRouteBeforeTheFirstBuild(t *testing.T) {
-	sekai := fakeSekai(t)
-	app := fiber.New()
-	off, _ := New(testConfig(sekai.URL, "", ""), nil, testLogger())
-	app.Get("/off", off.handleIndex)
-	on, _ := New(testConfig(sekai.URL, "http://bucket.invalid", ""), nil, testLogger())
-	app.Get("/on", on.handleIndex)
-	for path, want := range map[string]int{"/off": http.StatusNotFound, "/on": http.StatusServiceUnavailable} {
-		resp, err := app.Test(httptest.NewRequest(http.MethodGet, path, nil))
-		if err != nil || resp.StatusCode != want {
-			t.Fatalf("%s = %v %v, want %d", path, resp, err, want)
-		}
-	}
-}
-
 func TestStartRunsLoopsUntilCancelled(t *testing.T) {
 	sekai := fakeSekai(t)
-	bucket := fakeBucket(t)
-	s, err := New(testConfig(sekai.URL, bucket.URL, ""), newStoryDB(t), testLogger())
+	s, err := New(testConfig(sekai.URL, ""), newStoryDB(t), testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	wait := s.Start(ctx)
 	deadline := time.Now().Add(5 * time.Second)
-	for (s.currentCatalog() == nil || func() bool { idx, _ := s.index.snapshot(); return idx == nil }()) && time.Now().Before(deadline) {
+	for s.currentCatalog() == nil && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	s.Kick()
 	s.Kick() // a second kick while one is queued is dropped
 	cancel()
 	wait()
-	if idx, _ := s.index.snapshot(); idx == nil || s.currentCatalog() == nil {
-		t.Fatal("loops did not run")
+	if s.currentCatalog() == nil {
+		t.Fatal("the loop did not run")
 	}
 }

@@ -221,8 +221,6 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := overrideBool(&cfg.Story.Enabled, "STORY_ENABLED"); err != nil {
 		return err
 	}
-	overrideString(&cfg.Story.Index.AccessKeyID, "STORY_INDEX_ACCESS_KEY_ID")
-	overrideString(&cfg.Story.Index.SecretAccessKey, "STORY_INDEX_SECRET_ACCESS_KEY")
 	if err := overrideBool(&cfg.Story.Translation.Enabled, "STORY_TRANSLATION_ENABLED"); err != nil {
 		return err
 	}

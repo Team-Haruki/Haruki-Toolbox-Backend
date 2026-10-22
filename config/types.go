@@ -175,8 +175,8 @@ type BotSecurityConfig struct {
 	IngestTokenSHA256 string `yaml:"ingest_token_sha256"`
 }
 
-// StoryConfig drives the story viewer support: the JP asset index built from
-// the Garage asset bucket and the AI translation of JP-only stories.
+// StoryConfig drives the story player support: the AI translation of JP
+// stories that have no official Chinese text.
 type StoryConfig struct {
 	// Enabled registers the /api/misc/story routes.
 	Enabled bool `yaml:"enabled"`
@@ -187,20 +187,7 @@ type StoryConfig struct {
 	// translation and alignment checks).
 	AssetBaseURL string               `yaml:"asset_base_url"`
 	UserAgent    string               `yaml:"user_agent"`
-	Index        StoryIndexConfig     `yaml:"index"`
 	Translation  StoryTranslateConfig `yaml:"translation"`
-}
-
-// StoryIndexConfig lists the JP asset tree in the Garage bucket (S3 API,
-// read-only key) to build the story asset index.
-type StoryIndexConfig struct {
-	S3Endpoint      string `yaml:"s3_endpoint"`
-	S3Region        string `yaml:"s3_region"`
-	Bucket          string `yaml:"bucket"`
-	Prefix          string `yaml:"prefix"`
-	AccessKeyID     string `yaml:"access_key_id"`
-	SecretAccessKey string `yaml:"secret_access_key"`
-	RefreshMinutes  int    `yaml:"refresh_minutes"`
 }
 
 // StoryTranslateConfig configures the background translator and the

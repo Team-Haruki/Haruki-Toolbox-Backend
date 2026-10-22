@@ -40,7 +40,6 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, s *Se
 		return
 	}
 	g := apiHelper.Router.Group(routePrefix)
-	g.Get("/jp-index", s.handleIndex)
 	g.Get("/translations", s.handleList)
 	g.Get("/translations/:scenario_id", s.handleTranslation)
 }
@@ -52,25 +51,6 @@ func RegisterAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 	}
 	group := adminGroup.Group("/story", adminCoreModule.RequireAdmin(apiHelper))
 	group.Post("/translations/:scenario_id/retranslate", s.handleRetranslate)
-}
-
-func (s *Service) handleIndex(c fiber.Ctx) error {
-	if s.index == nil {
-		return harukiAPIHelper.ErrorNotFound(c, "story index is not configured")
-	}
-	idx, body := s.index.snapshot()
-	if idx == nil {
-		c.Set("Retry-After", "60")
-		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "story index is not built yet", nil)
-	}
-	etag := `"` + idx.Version + `"`
-	c.Set("ETag", etag)
-	c.Set("Cache-Control", "public, max-age=300")
-	if c.Get("If-None-Match") == etag {
-		return c.SendStatus(fiber.StatusNotModified)
-	}
-	c.Set("Content-Type", "application/json")
-	return c.Send(body)
 }
 
 func (s *Service) handleList(c fiber.Ctx) error {

@@ -276,14 +276,6 @@ story:
   registry_base_url: "https://sekai-api-cdn.haruki.seiunx.com"
   asset_base_url: "https://sekai-assets.haruki.seiunx.com"
   user_agent: "Haruki-Toolbox-Backend"
-  index: # JP asset index, built by listing the Garage bucket (read-only key)
-    s3_endpoint: "http://garage:3900"
-    s3_region: "garage"
-    bucket: "pjsk-assets"
-    prefix: "jp-assets/"
-    access_key_id: "" # env STORY_INDEX_ACCESS_KEY_ID
-    secret_access_key: "" # env STORY_INDEX_SECRET_ACCESS_KEY
-    refresh_minutes: 60
   translation: # AI Chinese for JP stories CN does not have
     enabled: false # env STORY_TRANSLATION_ENABLED
     interval_minutes: 30

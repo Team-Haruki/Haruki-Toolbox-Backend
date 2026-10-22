@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -23,14 +22,13 @@ const failedRetryAfter = 6 * time.Hour
 // maxFailedAttempts stops retrying an episode that keeps failing.
 const maxFailedAttempts = 5
 
-// Service owns the JP asset index and the translation worker.
+// Service owns the translation worker.
 type Service struct {
 	cfg    config.StoryConfig
 	db     *postgresql.Client
 	logger *harukiLogger.Logger
 	fetch  *fetcher
-	index  *indexBuilder // nil when the index is not configured
-	tr     *translator   // nil when translation is disabled
+	tr     *translator // nil when translation is disabled
 	gloss  glossaryCache
 	kick   chan struct{}
 
@@ -59,28 +57,6 @@ func New(cfg config.StoryConfig, db *postgresql.Client, logger *harukiLogger.Log
 		fetch:  newFetcher(cfg.RegistryBaseURL, cfg.AssetBaseURL, ua, httpClient),
 		kick:   make(chan struct{}, 1),
 	}
-	if ix := cfg.Index; ix.S3Endpoint != "" && ix.AccessKeyID != "" && ix.SecretAccessKey != "" {
-		region := ix.S3Region
-		if region == "" {
-			region = "garage"
-		}
-		bucket := ix.Bucket
-		if bucket == "" {
-			bucket = "pjsk-assets"
-		}
-		prefix := ix.Prefix
-		if prefix == "" {
-			prefix = "jp-assets/"
-		}
-		s.index = &indexBuilder{
-			prefix: prefix,
-			lister: &s3Lister{
-				endpoint: strings.TrimRight(ix.S3Endpoint, "/"), region: region, bucket: bucket,
-				accessKey: ix.AccessKeyID, secretKey: ix.SecretAccessKey,
-				client: &http.Client{Timeout: time.Minute}, now: time.Now,
-			},
-		}
-	}
 	if tc := cfg.Translation; tc.Enabled {
 		if tc.LLMBaseURL == "" || tc.LLMAPIKey == "" || tc.LLMModel == "" {
 			return nil, fmt.Errorf("story: translation needs llm_base_url, llm_api_key and llm_model")
@@ -104,24 +80,6 @@ func New(cfg config.StoryConfig, db *postgresql.Client, logger *harukiLogger.Log
 // after ctx is cancelled.
 func (s *Service) Start(ctx context.Context) func() {
 	var wg sync.WaitGroup
-	if s.index != nil {
-		every := time.Duration(s.cfg.Index.RefreshMinutes) * time.Minute
-		if every <= 0 {
-			every = time.Hour
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s.loop(ctx, every, nil, func() {
-				if err := s.index.refresh(ctx); err != nil {
-					s.logger.Warnf("story index refresh failed: %v", err)
-					return
-				}
-				idx, _ := s.index.snapshot()
-				s.logger.Infof("story index refreshed: %d models, %d movies, version %s", len(idx.Models), len(idx.Movies), idx.Version)
-			})
-		}()
-	}
 	every := time.Duration(s.cfg.Translation.IntervalMinutes) * time.Minute
 	if every <= 0 {
 		every = 30 * time.Minute
