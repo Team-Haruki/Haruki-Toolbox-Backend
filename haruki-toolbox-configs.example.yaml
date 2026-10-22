@@ -271,6 +271,21 @@ haruki_bot:
 bot_security:
   ingest_token_sha256: "" # env BOT_SECURITY_INGEST_TOKEN_SHA256; 64 hex characters; empty = ingest disabled
 
+story:
+  enabled: false # env STORY_ENABLED; registers /api/misc/story/*
+  registry_base_url: "https://sekai-api-cdn.haruki.seiunx.com"
+  asset_base_url: "https://sekai-assets.haruki.seiunx.com"
+  user_agent: "Haruki-Toolbox-Backend"
+  translation: # AI Chinese for JP stories CN does not have
+    enabled: false # env STORY_TRANSLATION_ENABLED
+    interval_minutes: 30
+    max_episodes_per_run: 20
+    llm_base_url: "" # env STORY_LLM_BASE_URL; OpenAI-compatible (/v1/chat/completions, streamed)
+    llm_api_key: "" # env STORY_LLM_API_KEY
+    llm_model: "gpt-6.1-sol" # env STORY_LLM_MODEL
+    llm_timeout_seconds: 900
+    chunk_lines: 120
+
 subscription:
   hmes_internal_base_url: "http://haruki-hmes:7910"
   hmes_internal_token: ""

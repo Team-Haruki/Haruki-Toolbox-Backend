@@ -51,6 +51,9 @@ type SponsorAfdianOrder func(*sql.Selector)
 // SponsorManualDuration is the predicate function for sponsormanualduration builders.
 type SponsorManualDuration func(*sql.Selector)
 
+// StoryTranslation is the predicate function for storytranslation builders.
+type StoryTranslation func(*sql.Selector)
+
 // SystemLog is the predicate function for systemlog builders.
 type SystemLog func(*sql.Selector)
 

@@ -524,6 +524,44 @@ var (
 			},
 		},
 	}
+	// StoryTranslationsColumns holds the columns for the "story_translations" table.
+	StoryTranslationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "scenario_id", Type: field.TypeString, Size: 128},
+		{Name: "lang", Type: field.TypeString, Size: 16},
+		{Name: "source_region", Type: field.TypeString, Size: 8, Default: "jp"},
+		{Name: "source_hash", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"done", "failed"}, Default: "done"},
+		{Name: "model", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "names", Type: field.TypeJSON, Nullable: true},
+		{Name: "lines", Type: field.TypeJSON, Nullable: true},
+		{Name: "effects", Type: field.TypeJSON, Nullable: true},
+		{Name: "summary", Type: field.TypeString, Size: 2147483647, Default: ""},
+		{Name: "error", Type: field.TypeString, Size: 2000, Default: ""},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "prompt_tokens", Type: field.TypeInt, Default: 0},
+		{Name: "completion_tokens", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// StoryTranslationsTable holds the schema information for the "story_translations" table.
+	StoryTranslationsTable = &schema.Table{
+		Name:       "story_translations",
+		Columns:    StoryTranslationsColumns,
+		PrimaryKey: []*schema.Column{StoryTranslationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "storytranslation_scenario_id_lang",
+				Unique:  true,
+				Columns: []*schema.Column{StoryTranslationsColumns[1], StoryTranslationsColumns[2]},
+			},
+			{
+				Name:    "storytranslation_status_updated_at",
+				Unique:  false,
+				Columns: []*schema.Column{StoryTranslationsColumns[5], StoryTranslationsColumns[16]},
+			},
+		},
+	}
 	// SystemLogsColumns holds the columns for the "system_logs" table.
 	SystemLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -848,6 +886,7 @@ var (
 		SponsorsTable,
 		SponsorAfdianOrdersTable,
 		SponsorManualDurationsTable,
+		StoryTranslationsTable,
 		SystemLogsTable,
 		TicketsTable,
 		TicketMessagesTable,
@@ -892,6 +931,9 @@ func init() {
 	}
 	SponsorManualDurationsTable.Annotation = &entsql.Annotation{
 		Table: "sponsor_manual_durations",
+	}
+	StoryTranslationsTable.Annotation = &entsql.Annotation{
+		Table: "story_translations",
 	}
 	SystemLogsTable.Annotation = &entsql.Annotation{
 		Table: "system_logs",

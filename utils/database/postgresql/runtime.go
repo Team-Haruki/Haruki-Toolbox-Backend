@@ -21,6 +21,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/storytranslation"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -618,6 +619,94 @@ func init() {
 	sponsormanualduration.DefaultUpdatedAt = sponsormanualdurationDescUpdatedAt.Default.(func() time.Time)
 	// sponsormanualduration.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	sponsormanualduration.UpdateDefaultUpdatedAt = sponsormanualdurationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	storytranslationFields := schema.StoryTranslation{}.Fields()
+	_ = storytranslationFields
+	// storytranslationDescScenarioID is the schema descriptor for scenario_id field.
+	storytranslationDescScenarioID := storytranslationFields[0].Descriptor()
+	// storytranslation.ScenarioIDValidator is a validator for the "scenario_id" field. It is called by the builders before save.
+	storytranslation.ScenarioIDValidator = func() func(string) error {
+		validators := storytranslationDescScenarioID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(scenario_id string) error {
+			for _, fn := range fns {
+				if err := fn(scenario_id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// storytranslationDescLang is the schema descriptor for lang field.
+	storytranslationDescLang := storytranslationFields[1].Descriptor()
+	// storytranslation.LangValidator is a validator for the "lang" field. It is called by the builders before save.
+	storytranslation.LangValidator = func() func(string) error {
+		validators := storytranslationDescLang.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(lang string) error {
+			for _, fn := range fns {
+				if err := fn(lang); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// storytranslationDescSourceRegion is the schema descriptor for source_region field.
+	storytranslationDescSourceRegion := storytranslationFields[2].Descriptor()
+	// storytranslation.DefaultSourceRegion holds the default value on creation for the source_region field.
+	storytranslation.DefaultSourceRegion = storytranslationDescSourceRegion.Default.(string)
+	// storytranslation.SourceRegionValidator is a validator for the "source_region" field. It is called by the builders before save.
+	storytranslation.SourceRegionValidator = storytranslationDescSourceRegion.Validators[0].(func(string) error)
+	// storytranslationDescSourceHash is the schema descriptor for source_hash field.
+	storytranslationDescSourceHash := storytranslationFields[3].Descriptor()
+	// storytranslation.DefaultSourceHash holds the default value on creation for the source_hash field.
+	storytranslation.DefaultSourceHash = storytranslationDescSourceHash.Default.(string)
+	// storytranslation.SourceHashValidator is a validator for the "source_hash" field. It is called by the builders before save.
+	storytranslation.SourceHashValidator = storytranslationDescSourceHash.Validators[0].(func(string) error)
+	// storytranslationDescModel is the schema descriptor for model field.
+	storytranslationDescModel := storytranslationFields[5].Descriptor()
+	// storytranslation.DefaultModel holds the default value on creation for the model field.
+	storytranslation.DefaultModel = storytranslationDescModel.Default.(string)
+	// storytranslation.ModelValidator is a validator for the "model" field. It is called by the builders before save.
+	storytranslation.ModelValidator = storytranslationDescModel.Validators[0].(func(string) error)
+	// storytranslationDescSummary is the schema descriptor for summary field.
+	storytranslationDescSummary := storytranslationFields[9].Descriptor()
+	// storytranslation.DefaultSummary holds the default value on creation for the summary field.
+	storytranslation.DefaultSummary = storytranslationDescSummary.Default.(string)
+	// storytranslationDescError is the schema descriptor for error field.
+	storytranslationDescError := storytranslationFields[10].Descriptor()
+	// storytranslation.DefaultError holds the default value on creation for the error field.
+	storytranslation.DefaultError = storytranslationDescError.Default.(string)
+	// storytranslation.ErrorValidator is a validator for the "error" field. It is called by the builders before save.
+	storytranslation.ErrorValidator = storytranslationDescError.Validators[0].(func(string) error)
+	// storytranslationDescAttempts is the schema descriptor for attempts field.
+	storytranslationDescAttempts := storytranslationFields[11].Descriptor()
+	// storytranslation.DefaultAttempts holds the default value on creation for the attempts field.
+	storytranslation.DefaultAttempts = storytranslationDescAttempts.Default.(int)
+	// storytranslationDescPromptTokens is the schema descriptor for prompt_tokens field.
+	storytranslationDescPromptTokens := storytranslationFields[12].Descriptor()
+	// storytranslation.DefaultPromptTokens holds the default value on creation for the prompt_tokens field.
+	storytranslation.DefaultPromptTokens = storytranslationDescPromptTokens.Default.(int)
+	// storytranslationDescCompletionTokens is the schema descriptor for completion_tokens field.
+	storytranslationDescCompletionTokens := storytranslationFields[13].Descriptor()
+	// storytranslation.DefaultCompletionTokens holds the default value on creation for the completion_tokens field.
+	storytranslation.DefaultCompletionTokens = storytranslationDescCompletionTokens.Default.(int)
+	// storytranslationDescCreatedAt is the schema descriptor for created_at field.
+	storytranslationDescCreatedAt := storytranslationFields[14].Descriptor()
+	// storytranslation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	storytranslation.DefaultCreatedAt = storytranslationDescCreatedAt.Default.(func() time.Time)
+	// storytranslationDescUpdatedAt is the schema descriptor for updated_at field.
+	storytranslationDescUpdatedAt := storytranslationFields[15].Descriptor()
+	// storytranslation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	storytranslation.DefaultUpdatedAt = storytranslationDescUpdatedAt.Default.(func() time.Time)
+	// storytranslation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	storytranslation.UpdateDefaultUpdatedAt = storytranslationDescUpdatedAt.UpdateDefault.(func() time.Time)
 	systemlogFields := schema.SystemLog{}.Fields()
 	_ = systemlogFields
 	// systemlogDescEventTime is the schema descriptor for event_time field.

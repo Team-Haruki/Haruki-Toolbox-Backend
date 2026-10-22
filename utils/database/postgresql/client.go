@@ -30,6 +30,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/storytranslation"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -74,6 +75,8 @@ type Client struct {
 	SponsorAfdianOrder *SponsorAfdianOrderClient
 	// SponsorManualDuration is the client for interacting with the SponsorManualDuration builders.
 	SponsorManualDuration *SponsorManualDurationClient
+	// StoryTranslation is the client for interacting with the StoryTranslation builders.
+	StoryTranslation *StoryTranslationClient
 	// SystemLog is the client for interacting with the SystemLog builders.
 	SystemLog *SystemLogClient
 	// Ticket is the client for interacting with the Ticket builders.
@@ -114,6 +117,7 @@ func (c *Client) init() {
 	c.Sponsor = NewSponsorClient(c.config)
 	c.SponsorAfdianOrder = NewSponsorAfdianOrderClient(c.config)
 	c.SponsorManualDuration = NewSponsorManualDurationClient(c.config)
+	c.StoryTranslation = NewStoryTranslationClient(c.config)
 	c.SystemLog = NewSystemLogClient(c.config)
 	c.Ticket = NewTicketClient(c.config)
 	c.TicketMessage = NewTicketMessageClient(c.config)
@@ -228,6 +232,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Sponsor:                     NewSponsorClient(cfg),
 		SponsorAfdianOrder:          NewSponsorAfdianOrderClient(cfg),
 		SponsorManualDuration:       NewSponsorManualDurationClient(cfg),
+		StoryTranslation:            NewStoryTranslationClient(cfg),
 		SystemLog:                   NewSystemLogClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
 		TicketMessage:               NewTicketMessageClient(cfg),
@@ -269,6 +274,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Sponsor:                     NewSponsorClient(cfg),
 		SponsorAfdianOrder:          NewSponsorAfdianOrderClient(cfg),
 		SponsorManualDuration:       NewSponsorManualDurationClient(cfg),
+		StoryTranslation:            NewStoryTranslationClient(cfg),
 		SystemLog:                   NewSystemLogClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
 		TicketMessage:               NewTicketMessageClient(cfg),
@@ -309,8 +315,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule,
 		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
-		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
-		c.WebhookSubscription,
+		c.StoryTranslation, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog,
+		c.User, c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -324,8 +330,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule,
 		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
-		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
-		c.WebhookSubscription,
+		c.StoryTranslation, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog,
+		c.User, c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -364,6 +370,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SponsorAfdianOrder.mutate(ctx, m)
 	case *SponsorManualDurationMutation:
 		return c.SponsorManualDuration.mutate(ctx, m)
+	case *StoryTranslationMutation:
+		return c.StoryTranslation.mutate(ctx, m)
 	case *SystemLogMutation:
 		return c.SystemLog.mutate(ctx, m)
 	case *TicketMutation:
@@ -2506,6 +2514,139 @@ func (c *SponsorManualDurationClient) mutate(ctx context.Context, m *SponsorManu
 	}
 }
 
+// StoryTranslationClient is a client for the StoryTranslation schema.
+type StoryTranslationClient struct {
+	config
+}
+
+// NewStoryTranslationClient returns a client for the StoryTranslation from the given config.
+func NewStoryTranslationClient(c config) *StoryTranslationClient {
+	return &StoryTranslationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `storytranslation.Hooks(f(g(h())))`.
+func (c *StoryTranslationClient) Use(hooks ...Hook) {
+	c.hooks.StoryTranslation = append(c.hooks.StoryTranslation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `storytranslation.Intercept(f(g(h())))`.
+func (c *StoryTranslationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StoryTranslation = append(c.inters.StoryTranslation, interceptors...)
+}
+
+// Create returns a builder for creating a StoryTranslation entity.
+func (c *StoryTranslationClient) Create() *StoryTranslationCreate {
+	mutation := newStoryTranslationMutation(c.config, OpCreate)
+	return &StoryTranslationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StoryTranslation entities.
+func (c *StoryTranslationClient) CreateBulk(builders ...*StoryTranslationCreate) *StoryTranslationCreateBulk {
+	return &StoryTranslationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StoryTranslationClient) MapCreateBulk(slice any, setFunc func(*StoryTranslationCreate, int)) *StoryTranslationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StoryTranslationCreateBulk{err: fmt.Errorf("calling to StoryTranslationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StoryTranslationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StoryTranslationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StoryTranslation.
+func (c *StoryTranslationClient) Update() *StoryTranslationUpdate {
+	mutation := newStoryTranslationMutation(c.config, OpUpdate)
+	return &StoryTranslationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StoryTranslationClient) UpdateOne(_m *StoryTranslation) *StoryTranslationUpdateOne {
+	mutation := newStoryTranslationMutation(c.config, OpUpdateOne, withStoryTranslation(_m))
+	return &StoryTranslationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StoryTranslationClient) UpdateOneID(id int) *StoryTranslationUpdateOne {
+	mutation := newStoryTranslationMutation(c.config, OpUpdateOne, withStoryTranslationID(id))
+	return &StoryTranslationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StoryTranslation.
+func (c *StoryTranslationClient) Delete() *StoryTranslationDelete {
+	mutation := newStoryTranslationMutation(c.config, OpDelete)
+	return &StoryTranslationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StoryTranslationClient) DeleteOne(_m *StoryTranslation) *StoryTranslationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StoryTranslationClient) DeleteOneID(id int) *StoryTranslationDeleteOne {
+	builder := c.Delete().Where(storytranslation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StoryTranslationDeleteOne{builder}
+}
+
+// Query returns a query builder for StoryTranslation.
+func (c *StoryTranslationClient) Query() *StoryTranslationQuery {
+	return &StoryTranslationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStoryTranslation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StoryTranslation entity by its id.
+func (c *StoryTranslationClient) Get(ctx context.Context, id int) (*StoryTranslation, error) {
+	return c.Query().Where(storytranslation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StoryTranslationClient) GetX(ctx context.Context, id int) *StoryTranslation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StoryTranslationClient) Hooks() []Hook {
+	return c.hooks.StoryTranslation
+}
+
+// Interceptors returns the client interceptors.
+func (c *StoryTranslationClient) Interceptors() []Interceptor {
+	return c.inters.StoryTranslation
+}
+
+func (c *StoryTranslationClient) mutate(ctx context.Context, m *StoryTranslationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StoryTranslationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StoryTranslationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StoryTranslationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StoryTranslationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown StoryTranslation mutation op: %q", m.Op())
+	}
+}
+
 // SystemLogClient is a client for the SystemLog schema.
 type SystemLogClient struct {
 	config
@@ -3603,14 +3744,15 @@ type (
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
 		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
-		SponsorAfdianOrder, SponsorManualDuration, SystemLog, Ticket, TicketMessage,
-		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
+		SponsorAfdianOrder, SponsorManualDuration, StoryTranslation, SystemLog, Ticket,
+		TicketMessage, UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
 	}
 	inters struct {
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode,
 		OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule, SocialPlatformInfo, Sponsor,
-		SponsorAfdianOrder, SponsorManualDuration, SystemLog, Ticket, TicketMessage,
-		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Interceptor
+		SponsorAfdianOrder, SponsorManualDuration, StoryTranslation, SystemLog, Ticket,
+		TicketMessage, UploadLog, User, WebhookEndpoint,
+		WebhookSubscription []ent.Interceptor
 	}
 )

@@ -42,6 +42,8 @@ type Tx struct {
 	SponsorAfdianOrder *SponsorAfdianOrderClient
 	// SponsorManualDuration is the client for interacting with the SponsorManualDuration builders.
 	SponsorManualDuration *SponsorManualDurationClient
+	// StoryTranslation is the client for interacting with the StoryTranslation builders.
+	StoryTranslation *StoryTranslationClient
 	// SystemLog is the client for interacting with the SystemLog builders.
 	SystemLog *SystemLogClient
 	// Ticket is the client for interacting with the Ticket builders.
@@ -202,6 +204,7 @@ func (tx *Tx) init() {
 	tx.Sponsor = NewSponsorClient(tx.config)
 	tx.SponsorAfdianOrder = NewSponsorAfdianOrderClient(tx.config)
 	tx.SponsorManualDuration = NewSponsorManualDurationClient(tx.config)
+	tx.StoryTranslation = NewStoryTranslationClient(tx.config)
 	tx.SystemLog = NewSystemLogClient(tx.config)
 	tx.Ticket = NewTicketClient(tx.config)
 	tx.TicketMessage = NewTicketMessageClient(tx.config)
