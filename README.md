@@ -7,7 +7,7 @@ It also utilizes Redis for efficient caching to speed up API responses.
 + `PostgreSQL`
 + `PostgreSQL` 游戏数据存储
 + `Redis`
-+ `Go 1.27.1` (for local development)
++ `Go 1.27.3` (for local development)
 
 ## How to Use
 
