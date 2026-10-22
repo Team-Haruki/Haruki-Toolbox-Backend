@@ -279,7 +279,8 @@ story:
   translation: # AI Chinese for JP stories CN does not have
     enabled: false # env STORY_TRANSLATION_ENABLED
     interval_minutes: 30
-    max_episodes_per_run: 20
+    max_episodes_per_run: 20 # 0 = the whole backlog in one scan
+    concurrency: 1 # series translated at once (episodes of a series stay in order)
     llm_base_url: "" # env STORY_LLM_BASE_URL; OpenAI-compatible (/v1/chat/completions, streamed)
     llm_api_key: "" # env STORY_LLM_API_KEY
     llm_model: "gpt-6.1-sol" # env STORY_LLM_MODEL

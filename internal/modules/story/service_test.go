@@ -367,3 +367,24 @@ func TestStartRunsLoopsUntilCancelled(t *testing.T) {
 		t.Fatal("the loop did not run")
 	}
 }
+
+func TestParallelSeriesKeepEpisodeOrder(t *testing.T) {
+	sekai := fakeSekai(t)
+	llm, prompts := recordingLLM(t, "")
+	db := newStoryDB(t)
+	cfg := testConfig(sekai.URL, llm.URL)
+	cfg.Translation.Concurrency = 3
+	s, err := New(cfg, db, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.translateRun(context.Background())
+	if n, _ := db.StoryTranslation.Query().Where(storytranslation.StatusEQ(storytranslation.StatusDone)).Count(context.Background()); n != 3 {
+		t.Fatalf("done rows = %d, want 3", n)
+	}
+	for _, p := range prompts() {
+		if strings.Contains(p, "「Ep2」（本话）") && !strings.Contains(p, "第1話「Ep1」：概括。") {
+			t.Fatalf("episode 2 ran without episode 1's summary:\n%s", p)
+		}
+	}
+}
