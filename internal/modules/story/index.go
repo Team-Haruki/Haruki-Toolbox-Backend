@@ -1,11 +1,13 @@
 package story
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -57,7 +59,7 @@ var listingPrefixes = []string{modelPrefix, motionPrefix, moviePrefix, movie2Pre
 // "clb01_21miku_motion_base").
 func buildAssetIndex(keys []string, now time.Time) *AssetIndex {
 	type modelDir struct {
-		model3, physics string
+		model3, physics []string
 		motions         []string
 	}
 	dirs := map[string]*modelDir{}
@@ -86,9 +88,9 @@ func buildAssetIndex(keys []string, now time.Time) *AssetIndex {
 					dirs[dir] = d
 				}
 				if strings.HasSuffix(file, ".model3") {
-					d.model3 = file
+					d.model3 = append(d.model3, file)
 				} else {
-					d.physics = file
+					d.physics = append(d.physics, file)
 				}
 			}
 		case strings.HasPrefix(k, motionPrefix):
@@ -136,13 +138,20 @@ func buildAssetIndex(keys []string, now time.Time) *AssetIndex {
 	}
 	idx := &AssetIndex{GeneratedAt: now.UTC(), Models: map[string]ModelEntry{}, Movies: movies, Se: se}
 	for dir, d := range dirs {
-		if d.model3 == "" {
+		if len(d.model3) == 0 {
 			continue
+		}
+		// re-exports leave the previous version next to the current one
+		// ("…_t04.model3" + "…_t05.model3"); the newest is the one in use
+		model3 := slices.MaxFunc(d.model3, naturalCompare)
+		physics := ""
+		if want := strings.TrimSuffix(model3, ".model3") + ".physics3"; slices.Contains(d.physics, want) {
+			physics = want
 		}
 		costume := path.Base(dir)
 		sort.Strings(d.motions)
 		idx.Models[costume] = ModelEntry{
-			Dir: dir, Model3: d.model3, Physics: d.physics,
+			Dir: dir, Model3: model3, Physics: physics,
 			MotionBase: matchBase(costume), Motions: d.motions,
 		}
 	}
@@ -154,6 +163,38 @@ func buildAssetIndex(keys []string, now time.Time) *AssetIndex {
 	sum := sha256.Sum256(raw)
 	idx.Version = hex.EncodeToString(sum[:8])
 	return idx
+}
+
+// naturalCompare orders strings with digit runs compared by value
+// ("_t9" < "_t10").
+func naturalCompare(a, b string) int {
+	for a != "" && b != "" {
+		da, db := digitPrefix(a), digitPrefix(b)
+		if da != "" && db != "" {
+			na, nb := strings.TrimLeft(da, "0"), strings.TrimLeft(db, "0")
+			if c := cmp.Compare(len(na), len(nb)); c != 0 {
+				return c
+			}
+			if c := strings.Compare(na, nb); c != 0 {
+				return c
+			}
+			a, b = a[len(da):], b[len(db):]
+			continue
+		}
+		if a[0] != b[0] {
+			return cmp.Compare(a[0], b[0])
+		}
+		a, b = a[1:], b[1:]
+	}
+	return cmp.Compare(len(a), len(b))
+}
+
+func digitPrefix(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return s[:i]
 }
 
 // indexBuilder keeps the current index and rebuilds it from the bucket.

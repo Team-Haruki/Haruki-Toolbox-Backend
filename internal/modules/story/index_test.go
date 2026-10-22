@@ -9,6 +9,12 @@ func TestBuildAssetIndex(t *testing.T) {
 	keys := []string{
 		"startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_3.0_t05.model3",
 		"startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_3.0_t05.physics3",
+		// stale previous export next to the current one
+		"startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_3.0_t04.model3",
+		"startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_3.0_t04.physics3",
+		"startapp/live2d/model/v2/main/02_saki/v2_02saki_casual/v2_02saki_clothes_t9.model3",
+		"startapp/live2d/model/v2/main/02_saki/v2_02saki_casual/v2_02saki_clothes_t9.physics3",
+		"startapp/live2d/model/v2/main/02_saki/v2_02saki_casual/v2_02saki_clothes_t10.model3",
 		"startapp/live2d/model/v1/main/10_an/10an_normal/10an_normal_3.0_t05.2048/texture_00.png",
 		"startapp/live2d/model/v2/main/15_nene/v2_15nene_casual/v2_15_nene_clothes_t08.model3",
 		"startapp/live2d/model/v2/main/15_nene/v2_15nene_casual/motions/w-pure03-nod.motion3.json",
@@ -28,6 +34,9 @@ func TestBuildAssetIndex(t *testing.T) {
 	}
 	idx := buildAssetIndex(keys, time.Unix(0, 0))
 	an := idx.Models["10an_normal"]
+	if saki := idx.Models["v2_02saki_casual"]; saki.Model3 != "v2_02saki_clothes_t10.model3" || saki.Physics != "" {
+		t.Fatalf("saki = %+v (newest model3, and no physics of another version)", saki)
+	}
 	if an.Model3 != "10an_normal_3.0_t05.model3" || an.Physics != "10an_normal_3.0_t05.physics3" ||
 		an.MotionBase != "startapp/live2d/motion/v1/main/10_an/10an_motion_base" {
 		t.Fatalf("10an_normal = %+v", an)
