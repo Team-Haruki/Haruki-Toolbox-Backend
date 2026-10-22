@@ -197,10 +197,13 @@ type StoryTranslateConfig struct {
 	// IntervalMinutes between scans for JP-only stories without a translation.
 	IntervalMinutes int `yaml:"interval_minutes"`
 	// MaxEpisodesPerRun caps one scan's work (0 = no cap).
-	MaxEpisodesPerRun int    `yaml:"max_episodes_per_run"`
-	LLMBaseURL        string `yaml:"llm_base_url"`
-	LLMAPIKey         string `yaml:"llm_api_key"`
-	LLMModel          string `yaml:"llm_model"`
+	MaxEpisodesPerRun int `yaml:"max_episodes_per_run"`
+	// Concurrency is how many series are translated at once (default 1);
+	// episodes of one series always go in order.
+	Concurrency int    `yaml:"concurrency"`
+	LLMBaseURL  string `yaml:"llm_base_url"`
+	LLMAPIKey   string `yaml:"llm_api_key"`
+	LLMModel    string `yaml:"llm_model"`
 	// LLMTimeoutSeconds bounds one streamed completion.
 	LLMTimeoutSeconds int `yaml:"llm_timeout_seconds"`
 	// ChunkLines splits long episodes into calls of at most this many lines.

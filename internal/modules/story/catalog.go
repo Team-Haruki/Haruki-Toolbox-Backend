@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -221,6 +222,25 @@ func kanaRatio(s *Scenario) float64 {
 	return float64(kana) / float64(letters)
 }
 
+// fetchParallelism bounds concurrent asset fetches (placeholder probes,
+// speaker harvesting).
+const fetchParallelism = 8
+
+// parallel runs fn(0..n-1) on at most `limit` goroutines and waits.
+func parallel(n, limit int, fn func(i int)) {
+	sem := make(chan struct{}, limit)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			fn(i)
+		}()
+	}
+	wg.Wait()
+}
+
 // untranslatedKana is the kanaRatio above which a non-JP scenario is taken to
 // be the JP placeholder text.
 const untranslatedKana = 0.3
@@ -374,20 +394,28 @@ func buildCatalog(ctx context.Context, f *fetcher) (*Catalog, error) {
 	// file already holds Chinese (checked once per series)
 	now := time.Now().UnixMilli()
 	c.CNHas = map[string]bool{}
-	seriesOK := map[string]bool{}
+	var probe []string // series listed on CN but not opened there yet
+	waiting := map[string][]string{}
 	for id, at := range cn {
 		ep := c.ByID[id]
 		if at <= now || ep == nil {
 			c.CNHas[id] = true
 			continue
 		}
-		ok, seen := seriesOK[ep.SeriesKey]
-		if !seen {
-			ok = f.localized(ctx, "cn", c.Series[ep.SeriesKey][0])
-			seriesOK[ep.SeriesKey] = ok
+		if _, ok := waiting[ep.SeriesKey]; !ok {
+			probe = append(probe, ep.SeriesKey)
 		}
-		if ok {
-			c.CNHas[id] = true
+		waiting[ep.SeriesKey] = append(waiting[ep.SeriesKey], id)
+	}
+	ok := make([]bool, len(probe))
+	parallel(len(probe), fetchParallelism, func(i int) {
+		ok[i] = f.localized(ctx, "cn", c.Series[probe[i]][0])
+	})
+	for i, key := range probe {
+		if ok[i] {
+			for _, id := range waiting[key] {
+				c.CNHas[id] = true
+			}
 		}
 	}
 	return c, nil

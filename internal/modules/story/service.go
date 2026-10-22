@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
@@ -34,7 +35,6 @@ type Service struct {
 
 	mu      sync.RWMutex
 	catalog *Catalog
-	current string // scenario being translated
 }
 
 // New validates the configuration; nil means the feature is off.
@@ -168,29 +168,52 @@ func (s *Service) translateRun(ctx context.Context) {
 	if limit > 0 && limit < thisRun {
 		thisRun = limit
 	}
-	s.logger.Infof("story translation: %d JP-only episodes pending (this run: %d)", len(pending), thisRun)
-	done := 0
+	workers := max(1, s.cfg.Translation.Concurrency)
+	s.logger.Infof("story translation: %d JP-only episodes pending (this run: %d, %d at a time)", len(pending), thisRun, workers)
+
+	// Series run in parallel; a series stays on one worker, in episode order,
+	// so each episode sees the summaries of the ones before it.
+	var series [][]*Episode
+	at := map[string]int{}
 	for _, ep := range pending {
-		if ctx.Err() != nil || (limit > 0 && done >= limit) {
-			return
+		i, ok := at[ep.SeriesKey]
+		if !ok {
+			i = len(series)
+			at[ep.SeriesKey] = i
+			series = append(series, nil)
 		}
-		if err := s.translateEpisode(ctx, c, ep); err != nil {
-			s.logger.Warnf("story translation %s failed: %v", ep.ScenarioID, err)
-		}
-		done++
+		series[i] = append(series[i], ep)
 	}
+	queue := make(chan []*Episode)
+	var started atomic.Int64
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for eps := range queue {
+				for _, ep := range eps {
+					if ctx.Err() != nil || (limit > 0 && started.Add(1) > int64(limit)) {
+						break
+					}
+					if err := s.translateEpisode(ctx, c, ep); err != nil {
+						s.logger.Warnf("story translation %s failed: %v", ep.ScenarioID, err)
+					}
+				}
+			}
+		}()
+	}
+	for _, eps := range series {
+		if ctx.Err() != nil || (limit > 0 && started.Load() >= int64(limit)) {
+			break
+		}
+		queue <- eps
+	}
+	close(queue)
+	wg.Wait()
 }
 
 func (s *Service) translateEpisode(ctx context.Context, c *Catalog, ep *Episode) error {
-	s.mu.Lock()
-	s.current = ep.ScenarioID
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		s.current = ""
-		s.mu.Unlock()
-	}()
-
 	var scn *Scenario
 	for _, p := range ep.Paths {
 		got, err := s.fetch.scenario(ctx, "jp", p)

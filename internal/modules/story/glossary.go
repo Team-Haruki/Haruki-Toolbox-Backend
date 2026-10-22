@@ -149,19 +149,27 @@ func harvestSpeakers(ctx context.Context, f *fetcher, dst map[string]string) {
 		return
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].EventID > es[j].EventID })
-	counts := map[[2]string]int{}
-	read := 0
+	// newest events CN lists; some are only JP placeholders, so look at a few
+	// more than needed and keep the first harvestEvents that hold real text
+	var candidates []masterEventStory
 	for _, s := range es {
-		if read >= harvestEvents {
-			break
-		}
 		if len(s.Episodes) == 0 {
 			continue
 		}
-		if _, ok := cn[s.Episodes[0].ScenarioID]; !ok {
-			continue
+		if _, ok := cn[s.Episodes[0].ScenarioID]; ok {
+			candidates = append(candidates, s)
 		}
-		used := false
+		if len(candidates) >= harvestEvents+20 {
+			break
+		}
+	}
+	type harvest struct {
+		pairs [][2]string
+		used  bool
+	}
+	results := make([]harvest, len(candidates))
+	parallel(len(candidates), fetchParallelism, func(i int) {
+		s := candidates[i]
 		for _, e := range s.Episodes {
 			p := "ondemand/event_story/" + s.AssetbundleName + "/scenario/" + e.ScenarioID + ".json"
 			js, err1 := f.scenario(ctx, "jp", p)
@@ -172,16 +180,27 @@ func harvestSpeakers(ctx context.Context, f *fetcher, dst map[string]string) {
 			if kanaRatio(cs) >= untranslatedKana {
 				break // the event's CN text is still the JP placeholder
 			}
-			used = true
-			for i := range js.TalkData {
-				a, b := js.TalkData[i].WindowDisplayName, cs.TalkData[i].WindowDisplayName
+			results[i].used = true
+			for k := range js.TalkData {
+				a, b := js.TalkData[k].WindowDisplayName, cs.TalkData[k].WindowDisplayName
 				if a != "" && b != "" {
-					counts[[2]string{a, b}]++
+					results[i].pairs = append(results[i].pairs, [2]string{a, b})
 				}
 			}
 		}
-		if used {
-			read++
+	})
+	counts := map[[2]string]int{}
+	read := 0
+	for _, r := range results {
+		if read >= harvestEvents {
+			break
+		}
+		if !r.used {
+			continue
+		}
+		read++
+		for _, pair := range r.pairs {
+			counts[pair]++
 		}
 	}
 	best := map[string]int{}
