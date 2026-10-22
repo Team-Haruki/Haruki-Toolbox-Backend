@@ -535,6 +535,7 @@ var (
 		{Name: "model", Type: field.TypeString, Size: 128, Default: ""},
 		{Name: "names", Type: field.TypeJSON, Nullable: true},
 		{Name: "lines", Type: field.TypeJSON, Nullable: true},
+		{Name: "effects", Type: field.TypeJSON, Nullable: true},
 		{Name: "summary", Type: field.TypeString, Size: 2147483647, Default: ""},
 		{Name: "error", Type: field.TypeString, Size: 2000, Default: ""},
 		{Name: "attempts", Type: field.TypeInt, Default: 0},
@@ -557,7 +558,7 @@ var (
 			{
 				Name:    "storytranslation_status_updated_at",
 				Unique:  false,
-				Columns: []*schema.Column{StoryTranslationsColumns[5], StoryTranslationsColumns[15]},
+				Columns: []*schema.Column{StoryTranslationsColumns[5], StoryTranslationsColumns[16]},
 			},
 		},
 	}

@@ -10,7 +10,7 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// StoryTranslation is a machine translation of one scenario's dialogue,
+// StoryTranslation is a machine translation of one scenario's text,
 // produced for JP stories that have no official text in the target language.
 // Lines are aligned with the scenario's TalkData by index.
 type StoryTranslation struct {
@@ -31,6 +31,10 @@ func (StoryTranslation) Fields() []ent.Field {
 		// names maps source speaker labels to translated ones.
 		field.JSON("names", map[string]string{}).Optional(),
 		field.JSON("lines", []string{}).Optional(),
+		// effects maps SpecialEffectData indexes (decimal strings) of text
+		// effects (telop, place label, choices, full-screen text) to their
+		// translation.
+		field.JSON("effects", map[string]string{}).Optional(),
 		field.Text("summary").Default(""),
 		field.String("error").MaxLen(2000).Default(""),
 		field.Int("attempts").Default(0),

@@ -34,6 +34,8 @@ type StoryTranslation struct {
 	Names map[string]string `json:"names,omitempty"`
 	// Lines holds the value of the "lines" field.
 	Lines []string `json:"lines,omitempty"`
+	// Effects holds the value of the "effects" field.
+	Effects map[string]string `json:"effects,omitempty"`
 	// Summary holds the value of the "summary" field.
 	Summary string `json:"summary,omitempty"`
 	// Error holds the value of the "error" field.
@@ -56,7 +58,7 @@ func (*StoryTranslation) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case storytranslation.FieldNames, storytranslation.FieldLines:
+		case storytranslation.FieldNames, storytranslation.FieldLines, storytranslation.FieldEffects:
 			values[i] = new([]byte)
 		case storytranslation.FieldID, storytranslation.FieldAttempts, storytranslation.FieldPromptTokens, storytranslation.FieldCompletionTokens:
 			values[i] = new(sql.NullInt64)
@@ -135,6 +137,14 @@ func (_m *StoryTranslation) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &_m.Lines); err != nil {
 					return fmt.Errorf("unmarshal field lines: %w", err)
+				}
+			}
+		case storytranslation.FieldEffects:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field effects", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Effects); err != nil {
+					return fmt.Errorf("unmarshal field effects: %w", err)
 				}
 			}
 		case storytranslation.FieldSummary:
@@ -238,6 +248,9 @@ func (_m *StoryTranslation) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("lines=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Lines))
+	builder.WriteString(", ")
+	builder.WriteString("effects=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Effects))
 	builder.WriteString(", ")
 	builder.WriteString("summary=")
 	builder.WriteString(_m.Summary)

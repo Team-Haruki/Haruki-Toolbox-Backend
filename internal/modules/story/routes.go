@@ -21,14 +21,17 @@ type TranslationItem struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
-// TranslationBody is a finished translation, aligned with TalkData.
+// TranslationBody is a finished translation: Lines aligned with TalkData,
+// Effects keyed by SpecialEffectData index.
 type TranslationBody struct {
 	ScenarioID string            `json:"scenarioId"`
 	Lang       string            `json:"lang"`
 	Model      string            `json:"model"`
 	Names      map[string]string `json:"names"`
 	Lines      []string          `json:"lines"`
-	UpdatedAt  time.Time         `json:"updatedAt"`
+	// Effects maps SpecialEffectData indexes to translated text effects.
+	Effects   map[string]string `json:"effects"`
+	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
 // RegisterRoutes mounts the public story API; s may be nil (feature off).
@@ -109,7 +112,7 @@ func (s *Service) handleTranslation(c fiber.Ctx) error {
 	c.Set("Cache-Control", "public, max-age=300")
 	return c.JSON(TranslationBody{
 		ScenarioID: row.ScenarioID, Lang: row.Lang, Model: row.Model,
-		Names: row.Names, Lines: row.Lines, UpdatedAt: row.UpdatedAt,
+		Names: row.Names, Lines: row.Lines, Effects: row.Effects, UpdatedAt: row.UpdatedAt,
 	})
 }
 

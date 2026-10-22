@@ -145,3 +145,55 @@ func TestKanaRatioSeparatesPlaceholderText(t *testing.T) {
 		t.Fatalf("cn ratio %.2f", r)
 	}
 }
+
+func TestTranslateIncludesTextEffectsInTimelineOrder(t *testing.T) {
+	var order []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Messages []chatMessage `json:"messages"`
+		}
+		_ = json.Unmarshal(body, &req)
+		user := req.Messages[1].Content
+		var lines []promptLine
+		_ = json.Unmarshal([]byte(user[strings.LastIndex(user, "【待翻译台词】\n")+len("【待翻译台词】\n"):]), &lines)
+		out := modelOutput{Names: map[string]string{}}
+		for _, l := range lines {
+			order = append(order, l.I)
+			out.Lines = append(out.Lines, struct {
+				I    int    `json:"i"`
+				Text string `json:"text"`
+			}{l.I, "zh:" + l.Text})
+		}
+		raw, _ := json.Marshal(out)
+		chunk, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"delta": map[string]string{"content": string(raw)}}}})
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", chunk)
+	}))
+	t.Cleanup(srv.Close)
+	tr := &translator{llm: &llmClient{baseURL: srv.URL, model: "m", timeout: 5 * time.Second, client: srv.Client(), backoff: time.Millisecond}}
+
+	scn := scenarioOf([2]string{"杏", "おはよう"}, [2]string{"こはね", "うん"})
+	type snippet = struct {
+		Action         int `json:"Action"`
+		ReferenceIndex int `json:"ReferenceIndex"`
+	}
+	type effect = struct {
+		EffectType int    `json:"EffectType"`
+		StringVal  string `json:"StringVal"`
+	}
+	scn.Snippets = []snippet{{actionTalk, 0}, {actionSpecialEffect, 1}, {actionSpecialEffect, 0}, {actionTalk, 1}}
+	scn.SpecialEffectData = []effect{{8, "放課後の教室"}, {7, "bg_a000101"}}
+
+	got, err := tr.translate(context.Background(), scn, promptContext{Episode: &Episode{Kind: "event"}})
+	if err != nil {
+		t.Fatalf("translate: %v", err)
+	}
+	// talk 0, the telop (effect 0 → 2 + 0), talk 1; the background is no text
+	if fmt.Sprint(order) != "[0 2 1]" {
+		t.Fatalf("prompt order = %v", order)
+	}
+	if got.Effects["0"] != "zh:放課後の教室" || len(got.Effects) != 1 || got.Lines[1] != "zh:うん" {
+		t.Fatalf("effects = %v lines = %v", got.Effects, got.Lines)
+	}
+}

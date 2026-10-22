@@ -154,7 +154,17 @@ func (f *fetcher) localized(ctx context.Context, region string, ep *Episode) boo
 // Scenario is the part of ScenarioSceneData the translator reads.
 type Scenario struct {
 	ScenarioID string `json:"ScenarioId"`
-	TalkData   []struct {
+	// Snippets is the timeline; Talk (1) and SpecialEffect (6) entries point
+	// into TalkData / SpecialEffectData.
+	Snippets []struct {
+		Action         int `json:"Action"`
+		ReferenceIndex int `json:"ReferenceIndex"`
+	} `json:"Snippets"`
+	SpecialEffectData []struct {
+		EffectType int    `json:"EffectType"`
+		StringVal  string `json:"StringVal"`
+	} `json:"SpecialEffectData"`
+	TalkData []struct {
 		WindowDisplayName string `json:"WindowDisplayName"`
 		Body              string `json:"Body"`
 		TalkCharacters    []struct {

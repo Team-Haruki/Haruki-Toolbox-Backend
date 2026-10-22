@@ -13129,6 +13129,7 @@ type StoryTranslationMutation struct {
 	names                *map[string]string
 	lines                *[]string
 	appendlines          []string
+	effects              *map[string]string
 	summary              *string
 	error                *string
 	attempts             *int
@@ -13573,6 +13574,55 @@ func (m *StoryTranslationMutation) ResetLines() {
 	delete(m.clearedFields, storytranslation.FieldLines)
 }
 
+// SetEffects sets the "effects" field.
+func (m *StoryTranslationMutation) SetEffects(value map[string]string) {
+	m.effects = &value
+}
+
+// Effects returns the value of the "effects" field in the mutation.
+func (m *StoryTranslationMutation) Effects() (r map[string]string, exists bool) {
+	v := m.effects
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEffects returns the old "effects" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldEffects(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEffects is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEffects requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEffects: %w", err)
+	}
+	return oldValue.Effects, nil
+}
+
+// ClearEffects clears the value of the "effects" field.
+func (m *StoryTranslationMutation) ClearEffects() {
+	m.effects = nil
+	m.clearedFields[storytranslation.FieldEffects] = struct{}{}
+}
+
+// EffectsCleared returns if the "effects" field was cleared in this mutation.
+func (m *StoryTranslationMutation) EffectsCleared() bool {
+	_, ok := m.clearedFields[storytranslation.FieldEffects]
+	return ok
+}
+
+// ResetEffects resets all changes to the "effects" field.
+func (m *StoryTranslationMutation) ResetEffects() {
+	m.effects = nil
+	delete(m.clearedFields, storytranslation.FieldEffects)
+}
+
 // SetSummary sets the "summary" field.
 func (m *StoryTranslationMutation) SetSummary(s string) {
 	m.summary = &s
@@ -13919,7 +13969,7 @@ func (m *StoryTranslationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *StoryTranslationMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
 	if m.scenario_id != nil {
 		fields = append(fields, storytranslation.FieldScenarioID)
 	}
@@ -13943,6 +13993,9 @@ func (m *StoryTranslationMutation) Fields() []string {
 	}
 	if m.lines != nil {
 		fields = append(fields, storytranslation.FieldLines)
+	}
+	if m.effects != nil {
+		fields = append(fields, storytranslation.FieldEffects)
 	}
 	if m.summary != nil {
 		fields = append(fields, storytranslation.FieldSummary)
@@ -13989,6 +14042,8 @@ func (m *StoryTranslationMutation) Field(name string) (ent.Value, bool) {
 		return m.Names()
 	case storytranslation.FieldLines:
 		return m.Lines()
+	case storytranslation.FieldEffects:
+		return m.Effects()
 	case storytranslation.FieldSummary:
 		return m.Summary()
 	case storytranslation.FieldError:
@@ -14028,6 +14083,8 @@ func (m *StoryTranslationMutation) OldField(ctx context.Context, name string) (e
 		return m.OldNames(ctx)
 	case storytranslation.FieldLines:
 		return m.OldLines(ctx)
+	case storytranslation.FieldEffects:
+		return m.OldEffects(ctx)
 	case storytranslation.FieldSummary:
 		return m.OldSummary(ctx)
 	case storytranslation.FieldError:
@@ -14106,6 +14163,13 @@ func (m *StoryTranslationMutation) SetField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLines(v)
+		return nil
+	case storytranslation.FieldEffects:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEffects(v)
 		return nil
 	case storytranslation.FieldSummary:
 		v, ok := value.(string)
@@ -14231,6 +14295,9 @@ func (m *StoryTranslationMutation) ClearedFields() []string {
 	if m.FieldCleared(storytranslation.FieldLines) {
 		fields = append(fields, storytranslation.FieldLines)
 	}
+	if m.FieldCleared(storytranslation.FieldEffects) {
+		fields = append(fields, storytranslation.FieldEffects)
+	}
 	return fields
 }
 
@@ -14250,6 +14317,9 @@ func (m *StoryTranslationMutation) ClearField(name string) error {
 		return nil
 	case storytranslation.FieldLines:
 		m.ClearLines()
+		return nil
+	case storytranslation.FieldEffects:
+		m.ClearEffects()
 		return nil
 	}
 	return fmt.Errorf("unknown StoryTranslation nullable field %s", name)
@@ -14282,6 +14352,9 @@ func (m *StoryTranslationMutation) ResetField(name string) error {
 		return nil
 	case storytranslation.FieldLines:
 		m.ResetLines()
+		return nil
+	case storytranslation.FieldEffects:
+		m.ResetEffects()
 		return nil
 	case storytranslation.FieldSummary:
 		m.ResetSummary()

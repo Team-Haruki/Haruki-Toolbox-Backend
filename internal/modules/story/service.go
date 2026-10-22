@@ -285,14 +285,14 @@ func (s *Service) save(ctx context.Context, id, hash string, res *translation) e
 	if existing != nil {
 		return existing.Update().
 			SetStatus(storytranslation.StatusDone).SetSourceHash(hash).SetModel(s.cfg.Translation.LLMModel).
-			SetNames(res.Names).SetLines(res.Lines).SetSummary(res.Summary).SetError("").
+			SetNames(res.Names).SetLines(res.Lines).SetEffects(res.Effects).SetSummary(res.Summary).SetError("").
 			AddAttempts(1).SetPromptTokens(res.Usage.PromptTokens).SetCompletionTokens(res.Usage.CompletionTokens).
 			Exec(ctx)
 	}
 	return s.db.StoryTranslation.Create().
 		SetScenarioID(id).SetLang(TranslationLang).SetSourceRegion("jp").SetSourceHash(hash).
 		SetStatus(storytranslation.StatusDone).SetModel(s.cfg.Translation.LLMModel).
-		SetNames(res.Names).SetLines(res.Lines).SetSummary(res.Summary).SetAttempts(1).
+		SetNames(res.Names).SetLines(res.Lines).SetEffects(res.Effects).SetSummary(res.Summary).SetAttempts(1).
 		SetPromptTokens(res.Usage.PromptTokens).SetCompletionTokens(res.Usage.CompletionTokens).
 		Exec(ctx)
 }

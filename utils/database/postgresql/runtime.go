@@ -676,33 +676,33 @@ func init() {
 	// storytranslation.ModelValidator is a validator for the "model" field. It is called by the builders before save.
 	storytranslation.ModelValidator = storytranslationDescModel.Validators[0].(func(string) error)
 	// storytranslationDescSummary is the schema descriptor for summary field.
-	storytranslationDescSummary := storytranslationFields[8].Descriptor()
+	storytranslationDescSummary := storytranslationFields[9].Descriptor()
 	// storytranslation.DefaultSummary holds the default value on creation for the summary field.
 	storytranslation.DefaultSummary = storytranslationDescSummary.Default.(string)
 	// storytranslationDescError is the schema descriptor for error field.
-	storytranslationDescError := storytranslationFields[9].Descriptor()
+	storytranslationDescError := storytranslationFields[10].Descriptor()
 	// storytranslation.DefaultError holds the default value on creation for the error field.
 	storytranslation.DefaultError = storytranslationDescError.Default.(string)
 	// storytranslation.ErrorValidator is a validator for the "error" field. It is called by the builders before save.
 	storytranslation.ErrorValidator = storytranslationDescError.Validators[0].(func(string) error)
 	// storytranslationDescAttempts is the schema descriptor for attempts field.
-	storytranslationDescAttempts := storytranslationFields[10].Descriptor()
+	storytranslationDescAttempts := storytranslationFields[11].Descriptor()
 	// storytranslation.DefaultAttempts holds the default value on creation for the attempts field.
 	storytranslation.DefaultAttempts = storytranslationDescAttempts.Default.(int)
 	// storytranslationDescPromptTokens is the schema descriptor for prompt_tokens field.
-	storytranslationDescPromptTokens := storytranslationFields[11].Descriptor()
+	storytranslationDescPromptTokens := storytranslationFields[12].Descriptor()
 	// storytranslation.DefaultPromptTokens holds the default value on creation for the prompt_tokens field.
 	storytranslation.DefaultPromptTokens = storytranslationDescPromptTokens.Default.(int)
 	// storytranslationDescCompletionTokens is the schema descriptor for completion_tokens field.
-	storytranslationDescCompletionTokens := storytranslationFields[12].Descriptor()
+	storytranslationDescCompletionTokens := storytranslationFields[13].Descriptor()
 	// storytranslation.DefaultCompletionTokens holds the default value on creation for the completion_tokens field.
 	storytranslation.DefaultCompletionTokens = storytranslationDescCompletionTokens.Default.(int)
 	// storytranslationDescCreatedAt is the schema descriptor for created_at field.
-	storytranslationDescCreatedAt := storytranslationFields[13].Descriptor()
+	storytranslationDescCreatedAt := storytranslationFields[14].Descriptor()
 	// storytranslation.DefaultCreatedAt holds the default value on creation for the created_at field.
 	storytranslation.DefaultCreatedAt = storytranslationDescCreatedAt.Default.(func() time.Time)
 	// storytranslationDescUpdatedAt is the schema descriptor for updated_at field.
-	storytranslationDescUpdatedAt := storytranslationFields[14].Descriptor()
+	storytranslationDescUpdatedAt := storytranslationFields[15].Descriptor()
 	// storytranslation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	storytranslation.DefaultUpdatedAt = storytranslationDescUpdatedAt.Default.(func() time.Time)
 	// storytranslation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

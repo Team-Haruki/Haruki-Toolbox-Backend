@@ -115,6 +115,18 @@ func (_u *StoryTranslationUpdate) ClearLines() *StoryTranslationUpdate {
 	return _u
 }
 
+// SetEffects sets the "effects" field.
+func (_u *StoryTranslationUpdate) SetEffects(v map[string]string) *StoryTranslationUpdate {
+	_u.mutation.SetEffects(v)
+	return _u
+}
+
+// ClearEffects clears the value of the "effects" field.
+func (_u *StoryTranslationUpdate) ClearEffects() *StoryTranslationUpdate {
+	_u.mutation.ClearEffects()
+	return _u
+}
+
 // SetSummary sets the "summary" field.
 func (_u *StoryTranslationUpdate) SetSummary(v string) *StoryTranslationUpdate {
 	_u.mutation.SetSummary(v)
@@ -324,6 +336,12 @@ func (_u *StoryTranslationUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if _u.mutation.LinesCleared() {
 		_spec.ClearField(storytranslation.FieldLines, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.Effects(); ok {
+		_spec.SetField(storytranslation.FieldEffects, field.TypeJSON, value)
+	}
+	if _u.mutation.EffectsCleared() {
+		_spec.ClearField(storytranslation.FieldEffects, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.Summary(); ok {
 		_spec.SetField(storytranslation.FieldSummary, field.TypeString, value)
 	}
@@ -454,6 +472,18 @@ func (_u *StoryTranslationUpdateOne) AppendLines(v []string) *StoryTranslationUp
 // ClearLines clears the value of the "lines" field.
 func (_u *StoryTranslationUpdateOne) ClearLines() *StoryTranslationUpdateOne {
 	_u.mutation.ClearLines()
+	return _u
+}
+
+// SetEffects sets the "effects" field.
+func (_u *StoryTranslationUpdateOne) SetEffects(v map[string]string) *StoryTranslationUpdateOne {
+	_u.mutation.SetEffects(v)
+	return _u
+}
+
+// ClearEffects clears the value of the "effects" field.
+func (_u *StoryTranslationUpdateOne) ClearEffects() *StoryTranslationUpdateOne {
+	_u.mutation.ClearEffects()
 	return _u
 }
 
@@ -695,6 +725,12 @@ func (_u *StoryTranslationUpdateOne) sqlSave(ctx context.Context) (_node *StoryT
 	}
 	if _u.mutation.LinesCleared() {
 		_spec.ClearField(storytranslation.FieldLines, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Effects(); ok {
+		_spec.SetField(storytranslation.FieldEffects, field.TypeJSON, value)
+	}
+	if _u.mutation.EffectsCleared() {
+		_spec.ClearField(storytranslation.FieldEffects, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Summary(); ok {
 		_spec.SetField(storytranslation.FieldSummary, field.TypeString, value)

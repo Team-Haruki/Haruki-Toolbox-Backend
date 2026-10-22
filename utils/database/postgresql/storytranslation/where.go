@@ -479,6 +479,16 @@ func LinesNotNil() predicate.StoryTranslation {
 	return predicate.StoryTranslation(sql.FieldNotNull(FieldLines))
 }
 
+// EffectsIsNil applies the IsNil predicate on the "effects" field.
+func EffectsIsNil() predicate.StoryTranslation {
+	return predicate.StoryTranslation(sql.FieldIsNull(FieldEffects))
+}
+
+// EffectsNotNil applies the NotNil predicate on the "effects" field.
+func EffectsNotNil() predicate.StoryTranslation {
+	return predicate.StoryTranslation(sql.FieldNotNull(FieldEffects))
+}
+
 // SummaryEQ applies the EQ predicate on the "summary" field.
 func SummaryEQ(v string) predicate.StoryTranslation {
 	return predicate.StoryTranslation(sql.FieldEQ(FieldSummary, v))

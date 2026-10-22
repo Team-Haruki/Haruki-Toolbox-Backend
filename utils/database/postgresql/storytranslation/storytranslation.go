@@ -30,6 +30,8 @@ const (
 	FieldNames = "names"
 	// FieldLines holds the string denoting the lines field in the database.
 	FieldLines = "lines"
+	// FieldEffects holds the string denoting the effects field in the database.
+	FieldEffects = "effects"
 	// FieldSummary holds the string denoting the summary field in the database.
 	FieldSummary = "summary"
 	// FieldError holds the string denoting the error field in the database.
@@ -59,6 +61,7 @@ var Columns = []string{
 	FieldModel,
 	FieldNames,
 	FieldLines,
+	FieldEffects,
 	FieldSummary,
 	FieldError,
 	FieldAttempts,

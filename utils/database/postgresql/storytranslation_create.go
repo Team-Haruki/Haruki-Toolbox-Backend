@@ -100,6 +100,12 @@ func (_c *StoryTranslationCreate) SetLines(v []string) *StoryTranslationCreate {
 	return _c
 }
 
+// SetEffects sets the "effects" field.
+func (_c *StoryTranslationCreate) SetEffects(v map[string]string) *StoryTranslationCreate {
+	_c.mutation.SetEffects(v)
+	return _c
+}
+
 // SetSummary sets the "summary" field.
 func (_c *StoryTranslationCreate) SetSummary(v string) *StoryTranslationCreate {
 	_c.mutation.SetSummary(v)
@@ -412,6 +418,10 @@ func (_c *StoryTranslationCreate) createSpec() (*StoryTranslation, *sqlgraph.Cre
 	if value, ok := _c.mutation.Lines(); ok {
 		_spec.SetField(storytranslation.FieldLines, field.TypeJSON, value)
 		_node.Lines = value
+	}
+	if value, ok := _c.mutation.Effects(); ok {
+		_spec.SetField(storytranslation.FieldEffects, field.TypeJSON, value)
+		_node.Effects = value
 	}
 	if value, ok := _c.mutation.Summary(); ok {
 		_spec.SetField(storytranslation.FieldSummary, field.TypeString, value)
