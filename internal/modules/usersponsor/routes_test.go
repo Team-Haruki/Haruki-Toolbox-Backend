@@ -24,7 +24,8 @@ func TestSponsorRoutesDoNotInterceptCurrentUserOrUnrelatedRoutes(t *testing.T) {
 		AuthProxySubjectHeader: "X-Test-Identity", AuthProxyEmailVerifiedHeader: "X-Test-Email-Verified",
 	}
 	// Match production order, including the real authentication middleware.
-	RegisterRoutes(e.h.api, OAuthConfig{}, sponsor.AfdianConfig{})
+	_, _, catalog := liveCatalogFixture(t)
+	RegisterRoutes(e.h.api, OAuthConfig{}, sponsor.AfdianConfig{}, catalog)
 	userinfo.RegisterUserInfoRoutes(e.h.api, api.NewUserDataBuilder(""))
 	app.Get("/api/user/unrelated-public", func(c fiber.Ctx) error { return c.SendStatus(204) })
 
@@ -34,6 +35,8 @@ func TestSponsorRoutesDoNotInterceptCurrentUserOrUnrelatedRoutes(t *testing.T) {
 		want               int
 		contains           string
 	}{
+		{"GET", "/api/misc/sponsor-frames/panel.png", "", false, 200, ""},
+		{"GET", "/api/misc/sponsor-frames/catalog.json", "", false, 404, ""},
 		{"GET", "/api/user/me", "", true, 200, `"userId":"12345"`},
 		{"GET", "/api/user/alice/get-settings", "", true, 200, `"server":"tw"`},
 		{"GET", "/api/user/unrelated-public", "", false, 204, ""},

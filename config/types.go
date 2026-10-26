@@ -49,6 +49,11 @@ type WebhookConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 }
 
+type SponsorFramesConfig struct {
+	Directory string `yaml:"directory"`
+	PublicURL string `yaml:"public_url"`
+}
+
 type AfdianConfig struct {
 	OAuthClientID        string `yaml:"oauth_client_id"`
 	OAuthClientSecret    string `yaml:"oauth_client_secret"`
@@ -409,6 +414,7 @@ type Config struct {
 	GameData               GameDataConfig                  `yaml:"game_data"`
 	Redis                  RedisConfig                     `yaml:"redis"`
 	Webhook                WebhookConfig                   `yaml:"webhook"`
+	SponsorFrames          SponsorFramesConfig             `yaml:"sponsor_frames"`
 	Afdian                 AfdianConfig                    `yaml:"afdian"`
 	Backend                BackendConfig                   `yaml:"backend"`
 	UserSystem             UserSystemConfig                `yaml:"user_system"`

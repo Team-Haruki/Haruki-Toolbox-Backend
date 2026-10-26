@@ -8,11 +8,18 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterRoutes(helper *api.HarukiToolboxRouterHelpers, cfg OAuthConfig, orders sponsor.AfdianConfig) {
+func RegisterRoutes(helper *api.HarukiToolboxRouterHelpers, cfg OAuthConfig, orders sponsor.AfdianConfig, catalogs ...*Catalog) {
 	if helper == nil || helper.Router == nil || helper.SessionHandler == nil {
 		return
 	}
-	h := &handlers{api: helper, oauth: cfg, orders: orders, client: newOAuthHTTPClient()}
+	var catalog *Catalog
+	if len(catalogs) > 0 {
+		catalog = catalogs[0]
+	}
+	if catalog != nil {
+		helper.Router.Get(previewRoute+":filename", catalog.preview)
+	}
+	h := &handlers{catalog: catalog, api: helper, oauth: cfg, orders: orders, client: newOAuthHTTPClient()}
 	r := helper.Router.Group("/api/user/:toolbox_user_id")
 	guards := usercore.RequireAuthenticatedSelf(helper, "toolbox_user_id")
 	// Fiber group middleware matches a prefix, so putting these guards on the

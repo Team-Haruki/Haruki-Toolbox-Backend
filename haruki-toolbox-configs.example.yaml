@@ -329,3 +329,10 @@ others:
     - "userChallengeLiveSoloResults"
     - "userChallengeLiveSoloHighScoreRewards"
     - "userMysekaiFixtureGameCharacterPerformanceBonuses"
+
+# Optional live catalog: catalog.json plus previews/ in this directory.
+# Empty values retain the embedded catalog; invalid initial files fail startup.
+# Updates are read without restart; malformed updates retain the last valid catalog.
+sponsor_frames:
+  directory: ""
+  public_url: "" # HTTPS public API origin serving /api/misc/sponsor-frames/:filename

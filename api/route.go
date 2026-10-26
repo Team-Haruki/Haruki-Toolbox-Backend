@@ -57,6 +57,7 @@ type TurnstileVerifier interface {
 // to the modules that consume them. Keep this structure narrow; database and
 // session access remain on the compatibility helper during their own migrations.
 type Dependencies struct {
+	SponsorFrames             *userSponsorModule.Catalog
 	HarukiProxyV3ClientPolicy *harukiHandler.ClientPolicy
 	DataSync                  harukiHandler.DataSyncConfig
 	BackgroundTasks           harukiBackground.Runner
@@ -161,7 +162,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 }
 
 func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
-	userSponsorModule.RegisterRoutes(apiHelper, dependencies.AfdianOAuth, dependencies.AfdianConfig)
+	userSponsorModule.RegisterRoutes(apiHelper, dependencies.AfdianOAuth, dependencies.AfdianConfig, dependencies.SponsorFrames)
 	userModule.RegisterUserRoutes(apiHelper)
 	userInfoModule.RegisterUserInfoRoutes(apiHelper, dependencies.UserDataBuilder)
 	userPrivateAPIModule.RegisterUserPrivateAPIRoutes(apiHelper)
