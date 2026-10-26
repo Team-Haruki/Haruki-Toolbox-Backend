@@ -16,10 +16,11 @@ import (
 )
 
 type handlers struct {
-	api    *api.HarukiToolboxRouterHelpers
-	oauth  OAuthConfig
-	orders sponsor.AfdianConfig
-	client *http.Client
+	catalog *Catalog
+	api     *api.HarukiToolboxRouterHelpers
+	oauth   OAuthConfig
+	orders  sponsor.AfdianConfig
+	client  *http.Client
 }
 
 type sponsorStatus struct {
@@ -70,10 +71,11 @@ func (h *handlers) frames(c fiber.Ctx) error {
 	if err != nil {
 		return api.ErrorInternal(c, "failed to load game accounts")
 	}
+	frames := h.catalog.snapshot()
 	accounts := make([]frameAccount, 0, len(bindings))
 	for _, b := range bindings {
 		frameID := b.SponsorFrameID
-		if frameID != nil && findFrame(*frameID) == nil {
+		if frameID != nil && lookupFrame(frames, *frameID) == nil {
 			frameID = nil
 		}
 		accounts = append(accounts, frameAccount{b.Server, b.GameUserID, b.Verified, frameID})
@@ -82,7 +84,7 @@ func (h *handlers) frames(c fiber.Ctx) error {
 		Status   sponsorStatus  `json:"status"`
 		Frames   []Frame        `json:"frames"`
 		Accounts []frameAccount `json:"accounts"`
-	}{s, frameCatalog(), accounts})
+	}{s, frames, accounts})
 }
 
 func (h *handlers) saveFrame(c fiber.Ctx) error {
@@ -93,7 +95,7 @@ func (h *handlers) saveFrame(c fiber.Ctx) error {
 		return api.ErrorBadRequest(c, "frameId is required; use an empty string to restore the game frame")
 	}
 	id := strings.TrimSpace(*payload.FrameID)
-	if id != "" && findFrame(id) == nil {
+	if id != "" && lookupFrame(h.catalog.snapshot(), id) == nil {
 		return api.ErrorBadRequest(c, "unknown frame")
 	}
 	uid, _ := usercore.CurrentUserID(c)
@@ -155,7 +157,7 @@ func (h *handlers) gameFrame(c fiber.Ctx) error {
 			return api.ErrorInternal(c, "failed to load frame")
 		}
 		if s.Eligible && b.SponsorFrameID != nil {
-			frame = findFrame(*b.SponsorFrameID)
+			frame = lookupFrame(h.catalog.snapshot(), *b.SponsorFrameID)
 		}
 	}
 	type selectedFrame struct {

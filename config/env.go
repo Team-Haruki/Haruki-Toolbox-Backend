@@ -48,6 +48,9 @@ func applyEnvOverrides(cfg *Config) error {
 		return err
 	}
 
+	overrideString(&cfg.SponsorFrames.Directory, "SPONSOR_FRAMES_DIRECTORY")
+	overrideString(&cfg.SponsorFrames.PublicURL, "SPONSOR_FRAMES_PUBLIC_URL")
+
 	overrideString(&cfg.Afdian.UserID, "AFDIAN_USER_ID")
 	overrideString(&cfg.Afdian.OAuthClientID, "AFDIAN_OAUTH_CLIENT_ID")
 	overrideString(&cfg.Afdian.OAuthClientSecret, "AFDIAN_OAUTH_CLIENT_SECRET")
