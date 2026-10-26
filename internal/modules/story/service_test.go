@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -28,7 +30,14 @@ var storyDBSeq atomic.Int64
 
 func newStoryDB(t *testing.T) *postgresql.Client {
 	t.Helper()
-	db := enttest.Open(t, "sqlite3", fmt.Sprintf("file:story-%d-%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano(), storyDBSeq.Add(1)))
+	driver, err := entsql.Open("sqlite3", fmt.Sprintf("file:story-%d-%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano(), storyDBSeq.Add(1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// SQLite permits one writer. Serialize database access while the test's
+	// translation workers still run concurrently, avoiding SQLITE_LOCKED.
+	driver.DB().SetMaxOpenConns(1)
+	db := enttest.NewClient(t, enttest.WithOptions(postgresql.Driver(driver)))
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
