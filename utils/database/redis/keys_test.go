@@ -5,6 +5,28 @@ import (
 	"testing"
 )
 
+func TestAfdianProofAndRateKeysAreOpaqueAndScoped(t *testing.T) {
+	keys := NewKeyBuilder("test-key-secret")
+	raw := "Sensitive-Identity-Or-State"
+	values := []string{keys.BuildAfdianOAuthStateKey(raw), keys.BuildAfdianOAuthRateKey(raw), keys.BuildAfdianOrderRateKey("user-short", raw), keys.BuildAfdianOrderRateKey("user-day", raw)}
+	seen := map[string]bool{}
+	for _, key := range values {
+		if strings.Contains(key, raw) || strings.Contains(key, "test-key-secret") || seen[key] {
+			t.Fatal("proof leakage or rate-domain collision")
+		}
+		seen[key] = true
+	}
+	if keys.BuildAfdianOAuthStateKey(raw) == keys.BuildAfdianOAuthStateKey(strings.ToLower(raw)) {
+		t.Fatal("case-sensitive OAuth states collided")
+	}
+	if keys.BuildAfdianOrderRateKey("user-short", raw) == keys.BuildAfdianOrderRateKey("user-short", "another-user") {
+		t.Fatal("different users share rate buckets")
+	}
+	if keys.BuildAfdianOAuthStateKey(raw) == NewKeyBuilder("another-secret").BuildAfdianOAuthStateKey(raw) {
+		t.Fatal("state fingerprint ignores deployment secret")
+	}
+}
+
 func TestBuildKeys(t *testing.T) {
 	t.Parallel()
 	keys := NewKeyBuilder("")
