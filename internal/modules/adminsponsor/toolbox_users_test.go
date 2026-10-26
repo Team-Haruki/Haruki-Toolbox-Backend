@@ -88,8 +88,53 @@ func TestAdminToolboxSponsorsPermissionsSearchAndPagination(t *testing.T) {
 		t.Fatalf("candidate search: %+v", list)
 	}
 	list = decode[toolboxSponsorList](t, e.do(t, "GET", toolboxUsersPath+"?page_size=1&page=2", "super-1", ""))
-	if list.Total != 2 || len(list.Items) != 1 || list.Page != 2 {
+	if list.Total != 3 || len(list.Items) != 1 || list.Page != 2 {
 		t.Fatalf("pagination: %+v", list)
+	}
+}
+
+func TestSuperAdminCanSearchAndManageOwnSponsorship(t *testing.T) {
+	e := newAdminTestEnv(t, sponsor.AfdianConfig{})
+	ctx := t.Context()
+	path := toolboxUsersPath + "/super-1"
+	search := toolboxUsersPath + "?scope=all&q=super-1"
+	list := decode[toolboxSponsorList](t, e.do(t, "GET", search, "super-1", ""))
+	if list.Total != 1 || len(list.Items) != 1 || list.Items[0].UserID != "super-1" || list.Items[0].Eligible {
+		t.Fatalf("super admin cannot find their own unverified sponsorship: %+v", list)
+	}
+	expectStatus(t, e.do(t, "PUT", path, "super-1", `{"access":"granted","note":""}`), 400)
+	expectStatus(t, e.do(t, "PUT", path, "super-1", `{"access":"granted","note":"Self sponsorship confirmed"}`), 200)
+	u := e.db.User.GetX(ctx, "super-1")
+	if u.Role != user.RoleSuperAdmin || u.AfdianUserID != nil || u.SponsorAccessOverride == nil || *u.SponsorAccessOverride != user.SponsorAccessOverrideGranted || u.SponsorAccessUpdatedBy == nil || *u.SponsorAccessUpdatedBy != "super-1" || u.SponsorAccessUpdatedAt == nil {
+		t.Fatal("self grant changed identity/role or omitted its audit attribution")
+	}
+	list = decode[toolboxSponsorList](t, e.do(t, "GET", toolboxUsersPath, "super-1", ""))
+	if list.Total != 1 || !list.Items[0].Eligible || list.Items[0].UserID != "super-1" {
+		t.Fatalf("certified self is absent: %+v", list)
+	}
+	for _, access := range []string{"blocked", "automatic"} {
+		expectStatus(t, e.do(t, "PUT", path, "super-1", fmt.Sprintf(`{"access":%q,"note":"Self sponsorship adjustment"}`, access)), 200)
+		list = decode[toolboxSponsorList](t, e.do(t, "GET", search, "super-1", ""))
+		if list.Total != 1 || list.Items[0].Eligible {
+			t.Fatalf("self %s did not remove manual access: %+v", access, list)
+		}
+	}
+	logs := e.db.SystemLog.Query().Where(systemlog.ActionEQ(toolboxSponsorAction), systemlog.ResultEQ("success")).AllX(ctx)
+	if len(logs) != 3 {
+		t.Fatalf("self audit count = %d, want 3", len(logs))
+	}
+	for _, log := range logs {
+		if log.ActorUserID == nil || *log.ActorUserID != "super-1" || log.TargetID == nil || *log.TargetID != "super-1" {
+			t.Fatal("self audit has the wrong actor or target")
+		}
+	}
+	// A role change between actor and target resolution must not allow self access.
+	if err := ensureCanManageToolboxSponsor("same", "super_admin", "same", "admin"); err == nil {
+		t.Fatal("self exception survived target role change")
+	}
+	list = decode[toolboxSponsorList](t, e.do(t, "GET", toolboxUsersPath+"?scope=all&q=admin-1", "admin-1", ""))
+	if list.Total != 0 {
+		t.Fatal("ordinary admin self-search restriction changed")
 	}
 }
 

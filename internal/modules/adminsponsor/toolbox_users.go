@@ -40,6 +40,15 @@ func toolboxSponsorView(u *postgresql.User, access sponsor.ToolboxAccess) toolbo
 		Note: stringPtrValue(u.SponsorAccessNote), UpdatedBy: stringPtrValue(u.SponsorAccessUpdatedBy), UpdatedAt: u.SponsorAccessUpdatedAt}
 }
 
+func ensureCanManageToolboxSponsor(actorID, actorRole, targetID, targetRole string) error {
+	// Sponsorship changes only cosmetic access. A super admin may manage their
+	// own sponsorship; the shared account/role management guard stays unchanged.
+	if actorID == targetID && admincore.NormalizeRole(actorRole) == admincore.RoleSuperAdmin && admincore.NormalizeRole(targetRole) == admincore.RoleSuperAdmin {
+		return nil
+	}
+	return admincore.EnsureAdminCanManageTargetUser(actorID, actorRole, targetID, targetRole)
+}
+
 func handleAdminListToolboxSponsors(helper *api.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		actorID, role, err := admincore.CurrentAdminActor(c)
@@ -58,9 +67,9 @@ func handleAdminListToolboxSponsors(helper *api.HarukiToolboxRouterHelpers) fibe
 			return api.ErrorBadRequest(c, "invalid search; all-user searches require a keyword")
 		}
 		db := helper.DBManager.DB
-		query := db.User.Query().Where(user.IDNEQ(actorID))
+		query := db.User.Query()
 		if role != admincore.RoleSuperAdmin {
-			query.Where(user.RoleNEQ(user.RoleSuperAdmin))
+			query.Where(user.IDNEQ(actorID), user.RoleNEQ(user.RoleSuperAdmin))
 		}
 		if scope == "certified" {
 			query.Where(user.Or(user.SponsorAccessOverrideNotNil(), func(s *sql.Selector) {
@@ -94,7 +103,7 @@ func handleAdminListToolboxSponsors(helper *api.HarukiToolboxRouterHelpers) fibe
 		}
 		result := toolboxSponsorList{Items: make([]toolboxSponsorItem, 0, len(users)), Total: total, Page: page, PageSize: size}
 		for _, u := range users {
-			if err := admincore.EnsureAdminCanManageTargetUser(actorID, role, u.ID, string(u.Role)); err != nil {
+			if err := ensureCanManageToolboxSponsor(actorID, role, u.ID, string(u.Role)); err != nil {
 				return admincore.RespondFiberOrForbidden(c, err, "cannot manage target user")
 			}
 			result.Items = append(result.Items, toolboxSponsorView(u, sponsor.ResolveToolboxAccess(u, rows, time.Now().UTC())))
@@ -137,7 +146,7 @@ func handleAdminUpdateToolboxSponsor(helper *api.HarukiToolboxRouterHelpers) fib
 			fail("query_failed")
 			return api.ErrorInternal(c, "failed to load user")
 		}
-		if err := admincore.EnsureAdminCanManageTargetUser(actorID, role, u.ID, string(u.Role)); err != nil {
+		if err := ensureCanManageToolboxSponsor(actorID, role, u.ID, string(u.Role)); err != nil {
 			fail("target_not_manageable")
 			return admincore.RespondFiberOrForbidden(c, err, "cannot manage target user")
 		}
@@ -147,6 +156,9 @@ func handleAdminUpdateToolboxSponsor(helper *api.HarukiToolboxRouterHelpers) fib
 		}
 		update := db.User.Update().Where(user.IDEQ(id)).SetSponsorAccessNote(payload.Note).SetSponsorAccessUpdatedBy(actorID).SetSponsorAccessUpdatedAt(time.Now().UTC())
 		// Repeat permission predicates in the write to avoid a concurrent role or ban change.
+		if actorID == id {
+			update.Where(user.RoleEQ(user.RoleSuperAdmin))
+		}
 		if role != admincore.RoleSuperAdmin {
 			update.Where(user.RoleNEQ(user.RoleSuperAdmin))
 		}
