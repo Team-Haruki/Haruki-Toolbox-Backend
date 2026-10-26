@@ -164,6 +164,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	frameCatalog, err := userSponsorModule.NewCatalog(cfg.SponsorFrames.Directory, cfg.SponsorFrames.PublicURL)
+	if err != nil {
+		return nil, err
+	}
 	deviceFlowLogger := harukiLogger.NewLoggerFromGlobal("OAuth2Device")
 	deviceFlowConfig := newOAuth2DeviceFlowConfig(cfg, deviceFlowLogger)
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
@@ -173,6 +177,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		TurnstileVerifier:         turnstileVerifier,
 		UserDataBuilder:           harukiAPIHelper.NewUserDataBuilder(cfg.UserSystem.AvatarURL),
 		AfdianConfig:              afdianConfig,
+		SponsorFrames:             frameCatalog,
 		AfdianOAuth:               userSponsorModule.OAuthConfig{ClientID: cfg.Afdian.OAuthClientID, ClientSecret: cfg.Afdian.OAuthClientSecret, RedirectURI: cfg.Afdian.OAuthRedirectURI},
 		MiscAssets: miscModule.NewAssetsConfig(miscModule.AssetsConfigOptions{
 			AvatarBaseURL: cfg.UserSystem.AvatarURL,
