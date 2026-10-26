@@ -72,7 +72,11 @@ func (h *handlers) frames(c fiber.Ctx) error {
 	}
 	accounts := make([]frameAccount, 0, len(bindings))
 	for _, b := range bindings {
-		accounts = append(accounts, frameAccount{b.Server, b.GameUserID, b.Verified, b.SponsorFrameID})
+		frameID := b.SponsorFrameID
+		if frameID != nil && findFrame(*frameID) == nil {
+			frameID = nil
+		}
+		accounts = append(accounts, frameAccount{b.Server, b.GameUserID, b.Verified, frameID})
 	}
 	return api.Responses.SuccessResponse(c, "success", &struct {
 		Status   sponsorStatus  `json:"status"`
