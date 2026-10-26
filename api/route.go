@@ -21,6 +21,7 @@ import (
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	publicModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/public"
 	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
+	storyModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/story"
 	subscriptionModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/subscription"
 	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	uploadModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/upload"
@@ -83,6 +84,8 @@ type Dependencies struct {
 	ServerCryptor        harukiSekai.ServerCryptor
 	UploadProxy          string
 	InheritPacing        harukiSekai.InheritPacing
+	// Story is nil when story.enabled is false.
+	Story *storyModule.Service
 }
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -93,6 +96,7 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 	harukiBotNeoModule.RegisterHarukiBotNeoRoutes(apiHelper)
 	webhookModule.RegisterWebhookRoutes(apiHelper)
 	publicModule.RegisterPublicRoutes(apiHelper)
+	storyModule.RegisterRoutes(apiHelper, dependencies.Story)
 	subscriptionModule.RegisterSubscriptionRoutes(apiHelper)
 	uploadModule.RegisterUploadRoutes(apiHelper, uploadModule.Dependencies{
 		HarukiProxyV3ClientPolicy: dependencies.HarukiProxyV3ClientPolicy,
@@ -153,6 +157,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 	adminTicketsModule.RegisterAdminTicketRoutes(apiHelper, adminGroup, dependencies.TicketNotifications)
 	adminWebhookModule.RegisterAdminWebhookRoutes(apiHelper, adminGroup)
 	botSecurityModule.RegisterAdminRoutes(apiHelper, adminGroup, botSecurityModule.AdminRouteOptions{})
+	storyModule.RegisterAdminRoutes(apiHelper, adminGroup, dependencies.Story)
 }
 
 func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {

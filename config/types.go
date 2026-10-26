@@ -178,6 +178,41 @@ type BotSecurityConfig struct {
 	IngestTokenSHA256 string `yaml:"ingest_token_sha256"`
 }
 
+// StoryConfig drives the story player support: the AI translation of JP
+// stories that have no official Chinese text.
+type StoryConfig struct {
+	// Enabled registers the /api/misc/story routes.
+	Enabled bool `yaml:"enabled"`
+	// RegistryBaseURL is the Haruki master registry CDN face
+	// (e.g. https://sekai-api-cdn.haruki.seiunx.com).
+	RegistryBaseURL string `yaml:"registry_base_url"`
+	// AssetBaseURL serves "<region>-assets/<path>" (scenario JSON for
+	// translation and alignment checks).
+	AssetBaseURL string               `yaml:"asset_base_url"`
+	UserAgent    string               `yaml:"user_agent"`
+	Translation  StoryTranslateConfig `yaml:"translation"`
+}
+
+// StoryTranslateConfig configures the background translator and the
+// OpenAI-compatible LLM endpoint it calls.
+type StoryTranslateConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// IntervalMinutes between scans for JP-only stories without a translation.
+	IntervalMinutes int `yaml:"interval_minutes"`
+	// MaxEpisodesPerRun caps one scan's work (0 = no cap).
+	MaxEpisodesPerRun int `yaml:"max_episodes_per_run"`
+	// Concurrency is how many series are translated at once (default 1);
+	// episodes of one series always go in order.
+	Concurrency int    `yaml:"concurrency"`
+	LLMBaseURL  string `yaml:"llm_base_url"`
+	LLMAPIKey   string `yaml:"llm_api_key"`
+	LLMModel    string `yaml:"llm_model"`
+	// LLMTimeoutSeconds bounds one streamed completion.
+	LLMTimeoutSeconds int `yaml:"llm_timeout_seconds"`
+	// ChunkLines splits long episodes into calls of at most this many lines.
+	ChunkLines int `yaml:"chunk_lines"`
+}
+
 type SubscriptionConfig struct {
 	HMESInternalBaseURL  string `yaml:"hmes_internal_base_url"`
 	HMESInternalToken    string `yaml:"hmes_internal_token"`
@@ -387,6 +422,7 @@ type Config struct {
 	HarukiBot              HarukiBotConfig                 `yaml:"haruki_bot"`
 	Subscription           SubscriptionConfig              `yaml:"subscription"`
 	BotSecurity            BotSecurityConfig               `yaml:"bot_security"`
+	Story                  StoryConfig                     `yaml:"story"`
 }
 
 var Cfg Config

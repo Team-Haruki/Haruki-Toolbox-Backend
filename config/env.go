@@ -221,6 +221,16 @@ func applyEnvOverrides(cfg *Config) error {
 	// Checked by startup validation (64 hex characters when non-empty).
 	overrideString(&cfg.BotSecurity.IngestTokenSHA256, "BOT_SECURITY_INGEST_TOKEN_SHA256")
 
+	if err := overrideBool(&cfg.Story.Enabled, "STORY_ENABLED"); err != nil {
+		return err
+	}
+	if err := overrideBool(&cfg.Story.Translation.Enabled, "STORY_TRANSLATION_ENABLED"); err != nil {
+		return err
+	}
+	overrideString(&cfg.Story.Translation.LLMBaseURL, "STORY_LLM_BASE_URL")
+	overrideString(&cfg.Story.Translation.LLMAPIKey, "STORY_LLM_API_KEY")
+	overrideString(&cfg.Story.Translation.LLMModel, "STORY_LLM_MODEL")
+
 	overrideString(&cfg.Subscription.HMESInternalBaseURL, "HARUKI_HMES_INTERNAL_BASE_URL")
 	overrideString(&cfg.Subscription.HMESInternalToken, "HARUKI_HMES_INTERNAL_API_TOKEN")
 	overrideString(&cfg.Subscription.UserAgent, "HARUKI_SUBSCRIPTION_USER_AGENT")

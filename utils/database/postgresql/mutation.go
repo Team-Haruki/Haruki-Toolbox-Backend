@@ -28,6 +28,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/storytranslation"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -61,6 +62,7 @@ const (
 	TypeSponsor                     = "Sponsor"
 	TypeSponsorAfdianOrder          = "SponsorAfdianOrder"
 	TypeSponsorManualDuration       = "SponsorManualDuration"
+	TypeStoryTranslation            = "StoryTranslation"
 	TypeSystemLog                   = "SystemLog"
 	TypeTicket                      = "Ticket"
 	TypeTicketMessage               = "TicketMessage"
@@ -13183,6 +13185,1321 @@ func (m *SponsorManualDurationMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *SponsorManualDurationMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown SponsorManualDuration edge %s", name)
+}
+
+// StoryTranslationMutation represents an operation that mutates the StoryTranslation nodes in the graph.
+type StoryTranslationMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int
+	scenario_id          *string
+	lang                 *string
+	source_region        *string
+	source_hash          *string
+	status               *storytranslation.Status
+	model                *string
+	names                *map[string]string
+	lines                *[]string
+	appendlines          []string
+	effects              *map[string]string
+	summary              *string
+	error                *string
+	attempts             *int
+	addattempts          *int
+	prompt_tokens        *int
+	addprompt_tokens     *int
+	completion_tokens    *int
+	addcompletion_tokens *int
+	created_at           *time.Time
+	updated_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*StoryTranslation, error)
+	predicates           []predicate.StoryTranslation
+}
+
+var _ ent.Mutation = (*StoryTranslationMutation)(nil)
+
+// storytranslationOption allows management of the mutation configuration using functional options.
+type storytranslationOption func(*StoryTranslationMutation)
+
+// newStoryTranslationMutation creates new mutation for the StoryTranslation entity.
+func newStoryTranslationMutation(c config, op Op, opts ...storytranslationOption) *StoryTranslationMutation {
+	m := &StoryTranslationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeStoryTranslation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withStoryTranslationID sets the ID field of the mutation.
+func withStoryTranslationID(id int) storytranslationOption {
+	return func(m *StoryTranslationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *StoryTranslation
+		)
+		m.oldValue = func(ctx context.Context) (*StoryTranslation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().StoryTranslation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withStoryTranslation sets the old StoryTranslation of the mutation.
+func withStoryTranslation(node *StoryTranslation) storytranslationOption {
+	return func(m *StoryTranslationMutation) {
+		m.oldValue = func(context.Context) (*StoryTranslation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m StoryTranslationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m StoryTranslationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *StoryTranslationMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *StoryTranslationMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().StoryTranslation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetScenarioID sets the "scenario_id" field.
+func (m *StoryTranslationMutation) SetScenarioID(s string) {
+	m.scenario_id = &s
+}
+
+// ScenarioID returns the value of the "scenario_id" field in the mutation.
+func (m *StoryTranslationMutation) ScenarioID() (r string, exists bool) {
+	v := m.scenario_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScenarioID returns the old "scenario_id" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldScenarioID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScenarioID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScenarioID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScenarioID: %w", err)
+	}
+	return oldValue.ScenarioID, nil
+}
+
+// ResetScenarioID resets all changes to the "scenario_id" field.
+func (m *StoryTranslationMutation) ResetScenarioID() {
+	m.scenario_id = nil
+}
+
+// SetLang sets the "lang" field.
+func (m *StoryTranslationMutation) SetLang(s string) {
+	m.lang = &s
+}
+
+// Lang returns the value of the "lang" field in the mutation.
+func (m *StoryTranslationMutation) Lang() (r string, exists bool) {
+	v := m.lang
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLang returns the old "lang" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldLang(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLang is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLang requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLang: %w", err)
+	}
+	return oldValue.Lang, nil
+}
+
+// ResetLang resets all changes to the "lang" field.
+func (m *StoryTranslationMutation) ResetLang() {
+	m.lang = nil
+}
+
+// SetSourceRegion sets the "source_region" field.
+func (m *StoryTranslationMutation) SetSourceRegion(s string) {
+	m.source_region = &s
+}
+
+// SourceRegion returns the value of the "source_region" field in the mutation.
+func (m *StoryTranslationMutation) SourceRegion() (r string, exists bool) {
+	v := m.source_region
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceRegion returns the old "source_region" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldSourceRegion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceRegion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceRegion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceRegion: %w", err)
+	}
+	return oldValue.SourceRegion, nil
+}
+
+// ResetSourceRegion resets all changes to the "source_region" field.
+func (m *StoryTranslationMutation) ResetSourceRegion() {
+	m.source_region = nil
+}
+
+// SetSourceHash sets the "source_hash" field.
+func (m *StoryTranslationMutation) SetSourceHash(s string) {
+	m.source_hash = &s
+}
+
+// SourceHash returns the value of the "source_hash" field in the mutation.
+func (m *StoryTranslationMutation) SourceHash() (r string, exists bool) {
+	v := m.source_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceHash returns the old "source_hash" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldSourceHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceHash: %w", err)
+	}
+	return oldValue.SourceHash, nil
+}
+
+// ResetSourceHash resets all changes to the "source_hash" field.
+func (m *StoryTranslationMutation) ResetSourceHash() {
+	m.source_hash = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *StoryTranslationMutation) SetStatus(s storytranslation.Status) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *StoryTranslationMutation) Status() (r storytranslation.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldStatus(ctx context.Context) (v storytranslation.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *StoryTranslationMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetModel sets the "model" field.
+func (m *StoryTranslationMutation) SetModel(s string) {
+	m.model = &s
+}
+
+// Model returns the value of the "model" field in the mutation.
+func (m *StoryTranslationMutation) Model() (r string, exists bool) {
+	v := m.model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModel returns the old "model" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModel: %w", err)
+	}
+	return oldValue.Model, nil
+}
+
+// ResetModel resets all changes to the "model" field.
+func (m *StoryTranslationMutation) ResetModel() {
+	m.model = nil
+}
+
+// SetNames sets the "names" field.
+func (m *StoryTranslationMutation) SetNames(value map[string]string) {
+	m.names = &value
+}
+
+// Names returns the value of the "names" field in the mutation.
+func (m *StoryTranslationMutation) Names() (r map[string]string, exists bool) {
+	v := m.names
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNames returns the old "names" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldNames(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNames is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNames requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNames: %w", err)
+	}
+	return oldValue.Names, nil
+}
+
+// ClearNames clears the value of the "names" field.
+func (m *StoryTranslationMutation) ClearNames() {
+	m.names = nil
+	m.clearedFields[storytranslation.FieldNames] = struct{}{}
+}
+
+// NamesCleared returns if the "names" field was cleared in this mutation.
+func (m *StoryTranslationMutation) NamesCleared() bool {
+	_, ok := m.clearedFields[storytranslation.FieldNames]
+	return ok
+}
+
+// ResetNames resets all changes to the "names" field.
+func (m *StoryTranslationMutation) ResetNames() {
+	m.names = nil
+	delete(m.clearedFields, storytranslation.FieldNames)
+}
+
+// SetLines sets the "lines" field.
+func (m *StoryTranslationMutation) SetLines(s []string) {
+	m.lines = &s
+	m.appendlines = nil
+}
+
+// Lines returns the value of the "lines" field in the mutation.
+func (m *StoryTranslationMutation) Lines() (r []string, exists bool) {
+	v := m.lines
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLines returns the old "lines" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldLines(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLines is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLines requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLines: %w", err)
+	}
+	return oldValue.Lines, nil
+}
+
+// AppendLines adds s to the "lines" field.
+func (m *StoryTranslationMutation) AppendLines(s []string) {
+	m.appendlines = append(m.appendlines, s...)
+}
+
+// AppendedLines returns the list of values that were appended to the "lines" field in this mutation.
+func (m *StoryTranslationMutation) AppendedLines() ([]string, bool) {
+	if len(m.appendlines) == 0 {
+		return nil, false
+	}
+	return m.appendlines, true
+}
+
+// ClearLines clears the value of the "lines" field.
+func (m *StoryTranslationMutation) ClearLines() {
+	m.lines = nil
+	m.appendlines = nil
+	m.clearedFields[storytranslation.FieldLines] = struct{}{}
+}
+
+// LinesCleared returns if the "lines" field was cleared in this mutation.
+func (m *StoryTranslationMutation) LinesCleared() bool {
+	_, ok := m.clearedFields[storytranslation.FieldLines]
+	return ok
+}
+
+// ResetLines resets all changes to the "lines" field.
+func (m *StoryTranslationMutation) ResetLines() {
+	m.lines = nil
+	m.appendlines = nil
+	delete(m.clearedFields, storytranslation.FieldLines)
+}
+
+// SetEffects sets the "effects" field.
+func (m *StoryTranslationMutation) SetEffects(value map[string]string) {
+	m.effects = &value
+}
+
+// Effects returns the value of the "effects" field in the mutation.
+func (m *StoryTranslationMutation) Effects() (r map[string]string, exists bool) {
+	v := m.effects
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEffects returns the old "effects" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldEffects(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEffects is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEffects requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEffects: %w", err)
+	}
+	return oldValue.Effects, nil
+}
+
+// ClearEffects clears the value of the "effects" field.
+func (m *StoryTranslationMutation) ClearEffects() {
+	m.effects = nil
+	m.clearedFields[storytranslation.FieldEffects] = struct{}{}
+}
+
+// EffectsCleared returns if the "effects" field was cleared in this mutation.
+func (m *StoryTranslationMutation) EffectsCleared() bool {
+	_, ok := m.clearedFields[storytranslation.FieldEffects]
+	return ok
+}
+
+// ResetEffects resets all changes to the "effects" field.
+func (m *StoryTranslationMutation) ResetEffects() {
+	m.effects = nil
+	delete(m.clearedFields, storytranslation.FieldEffects)
+}
+
+// SetSummary sets the "summary" field.
+func (m *StoryTranslationMutation) SetSummary(s string) {
+	m.summary = &s
+}
+
+// Summary returns the value of the "summary" field in the mutation.
+func (m *StoryTranslationMutation) Summary() (r string, exists bool) {
+	v := m.summary
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSummary returns the old "summary" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldSummary(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSummary is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSummary requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSummary: %w", err)
+	}
+	return oldValue.Summary, nil
+}
+
+// ResetSummary resets all changes to the "summary" field.
+func (m *StoryTranslationMutation) ResetSummary() {
+	m.summary = nil
+}
+
+// SetError sets the "error" field.
+func (m *StoryTranslationMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *StoryTranslationMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *StoryTranslationMutation) ResetError() {
+	m.error = nil
+}
+
+// SetAttempts sets the "attempts" field.
+func (m *StoryTranslationMutation) SetAttempts(i int) {
+	m.attempts = &i
+	m.addattempts = nil
+}
+
+// Attempts returns the value of the "attempts" field in the mutation.
+func (m *StoryTranslationMutation) Attempts() (r int, exists bool) {
+	v := m.attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempts returns the old "attempts" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldAttempts(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempts: %w", err)
+	}
+	return oldValue.Attempts, nil
+}
+
+// AddAttempts adds i to the "attempts" field.
+func (m *StoryTranslationMutation) AddAttempts(i int) {
+	if m.addattempts != nil {
+		*m.addattempts += i
+	} else {
+		m.addattempts = &i
+	}
+}
+
+// AddedAttempts returns the value that was added to the "attempts" field in this mutation.
+func (m *StoryTranslationMutation) AddedAttempts() (r int, exists bool) {
+	v := m.addattempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempts resets all changes to the "attempts" field.
+func (m *StoryTranslationMutation) ResetAttempts() {
+	m.attempts = nil
+	m.addattempts = nil
+}
+
+// SetPromptTokens sets the "prompt_tokens" field.
+func (m *StoryTranslationMutation) SetPromptTokens(i int) {
+	m.prompt_tokens = &i
+	m.addprompt_tokens = nil
+}
+
+// PromptTokens returns the value of the "prompt_tokens" field in the mutation.
+func (m *StoryTranslationMutation) PromptTokens() (r int, exists bool) {
+	v := m.prompt_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPromptTokens returns the old "prompt_tokens" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldPromptTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPromptTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPromptTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPromptTokens: %w", err)
+	}
+	return oldValue.PromptTokens, nil
+}
+
+// AddPromptTokens adds i to the "prompt_tokens" field.
+func (m *StoryTranslationMutation) AddPromptTokens(i int) {
+	if m.addprompt_tokens != nil {
+		*m.addprompt_tokens += i
+	} else {
+		m.addprompt_tokens = &i
+	}
+}
+
+// AddedPromptTokens returns the value that was added to the "prompt_tokens" field in this mutation.
+func (m *StoryTranslationMutation) AddedPromptTokens() (r int, exists bool) {
+	v := m.addprompt_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPromptTokens resets all changes to the "prompt_tokens" field.
+func (m *StoryTranslationMutation) ResetPromptTokens() {
+	m.prompt_tokens = nil
+	m.addprompt_tokens = nil
+}
+
+// SetCompletionTokens sets the "completion_tokens" field.
+func (m *StoryTranslationMutation) SetCompletionTokens(i int) {
+	m.completion_tokens = &i
+	m.addcompletion_tokens = nil
+}
+
+// CompletionTokens returns the value of the "completion_tokens" field in the mutation.
+func (m *StoryTranslationMutation) CompletionTokens() (r int, exists bool) {
+	v := m.completion_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletionTokens returns the old "completion_tokens" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldCompletionTokens(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletionTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletionTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletionTokens: %w", err)
+	}
+	return oldValue.CompletionTokens, nil
+}
+
+// AddCompletionTokens adds i to the "completion_tokens" field.
+func (m *StoryTranslationMutation) AddCompletionTokens(i int) {
+	if m.addcompletion_tokens != nil {
+		*m.addcompletion_tokens += i
+	} else {
+		m.addcompletion_tokens = &i
+	}
+}
+
+// AddedCompletionTokens returns the value that was added to the "completion_tokens" field in this mutation.
+func (m *StoryTranslationMutation) AddedCompletionTokens() (r int, exists bool) {
+	v := m.addcompletion_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCompletionTokens resets all changes to the "completion_tokens" field.
+func (m *StoryTranslationMutation) ResetCompletionTokens() {
+	m.completion_tokens = nil
+	m.addcompletion_tokens = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *StoryTranslationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *StoryTranslationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *StoryTranslationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *StoryTranslationMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *StoryTranslationMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the StoryTranslation entity.
+// If the StoryTranslation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StoryTranslationMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *StoryTranslationMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the StoryTranslationMutation builder.
+func (m *StoryTranslationMutation) Where(ps ...predicate.StoryTranslation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the StoryTranslationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *StoryTranslationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.StoryTranslation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *StoryTranslationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *StoryTranslationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (StoryTranslation).
+func (m *StoryTranslationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *StoryTranslationMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.scenario_id != nil {
+		fields = append(fields, storytranslation.FieldScenarioID)
+	}
+	if m.lang != nil {
+		fields = append(fields, storytranslation.FieldLang)
+	}
+	if m.source_region != nil {
+		fields = append(fields, storytranslation.FieldSourceRegion)
+	}
+	if m.source_hash != nil {
+		fields = append(fields, storytranslation.FieldSourceHash)
+	}
+	if m.status != nil {
+		fields = append(fields, storytranslation.FieldStatus)
+	}
+	if m.model != nil {
+		fields = append(fields, storytranslation.FieldModel)
+	}
+	if m.names != nil {
+		fields = append(fields, storytranslation.FieldNames)
+	}
+	if m.lines != nil {
+		fields = append(fields, storytranslation.FieldLines)
+	}
+	if m.effects != nil {
+		fields = append(fields, storytranslation.FieldEffects)
+	}
+	if m.summary != nil {
+		fields = append(fields, storytranslation.FieldSummary)
+	}
+	if m.error != nil {
+		fields = append(fields, storytranslation.FieldError)
+	}
+	if m.attempts != nil {
+		fields = append(fields, storytranslation.FieldAttempts)
+	}
+	if m.prompt_tokens != nil {
+		fields = append(fields, storytranslation.FieldPromptTokens)
+	}
+	if m.completion_tokens != nil {
+		fields = append(fields, storytranslation.FieldCompletionTokens)
+	}
+	if m.created_at != nil {
+		fields = append(fields, storytranslation.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, storytranslation.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *StoryTranslationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case storytranslation.FieldScenarioID:
+		return m.ScenarioID()
+	case storytranslation.FieldLang:
+		return m.Lang()
+	case storytranslation.FieldSourceRegion:
+		return m.SourceRegion()
+	case storytranslation.FieldSourceHash:
+		return m.SourceHash()
+	case storytranslation.FieldStatus:
+		return m.Status()
+	case storytranslation.FieldModel:
+		return m.Model()
+	case storytranslation.FieldNames:
+		return m.Names()
+	case storytranslation.FieldLines:
+		return m.Lines()
+	case storytranslation.FieldEffects:
+		return m.Effects()
+	case storytranslation.FieldSummary:
+		return m.Summary()
+	case storytranslation.FieldError:
+		return m.Error()
+	case storytranslation.FieldAttempts:
+		return m.Attempts()
+	case storytranslation.FieldPromptTokens:
+		return m.PromptTokens()
+	case storytranslation.FieldCompletionTokens:
+		return m.CompletionTokens()
+	case storytranslation.FieldCreatedAt:
+		return m.CreatedAt()
+	case storytranslation.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *StoryTranslationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case storytranslation.FieldScenarioID:
+		return m.OldScenarioID(ctx)
+	case storytranslation.FieldLang:
+		return m.OldLang(ctx)
+	case storytranslation.FieldSourceRegion:
+		return m.OldSourceRegion(ctx)
+	case storytranslation.FieldSourceHash:
+		return m.OldSourceHash(ctx)
+	case storytranslation.FieldStatus:
+		return m.OldStatus(ctx)
+	case storytranslation.FieldModel:
+		return m.OldModel(ctx)
+	case storytranslation.FieldNames:
+		return m.OldNames(ctx)
+	case storytranslation.FieldLines:
+		return m.OldLines(ctx)
+	case storytranslation.FieldEffects:
+		return m.OldEffects(ctx)
+	case storytranslation.FieldSummary:
+		return m.OldSummary(ctx)
+	case storytranslation.FieldError:
+		return m.OldError(ctx)
+	case storytranslation.FieldAttempts:
+		return m.OldAttempts(ctx)
+	case storytranslation.FieldPromptTokens:
+		return m.OldPromptTokens(ctx)
+	case storytranslation.FieldCompletionTokens:
+		return m.OldCompletionTokens(ctx)
+	case storytranslation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case storytranslation.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown StoryTranslation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StoryTranslationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case storytranslation.FieldScenarioID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScenarioID(v)
+		return nil
+	case storytranslation.FieldLang:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLang(v)
+		return nil
+	case storytranslation.FieldSourceRegion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceRegion(v)
+		return nil
+	case storytranslation.FieldSourceHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceHash(v)
+		return nil
+	case storytranslation.FieldStatus:
+		v, ok := value.(storytranslation.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case storytranslation.FieldModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModel(v)
+		return nil
+	case storytranslation.FieldNames:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNames(v)
+		return nil
+	case storytranslation.FieldLines:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLines(v)
+		return nil
+	case storytranslation.FieldEffects:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEffects(v)
+		return nil
+	case storytranslation.FieldSummary:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSummary(v)
+		return nil
+	case storytranslation.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case storytranslation.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempts(v)
+		return nil
+	case storytranslation.FieldPromptTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPromptTokens(v)
+		return nil
+	case storytranslation.FieldCompletionTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletionTokens(v)
+		return nil
+	case storytranslation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case storytranslation.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StoryTranslation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *StoryTranslationMutation) AddedFields() []string {
+	var fields []string
+	if m.addattempts != nil {
+		fields = append(fields, storytranslation.FieldAttempts)
+	}
+	if m.addprompt_tokens != nil {
+		fields = append(fields, storytranslation.FieldPromptTokens)
+	}
+	if m.addcompletion_tokens != nil {
+		fields = append(fields, storytranslation.FieldCompletionTokens)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *StoryTranslationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case storytranslation.FieldAttempts:
+		return m.AddedAttempts()
+	case storytranslation.FieldPromptTokens:
+		return m.AddedPromptTokens()
+	case storytranslation.FieldCompletionTokens:
+		return m.AddedCompletionTokens()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *StoryTranslationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case storytranslation.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempts(v)
+		return nil
+	case storytranslation.FieldPromptTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPromptTokens(v)
+		return nil
+	case storytranslation.FieldCompletionTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompletionTokens(v)
+		return nil
+	}
+	return fmt.Errorf("unknown StoryTranslation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *StoryTranslationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(storytranslation.FieldNames) {
+		fields = append(fields, storytranslation.FieldNames)
+	}
+	if m.FieldCleared(storytranslation.FieldLines) {
+		fields = append(fields, storytranslation.FieldLines)
+	}
+	if m.FieldCleared(storytranslation.FieldEffects) {
+		fields = append(fields, storytranslation.FieldEffects)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *StoryTranslationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *StoryTranslationMutation) ClearField(name string) error {
+	switch name {
+	case storytranslation.FieldNames:
+		m.ClearNames()
+		return nil
+	case storytranslation.FieldLines:
+		m.ClearLines()
+		return nil
+	case storytranslation.FieldEffects:
+		m.ClearEffects()
+		return nil
+	}
+	return fmt.Errorf("unknown StoryTranslation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *StoryTranslationMutation) ResetField(name string) error {
+	switch name {
+	case storytranslation.FieldScenarioID:
+		m.ResetScenarioID()
+		return nil
+	case storytranslation.FieldLang:
+		m.ResetLang()
+		return nil
+	case storytranslation.FieldSourceRegion:
+		m.ResetSourceRegion()
+		return nil
+	case storytranslation.FieldSourceHash:
+		m.ResetSourceHash()
+		return nil
+	case storytranslation.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case storytranslation.FieldModel:
+		m.ResetModel()
+		return nil
+	case storytranslation.FieldNames:
+		m.ResetNames()
+		return nil
+	case storytranslation.FieldLines:
+		m.ResetLines()
+		return nil
+	case storytranslation.FieldEffects:
+		m.ResetEffects()
+		return nil
+	case storytranslation.FieldSummary:
+		m.ResetSummary()
+		return nil
+	case storytranslation.FieldError:
+		m.ResetError()
+		return nil
+	case storytranslation.FieldAttempts:
+		m.ResetAttempts()
+		return nil
+	case storytranslation.FieldPromptTokens:
+		m.ResetPromptTokens()
+		return nil
+	case storytranslation.FieldCompletionTokens:
+		m.ResetCompletionTokens()
+		return nil
+	case storytranslation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case storytranslation.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown StoryTranslation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *StoryTranslationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *StoryTranslationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *StoryTranslationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *StoryTranslationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *StoryTranslationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *StoryTranslationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *StoryTranslationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown StoryTranslation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *StoryTranslationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown StoryTranslation edge %s", name)
 }
 
 // SystemLogMutation represents an operation that mutates the SystemLog nodes in the graph.

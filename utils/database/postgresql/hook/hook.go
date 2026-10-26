@@ -189,6 +189,18 @@ func (f SponsorManualDurationFunc) Mutate(ctx context.Context, m postgresql.Muta
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.SponsorManualDurationMutation", m)
 }
 
+// The StoryTranslationFunc type is an adapter to allow the use of ordinary
+// function as StoryTranslation mutator.
+type StoryTranslationFunc func(context.Context, *postgresql.StoryTranslationMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f StoryTranslationFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.StoryTranslationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.StoryTranslationMutation", m)
+}
+
 // The SystemLogFunc type is an adapter to allow the use of ordinary
 // function as SystemLog mutator.
 type SystemLogFunc func(context.Context, *postgresql.SystemLogMutation) (postgresql.Value, error)

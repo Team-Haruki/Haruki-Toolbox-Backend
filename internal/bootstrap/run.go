@@ -13,6 +13,7 @@ import (
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
+	storyModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/story"
 	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	userProfileModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
@@ -159,6 +160,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		ClientSecret:   cfg.OAuth2.HydraClientSecret,
 		RequestTimeout: time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
 	})
+	storyService, err := storyModule.New(cfg.Story, resources.toolboxClient, harukiLogger.NewLoggerFromGlobal("Story"))
+	if err != nil {
+		return nil, err
+	}
 	deviceFlowLogger := harukiLogger.NewLoggerFromGlobal("OAuth2Device")
 	deviceFlowConfig := newOAuth2DeviceFlowConfig(cfg, deviceFlowLogger)
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
@@ -207,6 +212,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 			DetailPath:  "/tickets",
 			DisplayName: cfg.UserSystem.SMTP.MailName,
 		},
+		Story: storyService,
 	})
 
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
@@ -219,6 +225,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		DBManager:   resources.databaseManager,
 		Logger:      deviceFlowLogger,
 	})
+	waitStory := func() {}
+	if storyService != nil {
+		waitStory = storyService.Start(schedulerCtx)
+	}
 	waitStatsSampler := func() {}
 	if cfg.Backend.ProfilingEnabled {
 		sqlPools := []sqlPoolSource{{name: "toolbox", db: resources.toolboxSQLDB}}
@@ -234,6 +244,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		stopSchedulers()
 		waitAfdianScheduler()
 		waitDeviceFlowReaper()
+		waitStory()
 		waitStatsSampler()
 	}
 
