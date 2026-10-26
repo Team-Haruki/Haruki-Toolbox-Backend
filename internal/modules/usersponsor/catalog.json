@@ -106,5 +106,32 @@
       "leftbottom": "static_images/custom_frames/night_heron_20261026/vertical/frame_leftbottom.png",
       "rightbottom": "static_images/custom_frames/night_heron_20261026/vertical/frame_rightbottom.png"
     }
+  },
+  {
+    "id": "dragon_bubble_20261027",
+    "name": {
+      "zh-CN": "龙泡泡",
+      "zh-TW": "龍泡泡",
+      "en-US": "Dragon Bubble"
+    },
+    "thumbnail": "/sponsor-frames/dragon_bubble_20261027-panel.png",
+    "panelPreview": "/sponsor-frames/dragon_bubble_20261027-panel.png",
+    "profilePreview": "/sponsor-frames/dragon_bubble_20261027-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/dragon_bubble_20261027/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/dragon_bubble_20261027/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/dragon_bubble_20261027/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/dragon_bubble_20261027/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/dragon_bubble_20261027/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/dragon_bubble_20261027/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/dragon_bubble_20261027/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/dragon_bubble_20261027/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/dragon_bubble_20261027/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/dragon_bubble_20261027/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/dragon_bubble_20261027/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/dragon_bubble_20261027/vertical/frame_rightbottom.png"
+    }
   }
 ]

@@ -30,7 +30,7 @@ func TestEndfieldFramesAreReservedForCloudConfiguration(t *testing.T) {
 	for _, frame := range response.Data.Frames {
 		ids = append(ids, frame.ID)
 	}
-	if !slices.Equal(ids, []string{"rgb_coiled_dragon", "rgb_thunder", "gif_laughing_yellow_20261001", "night_heron_20261026"}) {
+	if !slices.Equal(ids, []string{"rgb_coiled_dragon", "rgb_thunder", "gif_laughing_yellow_20261001", "night_heron_20261026", "dragon_bubble_20261027"}) {
 		t.Fatalf("unexpected user-selectable catalog: %v", ids)
 	}
 	if len(response.Data.Accounts) != 1 || response.Data.Accounts[0].FrameID != nil {

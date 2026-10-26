@@ -2,10 +2,10 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -20,11 +20,11 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var schedulerDBSeq atomic.Int64
-
 func newSchedulerDB(t *testing.T) *dbManager.Client {
 	t.Helper()
-	db := enttest.Open(t, "sqlite3", fmt.Sprintf("file:scheduler-%d-%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano(), schedulerDBSeq.Add(1)))
+	// Canceling an in-flight query can discard SQLite's last connection. A
+	// temporary file keeps the schema available for post-cancellation checks.
+	db := enttest.Open(t, "sqlite3", "file:"+filepath.Join(t.TempDir(), "scheduler.db")+"?_fk=1")
 	t.Cleanup(func() { _ = db.Close() })
 	// One hand-entered row still carrying the legacy single expiry.
 	if err := db.Sponsor.Create().SetID("manual_legacy").SetSource(sponsorSchema.SourceManual).
