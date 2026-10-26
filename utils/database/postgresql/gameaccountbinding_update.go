@@ -71,6 +71,26 @@ func (_u *GameAccountBindingUpdate) SetNillableVerified(v *bool) *GameAccountBin
 	return _u
 }
 
+// SetSponsorFrameID sets the "sponsor_frame_id" field.
+func (_u *GameAccountBindingUpdate) SetSponsorFrameID(v string) *GameAccountBindingUpdate {
+	_u.mutation.SetSponsorFrameID(v)
+	return _u
+}
+
+// SetNillableSponsorFrameID sets the "sponsor_frame_id" field if the given value is not nil.
+func (_u *GameAccountBindingUpdate) SetNillableSponsorFrameID(v *string) *GameAccountBindingUpdate {
+	if v != nil {
+		_u.SetSponsorFrameID(*v)
+	}
+	return _u
+}
+
+// ClearSponsorFrameID clears the value of the "sponsor_frame_id" field.
+func (_u *GameAccountBindingUpdate) ClearSponsorFrameID() *GameAccountBindingUpdate {
+	_u.mutation.ClearSponsorFrameID()
+	return _u
+}
+
 // SetIsDefault sets the "is_default" field.
 func (_u *GameAccountBindingUpdate) SetIsDefault(v bool) *GameAccountBindingUpdate {
 	_u.mutation.SetIsDefault(v)
@@ -166,7 +186,20 @@ func (_u *GameAccountBindingUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *GameAccountBindingUpdate) check() error {
+	if v, ok := _u.mutation.SponsorFrameID(); ok {
+		if err := gameaccountbinding.SponsorFrameIDValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_frame_id", err: fmt.Errorf(`postgresql: validator failed for field "GameAccountBinding.sponsor_frame_id": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *GameAccountBindingUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(gameaccountbinding.Table, gameaccountbinding.Columns, sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -183,6 +216,12 @@ func (_u *GameAccountBindingUpdate) sqlSave(ctx context.Context) (_node int, err
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SponsorFrameID(); ok {
+		_spec.SetField(gameaccountbinding.FieldSponsorFrameID, field.TypeString, value)
+	}
+	if _u.mutation.SponsorFrameIDCleared() {
+		_spec.ClearField(gameaccountbinding.FieldSponsorFrameID, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsDefault(); ok {
 		_spec.SetField(gameaccountbinding.FieldIsDefault, field.TypeBool, value)
@@ -287,6 +326,26 @@ func (_u *GameAccountBindingUpdateOne) SetNillableVerified(v *bool) *GameAccount
 	if v != nil {
 		_u.SetVerified(*v)
 	}
+	return _u
+}
+
+// SetSponsorFrameID sets the "sponsor_frame_id" field.
+func (_u *GameAccountBindingUpdateOne) SetSponsorFrameID(v string) *GameAccountBindingUpdateOne {
+	_u.mutation.SetSponsorFrameID(v)
+	return _u
+}
+
+// SetNillableSponsorFrameID sets the "sponsor_frame_id" field if the given value is not nil.
+func (_u *GameAccountBindingUpdateOne) SetNillableSponsorFrameID(v *string) *GameAccountBindingUpdateOne {
+	if v != nil {
+		_u.SetSponsorFrameID(*v)
+	}
+	return _u
+}
+
+// ClearSponsorFrameID clears the value of the "sponsor_frame_id" field.
+func (_u *GameAccountBindingUpdateOne) ClearSponsorFrameID() *GameAccountBindingUpdateOne {
+	_u.mutation.ClearSponsorFrameID()
 	return _u
 }
 
@@ -398,7 +457,20 @@ func (_u *GameAccountBindingUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *GameAccountBindingUpdateOne) check() error {
+	if v, ok := _u.mutation.SponsorFrameID(); ok {
+		if err := gameaccountbinding.SponsorFrameIDValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_frame_id", err: fmt.Errorf(`postgresql: validator failed for field "GameAccountBinding.sponsor_frame_id": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *GameAccountBindingUpdateOne) sqlSave(ctx context.Context) (_node *GameAccountBinding, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(gameaccountbinding.Table, gameaccountbinding.Columns, sqlgraph.NewFieldSpec(gameaccountbinding.FieldID, field.TypeInt))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -432,6 +504,12 @@ func (_u *GameAccountBindingUpdateOne) sqlSave(ctx context.Context) (_node *Game
 	}
 	if value, ok := _u.mutation.Verified(); ok {
 		_spec.SetField(gameaccountbinding.FieldVerified, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SponsorFrameID(); ok {
+		_spec.SetField(gameaccountbinding.FieldSponsorFrameID, field.TypeString, value)
+	}
+	if _u.mutation.SponsorFrameIDCleared() {
+		_spec.ClearField(gameaccountbinding.FieldSponsorFrameID, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsDefault(); ok {
 		_spec.SetField(gameaccountbinding.FieldIsDefault, field.TypeBool, value)

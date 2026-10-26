@@ -171,8 +171,12 @@ func init() {
 	gameaccountbindingDescVerified := gameaccountbindingFields[2].Descriptor()
 	// gameaccountbinding.DefaultVerified holds the default value on creation for the verified field.
 	gameaccountbinding.DefaultVerified = gameaccountbindingDescVerified.Default.(bool)
+	// gameaccountbindingDescSponsorFrameID is the schema descriptor for sponsor_frame_id field.
+	gameaccountbindingDescSponsorFrameID := gameaccountbindingFields[3].Descriptor()
+	// gameaccountbinding.SponsorFrameIDValidator is a validator for the "sponsor_frame_id" field. It is called by the builders before save.
+	gameaccountbinding.SponsorFrameIDValidator = gameaccountbindingDescSponsorFrameID.Validators[0].(func(string) error)
 	// gameaccountbindingDescIsDefault is the schema descriptor for is_default field.
-	gameaccountbindingDescIsDefault := gameaccountbindingFields[3].Descriptor()
+	gameaccountbindingDescIsDefault := gameaccountbindingFields[4].Descriptor()
 	// gameaccountbinding.DefaultIsDefault holds the default value on creation for the is_default field.
 	gameaccountbinding.DefaultIsDefault = gameaccountbindingDescIsDefault.Default.(bool)
 	gameaccountdatagrantFields := schema.GameAccountDataGrant{}.Fields()
@@ -905,16 +909,24 @@ func init() {
 	uploadlog.RequestBytesValidator = uploadlogDescRequestBytes.Validators[0].(func(int64) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
+	// userDescAfdianUserID is the schema descriptor for afdian_user_id field.
+	userDescAfdianUserID := userFields[4].Descriptor()
+	// user.AfdianUserIDValidator is a validator for the "afdian_user_id" field. It is called by the builders before save.
+	user.AfdianUserIDValidator = userDescAfdianUserID.Validators[0].(func(string) error)
+	// userDescSponsorAccessNote is the schema descriptor for sponsor_access_note field.
+	userDescSponsorAccessNote := userFields[8].Descriptor()
+	// user.SponsorAccessNoteValidator is a validator for the "sponsor_access_note" field. It is called by the builders before save.
+	user.SponsorAccessNoteValidator = userDescSponsorAccessNote.Validators[0].(func(string) error)
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.
-	userDescAllowCnMysekai := userFields[4].Descriptor()
+	userDescAllowCnMysekai := userFields[11].Descriptor()
 	// user.DefaultAllowCnMysekai holds the default value on creation for the allow_cn_mysekai field.
 	user.DefaultAllowCnMysekai = userDescAllowCnMysekai.Default.(bool)
 	// userDescTicketEmailNotificationsEnabled is the schema descriptor for ticket_email_notifications_enabled field.
-	userDescTicketEmailNotificationsEnabled := userFields[5].Descriptor()
+	userDescTicketEmailNotificationsEnabled := userFields[12].Descriptor()
 	// user.DefaultTicketEmailNotificationsEnabled holds the default value on creation for the ticket_email_notifications_enabled field.
 	user.DefaultTicketEmailNotificationsEnabled = userDescTicketEmailNotificationsEnabled.Default.(bool)
 	// userDescBanned is the schema descriptor for banned field.
-	userDescBanned := userFields[7].Descriptor()
+	userDescBanned := userFields[14].Descriptor()
 	// user.DefaultBanned holds the default value on creation for the banned field.
 	user.DefaultBanned = userDescBanned.Default.(bool)
 	// userDescID is the schema descriptor for id field.

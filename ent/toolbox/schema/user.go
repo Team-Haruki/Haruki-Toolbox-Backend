@@ -18,6 +18,16 @@ func (User) Fields() []ent.Field {
 		field.String("id").NotEmpty().Unique().Immutable(),
 		field.String("email").Unique(),
 		field.String("avatar_path").Optional().Nillable(),
+		// Populated only from server-verified OAuth or a paid creator order.
+		field.String("afdian_user_id").MaxLen(128).Optional().Nillable().Unique(),
+		field.Time("afdian_bound_at").Optional().Nillable(),
+		field.Enum("afdian_verification_method").Values("oauth2", "order").Optional().Nillable(),
+		// Manual sponsorship is independent of the verified Afdian identity.
+		// A block takes priority over future order/OAuth verification until restored.
+		field.Enum("sponsor_access_override").Values("granted", "blocked").Optional().Nillable(),
+		field.String("sponsor_access_note").MaxLen(1000).Optional().Nillable(),
+		field.String("sponsor_access_updated_by").Optional().Nillable(),
+		field.Time("sponsor_access_updated_at").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
 		field.Bool("ticket_email_notifications_enabled").Default(false),
 		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),

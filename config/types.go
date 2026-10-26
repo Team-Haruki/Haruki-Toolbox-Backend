@@ -50,6 +50,9 @@ type WebhookConfig struct {
 }
 
 type AfdianConfig struct {
+	OAuthClientID        string `yaml:"oauth_client_id"`
+	OAuthClientSecret    string `yaml:"oauth_client_secret"`
+	OAuthRedirectURI     string `yaml:"oauth_redirect_uri"`
 	UserID               string `yaml:"user_id"`
 	APIToken             string `yaml:"api_token"`
 	APIBaseURL           string `yaml:"api_base_url"`

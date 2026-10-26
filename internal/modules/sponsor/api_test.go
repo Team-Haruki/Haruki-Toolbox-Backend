@@ -82,6 +82,24 @@ func TestVerifyAfdianOrder(t *testing.T) {
 	}
 }
 
+func TestOrderLookupDoesNotForwardProofToRedirect(t *testing.T) {
+	forwarded := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+	}))
+	defer redirect.Close()
+	cfg := NewAfdianConfig(AfdianConfigOptions{UserID: "creator", APIToken: "secret", APIBaseURL: redirect.URL})
+	_, found, err := VerifyAfdianOrder(t.Context(), cfg, "202401011200001234567890123", time.Now())
+	if err == nil || found || forwarded {
+		t.Fatal("order proof followed an API redirect")
+	}
+}
+
 func newSponsorRouteApp(t *testing.T, cfg AfdianConfig) (*fiber.App, *harukiAPIHelper.HarukiToolboxRouterHelpers) {
 	t.Helper()
 	app := fiber.New()

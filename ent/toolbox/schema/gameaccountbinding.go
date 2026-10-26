@@ -18,6 +18,8 @@ func (GameAccountBinding) Fields() []ent.Field {
 		field.String("server").Comment("jp | en | tw | kr | cn"),
 		field.String("game_user_id"),
 		field.Bool("verified").Default(false),
+		// A catalog ID, never a client-supplied asset path.
+		field.String("sponsor_frame_id").MaxLen(128).Optional().Nillable(),
 		// At most one binding per user carries is_default=true (the user's
 		// global default account); enforced in application transactions, not by
 		// a DB constraint, so legacy rows may simply all be false.

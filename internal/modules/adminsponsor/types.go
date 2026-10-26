@@ -3,6 +3,7 @@ package adminsponsor
 import "time"
 
 type adminSponsorItem struct {
+	ToolboxBound       bool       `json:"toolboxBound"`
 	ID                 string     `json:"id"`
 	Name               string     `json:"name"`
 	Avatar             string     `json:"avatar"`
@@ -28,6 +29,7 @@ type adminSponsorItem struct {
 }
 
 type adminSponsorListResponse struct {
+	BoundCount  int                `json:"boundCount"`
 	GeneratedAt time.Time          `json:"generatedAt"`
 	Total       int                `json:"total"`
 	Items       []adminSponsorItem `json:"items"`

@@ -13,6 +13,7 @@ import (
 	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	orderSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
 	manualSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsormanualduration"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -77,6 +78,13 @@ func optionalAmount(amount string) *float64 {
 func buildAdminSponsorDetail(ctx context.Context, db *postgresql.Client, row *postgresql.Sponsor, now time.Time) (adminSponsorDetailResponse, error) {
 	var resp adminSponsorDetailResponse
 	resp.Sponsor = buildAdminSponsorItem(row, now)
+	if row.AfdianUserID != nil {
+		bound, err := db.User.Query().Where(userSchema.AfdianUserIDEQ(*row.AfdianUserID)).Exist(ctx)
+		if err != nil {
+			return resp, err
+		}
+		resp.Sponsor.ToolboxBound = bound
+	}
 
 	orders, err := db.SponsorAfdianOrder.Query().
 		Where(orderSchema.SponsorIDEQ(row.ID)).

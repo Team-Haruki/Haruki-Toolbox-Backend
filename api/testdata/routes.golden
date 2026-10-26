@@ -11,6 +11,7 @@ DELETE /api/admin/users/:target_user_id/game-account-bindings/:server/:game_user
 DELETE /api/admin/users/:target_user_id/ios-upload-code
 DELETE /api/admin/users/:target_user_id/social-platform
 DELETE /api/admin/webhooks/:webhook_id
+DELETE /api/user/:toolbox_user_id/afdian
 DELETE /api/user/:toolbox_user_id/authorize-social-platform/:id/
 DELETE /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
 DELETE /api/user/:toolbox_user_id/game-account/:server/:game_user_id
@@ -38,6 +39,7 @@ GET /api/admin/risk/events
 GET /api/admin/risk/rules
 GET /api/admin/sponsors
 GET /api/admin/sponsors/:sponsor_id
+GET /api/admin/sponsors/toolbox-users
 GET /api/admin/statistics/dashboard
 GET /api/admin/statistics/timeseries
 GET /api/admin/statistics/upload-analytics
@@ -78,10 +80,12 @@ GET /api/oauth2/user/bindings
 GET /api/oauth2/user/profile
 GET /api/private/game-binding
 GET /api/private/game-data/:server/:data_type/:user_id
+GET /api/private/game-frame/:server/:game_user_id
 GET /api/public/:server/:data_type/:user_id
 GET /api/sponsor/afdian
 GET /api/user/:toolbox_user_id/accessible-game-accounts
 GET /api/user/:toolbox_user_id/activity-logs/
+GET /api/user/:toolbox_user_id/afdian
 GET /api/user/:toolbox_user_id/game-account-grants
 GET /api/user/:toolbox_user_id/game-account-grants/received
 GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/:data_type
@@ -89,6 +93,7 @@ GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/recommend-data
 GET /api/user/:toolbox_user_id/get-settings
 GET /api/user/:toolbox_user_id/oauth2/authorizations/
 GET /api/user/:toolbox_user_id/social-platform/verification-status/:status_token
+GET /api/user/:toolbox_user_id/sponsor-frames
 GET /api/user/:toolbox_user_id/tickets/
 GET /api/user/:toolbox_user_id/tickets/:ticket_id
 GET /api/user/me
@@ -154,6 +159,9 @@ POST /api/oauth2/revoke
 POST /api/oauth2/token
 POST /api/sponsor/afdian/callback
 POST /api/sponsor/afdian/callback/:secret
+POST /api/user/:toolbox_user_id/afdian/authorize
+POST /api/user/:toolbox_user_id/afdian/callback
+POST /api/user/:toolbox_user_id/afdian/verify-order
 POST /api/user/:toolbox_user_id/authorize-social-platform/
 POST /api/user/:toolbox_user_id/authorize-social-platform/:id/
 POST /api/user/:toolbox_user_id/game-account/:server/:game_user_id
@@ -189,6 +197,7 @@ PUT /api/admin/oauth-clients/:client_id/webhooks/:webhook_id
 PUT /api/admin/risk/rules
 PUT /api/admin/sponsors/:sponsor_id
 PUT /api/admin/sponsors/:sponsor_id/manual-durations/:entry_id
+PUT /api/admin/sponsors/toolbox-users/:toolbox_user_id
 PUT /api/admin/tickets/:ticket_id/assign
 PUT /api/admin/tickets/:ticket_id/status
 PUT /api/admin/users/:target_user_id/allow-cn-mysekai
@@ -208,6 +217,7 @@ PUT /api/user/:toolbox_user_id/change-password
 PUT /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
 PUT /api/user/:toolbox_user_id/game-account/:server/:game_user_id
 PUT /api/user/:toolbox_user_id/profile
+PUT /api/user/:toolbox_user_id/sponsor-frames/:server/:game_user_id
 PUT /api/webhook/:server/:data_type/:user_id
 PUT /internal/mysekai-birthday-monitors/:subscription_id
 PUT /ios/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery

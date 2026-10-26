@@ -13,6 +13,8 @@ func RegisterAdminSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 
 	sponsors.Get("", handleAdminListSponsors(apiHelper))
 	sponsors.Post("", handleAdminCreateSponsor(apiHelper))
+	sponsors.Get("/toolbox-users", handleAdminListToolboxSponsors(apiHelper))
+	sponsors.Put("/toolbox-users/:toolbox_user_id", handleAdminUpdateToolboxSponsor(apiHelper))
 	sponsors.Get("/:sponsor_id", handleAdminGetSponsor(apiHelper))
 	sponsors.Put("/:sponsor_id", handleAdminUpdateSponsor(apiHelper))
 	sponsors.Post("/:sponsor_id/manual-durations", handleAdminCreateManualDuration(apiHelper))

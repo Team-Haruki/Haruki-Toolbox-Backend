@@ -16,6 +16,19 @@ import (
 
 const fakeInheritID = "FAKEinheritID0001"
 
+func TestAfdianOrderProofIsRedacted(t *testing.T) {
+	const number = "202401011200001234567890123"
+	for _, input := range []string{
+		`{"orderNumber":"` + number + `"}`, `{"out_trade_no":"` + number + `"}`,
+		"https://example.test/?orderNumber=" + number, "https://example.test/?out_trade_no=" + number,
+	} {
+		output := Text(input)
+		if strings.Contains(output, number) || !strings.Contains(output, "<redacted>") {
+			t.Fatalf("order proof was not redacted: %s", output)
+		}
+	}
+}
+
 func TestTextRedactsSecretPathSegments(t *testing.T) {
 	t.Parallel()
 

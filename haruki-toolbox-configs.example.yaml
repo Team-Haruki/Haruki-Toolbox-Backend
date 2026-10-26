@@ -60,6 +60,10 @@ webhook:
   enabled: true
 
 afdian:
+  # Separate OAuth2 application credentials issued by Afdian.
+  oauth_client_id: ""
+  oauth_client_secret: ""
+  oauth_redirect_uri: "https://haruki.seiunx.com/user/afdian/callback"
   user_id: ""
   api_token: ""
   api_base_url: "https://afdian.com/api/open"

@@ -25,6 +25,8 @@ type GameAccountBinding struct {
 	GameUserID string `json:"game_user_id,omitempty"`
 	// Verified holds the value of the "verified" field.
 	Verified bool `json:"verified,omitzero"`
+	// SponsorFrameID holds the value of the "sponsor_frame_id" field.
+	SponsorFrameID *string `json:"sponsor_frame_id,omitzero"`
 	// IsDefault holds the value of the "is_default" field.
 	IsDefault bool `json:"is_default,omitzero"`
 	// Suite holds the value of the "suite" field.
@@ -69,7 +71,7 @@ func (*GameAccountBinding) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case gameaccountbinding.FieldID:
 			values[i] = new(sql.NullInt64)
-		case gameaccountbinding.FieldServer, gameaccountbinding.FieldGameUserID:
+		case gameaccountbinding.FieldServer, gameaccountbinding.FieldGameUserID, gameaccountbinding.FieldSponsorFrameID:
 			values[i] = new(sql.NullString)
 		case gameaccountbinding.ForeignKeys[0]: // user_game_account_bindings
 			values[i] = new(sql.NullString)
@@ -111,6 +113,13 @@ func (_m *GameAccountBinding) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field verified", values[i])
 			} else if value.Valid {
 				_m.Verified = value.Bool
+			}
+		case gameaccountbinding.FieldSponsorFrameID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sponsor_frame_id", values[i])
+			} else if value.Valid {
+				_m.SponsorFrameID = new(string)
+				*_m.SponsorFrameID = value.String
 			}
 		case gameaccountbinding.FieldIsDefault:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -190,6 +199,11 @@ func (_m *GameAccountBinding) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("verified=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Verified))
+	builder.WriteString(", ")
+	if v := _m.SponsorFrameID; v != nil {
+		builder.WriteString("sponsor_frame_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("is_default=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsDefault))

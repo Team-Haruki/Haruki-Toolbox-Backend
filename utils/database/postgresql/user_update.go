@@ -81,6 +81,146 @@ func (_u *UserUpdate) ClearAvatarPath() *UserUpdate {
 	return _u
 }
 
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (_u *UserUpdate) SetAfdianUserID(v string) *UserUpdate {
+	_u.mutation.SetAfdianUserID(v)
+	return _u
+}
+
+// SetNillableAfdianUserID sets the "afdian_user_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAfdianUserID(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetAfdianUserID(*v)
+	}
+	return _u
+}
+
+// ClearAfdianUserID clears the value of the "afdian_user_id" field.
+func (_u *UserUpdate) ClearAfdianUserID() *UserUpdate {
+	_u.mutation.ClearAfdianUserID()
+	return _u
+}
+
+// SetAfdianBoundAt sets the "afdian_bound_at" field.
+func (_u *UserUpdate) SetAfdianBoundAt(v time.Time) *UserUpdate {
+	_u.mutation.SetAfdianBoundAt(v)
+	return _u
+}
+
+// SetNillableAfdianBoundAt sets the "afdian_bound_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAfdianBoundAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetAfdianBoundAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianBoundAt clears the value of the "afdian_bound_at" field.
+func (_u *UserUpdate) ClearAfdianBoundAt() *UserUpdate {
+	_u.mutation.ClearAfdianBoundAt()
+	return _u
+}
+
+// SetAfdianVerificationMethod sets the "afdian_verification_method" field.
+func (_u *UserUpdate) SetAfdianVerificationMethod(v user.AfdianVerificationMethod) *UserUpdate {
+	_u.mutation.SetAfdianVerificationMethod(v)
+	return _u
+}
+
+// SetNillableAfdianVerificationMethod sets the "afdian_verification_method" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAfdianVerificationMethod(v *user.AfdianVerificationMethod) *UserUpdate {
+	if v != nil {
+		_u.SetAfdianVerificationMethod(*v)
+	}
+	return _u
+}
+
+// ClearAfdianVerificationMethod clears the value of the "afdian_verification_method" field.
+func (_u *UserUpdate) ClearAfdianVerificationMethod() *UserUpdate {
+	_u.mutation.ClearAfdianVerificationMethod()
+	return _u
+}
+
+// SetSponsorAccessOverride sets the "sponsor_access_override" field.
+func (_u *UserUpdate) SetSponsorAccessOverride(v user.SponsorAccessOverride) *UserUpdate {
+	_u.mutation.SetSponsorAccessOverride(v)
+	return _u
+}
+
+// SetNillableSponsorAccessOverride sets the "sponsor_access_override" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSponsorAccessOverride(v *user.SponsorAccessOverride) *UserUpdate {
+	if v != nil {
+		_u.SetSponsorAccessOverride(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessOverride clears the value of the "sponsor_access_override" field.
+func (_u *UserUpdate) ClearSponsorAccessOverride() *UserUpdate {
+	_u.mutation.ClearSponsorAccessOverride()
+	return _u
+}
+
+// SetSponsorAccessNote sets the "sponsor_access_note" field.
+func (_u *UserUpdate) SetSponsorAccessNote(v string) *UserUpdate {
+	_u.mutation.SetSponsorAccessNote(v)
+	return _u
+}
+
+// SetNillableSponsorAccessNote sets the "sponsor_access_note" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSponsorAccessNote(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetSponsorAccessNote(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessNote clears the value of the "sponsor_access_note" field.
+func (_u *UserUpdate) ClearSponsorAccessNote() *UserUpdate {
+	_u.mutation.ClearSponsorAccessNote()
+	return _u
+}
+
+// SetSponsorAccessUpdatedBy sets the "sponsor_access_updated_by" field.
+func (_u *UserUpdate) SetSponsorAccessUpdatedBy(v string) *UserUpdate {
+	_u.mutation.SetSponsorAccessUpdatedBy(v)
+	return _u
+}
+
+// SetNillableSponsorAccessUpdatedBy sets the "sponsor_access_updated_by" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSponsorAccessUpdatedBy(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetSponsorAccessUpdatedBy(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessUpdatedBy clears the value of the "sponsor_access_updated_by" field.
+func (_u *UserUpdate) ClearSponsorAccessUpdatedBy() *UserUpdate {
+	_u.mutation.ClearSponsorAccessUpdatedBy()
+	return _u
+}
+
+// SetSponsorAccessUpdatedAt sets the "sponsor_access_updated_at" field.
+func (_u *UserUpdate) SetSponsorAccessUpdatedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetSponsorAccessUpdatedAt(v)
+	return _u
+}
+
+// SetNillableSponsorAccessUpdatedAt sets the "sponsor_access_updated_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSponsorAccessUpdatedAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetSponsorAccessUpdatedAt(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessUpdatedAt clears the value of the "sponsor_access_updated_at" field.
+func (_u *UserUpdate) ClearSponsorAccessUpdatedAt() *UserUpdate {
+	_u.mutation.ClearSponsorAccessUpdatedAt()
+	return _u
+}
+
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
 func (_u *UserUpdate) SetAllowCnMysekai(v bool) *UserUpdate {
 	_u.mutation.SetAllowCnMysekai(v)
@@ -425,6 +565,26 @@ func (_u *UserUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdate) check() error {
+	if v, ok := _u.mutation.AfdianUserID(); ok {
+		if err := user.AfdianUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		if err := user.AfdianVerificationMethodValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_verification_method", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_verification_method": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SponsorAccessOverride(); ok {
+		if err := user.SponsorAccessOverrideValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_access_override", err: fmt.Errorf(`postgresql: validator failed for field "User.sponsor_access_override": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SponsorAccessNote(); ok {
+		if err := user.SponsorAccessNoteValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_access_note", err: fmt.Errorf(`postgresql: validator failed for field "User.sponsor_access_note": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Role(); ok {
 		if err := user.RoleValidator(v); err != nil {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
@@ -456,6 +616,48 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AvatarPathCleared() {
 		_spec.ClearField(user.FieldAvatarPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianUserID(); ok {
+		_spec.SetField(user.FieldAfdianUserID, field.TypeString, value)
+	}
+	if _u.mutation.AfdianUserIDCleared() {
+		_spec.ClearField(user.FieldAfdianUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianBoundAt(); ok {
+		_spec.SetField(user.FieldAfdianBoundAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianBoundAtCleared() {
+		_spec.ClearField(user.FieldAfdianBoundAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		_spec.SetField(user.FieldAfdianVerificationMethod, field.TypeEnum, value)
+	}
+	if _u.mutation.AfdianVerificationMethodCleared() {
+		_spec.ClearField(user.FieldAfdianVerificationMethod, field.TypeEnum)
+	}
+	if value, ok := _u.mutation.SponsorAccessOverride(); ok {
+		_spec.SetField(user.FieldSponsorAccessOverride, field.TypeEnum, value)
+	}
+	if _u.mutation.SponsorAccessOverrideCleared() {
+		_spec.ClearField(user.FieldSponsorAccessOverride, field.TypeEnum)
+	}
+	if value, ok := _u.mutation.SponsorAccessNote(); ok {
+		_spec.SetField(user.FieldSponsorAccessNote, field.TypeString, value)
+	}
+	if _u.mutation.SponsorAccessNoteCleared() {
+		_spec.ClearField(user.FieldSponsorAccessNote, field.TypeString)
+	}
+	if value, ok := _u.mutation.SponsorAccessUpdatedBy(); ok {
+		_spec.SetField(user.FieldSponsorAccessUpdatedBy, field.TypeString, value)
+	}
+	if _u.mutation.SponsorAccessUpdatedByCleared() {
+		_spec.ClearField(user.FieldSponsorAccessUpdatedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.SponsorAccessUpdatedAt(); ok {
+		_spec.SetField(user.FieldSponsorAccessUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.SponsorAccessUpdatedAtCleared() {
+		_spec.ClearField(user.FieldSponsorAccessUpdatedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
@@ -790,6 +992,146 @@ func (_u *UserUpdateOne) SetNillableAvatarPath(v *string) *UserUpdateOne {
 // ClearAvatarPath clears the value of the "avatar_path" field.
 func (_u *UserUpdateOne) ClearAvatarPath() *UserUpdateOne {
 	_u.mutation.ClearAvatarPath()
+	return _u
+}
+
+// SetAfdianUserID sets the "afdian_user_id" field.
+func (_u *UserUpdateOne) SetAfdianUserID(v string) *UserUpdateOne {
+	_u.mutation.SetAfdianUserID(v)
+	return _u
+}
+
+// SetNillableAfdianUserID sets the "afdian_user_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAfdianUserID(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetAfdianUserID(*v)
+	}
+	return _u
+}
+
+// ClearAfdianUserID clears the value of the "afdian_user_id" field.
+func (_u *UserUpdateOne) ClearAfdianUserID() *UserUpdateOne {
+	_u.mutation.ClearAfdianUserID()
+	return _u
+}
+
+// SetAfdianBoundAt sets the "afdian_bound_at" field.
+func (_u *UserUpdateOne) SetAfdianBoundAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetAfdianBoundAt(v)
+	return _u
+}
+
+// SetNillableAfdianBoundAt sets the "afdian_bound_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAfdianBoundAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetAfdianBoundAt(*v)
+	}
+	return _u
+}
+
+// ClearAfdianBoundAt clears the value of the "afdian_bound_at" field.
+func (_u *UserUpdateOne) ClearAfdianBoundAt() *UserUpdateOne {
+	_u.mutation.ClearAfdianBoundAt()
+	return _u
+}
+
+// SetAfdianVerificationMethod sets the "afdian_verification_method" field.
+func (_u *UserUpdateOne) SetAfdianVerificationMethod(v user.AfdianVerificationMethod) *UserUpdateOne {
+	_u.mutation.SetAfdianVerificationMethod(v)
+	return _u
+}
+
+// SetNillableAfdianVerificationMethod sets the "afdian_verification_method" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAfdianVerificationMethod(v *user.AfdianVerificationMethod) *UserUpdateOne {
+	if v != nil {
+		_u.SetAfdianVerificationMethod(*v)
+	}
+	return _u
+}
+
+// ClearAfdianVerificationMethod clears the value of the "afdian_verification_method" field.
+func (_u *UserUpdateOne) ClearAfdianVerificationMethod() *UserUpdateOne {
+	_u.mutation.ClearAfdianVerificationMethod()
+	return _u
+}
+
+// SetSponsorAccessOverride sets the "sponsor_access_override" field.
+func (_u *UserUpdateOne) SetSponsorAccessOverride(v user.SponsorAccessOverride) *UserUpdateOne {
+	_u.mutation.SetSponsorAccessOverride(v)
+	return _u
+}
+
+// SetNillableSponsorAccessOverride sets the "sponsor_access_override" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSponsorAccessOverride(v *user.SponsorAccessOverride) *UserUpdateOne {
+	if v != nil {
+		_u.SetSponsorAccessOverride(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessOverride clears the value of the "sponsor_access_override" field.
+func (_u *UserUpdateOne) ClearSponsorAccessOverride() *UserUpdateOne {
+	_u.mutation.ClearSponsorAccessOverride()
+	return _u
+}
+
+// SetSponsorAccessNote sets the "sponsor_access_note" field.
+func (_u *UserUpdateOne) SetSponsorAccessNote(v string) *UserUpdateOne {
+	_u.mutation.SetSponsorAccessNote(v)
+	return _u
+}
+
+// SetNillableSponsorAccessNote sets the "sponsor_access_note" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSponsorAccessNote(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetSponsorAccessNote(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessNote clears the value of the "sponsor_access_note" field.
+func (_u *UserUpdateOne) ClearSponsorAccessNote() *UserUpdateOne {
+	_u.mutation.ClearSponsorAccessNote()
+	return _u
+}
+
+// SetSponsorAccessUpdatedBy sets the "sponsor_access_updated_by" field.
+func (_u *UserUpdateOne) SetSponsorAccessUpdatedBy(v string) *UserUpdateOne {
+	_u.mutation.SetSponsorAccessUpdatedBy(v)
+	return _u
+}
+
+// SetNillableSponsorAccessUpdatedBy sets the "sponsor_access_updated_by" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSponsorAccessUpdatedBy(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetSponsorAccessUpdatedBy(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessUpdatedBy clears the value of the "sponsor_access_updated_by" field.
+func (_u *UserUpdateOne) ClearSponsorAccessUpdatedBy() *UserUpdateOne {
+	_u.mutation.ClearSponsorAccessUpdatedBy()
+	return _u
+}
+
+// SetSponsorAccessUpdatedAt sets the "sponsor_access_updated_at" field.
+func (_u *UserUpdateOne) SetSponsorAccessUpdatedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetSponsorAccessUpdatedAt(v)
+	return _u
+}
+
+// SetNillableSponsorAccessUpdatedAt sets the "sponsor_access_updated_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSponsorAccessUpdatedAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetSponsorAccessUpdatedAt(*v)
+	}
+	return _u
+}
+
+// ClearSponsorAccessUpdatedAt clears the value of the "sponsor_access_updated_at" field.
+func (_u *UserUpdateOne) ClearSponsorAccessUpdatedAt() *UserUpdateOne {
+	_u.mutation.ClearSponsorAccessUpdatedAt()
 	return _u
 }
 
@@ -1150,6 +1492,26 @@ func (_u *UserUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *UserUpdateOne) check() error {
+	if v, ok := _u.mutation.AfdianUserID(); ok {
+		if err := user.AfdianUserIDValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		if err := user.AfdianVerificationMethodValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_verification_method", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_verification_method": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SponsorAccessOverride(); ok {
+		if err := user.SponsorAccessOverrideValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_access_override", err: fmt.Errorf(`postgresql: validator failed for field "User.sponsor_access_override": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SponsorAccessNote(); ok {
+		if err := user.SponsorAccessNoteValidator(v); err != nil {
+			return &ValidationError{Name: "sponsor_access_note", err: fmt.Errorf(`postgresql: validator failed for field "User.sponsor_access_note": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Role(); ok {
 		if err := user.RoleValidator(v); err != nil {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
@@ -1198,6 +1560,48 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.AvatarPathCleared() {
 		_spec.ClearField(user.FieldAvatarPath, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianUserID(); ok {
+		_spec.SetField(user.FieldAfdianUserID, field.TypeString, value)
+	}
+	if _u.mutation.AfdianUserIDCleared() {
+		_spec.ClearField(user.FieldAfdianUserID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AfdianBoundAt(); ok {
+		_spec.SetField(user.FieldAfdianBoundAt, field.TypeTime, value)
+	}
+	if _u.mutation.AfdianBoundAtCleared() {
+		_spec.ClearField(user.FieldAfdianBoundAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		_spec.SetField(user.FieldAfdianVerificationMethod, field.TypeEnum, value)
+	}
+	if _u.mutation.AfdianVerificationMethodCleared() {
+		_spec.ClearField(user.FieldAfdianVerificationMethod, field.TypeEnum)
+	}
+	if value, ok := _u.mutation.SponsorAccessOverride(); ok {
+		_spec.SetField(user.FieldSponsorAccessOverride, field.TypeEnum, value)
+	}
+	if _u.mutation.SponsorAccessOverrideCleared() {
+		_spec.ClearField(user.FieldSponsorAccessOverride, field.TypeEnum)
+	}
+	if value, ok := _u.mutation.SponsorAccessNote(); ok {
+		_spec.SetField(user.FieldSponsorAccessNote, field.TypeString, value)
+	}
+	if _u.mutation.SponsorAccessNoteCleared() {
+		_spec.ClearField(user.FieldSponsorAccessNote, field.TypeString)
+	}
+	if value, ok := _u.mutation.SponsorAccessUpdatedBy(); ok {
+		_spec.SetField(user.FieldSponsorAccessUpdatedBy, field.TypeString, value)
+	}
+	if _u.mutation.SponsorAccessUpdatedByCleared() {
+		_spec.ClearField(user.FieldSponsorAccessUpdatedBy, field.TypeString)
+	}
+	if value, ok := _u.mutation.SponsorAccessUpdatedAt(); ok {
+		_spec.SetField(user.FieldSponsorAccessUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.SponsorAccessUpdatedAtCleared() {
+		_spec.ClearField(user.FieldSponsorAccessUpdatedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)

@@ -52,14 +52,14 @@ var secretPathSegment = regexp.MustCompile(
 // follow ?, & or ;). `key` alone is deliberately excluded: the private
 // game-data API uses ?key= to select response fields.
 var secretQueryParam = regexp.MustCompile(
-	`(?i)([?&;](?:[a-z0-9_.-]*(?:token|secret|password|passwd|credential|signature|verifier|assertion|challenge)[a-z0-9_.-]*|inherit[_-]?id|pwd|code|user[_-]?code|device[_-]?code|sign|api[_-]?key|access[_-]?key)=)[^&#\s"'` + "`" + `<>]*`,
+	`(?i)([?&;](?:[a-z0-9_.-]*(?:token|secret|password|passwd|credential|signature|verifier|assertion|challenge)[a-z0-9_.-]*|inherit[_-]?id|order[_-]?number|out[_-]?trade[_-]?no|pwd|code|user[_-]?code|device[_-]?code|sign|api[_-]?key|access[_-]?key)=)[^&#\s"'` + "`" + `<>]*`,
 )
 
 // secretJSONField matches a JSON string value whose key denotes a credential,
 // including the OAuth2 device authorization user code, device code and flow
 // handle in snake_case (Hydra) or camelCase (Toolbox browser bodies).
 var secretJSONField = regexp.MustCompile(
-	`(?i)("(?:inherit[_-]?id|inherit[_-]?password|password|credential|session[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|user[_-]?code|device[_-]?code|flow[_-]?handle)"\s*:\s*")(?:[^"\\]|\\.)*"`,
+	`(?i)("(?:inherit[_-]?id|inherit[_-]?password|password|credential|session[_-]?token|access[_-]?token|refresh[_-]?token|client[_-]?secret|user[_-]?code|device[_-]?code|flow[_-]?handle|order[_-]?number|out[_-]?trade[_-]?no)"\s*:\s*")(?:[^"\\]|\\.)*"`,
 )
 
 // secretTokenLiteral matches a credential by its prefix wherever it appears,

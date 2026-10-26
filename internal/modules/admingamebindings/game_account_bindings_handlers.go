@@ -173,7 +173,7 @@ func handleAdminReassignGlobalGameAccountBinding(apiHelper *harukiAPIHelper.Haru
 			Changed:      row.Edges.User.ID != targetUser.ID,
 		}
 		if resp.Changed {
-			if _, err := row.Update().SetUserID(targetUser.ID).Save(c.Context()); err != nil {
+			if _, err := row.Update().SetUserID(targetUser.ID).ClearSponsorFrameID().Save(c.Context()); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalReassign, adminAuditTargetTypeGameAccount, server+":"+gameUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonReassignBindingFailed, nil))
 				return harukiAPIHelper.ErrorInternal(c, "failed to reassign binding")
 			}
@@ -335,7 +335,7 @@ func handleAdminBatchReassignGlobalGameAccountBindings(apiHelper *harukiAPIHelpe
 			result.FromUserID = row.Edges.User.ID
 			result.Changed = row.Edges.User.ID != targetUser.ID
 			if result.Changed {
-				if _, err := row.Update().SetUserID(targetUser.ID).Save(c.Context()); err != nil {
+				if _, err := row.Update().SetUserID(targetUser.ID).ClearSponsorFrameID().Save(c.Context()); err != nil {
 					result.Code = adminBatchResultCodeReassignBindingFailed
 					result.Message = "failed to reassign binding"
 					results = append(results, result)

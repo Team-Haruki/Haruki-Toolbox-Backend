@@ -25,6 +25,20 @@ type User struct {
 	Email string `json:"email,omitempty"`
 	// AvatarPath holds the value of the "avatar_path" field.
 	AvatarPath *string `json:"avatar_path,omitzero"`
+	// AfdianUserID holds the value of the "afdian_user_id" field.
+	AfdianUserID *string `json:"afdian_user_id,omitzero"`
+	// AfdianBoundAt holds the value of the "afdian_bound_at" field.
+	AfdianBoundAt *time.Time `json:"afdian_bound_at,omitzero"`
+	// AfdianVerificationMethod holds the value of the "afdian_verification_method" field.
+	AfdianVerificationMethod *user.AfdianVerificationMethod `json:"afdian_verification_method,omitzero"`
+	// SponsorAccessOverride holds the value of the "sponsor_access_override" field.
+	SponsorAccessOverride *user.SponsorAccessOverride `json:"sponsor_access_override,omitzero"`
+	// SponsorAccessNote holds the value of the "sponsor_access_note" field.
+	SponsorAccessNote *string `json:"sponsor_access_note,omitzero"`
+	// SponsorAccessUpdatedBy holds the value of the "sponsor_access_updated_by" field.
+	SponsorAccessUpdatedBy *string `json:"sponsor_access_updated_by,omitzero"`
+	// SponsorAccessUpdatedAt holds the value of the "sponsor_access_updated_at" field.
+	SponsorAccessUpdatedAt *time.Time `json:"sponsor_access_updated_at,omitzero"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
 	AllowCnMysekai bool `json:"allow_cn_mysekai,omitzero"`
 	// TicketEmailNotificationsEnabled holds the value of the "ticket_email_notifications_enabled" field.
@@ -129,9 +143,9 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldAllowCnMysekai, user.FieldTicketEmailNotificationsEnabled, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldAvatarPath, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldAvatarPath, user.FieldAfdianUserID, user.FieldAfdianVerificationMethod, user.FieldSponsorAccessOverride, user.FieldSponsorAccessNote, user.FieldSponsorAccessUpdatedBy, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
-		case user.FieldCreatedAt:
+		case user.FieldAfdianBoundAt, user.FieldSponsorAccessUpdatedAt, user.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -172,6 +186,55 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AvatarPath = new(string)
 				*_m.AvatarPath = value.String
+			}
+		case user.FieldAfdianUserID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_user_id", values[i])
+			} else if value.Valid {
+				_m.AfdianUserID = new(string)
+				*_m.AfdianUserID = value.String
+			}
+		case user.FieldAfdianBoundAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_bound_at", values[i])
+			} else if value.Valid {
+				_m.AfdianBoundAt = new(time.Time)
+				*_m.AfdianBoundAt = value.Time
+			}
+		case user.FieldAfdianVerificationMethod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_verification_method", values[i])
+			} else if value.Valid {
+				_m.AfdianVerificationMethod = new(user.AfdianVerificationMethod)
+				*_m.AfdianVerificationMethod = user.AfdianVerificationMethod(value.String)
+			}
+		case user.FieldSponsorAccessOverride:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sponsor_access_override", values[i])
+			} else if value.Valid {
+				_m.SponsorAccessOverride = new(user.SponsorAccessOverride)
+				*_m.SponsorAccessOverride = user.SponsorAccessOverride(value.String)
+			}
+		case user.FieldSponsorAccessNote:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sponsor_access_note", values[i])
+			} else if value.Valid {
+				_m.SponsorAccessNote = new(string)
+				*_m.SponsorAccessNote = value.String
+			}
+		case user.FieldSponsorAccessUpdatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sponsor_access_updated_by", values[i])
+			} else if value.Valid {
+				_m.SponsorAccessUpdatedBy = new(string)
+				*_m.SponsorAccessUpdatedBy = value.String
+			}
+		case user.FieldSponsorAccessUpdatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field sponsor_access_updated_at", values[i])
+			} else if value.Valid {
+				_m.SponsorAccessUpdatedAt = new(time.Time)
+				*_m.SponsorAccessUpdatedAt = value.Time
 			}
 		case user.FieldAllowCnMysekai:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -293,6 +356,41 @@ func (_m *User) String() string {
 	if v := _m.AvatarPath; v != nil {
 		builder.WriteString("avatar_path=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AfdianUserID; v != nil {
+		builder.WriteString("afdian_user_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.AfdianBoundAt; v != nil {
+		builder.WriteString("afdian_bound_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.AfdianVerificationMethod; v != nil {
+		builder.WriteString("afdian_verification_method=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SponsorAccessOverride; v != nil {
+		builder.WriteString("sponsor_access_override=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.SponsorAccessNote; v != nil {
+		builder.WriteString("sponsor_access_note=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SponsorAccessUpdatedBy; v != nil {
+		builder.WriteString("sponsor_access_updated_by=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SponsorAccessUpdatedAt; v != nil {
+		builder.WriteString("sponsor_access_updated_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("allow_cn_mysekai=")

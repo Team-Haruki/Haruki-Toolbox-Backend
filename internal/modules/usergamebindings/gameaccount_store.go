@@ -131,6 +131,9 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 			SetMysekai(req.MySekai).
 			SetIsDefault(!hasOtherDefault).
 			SetUserID(userID)
+		if result.Transferred {
+			update.ClearSponsorFrameID()
+		}
 		if _, err = update.Save(ctx); err != nil {
 			_ = tx.Rollback()
 			return nil, err
