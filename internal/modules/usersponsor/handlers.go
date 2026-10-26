@@ -11,7 +11,6 @@ import (
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
-	sponsorSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/gofiber/fiber/v3"
 )
@@ -24,45 +23,14 @@ type handlers struct {
 }
 
 type sponsorStatus struct {
-	OAuthEnabled             bool       `json:"oauthEnabled"`
-	OrderVerificationEnabled bool       `json:"orderVerificationEnabled"`
-	VerificationMethod       string     `json:"verificationMethod"`
-	AfdianUserID             *string    `json:"afdianUserId"`
-	BoundAt                  *time.Time `json:"boundAt"`
-	Eligible                 bool       `json:"eligible"`
-	Category                 string     `json:"category"`
-	ExpiresAt                *time.Time `json:"expiresAt"`
+	OAuthEnabled             bool `json:"oauthEnabled"`
+	OrderVerificationEnabled bool `json:"orderVerificationEnabled"`
+	sponsor.ToolboxAccess
 }
 
 func (h *handlers) statusFor(ctx context.Context, u *postgresql.User) (sponsorStatus, error) {
-	s := sponsorStatus{OAuthEnabled: h.oauth.Enabled(), OrderVerificationEnabled: h.orders.CredentialsConfigured(), AfdianUserID: u.AfdianUserID, BoundAt: u.AfdianBoundAt, Category: "none"}
-	if u.AfdianUserID != nil {
-		// Existing links predate order verification and were all OAuth2.
-		s.VerificationMethod = "oauth2"
-		if u.AfdianVerificationMethod != nil {
-			s.VerificationMethod = string(*u.AfdianVerificationMethod)
-		}
-	}
-	if u.Banned || u.AfdianUserID == nil {
-		return s, nil
-	}
-	rows, err := h.api.DBManager.DB.Sponsor.Query().Where(sponsorSchema.AfdianUserIDEQ(*u.AfdianUserID)).All(ctx)
-	if err != nil {
-		return s, err
-	}
-	// A previously sponsored account remains eligible after expiry. The
-	// sponsor module remains the only authority for current/former status.
-	s.Eligible = len(rows) > 0
-	for _, row := range rows {
-		category := string(sponsor.SponsorCategory(row, time.Now().UTC()))
-		if s.Category == "none" || category == string(sponsor.CategoryCurrent) {
-			s.Category = category
-		}
-		if row.PlanExpiresAt != nil && (s.ExpiresAt == nil || row.PlanExpiresAt.After(*s.ExpiresAt)) {
-			s.ExpiresAt = row.PlanExpiresAt
-		}
-	}
-	return s, nil
+	access, err := sponsor.QueryToolboxAccess(ctx, h.api.DBManager.DB, u)
+	return sponsorStatus{OAuthEnabled: h.oauth.Enabled(), OrderVerificationEnabled: h.orders.CredentialsConfigured(), ToolboxAccess: access}, err
 }
 
 func (h *handlers) currentStatus(c fiber.Ctx) (sponsorStatus, error) {
@@ -143,7 +111,7 @@ func (h *handlers) saveFrame(c fiber.Ctx) error {
 			return api.ErrorInternal(c, "failed to load sponsor status")
 		}
 		if !s.Eligible {
-			return api.ErrorForbidden(c, "a linked sponsor account is required")
+			return api.ErrorForbidden(c, "sponsor access is required")
 		}
 	}
 	update := h.api.DBManager.DB.GameAccountBinding.Update().Where(gameaccountbinding.IDEQ(b.ID),

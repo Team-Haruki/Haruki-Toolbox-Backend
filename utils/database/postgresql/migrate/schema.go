@@ -785,6 +785,10 @@ var (
 		{Name: "afdian_user_id", Type: field.TypeString, Unique: true, Nullable: true, Size: 128},
 		{Name: "afdian_bound_at", Type: field.TypeTime, Nullable: true},
 		{Name: "afdian_verification_method", Type: field.TypeEnum, Nullable: true, Enums: []string{"oauth2", "order"}},
+		{Name: "sponsor_access_override", Type: field.TypeEnum, Nullable: true, Enums: []string{"granted", "blocked"}},
+		{Name: "sponsor_access_note", Type: field.TypeString, Nullable: true, Size: 1000},
+		{Name: "sponsor_access_updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "sponsor_access_updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
 		{Name: "ticket_email_notifications_enabled", Type: field.TypeBool, Default: false},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
@@ -802,12 +806,12 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[13]},
+				Columns: []*schema.Column{UsersColumns[17]},
 			},
 			{
 				Name:    "user_role_banned",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[9], UsersColumns[10]},
+				Columns: []*schema.Column{UsersColumns[13], UsersColumns[14]},
 			},
 		},
 	}

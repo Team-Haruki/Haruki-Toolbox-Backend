@@ -90,6 +90,21 @@ func AfdianBoundAt(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAfdianBoundAt, v))
 }
 
+// SponsorAccessNote applies equality check predicate on the "sponsor_access_note" field. It's identical to SponsorAccessNoteEQ.
+func SponsorAccessNote(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessUpdatedBy applies equality check predicate on the "sponsor_access_updated_by" field. It's identical to SponsorAccessUpdatedByEQ.
+func SponsorAccessUpdatedBy(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedAt applies equality check predicate on the "sponsor_access_updated_at" field. It's identical to SponsorAccessUpdatedAtEQ.
+func SponsorAccessUpdatedAt(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessUpdatedAt, v))
+}
+
 // AllowCnMysekai applies equality check predicate on the "allow_cn_mysekai" field. It's identical to AllowCnMysekaiEQ.
 func AllowCnMysekai(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAllowCnMysekai, v))
@@ -478,6 +493,236 @@ func AfdianVerificationMethodIsNil() predicate.User {
 // AfdianVerificationMethodNotNil applies the NotNil predicate on the "afdian_verification_method" field.
 func AfdianVerificationMethodNotNil() predicate.User {
 	return predicate.User(sql.FieldNotNull(FieldAfdianVerificationMethod))
+}
+
+// SponsorAccessOverrideEQ applies the EQ predicate on the "sponsor_access_override" field.
+func SponsorAccessOverrideEQ(v SponsorAccessOverride) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessOverride, v))
+}
+
+// SponsorAccessOverrideNEQ applies the NEQ predicate on the "sponsor_access_override" field.
+func SponsorAccessOverrideNEQ(v SponsorAccessOverride) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldSponsorAccessOverride, v))
+}
+
+// SponsorAccessOverrideIn applies the In predicate on the "sponsor_access_override" field.
+func SponsorAccessOverrideIn(vs ...SponsorAccessOverride) predicate.User {
+	return predicate.User(sql.FieldIn(FieldSponsorAccessOverride, vs...))
+}
+
+// SponsorAccessOverrideNotIn applies the NotIn predicate on the "sponsor_access_override" field.
+func SponsorAccessOverrideNotIn(vs ...SponsorAccessOverride) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldSponsorAccessOverride, vs...))
+}
+
+// SponsorAccessOverrideIsNil applies the IsNil predicate on the "sponsor_access_override" field.
+func SponsorAccessOverrideIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldSponsorAccessOverride))
+}
+
+// SponsorAccessOverrideNotNil applies the NotNil predicate on the "sponsor_access_override" field.
+func SponsorAccessOverrideNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldSponsorAccessOverride))
+}
+
+// SponsorAccessNoteEQ applies the EQ predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteNEQ applies the NEQ predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteIn applies the In predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldSponsorAccessNote, vs...))
+}
+
+// SponsorAccessNoteNotIn applies the NotIn predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldSponsorAccessNote, vs...))
+}
+
+// SponsorAccessNoteGT applies the GT predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteGTE applies the GTE predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteLT applies the LT predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteLTE applies the LTE predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteContains applies the Contains predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteHasPrefix applies the HasPrefix predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteHasSuffix applies the HasSuffix predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteIsNil applies the IsNil predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldSponsorAccessNote))
+}
+
+// SponsorAccessNoteNotNil applies the NotNil predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldSponsorAccessNote))
+}
+
+// SponsorAccessNoteEqualFold applies the EqualFold predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessNoteContainsFold applies the ContainsFold predicate on the "sponsor_access_note" field.
+func SponsorAccessNoteContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldSponsorAccessNote, v))
+}
+
+// SponsorAccessUpdatedByEQ applies the EQ predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByNEQ applies the NEQ predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByIn applies the In predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldSponsorAccessUpdatedBy, vs...))
+}
+
+// SponsorAccessUpdatedByNotIn applies the NotIn predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldSponsorAccessUpdatedBy, vs...))
+}
+
+// SponsorAccessUpdatedByGT applies the GT predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByGTE applies the GTE predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByLT applies the LT predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByLTE applies the LTE predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByContains applies the Contains predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByHasPrefix applies the HasPrefix predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByHasSuffix applies the HasSuffix predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByIsNil applies the IsNil predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldSponsorAccessUpdatedBy))
+}
+
+// SponsorAccessUpdatedByNotNil applies the NotNil predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldSponsorAccessUpdatedBy))
+}
+
+// SponsorAccessUpdatedByEqualFold applies the EqualFold predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedByContainsFold applies the ContainsFold predicate on the "sponsor_access_updated_by" field.
+func SponsorAccessUpdatedByContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldSponsorAccessUpdatedBy, v))
+}
+
+// SponsorAccessUpdatedAtEQ applies the EQ predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSponsorAccessUpdatedAt, v))
+}
+
+// SponsorAccessUpdatedAtNEQ applies the NEQ predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtNEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldSponsorAccessUpdatedAt, v))
+}
+
+// SponsorAccessUpdatedAtIn applies the In predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldIn(FieldSponsorAccessUpdatedAt, vs...))
+}
+
+// SponsorAccessUpdatedAtNotIn applies the NotIn predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtNotIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldSponsorAccessUpdatedAt, vs...))
+}
+
+// SponsorAccessUpdatedAtGT applies the GT predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtGT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGT(FieldSponsorAccessUpdatedAt, v))
+}
+
+// SponsorAccessUpdatedAtGTE applies the GTE predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtGTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldSponsorAccessUpdatedAt, v))
+}
+
+// SponsorAccessUpdatedAtLT applies the LT predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtLT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLT(FieldSponsorAccessUpdatedAt, v))
+}
+
+// SponsorAccessUpdatedAtLTE applies the LTE predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtLTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldSponsorAccessUpdatedAt, v))
+}
+
+// SponsorAccessUpdatedAtIsNil applies the IsNil predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldSponsorAccessUpdatedAt))
+}
+
+// SponsorAccessUpdatedAtNotNil applies the NotNil predicate on the "sponsor_access_updated_at" field.
+func SponsorAccessUpdatedAtNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldSponsorAccessUpdatedAt))
 }
 
 // AllowCnMysekaiEQ applies the EQ predicate on the "allow_cn_mysekai" field.

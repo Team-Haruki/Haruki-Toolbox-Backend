@@ -39,6 +39,7 @@ GET /api/admin/risk/events
 GET /api/admin/risk/rules
 GET /api/admin/sponsors
 GET /api/admin/sponsors/:sponsor_id
+GET /api/admin/sponsors/toolbox-users
 GET /api/admin/statistics/dashboard
 GET /api/admin/statistics/timeseries
 GET /api/admin/statistics/upload-analytics
@@ -196,6 +197,7 @@ PUT /api/admin/oauth-clients/:client_id/webhooks/:webhook_id
 PUT /api/admin/risk/rules
 PUT /api/admin/sponsors/:sponsor_id
 PUT /api/admin/sponsors/:sponsor_id/manual-durations/:entry_id
+PUT /api/admin/sponsors/toolbox-users/:toolbox_user_id
 PUT /api/admin/tickets/:ticket_id/assign
 PUT /api/admin/tickets/:ticket_id/status
 PUT /api/admin/users/:target_user_id/allow-cn-mysekai

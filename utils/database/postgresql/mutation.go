@@ -19996,6 +19996,10 @@ type UserMutation struct {
 	afdian_user_id                           *string
 	afdian_bound_at                          *time.Time
 	afdian_verification_method               *user.AfdianVerificationMethod
+	sponsor_access_override                  *user.SponsorAccessOverride
+	sponsor_access_note                      *string
+	sponsor_access_updated_by                *string
+	sponsor_access_updated_at                *time.Time
 	allow_cn_mysekai                         *bool
 	ticket_email_notifications_enabled       *bool
 	role                                     *user.Role
@@ -20395,6 +20399,202 @@ func (m *UserMutation) AfdianVerificationMethodCleared() bool {
 func (m *UserMutation) ResetAfdianVerificationMethod() {
 	m.afdian_verification_method = nil
 	delete(m.clearedFields, user.FieldAfdianVerificationMethod)
+}
+
+// SetSponsorAccessOverride sets the "sponsor_access_override" field.
+func (m *UserMutation) SetSponsorAccessOverride(uao user.SponsorAccessOverride) {
+	m.sponsor_access_override = &uao
+}
+
+// SponsorAccessOverride returns the value of the "sponsor_access_override" field in the mutation.
+func (m *UserMutation) SponsorAccessOverride() (r user.SponsorAccessOverride, exists bool) {
+	v := m.sponsor_access_override
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorAccessOverride returns the old "sponsor_access_override" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSponsorAccessOverride(ctx context.Context) (v *user.SponsorAccessOverride, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorAccessOverride is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorAccessOverride requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorAccessOverride: %w", err)
+	}
+	return oldValue.SponsorAccessOverride, nil
+}
+
+// ClearSponsorAccessOverride clears the value of the "sponsor_access_override" field.
+func (m *UserMutation) ClearSponsorAccessOverride() {
+	m.sponsor_access_override = nil
+	m.clearedFields[user.FieldSponsorAccessOverride] = struct{}{}
+}
+
+// SponsorAccessOverrideCleared returns if the "sponsor_access_override" field was cleared in this mutation.
+func (m *UserMutation) SponsorAccessOverrideCleared() bool {
+	_, ok := m.clearedFields[user.FieldSponsorAccessOverride]
+	return ok
+}
+
+// ResetSponsorAccessOverride resets all changes to the "sponsor_access_override" field.
+func (m *UserMutation) ResetSponsorAccessOverride() {
+	m.sponsor_access_override = nil
+	delete(m.clearedFields, user.FieldSponsorAccessOverride)
+}
+
+// SetSponsorAccessNote sets the "sponsor_access_note" field.
+func (m *UserMutation) SetSponsorAccessNote(s string) {
+	m.sponsor_access_note = &s
+}
+
+// SponsorAccessNote returns the value of the "sponsor_access_note" field in the mutation.
+func (m *UserMutation) SponsorAccessNote() (r string, exists bool) {
+	v := m.sponsor_access_note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorAccessNote returns the old "sponsor_access_note" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSponsorAccessNote(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorAccessNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorAccessNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorAccessNote: %w", err)
+	}
+	return oldValue.SponsorAccessNote, nil
+}
+
+// ClearSponsorAccessNote clears the value of the "sponsor_access_note" field.
+func (m *UserMutation) ClearSponsorAccessNote() {
+	m.sponsor_access_note = nil
+	m.clearedFields[user.FieldSponsorAccessNote] = struct{}{}
+}
+
+// SponsorAccessNoteCleared returns if the "sponsor_access_note" field was cleared in this mutation.
+func (m *UserMutation) SponsorAccessNoteCleared() bool {
+	_, ok := m.clearedFields[user.FieldSponsorAccessNote]
+	return ok
+}
+
+// ResetSponsorAccessNote resets all changes to the "sponsor_access_note" field.
+func (m *UserMutation) ResetSponsorAccessNote() {
+	m.sponsor_access_note = nil
+	delete(m.clearedFields, user.FieldSponsorAccessNote)
+}
+
+// SetSponsorAccessUpdatedBy sets the "sponsor_access_updated_by" field.
+func (m *UserMutation) SetSponsorAccessUpdatedBy(s string) {
+	m.sponsor_access_updated_by = &s
+}
+
+// SponsorAccessUpdatedBy returns the value of the "sponsor_access_updated_by" field in the mutation.
+func (m *UserMutation) SponsorAccessUpdatedBy() (r string, exists bool) {
+	v := m.sponsor_access_updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorAccessUpdatedBy returns the old "sponsor_access_updated_by" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSponsorAccessUpdatedBy(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorAccessUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorAccessUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorAccessUpdatedBy: %w", err)
+	}
+	return oldValue.SponsorAccessUpdatedBy, nil
+}
+
+// ClearSponsorAccessUpdatedBy clears the value of the "sponsor_access_updated_by" field.
+func (m *UserMutation) ClearSponsorAccessUpdatedBy() {
+	m.sponsor_access_updated_by = nil
+	m.clearedFields[user.FieldSponsorAccessUpdatedBy] = struct{}{}
+}
+
+// SponsorAccessUpdatedByCleared returns if the "sponsor_access_updated_by" field was cleared in this mutation.
+func (m *UserMutation) SponsorAccessUpdatedByCleared() bool {
+	_, ok := m.clearedFields[user.FieldSponsorAccessUpdatedBy]
+	return ok
+}
+
+// ResetSponsorAccessUpdatedBy resets all changes to the "sponsor_access_updated_by" field.
+func (m *UserMutation) ResetSponsorAccessUpdatedBy() {
+	m.sponsor_access_updated_by = nil
+	delete(m.clearedFields, user.FieldSponsorAccessUpdatedBy)
+}
+
+// SetSponsorAccessUpdatedAt sets the "sponsor_access_updated_at" field.
+func (m *UserMutation) SetSponsorAccessUpdatedAt(t time.Time) {
+	m.sponsor_access_updated_at = &t
+}
+
+// SponsorAccessUpdatedAt returns the value of the "sponsor_access_updated_at" field in the mutation.
+func (m *UserMutation) SponsorAccessUpdatedAt() (r time.Time, exists bool) {
+	v := m.sponsor_access_updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSponsorAccessUpdatedAt returns the old "sponsor_access_updated_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSponsorAccessUpdatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSponsorAccessUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSponsorAccessUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSponsorAccessUpdatedAt: %w", err)
+	}
+	return oldValue.SponsorAccessUpdatedAt, nil
+}
+
+// ClearSponsorAccessUpdatedAt clears the value of the "sponsor_access_updated_at" field.
+func (m *UserMutation) ClearSponsorAccessUpdatedAt() {
+	m.sponsor_access_updated_at = nil
+	m.clearedFields[user.FieldSponsorAccessUpdatedAt] = struct{}{}
+}
+
+// SponsorAccessUpdatedAtCleared returns if the "sponsor_access_updated_at" field was cleared in this mutation.
+func (m *UserMutation) SponsorAccessUpdatedAtCleared() bool {
+	_, ok := m.clearedFields[user.FieldSponsorAccessUpdatedAt]
+	return ok
+}
+
+// ResetSponsorAccessUpdatedAt resets all changes to the "sponsor_access_updated_at" field.
+func (m *UserMutation) ResetSponsorAccessUpdatedAt() {
+	m.sponsor_access_updated_at = nil
+	delete(m.clearedFields, user.FieldSponsorAccessUpdatedAt)
 }
 
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
@@ -21016,7 +21216,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 17)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -21034,6 +21234,18 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.afdian_verification_method != nil {
 		fields = append(fields, user.FieldAfdianVerificationMethod)
+	}
+	if m.sponsor_access_override != nil {
+		fields = append(fields, user.FieldSponsorAccessOverride)
+	}
+	if m.sponsor_access_note != nil {
+		fields = append(fields, user.FieldSponsorAccessNote)
+	}
+	if m.sponsor_access_updated_by != nil {
+		fields = append(fields, user.FieldSponsorAccessUpdatedBy)
+	}
+	if m.sponsor_access_updated_at != nil {
+		fields = append(fields, user.FieldSponsorAccessUpdatedAt)
 	}
 	if m.allow_cn_mysekai != nil {
 		fields = append(fields, user.FieldAllowCnMysekai)
@@ -21076,6 +21288,14 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.AfdianBoundAt()
 	case user.FieldAfdianVerificationMethod:
 		return m.AfdianVerificationMethod()
+	case user.FieldSponsorAccessOverride:
+		return m.SponsorAccessOverride()
+	case user.FieldSponsorAccessNote:
+		return m.SponsorAccessNote()
+	case user.FieldSponsorAccessUpdatedBy:
+		return m.SponsorAccessUpdatedBy()
+	case user.FieldSponsorAccessUpdatedAt:
+		return m.SponsorAccessUpdatedAt()
 	case user.FieldAllowCnMysekai:
 		return m.AllowCnMysekai()
 	case user.FieldTicketEmailNotificationsEnabled:
@@ -21111,6 +21331,14 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldAfdianBoundAt(ctx)
 	case user.FieldAfdianVerificationMethod:
 		return m.OldAfdianVerificationMethod(ctx)
+	case user.FieldSponsorAccessOverride:
+		return m.OldSponsorAccessOverride(ctx)
+	case user.FieldSponsorAccessNote:
+		return m.OldSponsorAccessNote(ctx)
+	case user.FieldSponsorAccessUpdatedBy:
+		return m.OldSponsorAccessUpdatedBy(ctx)
+	case user.FieldSponsorAccessUpdatedAt:
+		return m.OldSponsorAccessUpdatedAt(ctx)
 	case user.FieldAllowCnMysekai:
 		return m.OldAllowCnMysekai(ctx)
 	case user.FieldTicketEmailNotificationsEnabled:
@@ -21175,6 +21403,34 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAfdianVerificationMethod(v)
+		return nil
+	case user.FieldSponsorAccessOverride:
+		v, ok := value.(user.SponsorAccessOverride)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorAccessOverride(v)
+		return nil
+	case user.FieldSponsorAccessNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorAccessNote(v)
+		return nil
+	case user.FieldSponsorAccessUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorAccessUpdatedBy(v)
+		return nil
+	case user.FieldSponsorAccessUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSponsorAccessUpdatedAt(v)
 		return nil
 	case user.FieldAllowCnMysekai:
 		v, ok := value.(bool)
@@ -21267,6 +21523,18 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldAfdianVerificationMethod) {
 		fields = append(fields, user.FieldAfdianVerificationMethod)
 	}
+	if m.FieldCleared(user.FieldSponsorAccessOverride) {
+		fields = append(fields, user.FieldSponsorAccessOverride)
+	}
+	if m.FieldCleared(user.FieldSponsorAccessNote) {
+		fields = append(fields, user.FieldSponsorAccessNote)
+	}
+	if m.FieldCleared(user.FieldSponsorAccessUpdatedBy) {
+		fields = append(fields, user.FieldSponsorAccessUpdatedBy)
+	}
+	if m.FieldCleared(user.FieldSponsorAccessUpdatedAt) {
+		fields = append(fields, user.FieldSponsorAccessUpdatedAt)
+	}
 	if m.FieldCleared(user.FieldBanReason) {
 		fields = append(fields, user.FieldBanReason)
 	}
@@ -21302,6 +21570,18 @@ func (m *UserMutation) ClearField(name string) error {
 	case user.FieldAfdianVerificationMethod:
 		m.ClearAfdianVerificationMethod()
 		return nil
+	case user.FieldSponsorAccessOverride:
+		m.ClearSponsorAccessOverride()
+		return nil
+	case user.FieldSponsorAccessNote:
+		m.ClearSponsorAccessNote()
+		return nil
+	case user.FieldSponsorAccessUpdatedBy:
+		m.ClearSponsorAccessUpdatedBy()
+		return nil
+	case user.FieldSponsorAccessUpdatedAt:
+		m.ClearSponsorAccessUpdatedAt()
+		return nil
 	case user.FieldBanReason:
 		m.ClearBanReason()
 		return nil
@@ -21336,6 +21616,18 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldAfdianVerificationMethod:
 		m.ResetAfdianVerificationMethod()
+		return nil
+	case user.FieldSponsorAccessOverride:
+		m.ResetSponsorAccessOverride()
+		return nil
+	case user.FieldSponsorAccessNote:
+		m.ResetSponsorAccessNote()
+		return nil
+	case user.FieldSponsorAccessUpdatedBy:
+		m.ResetSponsorAccessUpdatedBy()
+		return nil
+	case user.FieldSponsorAccessUpdatedAt:
+		m.ResetSponsorAccessUpdatedAt()
 		return nil
 	case user.FieldAllowCnMysekai:
 		m.ResetAllowCnMysekai()
