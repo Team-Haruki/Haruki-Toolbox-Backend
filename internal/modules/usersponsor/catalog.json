@@ -79,5 +79,32 @@
       "leftbottom": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_leftbottom.png",
       "rightbottom": "static_images/custom_frames/gif_laughing_yellow_20261001/vertical/frame_rightbottom.png"
     }
+  },
+  {
+    "id": "night_heron_20261026",
+    "name": {
+      "zh-CN": "夜鹭",
+      "zh-TW": "夜鷺",
+      "en-US": "Night Heron"
+    },
+    "thumbnail": "/sponsor-frames/night_heron_20261026-panel.png",
+    "panelPreview": "/sponsor-frames/night_heron_20261026-panel.png",
+    "profilePreview": "/sponsor-frames/night_heron_20261026-profile.jpg",
+    "horizontal": {
+      "base": "static_images/custom_frames/night_heron_20261026/horizontal/frame_base.png",
+      "centertop": "static_images/custom_frames/night_heron_20261026/horizontal/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/night_heron_20261026/horizontal/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/night_heron_20261026/horizontal/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/night_heron_20261026/horizontal/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/night_heron_20261026/horizontal/frame_rightbottom.png"
+    },
+    "vertical": {
+      "base": "static_images/custom_frames/night_heron_20261026/vertical/frame_base.png",
+      "centertop": "static_images/custom_frames/night_heron_20261026/vertical/frame_centertop.png",
+      "lefttop": "static_images/custom_frames/night_heron_20261026/vertical/frame_lefttop.png",
+      "righttop": "static_images/custom_frames/night_heron_20261026/vertical/frame_righttop.png",
+      "leftbottom": "static_images/custom_frames/night_heron_20261026/vertical/frame_leftbottom.png",
+      "rightbottom": "static_images/custom_frames/night_heron_20261026/vertical/frame_rightbottom.png"
+    }
   }
 ]

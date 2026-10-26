@@ -187,7 +187,10 @@ func TestExpiredOrFailedAuthorizationCannotBeReplayed(t *testing.T) {
 func TestFrameAccessIsPermanentAndScopedToVerifiedGameOwner(t *testing.T) {
 	e := newEnv(t)
 	ctx := t.Context()
-	frame := frameCatalog()[0]
+	frame := findFrame("night_heron_20261026")
+	if frame == nil {
+		t.Fatal("night heron is absent from the sponsor catalog")
+	}
 	e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").ExecX(ctx)
 	// An expired sponsorship still grants frames, even with is_active=false.
 	e.db.Sponsor.Create().SetID("afdian_afdian-alice").SetAfdianUserID("afdian-alice").SetPlanExpiresAt(time.Now().Add(-365 * 24 * time.Hour)).SetIsActive(false).SaveX(ctx)
