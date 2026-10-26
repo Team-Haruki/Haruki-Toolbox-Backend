@@ -5,6 +5,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprivateapi"
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/gofiber/fiber/v3"
 )
 
 func RegisterRoutes(helper *api.HarukiToolboxRouterHelpers, cfg OAuthConfig, orders sponsor.AfdianConfig) {
@@ -12,13 +13,21 @@ func RegisterRoutes(helper *api.HarukiToolboxRouterHelpers, cfg OAuthConfig, ord
 		return
 	}
 	h := &handlers{api: helper, oauth: cfg, orders: orders, client: newOAuthHTTPClient()}
-	r := helper.Router.Group("/api/user/:toolbox_user_id", usercore.RouteHandlers(usercore.RequireAuthenticatedSelf(helper, "toolbox_user_id"))...)
-	r.Get("/afdian", h.status)
-	r.Get("/sponsor-frames", h.frames)
-	r.Post("/afdian/authorize", h.authorize)
-	r.Post("/afdian/callback", h.callback)
-	r.Post("/afdian/verify-order", usercore.RequireVerifiedEmail(), h.verifyOrder)
-	r.Delete("/afdian", h.unlink)
-	r.Put("/sponsor-frames/:server/:game_user_id", h.saveFrame)
+	r := helper.Router.Group("/api/user/:toolbox_user_id")
+	guards := usercore.RequireAuthenticatedSelf(helper, "toolbox_user_id")
+	// Fiber group middleware matches a prefix, so putting these guards on the
+	// group also treats /api/user/me as toolbox_user_id="me". Scope them to
+	// the sponsor endpoints so current-user bootstrap and sibling routes work.
+	register := func(method, path string, handlers ...fiber.Handler) {
+		first, rest := usercore.RouteHandlerParts(guards, handlers...)
+		r.Add([]string{method}, path, first, rest...)
+	}
+	register(fiber.MethodGet, "/afdian", h.status)
+	register(fiber.MethodGet, "/sponsor-frames", h.frames)
+	register(fiber.MethodPost, "/afdian/authorize", h.authorize)
+	register(fiber.MethodPost, "/afdian/callback", h.callback)
+	register(fiber.MethodPost, "/afdian/verify-order", usercore.RequireVerifiedEmail(), h.verifyOrder)
+	register(fiber.MethodDelete, "/afdian", h.unlink)
+	register(fiber.MethodPut, "/sponsor-frames/:server/:game_user_id", h.saveFrame)
 	helper.Router.Get("/api/private/game-frame/:server/:game_user_id", userprivateapi.ValidateUserPermission(helper), h.gameFrame)
 }
