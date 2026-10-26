@@ -19995,6 +19995,7 @@ type UserMutation struct {
 	avatar_path                              *string
 	afdian_user_id                           *string
 	afdian_bound_at                          *time.Time
+	afdian_verification_method               *user.AfdianVerificationMethod
 	allow_cn_mysekai                         *bool
 	ticket_email_notifications_enabled       *bool
 	role                                     *user.Role
@@ -20345,6 +20346,55 @@ func (m *UserMutation) AfdianBoundAtCleared() bool {
 func (m *UserMutation) ResetAfdianBoundAt() {
 	m.afdian_bound_at = nil
 	delete(m.clearedFields, user.FieldAfdianBoundAt)
+}
+
+// SetAfdianVerificationMethod sets the "afdian_verification_method" field.
+func (m *UserMutation) SetAfdianVerificationMethod(uvm user.AfdianVerificationMethod) {
+	m.afdian_verification_method = &uvm
+}
+
+// AfdianVerificationMethod returns the value of the "afdian_verification_method" field in the mutation.
+func (m *UserMutation) AfdianVerificationMethod() (r user.AfdianVerificationMethod, exists bool) {
+	v := m.afdian_verification_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAfdianVerificationMethod returns the old "afdian_verification_method" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldAfdianVerificationMethod(ctx context.Context) (v *user.AfdianVerificationMethod, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAfdianVerificationMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAfdianVerificationMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAfdianVerificationMethod: %w", err)
+	}
+	return oldValue.AfdianVerificationMethod, nil
+}
+
+// ClearAfdianVerificationMethod clears the value of the "afdian_verification_method" field.
+func (m *UserMutation) ClearAfdianVerificationMethod() {
+	m.afdian_verification_method = nil
+	m.clearedFields[user.FieldAfdianVerificationMethod] = struct{}{}
+}
+
+// AfdianVerificationMethodCleared returns if the "afdian_verification_method" field was cleared in this mutation.
+func (m *UserMutation) AfdianVerificationMethodCleared() bool {
+	_, ok := m.clearedFields[user.FieldAfdianVerificationMethod]
+	return ok
+}
+
+// ResetAfdianVerificationMethod resets all changes to the "afdian_verification_method" field.
+func (m *UserMutation) ResetAfdianVerificationMethod() {
+	m.afdian_verification_method = nil
+	delete(m.clearedFields, user.FieldAfdianVerificationMethod)
 }
 
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
@@ -20966,7 +21016,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -20981,6 +21031,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.afdian_bound_at != nil {
 		fields = append(fields, user.FieldAfdianBoundAt)
+	}
+	if m.afdian_verification_method != nil {
+		fields = append(fields, user.FieldAfdianVerificationMethod)
 	}
 	if m.allow_cn_mysekai != nil {
 		fields = append(fields, user.FieldAllowCnMysekai)
@@ -21021,6 +21074,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.AfdianUserID()
 	case user.FieldAfdianBoundAt:
 		return m.AfdianBoundAt()
+	case user.FieldAfdianVerificationMethod:
+		return m.AfdianVerificationMethod()
 	case user.FieldAllowCnMysekai:
 		return m.AllowCnMysekai()
 	case user.FieldTicketEmailNotificationsEnabled:
@@ -21054,6 +21109,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldAfdianUserID(ctx)
 	case user.FieldAfdianBoundAt:
 		return m.OldAfdianBoundAt(ctx)
+	case user.FieldAfdianVerificationMethod:
+		return m.OldAfdianVerificationMethod(ctx)
 	case user.FieldAllowCnMysekai:
 		return m.OldAllowCnMysekai(ctx)
 	case user.FieldTicketEmailNotificationsEnabled:
@@ -21111,6 +21168,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAfdianBoundAt(v)
+		return nil
+	case user.FieldAfdianVerificationMethod:
+		v, ok := value.(user.AfdianVerificationMethod)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAfdianVerificationMethod(v)
 		return nil
 	case user.FieldAllowCnMysekai:
 		v, ok := value.(bool)
@@ -21200,6 +21264,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldAfdianBoundAt) {
 		fields = append(fields, user.FieldAfdianBoundAt)
 	}
+	if m.FieldCleared(user.FieldAfdianVerificationMethod) {
+		fields = append(fields, user.FieldAfdianVerificationMethod)
+	}
 	if m.FieldCleared(user.FieldBanReason) {
 		fields = append(fields, user.FieldBanReason)
 	}
@@ -21232,6 +21299,9 @@ func (m *UserMutation) ClearField(name string) error {
 	case user.FieldAfdianBoundAt:
 		m.ClearAfdianBoundAt()
 		return nil
+	case user.FieldAfdianVerificationMethod:
+		m.ClearAfdianVerificationMethod()
+		return nil
 	case user.FieldBanReason:
 		m.ClearBanReason()
 		return nil
@@ -21263,6 +21333,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldAfdianBoundAt:
 		m.ResetAfdianBoundAt()
+		return nil
+	case user.FieldAfdianVerificationMethod:
+		m.ResetAfdianVerificationMethod()
 		return nil
 	case user.FieldAllowCnMysekai:
 		m.ResetAllowCnMysekai()

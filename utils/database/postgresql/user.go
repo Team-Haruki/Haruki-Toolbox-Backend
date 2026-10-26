@@ -29,6 +29,8 @@ type User struct {
 	AfdianUserID *string `json:"afdian_user_id,omitzero"`
 	// AfdianBoundAt holds the value of the "afdian_bound_at" field.
 	AfdianBoundAt *time.Time `json:"afdian_bound_at,omitzero"`
+	// AfdianVerificationMethod holds the value of the "afdian_verification_method" field.
+	AfdianVerificationMethod *user.AfdianVerificationMethod `json:"afdian_verification_method,omitzero"`
 	// AllowCnMysekai holds the value of the "allow_cn_mysekai" field.
 	AllowCnMysekai bool `json:"allow_cn_mysekai,omitzero"`
 	// TicketEmailNotificationsEnabled holds the value of the "ticket_email_notifications_enabled" field.
@@ -133,7 +135,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldAllowCnMysekai, user.FieldTicketEmailNotificationsEnabled, user.FieldBanned:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldAvatarPath, user.FieldAfdianUserID, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
+		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldAvatarPath, user.FieldAfdianUserID, user.FieldAfdianVerificationMethod, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
 		case user.FieldAfdianBoundAt, user.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -190,6 +192,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AfdianBoundAt = new(time.Time)
 				*_m.AfdianBoundAt = value.Time
+			}
+		case user.FieldAfdianVerificationMethod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field afdian_verification_method", values[i])
+			} else if value.Valid {
+				_m.AfdianVerificationMethod = new(user.AfdianVerificationMethod)
+				*_m.AfdianVerificationMethod = user.AfdianVerificationMethod(value.String)
 			}
 		case user.FieldAllowCnMysekai:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -321,6 +330,11 @@ func (_m *User) String() string {
 	if v := _m.AfdianBoundAt; v != nil {
 		builder.WriteString("afdian_bound_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.AfdianVerificationMethod; v != nil {
+		builder.WriteString("afdian_verification_method=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("allow_cn_mysekai=")

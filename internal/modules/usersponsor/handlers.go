@@ -19,20 +19,30 @@ import (
 type handlers struct {
 	api    *api.HarukiToolboxRouterHelpers
 	oauth  OAuthConfig
+	orders sponsor.AfdianConfig
 	client *http.Client
 }
 
 type sponsorStatus struct {
-	OAuthEnabled bool       `json:"oauthEnabled"`
-	AfdianUserID *string    `json:"afdianUserId"`
-	BoundAt      *time.Time `json:"boundAt"`
-	Eligible     bool       `json:"eligible"`
-	Category     string     `json:"category"`
-	ExpiresAt    *time.Time `json:"expiresAt"`
+	OAuthEnabled             bool       `json:"oauthEnabled"`
+	OrderVerificationEnabled bool       `json:"orderVerificationEnabled"`
+	VerificationMethod       string     `json:"verificationMethod"`
+	AfdianUserID             *string    `json:"afdianUserId"`
+	BoundAt                  *time.Time `json:"boundAt"`
+	Eligible                 bool       `json:"eligible"`
+	Category                 string     `json:"category"`
+	ExpiresAt                *time.Time `json:"expiresAt"`
 }
 
 func (h *handlers) statusFor(ctx context.Context, u *postgresql.User) (sponsorStatus, error) {
-	s := sponsorStatus{OAuthEnabled: h.oauth.Enabled(), AfdianUserID: u.AfdianUserID, BoundAt: u.AfdianBoundAt, Category: "none"}
+	s := sponsorStatus{OAuthEnabled: h.oauth.Enabled(), OrderVerificationEnabled: h.orders.CredentialsConfigured(), AfdianUserID: u.AfdianUserID, BoundAt: u.AfdianBoundAt, Category: "none"}
+	if u.AfdianUserID != nil {
+		// Existing links predate order verification and were all OAuth2.
+		s.VerificationMethod = "oauth2"
+		if u.AfdianVerificationMethod != nil {
+			s.VerificationMethod = string(*u.AfdianVerificationMethod)
+		}
+	}
 	if u.Banned || u.AfdianUserID == nil {
 		return s, nil
 	}

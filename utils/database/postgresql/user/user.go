@@ -24,6 +24,8 @@ const (
 	FieldAfdianUserID = "afdian_user_id"
 	// FieldAfdianBoundAt holds the string denoting the afdian_bound_at field in the database.
 	FieldAfdianBoundAt = "afdian_bound_at"
+	// FieldAfdianVerificationMethod holds the string denoting the afdian_verification_method field in the database.
+	FieldAfdianVerificationMethod = "afdian_verification_method"
 	// FieldAllowCnMysekai holds the string denoting the allow_cn_mysekai field in the database.
 	FieldAllowCnMysekai = "allow_cn_mysekai"
 	// FieldTicketEmailNotificationsEnabled holds the string denoting the ticket_email_notifications_enabled field in the database.
@@ -104,6 +106,7 @@ var Columns = []string{
 	FieldAvatarPath,
 	FieldAfdianUserID,
 	FieldAfdianBoundAt,
+	FieldAfdianVerificationMethod,
 	FieldAllowCnMysekai,
 	FieldTicketEmailNotificationsEnabled,
 	FieldRole,
@@ -135,6 +138,29 @@ var (
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
+
+// AfdianVerificationMethod defines the type for the "afdian_verification_method" enum field.
+type AfdianVerificationMethod string
+
+// AfdianVerificationMethod values.
+const (
+	AfdianVerificationMethodOauth2 AfdianVerificationMethod = "oauth2"
+	AfdianVerificationMethodOrder  AfdianVerificationMethod = "order"
+)
+
+func (avm AfdianVerificationMethod) String() string {
+	return string(avm)
+}
+
+// AfdianVerificationMethodValidator is a validator for the "afdian_verification_method" field enum values. It is called by the builders before save.
+func AfdianVerificationMethodValidator(avm AfdianVerificationMethod) error {
+	switch avm {
+	case AfdianVerificationMethodOauth2, AfdianVerificationMethodOrder:
+		return nil
+	default:
+		return fmt.Errorf("user: invalid enum value for afdian_verification_method field: %q", avm)
+	}
+}
 
 // Role defines the type for the "role" enum field.
 type Role string
@@ -194,6 +220,11 @@ func ByAfdianUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByAfdianBoundAt orders the results by the afdian_bound_at field.
 func ByAfdianBoundAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAfdianBoundAt, opts...).ToFunc()
+}
+
+// ByAfdianVerificationMethod orders the results by the afdian_verification_method field.
+func ByAfdianVerificationMethod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAfdianVerificationMethod, opts...).ToFunc()
 }
 
 // ByAllowCnMysekai orders the results by the allow_cn_mysekai field.

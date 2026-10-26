@@ -914,15 +914,15 @@ func init() {
 	// user.AfdianUserIDValidator is a validator for the "afdian_user_id" field. It is called by the builders before save.
 	user.AfdianUserIDValidator = userDescAfdianUserID.Validators[0].(func(string) error)
 	// userDescAllowCnMysekai is the schema descriptor for allow_cn_mysekai field.
-	userDescAllowCnMysekai := userFields[6].Descriptor()
+	userDescAllowCnMysekai := userFields[7].Descriptor()
 	// user.DefaultAllowCnMysekai holds the default value on creation for the allow_cn_mysekai field.
 	user.DefaultAllowCnMysekai = userDescAllowCnMysekai.Default.(bool)
 	// userDescTicketEmailNotificationsEnabled is the schema descriptor for ticket_email_notifications_enabled field.
-	userDescTicketEmailNotificationsEnabled := userFields[7].Descriptor()
+	userDescTicketEmailNotificationsEnabled := userFields[8].Descriptor()
 	// user.DefaultTicketEmailNotificationsEnabled holds the default value on creation for the ticket_email_notifications_enabled field.
 	user.DefaultTicketEmailNotificationsEnabled = userDescTicketEmailNotificationsEnabled.Default.(bool)
 	// userDescBanned is the schema descriptor for banned field.
-	userDescBanned := userFields[9].Descriptor()
+	userDescBanned := userFields[10].Descriptor()
 	// user.DefaultBanned holds the default value on creation for the banned field.
 	user.DefaultBanned = userDescBanned.Default.(bool)
 	// userDescID is the schema descriptor for id field.

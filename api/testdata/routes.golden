@@ -160,6 +160,7 @@ POST /api/sponsor/afdian/callback
 POST /api/sponsor/afdian/callback/:secret
 POST /api/user/:toolbox_user_id/afdian/authorize
 POST /api/user/:toolbox_user_id/afdian/callback
+POST /api/user/:toolbox_user_id/afdian/verify-order
 POST /api/user/:toolbox_user_id/authorize-social-platform/
 POST /api/user/:toolbox_user_id/authorize-social-platform/:id/
 POST /api/user/:toolbox_user_id/game-account/:server/:game_user_id

@@ -161,7 +161,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 }
 
 func registerUserRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
-	userSponsorModule.RegisterRoutes(apiHelper, dependencies.AfdianOAuth)
+	userSponsorModule.RegisterRoutes(apiHelper, dependencies.AfdianOAuth, dependencies.AfdianConfig)
 	userModule.RegisterUserRoutes(apiHelper)
 	userInfoModule.RegisterUserInfoRoutes(apiHelper, dependencies.UserDataBuilder)
 	userPrivateAPIModule.RegisterUserPrivateAPIRoutes(apiHelper)

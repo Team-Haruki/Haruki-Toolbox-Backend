@@ -784,6 +784,7 @@ var (
 		{Name: "avatar_path", Type: field.TypeString, Nullable: true},
 		{Name: "afdian_user_id", Type: field.TypeString, Unique: true, Nullable: true, Size: 128},
 		{Name: "afdian_bound_at", Type: field.TypeTime, Nullable: true},
+		{Name: "afdian_verification_method", Type: field.TypeEnum, Nullable: true, Enums: []string{"oauth2", "order"}},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
 		{Name: "ticket_email_notifications_enabled", Type: field.TypeBool, Default: false},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
@@ -801,12 +802,12 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[12]},
+				Columns: []*schema.Column{UsersColumns[13]},
 			},
 			{
 				Name:    "user_role_banned",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[8], UsersColumns[9]},
+				Columns: []*schema.Column{UsersColumns[9], UsersColumns[10]},
 			},
 		},
 	}

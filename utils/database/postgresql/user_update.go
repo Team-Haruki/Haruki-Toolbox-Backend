@@ -121,6 +121,26 @@ func (_u *UserUpdate) ClearAfdianBoundAt() *UserUpdate {
 	return _u
 }
 
+// SetAfdianVerificationMethod sets the "afdian_verification_method" field.
+func (_u *UserUpdate) SetAfdianVerificationMethod(v user.AfdianVerificationMethod) *UserUpdate {
+	_u.mutation.SetAfdianVerificationMethod(v)
+	return _u
+}
+
+// SetNillableAfdianVerificationMethod sets the "afdian_verification_method" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAfdianVerificationMethod(v *user.AfdianVerificationMethod) *UserUpdate {
+	if v != nil {
+		_u.SetAfdianVerificationMethod(*v)
+	}
+	return _u
+}
+
+// ClearAfdianVerificationMethod clears the value of the "afdian_verification_method" field.
+func (_u *UserUpdate) ClearAfdianVerificationMethod() *UserUpdate {
+	_u.mutation.ClearAfdianVerificationMethod()
+	return _u
+}
+
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
 func (_u *UserUpdate) SetAllowCnMysekai(v bool) *UserUpdate {
 	_u.mutation.SetAllowCnMysekai(v)
@@ -470,6 +490,11 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		if err := user.AfdianVerificationMethodValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_verification_method", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_verification_method": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Role(); ok {
 		if err := user.RoleValidator(v); err != nil {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
@@ -513,6 +538,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.AfdianBoundAtCleared() {
 		_spec.ClearField(user.FieldAfdianBoundAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		_spec.SetField(user.FieldAfdianVerificationMethod, field.TypeEnum, value)
+	}
+	if _u.mutation.AfdianVerificationMethodCleared() {
+		_spec.ClearField(user.FieldAfdianVerificationMethod, field.TypeEnum)
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
@@ -890,6 +921,26 @@ func (_u *UserUpdateOne) ClearAfdianBoundAt() *UserUpdateOne {
 	return _u
 }
 
+// SetAfdianVerificationMethod sets the "afdian_verification_method" field.
+func (_u *UserUpdateOne) SetAfdianVerificationMethod(v user.AfdianVerificationMethod) *UserUpdateOne {
+	_u.mutation.SetAfdianVerificationMethod(v)
+	return _u
+}
+
+// SetNillableAfdianVerificationMethod sets the "afdian_verification_method" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAfdianVerificationMethod(v *user.AfdianVerificationMethod) *UserUpdateOne {
+	if v != nil {
+		_u.SetAfdianVerificationMethod(*v)
+	}
+	return _u
+}
+
+// ClearAfdianVerificationMethod clears the value of the "afdian_verification_method" field.
+func (_u *UserUpdateOne) ClearAfdianVerificationMethod() *UserUpdateOne {
+	_u.mutation.ClearAfdianVerificationMethod()
+	return _u
+}
+
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
 func (_u *UserUpdateOne) SetAllowCnMysekai(v bool) *UserUpdateOne {
 	_u.mutation.SetAllowCnMysekai(v)
@@ -1252,6 +1303,11 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		if err := user.AfdianVerificationMethodValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_verification_method", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_verification_method": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Role(); ok {
 		if err := user.RoleValidator(v); err != nil {
 			return &ValidationError{Name: "role", err: fmt.Errorf(`postgresql: validator failed for field "User.role": %w`, err)}
@@ -1312,6 +1368,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.AfdianBoundAtCleared() {
 		_spec.ClearField(user.FieldAfdianBoundAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.AfdianVerificationMethod(); ok {
+		_spec.SetField(user.FieldAfdianVerificationMethod, field.TypeEnum, value)
+	}
+	if _u.mutation.AfdianVerificationMethodCleared() {
+		_spec.ClearField(user.FieldAfdianVerificationMethod, field.TypeEnum)
 	}
 	if value, ok := _u.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
@@ -70,12 +71,14 @@ func newEnv(t *testing.T) *testEnv {
 			return c.SendStatus(401)
 		}
 		c.Locals("userID", c.Get("X-Test-User"))
+		c.Locals("emailVerified", c.Get("X-Test-Unverified") != "true")
 		c.Locals("authProxySessionID", c.Get("X-Test-Session"))
 		return c.Next()
 	}, usercore.RequireSelfUserParam("toolbox_user_id"), usercore.CheckUserNotBanned(h.api))
 	group.Get("/afdian", h.status)
 	group.Post("/afdian/authorize", h.authorize)
 	group.Post("/afdian/callback", h.callback)
+	group.Post("/afdian/verify-order", usercore.RequireVerifiedEmail(), h.verifyOrder)
 	group.Delete("/afdian", h.unlink)
 	group.Get("/sponsor-frames", h.frames)
 	group.Put("/sponsor-frames/:server/:game_user_id", h.saveFrame)
@@ -258,8 +261,8 @@ func TestAfdianConfigurationAndRateLimitFailClosed(t *testing.T) {
 func TestRegisteredBrowserRoutesRequireAuthentication(t *testing.T) {
 	app := fiber.New()
 	helper := &api.HarukiToolboxRouterHelpers{Router: app, SessionHandler: &api.SessionHandler{}}
-	RegisterRoutes(helper, OAuthConfig{})
-	for _, tc := range []struct{ method, path string }{{"GET", "afdian"}, {"GET", "sponsor-frames"}, {"POST", "afdian/authorize"}, {"POST", "afdian/callback"}, {"DELETE", "afdian"}, {"PUT", "sponsor-frames/cn/1"}} {
+	RegisterRoutes(helper, OAuthConfig{}, sponsor.NewAfdianConfig(sponsor.AfdianConfigOptions{}))
+	for _, tc := range []struct{ method, path string }{{"GET", "afdian"}, {"GET", "sponsor-frames"}, {"POST", "afdian/authorize"}, {"POST", "afdian/callback"}, {"POST", "afdian/verify-order"}, {"DELETE", "afdian"}, {"PUT", "sponsor-frames/cn/1"}} {
 		resp, err := app.Test(httptest.NewRequest(tc.method, "/api/user/alice/"+tc.path, nil))
 		if err != nil {
 			t.Fatal(err)

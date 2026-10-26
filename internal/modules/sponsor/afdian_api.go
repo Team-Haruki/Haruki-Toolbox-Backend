@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"crypto/subtle"
 	"encoding/hex"
 	json "encoding/json/v2"
 	"errors"
@@ -32,7 +33,9 @@ const (
 var ErrAfdianNotConfigured = errors.New("afdian user_id or api token is not configured")
 
 func afdianHTTPClient(cfg AfdianConfig) *http.Client {
-	return &http.Client{Timeout: cfg.timeout()}
+	return &http.Client{Timeout: cfg.timeout(), CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
 }
 
 func afdianSign(token string, params string, ts string, userID string) string {
@@ -90,7 +93,7 @@ func callAfdianList(ctx context.Context, client *http.Client, cfg AfdianConfig, 
 	if err := json.UnmarshalRead(bytes.NewReader(respBody), &payload, jsonvalue.Numbers); err != nil {
 		return afdianPage{}, err
 	}
-	if ec := readInt(payload, "ec"); ec != 0 && ec != 200 {
+	if ec := readInt(payload, "ec"); ec != 200 {
 		return afdianPage{}, fmt.Errorf("afdian api returned ec %d", ec)
 	}
 	data := readMap(payload, "data")
@@ -126,7 +129,7 @@ func VerifyAfdianOrder(ctx context.Context, cfg AfdianConfig, outTradeNo string,
 		return parsedAfdianOrder{}, false, err
 	}
 	for _, raw := range page.items {
-		if readString(raw, "out_trade_no", "outTradeNo") != outTradeNo {
+		if subtle.ConstantTimeCompare([]byte(readString(raw, "out_trade_no", "outTradeNo")), []byte(outTradeNo)) != 1 {
 			continue
 		}
 		parsed, ok := parseAfdianOrder(raw, now)

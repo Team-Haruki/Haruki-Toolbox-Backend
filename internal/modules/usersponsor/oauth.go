@@ -18,8 +18,6 @@ import (
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/authheader"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -175,23 +173,20 @@ func (h *handlers) callback(c fiber.Ctx) error {
 		return fiber.NewError(502, "afdian authorization could not be verified")
 	}
 	uid, _ := usercore.CurrentUserID(c)
-	// Only an unbound user (or reauthorization of the same identity) can bind.
-	// The unique nullable column arbitrates concurrent claims by different users.
-	n, err := h.api.DBManager.DB.User.Update().Where(user.IDEQ(uid), user.Or(user.AfdianUserIDIsNil(), user.AfdianUserIDEQ(afdianID))).
-		SetAfdianUserID(afdianID).SetAfdianBoundAt(time.Now().UTC()).Save(c.Context())
-	if postgresql.IsConstraintError(err) || (err == nil && n != 1) {
+	err = h.bindIdentity(c.Context(), uid, afdianID, "oauth2")
+	if errors.Is(err, errBindingConflict) {
 		return fiber.NewError(409, "afdian account is already bound; unlink before changing accounts")
 	}
 	if err != nil {
 		return api.ErrorInternal(c, "failed to save afdian binding")
 	}
-	usercore.WriteUserAuditLog(c, h.api, "user.afdian.bind", api.SystemLogResultSuccess, uid, nil)
+	usercore.WriteUserAuditLog(c, h.api, "user.afdian.bind", api.SystemLogResultSuccess, uid, map[string]any{"verificationMethod": "oauth2"})
 	return h.status(c)
 }
 
 func (h *handlers) unlink(c fiber.Ctx) error {
 	uid, _ := usercore.CurrentUserID(c)
-	if err := h.api.DBManager.DB.User.UpdateOneID(uid).ClearAfdianUserID().ClearAfdianBoundAt().Exec(c.Context()); err != nil {
+	if err := h.api.DBManager.DB.User.UpdateOneID(uid).ClearAfdianUserID().ClearAfdianBoundAt().ClearAfdianVerificationMethod().Exec(c.Context()); err != nil {
 		return api.ErrorInternal(c, "failed to unlink afdian account")
 	}
 	usercore.WriteUserAuditLog(c, h.api, "user.afdian.unlink", api.SystemLogResultSuccess, uid, nil)

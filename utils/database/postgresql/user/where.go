@@ -450,6 +450,36 @@ func AfdianBoundAtNotNil() predicate.User {
 	return predicate.User(sql.FieldNotNull(FieldAfdianBoundAt))
 }
 
+// AfdianVerificationMethodEQ applies the EQ predicate on the "afdian_verification_method" field.
+func AfdianVerificationMethodEQ(v AfdianVerificationMethod) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAfdianVerificationMethod, v))
+}
+
+// AfdianVerificationMethodNEQ applies the NEQ predicate on the "afdian_verification_method" field.
+func AfdianVerificationMethodNEQ(v AfdianVerificationMethod) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAfdianVerificationMethod, v))
+}
+
+// AfdianVerificationMethodIn applies the In predicate on the "afdian_verification_method" field.
+func AfdianVerificationMethodIn(vs ...AfdianVerificationMethod) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAfdianVerificationMethod, vs...))
+}
+
+// AfdianVerificationMethodNotIn applies the NotIn predicate on the "afdian_verification_method" field.
+func AfdianVerificationMethodNotIn(vs ...AfdianVerificationMethod) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAfdianVerificationMethod, vs...))
+}
+
+// AfdianVerificationMethodIsNil applies the IsNil predicate on the "afdian_verification_method" field.
+func AfdianVerificationMethodIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldAfdianVerificationMethod))
+}
+
+// AfdianVerificationMethodNotNil applies the NotNil predicate on the "afdian_verification_method" field.
+func AfdianVerificationMethodNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldAfdianVerificationMethod))
+}
+
 // AllowCnMysekaiEQ applies the EQ predicate on the "allow_cn_mysekai" field.
 func AllowCnMysekaiEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldAllowCnMysekai, v))

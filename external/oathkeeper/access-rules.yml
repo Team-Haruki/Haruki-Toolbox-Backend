@@ -321,7 +321,7 @@
 
 - id: haruki-protected-user-post
   match:
-    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<afdian/(authorize|callback)/?|ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform(/[^/]+)?/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
+    url: <http|https>://<[^/]+>/api/user/<[^/]+>/<afdian/(authorize|callback|verify-order)/?|ios/generate-upload-code|social-platform/(send-qq-mail|verify-qq-mail|generate-verification-code)|authorize-social-platform(/[^/]+)?/?|tickets/?|tickets/[^/]+/(messages|close)/?|game-account/[^/]+/[^/]+/?>
     methods: [POST]
   upstream:
     url: http://backend:16666

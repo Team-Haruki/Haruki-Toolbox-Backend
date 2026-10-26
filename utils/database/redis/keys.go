@@ -77,6 +77,10 @@ func (b KeyBuilder) BuildAfdianOAuthRateKey(userID string) string {
 	return "afdian:oauth:rate:" + b.hashExactIdentifier("afdian-user", userID)
 }
 
+func (b KeyBuilder) BuildAfdianOrderRateKey(scope, userID string) string {
+	return "afdian:order:rate:" + scope + ":" + b.hashExactIdentifier("afdian-order-user", userID)
+}
+
 func NewKeyBuilder(identifierHashSecret string) KeyBuilder {
 	return KeyBuilder{identifierHashSecret: identifierHashSecret}
 }

@@ -79,6 +79,20 @@ func (_c *UserCreate) SetNillableAfdianBoundAt(v *time.Time) *UserCreate {
 	return _c
 }
 
+// SetAfdianVerificationMethod sets the "afdian_verification_method" field.
+func (_c *UserCreate) SetAfdianVerificationMethod(v user.AfdianVerificationMethod) *UserCreate {
+	_c.mutation.SetAfdianVerificationMethod(v)
+	return _c
+}
+
+// SetNillableAfdianVerificationMethod sets the "afdian_verification_method" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAfdianVerificationMethod(v *user.AfdianVerificationMethod) *UserCreate {
+	if v != nil {
+		_c.SetAfdianVerificationMethod(*v)
+	}
+	return _c
+}
+
 // SetAllowCnMysekai sets the "allow_cn_mysekai" field.
 func (_c *UserCreate) SetAllowCnMysekai(v bool) *UserCreate {
 	_c.mutation.SetAllowCnMysekai(v)
@@ -347,6 +361,11 @@ func (_c *UserCreate) check() error {
 			return &ValidationError{Name: "afdian_user_id", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_user_id": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.AfdianVerificationMethod(); ok {
+		if err := user.AfdianVerificationMethodValidator(v); err != nil {
+			return &ValidationError{Name: "afdian_verification_method", err: fmt.Errorf(`postgresql: validator failed for field "User.afdian_verification_method": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.AllowCnMysekai(); !ok {
 		return &ValidationError{Name: "allow_cn_mysekai", err: errors.New(`postgresql: missing required field "User.allow_cn_mysekai"`)}
 	}
@@ -423,6 +442,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AfdianBoundAt(); ok {
 		_spec.SetField(user.FieldAfdianBoundAt, field.TypeTime, value)
 		_node.AfdianBoundAt = &value
+	}
+	if value, ok := _c.mutation.AfdianVerificationMethod(); ok {
+		_spec.SetField(user.FieldAfdianVerificationMethod, field.TypeEnum, value)
+		_node.AfdianVerificationMethod = &value
 	}
 	if value, ok := _c.mutation.AllowCnMysekai(); ok {
 		_spec.SetField(user.FieldAllowCnMysekai, field.TypeBool, value)
