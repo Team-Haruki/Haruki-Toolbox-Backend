@@ -212,7 +212,7 @@ func TestRecordInheritRetrievalFailureWritesUploadLog(t *testing.T) {
 		testUploadDependencies(),
 		harukiUtils.SupportedDataUploadServerEN,
 		harukiUtils.UploadDataTypeSuite,
-		&harukiUtils.SekaiInheritDataRetrieverResponse{UserID: gameUserID},
+		gameUserID,
 		err,
 	)
 

@@ -1113,6 +1113,52 @@ func HasIosScriptCodeWith(preds ...predicate.IOSScriptCode) predicate.User {
 	})
 }
 
+// HasInheritVaultKey applies the HasEdge predicate on the "inherit_vault_key" edge.
+func HasInheritVaultKey() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, InheritVaultKeyTable, InheritVaultKeyColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasInheritVaultKeyWith applies the HasEdge predicate on the "inherit_vault_key" edge with a given conditions (other predicates).
+func HasInheritVaultKeyWith(preds ...predicate.InheritVaultKey) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newInheritVaultKeyStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasInheritVaultEntries applies the HasEdge predicate on the "inherit_vault_entries" edge.
+func HasInheritVaultEntries() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, InheritVaultEntriesTable, InheritVaultEntriesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasInheritVaultEntriesWith applies the HasEdge predicate on the "inherit_vault_entries" edge with a given conditions (other predicates).
+func HasInheritVaultEntriesWith(preds ...predicate.InheritVaultEntry) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newInheritVaultEntriesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.User) predicate.User {
 	return predicate.User(sql.AndPredicates(predicates...))

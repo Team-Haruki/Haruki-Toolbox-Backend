@@ -70,6 +70,14 @@ type kratosIdentityRecord struct {
 	ID                  string                   `json:"id"`
 	Traits              map[string]any           `json:"traits"`
 	VerifiableAddresses []kratosVerifiableRecord `json:"verifiable_addresses"`
+	// Credentials lists the identity's login methods by type (password,
+	// oidc, passkey, ...). The admin API omits their secret configuration.
+	Credentials map[string]kratosCredentialRecord `json:"credentials"`
+}
+
+type kratosCredentialRecord struct {
+	Type        string   `json:"type"`
+	Identifiers []string `json:"identifiers"`
 }
 
 type kratosVerifiableRecord struct {

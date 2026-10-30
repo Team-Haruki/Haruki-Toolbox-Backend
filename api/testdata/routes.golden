@@ -11,6 +11,7 @@ DELETE /api/admin/users/:target_user_id/game-account-bindings/:server/:game_user
 DELETE /api/admin/users/:target_user_id/ios-upload-code
 DELETE /api/admin/users/:target_user_id/social-platform
 DELETE /api/admin/webhooks/:webhook_id
+DELETE /api/inherit/vault/entries/:entry_id
 DELETE /api/user/:toolbox_user_id/afdian
 DELETE /api/user/:toolbox_user_id/authorize-social-platform/:id/
 DELETE /api/user/:toolbox_user_id/game-account-grants/:server/:game_user_id/:data_type/:grantee_user_id
@@ -64,6 +65,10 @@ GET /api/admin/webhooks/:webhook_id/subscribers
 GET /api/admin/webhooks/settings
 GET /api/haruki-bot-neo/status
 GET /api/health
+GET /api/inherit/jobs/:job_id
+GET /api/inherit/jobs/:job_id/ws
+GET /api/inherit/vault/entries
+GET /api/inherit/vault/key
 GET /api/ios/module/:upload_code/*
 GET /api/ios/proxy/:server/suite/user/:user_id
 GET /api/ios/script/:upload_code/haruki-toolbox.js
@@ -140,6 +145,13 @@ POST /api/haruki-bot-neo/send-mail
 POST /api/harukiproxy/:server/:user_id/:data_type/upload
 POST /api/harukiproxy/v3/:server/:user_id/:data_type/upload
 POST /api/inherit/:server/:upload_type/submit
+POST /api/inherit/jobs
+POST /api/inherit/jobs/:job_id/cancel
+POST /api/inherit/jobs/:job_id/confirm
+POST /api/inherit/jobs/:job_id/ws-ticket
+POST /api/inherit/vault/entries/:entry_id/reissue
+POST /api/inherit/vault/entries/:entry_id/reveal
+POST /api/inherit/vault/key/reset
 POST /api/ios/proxy/:server/user/:user_id/mysekai
 POST /api/ios/script/:upload_code/upload
 POST /api/manual/:server/:user_id/:data_type/upload

@@ -54,6 +54,11 @@ func (User) Edges() []ent.Edge {
 		edge.To("ios_script_code", IOSScriptCode.Type).
 			Unique().
 			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("inherit_vault_key", InheritVaultKey.Type).
+			Unique().
+			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("inherit_vault_entries", InheritVaultEntry.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 	}
 }
 

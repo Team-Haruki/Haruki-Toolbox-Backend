@@ -35,5 +35,6 @@
 | [Ory 套件使用说明](ory-suite-usage.zh-CN.md) | Kratos / Hydra / Oathkeeper 各自的职责、登录态验证方式、社交登录（Google / Apple）接入、可信代理与转发 IP 的取值规则、为什么大量旧接口返回 410；设备授权的架构（§10.5）与配置（§10.6） |
 | [JSON 与数字精度约定](json-conventions.zh-CN.md) | JSON v2 的字段匹配、nil 表示、大整数精度及生成代码维护 |
 | [MessagePack codec 与 OrderedMap](msgpack-codec.zh-CN.md) | 共同字节游标、旧包退役、provider 字段规则、小对象合并分配和本机基准 |
+| [引继任务与引继保险库](inherit-jobs.md) | 新引继上传流程的前后端接口：步骤、WebSocket、保险库、二次验证与错误码。前端上线后删除 |
 
 编码代理与提交约定见仓库根目录的 [`AGENTS.md`](../AGENTS.md)。已完成的一次性设计、迁移计划和旧部署记录不在此保留，可通过 Git 历史查阅。

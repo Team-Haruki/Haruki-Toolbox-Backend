@@ -14,6 +14,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
@@ -435,6 +437,40 @@ func (_u *UserUpdate) SetIosScriptCode(v *IOSScriptCode) *UserUpdate {
 	return _u.SetIosScriptCodeID(v.ID)
 }
 
+// SetInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by ID.
+func (_u *UserUpdate) SetInheritVaultKeyID(id int) *UserUpdate {
+	_u.mutation.SetInheritVaultKeyID(id)
+	return _u
+}
+
+// SetNillableInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by ID if the given value is not nil.
+func (_u *UserUpdate) SetNillableInheritVaultKeyID(id *int) *UserUpdate {
+	if id != nil {
+		_u = _u.SetInheritVaultKeyID(*id)
+	}
+	return _u
+}
+
+// SetInheritVaultKey sets the "inherit_vault_key" edge to the InheritVaultKey entity.
+func (_u *UserUpdate) SetInheritVaultKey(v *InheritVaultKey) *UserUpdate {
+	return _u.SetInheritVaultKeyID(v.ID)
+}
+
+// AddInheritVaultEntryIDs adds the "inherit_vault_entries" edge to the InheritVaultEntry entity by IDs.
+func (_u *UserUpdate) AddInheritVaultEntryIDs(ids ...string) *UserUpdate {
+	_u.mutation.AddInheritVaultEntryIDs(ids...)
+	return _u
+}
+
+// AddInheritVaultEntries adds the "inherit_vault_entries" edges to the InheritVaultEntry entity.
+func (_u *UserUpdate) AddInheritVaultEntries(v ...*InheritVaultEntry) *UserUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddInheritVaultEntryIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -534,6 +570,33 @@ func (_u *UserUpdate) RemoveGameAccountDataGrantsReceived(v ...*GameAccountDataG
 func (_u *UserUpdate) ClearIosScriptCode() *UserUpdate {
 	_u.mutation.ClearIosScriptCode()
 	return _u
+}
+
+// ClearInheritVaultKey clears the "inherit_vault_key" edge to the InheritVaultKey entity.
+func (_u *UserUpdate) ClearInheritVaultKey() *UserUpdate {
+	_u.mutation.ClearInheritVaultKey()
+	return _u
+}
+
+// ClearInheritVaultEntries clears all "inherit_vault_entries" edges to the InheritVaultEntry entity.
+func (_u *UserUpdate) ClearInheritVaultEntries() *UserUpdate {
+	_u.mutation.ClearInheritVaultEntries()
+	return _u
+}
+
+// RemoveInheritVaultEntryIDs removes the "inherit_vault_entries" edge to InheritVaultEntry entities by IDs.
+func (_u *UserUpdate) RemoveInheritVaultEntryIDs(ids ...string) *UserUpdate {
+	_u.mutation.RemoveInheritVaultEntryIDs(ids...)
+	return _u
+}
+
+// RemoveInheritVaultEntries removes "inherit_vault_entries" edges to InheritVaultEntry entities.
+func (_u *UserUpdate) RemoveInheritVaultEntries(v ...*InheritVaultEntry) *UserUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveInheritVaultEntryIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -920,6 +983,80 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.InheritVaultKeyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.InheritVaultKeyTable,
+			Columns: []string{user.InheritVaultKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultkey.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.InheritVaultKeyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.InheritVaultKeyTable,
+			Columns: []string{user.InheritVaultKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultkey.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.InheritVaultEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedInheritVaultEntriesIDs(); len(nodes) > 0 && !_u.mutation.InheritVaultEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.InheritVaultEntriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1349,6 +1486,40 @@ func (_u *UserUpdateOne) SetIosScriptCode(v *IOSScriptCode) *UserUpdateOne {
 	return _u.SetIosScriptCodeID(v.ID)
 }
 
+// SetInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by ID.
+func (_u *UserUpdateOne) SetInheritVaultKeyID(id int) *UserUpdateOne {
+	_u.mutation.SetInheritVaultKeyID(id)
+	return _u
+}
+
+// SetNillableInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by ID if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInheritVaultKeyID(id *int) *UserUpdateOne {
+	if id != nil {
+		_u = _u.SetInheritVaultKeyID(*id)
+	}
+	return _u
+}
+
+// SetInheritVaultKey sets the "inherit_vault_key" edge to the InheritVaultKey entity.
+func (_u *UserUpdateOne) SetInheritVaultKey(v *InheritVaultKey) *UserUpdateOne {
+	return _u.SetInheritVaultKeyID(v.ID)
+}
+
+// AddInheritVaultEntryIDs adds the "inherit_vault_entries" edge to the InheritVaultEntry entity by IDs.
+func (_u *UserUpdateOne) AddInheritVaultEntryIDs(ids ...string) *UserUpdateOne {
+	_u.mutation.AddInheritVaultEntryIDs(ids...)
+	return _u
+}
+
+// AddInheritVaultEntries adds the "inherit_vault_entries" edges to the InheritVaultEntry entity.
+func (_u *UserUpdateOne) AddInheritVaultEntries(v ...*InheritVaultEntry) *UserUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddInheritVaultEntryIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -1448,6 +1619,33 @@ func (_u *UserUpdateOne) RemoveGameAccountDataGrantsReceived(v ...*GameAccountDa
 func (_u *UserUpdateOne) ClearIosScriptCode() *UserUpdateOne {
 	_u.mutation.ClearIosScriptCode()
 	return _u
+}
+
+// ClearInheritVaultKey clears the "inherit_vault_key" edge to the InheritVaultKey entity.
+func (_u *UserUpdateOne) ClearInheritVaultKey() *UserUpdateOne {
+	_u.mutation.ClearInheritVaultKey()
+	return _u
+}
+
+// ClearInheritVaultEntries clears all "inherit_vault_entries" edges to the InheritVaultEntry entity.
+func (_u *UserUpdateOne) ClearInheritVaultEntries() *UserUpdateOne {
+	_u.mutation.ClearInheritVaultEntries()
+	return _u
+}
+
+// RemoveInheritVaultEntryIDs removes the "inherit_vault_entries" edge to InheritVaultEntry entities by IDs.
+func (_u *UserUpdateOne) RemoveInheritVaultEntryIDs(ids ...string) *UserUpdateOne {
+	_u.mutation.RemoveInheritVaultEntryIDs(ids...)
+	return _u
+}
+
+// RemoveInheritVaultEntries removes "inherit_vault_entries" edges to InheritVaultEntry entities.
+func (_u *UserUpdateOne) RemoveInheritVaultEntries(v ...*InheritVaultEntry) *UserUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveInheritVaultEntryIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -1864,6 +2062,80 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.InheritVaultKeyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.InheritVaultKeyTable,
+			Columns: []string{user.InheritVaultKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultkey.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.InheritVaultKeyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.InheritVaultKeyTable,
+			Columns: []string{user.InheritVaultKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultkey.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.InheritVaultEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedInheritVaultEntriesIDs(); len(nodes) > 0 && !_u.mutation.InheritVaultEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.InheritVaultEntriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

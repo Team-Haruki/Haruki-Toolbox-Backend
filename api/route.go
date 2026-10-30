@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	adminModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admin"
 	adminContentModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincontent"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
@@ -40,6 +41,7 @@ import (
 	userTicketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usertickets"
 	webhookModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/webhook"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
@@ -85,8 +87,11 @@ type Dependencies struct {
 	ServerCryptor        harukiSekai.ServerCryptor
 	UploadProxy          string
 	InheritPacing        harukiSekai.InheritPacing
+	SekaiClient          harukiConfig.SekaiClientConfig
 	// Story is nil when story.enabled is false.
 	Story *storyModule.Service
+	// InheritVault is unavailable (not nil) when no master key is loaded.
+	InheritVault *inheritvault.Store
 }
 
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -113,6 +118,8 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 		ServerCryptor:             dependencies.ServerCryptor,
 		Proxy:                     dependencies.UploadProxy,
 		InheritPacing:             dependencies.InheritPacing,
+		InheritVault:              dependencies.InheritVault,
+		SekaiClient:               dependencies.SekaiClient,
 	})
 	iosModule.RegisterIOSRoutes(apiHelper, dependencies.IOSEndpoints)
 	oauth2Module.RegisterOAuth2Routes(apiHelper, oauth2Module.RouteOptions{

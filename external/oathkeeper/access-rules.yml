@@ -181,7 +181,10 @@
 
 - id: haruki-public-upload-entry
   match:
-    url: <http|https>://<[^/]+>/<ios/.*|api/ios/.*|api/inherit/.*>
+    # api/inherit/<server>/<type>/submit is the retired synchronous inherit
+    # route; it only answers 410. Everything else under api/inherit needs a
+    # session (the rules below).
+    url: <http|https>://<[^/]+>/<ios/.*|api/ios/.*|api/inherit/(jp|en)/(suite|mysekai)/submit>
     methods: [GET, POST, PUT]
   upstream:
     url: http://backend:16666
@@ -191,6 +194,48 @@
     handler: allow
   mutators:
     - handler: noop
+
+- id: haruki-protected-inherit-jobs
+  match:
+    url: <http|https>://<[^/]+>/api/inherit/<jobs|jobs/[^/]+|jobs/[^/]+/(confirm|cancel|ws-ticket)>
+    methods: [GET, POST]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+# The job WebSocket, like the tracker one: the upgrade request carries the
+# session cookie, and the backend also requires a one-time ticket from
+# POST .../ws-ticket in the query string.
+- id: haruki-protected-inherit-job-ws
+  match:
+    url: <http|https>://<[^/]+>/api/inherit/jobs/<[^/]+>/ws
+    methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
+
+- id: haruki-protected-inherit-vault
+  match:
+    url: <http|https>://<[^/]+>/api/inherit/vault/<key|key/reset|entries|entries/[^/]+|entries/[^/]+/(reveal|reissue)>
+    methods: [GET, POST, DELETE]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: header
 
 - id: haruki-public-legacy-auth
   match:

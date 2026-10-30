@@ -29,6 +29,7 @@
 - 对用户 URL 的出站请求在 dial 时拒绝私网 IP 并 pin 已校验 IP
 - introspection 固定 `access_token`，拒绝已禁用 client 的 token，禁用 client 时吊销其 token/consent
 - 公开端点不暴露金额、PII、凭据；错误与时序不区分「不存在」与「无权限」
+- 引继 ID / 密码、游戏登录凭据和新引继码只存在于内存与 `internal/platform/inheritvault` 的密封记录（凭据 ≤7 天、引继码 24 小时、可销毁、操作写 system log）；不进日志、错误、Redis 键名或明文存储；私钥每次由属主密码或 PIN 解开、用完即清
 
 ## 测试与文档
 

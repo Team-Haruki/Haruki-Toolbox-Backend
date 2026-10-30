@@ -13,6 +13,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
@@ -351,6 +353,40 @@ func (_c *UserCreate) SetIosScriptCode(v *IOSScriptCode) *UserCreate {
 	return _c.SetIosScriptCodeID(v.ID)
 }
 
+// SetInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by ID.
+func (_c *UserCreate) SetInheritVaultKeyID(id int) *UserCreate {
+	_c.mutation.SetInheritVaultKeyID(id)
+	return _c
+}
+
+// SetNillableInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by ID if the given value is not nil.
+func (_c *UserCreate) SetNillableInheritVaultKeyID(id *int) *UserCreate {
+	if id != nil {
+		_c = _c.SetInheritVaultKeyID(*id)
+	}
+	return _c
+}
+
+// SetInheritVaultKey sets the "inherit_vault_key" edge to the InheritVaultKey entity.
+func (_c *UserCreate) SetInheritVaultKey(v *InheritVaultKey) *UserCreate {
+	return _c.SetInheritVaultKeyID(v.ID)
+}
+
+// AddInheritVaultEntryIDs adds the "inherit_vault_entries" edge to the InheritVaultEntry entity by IDs.
+func (_c *UserCreate) AddInheritVaultEntryIDs(ids ...string) *UserCreate {
+	_c.mutation.AddInheritVaultEntryIDs(ids...)
+	return _c
+}
+
+// AddInheritVaultEntries adds the "inherit_vault_entries" edges to the InheritVaultEntry entity.
+func (_c *UserCreate) AddInheritVaultEntries(v ...*InheritVaultEntry) *UserCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddInheritVaultEntryIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -646,6 +682,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(iosscriptcode.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.InheritVaultKeyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   user.InheritVaultKeyTable,
+			Columns: []string{user.InheritVaultKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultkey.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.InheritVaultEntriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InheritVaultEntriesTable,
+			Columns: []string{user.InheritVaultEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(inheritvaultentry.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

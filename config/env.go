@@ -198,6 +198,10 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := overrideInt(&cfg.SekaiClient.InheritPacing.SuiteFollowupMS, "SEKAI_INHERIT_PAUSE_SUITE_FOLLOWUP_MS"); err != nil {
 		return err
 	}
+	overrideString(&cfg.InheritVault.MasterKeyFile, "INHERIT_VAULT_MASTER_KEY_FILE")
+	if err := overrideInt(&cfg.InheritVault.MasterKeyVersion, "INHERIT_VAULT_MASTER_KEY_VERSION"); err != nil {
+		return err
+	}
 
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")

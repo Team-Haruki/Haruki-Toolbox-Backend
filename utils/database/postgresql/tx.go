@@ -28,6 +28,10 @@ type Tx struct {
 	GroupList *GroupListClient
 	// IOSScriptCode is the client for interacting with the IOSScriptCode builders.
 	IOSScriptCode *IOSScriptCodeClient
+	// InheritVaultEntry is the client for interacting with the InheritVaultEntry builders.
+	InheritVaultEntry *InheritVaultEntryClient
+	// InheritVaultKey is the client for interacting with the InheritVaultKey builders.
+	InheritVaultKey *InheritVaultKeyClient
 	// OAuth2ClientWebhookEndpoint is the client for interacting with the OAuth2ClientWebhookEndpoint builders.
 	OAuth2ClientWebhookEndpoint *OAuth2ClientWebhookEndpointClient
 	// RiskEvent is the client for interacting with the RiskEvent builders.
@@ -197,6 +201,8 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupList = NewGroupListClient(tx.config)
 	tx.IOSScriptCode = NewIOSScriptCodeClient(tx.config)
+	tx.InheritVaultEntry = NewInheritVaultEntryClient(tx.config)
+	tx.InheritVaultKey = NewInheritVaultKeyClient(tx.config)
 	tx.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(tx.config)
 	tx.RiskEvent = NewRiskEventClient(tx.config)
 	tx.RiskRule = NewRiskRuleClient(tx.config)

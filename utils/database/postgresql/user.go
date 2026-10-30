@@ -9,6 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
@@ -73,9 +74,13 @@ type UserEdges struct {
 	GameAccountDataGrantsReceived []*GameAccountDataGrant `json:"game_account_data_grants_received,omitempty"`
 	// IosScriptCode holds the value of the ios_script_code edge.
 	IosScriptCode *IOSScriptCode `json:"ios_script_code,omitzero"`
+	// InheritVaultKey holds the value of the inherit_vault_key edge.
+	InheritVaultKey *InheritVaultKey `json:"inherit_vault_key,omitzero"`
+	// InheritVaultEntries holds the value of the inherit_vault_entries edge.
+	InheritVaultEntries []*InheritVaultEntry `json:"inherit_vault_entries,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [8]bool
 }
 
 // SocialPlatformInfoOrErr returns the SocialPlatformInfo value or an error if the edge
@@ -134,6 +139,26 @@ func (e UserEdges) IosScriptCodeOrErr() (*IOSScriptCode, error) {
 		return nil, &NotFoundError{label: iosscriptcode.Label}
 	}
 	return nil, &NotLoadedError{edge: "ios_script_code"}
+}
+
+// InheritVaultKeyOrErr returns the InheritVaultKey value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e UserEdges) InheritVaultKeyOrErr() (*InheritVaultKey, error) {
+	if e.InheritVaultKey != nil {
+		return e.InheritVaultKey, nil
+	} else if e.loadedTypes[6] {
+		return nil, &NotFoundError{label: inheritvaultkey.Label}
+	}
+	return nil, &NotLoadedError{edge: "inherit_vault_key"}
+}
+
+// InheritVaultEntriesOrErr returns the InheritVaultEntries value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) InheritVaultEntriesOrErr() ([]*InheritVaultEntry, error) {
+	if e.loadedTypes[7] {
+		return e.InheritVaultEntries, nil
+	}
+	return nil, &NotLoadedError{edge: "inherit_vault_entries"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -322,6 +347,16 @@ func (_m *User) QueryGameAccountDataGrantsReceived() *GameAccountDataGrantQuery 
 // QueryIosScriptCode queries the "ios_script_code" edge of the User entity.
 func (_m *User) QueryIosScriptCode() *IOSScriptCodeQuery {
 	return NewUserClient(_m.config).QueryIosScriptCode(_m)
+}
+
+// QueryInheritVaultKey queries the "inherit_vault_key" edge of the User entity.
+func (_m *User) QueryInheritVaultKey() *InheritVaultKeyQuery {
+	return NewUserClient(_m.config).QueryInheritVaultKey(_m)
+}
+
+// QueryInheritVaultEntries queries the "inherit_vault_entries" edge of the User entity.
+func (_m *User) QueryInheritVaultEntries() *InheritVaultEntryQuery {
+	return NewUserClient(_m.config).QueryInheritVaultEntries(_m)
 }
 
 // Update returns a builder for updating this User.

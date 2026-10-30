@@ -3,6 +3,7 @@ package sekai
 import (
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 var (
@@ -135,3 +136,22 @@ func IsAuthError(err error) bool {
 	var authErr *AuthError
 	return errors.As(err, &authErr)
 }
+
+func asAPIError(err error) (*APIError, bool) {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr, true
+	}
+	return nil, false
+}
+
+// APIStatus returns the HTTP status of the game API error in err's chain: 0
+// for a transport failure, -1 when err carries no *APIError.
+func APIStatus(err error) int {
+	if apiErr, ok := asAPIError(err); ok {
+		return apiErr.StatusCode
+	}
+	return -1
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
