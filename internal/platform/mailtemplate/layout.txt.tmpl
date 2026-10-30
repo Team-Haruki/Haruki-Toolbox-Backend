@@ -1,0 +1,33 @@
+{{.Brand}}
+
+{{.Title}}
+{{range .Intro}}
+{{.}}
+{{end}}
+{{- with .Code}}
+{{.Label}}：{{.Value}}
+{{- if .Note}}
+（{{.Note}}）
+{{- end}}
+{{end}}
+{{- if .Details}}
+{{range .Details}}{{.Label}}：{{.Value}}
+{{end}}
+{{- end}}
+{{- with .Quote}}
+{{.Label}}：
+{{.Text}}
+{{end}}
+{{- with .Action}}
+{{.Label}}：
+{{.URL}}
+{{end}}
+{{- range .Outro}}
+{{.}}
+{{end}}
+{{- with .Notice}}
+{{.}}
+{{end}}
+--
+{{.Footer}}
+{{.SiteURL}}

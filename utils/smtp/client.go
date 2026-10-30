@@ -3,11 +3,13 @@ package smtp
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strings"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 )
 
 const defaultSMTPTimeout = 10 * time.Second
@@ -130,11 +132,16 @@ func shouldFallbackToStartTLS(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "first record does not look like a tls handshake")
 }
 
+// DefaultDisplayName is the sender name used when neither the caller nor the
+// configuration (user_system.smtp.mail_name) names one.
+const DefaultDisplayName = "Haruki 工具箱"
+
 type HarukiSMTPClient struct {
-	Addr    string
-	Auth    smtp.Auth
-	From    string
-	Timeout time.Duration
+	Addr        string
+	Auth        smtp.Auth
+	From        string
+	DisplayName string
+	Timeout     time.Duration
 }
 
 func NewSMTPClient(cfg config.SMTPConfig) *HarukiSMTPClient {
@@ -142,33 +149,39 @@ func NewSMTPClient(cfg config.SMTPConfig) *HarukiSMTPClient {
 	auth := smtp.PlainAuth("", cfg.SMTPMail, cfg.SMTPPass, cfg.SMTPAddr)
 	timeout := normalizeSMTPTimeout(time.Duration(cfg.TimeoutSeconds) * time.Second)
 	return &HarukiSMTPClient{
-		Addr:    addr,
-		Auth:    auth,
-		From:    cfg.SMTPMail,
-		Timeout: timeout,
+		Addr:        addr,
+		Auth:        auth,
+		From:        cfg.SMTPMail,
+		DisplayName: strings.TrimSpace(cfg.MailName),
+		Timeout:     timeout,
 	}
 }
 
-func (c *HarukiSMTPClient) Send(to []string, subject, body string, displayName string) error {
-	headers := make(map[string]string)
-	if displayName != "" {
-		headers["From"] = fmt.Sprintf("%s <%s>", displayName, c.From)
-	} else {
-		headers["From"] = c.From
+// SendMessage sends msg as a multipart/alternative email. An empty
+// displayName falls back to the configured sender name.
+// The same validated recipient list is used for the envelope and the To
+// header.
+func (c *HarukiSMTPClient) SendMessage(to []string, msg Message, displayName string) error {
+	recipients, err := validRecipients(to)
+	if err != nil {
+		return err
 	}
-	headers["To"] = strings.Join(to, ", ")
-	headers["Subject"] = subject
-	headers["MIME-Version"] = "1.0"
-	headers["Content-Type"] = "text/html; charset=\"UTF-8\""
-	headers["Date"] = time.Now().Format(time.RFC1123Z)
-	var msgBuilder strings.Builder
-	for k, v := range headers {
-		_, err := fmt.Fprintf(&msgBuilder, "%s: %s\r\n", k, v)
-		if err != nil {
-			return err
-		}
+	if err := msg.validate(); err != nil {
+		return err
 	}
-	msgBuilder.WriteString("\r\n")
-	msgBuilder.WriteString(body)
-	return SendMailTLS(c.Addr, c.Auth, c.From, to, []byte(msgBuilder.String()), c.Timeout)
+	body, err := buildMIME(mail.Address{Name: c.senderName(displayName), Address: c.From}, recipients, msg, time.Now())
+	if err != nil {
+		return err
+	}
+	return SendMailTLS(c.Addr, c.Auth, c.From, recipients, body, c.Timeout)
+}
+
+func (c *HarukiSMTPClient) senderName(displayName string) string {
+	if name := strings.TrimSpace(singleLine(displayName)); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(singleLine(c.DisplayName)); name != "" {
+		return name
+	}
+	return DefaultDisplayName
 }

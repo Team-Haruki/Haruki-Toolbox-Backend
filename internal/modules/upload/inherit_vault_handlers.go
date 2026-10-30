@@ -3,7 +3,6 @@ package upload
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +10,9 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -226,7 +227,7 @@ func (s *inheritService) handleVaultReveal(c fiber.Ctx) error {
 		return respondProblem(c, errInternal)
 	}
 	s.writeAudit(meta, "inherit.vault.reveal", "success", entryID, s.entryAuditMeta(entry))
-	s.notify(meta, "已查看", entry)
+	s.notify(meta, mailtemplate.InheritCodeRevealed, entry)
 	return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &revealResponse{InheritID: inheritID, Password: password, CodeExpiresAt: entry.CodeExpiresAt})
 }
 
@@ -303,7 +304,7 @@ func (s *inheritService) handleVaultReissue(c fiber.Ctx) error {
 		resp.Warnings = append(resp.Warnings, *jobProblemFor(codeVaultFallback))
 	}
 	s.writeAudit(meta, "inherit.vault.reissue", "success", entryID, s.entryAuditMeta(entry))
-	s.notify(meta, "已重新签发", entry)
+	s.notify(meta, mailtemplate.InheritCodeReissued, entry)
 	return harukiAPIHelper.Responses.SuccessResponse(c, "reissued", resp)
 }
 
@@ -359,29 +360,39 @@ func (s *inheritService) entryAuditMeta(e *inheritvault.Entry) map[string]any {
 }
 
 // notify mails the owner when a stored code is shown or replaced, if their
-// email is verified. Delivery is best effort and never delays the response.
-func (s *inheritService) notify(meta requestMeta, action string, e *inheritvault.Entry) {
+// email is verified. The mail names the action, time, server, masked game
+// user ID and IP only; it never carries the code or any credential. Delivery
+// is best effort and never delays the response.
+func (s *inheritService) notify(meta requestMeta, compose func(mailtemplate.InheritVaultActivity) mailtemplate.Email, e *inheritvault.Entry) {
 	if !meta.EmailVerified || s.sendMail == nil {
 		return
 	}
-	server, masked, at := strings.ToUpper(e.Server), inheritvault.MaskGameUserID(e.GameUserID), s.now().Format(time.RFC3339)
-	userID, ip := meta.UserID, meta.IP
+	activity := mailtemplate.InheritVaultActivity{
+		Server:           e.Server,
+		MaskedGameUserID: inheritvault.MaskGameUserID(e.GameUserID),
+		IP:               meta.IP,
+		At:               s.now(),
+	}
+	userID := meta.UserID
 	mailnotify.Dispatch(func(ctx context.Context) {
 		email, _, _ := s.userEmail(ctx, userID)
 		if email == "" || !strings.Contains(email, "@") {
 			return
 		}
-		subject := "Haruki Toolbox：引继码" + action
-		body := fmt.Sprintf("你的 Haruki Toolbox 保险库中 %s 服账号 %s 的引继码%s。\n时间：%s\nIP：%s\n\n如果这不是你本人的操作，请立即修改 Toolbox 密码，并在游戏内重新生成引继码。", server, masked, action, at, ip)
-		s.sendMail(email, subject, body)
+		msg, err := mailtemplate.Render(compose(activity))
+		if err != nil {
+			s.logger.Warnf("Inherit vault notification mail could not be rendered: %v", err)
+			return
+		}
+		s.sendMail(email, msg)
 	})
 }
 
-func (s *inheritService) sendSMTP(to, subject, body string) {
+func (s *inheritService) sendSMTP(to string, msg harukiSMTP.Message) {
 	if s.api == nil || s.api.SMTPClient == nil {
 		return
 	}
-	if err := s.api.SMTPClient.Send([]string{to}, subject, body, "Haruki Toolbox"); err != nil {
+	if err := s.api.SMTPClient.SendMessage([]string{to}, msg, ""); err != nil {
 		s.logger.Warnf("Inherit vault notification mail failed: %v", err)
 	}
 }

@@ -3,11 +3,10 @@ package harukibotneo
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -70,8 +69,11 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 
 		// Send email
 		email := fmt.Sprintf("%s@qq.com", qqStr)
-		body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
-		if err := apiHelper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki Bot", body, "Haruki Bot | 星云科技"); err != nil {
+		msg, err := mailtemplate.Render(mailtemplate.BotVerificationCode(code, verifyCodeTTL))
+		if err == nil {
+			err = apiHelper.SMTPClient.SendMessage([]string{email}, msg, botMailDisplayName)
+		}
+		if err != nil {
 			if delErr := apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey); delErr != nil {
 				harukiLogger.Warnf("Failed to rollback verification code for QQ %s: %v", qqStr, delErr)
 			}

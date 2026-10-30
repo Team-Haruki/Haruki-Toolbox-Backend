@@ -3,6 +3,9 @@ package harukibotneo
 import "time"
 
 const (
+	// botMailDisplayName is the sender name of HarukiBot NEO code mail.
+	botMailDisplayName = "Haruki Bot | 星云科技"
+
 	verifyCodeTTL     = 10 * time.Minute
 	verifyCodeLen     = 6
 	maxVerifyAttempts = 5

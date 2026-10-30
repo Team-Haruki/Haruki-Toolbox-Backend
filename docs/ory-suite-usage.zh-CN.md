@@ -958,6 +958,20 @@ KRATOS_OIDC_APPLE_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----
 （Private Relay）也可以正常使用。前端无需硬编码 provider 列表，应渲染 Kratos login /
 registration flow 中 `method=oidc`、`provider=apple` 的 UI node。
 
+#### 11.1.2 邮件模板
+
+Kratos 发出的邮件（邮箱验证码、找回账号验证码，以及登录 / 注册验证码）与 Backend 自己发出的
+邮件共用同一个版式，模板位于 `external/kratos/courier-templates/`，由
+`internal/platform/mailtemplate` 生成（见该包的 `kratos.go`），不要手改。改动版式或文案后执行：
+
+```bash
+UPDATE_KRATOS_TEMPLATES=1 go test ./internal/platform/mailtemplate -run TestKratosCourierTemplatesAreGenerated
+```
+
+Kratos 通过 `courier.template_override_path`（compose 中为 `COURIER_TEMPLATE_OVERRIDE_PATH`）
+读取这个目录；目录中缺少的模板会回退到 Kratos 内置模板。Kratos 在进程内缓存已加载的模板，不会热加载
+模板文件的改动。
+
 ### 11.2 Auth Proxy / Oathkeeper 相关
 
 核心配置项：

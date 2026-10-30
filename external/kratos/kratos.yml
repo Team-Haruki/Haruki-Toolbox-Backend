@@ -152,6 +152,10 @@ identity:
       url: file:///etc/config/kratos/identity.schema.json
 
 courier:
+  # Email templates generated from internal/platform/mailtemplate (see
+  # kratos.go there). Templates missing from this directory fall back to the
+  # Kratos built-in ones.
+  template_override_path: /etc/config/kratos/courier-templates
   smtp:
     connection_uri: "smtps://smtp-user:smtp-password@smtp.your-provider.com:465/"
     from_address: "no-reply@example.com"

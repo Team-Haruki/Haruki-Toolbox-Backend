@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{.Subject}}</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; }
+a { text-decoration: none; }
+@media (max-width: 600px) {
+  .hm-outer { padding: 20px 8px !important; }
+  .hm-card { padding: 24px 20px !important; }
+  .hm-code { font-size: 26px !important; letter-spacing: 4px !important; }
+}
+@media (prefers-color-scheme: dark) {
+  .hm-page { background-color: #111113 !important; }
+  .hm-card { background-color: #1c1c1f !important; border-color: #2e2e33 !important; }
+  .hm-strong { color: #f4f4f5 !important; }
+  .hm-text { color: #d4d4d8 !important; }
+  .hm-muted { color: #a1a1aa !important; }
+  .hm-box { background-color: #232327 !important; border-color: #3f3f46 !important; }
+  .hm-rule { border-color: #2e2e33 !important; }
+  .hm-link { color: #6edece !important; }
+}
+</style>
+</head>
+<body class="hm-page" style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#f4f4f5;">{{.Preheader}}</div>
+<table role="presentation" class="hm-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
+<tr>
+<td class="hm-outer" align="center" style="padding:32px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif;">
+<tr>
+<td style="padding:0 4px 14px 4px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td width="4" bgcolor="#007a6e" style="width:4px;background-color:#007a6e;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>
+<td class="hm-strong" style="padding-left:10px;font-size:16px;line-height:20px;font-weight:600;color:#18181b;">{{.Brand}}</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td class="hm-card" bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #e4e4e7;border-radius:8px;padding:32px 32px 28px 32px;">
+<h1 class="hm-strong" style="margin:0 0 16px 0;font-size:20px;line-height:28px;font-weight:600;color:#18181b;">{{.Title}}</h1>
+{{- range .Intro}}
+<p class="hm-text" style="margin:0 0 14px 0;font-size:15px;line-height:24px;color:#3f3f46;">{{.}}</p>
+{{- end}}
+{{- with .Code}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 18px 0;">
+<tr>
+<td class="hm-box" bgcolor="#f4f4f5" align="center" style="background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;padding:18px 12px;">
+<div class="hm-muted" style="font-size:13px;line-height:18px;color:#71717a;margin:0 0 6px 0;">{{.Label}}</div>
+<div class="hm-code hm-strong" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace;font-size:30px;line-height:38px;font-weight:600;letter-spacing:6px;color:#18181b;">{{.Value}}</div>
+{{- if .Note}}
+<div class="hm-muted" style="font-size:13px;line-height:18px;color:#71717a;margin:6px 0 0 0;">{{.Note}}</div>
+{{- end}}
+</td>
+</tr>
+</table>
+{{- end}}
+{{- if .Details}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 18px 0;border-collapse:collapse;">
+{{- range .Details}}
+<tr>
+<td class="hm-muted hm-rule" valign="top" style="width:96px;padding:9px 12px 9px 0;border-top:1px solid #e4e4e7;font-size:14px;line-height:20px;color:#71717a;white-space:nowrap;">{{.Label}}</td>
+<td class="hm-strong hm-rule" valign="top" style="padding:9px 0;border-top:1px solid #e4e4e7;font-size:14px;line-height:20px;color:#18181b;word-break:break-all;">{{.Value}}</td>
+</tr>
+{{- end}}
+</table>
+{{- end}}
+{{- with .Quote}}
+<div class="hm-muted" style="margin:0 0 6px 0;font-size:13px;line-height:18px;color:#71717a;">{{.Label}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px 0;">
+<tr>
+<td class="hm-box hm-text" bgcolor="#f4f4f5" style="background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;padding:12px 14px;font-size:14px;line-height:22px;color:#3f3f46;word-break:break-word;white-space:pre-line;">{{.Text}}</td>
+</tr>
+</table>
+{{- end}}
+{{- with .Action}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 14px 0;">
+<tr>
+<td bgcolor="#007a6e" style="background-color:#007a6e;border-radius:6px;">
+<a href="{{.URL}}" target="_blank" style="display:inline-block;padding:11px 22px;font-size:15px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">{{.Label}}</a>
+</td>
+</tr>
+</table>
+<p class="hm-muted" style="margin:0 0 18px 0;font-size:13px;line-height:20px;color:#71717a;">如果按钮无法打开，请复制以下链接到浏览器：<br><a class="hm-link" href="{{.URL}}" target="_blank" style="color:#007a6e;text-decoration:underline;word-break:break-all;">{{.URL}}</a></p>
+{{- end}}
+{{- range .Outro}}
+<p class="hm-text" style="margin:0 0 14px 0;font-size:15px;line-height:24px;color:#3f3f46;">{{.}}</p>
+{{- end}}
+{{- with .Notice}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;">
+<tr>
+<td class="hm-rule hm-text" style="border-top:1px solid #e4e4e7;padding:16px 0 0 0;font-size:14px;line-height:22px;color:#3f3f46;">{{.}}</td>
+</tr>
+</table>
+{{- end}}
+</td>
+</tr>
+<tr>
+<td class="hm-muted" style="padding:18px 4px 0 4px;font-size:12px;line-height:20px;color:#71717a;">
+{{.Footer}}<br>
+<a class="hm-link" href="{{.SiteURL}}" target="_blank" style="color:#007a6e;text-decoration:none;">{{.SiteLabel}}</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
