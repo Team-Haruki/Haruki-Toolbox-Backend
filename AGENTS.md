@@ -76,7 +76,7 @@ go run ./main.go                                # 运行（需要 haruki-toolbox
 - `internal/modules/harukibotneo/` — HarukiBot NEO 注册与凭据重置（状态、发信、注册/重置）
 - `internal/modules/botsecurity/` — Haruki Cloud 推送的 bot 安全告警：内部接收（`bot_security.ingest_token_sha256`，未配置不注册路由）与 `/api/admin/bot-security` 管理端；主人 QQ 从 Bot 库按页批量解析，Bot 库不可用时置空
 - `internal/modules/sponsor/` + `adminsponsor/` — 爱发电赞助墙（公开读取 + webhook；爱发电 webhook 无签名，真实性靠 URL secret 和/或经爱发电 API 回查订单）与管理端。赞助时长分两个来源：爱发电时长由 `sponsor_afdian_orders` 中的订单重算，手动时长是管理员录入的 `sponsor_manual_durations` 条目（带备注、录入人），实际到期 = 爱发电时长之后依次接上手动条目。订单分类（`ClassifyAfdianOrder`）、两源合并（`ComputeAfdianPeriod` / `ComputeEffectiveExpiry`）与「当前 / 曾经」分类（`SponsorCategory`，实际到期在未来即当前，其余一律为曾经）只在 `sponsor/duration.go` 与 `helpers.go` 各有一处，公开接口直接下发 `category`，不要在别处（包括前端）另行推导；`sponsors.plan_expires_at`、`is_active`、`has_duration` 等只是重算出的缓存。手动条目、备注与订单金额只出现在管理端接口
-- `internal/platform/inheritvault/` — 引继保险库：用户密钥对（私钥先经 Argon2id 由 Toolbox 密码或保险库 PIN 包裹、再经服务端主密钥包裹）、按用户公钥密封的游戏登录凭据与新引继码、PostgreSQL 写入失败时的 Redis 暂存与回填、回收器。引继任务与保险库的接口在 `internal/modules/upload/inherit_*.go`，契约见 `docs/inherit-jobs.md`
+- `internal/platform/inheritvault/` — 引继码保险库：用户密钥对（私钥先经 Argon2id 由 Toolbox 密码或保险库 PIN 包裹、再经服务端主密钥包裹）、按用户公钥密封的游戏登录凭据与新引继码、PostgreSQL 写入失败时的 Redis 暂存与回填、回收器。引继任务与保险库的接口在 `internal/modules/upload/inherit_*.go`，契约见 `docs/inherit-jobs.md`
 - `utils/game/sekai/` 的 `InheritSession` — 一次引继会话（HTTP client、请求头、会话 token、按步骤调用；JP/EN 的差异只在 `inheritRegions`）。它不写日志，进度经 `Progress` 回调交给任务层
 - `internal/platform/mailtemplate/` — 所有邮件的统一版式：每封邮件是一个 `mailtemplate.Email`（数据，构造函数在 `emails.go`），`Render` 用同一份数据生成 HTML 与纯文本两部分，经 `smtp.HarukiSMTPClient.SendMessage` 以 multipart/alternative 发出。新邮件只加构造函数和测试样例，不要另写 HTML；邮件里不得出现引继码、密码或任何凭据，时间用 `FormatTime`（北京时间）。Kratos 的邮件模板（`external/kratos/courier-templates/`）也由这里生成，改版式或文案后按 `kratos.go` 顶部说明重新生成
 - `utils/codec/msgpackcodec/` — 面向不可信上传数据的有界 MessagePack 解码与 JSON 转换（`ValidateMaxDepth` 校验深度、按长度封顶）；`utils/orderedmap/` 是其 OrderedMap 存储
@@ -244,7 +244,7 @@ Ory 相关改动尤其建议关注：
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
 - `docs/harukiproxy-v3-client-integration.zh-CN.md` — HarukiProxy v3 客户端对接（OAuth2 上传）
 - `docs/backend-architecture.zh-CN.md`、`docs/json-conventions.zh-CN.md`、`docs/msgpack-codec.zh-CN.md` — 贡献者的代码约定
-- `docs/inherit-jobs.md` — 引继任务与引继保险库的前后端接口契约（前端上线后删除）
+- `docs/inherit-jobs.md` — 引继任务与引继码保险库的前后端接口契约（前端上线后删除）
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 - `external/oathkeeper/oathkeeper.yml` — Oathkeeper auth-proxy header mutator 约定
 

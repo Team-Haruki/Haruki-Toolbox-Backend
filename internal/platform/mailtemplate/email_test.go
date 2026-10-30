@@ -23,8 +23,8 @@ func sampleEmails() []sampleEmail {
 		{"email-verification-code", "邮箱验证码（绑定 QQ 时发送）", EmailVerificationCode("483920", 5*time.Minute), []string{"483920", "5 分钟内有效"}},
 		{"bot-verification-code", "HarukiBot NEO 注册 / 重置凭据验证码", BotVerificationCode("615204", 10*time.Minute), []string{"615204", "10 分钟内有效", "HarukiBot NEO"}},
 		{"game-account-transferred", "游戏账号绑定已转移（通知原绑定者）", GameAccountTransferred("jp", "7105938261048204", sampleTime), []string{"JP", "7105938261048204", "2026-10-31 14:05:09（北京时间）"}},
-		{"inherit-code-revealed", "引继保险库：引继码已被查看", InheritCodeRevealed(activity), []string{"查看引继码", "71****8204", "203.0.113.9", "2026-10-31 14:05:09（北京时间）", "修改 Haruki 工具箱密码"}},
-		{"inherit-code-reissued", "引继保险库：引继码已重新签发", InheritCodeReissued(activity), []string{"重新签发引继码", "71****8204", "原引继码已失效"}},
+		{"inherit-code-revealed", "引继码保险库：引继码已被查看", InheritCodeRevealed(activity), []string{"查看引继码", "Haruki 工具箱引继码保险库", "71****8204", "203.0.113.9", "2026-10-31 14:05:09（北京时间）", "修改 Haruki 工具箱密码"}},
+		{"inherit-code-reissued", "引继码保险库：引继码已重新签发", InheritCodeReissued(activity), []string{"重新签发引继码", "Haruki 工具箱引继码保险库", "71****8204", "原引继码已失效"}},
 		{"ticket-created", "工单：新工单（发给管理员）", TicketNotification(Ticket{
 			Event: TicketCreated, PublicID: "TK-20261031-0042", Subject: "上传 MySekai 数据时提示超时",
 			Status: "新建", Preview: "从昨天开始用 iOS 模块上传 MySekai 数据一直提示超时，Suite 数据正常。", URL: SiteURL + "/tickets/TK-20261031-0042",

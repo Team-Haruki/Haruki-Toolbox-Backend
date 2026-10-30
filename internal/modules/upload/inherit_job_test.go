@@ -591,15 +591,32 @@ func TestConfirmTimeoutCancelsWithoutExecuting(t *testing.T) {
 	env.createJob(validJobRequest())
 }
 
+// TestCancelOnlyBeforeExecute checks that only the owner can cancel, that a
+// job can be cancelled while it waits for confirmation and not after, and
+// that the lock is free by the time the cancellation is published.
 func TestCancelOnlyBeforeExecute(t *testing.T) {
 	env := newInheritTestEnv(t)
 	id := env.createJob(validJobRequest())
 	env.waitStatus(id, "awaiting_confirm")
+	rt := env.svc.registry.get(id)
+	if rt == nil {
+		t.Fatal("job not registered")
+	}
+	events, stop := rt.subscribe()
+	defer stop()
 	if res := env.call(testIntruder, "POST", "/api/inherit/jobs/"+id+"/cancel", nil); res.Status != http.StatusNotFound {
 		t.Fatalf("intruder cancel = %d", res.Status)
 	}
 	if res := env.call(testOwner, "POST", "/api/inherit/jobs/"+id+"/cancel", nil); res.Status != http.StatusOK {
 		t.Fatalf("cancel = %d %s", res.Status, res.Raw)
+	}
+	// The lock is released before the cancelled state is published, so the
+	// next create below never races the finished job.
+	lockAtPublish := waitPublishedStatus(t, events, jobStatusCancelled, func() bool {
+		return env.redis.Exists(inheritActiveKeyPrefix + testOwner)
+	})
+	if lockAtPublish {
+		t.Fatal("the cancelled state was published while the job still held the active-job lock")
 	}
 	job := env.waitStatus(id, "cancelled")
 	if errorCode(job) != codeCancelled || env.game.called("execute") {
@@ -619,6 +636,200 @@ func TestCancelOnlyBeforeExecute(t *testing.T) {
 	}
 	close(block)
 	env.waitStatus(id, "succeeded")
+}
+
+// Regression: creating a job right after cancelling one used to answer
+// job_already_running with the cancelled job's ID while that job was still
+// winding down, and the client then resumed the cancelled job.
+func TestCreateRightAfterCancelStartsANewJob(t *testing.T) {
+	env := newInheritTestEnv(t)
+	first := env.createJob(validJobRequest())
+	env.waitStatus(first, "awaiting_confirm")
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs/"+first+"/cancel", nil); res.Status != http.StatusOK {
+		t.Fatalf("cancel = %d %s", res.Status, res.Raw)
+	}
+	// No wait: the cancelled job may not have reached its terminal state yet.
+	second := env.createJob(validJobRequest())
+	if second == first {
+		t.Fatal("create returned the cancelled job")
+	}
+	if job := env.waitStatus(first, "cancelled"); errorCode(job) != codeCancelled {
+		t.Fatalf("first job = %v", job)
+	}
+	env.waitStatus(second, "awaiting_confirm")
+
+	// Once the cancelled job is fully gone, its release has left the new
+	// job's lock in place, and the conflict names the new job.
+	waitFor(t, func() bool { return env.svc.registry.get(first) == nil })
+	if got, err := env.redis.Get(inheritActiveKeyPrefix + testOwner); err != nil || got != second {
+		t.Fatalf("lock = %q, %v; want %s", got, err, second)
+	}
+	res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+	if res.Status != http.StatusConflict || res.code() != "job_already_running" || res.data()["job_id"] != second {
+		t.Fatalf("third job = %d %s", res.Status, res.Raw)
+	}
+}
+
+// A lock that still points to a finished job, or to one cancelled before it
+// executed, never blocks the owner and is never named in job_already_running.
+func TestLockOfAFinishedJobIsTakenOver(t *testing.T) {
+	cases := map[string]func(env *inheritTestEnv, job *inheritJob){
+		"finished, still registered": func(env *inheritTestEnv, job *inheritJob) {
+			job.Status = jobStatusCancelled
+			env.svc.registry.add(&jobRuntime{job: job})
+		},
+		"cancelled, winding down": func(env *inheritTestEnv, job *inheritJob) {
+			job.Status = jobStatusAwaitingConfirm
+			env.svc.registry.add(&jobRuntime{job: job, cancelled: true})
+		},
+		"finished, store only": func(env *inheritTestEnv, job *inheritJob) {
+			job.Status = jobStatusSucceeded
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			env := newInheritTestEnv(t)
+			old := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
+			setup(env, old)
+			if err := env.svc.jobs.save(context.Background(), old); err != nil {
+				t.Fatal(err)
+			}
+			env.redis.Set(inheritActiveKeyPrefix+testOwner, old.ID)
+			res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+			if res.Status != http.StatusAccepted {
+				t.Fatalf("create = %d %s", res.Status, res.Raw)
+			}
+			id, _ := res.data()["job_id"].(string)
+			if id == "" || id == old.ID {
+				t.Fatalf("job_id = %q", id)
+			}
+			if got, _ := env.redis.Get(inheritActiveKeyPrefix + testOwner); got != id {
+				t.Fatalf("lock = %q, want %s", got, id)
+			}
+			env.waitStatus(id, "awaiting_confirm")
+		})
+	}
+}
+
+// waitPublishedStatus reads the job's published snapshots until one shows
+// status, and returns probe's result taken as soon as that snapshot arrives.
+func waitPublishedStatus(t *testing.T, events <-chan []byte, status inheritJobStatus, probe func() bool) bool {
+	t.Helper()
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case raw, ok := <-events:
+			if !ok {
+				t.Fatalf("subscription closed before status %s", status)
+			}
+			var msg struct {
+				Job *struct {
+					Status inheritJobStatus `json:"status"`
+				} `json:"job"`
+			}
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				t.Fatal(err)
+			}
+			if msg.Job != nil && msg.Job.Status == status {
+				return probe()
+			}
+		case <-timeout:
+			t.Fatalf("status %s never published", status)
+		}
+	}
+}
+
+// Two requests that found the same stale holder cannot both take the lock
+// over: exactly one swap wins and the lock names only the winner.
+func TestStaleLockSwapHasOneWinner(t *testing.T) {
+	env := newInheritTestEnv(t)
+	ctx := context.Background()
+	key := inheritActiveKeyPrefix + testOwner
+	env.redis.Set(key, "stale-job")
+	ttl := inheritActiveLockTTL.Milliseconds()
+	first, err := env.svc.redis.Eval(ctx, activeLockSwapScript, []string{key}, "stale-job", "job-a", ttl).Int()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := env.svc.redis.Eval(ctx, activeLockSwapScript, []string{key}, "stale-job", "job-b", ttl).Int()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != 1 || second != 0 {
+		t.Fatalf("swaps = %d, %d; want exactly the first to win", first, second)
+	}
+	if got, _ := env.redis.Get(key); got != "job-a" {
+		t.Fatalf("lock = %q, want job-a", got)
+	}
+	if ttl := env.redis.TTL(key); ttl <= 0 {
+		t.Fatalf("swapped lock has no TTL (%v)", ttl)
+	}
+}
+
+// A lock that names a job still being created (registered, not yet stored)
+// is not stale: a concurrent create for the same owner is refused.
+func TestLockOfAJobBeingCreatedIsNotTakenOver(t *testing.T) {
+	env := newInheritTestEnv(t)
+	pending := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
+	env.svc.registry.add(&jobRuntime{job: pending})
+	env.redis.Set(inheritActiveKeyPrefix+testOwner, pending.ID)
+	res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+	if res.Status != http.StatusConflict || res.code() != "job_already_running" || res.data()["job_id"] != pending.ID {
+		t.Fatalf("create = %d %s", res.Status, res.Raw)
+	}
+	if got, _ := env.redis.Get(inheritActiveKeyPrefix + testOwner); got != pending.ID {
+		t.Fatalf("lock = %q, want %s", got, pending.ID)
+	}
+}
+
+// A create that cannot read the lock, or cannot store its job, answers 503
+// and leaves neither a registered job nor a lock behind.
+func TestCreateFailuresLeaveNoJobOrLock(t *testing.T) {
+	env := newInheritTestEnv(t)
+	key := inheritActiveKeyPrefix + testOwner
+
+	// An unreadable lock value (wrong type) is a store failure.
+	env.redis.Lpush(key, "garbage")
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest()); res.Status != http.StatusServiceUnavailable || res.code() != "store_unavailable" {
+		t.Fatalf("unreadable lock = %d %s", res.Status, res.Raw)
+	}
+	env.redis.Del(key)
+
+	// The job record cannot be stored.
+	jobs := env.svc.jobs
+	env.svc.jobs = jobStore{}
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest()); res.Status != http.StatusServiceUnavailable || res.code() != "store_unavailable" {
+		t.Fatalf("store down = %d %s", res.Status, res.Raw)
+	}
+	env.svc.jobs = jobs
+	if env.redis.Exists(key) {
+		t.Fatal("a failed create kept the active-job lock")
+	}
+	env.svc.registry.mu.Lock()
+	registered := len(env.svc.registry.jobs)
+	env.svc.registry.mu.Unlock()
+	if registered != 0 {
+		t.Fatalf("%d jobs left registered", registered)
+	}
+	if running, owner := env.svc.activeHolder(context.Background(), ""); running || owner != "" {
+		t.Fatalf("empty holder = %v, %q", running, owner)
+	}
+	env.createJob(validJobRequest())
+}
+
+// Releasing a lock that another job has taken over leaves it alone.
+func TestReleaseActiveOnlyDropsItsOwnLock(t *testing.T) {
+	env := newInheritTestEnv(t)
+	key := inheritActiveKeyPrefix + testOwner
+	env.redis.Set(key, "job-b")
+	env.svc.releaseActive(testOwner, "job-a")
+	if got, _ := env.redis.Get(key); got != "job-b" {
+		t.Fatalf("lock = %q after another job's release", got)
+	}
+	env.svc.releaseActive(testOwner, "job-b")
+	if env.redis.Exists(key) {
+		t.Fatal("holder's release kept the lock")
+	}
 }
 
 func TestPreviewBare403IsInheritInvalid(t *testing.T) {

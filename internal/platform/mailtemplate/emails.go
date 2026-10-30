@@ -104,7 +104,7 @@ func InheritCodeRevealed(a InheritVaultActivity) Email {
 	return Email{
 		Subject: subject("保险库中的引继码已被查看"),
 		Title:   "引继码已被查看",
-		Intro:   []string{"您的 Haruki 工具箱引继保险库中，有一条引继码刚刚被查看。"},
+		Intro:   []string{"您的 Haruki 工具箱引继码保险库中，有一条引继码刚刚被查看。"},
 		Details: a.details("查看引继码"),
 		Notice:  inheritNotYou,
 	}
@@ -117,7 +117,7 @@ func InheritCodeReissued(a InheritVaultActivity) Email {
 		Subject: subject("保险库中的引继码已重新签发"),
 		Title:   "引继码已重新签发",
 		Intro: []string{
-			"您的 Haruki 工具箱引继保险库刚刚为一个游戏账号签发了新的引继码，原引继码已失效。新引继码只能在保险库中查看。",
+			"您的 Haruki 工具箱引继码保险库刚刚为一个游戏账号签发了新的引继码，原引继码已失效。新引继码只能在保险库中查看。",
 		},
 		Details: a.details("重新签发引继码"),
 		Notice:  inheritNotYou,
