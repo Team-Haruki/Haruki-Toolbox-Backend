@@ -168,7 +168,10 @@ func (s *inheritService) handleCreateJob(c fiber.Ctx) error {
 
 	job := newInheritJob(meta.UserID, req.Server, req.UploadType, req.NewPasswordMode, s.now())
 	job.Unlock = hint
-	if p := s.claimActive(ctx, meta.UserID, job.ID); p != nil {
+	if running, p := s.claimActive(ctx, meta.UserID, job.ID); p != nil {
+		if p == errJobAlreadyRunning && running != "" {
+			return respondJobAlreadyRunning(c, running)
+		}
 		return respondProblem(c, p)
 	}
 	if err := s.jobs.save(ctx, job); err != nil {
@@ -199,30 +202,45 @@ func (s *inheritService) handleCreateJob(c fiber.Ctx) error {
 
 // claimActive takes the owner's one-active-job lock. A lock left by a job
 // that has finished, expired, or belonged to a process that has since
-// stopped is taken over.
-func (s *inheritService) claimActive(ctx context.Context, userID, jobID string) *apiProblem {
+// stopped is taken over. When the owner already has a running job it returns
+// errJobAlreadyRunning and that job's ID; the lock key is per owner, and the
+// ID is only returned after checking the job belongs to userID.
+func (s *inheritService) claimActive(ctx context.Context, userID, jobID string) (string, *apiProblem) {
 	key := inheritActiveKeyPrefix + userID
 	acquired, err := s.redis.SetNX(ctx, key, jobID, inheritActiveLockTTL).Result()
 	if err != nil {
-		return errStoreUnavailable
+		return "", errStoreUnavailable
 	}
 	if acquired {
-		return nil
+		return "", nil
 	}
 	holder, err := s.redis.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return errStoreUnavailable
+		return "", errStoreUnavailable
 	}
-	if holder != "" && s.registry.get(holder) != nil {
-		return errJobAlreadyRunning
+	if holder != "" {
+		if rt := s.registry.get(holder); rt != nil {
+			rt.mu.Lock()
+			owner := rt.job.OwnerUserID
+			rt.mu.Unlock()
+			return ownedJobID(holder, owner, userID), errJobAlreadyRunning
+		}
 	}
 	if previous, err := s.jobs.load(ctx, holder); err == nil && previous != nil && !previous.Status.terminal() && previous.Instance == inheritInstanceID {
-		return errJobAlreadyRunning
+		return ownedJobID(holder, previous.OwnerUserID, userID), errJobAlreadyRunning
 	}
 	if err := s.redis.Set(ctx, key, jobID, inheritActiveLockTTL).Err(); err != nil {
-		return errStoreUnavailable
+		return "", errStoreUnavailable
 	}
-	return nil
+	return "", nil
+}
+
+// ownedJobID returns jobID when owner is userID, else "".
+func ownedJobID(jobID, owner, userID string) string {
+	if owner != userID {
+		return ""
+	}
+	return jobID
 }
 
 func (s *inheritService) releaseActive(userID, jobID string) {

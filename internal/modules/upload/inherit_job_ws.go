@@ -134,6 +134,14 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 			s.handleWSCommand(ws, meta, jobID, msg)
 		}
 	}()
+	// The reader must be gone before serveWS returns: once the hijack
+	// handler returns, fasthttp pools the connection's buffers, and a reader
+	// still inside ReadMessage would share them with the next request.
+	// Closing the connection ends a pending read at once.
+	defer func() {
+		_ = conn.Close()
+		<-readerDone
+	}()
 
 	ticker := time.NewTicker(wsPingInterval)
 	defer ticker.Stop()

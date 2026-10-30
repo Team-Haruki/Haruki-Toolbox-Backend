@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	json "encoding/json/v2"
@@ -139,6 +140,29 @@ func (u *Unlocked) Close() {
 	}
 }
 
+// lastKeyVersion is the last version nextKeyVersion handed out.
+var lastKeyVersion atomic.Int64
+
+// nextKeyVersion returns the version for a new key pair: the wall clock in
+// microseconds, kept strictly increasing within the process. ResetKey deletes
+// the key row, so the version cannot be counted up from the previous one; a
+// fixed version would let an entry sealed to a discarded key (by a job that
+// was already running during the reset) pass the ErrStale check, and would
+// let a Rewrap that raced a reset write the old private key next to the new
+// public key.
+func nextKeyVersion() int {
+	v := time.Now().UnixMicro()
+	for {
+		last := lastKeyVersion.Load()
+		if v <= last {
+			v = last + 1
+		}
+		if lastKeyVersion.CompareAndSwap(last, v) {
+			return int(v)
+		}
+	}
+}
+
 // CreateKey sets up the user's key pair protected by secret. It fails if a
 // key already exists.
 func (s *Store) CreateKey(ctx context.Context, userID, kind string, secret []byte) (*Unlocked, error) {
@@ -148,7 +172,7 @@ func (s *Store) CreateKey(ctx context.Context, userID, kind string, secret []byt
 	if kind != SecretKindPassword && kind != SecretKindPIN {
 		return nil, fmt.Errorf("inherit vault: unknown secret kind %q", kind)
 	}
-	k, err := GenerateKey(s.master, userID, 1, secret)
+	k, err := GenerateKey(s.master, userID, nextKeyVersion(), secret)
 	if err != nil {
 		return nil, err
 	}

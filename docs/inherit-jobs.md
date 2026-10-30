@@ -99,7 +99,13 @@ Everything above is checked before the game server is contacted.
 {"status": 202, "message": "job created", "updatedData": {"job_id": "…uuid…", "job": { /* snapshot, §4.2 */ }}}
 ```
 
-Errors: `invalid_request`, `invalid_server`, `invalid_upload_type`, `inherit_id_invalid`, `inherit_password_invalid`, `new_password_mode_invalid`, `reuse_password_invalid` (400); `mysekai_requires_qq` (403); `job_already_running` (409, one active job per user); `rate_limited` (429, 10 jobs per user per hour); `server_busy` (429, `Retry-After`); `game_degraded` (503, `Retry-After`); `vault_unavailable`, `identity_unavailable`, `store_unavailable` (503).
+Errors: `invalid_request`, `invalid_server`, `invalid_upload_type`, `inherit_id_invalid`, `inherit_password_invalid`, `new_password_mode_invalid`, `reuse_password_invalid` (400); `mysekai_requires_qq` (403); `job_already_running` (409, one active job per user; see below); `rate_limited` (429, 10 jobs per user per hour); `server_busy` (429, `Retry-After`); `game_degraded` (503, `Retry-After`); `vault_unavailable`, `identity_unavailable`, `store_unavailable` (503).
+
+`job_already_running` also carries the ID of the caller's own running job, so a page that lost it (reload, another tab) can reattach with §4.2 and the WebSocket instead of waiting for the job to end. The ID is only ever the caller's own job; when the backend cannot name it, `job_id` is absent.
+
+```json
+{"status": 409, "message": "你已有一个进行中的引继任务", "updatedData": {"code": "job_already_running", "job_id": "…uuid…"}}
+```
 
 ### 4.2 Snapshot
 
@@ -205,9 +211,11 @@ A vault entry is one transferred account: its login credential (kept 7 days from
 `GET /api/inherit/vault/key`:
 
 ```json
-{"initialized": true, "kind": "password", "key_version": 1, "created_at": "…", "updated_at": "…"}
+{"initialized": true, "kind": "password", "key_version": 1793375683278469, "created_at": "…", "updated_at": "…"}
 {"initialized": false, "kind": "pin", "identity_has_password": false}
 ```
+
+`key_version` identifies the key pair. It is an opaque, increasing integer (below 2^53) that changes on every reset; entries sealed to an earlier version answer `entry_stale`.
 
 ### 5.2 List entries
 

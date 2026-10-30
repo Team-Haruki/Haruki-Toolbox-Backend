@@ -23,10 +23,20 @@ func (p *apiProblem) Error() string { return p.Code }
 
 type problemBody struct {
 	Code string `json:"code"`
+	// JobID is set only on job_already_running: the caller's own running
+	// job, so a client that lost its ID can reattach to it.
+	JobID string `json:"job_id,omitempty"`
 }
 
 func respondProblem(c fiber.Ctx, p *apiProblem) error {
 	return harukiAPIHelper.Responses.UpdatedDataResponse(c, p.Status, p.Message, &problemBody{Code: p.Code})
+}
+
+// respondJobAlreadyRunning answers job_already_running with the owner's
+// running job ID.
+func respondJobAlreadyRunning(c fiber.Ctx, jobID string) error {
+	p := errJobAlreadyRunning
+	return harukiAPIHelper.Responses.UpdatedDataResponse(c, p.Status, p.Message, &problemBody{Code: p.Code, JobID: jobID})
 }
 
 func problem(status int, code, message string) *apiProblem {

@@ -881,8 +881,43 @@ func TestOneActiveJobPerUser(t *testing.T) {
 	env := newInheritTestEnv(t)
 	id := env.createJob(validJobRequest())
 	env.waitStatus(id, "awaiting_confirm")
-	if res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest()); res.Status != http.StatusConflict || res.code() != "job_already_running" {
+	res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+	if res.Status != http.StatusConflict || res.code() != "job_already_running" {
 		t.Fatalf("second job = %d %s", res.Status, res.Raw)
+	}
+	// The conflict names the owner's running job so a client that lost its
+	// ID can reattach to it.
+	if got := res.data()["job_id"]; got != id {
+		t.Fatalf("job_id = %v, want %s", got, id)
+	}
+	if got := env.job(id); got["status"] != "awaiting_confirm" {
+		t.Fatalf("running job = %v", got["status"])
+	}
+}
+
+// A job left by an earlier start of this process that is still not finished
+// holds the lock too; the conflict names it as well.
+func TestRunningJobFromStoreIsReportedToItsOwner(t *testing.T) {
+	env := newInheritTestEnv(t)
+	job := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
+	job.Instance = inheritInstanceID
+	job.Status = jobStatusAwaitingConfirm
+	if err := env.svc.jobs.save(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	env.redis.Set(inheritActiveKeyPrefix+testOwner, job.ID)
+	res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+	if res.Status != http.StatusConflict || res.code() != "job_already_running" || res.data()["job_id"] != job.ID {
+		t.Fatalf("second job = %d %s", res.Status, res.Raw)
+	}
+}
+
+func TestOwnedJobIDHidesOtherOwners(t *testing.T) {
+	if got := ownedJobID("j1", "owner", "owner"); got != "j1" {
+		t.Fatalf("own job = %q", got)
+	}
+	if got := ownedJobID("j1", "someone-else", "owner"); got != "" {
+		t.Fatalf("foreign job = %q, want empty", got)
 	}
 }
 

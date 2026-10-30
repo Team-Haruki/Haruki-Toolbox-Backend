@@ -15,6 +15,7 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 
 	"github.com/alicebob/miniredis/v2"
 	_ "github.com/mattn/go-sqlite3"
@@ -447,6 +448,66 @@ func TestResetKeyDiscardsEverything(t *testing.T) {
 	defer fresh.Close()
 	if _, err := u.OpenCredential(&Entry{ID: "e1", UserID: "u1", Server: "jp", KeyVersion: 1, CredentialSealed: []byte{1}}); err == nil {
 		t.Fatal("old unlocked key still opens")
+	}
+}
+
+// A job that unlocked the key before a reset may still write after the owner
+// has created a new key. The entry is sealed to the discarded key, so it must
+// be reported as stale, not as undecryptable; and a Rewrap that read the old
+// key must not overwrite the new one.
+func TestKeyCreatedAfterAResetHasANewVersion(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := context.Background()
+	old, err := env.store.CreateKey(ctx, "u1", SecretKindPIN, []byte("pin-12345678"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Close()
+	if _, err := env.store.ResetKey(ctx, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := env.store.CreateKey(ctx, "u1", SecretKindPIN, []byte("pin-87654321"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	if fresh.KeyVersion <= old.KeyVersion {
+		t.Fatalf("new key version %d, want more than %d", fresh.KeyVersion, old.KeyVersion)
+	}
+
+	// The in-flight job still holds the old public key and version.
+	putCredential(t, env.store, old, "late", "cred")
+	e, err := env.store.Get(ctx, "u1", "late")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fresh.OpenCredential(e); !errors.Is(err, ErrStale) {
+		t.Fatalf("OpenCredential = %v, want ErrStale", err)
+	}
+
+	// A Rewrap guarded by the old version leaves the new key untouched.
+	n, err := env.store.db.InheritVaultKey.Update().
+		Where(inheritvaultkey.UserIDEQ("u1"), inheritvaultkey.KeyVersionEQ(old.KeyVersion)).
+		SetWrappedPrivateKey([]byte("from the old key")).
+		Save(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("update guarded by the old version = %d, %v; want 0", n, err)
+	}
+	again, err := env.store.Unlock(ctx, "u1", []byte("pin-87654321"))
+	if err != nil {
+		t.Fatalf("new key no longer unlocks: %v", err)
+	}
+	again.Close()
+}
+
+func TestNextKeyVersionIsStrictlyIncreasing(t *testing.T) {
+	prev := nextKeyVersion()
+	for range 1000 {
+		v := nextKeyVersion()
+		if v <= prev {
+			t.Fatalf("nextKeyVersion = %d after %d", v, prev)
+		}
+		prev = v
 	}
 }
 
