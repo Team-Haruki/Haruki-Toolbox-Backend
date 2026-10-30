@@ -605,6 +605,11 @@ func TestCancelOnlyBeforeExecute(t *testing.T) {
 	if errorCode(job) != codeCancelled || env.game.called("execute") {
 		t.Fatalf("job = %v", job)
 	}
+	// The lock is released before the cancelled state can be seen, so the
+	// next create below never races the finished job.
+	if env.redis.Exists(inheritActiveKeyPrefix + testOwner) {
+		t.Fatal("a cancelled job still holds the active-job lock")
+	}
 
 	// Once confirmed, the job can no longer be cancelled.
 	env.game = &fakeInheritGame{}
@@ -619,6 +624,94 @@ func TestCancelOnlyBeforeExecute(t *testing.T) {
 	}
 	close(block)
 	env.waitStatus(id, "succeeded")
+}
+
+// Regression: creating a job right after cancelling one used to answer
+// job_already_running with the cancelled job's ID while that job was still
+// winding down, and the client then resumed the cancelled job.
+func TestCreateRightAfterCancelStartsANewJob(t *testing.T) {
+	env := newInheritTestEnv(t)
+	first := env.createJob(validJobRequest())
+	env.waitStatus(first, "awaiting_confirm")
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs/"+first+"/cancel", nil); res.Status != http.StatusOK {
+		t.Fatalf("cancel = %d %s", res.Status, res.Raw)
+	}
+	// No wait: the cancelled job may not have reached its terminal state yet.
+	second := env.createJob(validJobRequest())
+	if second == first {
+		t.Fatal("create returned the cancelled job")
+	}
+	if job := env.waitStatus(first, "cancelled"); errorCode(job) != codeCancelled {
+		t.Fatalf("first job = %v", job)
+	}
+	env.waitStatus(second, "awaiting_confirm")
+
+	// Once the cancelled job is fully gone, its release has left the new
+	// job's lock in place, and the conflict names the new job.
+	waitFor(t, func() bool { return env.svc.registry.get(first) == nil })
+	if got, err := env.redis.Get(inheritActiveKeyPrefix + testOwner); err != nil || got != second {
+		t.Fatalf("lock = %q, %v; want %s", got, err, second)
+	}
+	res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+	if res.Status != http.StatusConflict || res.code() != "job_already_running" || res.data()["job_id"] != second {
+		t.Fatalf("third job = %d %s", res.Status, res.Raw)
+	}
+}
+
+// A lock that still points to a finished job, or to one cancelled before it
+// executed, never blocks the owner and is never named in job_already_running.
+func TestLockOfAFinishedJobIsTakenOver(t *testing.T) {
+	cases := map[string]func(env *inheritTestEnv, job *inheritJob){
+		"finished, still registered": func(env *inheritTestEnv, job *inheritJob) {
+			job.Status = jobStatusCancelled
+			env.svc.registry.add(&jobRuntime{job: job})
+		},
+		"cancelled, winding down": func(env *inheritTestEnv, job *inheritJob) {
+			job.Status = jobStatusAwaitingConfirm
+			env.svc.registry.add(&jobRuntime{job: job, cancelled: true})
+		},
+		"finished, store only": func(env *inheritTestEnv, job *inheritJob) {
+			job.Status = jobStatusSucceeded
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			env := newInheritTestEnv(t)
+			old := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
+			setup(env, old)
+			if err := env.svc.jobs.save(context.Background(), old); err != nil {
+				t.Fatal(err)
+			}
+			env.redis.Set(inheritActiveKeyPrefix+testOwner, old.ID)
+			res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest())
+			if res.Status != http.StatusAccepted {
+				t.Fatalf("create = %d %s", res.Status, res.Raw)
+			}
+			id, _ := res.data()["job_id"].(string)
+			if id == "" || id == old.ID {
+				t.Fatalf("job_id = %q", id)
+			}
+			if got, _ := env.redis.Get(inheritActiveKeyPrefix + testOwner); got != id {
+				t.Fatalf("lock = %q, want %s", got, id)
+			}
+			env.waitStatus(id, "awaiting_confirm")
+		})
+	}
+}
+
+// Releasing a lock that another job has taken over leaves it alone.
+func TestReleaseActiveOnlyDropsItsOwnLock(t *testing.T) {
+	env := newInheritTestEnv(t)
+	key := inheritActiveKeyPrefix + testOwner
+	env.redis.Set(key, "job-b")
+	env.svc.releaseActive(testOwner, "job-a")
+	if got, _ := env.redis.Get(key); got != "job-b" {
+		t.Fatalf("lock = %q after another job's release", got)
+	}
+	env.svc.releaseActive(testOwner, "job-b")
+	if env.redis.Exists(key) {
+		t.Fatal("holder's release kept the lock")
+	}
 }
 
 func TestPreviewBare403IsInheritInvalid(t *testing.T) {

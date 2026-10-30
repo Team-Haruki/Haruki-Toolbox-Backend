@@ -201,38 +201,85 @@ func (s *inheritService) handleCreateJob(c fiber.Ctx) error {
 }
 
 // claimActive takes the owner's one-active-job lock. A lock left by a job
-// that has finished, expired, or belonged to a process that has since
-// stopped is taken over. When the owner already has a running job it returns
-// errJobAlreadyRunning and that job's ID; the lock key is per owner, and the
-// ID is only returned after checking the job belongs to userID.
+// that has finished, has been cancelled before executing, has expired, or
+// belonged to a process that has since stopped is taken over. When the owner
+// already has a running job it returns errJobAlreadyRunning and that job's
+// ID; the lock key is per owner, and the ID is only returned after checking
+// the job belongs to userID and is not finished.
 func (s *inheritService) claimActive(ctx context.Context, userID, jobID string) (string, *apiProblem) {
 	key := inheritActiveKeyPrefix + userID
-	acquired, err := s.redis.SetNX(ctx, key, jobID, inheritActiveLockTTL).Result()
-	if err != nil {
-		return "", errStoreUnavailable
-	}
-	if acquired {
-		return "", nil
-	}
-	holder, err := s.redis.Get(ctx, key).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		return "", errStoreUnavailable
-	}
-	if holder != "" {
-		if rt := s.registry.get(holder); rt != nil {
-			rt.mu.Lock()
-			owner := rt.job.OwnerUserID
-			rt.mu.Unlock()
+	for range activeClaimAttempts {
+		acquired, err := s.redis.SetNX(ctx, key, jobID, inheritActiveLockTTL).Result()
+		if err != nil {
+			return "", errStoreUnavailable
+		}
+		if acquired {
+			return "", nil
+		}
+		holder, err := s.redis.Get(ctx, key).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return "", errStoreUnavailable
+		}
+		if running, owner := s.activeHolder(ctx, holder); running {
 			return ownedJobID(holder, owner, userID), errJobAlreadyRunning
 		}
+		// Replace the stale holder only if it is still the holder, so two
+		// requests that both found it stale cannot both start a job.
+		swapped, err := s.redis.Eval(ctx, activeLockSwapScript, []string{key}, holder, jobID, inheritActiveLockTTL.Milliseconds()).Int()
+		if err != nil {
+			return "", errStoreUnavailable
+		}
+		if swapped == 1 {
+			return "", nil
+		}
 	}
+	// The lock kept changing hands under us; another request is creating a
+	// job for this owner right now.
+	return "", errJobAlreadyRunning
+}
+
+const activeClaimAttempts = 3
+
+// activeLockSwapScript sets KEYS[1] to ARGV[2] (TTL ARGV[3] ms) when it is
+// unset or still holds ARGV[1].
+const activeLockSwapScript = `
+local current = redis.call('GET', KEYS[1])
+if current == false or current == ARGV[1] then
+  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+  return 1
+end
+return 0
+`
+
+// activeLockReleaseScript deletes KEYS[1] only while it holds ARGV[1].
+const activeLockReleaseScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`
+
+// activeHolder reports whether the job holding the lock is still running,
+// and its owner. A job in this process counts as running until it is
+// finished or has been cancelled before executing: a cancelled job can never
+// execute, so the owner may start the next one while it winds down. A job
+// known only from the store counts as running while it is unfinished and
+// belongs to this process; one from a stopped process is stale.
+func (s *inheritService) activeHolder(ctx context.Context, holder string) (running bool, owner string) {
+	if holder == "" {
+		return false, ""
+	}
+	if rt := s.registry.get(holder); rt != nil {
+		rt.mu.Lock()
+		defer rt.mu.Unlock()
+		finishing := rt.job.Status.terminal() || (rt.cancelled && !rt.confirmed)
+		return !finishing, rt.job.OwnerUserID
+	}
+	// An unreadable record cannot be shown to be running; treat it as stale.
 	if previous, err := s.jobs.load(ctx, holder); err == nil && previous != nil && !previous.Status.terminal() && previous.Instance == inheritInstanceID {
-		return ownedJobID(holder, previous.OwnerUserID, userID), errJobAlreadyRunning
+		return true, previous.OwnerUserID
 	}
-	if err := s.redis.Set(ctx, key, jobID, inheritActiveLockTTL).Err(); err != nil {
-		return "", errStoreUnavailable
-	}
-	return "", nil
+	return false, ""
 }
 
 // ownedJobID returns jobID when owner is userID, else "".
@@ -243,16 +290,16 @@ func ownedJobID(jobID, owner, userID string) string {
 	return jobID
 }
 
+// releaseActive drops the owner's lock if jobID still holds it. The check
+// and the delete are one script, so a lock another job has just taken over
+// is never removed.
 func (s *inheritService) releaseActive(userID, jobID string) {
 	if s.redis == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	key := inheritActiveKeyPrefix + userID
-	if current, err := s.redis.Get(ctx, key).Result(); err == nil && current == jobID {
-		_ = s.redis.Del(ctx, key).Err()
-	}
+	_ = s.redis.Eval(ctx, activeLockReleaseScript, []string{inheritActiveKeyPrefix + userID}, jobID).Err()
 }
 
 func (s *inheritService) queryVerifiedQQ(ctx context.Context, userID string) (bool, error) {

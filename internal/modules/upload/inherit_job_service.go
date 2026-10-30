@@ -260,8 +260,12 @@ func (s *inheritService) addWarning(rt *jobRuntime, code string) {
 	})
 }
 
-// finish ends the job. Steps that never ran are marked skipped.
+// finish ends the job. Steps that never ran are marked skipped. The owner's
+// active-job lock is released before the terminal state is stored or
+// published, so a client that sees the job end can start the next one at
+// once instead of being sent back to the finished job.
 func (s *inheritService) finish(rt *jobRuntime, status inheritJobStatus, code string) {
+	s.releaseActive(rt.job.OwnerUserID, rt.job.ID)
 	now := s.now()
 	s.update(rt, &jobEvent{Step: stepDone, Status: string(status), Code: code, At: &now}, func(j *inheritJob) {
 		j.Status = status
