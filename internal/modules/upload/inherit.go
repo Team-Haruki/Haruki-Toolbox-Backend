@@ -25,7 +25,7 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		}
 		// Emergency suspension: reject JP before reading credentials or contacting the game.
 		if server == harukiUtils.SupportedInheritUploadServerJP {
-			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "日服引继码功能已临时禁用。请立即进入日服游戏重新生成新引继码，使旧引继码失效，并妥善保存。暂停期间请勿提交新引继码。 JP transfer-code uploads are temporarily disabled. Generate a new transfer code in the JP game immediately and keep it safe; do not submit it during the suspension.", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "由于日服继承登录发生变更，我们正在进行验证，日服引继码功能已临时禁用。请立即进入日服游戏重新生成新引继码，使旧引继码失效，并妥善保存。暂停期间请勿提交新引继码。 JP transfer-code uploads are temporarily disabled. Generate a new transfer code in the JP game immediately and keep it safe; do not submit it during the suspension.", nil)
 		}
 		uploadType, err := harukiUtils.ParseUploadDataType(uploadTypeStr)
 		if err != nil {
