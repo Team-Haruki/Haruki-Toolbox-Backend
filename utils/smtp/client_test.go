@@ -36,8 +36,12 @@ func TestNewSMTPClientTimeout(t *testing.T) {
 		SMTPPort:       465,
 		SMTPMail:       "noreply@example.com",
 		SMTPPass:       "secret",
+		MailName:       " Haruki 工具箱 ",
 		TimeoutSeconds: 25,
 	})
+	if client.DisplayName != "Haruki 工具箱" {
+		t.Fatalf("NewSMTPClient display name = %q", client.DisplayName)
+	}
 	if client.Timeout != 25*time.Second {
 		t.Fatalf("NewSMTPClient configured timeout = %v, want %v", client.Timeout, 25*time.Second)
 	}

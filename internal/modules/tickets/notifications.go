@@ -2,29 +2,27 @@ package tickets
 
 import (
 	"context"
-	"fmt"
-	"html"
 	"net/url"
 	"strings"
 	"unicode/utf8"
 
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	sql "entgo.io/ent/dialect/sql"
 )
 
-const (
-	defaultTicketMailDisplayName = "Haruki Toolbox"
-	ticketMailPreviewLength      = 240
-)
+const ticketMailPreviewLength = 240
 
-// MailSender is the outbound mail port required by ticket notifications.
+// MailSender is the outbound mail port required by ticket notifications. An
+// empty displayName means the configured sender name.
 type MailSender interface {
-	Send(to []string, subject, body string, displayName string) error
+	SendMessage(to []string, msg harukiSMTP.Message, displayName string) error
 }
 
 // NotificationConfig is supplied by the composition/transport layer. Keeping
@@ -55,11 +53,11 @@ type Event struct {
 }
 
 func NotifyAdminsOfNewTicket(ctx context.Context, db *postgresql.Client, event Event) {
-	notifyAdmins(ctx, db, event, "新工单")
+	notifyAdmins(ctx, db, event, mailtemplate.TicketCreated)
 }
 
 func NotifyAdminsOfUserReply(ctx context.Context, db *postgresql.Client, event Event) {
-	notifyAdmins(ctx, db, event, "用户回复")
+	notifyAdmins(ctx, db, event, mailtemplate.TicketUserReplied)
 }
 
 func NotifyUserOfAdminReply(ctx context.Context, db *postgresql.Client, event Event) {
@@ -87,10 +85,10 @@ func NotifyUserOfAdminReply(ctx context.Context, db *postgresql.Client, event Ev
 	if email == "" || !strings.Contains(email, "@") {
 		return
 	}
-	sendTicketMail(event, []string{email}, "工单有新回复")
+	sendTicketMail(event, []string{email}, mailtemplate.TicketAdminReplied)
 }
 
-func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, action string) {
+func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, kind mailtemplate.TicketEvent) {
 	if db == nil || event.MailSender == nil {
 		return
 	}
@@ -118,7 +116,7 @@ func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, actio
 	if len(recipients) == 0 {
 		return
 	}
-	sendTicketMail(event, recipients, action)
+	sendTicketMail(event, recipients, kind)
 }
 
 func normalizeRecipientEmails(rows []*postgresql.User) []string {
@@ -141,18 +139,17 @@ func normalizeRecipientEmails(rows []*postgresql.User) []string {
 	return recipients
 }
 
-func sendTicketMail(event Event, recipients []string, action string) {
+func sendTicketMail(event Event, recipients []string, kind mailtemplate.TicketEvent) {
 	if len(recipients) == 0 || event.MailSender == nil {
 		return
 	}
 
-	subject := buildTicketMailSubject(event.Ticket, action)
-	body := buildTicketMailBody(event)
-	displayName := strings.TrimSpace(event.DisplayName)
-	if displayName == "" {
-		displayName = defaultTicketMailDisplayName
+	msg, err := mailtemplate.Render(buildTicketMail(event, kind))
+	if err != nil {
+		harukiLogger.Warnf("Failed to render ticket notification mail for ticket %s: %v", event.Ticket.PublicID, err)
+		return
 	}
-	if err := event.MailSender.Send(recipients, subject, body, displayName); err != nil {
+	if err := event.MailSender.SendMessage(recipients, msg, strings.TrimSpace(event.DisplayName)); err != nil {
 		harukiLogger.Warnf("Failed to send ticket notification mail for ticket %s to %s: %v", event.Ticket.PublicID, strings.Join(recipients, ","), err)
 	}
 }
@@ -196,58 +193,15 @@ func BuildEvent(ticketRow *postgresql.Ticket, actorUserID, message string, mailS
 	}
 }
 
-func buildTicketMailSubject(ticketCtx TicketContext, action string) string {
-	action = strings.TrimSpace(action)
-	if action == "" {
-		action = "工单通知"
-	}
-	publicID := strings.TrimSpace(ticketCtx.PublicID)
-	subject := strings.TrimSpace(ticketCtx.Subject)
-	switch {
-	case publicID != "" && subject != "":
-		return fmt.Sprintf("[Haruki Toolbox] %s：%s %s", action, publicID, truncateRunes(subject, 60))
-	case publicID != "":
-		return fmt.Sprintf("[Haruki Toolbox] %s：%s", action, publicID)
-	case subject != "":
-		return fmt.Sprintf("[Haruki Toolbox] %s：%s", action, truncateRunes(subject, 60))
-	default:
-		return "[Haruki Toolbox] " + action
-	}
-}
-
-func buildTicketMailBody(event Event) string {
-	detailURL := buildTicketDetailURL(event.FrontendURL, event.DetailPath, event.Ticket.PublicID)
-	preview := normalizeMessagePreview(event.Message, ticketMailPreviewLength)
-
-	var builder strings.Builder
-	builder.WriteString("<p>Haruki Toolbox 工单有新的动态。</p>")
-	builder.WriteString("<ul>")
-	writeTicketMailListItem(&builder, "工单编号", event.Ticket.PublicID)
-	writeTicketMailListItem(&builder, "工单主题", event.Ticket.Subject)
-	writeTicketMailListItem(&builder, "当前状态", ticketStatusLabel(event.Ticket.Status))
-	if preview != "" {
-		writeTicketMailListItem(&builder, "内容摘要", preview)
-	}
-	builder.WriteString("</ul>")
-	if detailURL != "" {
-		builder.WriteString(`<p><a href="`)
-		builder.WriteString(html.EscapeString(detailURL))
-		builder.WriteString(`">打开工单详情</a></p>`)
-	}
-	builder.WriteString("<p>这是一封自动通知邮件，请不要直接回复。</p>")
-	return builder.String()
-}
-
-func writeTicketMailListItem(builder *strings.Builder, label, value string) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return
-	}
-	builder.WriteString("<li><strong>")
-	builder.WriteString(html.EscapeString(label))
-	builder.WriteString("：</strong>")
-	builder.WriteString(html.EscapeString(value))
-	builder.WriteString("</li>")
+func buildTicketMail(event Event, kind mailtemplate.TicketEvent) mailtemplate.Email {
+	return mailtemplate.TicketNotification(mailtemplate.Ticket{
+		Event:    kind,
+		PublicID: event.Ticket.PublicID,
+		Subject:  event.Ticket.Subject,
+		Status:   ticketStatusLabel(event.Ticket.Status),
+		Preview:  normalizeMessagePreview(event.Message, ticketMailPreviewLength),
+		URL:      buildTicketDetailURL(event.FrontendURL, event.DetailPath, event.Ticket.PublicID),
+	})
 }
 
 func buildTicketDetailURL(frontendURL, detailPath, publicTicketID string) string {

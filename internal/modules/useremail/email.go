@@ -10,15 +10,17 @@ import (
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	platformIdentity "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/identity"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 const (
+	emailCodeTTL = 5 * time.Minute
+
 	emailSendRateLimitWindow = 10 * time.Minute
 
 	emailSendIPLimit     = 20
@@ -166,12 +168,15 @@ func sendVerificationCode(c fiber.Ctx, email string, helper *harukiAPIHelper.Har
 		return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
 	}
 	redisKey := helper.DBManager.Redis.KeyBuilder().BuildEmailVerifyKey(email)
-	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, 5*time.Minute); err != nil {
+	if err := helper.DBManager.Redis.SetCache(ctx, redisKey, code, emailCodeTTL); err != nil {
 		harukiLogger.Errorf("Failed to set redis cache: %v", err)
 		return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 	}
-	body := strings.ReplaceAll(smtp.VerificationCodeTemplate, "{{CODE}}", code)
-	if err := helper.SMTPClient.Send([]string{email}, "您的验证码 | Haruki工具箱", body, "Haruki工具箱 | 星云科技"); err != nil {
+	msg, err := mailtemplate.Render(mailtemplate.EmailVerificationCode(code, emailCodeTTL))
+	if err == nil {
+		err = helper.SMTPClient.SendMessage([]string{email}, msg, "")
+	}
+	if err != nil {
 		if delErr := helper.DBManager.Redis.DeleteCache(ctx, redisKey); delErr != nil {
 			harukiLogger.Warnf("Failed to rollback verification code for %s: %v", email, delErr)
 		}

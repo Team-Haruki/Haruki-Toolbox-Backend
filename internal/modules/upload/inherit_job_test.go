@@ -27,6 +27,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/fasthttp/websocket"
@@ -159,6 +160,7 @@ type inheritTestEnv struct {
 	uploads     int
 	mu          sync.Mutex
 	mails       []string
+	mailBodies  []string
 	identity    map[string]bool // user -> has password
 	password    map[string]string
 }
@@ -220,9 +222,10 @@ func newInheritTestEnv(t *testing.T) *inheritTestEnv {
 	svc.userEmail = func(_ context.Context, userID string) (string, string, error) {
 		return userID + "@example.com", userID, nil
 	}
-	svc.sendMail = func(to, subject, _ string) {
+	svc.sendMail = func(to string, msg harukiSMTP.Message) {
 		env.mu.Lock()
-		env.mails = append(env.mails, to+"|"+subject)
+		env.mails = append(env.mails, to+"|"+msg.Subject)
+		env.mailBodies = append(env.mailBodies, msg.HTML+"\n"+msg.Text)
 		env.mu.Unlock()
 	}
 	env.svc = svc
@@ -523,6 +526,16 @@ func TestJobRunsToSuccessAndHandsBackTheAccount(t *testing.T) {
 		t.Fatalf("reveal = %d %s", reveal.Status, reveal.Raw)
 	}
 	waitFor(t, func() bool { env.mu.Lock(); defer env.mu.Unlock(); return len(env.mails) == 1 })
+	env.mu.Lock()
+	for _, body := range env.mailBodies {
+		for _, secret := range []string{testGameCredential, testEnteredPW, testEnteredID, testIssuedID, strconv.FormatInt(testGameUID, 10)} {
+			if strings.Contains(body, secret) {
+				env.mu.Unlock()
+				t.Fatalf("notification mail holds %q", secret)
+			}
+		}
+	}
+	env.mu.Unlock()
 	for _, action := range []string{"inherit.job.create", "inherit.job.confirm", "inherit.vault.key.create", "inherit.vault.store", "inherit.vault.reveal"} {
 		if n := env.db.SystemLog.Query().Where(systemlog.ActionEQ(action)).CountX(context.Background()); n != 1 {
 			t.Errorf("audit %s rows = %d", action, n)

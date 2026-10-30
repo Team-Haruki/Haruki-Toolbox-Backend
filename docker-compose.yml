@@ -172,6 +172,9 @@ services:
       COURIER_SMTP_CONNECTION_URI: ${SMTP_CONNECTION_URI}
       COURIER_SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-no-reply@example.com}
       COURIER_SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Haruki Toolbox}"
+      # Generated from internal/platform/mailtemplate; a missing directory
+      # falls back to the Kratos built-in templates.
+      COURIER_TEMPLATE_OVERRIDE_PATH: /etc/config/kratos/courier-templates
       HTTP_PROXY: "http://haruki-mihomo:7890"
       HTTPS_PROXY: "http://haruki-mihomo:7890"
       NO_PROXY: "localhost,127.0.0.1,0.0.0.0,192.168.0.0/16,172.16.0.0/12,10.0.0.0/8,.sock,::1"
@@ -180,6 +183,7 @@ services:
       - ${STACK_HOST_ROOT}/kratos/identity.schema.json:/etc/config/kratos/identity.schema.json:ro
       - ${STACK_HOST_ROOT}/kratos/oidc.google.jsonnet:/etc/config/kratos/oidc.google.jsonnet:ro
       - ${STACK_HOST_ROOT}/kratos/oidc.apple.jsonnet:/etc/config/kratos/oidc.apple.jsonnet:ro
+      - ${STACK_HOST_ROOT}/kratos/courier-templates:/etc/config/kratos/courier-templates:ro
 
   hydra-migrate:
     image: oryd/hydra:${ORY_VERSION}

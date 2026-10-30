@@ -13,6 +13,7 @@ import (
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -55,7 +56,7 @@ type inheritService struct {
 	hasPassword    func(ctx context.Context, identityID string) (bool, error)
 	hasVerifiedQQ  func(ctx context.Context, userID string) (bool, error)
 	userEmail      func(ctx context.Context, userID string) (email, identityID string, err error)
-	sendMail       func(to, subject, body string)
+	sendMail       func(to string, msg harukiSMTP.Message)
 }
 
 func newInheritService(api *harukiAPIHelper.HarukiToolboxRouterHelpers, deps Dependencies) *inheritService {

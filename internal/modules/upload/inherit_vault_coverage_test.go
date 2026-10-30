@@ -18,6 +18,7 @@ import (
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
@@ -493,7 +494,7 @@ func TestVaultReissueReusesThePreviousPassword(t *testing.T) {
 		env.mu.Lock()
 		defer env.mu.Unlock()
 		for _, m := range env.mails {
-			if strings.HasSuffix(m, "引继码已重新签发") {
+			if strings.HasSuffix(m, "|保险库中的引继码已重新签发 | Haruki 工具箱") {
 				return true
 			}
 		}
@@ -633,22 +634,27 @@ func TestVaultNotifyOnlyMailsVerifiedAddresses(t *testing.T) {
 		}
 		return userID + "@example.com", userID, nil
 	}
-	env.svc.notify(requestMeta{UserID: "unverified", EmailVerified: false}, "已查看", entry)
-	env.svc.notify(requestMeta{UserID: "no-address", EmailVerified: true}, "已查看", entry)
+	env.svc.notify(requestMeta{UserID: "unverified", EmailVerified: false}, mailtemplate.InheritCodeRevealed, entry)
+	env.svc.notify(requestMeta{UserID: "no-address", EmailVerified: true}, mailtemplate.InheritCodeRevealed, entry)
 	if got := <-looked; got != "no-address" {
 		t.Fatalf("looked up %q; an unverified owner must not be looked up", got)
 	}
-	env.svc.notify(requestMeta{UserID: testOwner, EmailVerified: true, IP: "203.0.113.9"}, "已查看", entry)
+	env.svc.notify(requestMeta{UserID: testOwner, EmailVerified: true, IP: "203.0.113.9"}, mailtemplate.InheritCodeRevealed, entry)
 	waitFor(t, func() bool { env.mu.Lock(); defer env.mu.Unlock(); return len(env.mails) == 1 })
 	env.mu.Lock()
 	defer env.mu.Unlock()
-	if env.mails[0] != testOwner+"@example.com|Haruki Toolbox：引继码已查看" {
+	if env.mails[0] != testOwner+"@example.com|保险库中的引继码已被查看 | Haruki 工具箱" {
 		t.Fatalf("mails = %v", env.mails)
+	}
+	for _, want := range []string{"查看引继码", "JP", "203.0.113.9", "（北京时间）", "修改 Haruki 工具箱密码"} {
+		if !strings.Contains(env.mailBodies[0], want) {
+			t.Fatalf("notification mail lacks %q: %s", want, env.mailBodies[0])
+		}
 	}
 }
 
 func TestVaultSendSMTPIsBestEffort(t *testing.T) {
-	(&inheritService{}).sendSMTP("a@example.com", "s", "b")
+	(&inheritService{}).sendSMTP("a@example.com", harukiSMTP.Message{Subject: "s", HTML: "<p>b</p>", Text: "b"})
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -660,7 +666,7 @@ func TestVaultSendSMTPIsBestEffort(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		env.svc.sendSMTP("a@example.com", "subject", "body")
+		env.svc.sendSMTP("a@example.com", harukiSMTP.Message{Subject: "subject", HTML: "<p>body</p>", Text: "body"})
 	}()
 	select {
 	case <-done:

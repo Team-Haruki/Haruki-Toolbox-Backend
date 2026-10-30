@@ -11,6 +11,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -24,11 +25,12 @@ type recordedMail struct {
 	to          []string
 	subject     string
 	body        string
+	text        string
 	displayName string
 }
 
-func (s *recordingMailSender) Send(to []string, subject, body, displayName string) error {
-	s.calls = append(s.calls, recordedMail{append([]string(nil), to...), subject, body, displayName})
+func (s *recordingMailSender) SendMessage(to []string, msg harukiSMTP.Message, displayName string) error {
+	s.calls = append(s.calls, recordedMail{append([]string(nil), to...), msg.Subject, msg.HTML, msg.Text, displayName})
 	return s.err
 }
 
@@ -101,6 +103,12 @@ func TestNotifyAdminsOfNewTicketSelectsEnabledAdmins(t *testing.T) {
 	if !strings.Contains(sender.calls[0].body, "https://haruki.example/tickets/TK-1") {
 		t.Fatalf("body = %q", sender.calls[0].body)
 	}
+	if !strings.Contains(sender.calls[0].text, "https://haruki.example/tickets/TK-1") || !strings.Contains(sender.calls[0].text, "first line second line") {
+		t.Fatalf("text = %q", sender.calls[0].text)
+	}
+	if sender.calls[0].subject != "新工单：TK-1 Upload failed | Haruki 工具箱" || sender.calls[0].displayName != "Haruki" {
+		t.Fatalf("subject = %q, displayName = %q", sender.calls[0].subject, sender.calls[0].displayName)
+	}
 }
 
 func TestNotifyAdminsOfUserReplySelectsEnabledAdmins(t *testing.T) {
@@ -165,6 +173,9 @@ func TestNotifyUserOfAdminReplySendsEscapedMailToCreator(t *testing.T) {
 	}
 	if !strings.Contains(sender.calls[0].body, "fixed &lt;b&gt;maybe&lt;/b&gt;") {
 		t.Fatalf("body = %q", sender.calls[0].body)
+	}
+	if sender.calls[0].subject != "工单有新回复：TK-4 Question | Haruki 工具箱" {
+		t.Fatalf("subject = %q", sender.calls[0].subject)
 	}
 }
 

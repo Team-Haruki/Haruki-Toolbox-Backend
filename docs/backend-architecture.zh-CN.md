@@ -28,6 +28,7 @@ utils/database/neopg/            Bot Ent 生成产物（迁移期保持位置不
 | `internal/platform/upload` | 游戏上传预处理、Suite 复原编排、同步与通知 |
 | `internal/platform/runtimeconfig` | Redis 中可由管理员修改的运行期设置（如 `oauth2DeviceFlowEnabled`） |
 | `internal/platform/mailnotify` | 有界的通知邮件派发 |
+| `internal/platform/mailtemplate` | 所有邮件（含生成的 Kratos 邮件模板）的统一版式与内容 |
 | `internal/platform/{authheader,filtering,identity,pagination,timeutil}` | bearer 头解析、CSV 过滤值、邮箱规范化、分页与时间范围工具 |
 | `internal/platform/oauth2` | Hydra 客户端（含不跟随重定向的 `DoWithoutRedirect`）、token introspection（bearer 中间件与内部 API 共用 `IntrospectAccessToken`）、scope 定义与鉴权中间件 |
 | `utils/game/sekai`、`utils/game/sekaiapi` | 游戏客户端加解密、协议处理及 SekaiAPI 适配 |

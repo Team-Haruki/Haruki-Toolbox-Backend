@@ -3,19 +3,19 @@ package usergamebindings
 import (
 	"context"
 	"errors"
-	"html"
 	"strconv"
 	"strings"
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 )
 
 func clearGameAccountPublicCaches(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, serverStr, gameUserIDStr string) {
@@ -95,8 +95,8 @@ type gameAccountBindingSaveResult struct {
 
 var errGameAccountBindingOwnerBanned = errors.New("game account binding owner is banned")
 
-var sendGameAccountBindingTransferMail = func(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, body string) error {
-	return apiHelper.SMTPClient.Send([]string{email}, "游戏账号绑定变更通知 | Haruki工具箱", body, "Haruki工具箱 | 星云科技")
+var sendGameAccountBindingTransferMail = func(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, email string, msg harukiSMTP.Message) error {
+	return apiHelper.SMTPClient.SendMessage([]string{email}, msg, "")
 }
 
 func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, existing *postgresql.GameAccountBinding, serverStr, gameUserIDStr, userID string, req harukiAPIHelper.CreateGameAccountBindingPayload) (*gameAccountBindingSaveResult, error) {
@@ -191,21 +191,12 @@ func notifyPreviousGameAccountBindingOwner(apiHelper *harukiAPIHelper.HarukiTool
 		harukiLogger.Warnf("Skip game account binding transfer notification because SMTP client is unavailable: userID=%s server=%s gameUserID=%s", transfer.PreviousOwnerUserID, serverStr, gameUserIDStr)
 		return
 	}
-	body := buildGameAccountBindingTransferMailBody(serverStr, gameUserIDStr, transferTime)
-	if err := sendGameAccountBindingTransferMail(apiHelper, email, body); err != nil {
+	msg, err := mailtemplate.Render(mailtemplate.GameAccountTransferred(serverStr, gameUserIDStr, transferTime))
+	if err != nil {
+		harukiLogger.Warnf("Failed to render game account binding transfer notification: %v", err)
+		return
+	}
+	if err := sendGameAccountBindingTransferMail(apiHelper, email, msg); err != nil {
 		harukiLogger.Warnf("Failed to send game account binding transfer notification to previous owner %s: %v", transfer.PreviousOwnerUserID, err)
 	}
-}
-
-func buildGameAccountBindingTransferMailBody(serverStr, gameUserIDStr string, transferTime time.Time) string {
-	body := smtp.GameAccountBindingTransferTemplate
-	replacements := map[string]string{
-		"{{SERVER}}":        html.EscapeString(strings.ToUpper(strings.TrimSpace(serverStr))),
-		"{{GAME_USER_ID}}":  html.EscapeString(strings.TrimSpace(gameUserIDStr)),
-		"{{TRANSFER_TIME}}": html.EscapeString(transferTime.UTC().Format(time.RFC3339)),
-	}
-	for old, newValue := range replacements {
-		body = strings.ReplaceAll(body, old, newValue)
-	}
-	return body
 }

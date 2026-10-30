@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>验证您的邮箱 | Haruki 工具箱</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; }
+a { text-decoration: none; }
+@media (max-width: 600px) {
+  .hm-outer { padding: 20px 8px !important; }
+  .hm-card { padding: 24px 20px !important; }
+  .hm-code { font-size: 26px !important; letter-spacing: 4px !important; }
+}
+@media (prefers-color-scheme: dark) {
+  .hm-page { background-color: #111113 !important; }
+  .hm-card { background-color: #1c1c1f !important; border-color: #2e2e33 !important; }
+  .hm-strong { color: #f4f4f5 !important; }
+  .hm-text { color: #d4d4d8 !important; }
+  .hm-muted { color: #a1a1aa !important; }
+  .hm-box { background-color: #232327 !important; border-color: #3f3f46 !important; }
+  .hm-rule { border-color: #2e2e33 !important; }
+  .hm-link { color: #6edece !important; }
+}
+</style>
+</head>
+<body class="hm-page" style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#f4f4f5;">邮箱验证码，{{ .ExpiresInMinutes }} 分钟内有效。</div>
+<table role="presentation" class="hm-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f5" style="background-color:#f4f4f5;">
+<tr>
+<td class="hm-outer" align="center" style="padding:32px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC',Helvetica,Arial,sans-serif;">
+<tr>
+<td style="padding:0 4px 14px 4px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td width="4" bgcolor="#007a6e" style="width:4px;background-color:#007a6e;border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>
+<td class="hm-strong" style="padding-left:10px;font-size:16px;line-height:20px;font-weight:600;color:#18181b;">Haruki 工具箱</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td class="hm-card" bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #e4e4e7;border-radius:8px;padding:32px 32px 28px 32px;">
+<h1 class="hm-strong" style="margin:0 0 16px 0;font-size:20px;line-height:28px;font-weight:600;color:#18181b;">验证您的邮箱</h1>
+<p class="hm-text" style="margin:0 0 14px 0;font-size:15px;line-height:24px;color:#3f3f46;">请在页面中输入下方验证码，或点击按钮，完成 Haruki 工具箱的邮箱验证。</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 18px 0;">
+<tr>
+<td class="hm-box" bgcolor="#f4f4f5" align="center" style="background-color:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;padding:18px 12px;">
+<div class="hm-muted" style="font-size:13px;line-height:18px;color:#71717a;margin:0 0 6px 0;">验证码</div>
+<div class="hm-code hm-strong" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono','Courier New',monospace;font-size:30px;line-height:38px;font-weight:600;letter-spacing:6px;color:#18181b;">{{ .VerificationCode }}</div>
+<div class="hm-muted" style="font-size:13px;line-height:18px;color:#71717a;margin:6px 0 0 0;">{{ .ExpiresInMinutes }} 分钟内有效</div>
+</td>
+</tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 14px 0;">
+<tr>
+<td bgcolor="#007a6e" style="background-color:#007a6e;border-radius:6px;">
+<a href="{{ .VerificationURL }}" target="_blank" style="display:inline-block;padding:11px 22px;font-size:15px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">验证邮箱</a>
+</td>
+</tr>
+</table>
+<p class="hm-muted" style="margin:0 0 18px 0;font-size:13px;line-height:20px;color:#71717a;">如果按钮无法打开，请复制以下链接到浏览器：<br><a class="hm-link" href="{{ .VerificationURL }}" target="_blank" style="color:#007a6e;text-decoration:underline;word-break:break-all;">{{ .VerificationURL }}</a></p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0 0;">
+<tr>
+<td class="hm-rule hm-text" style="border-top:1px solid #e4e4e7;padding:16px 0 0 0;font-size:14px;line-height:22px;color:#3f3f46;">如果这不是您本人的操作，请忽略此邮件，您的账号不会发生任何变化。请勿将验证码告诉任何人。</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td class="hm-muted" style="padding:18px 4px 0 4px;font-size:12px;line-height:20px;color:#71717a;">
+此邮件由 Haruki 工具箱自动发送，请勿直接回复。如果并非您本人操作，请按上文提示处理，或通过工单联系我们。<br>
+<a class="hm-link" href="https://haruki.seiunx.com" target="_blank" style="color:#007a6e;text-decoration:none;">haruki.seiunx.com</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
