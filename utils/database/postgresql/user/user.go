@@ -60,6 +60,10 @@ const (
 	EdgeGameAccountDataGrantsReceived = "game_account_data_grants_received"
 	// EdgeIosScriptCode holds the string denoting the ios_script_code edge name in mutations.
 	EdgeIosScriptCode = "ios_script_code"
+	// EdgeInheritVaultKey holds the string denoting the inherit_vault_key edge name in mutations.
+	EdgeInheritVaultKey = "inherit_vault_key"
+	// EdgeInheritVaultEntries holds the string denoting the inherit_vault_entries edge name in mutations.
+	EdgeInheritVaultEntries = "inherit_vault_entries"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// SocialPlatformInfoTable is the table that holds the social_platform_info relation/edge.
@@ -104,6 +108,20 @@ const (
 	IosScriptCodeInverseTable = "ios_script_codes"
 	// IosScriptCodeColumn is the table column denoting the ios_script_code relation/edge.
 	IosScriptCodeColumn = "user_id"
+	// InheritVaultKeyTable is the table that holds the inherit_vault_key relation/edge.
+	InheritVaultKeyTable = "inherit_vault_keys"
+	// InheritVaultKeyInverseTable is the table name for the InheritVaultKey entity.
+	// It exists in this package in order to avoid circular dependency with the "inheritvaultkey" package.
+	InheritVaultKeyInverseTable = "inherit_vault_keys"
+	// InheritVaultKeyColumn is the table column denoting the inherit_vault_key relation/edge.
+	InheritVaultKeyColumn = "user_id"
+	// InheritVaultEntriesTable is the table that holds the inherit_vault_entries relation/edge.
+	InheritVaultEntriesTable = "inherit_vault_entries"
+	// InheritVaultEntriesInverseTable is the table name for the InheritVaultEntry entity.
+	// It exists in this package in order to avoid circular dependency with the "inheritvaultentry" package.
+	InheritVaultEntriesInverseTable = "inherit_vault_entries"
+	// InheritVaultEntriesColumn is the table column denoting the inherit_vault_entries relation/edge.
+	InheritVaultEntriesColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -388,6 +406,27 @@ func ByIosScriptCodeField(field string, opts ...sql.OrderTermOption) OrderOption
 		sqlgraph.OrderByNeighborTerms(s, newIosScriptCodeStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByInheritVaultKeyField orders the results by inherit_vault_key field.
+func ByInheritVaultKeyField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newInheritVaultKeyStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByInheritVaultEntriesCount orders the results by inherit_vault_entries count.
+func ByInheritVaultEntriesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newInheritVaultEntriesStep(), opts...)
+	}
+}
+
+// ByInheritVaultEntries orders the results by inherit_vault_entries terms.
+func ByInheritVaultEntries(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newInheritVaultEntriesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newSocialPlatformInfoStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -428,5 +467,19 @@ func newIosScriptCodeStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(IosScriptCodeInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2O, false, IosScriptCodeTable, IosScriptCodeColumn),
+	)
+}
+func newInheritVaultKeyStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(InheritVaultKeyInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, InheritVaultKeyTable, InheritVaultKeyColumn),
+	)
+}
+func newInheritVaultEntriesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(InheritVaultEntriesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, InheritVaultEntriesTable, InheritVaultEntriesColumn),
 	)
 }

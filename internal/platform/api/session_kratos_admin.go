@@ -45,6 +45,18 @@ func (s *SessionHandler) VerifyKratosPasswordByIdentityID(ctx context.Context, i
 	return s.VerifyKratosPassword(ctx, identifier, password)
 }
 
+// KratosIdentityHasPassword reports whether the identity can log in with a
+// password. Identities created through social sign-in (OIDC) or a passkey
+// have none until the owner adds one in their settings.
+func (s *SessionHandler) KratosIdentityHasPassword(ctx context.Context, identityID string) (bool, error) {
+	identity, err := s.fetchKratosIdentityByID(ctx, identityID)
+	if err != nil {
+		return false, err
+	}
+	_, ok := identity.Credentials["password"]
+	return ok, nil
+}
+
 func (s *SessionHandler) UpdateKratosEmailByIdentityID(ctx context.Context, identityID string, email string) error {
 	identityID = strings.TrimSpace(identityID)
 	email = platformIdentity.NormalizeEmail(email)

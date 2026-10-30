@@ -2,7 +2,10 @@ package upload
 
 import (
 	"context"
+
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
@@ -26,6 +29,9 @@ type Dependencies struct {
 	SuiteRestoreService       *harukiDataHandler.SuiteRestoreService
 	ServerCryptor             harukiSekai.ServerCryptor
 	Proxy                     string
+	// SekaiClient holds the game endpoints, headers and inherit signing
+	// secrets used by inherit jobs.
+	SekaiClient harukiConfig.SekaiClientConfig
 	// InheritPacing sets the pauses between game API calls of an inherit;
 	// unset fields keep the defaults.
 	InheritPacing harukiSekai.InheritPacing
@@ -39,6 +45,9 @@ type Dependencies struct {
 	// outlives the client that minted it, so skipping this check would let a
 	// disabled integration keep writing.
 	OAuth2ClientActiveChecker harukiOAuth2.ClientActiveChecker
+	// InheritVault stores what inherit jobs hand back to the owner. When it
+	// has no master key the inherit job and vault endpoints answer 503.
+	InheritVault *inheritvault.Store
 }
 
 func RegisterUploadRoutes(apiHelper *apiHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {

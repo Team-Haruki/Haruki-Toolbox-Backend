@@ -83,7 +83,7 @@ func TestResolveProxyEndpoint_InvalidServer(t *testing.T) {
 func TestBuildProxyPath(t *testing.T) {
 	t.Parallel()
 
-	path, err := buildProxyPath(harukiUtils.UploadDataTypeSuite, httpMethodGet, 123, nil)
+	path, err := buildProxyPath(harukiUtils.UploadDataTypeSuite, "GET", 123, nil)
 	if err != nil {
 		t.Fatalf("buildProxyPath suite err=%v", err)
 	}
@@ -92,7 +92,7 @@ func TestBuildProxyPath(t *testing.T) {
 	}
 
 	id := int64(99)
-	path, err = buildProxyPath(harukiUtils.UploadDataTypeMysekaiBirthdayParty, httpMethodPost, 123, &id)
+	path, err = buildProxyPath(harukiUtils.UploadDataTypeMysekaiBirthdayParty, "POST", 123, &id)
 	if err != nil {
 		t.Fatalf("buildProxyPath birthday err=%v", err)
 	}
@@ -100,13 +100,13 @@ func TestBuildProxyPath(t *testing.T) {
 		t.Fatalf("buildProxyPath birthday=%q", path)
 	}
 
-	_, err = buildProxyPath(harukiUtils.UploadDataTypeMysekaiBirthdayParty, httpMethodPost, 123, nil)
+	_, err = buildProxyPath(harukiUtils.UploadDataTypeMysekaiBirthdayParty, "POST", 123, nil)
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("buildProxyPath missing birthday id should return APIError, got %T", err)
 	}
 
-	_, err = buildProxyPath(harukiUtils.UploadDataType("unknown"), httpMethodGet, 123, nil)
+	_, err = buildProxyPath(harukiUtils.UploadDataType("unknown"), "GET", 123, nil)
 	if err == nil {
 		t.Fatalf("buildProxyPath should fail for invalid data type")
 	}

@@ -19,6 +19,7 @@ import (
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
 	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
@@ -168,6 +169,8 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	inheritVaultLogger := harukiLogger.NewLoggerFromGlobal("InheritVault")
+	inheritVault := newInheritVaultStore(cfg, resources, inheritVaultLogger)
 	deviceFlowLogger := harukiLogger.NewLoggerFromGlobal("OAuth2Device")
 	deviceFlowConfig := newOAuth2DeviceFlowConfig(cfg, deviceFlowLogger)
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
@@ -205,6 +208,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		}),
 		UploadProxy:   cfg.Proxy,
 		InheritPacing: harukiSekai.InheritPacingFromConfig(cfg.SekaiClient.InheritPacing),
+		SekaiClient:   cfg.SekaiClient,
 		UserProfileConfig: userProfileModule.NewConfig(userProfileModule.ConfigOptions{
 			AvatarSaveDir: cfg.UserSystem.AvatarSaveDir,
 			AvatarBaseURL: cfg.UserSystem.AvatarURL,
@@ -217,7 +221,8 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 			DetailPath:  "/tickets",
 			DisplayName: cfg.UserSystem.SMTP.MailName,
 		},
-		Story: storyService,
+		Story:        storyService,
+		InheritVault: inheritVault,
 	})
 
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
@@ -230,6 +235,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		DBManager:   resources.databaseManager,
 		Logger:      deviceFlowLogger,
 	})
+	waitInheritVaultReaper := inheritvault.StartReaper(schedulerCtx, inheritVault, inheritvault.ReaperInterval, inheritVaultLogger)
 	waitStory := func() {}
 	if storyService != nil {
 		waitStory = storyService.Start(schedulerCtx)
@@ -249,6 +255,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		stopSchedulers()
 		waitAfdianScheduler()
 		waitDeviceFlowReaper()
+		waitInheritVaultReaper()
 		waitStory()
 		waitStatsSampler()
 	}
@@ -273,6 +280,23 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 
 	buildComplete = true
 	return application, nil
+}
+
+// newInheritVaultStore loads the inherit vault master key. A missing or
+// malformed key file only disables inherit jobs and the vault (their
+// endpoints answer 503); the rest of the backend starts normally. The key
+// itself is never logged.
+func newInheritVaultStore(cfg harukiConfig.Config, resources *applicationResources, logger *harukiLogger.Logger) *inheritvault.Store {
+	var master *inheritvault.MasterKey
+	if strings.TrimSpace(cfg.InheritVault.MasterKeyFile) == "" {
+		logger.Warnf("Inherit vault disabled: inherit_vault.master_key_file is not set; inherit jobs are unavailable")
+	} else if key, err := inheritvault.LoadMasterKeyFile(cfg.InheritVault.MasterKeyFile, cfg.InheritVault.MasterKeyVersion); err != nil {
+		logger.Errorf("Inherit vault disabled: %v", err)
+	} else {
+		master = key
+		logger.Infof("Inherit vault enabled with master key v%d", key.Version())
+	}
+	return inheritvault.NewStore(resources.toolboxClient, resources.redisClient.Redis, master)
 }
 
 // newOAuth2DeviceFlowConfig turns oauth2.device_flow into the module's

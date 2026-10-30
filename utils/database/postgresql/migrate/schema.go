@@ -267,6 +267,83 @@ var (
 			},
 		},
 	}
+	// InheritVaultEntriesColumns holds the columns for the "inherit_vault_entries" table.
+	InheritVaultEntriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "server", Type: field.TypeEnum, Enums: []string{"jp", "en"}},
+		{Name: "game_user_id", Type: field.TypeInt64},
+		{Name: "job_id", Type: field.TypeString, Nullable: true},
+		{Name: "key_version", Type: field.TypeInt},
+		{Name: "wrap_scheme", Type: field.TypeString, Size: 64},
+		{Name: "credential_sealed", Type: field.TypeBytes},
+		{Name: "code_sealed", Type: field.TypeBytes, Nullable: true},
+		{Name: "code_issued_at", Type: field.TypeTime, Nullable: true},
+		{Name: "code_expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "credential_expires_at", Type: field.TypeTime},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "destroyed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "user_id", Type: field.TypeString},
+	}
+	// InheritVaultEntriesTable holds the schema information for the "inherit_vault_entries" table.
+	InheritVaultEntriesTable = &schema.Table{
+		Name:       "inherit_vault_entries",
+		Columns:    InheritVaultEntriesColumns,
+		PrimaryKey: []*schema.Column{InheritVaultEntriesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "inherit_vault_entries_users_inherit_vault_entries",
+				Columns:    []*schema.Column{InheritVaultEntriesColumns[14]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "inheritvaultentry_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{InheritVaultEntriesColumns[14], InheritVaultEntriesColumns[11]},
+			},
+			{
+				Name:    "inheritvaultentry_credential_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{InheritVaultEntriesColumns[10]},
+			},
+			{
+				Name:    "inheritvaultentry_code_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{InheritVaultEntriesColumns[9]},
+			},
+		},
+	}
+	// InheritVaultKeysColumns holds the columns for the "inherit_vault_keys" table.
+	InheritVaultKeysColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "key_version", Type: field.TypeInt},
+		{Name: "public_key", Type: field.TypeBytes},
+		{Name: "wrapped_private_key", Type: field.TypeBytes},
+		{Name: "wrap_scheme", Type: field.TypeString, Size: 64},
+		{Name: "secret_kind", Type: field.TypeEnum, Enums: []string{"password", "pin"}},
+		{Name: "kdf_params", Type: field.TypeString, Size: 512},
+		{Name: "master_key_version", Type: field.TypeInt},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "user_id", Type: field.TypeString, Unique: true},
+	}
+	// InheritVaultKeysTable holds the schema information for the "inherit_vault_keys" table.
+	InheritVaultKeysTable = &schema.Table{
+		Name:       "inherit_vault_keys",
+		Columns:    InheritVaultKeysColumns,
+		PrimaryKey: []*schema.Column{InheritVaultKeysColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "inherit_vault_keys_users_inherit_vault_key",
+				Columns:    []*schema.Column{InheritVaultKeysColumns[10]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
 	// Oauth2ClientWebhookEndpointsColumns holds the columns for the "oauth2_client_webhook_endpoints" table.
 	Oauth2ClientWebhookEndpointsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
@@ -887,6 +964,8 @@ var (
 		GroupsTable,
 		GroupListsTable,
 		IosScriptCodesTable,
+		InheritVaultEntriesTable,
+		InheritVaultKeysTable,
 		Oauth2ClientWebhookEndpointsTable,
 		RiskEventsTable,
 		RiskRulesTable,
@@ -921,6 +1000,8 @@ func init() {
 	}
 	GroupListsTable.ForeignKeys[0].RefTable = GroupsTable
 	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
+	InheritVaultEntriesTable.ForeignKeys[0].RefTable = UsersTable
+	InheritVaultKeysTable.ForeignKeys[0].RefTable = UsersTable
 	Oauth2ClientWebhookEndpointsTable.Annotation = &entsql.Annotation{
 		Table: "oauth2_client_webhook_endpoints",
 	}

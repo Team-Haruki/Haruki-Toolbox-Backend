@@ -149,6 +149,9 @@ func normalizeConfigDefaults(cfg *Config) error {
 		cfg.Backend.ShutdownTimeout = 10
 	}
 	cfg.SekaiClient.InheritPacing = cfg.SekaiClient.InheritPacing.Normalized()
+	if cfg.InheritVault.MasterKeyVersion <= 0 {
+		cfg.InheritVault.MasterKeyVersion = 1
+	}
 	if cfg.Backend.ProfilingIntervalSeconds <= 0 {
 		cfg.Backend.ProfilingIntervalSeconds = 15
 	}

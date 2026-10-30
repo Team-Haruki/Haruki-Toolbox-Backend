@@ -6,6 +6,7 @@ require (
 	entgo.io/ent v0.14.6
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/alicebob/miniredis/v2 v2.39.0
+	github.com/fasthttp/websocket v1.5.12
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -49,6 +50,7 @@ require (
 	github.com/molecule-man/go-brrr v1.0.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/yuin/gopher-lua v1.1.2 // indirect

@@ -13,6 +13,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
@@ -261,6 +263,46 @@ func init() {
 	iosscriptcodeDescUploadCode := iosscriptcodeFields[1].Descriptor()
 	// iosscriptcode.UploadCodeValidator is a validator for the "upload_code" field. It is called by the builders before save.
 	iosscriptcode.UploadCodeValidator = iosscriptcodeDescUploadCode.Validators[0].(func(string) error)
+	inheritvaultentryFields := schema.InheritVaultEntry{}.Fields()
+	_ = inheritvaultentryFields
+	// inheritvaultentryDescUserID is the schema descriptor for user_id field.
+	inheritvaultentryDescUserID := inheritvaultentryFields[1].Descriptor()
+	// inheritvaultentry.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	inheritvaultentry.UserIDValidator = inheritvaultentryDescUserID.Validators[0].(func(string) error)
+	// inheritvaultentryDescKeyVersion is the schema descriptor for key_version field.
+	inheritvaultentryDescKeyVersion := inheritvaultentryFields[5].Descriptor()
+	// inheritvaultentry.KeyVersionValidator is a validator for the "key_version" field. It is called by the builders before save.
+	inheritvaultentry.KeyVersionValidator = inheritvaultentryDescKeyVersion.Validators[0].(func(int) error)
+	// inheritvaultentryDescWrapScheme is the schema descriptor for wrap_scheme field.
+	inheritvaultentryDescWrapScheme := inheritvaultentryFields[6].Descriptor()
+	// inheritvaultentry.WrapSchemeValidator is a validator for the "wrap_scheme" field. It is called by the builders before save.
+	inheritvaultentry.WrapSchemeValidator = inheritvaultentryDescWrapScheme.Validators[0].(func(string) error)
+	// inheritvaultentryDescID is the schema descriptor for id field.
+	inheritvaultentryDescID := inheritvaultentryFields[0].Descriptor()
+	// inheritvaultentry.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	inheritvaultentry.IDValidator = inheritvaultentryDescID.Validators[0].(func(string) error)
+	inheritvaultkeyFields := schema.InheritVaultKey{}.Fields()
+	_ = inheritvaultkeyFields
+	// inheritvaultkeyDescUserID is the schema descriptor for user_id field.
+	inheritvaultkeyDescUserID := inheritvaultkeyFields[0].Descriptor()
+	// inheritvaultkey.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	inheritvaultkey.UserIDValidator = inheritvaultkeyDescUserID.Validators[0].(func(string) error)
+	// inheritvaultkeyDescKeyVersion is the schema descriptor for key_version field.
+	inheritvaultkeyDescKeyVersion := inheritvaultkeyFields[1].Descriptor()
+	// inheritvaultkey.KeyVersionValidator is a validator for the "key_version" field. It is called by the builders before save.
+	inheritvaultkey.KeyVersionValidator = inheritvaultkeyDescKeyVersion.Validators[0].(func(int) error)
+	// inheritvaultkeyDescWrapScheme is the schema descriptor for wrap_scheme field.
+	inheritvaultkeyDescWrapScheme := inheritvaultkeyFields[4].Descriptor()
+	// inheritvaultkey.WrapSchemeValidator is a validator for the "wrap_scheme" field. It is called by the builders before save.
+	inheritvaultkey.WrapSchemeValidator = inheritvaultkeyDescWrapScheme.Validators[0].(func(string) error)
+	// inheritvaultkeyDescKdfParams is the schema descriptor for kdf_params field.
+	inheritvaultkeyDescKdfParams := inheritvaultkeyFields[6].Descriptor()
+	// inheritvaultkey.KdfParamsValidator is a validator for the "kdf_params" field. It is called by the builders before save.
+	inheritvaultkey.KdfParamsValidator = inheritvaultkeyDescKdfParams.Validators[0].(func(string) error)
+	// inheritvaultkeyDescMasterKeyVersion is the schema descriptor for master_key_version field.
+	inheritvaultkeyDescMasterKeyVersion := inheritvaultkeyFields[7].Descriptor()
+	// inheritvaultkey.MasterKeyVersionValidator is a validator for the "master_key_version" field. It is called by the builders before save.
+	inheritvaultkey.MasterKeyVersionValidator = inheritvaultkeyDescMasterKeyVersion.Validators[0].(func(int) error)
 	oauth2clientwebhookendpointFields := schema.OAuth2ClientWebhookEndpoint{}.Fields()
 	_ = oauth2clientwebhookendpointFields
 	// oauth2clientwebhookendpointDescClientID is the schema descriptor for client_id field.

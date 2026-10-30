@@ -19,6 +19,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/group"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
@@ -55,6 +57,8 @@ const (
 	TypeGroup                       = "Group"
 	TypeGroupList                   = "GroupList"
 	TypeIOSScriptCode               = "IOSScriptCode"
+	TypeInheritVaultEntry           = "InheritVaultEntry"
+	TypeInheritVaultKey             = "InheritVaultKey"
 	TypeOAuth2ClientWebhookEndpoint = "OAuth2ClientWebhookEndpoint"
 	TypeRiskEvent                   = "RiskEvent"
 	TypeRiskRule                    = "RiskRule"
@@ -6271,6 +6275,2196 @@ func (m *IOSScriptCodeMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown IOSScriptCode edge %s", name)
+}
+
+// InheritVaultEntryMutation represents an operation that mutates the InheritVaultEntry nodes in the graph.
+type InheritVaultEntryMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *string
+	server                *inheritvaultentry.Server
+	game_user_id          *int64
+	addgame_user_id       *int64
+	job_id                *string
+	key_version           *int
+	addkey_version        *int
+	wrap_scheme           *string
+	credential_sealed     *[]byte
+	code_sealed           *[]byte
+	code_issued_at        *time.Time
+	code_expires_at       *time.Time
+	credential_expires_at *time.Time
+	created_at            *time.Time
+	updated_at            *time.Time
+	destroyed_at          *time.Time
+	clearedFields         map[string]struct{}
+	user                  *string
+	cleareduser           bool
+	done                  bool
+	oldValue              func(context.Context) (*InheritVaultEntry, error)
+	predicates            []predicate.InheritVaultEntry
+}
+
+var _ ent.Mutation = (*InheritVaultEntryMutation)(nil)
+
+// inheritvaultentryOption allows management of the mutation configuration using functional options.
+type inheritvaultentryOption func(*InheritVaultEntryMutation)
+
+// newInheritVaultEntryMutation creates new mutation for the InheritVaultEntry entity.
+func newInheritVaultEntryMutation(c config, op Op, opts ...inheritvaultentryOption) *InheritVaultEntryMutation {
+	m := &InheritVaultEntryMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeInheritVaultEntry,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withInheritVaultEntryID sets the ID field of the mutation.
+func withInheritVaultEntryID(id string) inheritvaultentryOption {
+	return func(m *InheritVaultEntryMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *InheritVaultEntry
+		)
+		m.oldValue = func(ctx context.Context) (*InheritVaultEntry, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().InheritVaultEntry.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withInheritVaultEntry sets the old InheritVaultEntry of the mutation.
+func withInheritVaultEntry(node *InheritVaultEntry) inheritvaultentryOption {
+	return func(m *InheritVaultEntryMutation) {
+		m.oldValue = func(context.Context) (*InheritVaultEntry, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m InheritVaultEntryMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m InheritVaultEntryMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of InheritVaultEntry entities.
+func (m *InheritVaultEntryMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *InheritVaultEntryMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *InheritVaultEntryMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().InheritVaultEntry.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *InheritVaultEntryMutation) SetUserID(s string) {
+	m.user = &s
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *InheritVaultEntryMutation) UserID() (r string, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *InheritVaultEntryMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetServer sets the "server" field.
+func (m *InheritVaultEntryMutation) SetServer(i inheritvaultentry.Server) {
+	m.server = &i
+}
+
+// Server returns the value of the "server" field in the mutation.
+func (m *InheritVaultEntryMutation) Server() (r inheritvaultentry.Server, exists bool) {
+	v := m.server
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServer returns the old "server" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldServer(ctx context.Context) (v inheritvaultentry.Server, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServer is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServer requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServer: %w", err)
+	}
+	return oldValue.Server, nil
+}
+
+// ResetServer resets all changes to the "server" field.
+func (m *InheritVaultEntryMutation) ResetServer() {
+	m.server = nil
+}
+
+// SetGameUserID sets the "game_user_id" field.
+func (m *InheritVaultEntryMutation) SetGameUserID(i int64) {
+	m.game_user_id = &i
+	m.addgame_user_id = nil
+}
+
+// GameUserID returns the value of the "game_user_id" field in the mutation.
+func (m *InheritVaultEntryMutation) GameUserID() (r int64, exists bool) {
+	v := m.game_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGameUserID returns the old "game_user_id" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldGameUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGameUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGameUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGameUserID: %w", err)
+	}
+	return oldValue.GameUserID, nil
+}
+
+// AddGameUserID adds i to the "game_user_id" field.
+func (m *InheritVaultEntryMutation) AddGameUserID(i int64) {
+	if m.addgame_user_id != nil {
+		*m.addgame_user_id += i
+	} else {
+		m.addgame_user_id = &i
+	}
+}
+
+// AddedGameUserID returns the value that was added to the "game_user_id" field in this mutation.
+func (m *InheritVaultEntryMutation) AddedGameUserID() (r int64, exists bool) {
+	v := m.addgame_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetGameUserID resets all changes to the "game_user_id" field.
+func (m *InheritVaultEntryMutation) ResetGameUserID() {
+	m.game_user_id = nil
+	m.addgame_user_id = nil
+}
+
+// SetJobID sets the "job_id" field.
+func (m *InheritVaultEntryMutation) SetJobID(s string) {
+	m.job_id = &s
+}
+
+// JobID returns the value of the "job_id" field in the mutation.
+func (m *InheritVaultEntryMutation) JobID() (r string, exists bool) {
+	v := m.job_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobID returns the old "job_id" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldJobID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobID: %w", err)
+	}
+	return oldValue.JobID, nil
+}
+
+// ClearJobID clears the value of the "job_id" field.
+func (m *InheritVaultEntryMutation) ClearJobID() {
+	m.job_id = nil
+	m.clearedFields[inheritvaultentry.FieldJobID] = struct{}{}
+}
+
+// JobIDCleared returns if the "job_id" field was cleared in this mutation.
+func (m *InheritVaultEntryMutation) JobIDCleared() bool {
+	_, ok := m.clearedFields[inheritvaultentry.FieldJobID]
+	return ok
+}
+
+// ResetJobID resets all changes to the "job_id" field.
+func (m *InheritVaultEntryMutation) ResetJobID() {
+	m.job_id = nil
+	delete(m.clearedFields, inheritvaultentry.FieldJobID)
+}
+
+// SetKeyVersion sets the "key_version" field.
+func (m *InheritVaultEntryMutation) SetKeyVersion(i int) {
+	m.key_version = &i
+	m.addkey_version = nil
+}
+
+// KeyVersion returns the value of the "key_version" field in the mutation.
+func (m *InheritVaultEntryMutation) KeyVersion() (r int, exists bool) {
+	v := m.key_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyVersion returns the old "key_version" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldKeyVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyVersion: %w", err)
+	}
+	return oldValue.KeyVersion, nil
+}
+
+// AddKeyVersion adds i to the "key_version" field.
+func (m *InheritVaultEntryMutation) AddKeyVersion(i int) {
+	if m.addkey_version != nil {
+		*m.addkey_version += i
+	} else {
+		m.addkey_version = &i
+	}
+}
+
+// AddedKeyVersion returns the value that was added to the "key_version" field in this mutation.
+func (m *InheritVaultEntryMutation) AddedKeyVersion() (r int, exists bool) {
+	v := m.addkey_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetKeyVersion resets all changes to the "key_version" field.
+func (m *InheritVaultEntryMutation) ResetKeyVersion() {
+	m.key_version = nil
+	m.addkey_version = nil
+}
+
+// SetWrapScheme sets the "wrap_scheme" field.
+func (m *InheritVaultEntryMutation) SetWrapScheme(s string) {
+	m.wrap_scheme = &s
+}
+
+// WrapScheme returns the value of the "wrap_scheme" field in the mutation.
+func (m *InheritVaultEntryMutation) WrapScheme() (r string, exists bool) {
+	v := m.wrap_scheme
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWrapScheme returns the old "wrap_scheme" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldWrapScheme(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWrapScheme is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWrapScheme requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWrapScheme: %w", err)
+	}
+	return oldValue.WrapScheme, nil
+}
+
+// ResetWrapScheme resets all changes to the "wrap_scheme" field.
+func (m *InheritVaultEntryMutation) ResetWrapScheme() {
+	m.wrap_scheme = nil
+}
+
+// SetCredentialSealed sets the "credential_sealed" field.
+func (m *InheritVaultEntryMutation) SetCredentialSealed(b []byte) {
+	m.credential_sealed = &b
+}
+
+// CredentialSealed returns the value of the "credential_sealed" field in the mutation.
+func (m *InheritVaultEntryMutation) CredentialSealed() (r []byte, exists bool) {
+	v := m.credential_sealed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCredentialSealed returns the old "credential_sealed" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldCredentialSealed(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCredentialSealed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCredentialSealed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCredentialSealed: %w", err)
+	}
+	return oldValue.CredentialSealed, nil
+}
+
+// ResetCredentialSealed resets all changes to the "credential_sealed" field.
+func (m *InheritVaultEntryMutation) ResetCredentialSealed() {
+	m.credential_sealed = nil
+}
+
+// SetCodeSealed sets the "code_sealed" field.
+func (m *InheritVaultEntryMutation) SetCodeSealed(b []byte) {
+	m.code_sealed = &b
+}
+
+// CodeSealed returns the value of the "code_sealed" field in the mutation.
+func (m *InheritVaultEntryMutation) CodeSealed() (r []byte, exists bool) {
+	v := m.code_sealed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCodeSealed returns the old "code_sealed" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldCodeSealed(ctx context.Context) (v *[]byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCodeSealed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCodeSealed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCodeSealed: %w", err)
+	}
+	return oldValue.CodeSealed, nil
+}
+
+// ClearCodeSealed clears the value of the "code_sealed" field.
+func (m *InheritVaultEntryMutation) ClearCodeSealed() {
+	m.code_sealed = nil
+	m.clearedFields[inheritvaultentry.FieldCodeSealed] = struct{}{}
+}
+
+// CodeSealedCleared returns if the "code_sealed" field was cleared in this mutation.
+func (m *InheritVaultEntryMutation) CodeSealedCleared() bool {
+	_, ok := m.clearedFields[inheritvaultentry.FieldCodeSealed]
+	return ok
+}
+
+// ResetCodeSealed resets all changes to the "code_sealed" field.
+func (m *InheritVaultEntryMutation) ResetCodeSealed() {
+	m.code_sealed = nil
+	delete(m.clearedFields, inheritvaultentry.FieldCodeSealed)
+}
+
+// SetCodeIssuedAt sets the "code_issued_at" field.
+func (m *InheritVaultEntryMutation) SetCodeIssuedAt(t time.Time) {
+	m.code_issued_at = &t
+}
+
+// CodeIssuedAt returns the value of the "code_issued_at" field in the mutation.
+func (m *InheritVaultEntryMutation) CodeIssuedAt() (r time.Time, exists bool) {
+	v := m.code_issued_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCodeIssuedAt returns the old "code_issued_at" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldCodeIssuedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCodeIssuedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCodeIssuedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCodeIssuedAt: %w", err)
+	}
+	return oldValue.CodeIssuedAt, nil
+}
+
+// ClearCodeIssuedAt clears the value of the "code_issued_at" field.
+func (m *InheritVaultEntryMutation) ClearCodeIssuedAt() {
+	m.code_issued_at = nil
+	m.clearedFields[inheritvaultentry.FieldCodeIssuedAt] = struct{}{}
+}
+
+// CodeIssuedAtCleared returns if the "code_issued_at" field was cleared in this mutation.
+func (m *InheritVaultEntryMutation) CodeIssuedAtCleared() bool {
+	_, ok := m.clearedFields[inheritvaultentry.FieldCodeIssuedAt]
+	return ok
+}
+
+// ResetCodeIssuedAt resets all changes to the "code_issued_at" field.
+func (m *InheritVaultEntryMutation) ResetCodeIssuedAt() {
+	m.code_issued_at = nil
+	delete(m.clearedFields, inheritvaultentry.FieldCodeIssuedAt)
+}
+
+// SetCodeExpiresAt sets the "code_expires_at" field.
+func (m *InheritVaultEntryMutation) SetCodeExpiresAt(t time.Time) {
+	m.code_expires_at = &t
+}
+
+// CodeExpiresAt returns the value of the "code_expires_at" field in the mutation.
+func (m *InheritVaultEntryMutation) CodeExpiresAt() (r time.Time, exists bool) {
+	v := m.code_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCodeExpiresAt returns the old "code_expires_at" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldCodeExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCodeExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCodeExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCodeExpiresAt: %w", err)
+	}
+	return oldValue.CodeExpiresAt, nil
+}
+
+// ClearCodeExpiresAt clears the value of the "code_expires_at" field.
+func (m *InheritVaultEntryMutation) ClearCodeExpiresAt() {
+	m.code_expires_at = nil
+	m.clearedFields[inheritvaultentry.FieldCodeExpiresAt] = struct{}{}
+}
+
+// CodeExpiresAtCleared returns if the "code_expires_at" field was cleared in this mutation.
+func (m *InheritVaultEntryMutation) CodeExpiresAtCleared() bool {
+	_, ok := m.clearedFields[inheritvaultentry.FieldCodeExpiresAt]
+	return ok
+}
+
+// ResetCodeExpiresAt resets all changes to the "code_expires_at" field.
+func (m *InheritVaultEntryMutation) ResetCodeExpiresAt() {
+	m.code_expires_at = nil
+	delete(m.clearedFields, inheritvaultentry.FieldCodeExpiresAt)
+}
+
+// SetCredentialExpiresAt sets the "credential_expires_at" field.
+func (m *InheritVaultEntryMutation) SetCredentialExpiresAt(t time.Time) {
+	m.credential_expires_at = &t
+}
+
+// CredentialExpiresAt returns the value of the "credential_expires_at" field in the mutation.
+func (m *InheritVaultEntryMutation) CredentialExpiresAt() (r time.Time, exists bool) {
+	v := m.credential_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCredentialExpiresAt returns the old "credential_expires_at" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldCredentialExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCredentialExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCredentialExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCredentialExpiresAt: %w", err)
+	}
+	return oldValue.CredentialExpiresAt, nil
+}
+
+// ResetCredentialExpiresAt resets all changes to the "credential_expires_at" field.
+func (m *InheritVaultEntryMutation) ResetCredentialExpiresAt() {
+	m.credential_expires_at = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *InheritVaultEntryMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *InheritVaultEntryMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *InheritVaultEntryMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *InheritVaultEntryMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *InheritVaultEntryMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *InheritVaultEntryMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetDestroyedAt sets the "destroyed_at" field.
+func (m *InheritVaultEntryMutation) SetDestroyedAt(t time.Time) {
+	m.destroyed_at = &t
+}
+
+// DestroyedAt returns the value of the "destroyed_at" field in the mutation.
+func (m *InheritVaultEntryMutation) DestroyedAt() (r time.Time, exists bool) {
+	v := m.destroyed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDestroyedAt returns the old "destroyed_at" field's value of the InheritVaultEntry entity.
+// If the InheritVaultEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultEntryMutation) OldDestroyedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDestroyedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDestroyedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDestroyedAt: %w", err)
+	}
+	return oldValue.DestroyedAt, nil
+}
+
+// ClearDestroyedAt clears the value of the "destroyed_at" field.
+func (m *InheritVaultEntryMutation) ClearDestroyedAt() {
+	m.destroyed_at = nil
+	m.clearedFields[inheritvaultentry.FieldDestroyedAt] = struct{}{}
+}
+
+// DestroyedAtCleared returns if the "destroyed_at" field was cleared in this mutation.
+func (m *InheritVaultEntryMutation) DestroyedAtCleared() bool {
+	_, ok := m.clearedFields[inheritvaultentry.FieldDestroyedAt]
+	return ok
+}
+
+// ResetDestroyedAt resets all changes to the "destroyed_at" field.
+func (m *InheritVaultEntryMutation) ResetDestroyedAt() {
+	m.destroyed_at = nil
+	delete(m.clearedFields, inheritvaultentry.FieldDestroyedAt)
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *InheritVaultEntryMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[inheritvaultentry.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *InheritVaultEntryMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *InheritVaultEntryMutation) UserIDs() (ids []string) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *InheritVaultEntryMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the InheritVaultEntryMutation builder.
+func (m *InheritVaultEntryMutation) Where(ps ...predicate.InheritVaultEntry) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the InheritVaultEntryMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *InheritVaultEntryMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.InheritVaultEntry, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *InheritVaultEntryMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *InheritVaultEntryMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (InheritVaultEntry).
+func (m *InheritVaultEntryMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *InheritVaultEntryMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.user != nil {
+		fields = append(fields, inheritvaultentry.FieldUserID)
+	}
+	if m.server != nil {
+		fields = append(fields, inheritvaultentry.FieldServer)
+	}
+	if m.game_user_id != nil {
+		fields = append(fields, inheritvaultentry.FieldGameUserID)
+	}
+	if m.job_id != nil {
+		fields = append(fields, inheritvaultentry.FieldJobID)
+	}
+	if m.key_version != nil {
+		fields = append(fields, inheritvaultentry.FieldKeyVersion)
+	}
+	if m.wrap_scheme != nil {
+		fields = append(fields, inheritvaultentry.FieldWrapScheme)
+	}
+	if m.credential_sealed != nil {
+		fields = append(fields, inheritvaultentry.FieldCredentialSealed)
+	}
+	if m.code_sealed != nil {
+		fields = append(fields, inheritvaultentry.FieldCodeSealed)
+	}
+	if m.code_issued_at != nil {
+		fields = append(fields, inheritvaultentry.FieldCodeIssuedAt)
+	}
+	if m.code_expires_at != nil {
+		fields = append(fields, inheritvaultentry.FieldCodeExpiresAt)
+	}
+	if m.credential_expires_at != nil {
+		fields = append(fields, inheritvaultentry.FieldCredentialExpiresAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, inheritvaultentry.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, inheritvaultentry.FieldUpdatedAt)
+	}
+	if m.destroyed_at != nil {
+		fields = append(fields, inheritvaultentry.FieldDestroyedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *InheritVaultEntryMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case inheritvaultentry.FieldUserID:
+		return m.UserID()
+	case inheritvaultentry.FieldServer:
+		return m.Server()
+	case inheritvaultentry.FieldGameUserID:
+		return m.GameUserID()
+	case inheritvaultentry.FieldJobID:
+		return m.JobID()
+	case inheritvaultentry.FieldKeyVersion:
+		return m.KeyVersion()
+	case inheritvaultentry.FieldWrapScheme:
+		return m.WrapScheme()
+	case inheritvaultentry.FieldCredentialSealed:
+		return m.CredentialSealed()
+	case inheritvaultentry.FieldCodeSealed:
+		return m.CodeSealed()
+	case inheritvaultentry.FieldCodeIssuedAt:
+		return m.CodeIssuedAt()
+	case inheritvaultentry.FieldCodeExpiresAt:
+		return m.CodeExpiresAt()
+	case inheritvaultentry.FieldCredentialExpiresAt:
+		return m.CredentialExpiresAt()
+	case inheritvaultentry.FieldCreatedAt:
+		return m.CreatedAt()
+	case inheritvaultentry.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case inheritvaultentry.FieldDestroyedAt:
+		return m.DestroyedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *InheritVaultEntryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case inheritvaultentry.FieldUserID:
+		return m.OldUserID(ctx)
+	case inheritvaultentry.FieldServer:
+		return m.OldServer(ctx)
+	case inheritvaultentry.FieldGameUserID:
+		return m.OldGameUserID(ctx)
+	case inheritvaultentry.FieldJobID:
+		return m.OldJobID(ctx)
+	case inheritvaultentry.FieldKeyVersion:
+		return m.OldKeyVersion(ctx)
+	case inheritvaultentry.FieldWrapScheme:
+		return m.OldWrapScheme(ctx)
+	case inheritvaultentry.FieldCredentialSealed:
+		return m.OldCredentialSealed(ctx)
+	case inheritvaultentry.FieldCodeSealed:
+		return m.OldCodeSealed(ctx)
+	case inheritvaultentry.FieldCodeIssuedAt:
+		return m.OldCodeIssuedAt(ctx)
+	case inheritvaultentry.FieldCodeExpiresAt:
+		return m.OldCodeExpiresAt(ctx)
+	case inheritvaultentry.FieldCredentialExpiresAt:
+		return m.OldCredentialExpiresAt(ctx)
+	case inheritvaultentry.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case inheritvaultentry.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case inheritvaultentry.FieldDestroyedAt:
+		return m.OldDestroyedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown InheritVaultEntry field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InheritVaultEntryMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case inheritvaultentry.FieldUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case inheritvaultentry.FieldServer:
+		v, ok := value.(inheritvaultentry.Server)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServer(v)
+		return nil
+	case inheritvaultentry.FieldGameUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGameUserID(v)
+		return nil
+	case inheritvaultentry.FieldJobID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobID(v)
+		return nil
+	case inheritvaultentry.FieldKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyVersion(v)
+		return nil
+	case inheritvaultentry.FieldWrapScheme:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWrapScheme(v)
+		return nil
+	case inheritvaultentry.FieldCredentialSealed:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCredentialSealed(v)
+		return nil
+	case inheritvaultentry.FieldCodeSealed:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCodeSealed(v)
+		return nil
+	case inheritvaultentry.FieldCodeIssuedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCodeIssuedAt(v)
+		return nil
+	case inheritvaultentry.FieldCodeExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCodeExpiresAt(v)
+		return nil
+	case inheritvaultentry.FieldCredentialExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCredentialExpiresAt(v)
+		return nil
+	case inheritvaultentry.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case inheritvaultentry.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case inheritvaultentry.FieldDestroyedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDestroyedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultEntry field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *InheritVaultEntryMutation) AddedFields() []string {
+	var fields []string
+	if m.addgame_user_id != nil {
+		fields = append(fields, inheritvaultentry.FieldGameUserID)
+	}
+	if m.addkey_version != nil {
+		fields = append(fields, inheritvaultentry.FieldKeyVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *InheritVaultEntryMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case inheritvaultentry.FieldGameUserID:
+		return m.AddedGameUserID()
+	case inheritvaultentry.FieldKeyVersion:
+		return m.AddedKeyVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InheritVaultEntryMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case inheritvaultentry.FieldGameUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddGameUserID(v)
+		return nil
+	case inheritvaultentry.FieldKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddKeyVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultEntry numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *InheritVaultEntryMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(inheritvaultentry.FieldJobID) {
+		fields = append(fields, inheritvaultentry.FieldJobID)
+	}
+	if m.FieldCleared(inheritvaultentry.FieldCodeSealed) {
+		fields = append(fields, inheritvaultentry.FieldCodeSealed)
+	}
+	if m.FieldCleared(inheritvaultentry.FieldCodeIssuedAt) {
+		fields = append(fields, inheritvaultentry.FieldCodeIssuedAt)
+	}
+	if m.FieldCleared(inheritvaultentry.FieldCodeExpiresAt) {
+		fields = append(fields, inheritvaultentry.FieldCodeExpiresAt)
+	}
+	if m.FieldCleared(inheritvaultentry.FieldDestroyedAt) {
+		fields = append(fields, inheritvaultentry.FieldDestroyedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *InheritVaultEntryMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *InheritVaultEntryMutation) ClearField(name string) error {
+	switch name {
+	case inheritvaultentry.FieldJobID:
+		m.ClearJobID()
+		return nil
+	case inheritvaultentry.FieldCodeSealed:
+		m.ClearCodeSealed()
+		return nil
+	case inheritvaultentry.FieldCodeIssuedAt:
+		m.ClearCodeIssuedAt()
+		return nil
+	case inheritvaultentry.FieldCodeExpiresAt:
+		m.ClearCodeExpiresAt()
+		return nil
+	case inheritvaultentry.FieldDestroyedAt:
+		m.ClearDestroyedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultEntry nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *InheritVaultEntryMutation) ResetField(name string) error {
+	switch name {
+	case inheritvaultentry.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case inheritvaultentry.FieldServer:
+		m.ResetServer()
+		return nil
+	case inheritvaultentry.FieldGameUserID:
+		m.ResetGameUserID()
+		return nil
+	case inheritvaultentry.FieldJobID:
+		m.ResetJobID()
+		return nil
+	case inheritvaultentry.FieldKeyVersion:
+		m.ResetKeyVersion()
+		return nil
+	case inheritvaultentry.FieldWrapScheme:
+		m.ResetWrapScheme()
+		return nil
+	case inheritvaultentry.FieldCredentialSealed:
+		m.ResetCredentialSealed()
+		return nil
+	case inheritvaultentry.FieldCodeSealed:
+		m.ResetCodeSealed()
+		return nil
+	case inheritvaultentry.FieldCodeIssuedAt:
+		m.ResetCodeIssuedAt()
+		return nil
+	case inheritvaultentry.FieldCodeExpiresAt:
+		m.ResetCodeExpiresAt()
+		return nil
+	case inheritvaultentry.FieldCredentialExpiresAt:
+		m.ResetCredentialExpiresAt()
+		return nil
+	case inheritvaultentry.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case inheritvaultentry.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case inheritvaultentry.FieldDestroyedAt:
+		m.ResetDestroyedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultEntry field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *InheritVaultEntryMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.user != nil {
+		edges = append(edges, inheritvaultentry.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *InheritVaultEntryMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case inheritvaultentry.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *InheritVaultEntryMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *InheritVaultEntryMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *InheritVaultEntryMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.cleareduser {
+		edges = append(edges, inheritvaultentry.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *InheritVaultEntryMutation) EdgeCleared(name string) bool {
+	switch name {
+	case inheritvaultentry.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *InheritVaultEntryMutation) ClearEdge(name string) error {
+	switch name {
+	case inheritvaultentry.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultEntry unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *InheritVaultEntryMutation) ResetEdge(name string) error {
+	switch name {
+	case inheritvaultentry.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultEntry edge %s", name)
+}
+
+// InheritVaultKeyMutation represents an operation that mutates the InheritVaultKey nodes in the graph.
+type InheritVaultKeyMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *int
+	key_version           *int
+	addkey_version        *int
+	public_key            *[]byte
+	wrapped_private_key   *[]byte
+	wrap_scheme           *string
+	secret_kind           *inheritvaultkey.SecretKind
+	kdf_params            *string
+	master_key_version    *int
+	addmaster_key_version *int
+	created_at            *time.Time
+	updated_at            *time.Time
+	clearedFields         map[string]struct{}
+	user                  *string
+	cleareduser           bool
+	done                  bool
+	oldValue              func(context.Context) (*InheritVaultKey, error)
+	predicates            []predicate.InheritVaultKey
+}
+
+var _ ent.Mutation = (*InheritVaultKeyMutation)(nil)
+
+// inheritvaultkeyOption allows management of the mutation configuration using functional options.
+type inheritvaultkeyOption func(*InheritVaultKeyMutation)
+
+// newInheritVaultKeyMutation creates new mutation for the InheritVaultKey entity.
+func newInheritVaultKeyMutation(c config, op Op, opts ...inheritvaultkeyOption) *InheritVaultKeyMutation {
+	m := &InheritVaultKeyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeInheritVaultKey,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withInheritVaultKeyID sets the ID field of the mutation.
+func withInheritVaultKeyID(id int) inheritvaultkeyOption {
+	return func(m *InheritVaultKeyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *InheritVaultKey
+		)
+		m.oldValue = func(ctx context.Context) (*InheritVaultKey, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().InheritVaultKey.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withInheritVaultKey sets the old InheritVaultKey of the mutation.
+func withInheritVaultKey(node *InheritVaultKey) inheritvaultkeyOption {
+	return func(m *InheritVaultKeyMutation) {
+		m.oldValue = func(context.Context) (*InheritVaultKey, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m InheritVaultKeyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m InheritVaultKeyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *InheritVaultKeyMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *InheritVaultKeyMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().InheritVaultKey.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *InheritVaultKeyMutation) SetUserID(s string) {
+	m.user = &s
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *InheritVaultKeyMutation) UserID() (r string, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *InheritVaultKeyMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetKeyVersion sets the "key_version" field.
+func (m *InheritVaultKeyMutation) SetKeyVersion(i int) {
+	m.key_version = &i
+	m.addkey_version = nil
+}
+
+// KeyVersion returns the value of the "key_version" field in the mutation.
+func (m *InheritVaultKeyMutation) KeyVersion() (r int, exists bool) {
+	v := m.key_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyVersion returns the old "key_version" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldKeyVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyVersion: %w", err)
+	}
+	return oldValue.KeyVersion, nil
+}
+
+// AddKeyVersion adds i to the "key_version" field.
+func (m *InheritVaultKeyMutation) AddKeyVersion(i int) {
+	if m.addkey_version != nil {
+		*m.addkey_version += i
+	} else {
+		m.addkey_version = &i
+	}
+}
+
+// AddedKeyVersion returns the value that was added to the "key_version" field in this mutation.
+func (m *InheritVaultKeyMutation) AddedKeyVersion() (r int, exists bool) {
+	v := m.addkey_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetKeyVersion resets all changes to the "key_version" field.
+func (m *InheritVaultKeyMutation) ResetKeyVersion() {
+	m.key_version = nil
+	m.addkey_version = nil
+}
+
+// SetPublicKey sets the "public_key" field.
+func (m *InheritVaultKeyMutation) SetPublicKey(b []byte) {
+	m.public_key = &b
+}
+
+// PublicKey returns the value of the "public_key" field in the mutation.
+func (m *InheritVaultKeyMutation) PublicKey() (r []byte, exists bool) {
+	v := m.public_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublicKey returns the old "public_key" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldPublicKey(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublicKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublicKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublicKey: %w", err)
+	}
+	return oldValue.PublicKey, nil
+}
+
+// ResetPublicKey resets all changes to the "public_key" field.
+func (m *InheritVaultKeyMutation) ResetPublicKey() {
+	m.public_key = nil
+}
+
+// SetWrappedPrivateKey sets the "wrapped_private_key" field.
+func (m *InheritVaultKeyMutation) SetWrappedPrivateKey(b []byte) {
+	m.wrapped_private_key = &b
+}
+
+// WrappedPrivateKey returns the value of the "wrapped_private_key" field in the mutation.
+func (m *InheritVaultKeyMutation) WrappedPrivateKey() (r []byte, exists bool) {
+	v := m.wrapped_private_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWrappedPrivateKey returns the old "wrapped_private_key" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldWrappedPrivateKey(ctx context.Context) (v []byte, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWrappedPrivateKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWrappedPrivateKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWrappedPrivateKey: %w", err)
+	}
+	return oldValue.WrappedPrivateKey, nil
+}
+
+// ResetWrappedPrivateKey resets all changes to the "wrapped_private_key" field.
+func (m *InheritVaultKeyMutation) ResetWrappedPrivateKey() {
+	m.wrapped_private_key = nil
+}
+
+// SetWrapScheme sets the "wrap_scheme" field.
+func (m *InheritVaultKeyMutation) SetWrapScheme(s string) {
+	m.wrap_scheme = &s
+}
+
+// WrapScheme returns the value of the "wrap_scheme" field in the mutation.
+func (m *InheritVaultKeyMutation) WrapScheme() (r string, exists bool) {
+	v := m.wrap_scheme
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWrapScheme returns the old "wrap_scheme" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldWrapScheme(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWrapScheme is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWrapScheme requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWrapScheme: %w", err)
+	}
+	return oldValue.WrapScheme, nil
+}
+
+// ResetWrapScheme resets all changes to the "wrap_scheme" field.
+func (m *InheritVaultKeyMutation) ResetWrapScheme() {
+	m.wrap_scheme = nil
+}
+
+// SetSecretKind sets the "secret_kind" field.
+func (m *InheritVaultKeyMutation) SetSecretKind(ik inheritvaultkey.SecretKind) {
+	m.secret_kind = &ik
+}
+
+// SecretKind returns the value of the "secret_kind" field in the mutation.
+func (m *InheritVaultKeyMutation) SecretKind() (r inheritvaultkey.SecretKind, exists bool) {
+	v := m.secret_kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecretKind returns the old "secret_kind" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldSecretKind(ctx context.Context) (v inheritvaultkey.SecretKind, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecretKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecretKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecretKind: %w", err)
+	}
+	return oldValue.SecretKind, nil
+}
+
+// ResetSecretKind resets all changes to the "secret_kind" field.
+func (m *InheritVaultKeyMutation) ResetSecretKind() {
+	m.secret_kind = nil
+}
+
+// SetKdfParams sets the "kdf_params" field.
+func (m *InheritVaultKeyMutation) SetKdfParams(s string) {
+	m.kdf_params = &s
+}
+
+// KdfParams returns the value of the "kdf_params" field in the mutation.
+func (m *InheritVaultKeyMutation) KdfParams() (r string, exists bool) {
+	v := m.kdf_params
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKdfParams returns the old "kdf_params" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldKdfParams(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKdfParams is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKdfParams requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKdfParams: %w", err)
+	}
+	return oldValue.KdfParams, nil
+}
+
+// ResetKdfParams resets all changes to the "kdf_params" field.
+func (m *InheritVaultKeyMutation) ResetKdfParams() {
+	m.kdf_params = nil
+}
+
+// SetMasterKeyVersion sets the "master_key_version" field.
+func (m *InheritVaultKeyMutation) SetMasterKeyVersion(i int) {
+	m.master_key_version = &i
+	m.addmaster_key_version = nil
+}
+
+// MasterKeyVersion returns the value of the "master_key_version" field in the mutation.
+func (m *InheritVaultKeyMutation) MasterKeyVersion() (r int, exists bool) {
+	v := m.master_key_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMasterKeyVersion returns the old "master_key_version" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldMasterKeyVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMasterKeyVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMasterKeyVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMasterKeyVersion: %w", err)
+	}
+	return oldValue.MasterKeyVersion, nil
+}
+
+// AddMasterKeyVersion adds i to the "master_key_version" field.
+func (m *InheritVaultKeyMutation) AddMasterKeyVersion(i int) {
+	if m.addmaster_key_version != nil {
+		*m.addmaster_key_version += i
+	} else {
+		m.addmaster_key_version = &i
+	}
+}
+
+// AddedMasterKeyVersion returns the value that was added to the "master_key_version" field in this mutation.
+func (m *InheritVaultKeyMutation) AddedMasterKeyVersion() (r int, exists bool) {
+	v := m.addmaster_key_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMasterKeyVersion resets all changes to the "master_key_version" field.
+func (m *InheritVaultKeyMutation) ResetMasterKeyVersion() {
+	m.master_key_version = nil
+	m.addmaster_key_version = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *InheritVaultKeyMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *InheritVaultKeyMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *InheritVaultKeyMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *InheritVaultKeyMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *InheritVaultKeyMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the InheritVaultKey entity.
+// If the InheritVaultKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultKeyMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *InheritVaultKeyMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *InheritVaultKeyMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[inheritvaultkey.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *InheritVaultKeyMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *InheritVaultKeyMutation) UserIDs() (ids []string) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *InheritVaultKeyMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the InheritVaultKeyMutation builder.
+func (m *InheritVaultKeyMutation) Where(ps ...predicate.InheritVaultKey) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the InheritVaultKeyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *InheritVaultKeyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.InheritVaultKey, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *InheritVaultKeyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *InheritVaultKeyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (InheritVaultKey).
+func (m *InheritVaultKeyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *InheritVaultKeyMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.user != nil {
+		fields = append(fields, inheritvaultkey.FieldUserID)
+	}
+	if m.key_version != nil {
+		fields = append(fields, inheritvaultkey.FieldKeyVersion)
+	}
+	if m.public_key != nil {
+		fields = append(fields, inheritvaultkey.FieldPublicKey)
+	}
+	if m.wrapped_private_key != nil {
+		fields = append(fields, inheritvaultkey.FieldWrappedPrivateKey)
+	}
+	if m.wrap_scheme != nil {
+		fields = append(fields, inheritvaultkey.FieldWrapScheme)
+	}
+	if m.secret_kind != nil {
+		fields = append(fields, inheritvaultkey.FieldSecretKind)
+	}
+	if m.kdf_params != nil {
+		fields = append(fields, inheritvaultkey.FieldKdfParams)
+	}
+	if m.master_key_version != nil {
+		fields = append(fields, inheritvaultkey.FieldMasterKeyVersion)
+	}
+	if m.created_at != nil {
+		fields = append(fields, inheritvaultkey.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, inheritvaultkey.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *InheritVaultKeyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case inheritvaultkey.FieldUserID:
+		return m.UserID()
+	case inheritvaultkey.FieldKeyVersion:
+		return m.KeyVersion()
+	case inheritvaultkey.FieldPublicKey:
+		return m.PublicKey()
+	case inheritvaultkey.FieldWrappedPrivateKey:
+		return m.WrappedPrivateKey()
+	case inheritvaultkey.FieldWrapScheme:
+		return m.WrapScheme()
+	case inheritvaultkey.FieldSecretKind:
+		return m.SecretKind()
+	case inheritvaultkey.FieldKdfParams:
+		return m.KdfParams()
+	case inheritvaultkey.FieldMasterKeyVersion:
+		return m.MasterKeyVersion()
+	case inheritvaultkey.FieldCreatedAt:
+		return m.CreatedAt()
+	case inheritvaultkey.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *InheritVaultKeyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case inheritvaultkey.FieldUserID:
+		return m.OldUserID(ctx)
+	case inheritvaultkey.FieldKeyVersion:
+		return m.OldKeyVersion(ctx)
+	case inheritvaultkey.FieldPublicKey:
+		return m.OldPublicKey(ctx)
+	case inheritvaultkey.FieldWrappedPrivateKey:
+		return m.OldWrappedPrivateKey(ctx)
+	case inheritvaultkey.FieldWrapScheme:
+		return m.OldWrapScheme(ctx)
+	case inheritvaultkey.FieldSecretKind:
+		return m.OldSecretKind(ctx)
+	case inheritvaultkey.FieldKdfParams:
+		return m.OldKdfParams(ctx)
+	case inheritvaultkey.FieldMasterKeyVersion:
+		return m.OldMasterKeyVersion(ctx)
+	case inheritvaultkey.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case inheritvaultkey.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown InheritVaultKey field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InheritVaultKeyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case inheritvaultkey.FieldUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case inheritvaultkey.FieldKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyVersion(v)
+		return nil
+	case inheritvaultkey.FieldPublicKey:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublicKey(v)
+		return nil
+	case inheritvaultkey.FieldWrappedPrivateKey:
+		v, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWrappedPrivateKey(v)
+		return nil
+	case inheritvaultkey.FieldWrapScheme:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWrapScheme(v)
+		return nil
+	case inheritvaultkey.FieldSecretKind:
+		v, ok := value.(inheritvaultkey.SecretKind)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecretKind(v)
+		return nil
+	case inheritvaultkey.FieldKdfParams:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKdfParams(v)
+		return nil
+	case inheritvaultkey.FieldMasterKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMasterKeyVersion(v)
+		return nil
+	case inheritvaultkey.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case inheritvaultkey.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultKey field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *InheritVaultKeyMutation) AddedFields() []string {
+	var fields []string
+	if m.addkey_version != nil {
+		fields = append(fields, inheritvaultkey.FieldKeyVersion)
+	}
+	if m.addmaster_key_version != nil {
+		fields = append(fields, inheritvaultkey.FieldMasterKeyVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *InheritVaultKeyMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case inheritvaultkey.FieldKeyVersion:
+		return m.AddedKeyVersion()
+	case inheritvaultkey.FieldMasterKeyVersion:
+		return m.AddedMasterKeyVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InheritVaultKeyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case inheritvaultkey.FieldKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddKeyVersion(v)
+		return nil
+	case inheritvaultkey.FieldMasterKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMasterKeyVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultKey numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *InheritVaultKeyMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *InheritVaultKeyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *InheritVaultKeyMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown InheritVaultKey nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *InheritVaultKeyMutation) ResetField(name string) error {
+	switch name {
+	case inheritvaultkey.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case inheritvaultkey.FieldKeyVersion:
+		m.ResetKeyVersion()
+		return nil
+	case inheritvaultkey.FieldPublicKey:
+		m.ResetPublicKey()
+		return nil
+	case inheritvaultkey.FieldWrappedPrivateKey:
+		m.ResetWrappedPrivateKey()
+		return nil
+	case inheritvaultkey.FieldWrapScheme:
+		m.ResetWrapScheme()
+		return nil
+	case inheritvaultkey.FieldSecretKind:
+		m.ResetSecretKind()
+		return nil
+	case inheritvaultkey.FieldKdfParams:
+		m.ResetKdfParams()
+		return nil
+	case inheritvaultkey.FieldMasterKeyVersion:
+		m.ResetMasterKeyVersion()
+		return nil
+	case inheritvaultkey.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case inheritvaultkey.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultKey field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *InheritVaultKeyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.user != nil {
+		edges = append(edges, inheritvaultkey.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *InheritVaultKeyMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case inheritvaultkey.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *InheritVaultKeyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *InheritVaultKeyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *InheritVaultKeyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.cleareduser {
+		edges = append(edges, inheritvaultkey.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *InheritVaultKeyMutation) EdgeCleared(name string) bool {
+	switch name {
+	case inheritvaultkey.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *InheritVaultKeyMutation) ClearEdge(name string) error {
+	switch name {
+	case inheritvaultkey.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultKey unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *InheritVaultKeyMutation) ResetEdge(name string) error {
+	switch name {
+	case inheritvaultkey.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultKey edge %s", name)
 }
 
 // OAuth2ClientWebhookEndpointMutation represents an operation that mutates the OAuth2ClientWebhookEndpoint nodes in the graph.
@@ -20024,6 +22218,11 @@ type UserMutation struct {
 	clearedgame_account_data_grants_received bool
 	ios_script_code                          *int
 	clearedios_script_code                   bool
+	inherit_vault_key                        *int
+	clearedinherit_vault_key                 bool
+	inherit_vault_entries                    map[string]struct{}
+	removedinherit_vault_entries             map[string]struct{}
+	clearedinherit_vault_entries             bool
 	done                                     bool
 	oldValue                                 func(context.Context) (*User, error)
 	predicates                               []predicate.User
@@ -21182,6 +23381,99 @@ func (m *UserMutation) ResetIosScriptCode() {
 	m.clearedios_script_code = false
 }
 
+// SetInheritVaultKeyID sets the "inherit_vault_key" edge to the InheritVaultKey entity by id.
+func (m *UserMutation) SetInheritVaultKeyID(id int) {
+	m.inherit_vault_key = &id
+}
+
+// ClearInheritVaultKey clears the "inherit_vault_key" edge to the InheritVaultKey entity.
+func (m *UserMutation) ClearInheritVaultKey() {
+	m.clearedinherit_vault_key = true
+}
+
+// InheritVaultKeyCleared reports if the "inherit_vault_key" edge to the InheritVaultKey entity was cleared.
+func (m *UserMutation) InheritVaultKeyCleared() bool {
+	return m.clearedinherit_vault_key
+}
+
+// InheritVaultKeyID returns the "inherit_vault_key" edge ID in the mutation.
+func (m *UserMutation) InheritVaultKeyID() (id int, exists bool) {
+	if m.inherit_vault_key != nil {
+		return *m.inherit_vault_key, true
+	}
+	return
+}
+
+// InheritVaultKeyIDs returns the "inherit_vault_key" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// InheritVaultKeyID instead. It exists only for internal usage by the builders.
+func (m *UserMutation) InheritVaultKeyIDs() (ids []int) {
+	if id := m.inherit_vault_key; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetInheritVaultKey resets all changes to the "inherit_vault_key" edge.
+func (m *UserMutation) ResetInheritVaultKey() {
+	m.inherit_vault_key = nil
+	m.clearedinherit_vault_key = false
+}
+
+// AddInheritVaultEntryIDs adds the "inherit_vault_entries" edge to the InheritVaultEntry entity by ids.
+func (m *UserMutation) AddInheritVaultEntryIDs(ids ...string) {
+	if m.inherit_vault_entries == nil {
+		m.inherit_vault_entries = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.inherit_vault_entries[ids[i]] = struct{}{}
+	}
+}
+
+// ClearInheritVaultEntries clears the "inherit_vault_entries" edge to the InheritVaultEntry entity.
+func (m *UserMutation) ClearInheritVaultEntries() {
+	m.clearedinherit_vault_entries = true
+}
+
+// InheritVaultEntriesCleared reports if the "inherit_vault_entries" edge to the InheritVaultEntry entity was cleared.
+func (m *UserMutation) InheritVaultEntriesCleared() bool {
+	return m.clearedinherit_vault_entries
+}
+
+// RemoveInheritVaultEntryIDs removes the "inherit_vault_entries" edge to the InheritVaultEntry entity by IDs.
+func (m *UserMutation) RemoveInheritVaultEntryIDs(ids ...string) {
+	if m.removedinherit_vault_entries == nil {
+		m.removedinherit_vault_entries = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.inherit_vault_entries, ids[i])
+		m.removedinherit_vault_entries[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedInheritVaultEntries returns the removed IDs of the "inherit_vault_entries" edge to the InheritVaultEntry entity.
+func (m *UserMutation) RemovedInheritVaultEntriesIDs() (ids []string) {
+	for id := range m.removedinherit_vault_entries {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// InheritVaultEntriesIDs returns the "inherit_vault_entries" edge IDs in the mutation.
+func (m *UserMutation) InheritVaultEntriesIDs() (ids []string) {
+	for id := range m.inherit_vault_entries {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetInheritVaultEntries resets all changes to the "inherit_vault_entries" edge.
+func (m *UserMutation) ResetInheritVaultEntries() {
+	m.inherit_vault_entries = nil
+	m.clearedinherit_vault_entries = false
+	m.removedinherit_vault_entries = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -21656,7 +23948,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 8)
 	if m.social_platform_info != nil {
 		edges = append(edges, user.EdgeSocialPlatformInfo)
 	}
@@ -21674,6 +23966,12 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.ios_script_code != nil {
 		edges = append(edges, user.EdgeIosScriptCode)
+	}
+	if m.inherit_vault_key != nil {
+		edges = append(edges, user.EdgeInheritVaultKey)
+	}
+	if m.inherit_vault_entries != nil {
+		edges = append(edges, user.EdgeInheritVaultEntries)
 	}
 	return edges
 }
@@ -21714,13 +24012,23 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 		if id := m.ios_script_code; id != nil {
 			return []ent.Value{*id}
 		}
+	case user.EdgeInheritVaultKey:
+		if id := m.inherit_vault_key; id != nil {
+			return []ent.Value{*id}
+		}
+	case user.EdgeInheritVaultEntries:
+		ids := make([]ent.Value, 0, len(m.inherit_vault_entries))
+		for id := range m.inherit_vault_entries {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 8)
 	if m.removedauthorized_social_platforms != nil {
 		edges = append(edges, user.EdgeAuthorizedSocialPlatforms)
 	}
@@ -21732,6 +24040,9 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedgame_account_data_grants_received != nil {
 		edges = append(edges, user.EdgeGameAccountDataGrantsReceived)
+	}
+	if m.removedinherit_vault_entries != nil {
+		edges = append(edges, user.EdgeInheritVaultEntries)
 	}
 	return edges
 }
@@ -21764,13 +24075,19 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeInheritVaultEntries:
+		ids := make([]ent.Value, 0, len(m.removedinherit_vault_entries))
+		for id := range m.removedinherit_vault_entries {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 8)
 	if m.clearedsocial_platform_info {
 		edges = append(edges, user.EdgeSocialPlatformInfo)
 	}
@@ -21788,6 +24105,12 @@ func (m *UserMutation) ClearedEdges() []string {
 	}
 	if m.clearedios_script_code {
 		edges = append(edges, user.EdgeIosScriptCode)
+	}
+	if m.clearedinherit_vault_key {
+		edges = append(edges, user.EdgeInheritVaultKey)
+	}
+	if m.clearedinherit_vault_entries {
+		edges = append(edges, user.EdgeInheritVaultEntries)
 	}
 	return edges
 }
@@ -21808,6 +24131,10 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedgame_account_data_grants_received
 	case user.EdgeIosScriptCode:
 		return m.clearedios_script_code
+	case user.EdgeInheritVaultKey:
+		return m.clearedinherit_vault_key
+	case user.EdgeInheritVaultEntries:
+		return m.clearedinherit_vault_entries
 	}
 	return false
 }
@@ -21821,6 +24148,9 @@ func (m *UserMutation) ClearEdge(name string) error {
 		return nil
 	case user.EdgeIosScriptCode:
 		m.ClearIosScriptCode()
+		return nil
+	case user.EdgeInheritVaultKey:
+		m.ClearInheritVaultKey()
 		return nil
 	}
 	return fmt.Errorf("unknown User unique edge %s", name)
@@ -21847,6 +24177,12 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeIosScriptCode:
 		m.ResetIosScriptCode()
+		return nil
+	case user.EdgeInheritVaultKey:
+		m.ResetInheritVaultKey()
+		return nil
+	case user.EdgeInheritVaultEntries:
+		m.ResetInheritVaultEntries()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

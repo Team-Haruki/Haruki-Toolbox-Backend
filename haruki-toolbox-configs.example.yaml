@@ -262,6 +262,16 @@ sekai_client:
     before_login_ms: 2000 # env SEKAI_INHERIT_PAUSE_BEFORE_LOGIN_MS; between the executing inherit call and the login
     suite_followup_ms: 1000 # env SEKAI_INHERIT_PAUSE_SUITE_FOLLOWUP_MS; each of the three pauses around the suite follow-up calls
 
+# Inherit (transfer-code) jobs keep the game login credential and the newly
+# issued transfer code in an encrypted vault so the owner can get back into
+# the account. The master key file holds exactly 32 random bytes (raw, hex or
+# base64), e.g. `openssl rand -out <file> 32`; keep it readable only by the
+# backend and never commit it. Without a valid key file the inherit job and
+# vault endpoints answer 503 and the rest of the backend runs normally.
+inherit_vault:
+  master_key_file: "" # env INHERIT_VAULT_MASTER_KEY_FILE
+  master_key_version: 1 # env INHERIT_VAULT_MASTER_KEY_VERSION; recorded with every wrapped key
+
 
 haruki_bot:
   db_url: "postgresql://user:password@postgres:5432/haruki_bot?sslmode=disable"

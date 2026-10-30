@@ -37,6 +37,19 @@ utils/database/neopg/            Bot Ent 生成产物（迁移期保持位置不
 | `utils/database` | 数据库连接、游戏数据存储、Redis 及 Ent 生成代码 |
 | `utils/{http,smtp,cloudflare,logger,background,perfstats,perfdebug,redact}` | 网络、邮件、外部适配、日志、日志脱敏与运行期基础设施 |
 | `utils/circuitbreaker` | 按 key（通常是游戏服务器）独立计数的上游熔断器，供引继上传与 SekaiAPI 资料查询使用 |
+| `internal/platform/inheritvault` | 引继保险库：用户密钥对的生成、包裹与迁移，凭据与引继码的密封、Redis 暂存与回填，回收器 |
+
+### 引继任务与保险库的代码落点
+
+引继上传是后台任务：任务停在确认步骤等属主确认后才执行引继，执行后立即把游戏登录凭据写入保险库，登录后先签发新引继码再取数据。契约见 [inherit-jobs.md](inherit-jobs.md)。
+
+| 位置 | 职责 |
+| --- | --- |
+| `utils/game/sekai/inherit_*.go` | `InheritSession`：一次引继会话的全部游戏请求，按步骤暴露（`Bootstrap`、`Preview`、`Execute`、`Login`、`IssueInheritCode`、`FetchSuite`、`FetchMysekai`）；JP/EN 差异在 `inheritRegions`；不写日志，子步骤经 `Progress` 回调上报 |
+| `internal/modules/upload/inherit_job*.go` | 任务模型与 Redis 记录、步骤编排（`runPhases`）、HTTP 与 WebSocket 接口、一次性 WebSocket 票据 |
+| `internal/modules/upload/inherit_unlock.go` | 二次验证：Kratos 密码或保险库 PIN，首次使用时创建密钥，改密码后用旧密码迁移 |
+| `internal/modules/upload/inherit_vault_handlers.go` | 保险库列表、查看、重新签发、销毁与重置，邮件提醒 |
+| `internal/platform/inheritvault` | 加密格式、存储、Redis 暂存与回收器；主密钥由 `inherit_vault.master_key_file` 指定，缺失时只关闭本功能 |
 
 ### OAuth2 设备授权的代码落点
 
@@ -131,7 +144,7 @@ main -> bootstrap -> api -> modules -> platform
 
 Suite / MYSEKAI 由独立 PostgreSQL pool 读写；`game_data.url`（或 `GAME_DATA_URL`）为必填，`game_data.read_source` 仅接受 `postgres`。MongoDB 已退役，残留 BSON 工具及 `mongodb.private_api_*` 配置命名仅用于兼容，不建立 Mongo 连接。
 
-游戏字段以 `utils/database/gamedata/catalog` 为准。`userInherit`、`userPlatformInheritIos`、`userPlatformInheritAndroid`、`userPlatforms`、`userRegistration` 包含继承凭据或个人信息，必须维持拒绝存储规则；不得因删除旧的字段置空配置而重新纳入。API 的投影与授权另行生效。
+游戏字段以 `utils/database/gamedata/catalog` 为准。`userInherit`、`userPlatformInheritIos`、`userPlatformInheritAndroid`、`userPlatforms`、`userRegistration` 包含继承凭据或个人信息，必须维持拒绝存储规则；不得因删除旧的字段置空配置而重新纳入。API 的投影与授权另行生效。引继任务为属主取回的凭据与新引继码只进 `inherit_vault_entries` 的密封字段（见 `AGENTS.md`「安全不变量」），游戏数据库与缓存中不得出现。
 
 游戏数据的 revision 与缓存一致性改造尚未落地；在此之前，条件读取以 unix 秒精度的 `upload_time` 为准，同一秒内的多次上传无法区分。
 

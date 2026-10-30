@@ -429,6 +429,17 @@ type Config struct {
 	Subscription           SubscriptionConfig              `yaml:"subscription"`
 	BotSecurity            BotSecurityConfig               `yaml:"bot_security"`
 	Story                  StoryConfig                     `yaml:"story"`
+	InheritVault           InheritVaultConfig              `yaml:"inherit_vault"`
+}
+
+// InheritVaultConfig points at the inherit vault master key. The key is read
+// from a file so it never sits in the YAML or the environment itself.
+type InheritVaultConfig struct {
+	// MasterKeyFile holds exactly 32 bytes (raw, hex or base64). Empty
+	// disables inherit jobs and the vault.
+	MasterKeyFile string `yaml:"master_key_file"`
+	// MasterKeyVersion is recorded with every key it wraps; defaults to 1.
+	MasterKeyVersion int `yaml:"master_key_version"`
 }
 
 var Cfg Config

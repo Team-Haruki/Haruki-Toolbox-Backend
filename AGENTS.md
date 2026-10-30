@@ -76,6 +76,8 @@ go run ./main.go                                # 运行（需要 haruki-toolbox
 - `internal/modules/harukibotneo/` — HarukiBot NEO 注册与凭据重置（状态、发信、注册/重置）
 - `internal/modules/botsecurity/` — Haruki Cloud 推送的 bot 安全告警：内部接收（`bot_security.ingest_token_sha256`，未配置不注册路由）与 `/api/admin/bot-security` 管理端；主人 QQ 从 Bot 库按页批量解析，Bot 库不可用时置空
 - `internal/modules/sponsor/` + `adminsponsor/` — 爱发电赞助墙（公开读取 + webhook；爱发电 webhook 无签名，真实性靠 URL secret 和/或经爱发电 API 回查订单）与管理端。赞助时长分两个来源：爱发电时长由 `sponsor_afdian_orders` 中的订单重算，手动时长是管理员录入的 `sponsor_manual_durations` 条目（带备注、录入人），实际到期 = 爱发电时长之后依次接上手动条目。订单分类（`ClassifyAfdianOrder`）、两源合并（`ComputeAfdianPeriod` / `ComputeEffectiveExpiry`）与「当前 / 曾经」分类（`SponsorCategory`，实际到期在未来即当前，其余一律为曾经）只在 `sponsor/duration.go` 与 `helpers.go` 各有一处，公开接口直接下发 `category`，不要在别处（包括前端）另行推导；`sponsors.plan_expires_at`、`is_active`、`has_duration` 等只是重算出的缓存。手动条目、备注与订单金额只出现在管理端接口
+- `internal/platform/inheritvault/` — 引继保险库：用户密钥对（私钥先经 Argon2id 由 Toolbox 密码或保险库 PIN 包裹、再经服务端主密钥包裹）、按用户公钥密封的游戏登录凭据与新引继码、PostgreSQL 写入失败时的 Redis 暂存与回填、回收器。引继任务与保险库的接口在 `internal/modules/upload/inherit_*.go`，契约见 `docs/inherit-jobs.md`
+- `utils/game/sekai/` 的 `InheritSession` — 一次引继会话（HTTP client、请求头、会话 token、按步骤调用；JP/EN 的差异只在 `inheritRegions`）。它不写日志，进度经 `Progress` 回调交给任务层
 - `utils/codec/msgpackcodec/` — 面向不可信上传数据的有界 MessagePack 解码与 JSON 转换（`ValidateMaxDepth` 校验深度、按长度封顶）；`utils/orderedmap/` 是其 OrderedMap 存储
 
 优先复用 `SessionHandler`、`admincore`、`usercore` 与 `internal/platform/oauth2/`，不要另起平行 helper。
@@ -158,6 +160,7 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - **SSRF。** 对用户提供 URL 的出站请求（webhook 回调）必须在 **dial 时**重新解析并拒绝私网/链路本地 IP、pin 已校验 IP，而不只是事前校验 DNS（防 rebinding）。
 - **OAuth2 bearer。** introspection 固定 `access_token` 类型，拒绝已禁用 client 的 token，禁用 client 时要真正吊销其 token/consent（不只改 metadata）。
 - **公开响应/枚举。** 公开端点不暴露付费金额、PII、凭据；错误信息或时序不得区分「不存在」与「无权限」。
+- **引继材料只进加密保险库。** 引继 ID、引继密码、游戏登录凭据和新签发的引继码只允许以三种形式存在：请求处理与任务运行期间的内存；`inherit_vault_entries` 中按属主公钥密封的字段（凭据最多保留 7 天，引继码 24 小时，属主可随时销毁，回收器硬删除）；PostgreSQL 不可用时同样密封后暂存的 Redis 记录（7 天 TTL，属主绑定，之后回填）。唯一的例外是任务进行中展示给属主的新引继码：仅用服务端主密钥密封在任务记录里，随任务记录 1 小时过期。它们不进日志、错误信息、system log 元数据、Redis 键名或任何明文存储；每次存入、查看、重新签发、销毁和密钥创建/迁移/重置都写 system log（只含 ID、服务器和打码后的游戏用户 ID）。解开私钥必须每次由属主提供密码或 PIN，用完即清除，不得缓存。主密钥只从文件读取，不得打印。
 
 ## 数据与模型规则
 
@@ -176,8 +179,9 @@ Hydra subject 当前采用“优先 Kratos identity ID，兼容 fallback 本地 
 - 优先使用项目 logger helper
 - 全局 logger 应遵循当前启动时设置的 log level 和 writer
 - 避免在包级提前固化旧日志配置
-- 凭据不进日志：项目 logger、access log（`redact.Writer`）、system log 的 path 与上传审计的错误信息都经 `utils/redact` 脱敏。引继 ID 与引继密码一律替换为 `<redacted>`；知道确切值的调用方（Sekai 客户端）把它传给 `redact.Text` / `redact.Error`
-- 游戏用户 ID 一般可以出现在日志里（公开数据 URL 本身就带它，上传失败日志把它作为结构化字段）。例外是引继流程：引继解析出的 ID 在 Sekai 客户端的日志与 `APIError` 里经 `redact.MaskIDs` / `redact.IDsInError` 换成 `redact.Fingerprint`（进程内随机密钥的 HMAC，只能在同一进程内关联，不可逆），上传审计行另行记录原值
+- 凭据不进日志：项目 logger、access log（`redact.Writer`）、system log 的 path 与上传审计的错误信息都经 `utils/redact` 脱敏。引继 ID、引继密码、游戏登录凭据与新引继码一律替换为 `<redacted>`；知道确切值的调用方（`InheritSession`）把它们传给 `redact.Text` / `redact.Error`
+- 游戏用户 ID 一般可以出现在日志里（公开数据 URL 本身就带它，上传失败日志把它作为结构化字段）。例外是引继流程：引继解析出的 ID 在 `InheritSession` 返回的错误与 `APIError` 里经 `redact.MaskIDs` / `redact.IDsInError` 换成 `redact.Fingerprint`（进程内随机密钥的 HMAC，只能在同一进程内关联，不可逆），上传审计行另行记录原值
+- 引继任务不逐请求写日志：步骤进度只走任务的 WebSocket 事件，每个任务结束时只写一行结构化日志（任务 ID、服务器、上传类型、最后一步、结果与错误码、耗时），不含用户 ID、游戏用户 ID 或任何凭据
 
 ## 测试规则
 
@@ -239,6 +243,7 @@ Ory 相关改动尤其建议关注：
 - `docs/webhook-integration.zh-CN.md` — Webhook 对接
 - `docs/harukiproxy-v3-client-integration.zh-CN.md` — HarukiProxy v3 客户端对接（OAuth2 上传）
 - `docs/backend-architecture.zh-CN.md`、`docs/json-conventions.zh-CN.md`、`docs/msgpack-codec.zh-CN.md` — 贡献者的代码约定
+- `docs/inherit-jobs.md` — 引继任务与引继保险库的前后端接口契约（前端上线后删除）
 - `external/oathkeeper/access-rules.yml` — Oathkeeper 访问规则
 - `external/oathkeeper/oathkeeper.yml` — Oathkeeper auth-proxy header mutator 约定
 

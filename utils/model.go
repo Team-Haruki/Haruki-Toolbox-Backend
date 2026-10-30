@@ -8,18 +8,6 @@ type SekaiDataRetrieverResponse struct {
 	NewHeaders map[string][]string `json:"new_headers,omitempty"`
 }
 
-type SekaiInheritDataRetrieverResponse struct {
-	Server  string `json:"server"`
-	UserID  int64  `json:"user_id"`
-	Suite   []byte `json:"suite,omitempty"`
-	Mysekai []byte `json:"mysekai,omitempty"`
-}
-
-type InheritInformation struct {
-	InheritID       string `json:"inherit_id"`
-	InheritPassword string `json:"inherit_password"`
-}
-
 type DataChunk struct {
 	RequestURL  string    `json:"request_url"`
 	UploadID    string    `json:"upload_id"`
