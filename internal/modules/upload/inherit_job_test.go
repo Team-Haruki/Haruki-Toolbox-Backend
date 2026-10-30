@@ -782,6 +782,41 @@ func TestLockOfAJobBeingCreatedIsNotTakenOver(t *testing.T) {
 	}
 }
 
+// A create that cannot read the lock, or cannot store its job, answers 503
+// and leaves neither a registered job nor a lock behind.
+func TestCreateFailuresLeaveNoJobOrLock(t *testing.T) {
+	env := newInheritTestEnv(t)
+	key := inheritActiveKeyPrefix + testOwner
+
+	// An unreadable lock value (wrong type) is a store failure.
+	env.redis.Lpush(key, "garbage")
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest()); res.Status != http.StatusServiceUnavailable || res.code() != "store_unavailable" {
+		t.Fatalf("unreadable lock = %d %s", res.Status, res.Raw)
+	}
+	env.redis.Del(key)
+
+	// The job record cannot be stored.
+	jobs := env.svc.jobs
+	env.svc.jobs = jobStore{}
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs", validJobRequest()); res.Status != http.StatusServiceUnavailable || res.code() != "store_unavailable" {
+		t.Fatalf("store down = %d %s", res.Status, res.Raw)
+	}
+	env.svc.jobs = jobs
+	if env.redis.Exists(key) {
+		t.Fatal("a failed create kept the active-job lock")
+	}
+	env.svc.registry.mu.Lock()
+	registered := len(env.svc.registry.jobs)
+	env.svc.registry.mu.Unlock()
+	if registered != 0 {
+		t.Fatalf("%d jobs left registered", registered)
+	}
+	if running, owner := env.svc.activeHolder(context.Background(), ""); running || owner != "" {
+		t.Fatalf("empty holder = %v, %q", running, owner)
+	}
+	env.createJob(validJobRequest())
+}
+
 // Releasing a lock that another job has taken over leaves it alone.
 func TestReleaseActiveOnlyDropsItsOwnLock(t *testing.T) {
 	env := newInheritTestEnv(t)
