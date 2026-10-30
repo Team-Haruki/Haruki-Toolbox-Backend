@@ -118,6 +118,10 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 	})
 	readerDone := make(chan struct{})
+	// commandMu is held while a client command is handled, so the closing
+	// frame of a finished job never overtakes the reply to the command that
+	// finished it (a cancel's ack).
+	var commandMu sync.Mutex
 	go func() {
 		defer close(readerDone)
 		for {
@@ -131,7 +135,9 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 				_ = ws.write(wsMessage{Type: "error", Code: errInvalidRequest.Code, Message: errInvalidRequest.Message})
 				continue
 			}
+			commandMu.Lock()
 			s.handleWSCommand(ws, meta, jobID, msg)
+			commandMu.Unlock()
 		}
 	}()
 	// The reader must be gone before serveWS returns: once the hijack
@@ -149,7 +155,9 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 		select {
 		case msg, ok := <-events:
 			if !ok {
+				commandMu.Lock()
 				_ = ws.control(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "job finished"))
+				commandMu.Unlock()
 				return
 			}
 			if ws.writeRaw(msg) != nil {
