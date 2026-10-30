@@ -168,23 +168,28 @@ func (s *inheritService) handleCreateJob(c fiber.Ctx) error {
 
 	job := newInheritJob(meta.UserID, req.Server, req.UploadType, req.NewPasswordMode, s.now())
 	job.Unlock = hint
-	if running, p := s.claimActive(ctx, meta.UserID, job.ID); p != nil {
-		if p == errJobAlreadyRunning && running != "" {
-			return respondJobAlreadyRunning(c, running)
-		}
-		return respondProblem(c, p)
-	}
-	if err := s.jobs.save(ctx, job); err != nil {
-		s.releaseActive(meta.UserID, job.ID)
-		return respondProblem(c, errStoreUnavailable)
-	}
 	rt := &jobRuntime{
 		job:       job,
 		code:      harukiSekai.InheritCode{InheritID: strings.Clone(req.InheritID), Password: strings.Clone(req.InheritPassword)},
 		confirmCh: make(chan confirmation, 1),
 		cancelCh:  make(chan struct{}, 1),
 	}
+	// Register before taking the lock: from the moment the lock names this
+	// job, a concurrent create must find it running, not stale for lack of a
+	// record.
 	s.registry.add(rt)
+	if running, p := s.claimActive(ctx, meta.UserID, job.ID); p != nil {
+		s.registry.remove(job.ID)
+		if p == errJobAlreadyRunning && running != "" {
+			return respondJobAlreadyRunning(c, running)
+		}
+		return respondProblem(c, p)
+	}
+	if err := s.jobs.save(ctx, job); err != nil {
+		s.registry.remove(job.ID)
+		s.releaseActive(meta.UserID, job.ID)
+		return respondProblem(c, errStoreUnavailable)
+	}
 	if !startBackgroundTask(s.runner, s.logger, "inherit-job", func() { s.run(rt, breakerToken) }) {
 		s.registry.remove(job.ID)
 		s.releaseActive(meta.UserID, job.ID)
