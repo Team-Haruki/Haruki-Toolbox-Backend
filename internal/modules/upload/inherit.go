@@ -23,6 +23,10 @@ func handleInheritSubmit(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
+		// Temporary: JP inherit login is disabled while the changed JP inherit flow is verified.
+		if server == harukiUtils.SupportedInheritUploadServerJP {
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "由于日服继承登录发生变更，我们正在进行验证，因此临时禁用日服的继承登录功能", nil)
+		}
 		uploadType, err := harukiUtils.ParseUploadDataType(uploadTypeStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid upload_type")
