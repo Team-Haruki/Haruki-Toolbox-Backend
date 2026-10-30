@@ -969,8 +969,8 @@ UPDATE_KRATOS_TEMPLATES=1 go test ./internal/platform/mailtemplate -run TestKrat
 ```
 
 Kratos 通过 `courier.template_override_path`（compose 中为 `COURIER_TEMPLATE_OVERRIDE_PATH`）
-读取这个目录；目录中缺少的模板会回退到 Kratos 内置模板。Kratos 会缓存已加载的模板，更新模板文件后
-需要重启 Kratos 才会生效。
+读取这个目录；目录中缺少的模板会回退到 Kratos 内置模板。Kratos 在进程内缓存已加载的模板，不会热加载
+模板文件的改动。
 
 ### 11.2 Auth Proxy / Oathkeeper 相关
 

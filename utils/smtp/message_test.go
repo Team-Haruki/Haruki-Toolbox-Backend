@@ -18,7 +18,7 @@ func TestBuildMIMESendsTextAndHTMLParts(t *testing.T) {
 		HTML:    "<p>" + strings.Repeat("长", 400) + "</p>\n<p>second</p>",
 		Text:    "第一行\n第二行",
 	}
-	raw, err := buildMIME(mail.Address{Name: "Haruki 工具箱", Address: "noreply@example.com"}, []string{"a@example.com", "b@example.com\r\nBcc: x@example.com"}, msg, time.Date(2026, 10, 31, 6, 0, 0, 0, time.UTC))
+	raw, err := buildMIME(mail.Address{Name: "Haruki 工具箱", Address: "noreply@example.com"}, []string{"a@example.com", "b@example.com"}, msg, time.Date(2026, 10, 31, 6, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,10 @@ func TestBuildMIMESendsTextAndHTMLParts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if parsed.Header.Get("Bcc") != "" {
-		t.Fatal("header injection through subject or recipient")
+		t.Fatal("header injection through the subject")
+	}
+	if to, err := parsed.Header.AddressList("To"); err != nil || len(to) != 2 || to[0].Address != "a@example.com" || to[1].Address != "b@example.com" {
+		t.Fatalf("to = %v, %v", to, err)
 	}
 	decoder := new(mime.WordDecoder)
 	subject, err := decoder.DecodeHeader(parsed.Header.Get("Subject"))
@@ -80,6 +83,48 @@ func TestBuildMIMESendsTextAndHTMLParts(t *testing.T) {
 	}
 	if bodies["text/plain"] != "第一行\r\n第二行" || !strings.Contains(bodies["text/html"], "<p>second</p>") {
 		t.Fatalf("bodies = %q", bodies)
+	}
+}
+
+func TestValidRecipients(t *testing.T) {
+	got, err := validRecipients([]string{" a@example.com ", "b@example.com"})
+	if err != nil || strings.Join(got, ",") != "a@example.com,b@example.com" {
+		t.Fatalf("validRecipients = %v, %v", got, err)
+	}
+	for _, bad := range [][]string{
+		nil,
+		{""},
+		{"a@example.com", " "},
+		{"b@example.com\r\nBcc: x@example.com"},
+		{"Name <a@example.com>"},
+		{"not-an-address"},
+	} {
+		if got, err := validRecipients(bad); err == nil {
+			t.Errorf("validRecipients(%q) = %v, want error", bad, got)
+		}
+	}
+}
+
+func TestSendMessageRejectsBadInputBeforeDialing(t *testing.T) {
+	// Port 1 on the loopback address refuses connections; a dial attempt
+	// would surface as a different error.
+	client := &HarukiSMTPClient{Addr: "127.0.0.1:1", From: "noreply@example.com", Timeout: time.Second}
+	full := Message{Subject: "s", HTML: "<p>b</p>", Text: "b"}
+	cases := map[string]struct {
+		to  []string
+		msg Message
+	}{
+		"bad recipient": {[]string{"a@example.com\r\nBcc: x@example.com"}, full},
+		"no recipient":  {nil, full},
+		"no text part":  {[]string{"a@example.com"}, Message{Subject: "s", HTML: "<p>b</p>"}},
+		"no html part":  {[]string{"a@example.com"}, Message{Subject: "s", Text: "b"}},
+		"no subject":    {[]string{"a@example.com"}, Message{HTML: "<p>b</p>", Text: "b"}},
+	}
+	for name, tc := range cases {
+		err := client.SendMessage(tc.to, tc.msg, "")
+		if err == nil || strings.Contains(err.Error(), "dial") {
+			t.Errorf("%s: err = %v, want a validation error", name, err)
+		}
 	}
 }
 

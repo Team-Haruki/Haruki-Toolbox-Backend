@@ -105,6 +105,61 @@ func TestUserInputIsEscaped(t *testing.T) {
 	}
 }
 
+func TestTicketWithoutWebURLStillNotifies(t *testing.T) {
+	for _, url := range []string{"haruki.example/tickets/TK-1", "ftp://haruki.example/tickets/TK-1", ""} {
+		msg, err := Render(TicketNotification(Ticket{Event: TicketCreated, PublicID: "TK-1", Subject: "s", URL: url}))
+		if err != nil {
+			t.Fatalf("URL %q: %v", url, err)
+		}
+		if strings.Contains(msg.HTML, "查看工单") {
+			t.Errorf("URL %q produced a button", url)
+		}
+	}
+}
+
+func TestActionURLIsTrimmed(t *testing.T) {
+	action := &Action{Label: "查看", URL: " https://haruki.example/x\n"}
+	msg, err := Render(Email{Subject: "s", Title: "t", Action: action})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg.HTML, `href="https://haruki.example/x"`) || strings.Contains(msg.HTML, "%0a") {
+		t.Fatalf("html = %s", msg.HTML)
+	}
+	if action.URL != " https://haruki.example/x\n" {
+		t.Fatal("Render modified the caller's Action")
+	}
+}
+
+func TestInheritNoticeSurvivesMissingFields(t *testing.T) {
+	for _, compose := range []func(InheritVaultActivity) Email{InheritCodeRevealed, InheritCodeReissued} {
+		msg, err := Render(compose(InheritVaultActivity{At: sampleTime}))
+		if err != nil {
+			t.Fatalf("security notice dropped: %v", err)
+		}
+		if strings.Contains(msg.Text, "IP 地址") || strings.Contains(msg.Text, "服务器") || !strings.Contains(msg.Text, "（北京时间）") {
+			t.Fatalf("text = %q", msg.Text)
+		}
+	}
+}
+
+func TestQuoteKeepsLineBreaks(t *testing.T) {
+	msg, err := Render(Email{Subject: "s", Title: "t", Quote: &Quote{Label: "l", Text: "1. a\n2. b"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg.HTML, "white-space:pre-line;\">1. a\n2. b</td>") || !strings.Contains(msg.Text, "1. a\n2. b") {
+		t.Fatalf("line breaks lost: %s", msg.HTML)
+	}
+}
+
+func TestTicketPreviewIsBounded(t *testing.T) {
+	e := TicketNotification(Ticket{Event: TicketCreated, PublicID: "TK-1", Preview: strings.Repeat("字", 5000)})
+	if n := len([]rune(e.Quote.Text)); n != ticketPreviewMaxRunes {
+		t.Fatalf("preview runes = %d", n)
+	}
+}
+
 func TestRenderRejectsMissingValues(t *testing.T) {
 	cases := map[string]Email{
 		"empty code":       EmailVerificationCode(" ", 5*time.Minute),
@@ -156,9 +211,12 @@ func TestFormatTimeUsesCST(t *testing.T) {
 	}
 }
 
-func TestCodeNoteRoundsToMinutes(t *testing.T) {
-	if got := codeNote(90 * time.Second); got != "2 分钟内有效" {
-		t.Fatalf("codeNote = %q", got)
+func TestCodeNeverOverstatesLifetime(t *testing.T) {
+	if got := codeNote(90 * time.Second); got != "1 分钟内有效" {
+		t.Fatalf("codeNote(90s) = %q", got)
+	}
+	if got := codeNote(10 * time.Minute); got != "10 分钟内有效" {
+		t.Fatalf("codeNote(10m) = %q", got)
 	}
 	if got := codeNote(0); got != "1 分钟内有效" {
 		t.Fatalf("codeNote(0) = %q", got)

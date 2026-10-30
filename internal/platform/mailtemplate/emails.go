@@ -12,12 +12,13 @@ import (
 
 const ignoreIfNotYou = "如果这不是您本人的操作，请忽略此邮件，您的账号不会发生任何变化。请勿将验证码告诉任何人。"
 
+// codeNote states a code's lifetime in whole minutes, rounded down so the
+// mail never promises more time than the code has.
 func codeNote(ttl time.Duration) string {
-	minutes := int(ttl.Round(time.Minute) / time.Minute)
-	if minutes < 1 {
-		minutes = 1
+	if minutes := int(ttl / time.Minute); minutes >= 1 {
+		return fmt.Sprintf("%d 分钟内有效", minutes)
 	}
-	return fmt.Sprintf("%d 分钟内有效", minutes)
+	return "1 分钟内有效"
 }
 
 // EmailVerificationCode is the one-time code that proves the recipient owns
@@ -73,15 +74,24 @@ type InheritVaultActivity struct {
 	At               time.Time
 }
 
+// details leaves out any value that is unknown, so a security notice is
+// never dropped for lack of an optional field.
 func (a InheritVaultActivity) details(action string) []Detail {
-	details := []Detail{
-		{Label: "操作", Value: action},
-		{Label: "服务器", Value: strings.ToUpper(strings.TrimSpace(a.Server))},
-		{Label: "游戏账号", Value: a.MaskedGameUserID},
-		{Label: "时间", Value: FormatTime(a.At)},
-	}
-	if ip := strings.TrimSpace(a.IP); ip != "" {
-		details = append(details, Detail{Label: "IP 地址", Value: ip})
+	return nonEmptyDetails(
+		Detail{Label: "操作", Value: action},
+		Detail{Label: "服务器", Value: strings.ToUpper(strings.TrimSpace(a.Server))},
+		Detail{Label: "游戏账号", Value: strings.TrimSpace(a.MaskedGameUserID)},
+		Detail{Label: "时间", Value: FormatTime(a.At)},
+		Detail{Label: "IP 地址", Value: strings.TrimSpace(a.IP)},
+	)
+}
+
+func nonEmptyDetails(all ...Detail) []Detail {
+	var details []Detail
+	for _, d := range all {
+		if d.Value != "" {
+			details = append(details, d)
+		}
 	}
 	return details
 }
@@ -136,7 +146,10 @@ type Ticket struct {
 	URL      string
 }
 
-const ticketSubjectMaxRunes = 60
+const (
+	ticketSubjectMaxRunes = 60
+	ticketPreviewMaxRunes = 1000
+)
 
 // TicketNotification announces new ticket activity. Ticket subjects and
 // messages are user input; the layout escapes them.
@@ -158,26 +171,21 @@ func TicketNotification(t Ticket) Email {
 		line += "：" + ref
 	}
 
-	var details []Detail
-	for _, d := range []Detail{
-		{Label: "工单编号", Value: publicID},
-		{Label: "主题", Value: ticketSubject},
-		{Label: "状态", Value: strings.TrimSpace(t.Status)},
-	} {
-		if d.Value != "" {
-			details = append(details, d)
-		}
-	}
 	e := Email{
 		Subject: subject(line),
 		Title:   title,
 		Intro:   []string{intro},
-		Details: details,
+		Details: nonEmptyDetails(
+			Detail{Label: "工单编号", Value: publicID},
+			Detail{Label: "主题", Value: ticketSubject},
+			Detail{Label: "状态", Value: strings.TrimSpace(t.Status)},
+		),
 	}
 	if preview := strings.TrimSpace(t.Preview); preview != "" {
-		e.Quote = &Quote{Label: "内容摘要", Text: preview}
+		e.Quote = &Quote{Label: "内容摘要", Text: truncateRunes(preview, ticketPreviewMaxRunes)}
 	}
-	if url := strings.TrimSpace(t.URL); url != "" {
+	// A misconfigured frontend URL costs the button, not the notification.
+	if url := strings.TrimSpace(t.URL); isWebURL(url) {
 		e.Action = &Action{Label: "查看工单", URL: url}
 	}
 	return e

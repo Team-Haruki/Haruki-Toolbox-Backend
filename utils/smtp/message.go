@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"mime"
 	"net/mail"
@@ -19,8 +20,33 @@ type Message struct {
 	Text    string
 }
 
-// buildMIME serialises msg into an RFC 5322 message. Header values are
-// stripped of line breaks and RFC 2047 encoded, and both bodies are base64
+func (m Message) validate() error {
+	if strings.TrimSpace(m.Subject) == "" || strings.TrimSpace(m.HTML) == "" || strings.TrimSpace(m.Text) == "" {
+		return errors.New("mail message needs a subject, an HTML part and a text part")
+	}
+	return nil
+}
+
+// validRecipients trims the recipient list and rejects it when it is empty or
+// any entry is not a bare email address (which also rules out line breaks).
+func validRecipients(to []string) ([]string, error) {
+	out := make([]string, 0, len(to))
+	for _, raw := range to {
+		addr := strings.TrimSpace(raw)
+		parsed, err := mail.ParseAddress(addr)
+		if err != nil || parsed.Name != "" || parsed.Address != addr {
+			return nil, fmt.Errorf("invalid mail recipient %q", addr)
+		}
+		out = append(out, addr)
+	}
+	if len(out) == 0 {
+		return nil, errors.New("mail has no recipient")
+	}
+	return out, nil
+}
+
+// buildMIME serialises msg into an RFC 5322 message for already validated
+// recipients. The subject is stripped of line breaks and RFC 2047 encoded, and both bodies are base64
 // encoded so long HTML lines never exceed the SMTP line limit.
 func buildMIME(from mail.Address, to []string, msg Message, now time.Time) ([]byte, error) {
 	boundary, err := randomToken(16)
@@ -44,7 +70,7 @@ func buildMIME(from mail.Address, to []string, msg Message, now time.Time) ([]by
 		b.WriteString("\r\n")
 	}
 	writeHeader("From", from.String())
-	writeHeader("To", strings.Join(sanitizeAddresses(to), ", "))
+	writeHeader("To", strings.Join(to, ", "))
 	writeHeader("Subject", mime.BEncoding.Encode("UTF-8", singleLine(msg.Subject)))
 	writeHeader("Date", now.Format(time.RFC1123Z))
 	writeHeader("Message-ID", fmt.Sprintf("<%s@%s>", messageID, domain))
@@ -86,16 +112,6 @@ func normalizeNewlines(s string) string {
 
 func singleLine(s string) string {
 	return strings.Join(strings.FieldsFunc(s, func(r rune) bool { return r == '\r' || r == '\n' }), " ")
-}
-
-func sanitizeAddresses(to []string) []string {
-	out := make([]string, 0, len(to))
-	for _, addr := range to {
-		if addr = strings.TrimSpace(singleLine(addr)); addr != "" {
-			out = append(out, addr)
-		}
-	}
-	return out
 }
 
 func randomToken(n int) (string, error) {

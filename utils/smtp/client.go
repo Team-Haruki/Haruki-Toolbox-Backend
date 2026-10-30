@@ -159,12 +159,21 @@ func NewSMTPClient(cfg config.SMTPConfig) *HarukiSMTPClient {
 
 // SendMessage sends msg as a multipart/alternative email. An empty
 // displayName falls back to the configured sender name.
+// The same validated recipient list is used for the envelope and the To
+// header.
 func (c *HarukiSMTPClient) SendMessage(to []string, msg Message, displayName string) error {
-	body, err := buildMIME(mail.Address{Name: c.senderName(displayName), Address: c.From}, to, msg, time.Now())
+	recipients, err := validRecipients(to)
 	if err != nil {
 		return err
 	}
-	return SendMailTLS(c.Addr, c.Auth, c.From, to, body, c.Timeout)
+	if err := msg.validate(); err != nil {
+		return err
+	}
+	body, err := buildMIME(mail.Address{Name: c.senderName(displayName), Address: c.From}, recipients, msg, time.Now())
+	if err != nil {
+		return err
+	}
+	return SendMailTLS(c.Addr, c.Auth, c.From, recipients, body, c.Timeout)
 }
 
 func (c *HarukiSMTPClient) senderName(displayName string) string {

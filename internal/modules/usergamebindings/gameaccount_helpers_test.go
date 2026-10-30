@@ -295,11 +295,12 @@ func TestSaveGameAccountBindingRejectsTransferFromBannedOwner(t *testing.T) {
 
 func TestNotifyPreviousGameAccountBindingOwnerBestEffort(t *testing.T) {
 	var sentTo string
-	var sentBody string
+	var sentBody, sentText string
 	originalSend := sendGameAccountBindingTransferMail
 	sendGameAccountBindingTransferMail = func(_ *harukiAPIHelper.HarukiToolboxRouterHelpers, email string, msg smtp.Message) error {
 		sentTo = email
 		sentBody = msg.HTML + "\n" + msg.Text
+		sentText = msg.Text
 		return errors.New("smtp down")
 	}
 	t.Cleanup(func() {
@@ -322,6 +323,9 @@ func TestNotifyPreviousGameAccountBindingOwnerBestEffort(t *testing.T) {
 	}
 	if !strings.Contains(sentBody, "123456") || !strings.Contains(sentBody, "JP") {
 		t.Fatalf("sent body missing server/game user id: %s", sentBody)
+	}
+	if !strings.Contains(sentText, "JP") || !strings.Contains(sentText, "123456") || !strings.Contains(sentText, "2026-06-14 16:00:00（北京时间）") {
+		t.Fatalf("plain-text part incomplete: %q", sentText)
 	}
 	if !strings.Contains(sentBody, "2026-06-14 16:00:00（北京时间）") {
 		t.Fatalf("sent body missing the transfer time in CST: %s", sentBody)

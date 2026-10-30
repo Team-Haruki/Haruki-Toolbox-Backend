@@ -155,6 +155,25 @@ func TestKratosTemplatesExecuteWithKratosModels(t *testing.T) {
 	for _, tpl := range templates {
 		byDir[tpl.Dir] = tpl
 	}
+	// Every code-based email family Kratos v25.4 sends
+	// (selfservice/strategy/code/code_sender.go). The link-based
+	// recovery/valid and verification/valid families are unused because the
+	// recovery and verification flows are configured with `use: code`.
+	wantDirs := []string{
+		"login_code/valid",
+		"recovery_code/invalid",
+		"recovery_code/valid",
+		"registration_code/valid",
+		"verification_code/invalid",
+		"verification_code/valid",
+	}
+	var gotDirs []string
+	for _, tpl := range templates {
+		gotDirs = append(gotDirs, tpl.Dir)
+	}
+	if strings.Join(gotDirs, ",") != strings.Join(wantDirs, ",") {
+		t.Fatalf("generated families = %v, want %v", gotDirs, wantDirs)
+	}
 	samples := kratosSamples()
 	if len(samples) != len(templates) {
 		t.Fatalf("%d samples for %d templates", len(samples), len(templates))
@@ -179,8 +198,12 @@ func TestKratosTemplatesExecuteWithKratosModels(t *testing.T) {
 			}
 		}
 	}
-	// The verification link is a real link in the HTML part.
+	// The verification code is shown in the code box on its own, not only
+	// inside the link, and the link is a real link in the HTML part.
 	out := executeKratosTemplate(t, byDir["verification_code/valid"], kratosSamples()[0].model)
+	if !strings.Contains(out.html, ">294715</div>") || !strings.Contains(out.text, "验证码：294715") {
+		t.Errorf("verification code box missing")
+	}
 	if !strings.Contains(out.html, `href="https://auth.example.com/self-service/verification?flow=6c1a3b0e-2f4d-4d8e-9b1a-0d5e7f9c2a41&amp;code=294715"`) {
 		t.Errorf("verification link missing from html: %s", out.html)
 	}

@@ -161,6 +161,7 @@ type inheritTestEnv struct {
 	mu          sync.Mutex
 	mails       []string
 	mailBodies  []string
+	mailTexts   []string
 	identity    map[string]bool // user -> has password
 	password    map[string]string
 }
@@ -226,6 +227,7 @@ func newInheritTestEnv(t *testing.T) *inheritTestEnv {
 		env.mu.Lock()
 		env.mails = append(env.mails, to+"|"+msg.Subject)
 		env.mailBodies = append(env.mailBodies, msg.HTML+"\n"+msg.Text)
+		env.mailTexts = append(env.mailTexts, msg.Text)
 		env.mu.Unlock()
 	}
 	env.svc = svc

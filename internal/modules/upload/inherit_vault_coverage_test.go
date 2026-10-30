@@ -647,8 +647,8 @@ func TestVaultNotifyOnlyMailsVerifiedAddresses(t *testing.T) {
 		t.Fatalf("mails = %v", env.mails)
 	}
 	for _, want := range []string{"查看引继码", "JP", "203.0.113.9", "（北京时间）", "修改 Haruki 工具箱密码"} {
-		if !strings.Contains(env.mailBodies[0], want) {
-			t.Fatalf("notification mail lacks %q: %s", want, env.mailBodies[0])
+		if !strings.Contains(env.mailBodies[0], want) || !strings.Contains(env.mailTexts[0], want) {
+			t.Fatalf("notification mail (html or text) lacks %q: %s", want, env.mailBodies[0])
 		}
 	}
 }

@@ -99,6 +99,7 @@ type layoutData struct {
 
 // Render renders e as a complete message with an HTML and a plain-text part.
 func Render(e Email) (smtp.Message, error) {
+	e = e.normalized()
 	if err := e.validate(false); err != nil {
 		return smtp.Message{}, err
 	}
@@ -118,6 +119,17 @@ func render(e Email) (smtp.Message, error) {
 		return smtp.Message{}, fmt.Errorf("render text mail: %w", err)
 	}
 	return smtp.Message{Subject: e.Subject, HTML: html.String(), Text: text.String()}, nil
+}
+
+// normalized trims the action URL, so the URL that is validated is exactly
+// the URL that is rendered. The caller's Action is not modified.
+func (e Email) normalized() Email {
+	if e.Action != nil {
+		action := *e.Action
+		action.URL = strings.TrimSpace(action.URL)
+		e.Action = &action
+	}
+	return e
 }
 
 // validate rejects an email with a missing required value, so a caller that
