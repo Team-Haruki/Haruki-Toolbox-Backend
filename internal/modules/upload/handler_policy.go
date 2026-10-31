@@ -104,7 +104,7 @@ func deriveUploadOwnership(ownerUserID string, currentUserID *string, uploadMeth
 
 func allowAnonymousBoundAccountUpload(uploadMethod harukiUtils.UploadMethod) bool {
 	switch uploadMethod {
-	case harukiUtils.UploadMethodIOSProxy, harukiUtils.UploadMethodInherit, harukiUtils.UploadMethodHarukiProxy:
+	case harukiUtils.UploadMethodIOSProxy, harukiUtils.UploadMethodInherit, harukiUtils.UploadMethodHarukiProxy, harukiUtils.UploadMethodInternal:
 		return true
 	default:
 		return false

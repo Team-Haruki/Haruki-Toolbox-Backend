@@ -48,6 +48,9 @@ type Dependencies struct {
 	// InheritVault stores what inherit jobs hand back to the owner. When it
 	// has no master key the inherit job and vault endpoints answer 503.
 	InheritVault *inheritvault.Store
+	// InternalUpload gates the internal upload endpoint; its zero value
+	// leaves the route unregistered.
+	InternalUpload InternalUploadConfig
 }
 
 func RegisterUploadRoutes(apiHelper *apiHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -56,4 +59,5 @@ func RegisterUploadRoutes(apiHelper *apiHelper.HarukiToolboxRouterHelpers, depen
 	registerHarukiProxyRoutes(apiHelper, dependencies)
 	registerManualUploadRoutes(apiHelper, dependencies)
 	registerOAuth2UploadRoutes(apiHelper, dependencies)
+	registerInternalUploadRoutes(apiHelper, dependencies)
 }

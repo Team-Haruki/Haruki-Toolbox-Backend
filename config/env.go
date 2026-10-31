@@ -227,6 +227,7 @@ func applyEnvOverrides(cfg *Config) error {
 
 	// Checked by startup validation (64 hex characters when non-empty).
 	overrideString(&cfg.BotSecurity.IngestTokenSHA256, "BOT_SECURITY_INGEST_TOKEN_SHA256")
+	overrideString(&cfg.InternalUpload.TokenSHA256File, "INTERNAL_UPLOAD_TOKEN_SHA256_FILE")
 
 	if err := overrideBool(&cfg.Story.Enabled, "STORY_ENABLED"); err != nil {
 		return err

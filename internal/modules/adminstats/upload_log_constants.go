@@ -20,4 +20,5 @@ var validUploadMethods = []string{
 	string(harukiUtils.UploadMethodIOSScript),
 	string(harukiUtils.UploadMethodHarukiProxy),
 	string(harukiUtils.UploadMethodInherit),
+	string(harukiUtils.UploadMethodInternal),
 }

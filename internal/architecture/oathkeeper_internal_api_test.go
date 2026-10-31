@@ -12,7 +12,8 @@ import (
 
 // TestInternalAPINotRoutedByOathkeeper keeps /internal/ off the public
 // gateway: POST /internal/oauth2/introspect, POST
-// /internal/bot-security/alerts and the birthday-monitor mirror are reachable only on the backend port (private network / compose network,
+// /internal/bot-security/alerts, POST /internal/upload/... and the
+// birthday-monitor mirror are reachable only on the backend port (private network / compose network,
 // never via the public proxy), so no Oathkeeper access rule anywhere in the
 // repository may match an /internal/ URL, for any method, scheme or host.
 func TestInternalAPINotRoutedByOathkeeper(t *testing.T) {
@@ -85,6 +86,9 @@ func internalAPIProbeURLs() []string {
 		"/internal/mysekai-birthday-events/e1/ack",
 		"/internal/bot-security/alerts",
 		"/internal/bot-security/alerts/",
+		"/internal/upload/jp/123/suite",
+		"/internal/upload/cn/123/mysekai",
+		"/internal/upload/en/123/suite",
 	}
 	var probes []string
 	for _, scheme := range []string{"http", "https"} {

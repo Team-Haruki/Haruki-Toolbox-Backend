@@ -285,6 +285,9 @@ haruki_bot:
 bot_security:
   ingest_token_sha256: "" # env BOT_SECURITY_INGEST_TOKEN_SHA256; 64 hex characters; empty = ingest disabled
 
+internal_upload:
+  token_sha256_file: "" # env INTERNAL_UPLOAD_TOKEN_SHA256_FILE; file with the 64-hex SHA-256 of the service token; empty = endpoint disabled
+
 story:
   enabled: false # env STORY_ENABLED; registers /api/misc/story/*
   registry_base_url: "https://sekai-api-cdn.haruki.seiunx.com"

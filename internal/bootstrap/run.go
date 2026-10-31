@@ -15,6 +15,7 @@ import (
 	sponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	storyModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/story"
 	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
+	uploadModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/upload"
 	userProfileModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
 	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
@@ -193,6 +194,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		OAuth2DeviceFlow:    deviceFlowConfig,
 		OAuth2InternalAPI:   newOAuth2InternalAPIConfig(cfg),
 		BotSecurityIngest:   newBotSecurityIngestConfig(cfg),
+		InternalUpload:      newInternalUploadConfig(cfg, harukiLogger.NewLoggerFromGlobal("InternalUpload")),
 		OAuth2AvatarBaseURL: cfg.UserSystem.AvatarURL,
 		UploadHTTPClient:    harukiHttp.NewClient(strings.TrimSpace(cfg.Proxy), 15*time.Second),
 		UploadLogger:        harukiLogger.NewLoggerFromGlobal("SekaiDataHandler"),
@@ -297,6 +299,24 @@ func newInheritVaultStore(cfg harukiConfig.Config, resources *applicationResourc
 		logger.Infof("Inherit vault enabled with master key v%d", key.Version())
 	}
 	return inheritvault.NewStore(resources.toolboxClient, resources.redisClient.Redis, master)
+}
+
+// newInternalUploadConfig loads internal_upload.token_sha256_file. An unset
+// path leaves the endpoint unregistered; a missing or malformed file does the
+// same and is logged, so the rest of the backend starts normally. The file's
+// content is never logged.
+func newInternalUploadConfig(cfg harukiConfig.Config, logger *harukiLogger.Logger) uploadModule.InternalUploadConfig {
+	path := strings.TrimSpace(cfg.InternalUpload.TokenSHA256File)
+	if path == "" {
+		return uploadModule.InternalUploadConfig{}
+	}
+	internalUpload, err := uploadModule.LoadInternalUploadConfig(path)
+	if err != nil {
+		logger.Errorf("Internal upload disabled: %v", err)
+		return uploadModule.InternalUploadConfig{}
+	}
+	logger.Infof("Internal upload enabled")
+	return internalUpload
 }
 
 // newOAuth2DeviceFlowConfig turns oauth2.device_flow into the module's
