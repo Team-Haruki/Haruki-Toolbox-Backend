@@ -430,6 +430,7 @@ type Config struct {
 	BotSecurity            BotSecurityConfig               `yaml:"bot_security"`
 	Story                  StoryConfig                     `yaml:"story"`
 	InheritVault           InheritVaultConfig              `yaml:"inherit_vault"`
+	InternalUpload         InternalUploadConfig            `yaml:"internal_upload"`
 }
 
 // InheritVaultConfig points at the inherit vault master key. The key is read
@@ -440,6 +441,16 @@ type InheritVaultConfig struct {
 	MasterKeyFile string `yaml:"master_key_file"`
 	// MasterKeyVersion is recorded with every key it wraps; defaults to 1.
 	MasterKeyVersion int `yaml:"master_key_version"`
+}
+
+// InternalUploadConfig configures the internal upload endpoint for trusted
+// services of our own.
+type InternalUploadConfig struct {
+	// TokenSHA256File names a file holding the hex SHA-256 (64 characters) of
+	// the service token; the token itself never goes into backend config.
+	// Empty leaves the route unregistered; an unreadable or malformed file
+	// also leaves it unregistered and is logged at startup.
+	TokenSHA256File string `yaml:"token_sha256_file"`
 }
 
 var Cfg Config

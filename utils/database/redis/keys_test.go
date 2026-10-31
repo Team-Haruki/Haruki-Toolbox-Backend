@@ -52,6 +52,11 @@ func TestBuildKeys(t *testing.T) {
 			want: "haruki:rate-limit:bot-security-ingest:29000000:ip:10.0.0.1",
 		},
 		{
+			name: "internal upload rate limit",
+			got:  BuildInternalUploadRateLimitKey(29000000, "10.0.0.1"),
+			want: "haruki:rate-limit:internal-upload:29000000:ip:10.0.0.1",
+		},
+		{
 			name: "game account verify",
 			got:  BuildGameAccountVerifyKey("u1", "jp", "123"),
 			want: "haruki:game-account:verify:u1:jp:123",

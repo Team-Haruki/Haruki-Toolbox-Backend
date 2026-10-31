@@ -83,6 +83,9 @@ const (
 	// a delegated game-data:write token, rather than by the account owner's own
 	// session or proxy.
 	UploadMethodOAuth2 UploadMethod = "oauth2"
+	// UploadMethodInternal is an upload from a trusted service of our own,
+	// authenticated by a service token on the internal listener.
+	UploadMethodInternal UploadMethod = "internal"
 )
 
 const (

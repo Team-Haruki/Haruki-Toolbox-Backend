@@ -75,7 +75,9 @@ type Dependencies struct {
 	OAuth2DeviceFlow  oauth2Module.DeviceFlowConfig
 	OAuth2InternalAPI oauth2Module.InternalAPIConfig
 	// BotSecurityIngest gates POST /internal/bot-security/alerts.
-	BotSecurityIngest    botSecurityModule.IngestConfig
+	BotSecurityIngest botSecurityModule.IngestConfig
+	// InternalUpload gates the internal upload endpoint.
+	InternalUpload       uploadModule.InternalUploadConfig
 	IOSEndpoints         iosModule.EndpointConfig
 	OAuth2AvatarBaseURL  string
 	UserProfileConfig    userProfileModule.Config
@@ -120,6 +122,8 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 		InheritPacing:             dependencies.InheritPacing,
 		InheritVault:              dependencies.InheritVault,
 		SekaiClient:               dependencies.SekaiClient,
+		// Registered only when internal_upload.token_sha256_file is loaded.
+		InternalUpload: dependencies.InternalUpload,
 	})
 	iosModule.RegisterIOSRoutes(apiHelper, dependencies.IOSEndpoints)
 	oauth2Module.RegisterOAuth2Routes(apiHelper, oauth2Module.RouteOptions{

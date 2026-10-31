@@ -40,6 +40,7 @@ const (
 	KeyModuleRateLimit         = "rate-limit"
 	KeyActionUploadIngress     = "upload-ingress"
 	KeyActionBotSecurityIngest = "bot-security-ingest"
+	KeyActionInternalUpload    = "internal-upload"
 
 	KeyModulePublicAPI = "public-api"
 	KeyActionCache     = "cache"
@@ -232,6 +233,19 @@ func BuildBotSecurityIngestRateLimitKey(windowUnix int64, clientIP string) strin
 		KeyPrefixHaruki,
 		KeyModuleRateLimit,
 		KeyActionBotSecurityIngest,
+		strconv.FormatInt(windowUnix, 10),
+		KeyDimensionIP,
+		clientIP,
+	)
+}
+
+// BuildInternalUploadRateLimitKey counts internal uploads accepted from one
+// caller address in one fixed window.
+func BuildInternalUploadRateLimitKey(windowUnix int64, clientIP string) string {
+	return buildKey(
+		KeyPrefixHaruki,
+		KeyModuleRateLimit,
+		KeyActionInternalUpload,
 		strconv.FormatInt(windowUnix, 10),
 		KeyDimensionIP,
 		clientIP,

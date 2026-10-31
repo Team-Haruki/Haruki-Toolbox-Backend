@@ -25,8 +25,10 @@ func newAttempt(method utils.UploadMethod, size int) *platform.Attempt {
 		a.AuthMethod = "ios_user_code"
 	case utils.UploadMethodIOSProxy:
 		a.AuthMethod = "game_session_proxy"
+	case utils.UploadMethodInternal:
+		a.AuthMethod = internalUploadAuthMethod
 	}
-	if method == utils.UploadMethodInherit {
+	if method == utils.UploadMethodInherit || method == utils.UploadMethodInternal {
 		a.Client.Platform = "not_applicable"
 	}
 	return a

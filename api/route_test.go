@@ -97,6 +97,8 @@ func TestRouteManifest(t *testing.T) {
 		OAuth2InternalAPI: testInternalAPIConfig(t),
 		// So is the bot security alert ingest.
 		BotSecurityIngest: testBotSecurityIngestConfig(t),
+		// And the internal upload.
+		InternalUpload: testInternalUploadConfig(t),
 	})
 
 	actual := routeManifest(app)

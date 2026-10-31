@@ -11,6 +11,7 @@ import (
 
 	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
+	uploadModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/upload"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
@@ -42,6 +43,18 @@ func testBotSecurityIngestConfig(t *testing.T) botSecurityModule.IngestConfig {
 	cfg, err := botSecurityModule.ParseIngestConfig(hex.EncodeToString(sum[:]))
 	if err != nil {
 		t.Fatalf("ParseIngestConfig: %v", err)
+	}
+	return cfg
+}
+
+const testInternalUploadToken = "internal-upload-route-test-token"
+
+func testInternalUploadConfig(t *testing.T) uploadModule.InternalUploadConfig {
+	t.Helper()
+	sum := sha256.Sum256([]byte(testInternalUploadToken))
+	cfg, err := uploadModule.ParseInternalUploadTokenSHA256(hex.EncodeToString(sum[:]))
+	if err != nil {
+		t.Fatalf("ParseInternalUploadTokenSHA256: %v", err)
 	}
 	return cfg
 }
@@ -150,5 +163,52 @@ func TestBotSecurityIngestRouteRegistration(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status %d, want 404 while ingestion is not configured", resp.StatusCode)
+	}
+}
+
+// The internal upload route answers with its own 401 (no private API guard,
+// no Oathkeeper session) and is absent without its token file.
+func TestInternalUploadRouteRegistration(t *testing.T) {
+	newApp := func(internalUpload uploadModule.InternalUploadConfig) *fiber.App {
+		app := fiber.New()
+		apiHelper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+			Router:         app,
+			DBManager:      &database.HarukiToolboxDBManager{},
+			SessionHandler: harukiAPIHelper.NewSessionHandler(nil, ""),
+		}
+		RegisterRoutes(apiHelper, Dependencies{
+			HydraConfig:    harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{}),
+			InternalUpload: internalUpload,
+		})
+		return app
+	}
+	const path = "/internal/upload/jp/123/suite"
+
+	app := newApp(testInternalUploadConfig(t))
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, path, strings.NewReader("payload")))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(string(body), `"error_code":"invalid_client_credentials"`) {
+		t.Fatalf("status %d body %s, want 401 from the internal upload route itself", resp.StatusCode, body)
+	}
+
+	app = newApp(uploadModule.InternalUploadConfig{})
+	for _, route := range app.GetRoutes(true) {
+		if strings.HasPrefix(route.Path, "/internal/upload") {
+			t.Fatalf("%s %s registered without internal_upload.token_sha256_file", route.Method, route.Path)
+		}
+	}
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("payload"))
+	req.Header.Set("Authorization", "Bearer "+testInternalUploadToken)
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status %d, want 404 while the internal upload is not configured", resp.StatusCode)
 	}
 }
