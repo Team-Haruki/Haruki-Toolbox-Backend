@@ -88,6 +88,7 @@ func internalAPIProbeURLs() []string {
 		"/internal/bot-security/alerts/",
 		"/internal/upload/jp/123/suite",
 		"/internal/upload/cn/123/mysekai",
+		"/internal/upload/en/123/suite",
 	}
 	var probes []string
 	for _, scheme := range []string{"http", "https"} {

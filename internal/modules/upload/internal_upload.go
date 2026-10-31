@@ -90,6 +90,14 @@ func LoadInternalUploadConfig(path string) (InternalUploadConfig, error) {
 	if path == "" {
 		return InternalUploadConfig{}, fmt.Errorf("%w: no token file configured", ErrInternalUploadToken)
 	}
+	// A FIFO or device would block the open or the read and hang startup.
+	info, err := os.Stat(path)
+	if err != nil {
+		return InternalUploadConfig{}, fmt.Errorf("%w: cannot read token file", ErrInternalUploadToken)
+	}
+	if !info.Mode().IsRegular() {
+		return InternalUploadConfig{}, fmt.Errorf("%w: token file must be a regular file", ErrInternalUploadToken)
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return InternalUploadConfig{}, fmt.Errorf("%w: cannot read token file", ErrInternalUploadToken)
@@ -181,6 +189,19 @@ func internalUploadAttempt(c fiber.Ctx) *platform.Attempt {
 	return a
 }
 
+// identityContentEncoding reports whether every Content-Encoding field (and
+// every coding listed in one) is absent or identity.
+func identityContentEncoding(fields [][]byte) bool {
+	for _, field := range fields {
+		for coding := range strings.SplitSeq(string(field), ",") {
+			if coding = strings.TrimSpace(coding); coding != "" && !strings.EqualFold(coding, "identity") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // registerInternalUploadRoutes registers the internal upload endpoint when
 // it is configured; otherwise nothing is registered.
 func registerInternalUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
@@ -210,7 +231,7 @@ func handleInternalUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 		invalid := func(status int, message string) error {
 			return proxyResponse(c, status, "invalid_upload_payload", message, false, nil)
 		}
-		if encoding := strings.TrimSpace(c.Get(fiber.HeaderContentEncoding)); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		if !identityContentEncoding(c.Request().Header.PeekAll(fiber.HeaderContentEncoding)) {
 			return invalid(fiber.StatusUnsupportedMediaType, "content encoding is not supported")
 		}
 		body := c.Request().Body()

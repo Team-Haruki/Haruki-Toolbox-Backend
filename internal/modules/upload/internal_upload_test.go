@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -83,6 +84,7 @@ func TestLoadInternalUploadConfig(t *testing.T) {
 		"too short":    writeInternalUploadTokenFile(t, []byte(digest[:63])),
 		"oversized":    writeInternalUploadTokenFile(t, bytes.Repeat([]byte("a"), internalUploadTokenFileMaxBytes+1)),
 		"directory":    t.TempDir(),
+		"fifo":         testInternalUploadFIFO(t),
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg, err := LoadInternalUploadConfig(path)
@@ -96,6 +98,40 @@ func TestLoadInternalUploadConfig(t *testing.T) {
 				t.Fatalf("error repeats the file content: %v", err)
 			}
 		})
+	}
+}
+
+// testInternalUploadFIFO is a named pipe with no writer: opening it for
+// reading would block forever.
+func testInternalUploadFIFO(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fifo")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Skipf("mkfifo: %v", err)
+	}
+	return path
+}
+
+func TestIdentityContentEncoding(t *testing.T) {
+	for _, tc := range []struct {
+		fields []string
+		want   bool
+	}{
+		{nil, true},
+		{[]string{""}, true},
+		{[]string{"identity"}, true},
+		{[]string{"Identity, identity"}, true},
+		{[]string{"gzip"}, false},
+		{[]string{"identity", "br"}, false},
+		{[]string{"identity, deflate"}, false},
+	} {
+		fields := make([][]byte, len(tc.fields))
+		for i, f := range tc.fields {
+			fields[i] = []byte(f)
+		}
+		if got := identityContentEncoding(fields); got != tc.want {
+			t.Errorf("identityContentEncoding(%q) = %v, want %v", tc.fields, got, tc.want)
+		}
 	}
 }
 
@@ -134,6 +170,11 @@ type internalUploadTestEnv struct {
 
 func newInternalUploadTestEnv(t *testing.T, withRedis bool) *internalUploadTestEnv {
 	t.Helper()
+	return newInternalUploadTestEnvAt(t, withRedis, time.Now)
+}
+
+func newInternalUploadTestEnvAt(t *testing.T, withRedis bool, now func() time.Time) *internalUploadTestEnv {
+	t.Helper()
 	db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "internal-upload"))
 	t.Cleanup(func() { _ = db.Close() })
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
@@ -145,7 +186,7 @@ func newInternalUploadTestEnv(t *testing.T, withRedis bool) *internalUploadTestE
 	deps.InternalUpload = testInternalUploadConfig(t)
 	// The default Fiber limit (4 MiB) is below the route's own limit.
 	app := fiber.New(fiber.Config{BodyLimit: 2 * internalUploadMaxBodyBytes})
-	app.Post(InternalUploadPath, handleInternalUpload(helper, deps, time.Now, harukiLogger.NewLogger("InternalUploadTest", "DEBUG", io.Discard)))
+	app.Post(InternalUploadPath, handleInternalUpload(helper, deps, now, harukiLogger.NewLogger("InternalUploadTest", "DEBUG", io.Discard)))
 	return &internalUploadTestEnv{app: app, db: db, helper: helper, deps: deps}
 }
 
@@ -225,6 +266,7 @@ func TestInternalUploadRejectsBeforeThePipeline(t *testing.T) {
 		"zero user id":   {internalUploadRequest{path: "/internal/upload/jp/0/suite", body: []byte("x")}, 400, "invalid_upload_payload"},
 		"empty body":     {internalUploadRequest{path: "/internal/upload/jp/123/suite"}, 400, "invalid_upload_payload"},
 		"gzip body":      {internalUploadRequest{path: "/internal/upload/jp/123/suite", body: []byte("x"), headers: map[string]string{"Content-Encoding": "gzip"}}, 415, "invalid_upload_payload"},
+		"gzip in a list": {internalUploadRequest{path: "/internal/upload/jp/123/suite", body: []byte("x"), headers: map[string]string{"Content-Encoding": "identity, gzip"}}, 415, "invalid_upload_payload"},
 		"oversized":      {internalUploadRequest{path: "/internal/upload/jp/123/suite", body: make([]byte, internalUploadMaxBodyBytes+1)}, 413, "invalid_upload_payload"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -241,8 +283,10 @@ func TestInternalUploadRejectsBeforeThePipeline(t *testing.T) {
 }
 
 func TestInternalUploadRateLimit(t *testing.T) {
-	env := newInternalUploadTestEnv(t, true)
+	// One fixed clock for the seeded key and the handler, so a minute boundary
+	// between the two cannot move the handler to another window.
 	now := time.Now().UTC()
+	env := newInternalUploadTestEnvAt(t, true, func() time.Time { return now })
 	window := int64(internalUploadRateLimitWindow / time.Second)
 	key := harukiRedis.BuildInternalUploadRateLimitKey(now.Unix()/window, "0.0.0.0")
 	if err := env.helper.DBManager.Redis.Redis.Set(context.Background(), key, internalUploadRateLimitPerIP, time.Minute).Err(); err != nil {

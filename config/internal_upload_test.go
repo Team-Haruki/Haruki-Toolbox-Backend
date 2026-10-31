@@ -36,6 +36,7 @@ func TestInternalUploadTokenFileDefaultsAndEnv(t *testing.T) {
 
 // The example config ships the endpoint disabled.
 func TestExampleConfigInternalUploadDisabled(t *testing.T) {
+	t.Setenv("INTERNAL_UPLOAD_TOKEN_SHA256_FILE", "")
 	cfg, err := Load("../haruki-toolbox-configs.example.yaml")
 	if err != nil {
 		t.Fatalf("load example config: %v", err)
