@@ -249,10 +249,6 @@ type adminUserAllowCNMysekaiResponse struct {
 	AllowCNMysekai bool   `json:"allowCNMysekai"`
 }
 
-type adminSoftDeletePayload struct {
-	Reason *string `json:"reason,omitzero"`
-}
-
 type adminResetPasswordPayload struct {
 	NewPassword *string `json:"newPassword,omitzero"`
 	ForceLogout *bool   `json:"forceLogout,omitzero"`

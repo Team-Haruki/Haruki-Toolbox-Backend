@@ -43,7 +43,10 @@ func RegisterAdminUserRoutes(
 	users.Delete("/:target_user_id/ios-upload-code", handleClearUserIOSUploadCode(apiHelper))
 	users.Put("/:target_user_id/ban", handleBanUser(apiHelper, hydraConfig))
 	users.Put("/:target_user_id/unban", handleUnbanUser(apiHelper))
-	users.Delete("/:target_user_id", handleSoftDeleteUser(apiHelper, hydraConfig))
+	// A distinct endpoint prevents a new frontend from invoking the old soft
+	// delete implementation during a rolling upgrade or rollback.
+	users.Delete("/:target_user_id/permanent", handleDeleteUser(apiHelper, hydraConfig))
+	users.Delete("/:target_user_id", handleDeleteUser(apiHelper, hydraConfig))
 	users.Post("/:target_user_id/restore", handleRestoreUser(apiHelper))
 	users.Post("/:target_user_id/reset-password", handleResetUserPassword(apiHelper))
 	users.Post("/:target_user_id/force-logout", handleForceLogoutUser(apiHelper))

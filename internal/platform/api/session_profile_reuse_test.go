@@ -149,6 +149,11 @@ func TestResolvedProfileFallbackBranches(t *testing.T) {
 			handler.DBClient = db
 			handler.KratosAutoLinkByEmail = tc.link
 			handler.KratosAutoProvisionUser = tc.provision
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`{"id":"fallback-identity","traits":{"email":"fallback@example.test"}}`))
+			}))
+			t.Cleanup(provider.Close)
+			handler.KratosAdminURL = provider.URL
 			id, profile, err := handler.resolveKratosIdentityWithProfile(ctx, "fallback-identity", "fallback@example.test", tc.verified)
 			if !tc.success {
 				if !errors.Is(err, errKratosIdentityUnmapped) || id != "" || profile != nil {

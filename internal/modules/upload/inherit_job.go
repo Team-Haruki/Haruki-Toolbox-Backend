@@ -9,6 +9,7 @@ import (
 
 	json "encoding/json/v2"
 
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 
 	"github.com/google/uuid"
@@ -29,7 +30,7 @@ const (
 	inheritJobsPerUserHour   = 10
 	inheritIssueAttempts     = 3
 	inheritJobKeyPrefix      = "inherit:job:"
-	inheritActiveKeyPrefix   = "inherit:jobs:active:"
+	inheritActiveKeyPrefix   = harukiRedis.InheritActiveKeyPrefix
 	inheritRateKeyPrefix     = "inherit:jobs:rate:"
 	inheritRandomPasswordLen = 12
 )

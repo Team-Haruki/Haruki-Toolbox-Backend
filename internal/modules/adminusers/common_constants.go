@@ -13,7 +13,6 @@ const (
 	adminAuditActionUserBan             = "admin.user.ban"
 	adminAuditActionUserUnban           = "admin.user.unban"
 	adminAuditActionUserForceLogout     = "admin.user.force_logout"
-	adminAuditActionUserSoftDelete      = "admin.user.soft_delete"
 	adminAuditActionUserRestore         = "admin.user.restore"
 	adminAuditActionUserResetPass       = "admin.user.reset_password"
 	adminAuditActionUserRoleUpdate      = "admin.user.role.update"

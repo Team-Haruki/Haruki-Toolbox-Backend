@@ -34,7 +34,6 @@ const (
 const defaultAdminUserDetailActivityWindowHours = 24
 
 const (
-	softDeleteBanReasonPrefix   = "[soft_deleted]"
 	temporaryPasswordPrefix     = "Tmp-"
 	temporaryPasswordBytes      = 12
 	adminPasswordMinLengthChars = 8

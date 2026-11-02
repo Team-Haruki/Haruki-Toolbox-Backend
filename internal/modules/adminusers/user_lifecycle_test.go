@@ -2,19 +2,6 @@ package adminusers
 
 import "testing"
 
-func TestBuildSoftDeleteBanReason(t *testing.T) {
-	got := buildSoftDeleteBanReason(nil)
-	if got != softDeleteBanReasonPrefix {
-		t.Fatalf("got = %q, want %q", got, softDeleteBanReasonPrefix)
-	}
-
-	raw := "  test reason  "
-	got = buildSoftDeleteBanReason(&raw)
-	if got != softDeleteBanReasonPrefix+" test reason" {
-		t.Fatalf("got = %q, want %q", got, softDeleteBanReasonPrefix+" test reason")
-	}
-}
-
 func TestValidateAdminPasswordInput(t *testing.T) {
 	if err := validateAdminPasswordInput("1234567"); err == nil {
 		t.Fatalf("expected short password to fail")

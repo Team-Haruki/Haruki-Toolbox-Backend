@@ -8,6 +8,8 @@ import (
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	platformTime "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/timeutil"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	sql "entgo.io/ent/dialect/sql"
@@ -92,6 +94,8 @@ func applyAdminUserQueryFilters(query *postgresql.UserQuery, filters *adminUserQ
 			userSchema.IDContainsFold(filters.Query),
 			userSchema.NameContainsFold(filters.Query),
 			userSchema.EmailContainsFold(filters.Query),
+			userSchema.HasSocialPlatformInfoWith(socialplatforminfo.PlatformUserIDContainsFold(filters.Query)),
+			userSchema.HasAuthorizedSocialPlatformsWith(authorizesocialplatforminfo.PlatformUserIDContainsFold(filters.Query)),
 		))
 	}
 	if filters.Role != "" {
