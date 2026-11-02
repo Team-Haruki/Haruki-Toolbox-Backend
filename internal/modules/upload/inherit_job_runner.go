@@ -293,6 +293,9 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 	s.setStep(rt, stepLogin, stepRunning, "")
 	if err := game.Login(ctx, gameUserID, credential); err != nil {
 		gameErr = err
+		// login_failed keeps its meaning (credential saved, re-issue later);
+		// the warning says why.
+		s.warnIfVersionOutdated(rt, err)
 		return s.failStep(rt, stepLogin, codeLoginFailed)
 	}
 	s.setStep(rt, stepLogin, stepOK, "")
@@ -308,6 +311,7 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 		gameErr = err
 		s.setStep(rt, stepIssueNewCode, stepFailed, codeIssueCodeFailed)
 		s.addWarning(rt, codeIssueCodeFailed)
+		s.warnIfVersionOutdated(rt, err)
 		s.setStep(rt, stepVaultStoreCode, stepSkipped, "")
 	} else {
 		expires := s.now().Add(inheritvault.CodeLifetime)
@@ -344,8 +348,11 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 		gameErr = err
 		s.recordRetrievalFailure(job, gameUserID, err)
 		failure := codeFetchFailed
-		if harukiSekai.IsMaintenanceError(err) {
+		switch {
+		case harukiSekai.IsMaintenanceError(err):
 			failure = codeGameMaintenance
+		case harukiSekai.IsGameVersionOutdated(err):
+			failure = codeGameVersionOutdated
 		}
 		return s.failStep(rt, stepFetchSuite, failure)
 	}
@@ -361,8 +368,11 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 			gameErr = err
 			s.recordRetrievalFailure(job, gameUserID, err)
 			failure := codeMysekaiUnavailable
-			if harukiSekai.IsMaintenanceError(err) {
+			switch {
+			case harukiSekai.IsMaintenanceError(err):
 				failure = codeGameMaintenance
+			case harukiSekai.IsGameVersionOutdated(err):
+				failure = codeGameVersionOutdated
 			}
 			return s.failStep(rt, stepFetchMysekai, failure)
 		}
@@ -385,6 +395,14 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 	}
 	s.setStep(rt, stepUpload, stepOK, "")
 	return s.end(rt, stepDone, jobStatusSucceeded, "")
+}
+
+// warnIfVersionOutdated adds the game_version_outdated warning when err is a
+// 426 the session could not recover from.
+func (s *inheritService) warnIfVersionOutdated(rt *jobRuntime, err error) {
+	if harukiSekai.IsGameVersionOutdated(err) {
+		s.addWarning(rt, codeGameVersionOutdated)
+	}
 }
 
 func auditResult(ok bool) string {

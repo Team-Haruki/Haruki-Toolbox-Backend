@@ -238,6 +238,7 @@ func (s *inheritService) progressFor(rt *jobRuntime) harukiSekai.Progress {
 		rt.mu.Lock()
 		step := rt.job.CurrentStep
 		rt.mu.Unlock()
+		s.logVersionRefresh(rt, step, e)
 		s.update(rt, &jobEvent{Step: step, Substep: e.Step, Status: string(e.Status), Note: e.Note, At: &now}, func(j *inheritJob) {
 			st := j.step(step)
 			if st == nil {
@@ -251,6 +252,23 @@ func (s *inheritService) progressFor(rt *jobRuntime) harukiSekai.Progress {
 			}
 			st.Substeps = append(st.Substeps, jobSubstep{Name: e.Step, Status: string(e.Status), Note: e.Note, At: &now})
 		})
+	}
+}
+
+// logVersionRefresh logs the outcome of a version refresh after a 426, so the
+// operator can tell a lagging version source from a bad code. The note holds
+// only the source and the versions, never an identifier.
+func (s *inheritService) logVersionRefresh(rt *jobRuntime, step string, e harukiSekai.ProgressEvent) {
+	if e.Step != harukiSekai.SubStepVersionRefresh {
+		return
+	}
+	switch e.Status {
+	case harukiSekai.ProgressDone:
+		s.logger.Warnf("inherit job game version outdated, refreshed job=%s server=%s step=%s result=%s",
+			rt.job.ID, rt.job.Server, step, e.Note)
+	case harukiSekai.ProgressFailed:
+		s.logger.Warnf("inherit job game version outdated, no newer version found job=%s server=%s step=%s result=%s",
+			rt.job.ID, rt.job.Server, step, e.Note)
 	}
 }
 
