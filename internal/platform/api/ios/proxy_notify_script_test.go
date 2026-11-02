@@ -81,6 +81,7 @@ func TestProxyNotifyScriptReportsTheUploadResultHeader(t *testing.T) {
 		{"invalid data", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "X-Haruki-Upload-Result": "failed", "X-Haruki-Upload-Error": "invalid_upload_payload" }`}, "日服 Suite 数据上传失败", "无法解析这份数据"},
 		{"not allowed", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "X-Haruki-Upload-Result": "failed", "X-Haruki-Upload-Error": "upload_not_allowed" }`}, "日服 Suite 数据上传失败", "没有在 Haruki 工具箱绑定并验证"},
 		{"game server unreachable", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "X-Haruki-Upload-Result": "failed", "X-Haruki-Upload-Error": "game_server_unavailable" }`}, "日服 Suite 数据上传失败", "连不上游戏服务器"},
+		{"rate limited", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "X-Haruki-Upload-Result": "failed", "X-Haruki-Upload-Error": "rate_limited" }`}, "日服 Suite 数据上传失败", "上传太频繁"},
 		{"failed without a code", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "X-Haruki-Upload-Result": "failed" }`}, "日服 Suite 数据上传失败", "没有保存这份数据"},
 		{"nothing to upload", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "X-Haruki-Upload-Result": "skipped" }`}, "", ""},
 		{"header absent", proxyNotifyRun{notifyByDefault: true, url: suiteURL, headers: `{ "Content-Type": "application/octet-stream" }`}, "", ""},

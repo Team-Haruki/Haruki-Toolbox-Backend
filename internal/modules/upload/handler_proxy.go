@@ -123,7 +123,8 @@ func HandleProxyUpload(
 // notifies the user: X-Haruki-Upload-Result is ok, failed or skipped (the
 // response carried nothing to upload), and on failure X-Haruki-Upload-Error
 // holds the public error code (invalid_upload_payload, upload_not_allowed,
-// temporarily_unavailable, internal_error, game_server_unavailable).
+// temporarily_unavailable, internal_error, game_server_unavailable, and
+// rate_limited from the entry guard).
 const (
 	proxyUploadResultHeader = "X-Haruki-Upload-Result"
 	proxyUploadErrorHeader  = "X-Haruki-Upload-Error"

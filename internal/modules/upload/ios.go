@@ -312,11 +312,15 @@ func parseIOSProxyPathInt(raw string) (int64, error) {
 
 func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	logger := harukiLogger.NewLoggerFromGlobal("HarukiSekaiIOS")
-	proxyGuard := openUploadEntryGuard(apiHelper)
+	scriptGuard := openUploadEntryGuard(apiHelper)
+	// A refused proxy upload still says so to the module's notification script.
+	proxyGuard := openUploadEntryGuard(apiHelper, func(c fiber.Ctx) {
+		setProxyUploadResult(c, proxyUploadFailed, "rate_limited")
+	})
 	for _, prefix := range []string{"/ios", "/api/ios"} {
 		api := apiHelper.Router.Group(prefix)
 
-		api.Post("/script/:upload_code/upload", proxyGuard, handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
+		api.Post("/script/:upload_code/upload", scriptGuard, handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
 		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, dependencies, logger))
 		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, dependencies, logger))
 		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, dependencies, logger))

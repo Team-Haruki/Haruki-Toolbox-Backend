@@ -43,6 +43,8 @@ const uploadErrorTextJS = `function uploadErrorText(code) {
             return "工具箱保存数据时出错，稍后重进游戏即可重试。";
         case "game_server_unavailable":
             return "工具箱连不上游戏服务器，这次没有上传。";
+        case "rate_limited":
+            return "上传太频繁，请稍后重进游戏再试。";
         default:
             return "";
     }

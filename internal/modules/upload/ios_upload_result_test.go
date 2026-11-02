@@ -196,3 +196,59 @@ func TestIOSProxyUploadReportsTheResultInHeaders(t *testing.T) {
 		})
 	}
 }
+
+// ★ A proxy upload refused by the rate limiter tells the module's
+// notification script (failed, rate_limited); the 429 itself, with its
+// Retry-After, is unchanged, and other routes behind the same limiter do not
+// get the upload headers.
+func TestRateLimitedProxyUploadReportsTheResult(t *testing.T) {
+	helper := newTestAPIHelperWithRedis(t)
+	app := fiber.New()
+	helper.Router = app
+	registerIOSUploadRoutes(helper, testUploadDependencies())
+	app.Post("/api/inherit/:server/:upload_type/submit", openUploadEntryGuard(helper), handleInheritSubmitGone)
+
+	routes := []struct {
+		method, pattern, path string
+		wantHeaders           bool
+	}{
+		{"GET", "/ios/proxy/:server/suite/user/:user_id", "/ios/proxy/jp/suite/user/1", true},
+		{"POST", "/api/ios/proxy/:server/user/:user_id/mysekai", "/api/ios/proxy/jp/user/1/mysekai", true},
+		{"PUT", "/ios/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", "/ios/proxy/jp/user/1/mysekai/birthday-party/2/delivery", true},
+		{"POST", "/ios/script/:upload_code/upload", "/ios/script/code/upload", false},
+		{"POST", "/api/inherit/:server/:upload_type/submit", "/api/inherit/jp/suite/submit", false},
+	}
+	// Use up this window and the next for each route, so a minute boundary
+	// during the test cannot let a request through.
+	now := time.Now().UTC()
+	for _, r := range routes {
+		key := "0.0.0.0|" + r.method + "|" + r.pattern
+		for _, at := range []time.Time{now, now.Add(openUploadRateLimitWindow)} {
+			for range openUploadRateLimitPerMinute {
+				if _, _, err := consumeOpenUploadRateLimit(context.Background(), helper, key, at); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+
+	for _, r := range routes {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			resp, err := app.Test(httptest.NewRequest(r.method, r.path, strings.NewReader("x")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != fiber.StatusTooManyRequests || resp.Header.Get("Retry-After") == "" {
+				t.Fatalf("status %d, Retry-After %q: want a 429 with Retry-After", resp.StatusCode, resp.Header.Get("Retry-After"))
+			}
+			result, code := resp.Header.Get(proxyUploadResultHeader), resp.Header.Get(proxyUploadErrorHeader)
+			if r.wantHeaders && (result != "failed" || code != "rate_limited") {
+				t.Errorf("upload headers = %q %q, want failed rate_limited", result, code)
+			}
+			if !r.wantHeaders && (result != "" || code != "") {
+				t.Errorf("a non-proxy route carries upload headers %q %q", result, code)
+			}
+		})
+	}
+}

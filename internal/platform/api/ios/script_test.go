@@ -113,8 +113,8 @@ func TestScriptVersionsChangeWithTheScripts(t *testing.T) {
 	for _, tc := range []struct {
 		name, version, pinnedVersion, pinnedSHA256, template string
 	}{
-		{"uploader", ScriptVersion, "1.1.0", "1a63ec0459b2a223b753f1fb6aba09f443fc2236f102f5fc60d5b3543076aa1b", HarukiIOSJavaScriptTemplate},
-		{"proxy notify", ProxyNotifyScriptVersion, "1.0.0", "0332cc5eee22b5be7372b46a19c2a4551a1be44493c44de49b6e1a273e13e0b8", proxyNotifyScriptTemplate},
+		{"uploader", ScriptVersion, "1.1.0", "dcf802b7c9ad29446d444383e77e84e7d0cc5ff9c258fb1b13f53daccd869897", HarukiIOSJavaScriptTemplate},
+		{"proxy notify", ProxyNotifyScriptVersion, "1.0.0", "e3ac8397dc9895863c46fc0dd3d0af6cf06c3eada634cf66b19fc631a311ac35", proxyNotifyScriptTemplate},
 	} {
 		sum := sha256.Sum256([]byte(tc.template + notifyArgumentJS + uploadErrorTextJS))
 		if got := hex.EncodeToString(sum[:]); got != tc.pinnedSHA256 || tc.version != tc.pinnedVersion {

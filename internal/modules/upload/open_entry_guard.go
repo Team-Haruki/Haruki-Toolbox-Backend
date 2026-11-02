@@ -73,7 +73,9 @@ func (l *openUploadRateLimiter) cleanupLocked(now time.Time) {
 	}
 }
 
-func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+// openUploadEntryGuard rate-limits the open upload entry points. onLimited,
+// if given, runs on a request it refuses, before the 429 is written.
+func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, onLimited ...func(fiber.Ctx)) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		now := time.Now().UTC()
 		bucketKey := buildOpenUploadRateLimitKey(c)
@@ -99,6 +101,9 @@ func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			}
 		}
 		c.Set("Retry-After", strconv.Itoa(retryAfter))
+		for _, hook := range onLimited {
+			hook(c)
+		}
 		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
 	}
 }
