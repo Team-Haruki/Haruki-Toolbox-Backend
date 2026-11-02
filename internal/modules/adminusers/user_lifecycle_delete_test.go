@@ -8,13 +8,63 @@ import (
 	"testing"
 	"time"
 
+	json "encoding/json/v2"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestPermanentDeletionRouteReturnsAcknowledgementAndAudit(t *testing.T) {
+	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
+	helper.DBManager.DB = newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+	db := helper.DBManager.DB
+	db.User.Create().SetID("actor").SetName("Admin").SetEmail("actor@example.test").SetRole(userSchema.RoleSuperAdmin).SaveX(ctx)
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SaveX(ctx)
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() })
+	RegisterAdminUserRoutes(helper, app.Group("/api/admin"), nil, harukiAPIHelper.UserDataBuilder{})
+	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/target/permanent", strings.NewReader(`{"confirmUserId":"target"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var body harukiAPIHelper.GenericResponse[struct {
+		UserID  string `json:"userId"`
+		Deleted bool   `json:"deleted"`
+	}]
+	if err := json.UnmarshalRead(resp.Body, &body); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 200 || body.UpdatedData == nil || body.UpdatedData.UserID != "target" || !body.UpdatedData.Deleted {
+		t.Fatalf("status=%d acknowledgement=%+v", resp.StatusCode, body.UpdatedData)
+	}
+	if db.User.Query().Where(userSchema.IDEQ("target")).ExistX(ctx) {
+		t.Fatal("acknowledged deletion retained account")
+	}
+	if !db.SystemLog.Query().Where(systemlog.ActionEQ(adminAuditActionUserDelete), systemlog.TargetIDEQ("target"), systemlog.ResultEQ("success")).ExistX(ctx) {
+		t.Fatal("missing permanent-deletion audit")
+	}
+}
+
+func TestDeletionRechecksTargetRoleAfterInitialLookup(t *testing.T) {
+	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
+	helper.DBManager.DB = newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+	db := helper.DBManager.DB
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetRole(userSchema.RoleSuperAdmin).SaveX(ctx)
+	if _, err := permanentlyDeleteUser(ctx, helper, nil, "actor", roleAdmin, "target"); err == nil {
+		t.Fatal("ordinary admin deleted a target promoted to super-admin")
+	}
+	if db.User.GetX(ctx, "target").Banned {
+		t.Fatal("guarded deletion changed protected user")
+	}
+}
 
 func TestPermanentlyDeleteUserCleansBindingsAndIdentity(t *testing.T) {
 	for _, identityStatus := range []int{http.StatusNoContent, http.StatusNotFound} {
