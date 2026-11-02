@@ -3,7 +3,6 @@ package adminusers
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"strings"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -11,17 +10,6 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
-
-func buildSoftDeleteBanReason(reason *string) string {
-	if reason == nil {
-		return softDeleteBanReasonPrefix
-	}
-	trimmed := strings.TrimSpace(*reason)
-	if trimmed == "" {
-		return softDeleteBanReasonPrefix
-	}
-	return softDeleteBanReasonPrefix + " " + trimmed
-}
 
 func generateTemporaryPassword() (string, error) {
 	b := make([]byte, temporaryPasswordBytes)

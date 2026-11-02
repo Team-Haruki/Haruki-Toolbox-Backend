@@ -208,6 +208,16 @@ func (s *SessionHandler) createKratosProvisionedUser(ctx context.Context, identi
 	if identityID == "" || email == "" {
 		return "", fmt.Errorf("%w: missing identity data", errKratosIdentityUnmapped)
 	}
+	// A proxy request authenticated before permanent deletion can arrive late.
+	// Revalidate unknown identities before provisioning so it cannot recreate
+	// the deleted Toolbox account from stale trusted headers.
+	identity, err := s.fetchKratosIdentityByID(ctx, identityID)
+	if err != nil {
+		return "", err
+	}
+	if identity.ID != identityID || platformIdentity.NormalizeEmail(extractKratosIdentityEmail(*identity)) != email {
+		return "", fmt.Errorf("%w: identity no longer matches email", errKratosIdentityUnmapped)
+	}
 
 	for range kratosProvisionUserIDAttempts {
 		uid, err := generateProvisionedUserID(time.Now().UTC())

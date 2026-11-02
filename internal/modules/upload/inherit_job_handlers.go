@@ -16,6 +16,8 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 
 	"github.com/gofiber/fiber/v3"
@@ -185,6 +187,14 @@ func (s *inheritService) handleCreateJob(c fiber.Ctx) error {
 		}
 		return respondProblem(c, p)
 	}
+	// Authentication may have happened just before an administrator deleted or
+	// banned the account. Recheck after taking the shared lifecycle lock.
+	exists, err := s.api.DBManager.DB.User.Query().Where(userSchema.IDEQ(meta.UserID), userSchema.BannedEQ(false)).Exist(ctx)
+	if err != nil || !exists {
+		s.registry.remove(job.ID)
+		s.releaseActive(meta.UserID, job.ID)
+		return respondProblem(c, errStoreUnavailable)
+	}
 	if err := s.jobs.save(ctx, job); err != nil {
 		s.registry.remove(job.ID)
 		s.releaseActive(meta.UserID, job.ID)
@@ -271,6 +281,9 @@ return 0
 // known only from the store counts as running while it is unfinished and
 // belongs to this process; one from a stopped process is stale.
 func (s *inheritService) activeHolder(ctx context.Context, holder string) (running bool, owner string) {
+	if strings.HasPrefix(holder, harukiRedis.AccountDeletionLockPrefix) {
+		return true, ""
+	}
 	if holder == "" {
 		return false, ""
 	}

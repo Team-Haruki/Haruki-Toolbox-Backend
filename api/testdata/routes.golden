@@ -9,6 +9,7 @@ DELETE /api/admin/users/:target_user_id
 DELETE /api/admin/users/:target_user_id/authorized-social-platforms/:platform_id
 DELETE /api/admin/users/:target_user_id/game-account-bindings/:server/:game_user_id
 DELETE /api/admin/users/:target_user_id/ios-upload-code
+DELETE /api/admin/users/:target_user_id/permanent
 DELETE /api/admin/users/:target_user_id/social-platform
 DELETE /api/admin/webhooks/:webhook_id
 DELETE /api/inherit/vault/entries/:entry_id
