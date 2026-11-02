@@ -23,10 +23,10 @@ const (
 )
 
 // gameAccountCapabilityRecommend is derived, not stored: it reports that
-// recommend-data is callable for this account at all. Its dependency table is
-// deckRecommendRequiredDataTypes, so the read path and this read model cannot
-// drift. A client that wants the mysekai deck mode checks the "mysekai"
-// capability alongside it, exactly as the read path does.
+// recommend-data is callable for this account, in either mode. Its dependency
+// table is deckRecommendRequiredDataTypes, so the read path and this read model
+// cannot drift. Both modes need only suite, so no "mysekai" capability is
+// needed for the mysekai deck mode.
 const gameAccountCapabilityRecommend = "recommend"
 
 // accessibleGameAccountCapability describes one readable data type. An absent
@@ -212,16 +212,19 @@ func ownedGameAccountCapabilities(verified bool) map[string]accessibleGameAccoun
 
 // applyDerivedGameAccountCapabilities adds capabilities that are not stored as
 // grants but follow from the ones that are. recommend-data is derived from the
-// data types its base mode reads, taken from the same table the handler uses, so
-// the two cannot drift; it expires with the earliest of them. A client wanting
-// the mysekai deck mode additionally checks the mysekai capability — precisely
-// the extra data type that mode requires.
+// data types every one of its modes reads, taken from the same table the
+// handler uses, so the two cannot drift; it expires with the earliest of them.
+// Today both modes read only suite, so suite access alone offers both.
 func applyDerivedGameAccountCapabilities(capabilities map[string]accessibleGameAccountCapability) {
 	if capabilities == nil {
 		return
 	}
 	var earliest *time.Time
-	for _, required := range deckRecommendRequiredDataTypes(deckRecommendDataModeSuite) {
+	requiredTypes := append(
+		deckRecommendRequiredDataTypes(deckRecommendDataModeSuite),
+		deckRecommendRequiredDataTypes(deckRecommendDataModeMysekai)...,
+	)
+	for _, required := range requiredTypes {
 		capability, ok := capabilities[string(required)]
 		if !ok {
 			return

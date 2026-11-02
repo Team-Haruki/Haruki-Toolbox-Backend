@@ -31,14 +31,7 @@ func TestDeckRecommendRequiresGameDataSource(t *testing.T) {
 		"nil game data":  {DBManager: &database.HarukiToolboxDBManager{}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			for _, includeMysekai := range []bool{false, true} {
-				got, err := LoadDeckRecommendUserData(t.Context(), helper, 1, harukiUtils.SupportedDataUploadServerJP, includeMysekai)
-				if got != nil {
-					t.Fatalf("unexpected data %v", got)
-				}
-				requireFiberStatus(t, err, fiber.StatusInternalServerError, msg)
-			}
-			got, err := LoadDeckRecommendMysekaiData(t.Context(), helper, 1, harukiUtils.SupportedDataUploadServerJP)
+			got, err := LoadDeckRecommendUserData(t.Context(), helper, 1, harukiUtils.SupportedDataUploadServerJP)
 			if got != nil {
 				t.Fatalf("unexpected data %v", got)
 			}
@@ -47,20 +40,14 @@ func TestDeckRecommendRequiresGameDataSource(t *testing.T) {
 	}
 }
 
-// An unknown region can never have a row; both stores must report it as
+// An unknown region can never have a row; it must be reported as
 // player-not-found without touching the database.
 func TestDeckRecommendUnknownRegionIsNotFound(t *testing.T) {
 	helper := &api.HarukiToolboxRouterHelpers{
 		DBManager: &database.HarukiToolboxDBManager{GameData: gamedata.NewService(&gamedata.Pool{})},
 	}
 	const server = harukiUtils.SupportedDataUploadServer("xx")
-	got, err := LoadDeckRecommendUserData(t.Context(), helper, 1, server, true)
-	if got != nil {
-		t.Fatalf("unexpected data %v", got)
-	}
-	requireFiberStatus(t, err, fiber.StatusNotFound, "Player data not found.")
-
-	got, err = LoadDeckRecommendMysekaiData(t.Context(), helper, 1, server)
+	got, err := LoadDeckRecommendUserData(t.Context(), helper, 1, server)
 	if got != nil {
 		t.Fatalf("unexpected data %v", got)
 	}
