@@ -116,8 +116,9 @@ type proxyNotifyResult struct {
 	// DoneChanges are the keys of each $done value: anything there would
 	// change the response.
 	DoneChanges [][]string `json:"doneChanges"`
-	// HeadersChanged: the script modified $response.headers in place.
-	HeadersChanged bool `json:"headersChanged"`
+	// ResponseChanged: the script modified $response (status or headers)
+	// in place.
+	ResponseChanged bool `json:"responseChanged"`
 }
 
 // Runs the proxy-mode notification script under Node with one app's runtime
@@ -131,10 +132,9 @@ func runProxyNotifyScript(t *testing.T, node string, app proxyNotifyRuntime, r p
 	}
 	harness := `
 const vm = require("vm"), fs = require("fs");
-const run = { notifications: [], done: 0, doneChanges: [], headersChanged: false };
+const run = { notifications: [], done: 0, doneChanges: [], responseChanged: false };
 const throwNotify = ` + strconv.FormatBool(r.throwNotify) + `;
 const headers = ` + r.headers + `;
-const headersBefore = JSON.stringify(headers);
 const sandbox = {
   console: { log() {} },
   $request: { url: ` + strconv.Quote(r.url) + `, method: "GET", headers: {} },
@@ -143,8 +143,9 @@ const sandbox = {
 };
 ` + app.notifyAPI + `
 ` + app.argument(r.setting) + `
+const responseBefore = JSON.stringify(sandbox.$response);
 vm.runInNewContext(fs.readFileSync(process.argv[2], "utf8"), sandbox);
-run.headersChanged = JSON.stringify(headers) !== headersBefore;
+run.responseChanged = JSON.stringify(sandbox.$response) !== responseBefore;
 process.stdout.write(JSON.stringify(run));
 `
 	harnessPath := filepath.Join(dir, "harness.js")
@@ -163,7 +164,8 @@ process.stdout.write(JSON.stringify(run));
 }
 
 // For every app's runtime: one notification for a reported upload (or none),
-// following the switch, and the response passed through untouched exactly
+// following the switch, and the response (status, headers, $done value)
+// passed through untouched exactly
 // once, also when there is nothing to report or posting the notification
 // throws.
 func TestProxyNotifyScriptReportsTheUploadResultHeader(t *testing.T) {
@@ -221,8 +223,8 @@ func TestProxyNotifyScriptReportsTheUploadResultHeader(t *testing.T) {
 						t.Errorf("$done changes the response: %q", changes)
 					}
 				}
-				if run.HeadersChanged {
-					t.Error("the script modified the response headers")
+				if run.ResponseChanged {
+					t.Error("the script modified the response status or headers")
 				}
 				if tc.want.subtitle == "" {
 					if len(run.Notifications) != 0 {
