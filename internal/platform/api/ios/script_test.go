@@ -105,15 +105,22 @@ process.stdout.write(posts.join(","));
 }
 
 // ★ A changed script must carry a new version, or no installed module loads it:
-// the modules name the script by a URL ending in &v=<version>, and proxy apps
-// cache scripts by URL (see ScriptVersion). The hash pins the template to its
-// version. When this fails, bump ScriptVersion, then set both values here.
-func TestUploaderScriptVersionChangesWithTheScript(t *testing.T) {
-	const version, templateSHA256 = "1.1.0", "a9fc3888f097a9d8efd2b04294a49e74bd4e0ebf30a92992320620f3a5dd712f"
-	sum := sha256.Sum256([]byte(HarukiIOSJavaScriptTemplate))
-	if got := hex.EncodeToString(sum[:]); got != templateSHA256 || ScriptVersion != version {
-		t.Fatalf("uploader script %s at version %s, pinned %s at %s: bump ScriptVersion for a changed script, then update this test",
-			got, ScriptVersion, templateSHA256, version)
+// the modules name a script by a URL ending in v=<version>, and proxy apps
+// cache scripts by URL (see ScriptVersion). The hashes pin each template, with
+// the parts it shares, to its version. When this fails, bump the version, then
+// set both values here.
+func TestScriptVersionsChangeWithTheScripts(t *testing.T) {
+	for _, tc := range []struct {
+		name, version, pinnedVersion, pinnedSHA256, template string
+	}{
+		{"uploader", ScriptVersion, "1.1.0", "1a63ec0459b2a223b753f1fb6aba09f443fc2236f102f5fc60d5b3543076aa1b", HarukiIOSJavaScriptTemplate},
+		{"proxy notify", ProxyNotifyScriptVersion, "1.0.0", "0332cc5eee22b5be7372b46a19c2a4551a1be44493c44de49b6e1a273e13e0b8", proxyNotifyScriptTemplate},
+	} {
+		sum := sha256.Sum256([]byte(tc.template + notifyArgumentJS + uploadErrorTextJS))
+		if got := hex.EncodeToString(sum[:]); got != tc.pinnedSHA256 || tc.version != tc.pinnedVersion {
+			t.Errorf("%s script %s at version %s, pinned %s at %s: bump its version for a changed script, then update this test",
+				tc.name, got, tc.version, tc.pinnedSHA256, tc.pinnedVersion)
+		}
 	}
 }
 
@@ -225,7 +232,12 @@ func TestUploaderScriptPostsOneModuleNotificationPerUpload(t *testing.T) {
 		wantSubtitle string // "" means no notification
 		wantMessage  string
 	}{
-		{"success", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 2*mib + 1, respond: ok}, "0/3,1/3,2/3", uploaded, "工具箱已收到数据"},
+		{"success", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 2*mib + 1, respond: ok}, "0/3,1/3,2/3", uploaded, "工具箱已保存这份数据"},
+		{"still processing", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 2*mib + 1, respond: `(i) => i === 2 ? { status: 202 } : { status: 200 }`}, "0/3,1/3,2/3", uploaded, "还在处理中"},
+		{"202 before the last chunk is a failure", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 2*mib + 1, respond: `() => ({ status: 202 })`}, "0/3", "日服 Suite 数据上传失败", "HTTP 202"},
+		{"invalid data", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 400, body: '{"status":400,"message":"invalid_upload_payload"}' })`}, "0/1", "日服 Suite 数据上传失败", "无法解析这份数据"},
+		{"refused after processing", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 403, body: '{"status":403,"message":"upload_not_allowed"}' })`}, "0/1", "日服 Suite 数据上传失败", "没有在 Haruki 工具箱绑定并验证"},
+		{"save failed", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 500, body: '{"status":500,"message":"internal_error"}' })`}, "0/1", "日服 Suite 数据上传失败", "保存数据时出错"},
 		{"second tw host, mysekai", uploaderRun{notifyByDefault: true, url: "https://tw-b.example.com/api/user/1/mysekai?isForceAllReloadOnlyMysekai=True", bodyBytes: 10, respond: ok}, "0/1", "台服 MySekai 数据已上传", ""},
 		{"birthday party", uploaderRun{notifyByDefault: true, url: "https://jp.example.com/api/user/1/mysekai/birthday-party/2/delivery", bodyBytes: 10, respond: ok}, "0/1", "日服 MySekai 生日派对 数据已上传", ""},
 		{"no argument, default off", uploaderRun{url: suiteURL, bodyBytes: 10, respond: ok}, "0/1", "", ""},

@@ -93,8 +93,64 @@ func TestLoonPluginDeclaresTheNotifyArgument(t *testing.T) {
 			}
 		}
 	}
-	if proxy := mustGenerateModule(t, notifyModuleRequest(ProxyAppLoon, UploadModeProxy, false)); strings.Contains(proxy, "[Argument]") {
-		t.Fatalf("a proxy-mode plugin declares arguments:\n%s", proxy)
+}
+
+// In proxy mode the Loon plugin runs no upload script, only the body-less
+// notification script on the rewritten upload URL, switched by the same
+// argument. Loon documents that response scripts match the rewritten URL and
+// that a script without requires-body runs at the response header stage
+// (https://nsloon.app/docs/Script/script_v2).
+func TestLoonProxyPluginNotifiesFromTheRewrittenURL(t *testing.T) {
+	useStashTestHosts(t)
+	for _, tc := range []struct {
+		notifyOff bool
+		want      string
+	}{{false, "true"}, {true, "false"}} {
+		req := notifyModuleRequest(ProxyAppLoon, UploadModeProxy, tc.notifyOff)
+		plugin := mustGenerateModule(t, req)
+		if !strings.Contains(plugin, "[Argument]\nnotify = switch,"+tc.want+",") {
+			t.Fatalf("NotifyOff=%t: plugin lacks the switch:\n%s", tc.notifyOff, plugin)
+		}
+		lines := regexp.MustCompile(`(?m)^http-response .*$`).FindAllString(plugin, -1)
+		if len(lines) != 1 {
+			t.Fatalf("script lines = %q, want the one notification script", lines)
+		}
+		line := lines[0]
+		wantPath := "script-path=https://toolbox.example" + ProxyNotifyScriptPath + "?v=" + ProxyNotifyScriptVersion
+		if tc.notifyOff {
+			wantPath += "&notify=false"
+		}
+		for _, want := range []string{wantPath + ",", "requires-body=false", "argument={notify}"} {
+			if !strings.Contains(line, want) {
+				t.Errorf("script line lacks %q: %s", want, line)
+			}
+		}
+		if strings.Contains(line, "binary-body-mode") {
+			t.Errorf("the notification script asks for the body: %s", line)
+		}
+		// The pattern matches every rewritten upload URL and nothing else.
+		pattern := regexp.MustCompile(strings.Fields(strings.TrimPrefix(line, "http-response "))[0])
+		rs := GenerateRuleSet(req, "https://toolbox.example", "direct")
+		if len(rs.RewriteRules) == 0 {
+			t.Fatal("no rewrite rules")
+		}
+		for _, rule := range rs.RewriteRules {
+			if !pattern.MatchString(rule.Target) {
+				t.Errorf("pattern %s misses the rewrite target %s", pattern, rule.Target)
+			}
+		}
+		for _, other := range []string{"https://jp.example.com/api/suite/user/1", "https://toolbox.example/ios/script/code/haruki-toolbox.js", "https://toolboxXexample/ios/proxy/jp/suite/user/1"} {
+			if pattern.MatchString(other) {
+				t.Errorf("pattern %s also matches %s", pattern, other)
+			}
+		}
+	}
+	// The other apps keep their proxy-mode modules: their docs do not say
+	// which URL a response script sees after a transparent rewrite.
+	for _, app := range []ProxyApp{ProxyAppSurge, ProxyAppQuantumultX, ProxyAppStash} {
+		if module := mustGenerateModule(t, notifyModuleRequest(app, UploadModeProxy, false)); strings.Contains(module, "proxy-notify") || strings.Contains(module, "notify") {
+			t.Errorf("%s proxy-mode module mentions notifications:\n%s", app, module)
+		}
 	}
 }
 

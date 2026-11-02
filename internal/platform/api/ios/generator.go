@@ -79,8 +79,21 @@ func GenerateScript(uploadCode string, chunkSizeMB int, uploadURL string, notify
 		"{{SCRIPT_VERSION}}", ScriptVersion,
 		"{{NOTIFY_DEFAULT}}", strconv.FormatBool(notifyByDefault),
 		"{{REGION_LABELS}}", string(regionLabels),
+		"{{NOTIFY_ARGUMENT_JS}}", notifyArgumentJS,
+		"{{UPLOAD_ERROR_TEXT_JS}}", uploadErrorTextJS,
 		"\\u0060", "`",
 	).Replace(HarukiIOSJavaScriptTemplate)
+}
+
+// GenerateProxyNotifyScript renders the proxy-mode notification script.
+// notifyByDefault applies when the app passes no notify argument.
+func GenerateProxyNotifyScript(notifyByDefault bool) string {
+	return strings.NewReplacer(
+		"{{SCRIPT_VERSION}}", ProxyNotifyScriptVersion,
+		"{{NOTIFY_DEFAULT}}", strconv.FormatBool(notifyByDefault),
+		"{{NOTIFY_ARGUMENT_JS}}", notifyArgumentJS,
+		"{{UPLOAD_ERROR_TEXT_JS}}", uploadErrorTextJS,
+	).Replace(proxyNotifyScriptTemplate)
 }
 
 // scriptRegionLabels maps each configured game API host to the region name the
@@ -149,6 +162,17 @@ func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ reject\n")
 	sb.WriteString("\n")
+	if rs.ProxyNotify != nil {
+		// Proxy mode: no upload script, only the body-less notification
+		// script on the rewritten URL, switched by the same argument.
+		sb.WriteString("[Argument]\n")
+		sb.WriteString(fmt.Sprintf("%s = switch,%s,tag=%s,desc=%s\n", notifyArgumentName, notifyArgumentDefault(req), notifyArgumentTitle, notifyArgumentDesc))
+		sb.WriteString("\n")
+		sb.WriteString("[Script]\n")
+		sb.WriteString(fmt.Sprintf("http-response %s script-path=%s, requires-body=false, timeout=10, tag=haruki-upload-notify, argument={%s}\n",
+			rs.ProxyNotify.Pattern, rs.ProxyNotify.Target, notifyArgumentName))
+		sb.WriteString("\n")
+	}
 	if len(rs.ScriptRules) > 0 {
 		// A switch the user flips in the plugin's settings; the script gets
 		// it as $argument.notify.

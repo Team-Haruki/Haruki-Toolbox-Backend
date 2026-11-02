@@ -274,23 +274,7 @@ const url = $.isRequest ? $request.url : '';
 const notifyByDefault = {{NOTIFY_DEFAULT}};
 const regionLabels = {{REGION_LABELS}};
 
-function notifyEnabled() {
-    if (typeof $argument === "undefined" || $argument === null) return notifyByDefault;
-    let value;
-    if (typeof $argument === "object") {
-        value = $argument.notify;
-    } else {
-        const text = String($argument).trim();
-        const match = text.match(/(?:^|[&,;\s])notify\s*=\s*([^&,;\s]*)/i);
-        value = match ? match[1] : (/^(true|false|on|off|1|0)$/i.test(text) ? text : undefined);
-    }
-    if (value === undefined || value === null) return notifyByDefault;
-    value = String(value).trim();
-    // An app that does not fill in arguments leaves {{{notify}}}, {notify} or
-    // ${args.notify} as it is.
-    if (value === "" || /[{}$]/.test(value)) return notifyByDefault;
-    return !/^(false|0|off|no|关闭|关)$/i.test(value);
-}
+{{NOTIFY_ARGUMENT_JS}}
 
 function log(message) {
     console.log(\u0060[${scriptName}-v${version}] [${upload_id}] ${message}\u0060);
@@ -314,6 +298,8 @@ function notifyResult(subtitle, message) {
 }
 
 // The texts matched here are the upload endpoint's own error messages.
+{{UPLOAD_ERROR_TEXT_JS}}
+
 function failureMessage(status, data) {
     let reason = "";
     try {
@@ -321,11 +307,9 @@ function failureMessage(status, data) {
     } catch (e) {
         reason = "";
     }
-    if (reason === "invalid upload code") {
-        return "上传码已失效：请到 Haruki 工具箱的 iOS 模块页面，用新的上传码重新安装模块。";
-    }
-    if (reason === "upload not allowed") {
-        return "这个游戏账号还没有在 Haruki 工具箱绑定并验证，或你没有它的上传授权。";
+    const known = uploadErrorText(reason);
+    if (known) {
+        return known;
     }
     if (status === 413) {
         return "这份数据太大，工具箱没有接收。";
@@ -337,13 +321,15 @@ function failureMessage(status, data) {
 }
 
 // A notification that throws must not keep the game waiting for its response.
-function finish(error) {
+function finish(error, stillProcessing) {
     try {
         const subject = (regionLabel() ? regionLabel() + " " : "") + dataLabel() + " 数据";
         if (error !== null) {
             notifyResult(subject + "上传失败", error);
+        } else if (stillProcessing) {
+            notifyResult(subject + "已上传", "工具箱已收到数据，还在处理中，稍后首页「我的账号」会更新上传时间。");
         } else {
-            notifyResult(subject + "已上传", "工具箱已收到数据并开始处理，处理完成后首页「我的账号」会更新上传时间。");
+            notifyResult(subject + "已上传", "工具箱已保存这份数据，首页「我的账号」会显示这次的上传时间。");
         }
     } catch (e) {
         log("notification failed: " + e);
@@ -378,15 +364,16 @@ function sendChunk(index, totalChunks) {
         if (error) {
             log(\u0060chunk ${index + 1} upload failed: ${error}\u0060);
             finish("连不上 Haruki 工具箱（" + error + "）。游戏本身不受影响，稍后重进游戏即可重试。");
-        } else if (resp.status !== 200) {
+        } else if (resp.status !== 200 && !(resp.status === 202 && index + 1 === totalChunks)) {
             log(\u0060chunk ${index + 1} upload failed: HTTP ${resp.status}\u0060);
             finish(failureMessage(resp.status, data));
         } else if (index + 1 < totalChunks) {
             log(\u0060chunk ${index + 1} upload success\u0060);
             sendChunk(index + 1, totalChunks);
         } else {
-            log(\u0060upload completed: ${totalChunks} chunks\u0060);
-            finish(null);
+            log(\u0060upload completed: ${totalChunks} chunks, HTTP ${resp.status}\u0060);
+            // 202: the server took the upload but had not finished it in time.
+            finish(null, resp.status === 202);
         }
     });
 }

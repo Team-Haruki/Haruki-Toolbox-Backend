@@ -18,6 +18,11 @@ func TestIOSCodeWriteGrantAndQueuedRevocation(t *testing.T) {
 	previous := config.Cfg.SekaiClient
 	t.Cleanup(func() { config.Cfg.SekaiClient = previous })
 	config.Cfg.SekaiClient = config.SekaiClientConfig{JPServerAPIHost: "jp.example.test", ENServerAPIHost: "en.example.test", TWServerAPIHost: "tw.example.test", KRServerAPIHost: "kr.example.test", CNServerAPIHost: "cn.example.test"}
+	// The queued runner holds the upload until the test runs it, so the final
+	// chunk stops waiting and answers 202 (received, still processing).
+	previousWait := scriptUploadAckWait
+	scriptUploadAckWait = 20 * time.Millisecond
+	t.Cleanup(func() { scriptUploadAckWait = previousWait })
 	for _, scenario := range []string{"read", "write", "revoked-code", "revoked-grant"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, scenario))
@@ -64,7 +69,7 @@ func TestIOSCodeWriteGrantAndQueuedRevocation(t *testing.T) {
 				}
 				return
 			}
-			if resp.StatusCode != 200 {
+			if resp.StatusCode != 202 {
 				t.Fatal(resp.StatusCode)
 			}
 			if scenario == "revoked-code" {
