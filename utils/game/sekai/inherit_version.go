@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 // ErrGameVersionOutdated marks a game answer of 426 Upgrade Required that a
@@ -106,7 +108,8 @@ func (s *InheritSession) retryOnUpgrade(ctx context.Context, allowRelogin bool, 
 func (s *InheritSession) refreshVersions(ctx context.Context, upgradeBody []byte, allowRelogin bool) bool {
 	s.report(SubStepVersionRefresh, ProgressRunning, "")
 	beforeData, beforeAsset := s.versionHeaders()
-	changed := func() bool {
+	beforeApp, beforeHash := s.headers[headerAppVersion], s.headers[headerAppHash]
+	dataChanged := func() bool {
 		data, asset := s.versionHeaders()
 		return data != beforeData || asset != beforeAsset
 	}
@@ -117,11 +120,11 @@ func (s *InheritSession) refreshVersions(ctx context.Context, upgradeBody []byte
 	}
 
 	fileErr := s.fetchVersion(ctx, true)
-	if fileErr == nil && changed() {
+	if fileErr == nil && dataChanged() {
 		return done(VersionSourceFile)
 	}
 	if allowRelogin && s.credential != "" {
-		if _, err := s.authenticate(ctx); err == nil && changed() {
+		if _, err := s.authenticate(ctx); err == nil && dataChanged() {
 			return done(VersionSourceLogin)
 		}
 	}
@@ -130,10 +133,61 @@ func (s *InheritSession) refreshVersions(ctx context.Context, upgradeBody []byte
 			return done(VersionSourceResponse)
 		}
 	}
+	// A new app version (or hash) from the file is a refresh too: it is what a
+	// 426 on login usually means. It is checked last so it never skips the
+	// login or answer steps that could also bring newer data versions.
+	if fileErr == nil && (s.headers[headerAppVersion] != beforeApp || s.headers[headerAppHash] != beforeHash) {
+		return done(VersionSourceFile)
+	}
 	note := versionRefreshNone
 	if fileErr != nil {
 		note = versionRefreshError
 	}
 	s.report(SubStepVersionRefresh, ProgressFailed, note)
 	return false
+}
+
+// compareVersions compares dotted numeric versions ("7.1.0.45"). ok is false
+// when either is not of that form.
+func compareVersions(a, b string) (cmp int, ok bool) {
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < max(len(pa), len(pb)); i++ {
+		var na, nb int
+		var err error
+		if i < len(pa) {
+			if na, err = strconv.Atoi(pa[i]); err != nil || na < 0 {
+				return 0, false
+			}
+		}
+		if i < len(pb) {
+			if nb, err = strconv.Atoi(pb[i]); err != nil || nb < 0 {
+				return 0, false
+			}
+		}
+		if na != nb {
+			if na < nb {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return 0, true
+}
+
+// fileVersionApplies reports whether a data or asset version read from the
+// version file replaces the current header: always on the first read; later
+// only when the file moved, and never to a version older than the current one
+// (which a login or a 426 answer may have set). Versions that do not compare
+// numerically are taken when the file moved.
+func (s *InheritSession) fileVersionApplies(fileValue, lastFileValue, current string) bool {
+	if !s.versionRead {
+		return true
+	}
+	if fileValue == lastFileValue {
+		return false
+	}
+	if cmp, ok := compareVersions(fileValue, current); ok && cmp < 0 {
+		return false
+	}
+	return true
 }

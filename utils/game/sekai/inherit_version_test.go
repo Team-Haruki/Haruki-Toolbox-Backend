@@ -21,6 +21,9 @@ type versionedGame struct {
 	// game is what the game expects; file is what the version file says.
 	gameData, gameAsset string
 	fileData, fileAsset string
+	// gameApp, when set, is the app version login demands (426 otherwise);
+	// fileApp is the app version in the file.
+	gameApp, fileApp string
 	// bumpAfterLogin moves the game to the given versions right after the
 	// first login: a data update in the middle of a job.
 	bumpAfterLogin     [2]string
@@ -35,7 +38,7 @@ type versionedGame struct {
 func newVersionedGame(t *testing.T) (*versionedGame, *httptest.Server) {
 	t.Helper()
 	fg := &fakeGame{t: t, override: map[string]http.HandlerFunc{}, bodies: map[string]map[string]any{}}
-	g := &versionedGame{fakeGame: fg, gameData: "3", gameAsset: "4", fileData: "3", fileAsset: "4", dataVersionSeen: map[string][]string{}}
+	g := &versionedGame{fakeGame: fg, gameData: "3", gameAsset: "4", fileData: "3", fileAsset: "4", fileApp: "1", dataVersionSeen: map[string][]string{}}
 	srv := httptest.NewServer(http.HandlerFunc(g.serve))
 	t.Cleanup(srv.Close)
 	return g, srv
@@ -48,7 +51,7 @@ func (g *versionedGame) serve(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Cache-Control") == "no-cache" {
 			g.versionNoCacheHits++
 		}
-		body := `{"appVersion":"1","appHash":"2","dataVersion":"` + g.fileData + `","assetVersion":"` + g.fileAsset + `"}`
+		body := `{"appVersion":"` + g.fileApp + `","appHash":"2","dataVersion":"` + g.fileData + `","assetVersion":"` + g.fileAsset + `"}`
 		g.mu.Unlock()
 		g.add("GET /version")
 		_, _ = w.Write([]byte(body))
@@ -73,6 +76,12 @@ func (g *versionedGame) serve(w http.ResponseWriter, r *http.Request) {
 		if body != nil {
 			g.write(w, body)
 		}
+		return
+	}
+	if r.URL.Path == "/api/user/"+uid+"/auth" && g.gameApp != "" && r.Header.Get("X-App-Version") != g.gameApp {
+		g.mu.Unlock()
+		g.add("PUT /api/user/" + uid + "/auth -> 426")
+		w.WriteHeader(http.StatusUpgradeRequired)
 		return
 	}
 	if r.URL.Path == "/api/user/"+uid+"/auth" {
@@ -387,6 +396,86 @@ func assertAppVersionFromFileOnly(t *testing.T, g *versionedGame) {
 	for _, v := range g.appVersionSeen {
 		if v != "1" {
 			t.Fatalf("a game call sent app version %q; it must only come from the version file", v)
+		}
+	}
+}
+
+// A 426 on login means the app version moved. The re-read file has the new
+// app version (its data and asset unchanged): that counts as a refresh, and
+// login is retried with it.
+func TestLogin426RetriesWithTheFilesNewAppVersion(t *testing.T) {
+	g, srv := newVersionedGame(t)
+	recordPauses(t, g.fakeGame)
+	s := newTestSession(t, ServerEN, srv.URL, nil)
+	ctx := context.Background()
+	if err := s.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Preview(ctx, testCode); err != nil {
+		t.Fatal(err)
+	}
+	credential, err := s.Execute(ctx, testCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.mu.Lock()
+	g.gameApp, g.fileApp = "1.1", "1.1"
+	g.mu.Unlock()
+	if err := s.Login(ctx, s.UserID(), credential); err != nil {
+		t.Fatalf("Login: %v (calls %q)", err, g.snapshot())
+	}
+	uid := strconv.FormatInt(testUserID, 10)
+	if g.count("PUT /api/user/"+uid+"/auth -> 426") != 1 || g.count("PUT /api/user/"+uid+"/auth") != 1 {
+		t.Fatalf("login calls = %q", g.snapshot())
+	}
+	if s.headers[headerAppVersion] != "1.1" {
+		t.Fatalf("app version = %q, want the file's", s.headers[headerAppVersion])
+	}
+}
+
+// A file that moved but is still behind what a login reported does not
+// replace it; a file that moved past it does.
+func TestMovedButOlderFileDoesNotReplaceAdoptedVersions(t *testing.T) {
+	g, srv := newVersionedGame(t)
+	s := newTestSession(t, ServerEN, srv.URL, nil)
+	ctx := context.Background()
+	g.setFile("7.1.0.40", "7.1.0.40")
+	if err := s.fetchVersion(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	s.adoptDataVersions(map[string]any{"dataVersion": "7.1.0.45", "assetVersion": "7.1.0.45"})
+	g.setFile("7.1.0.42", "7.1.0.42")
+	if err := s.fetchVersion(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if data, asset := s.versionHeaders(); data != "7.1.0.45" || asset != "7.1.0.45" {
+		t.Fatalf("an older file replaced adopted versions: data=%s asset=%s", data, asset)
+	}
+	g.setFile("7.1.0.46", "7.1.0.46")
+	if err := s.fetchVersion(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if data, asset := s.versionHeaders(); data != "7.1.0.46" || asset != "7.1.0.46" {
+		t.Fatalf("a newer file did not apply: data=%s asset=%s", data, asset)
+	}
+}
+
+func TestCompareVersions(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		cmp  int
+		ok   bool
+	}{
+		{"7.1.0.45", "7.1.0.45", 0, true},
+		{"7.1.0.45", "7.1.0.9", 1, true},
+		{"7.1.0", "7.1.0.1", -1, true},
+		{"7.2", "7.1.9.9", 1, true},
+		{"7.1.0-x", "7.1.0", 0, false},
+		{"", "1", 0, false},
+	} {
+		cmp, ok := compareVersions(tc.a, tc.b)
+		if ok != tc.ok || (ok && cmp != tc.cmp) {
+			t.Errorf("compareVersions(%q, %q) = %d, %v; want %d, %v", tc.a, tc.b, cmp, ok, tc.cmp, tc.ok)
 		}
 	}
 }

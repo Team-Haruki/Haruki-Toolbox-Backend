@@ -72,8 +72,9 @@ var noCacheHeaders = map[string]string{"Cache-Control": "no-cache", "Pragma": "n
 
 // fetchVersion reads the version file and sets the version headers. The app
 // version and hash always come from it. Its data and asset versions are set
-// on the first read, and afterwards only when the file moved, so a refresh
-// with a stale file keeps versions a login reported (adoptDataVersions).
+// on the first read, and afterwards only when the file moved and is not older
+// than what the session already sends (fileVersionApplies), so a refresh with
+// a stale file keeps versions a login reported (adoptDataVersions).
 func (s *InheritSession) fetchVersion(ctx context.Context, fresh bool) error {
 	var requestHeaders map[string]string
 	if fresh {
@@ -102,10 +103,10 @@ func (s *InheritSession) fetchVersion(ctx context.Context, fresh bool) error {
 		}
 		s.headers[headerAppVersion] = v.AppVersion
 		s.headers[headerAppHash] = v.AppHash
-		if !s.versionRead || v.DataVersion != s.fileData {
+		if s.fileVersionApplies(v.DataVersion, s.fileData, s.headers[headerDataVersion]) {
 			s.headers[headerDataVersion] = v.DataVersion
 		}
-		if !s.versionRead || v.AssetVersion != s.fileAsset {
+		if s.fileVersionApplies(v.AssetVersion, s.fileAsset, s.headers[headerAssetVersion]) {
 			s.headers[headerAssetVersion] = v.AssetVersion
 		}
 		s.fileData, s.fileAsset, s.versionRead = v.DataVersion, v.AssetVersion, true

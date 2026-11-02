@@ -315,7 +315,7 @@ Unlock errors: `password_required`, `vault_pin_required`, `vault_pin_invalid_for
 | `cancelled` | Cancelled by the owner | yes |
 | `game_degraded`, `server_busy` | Refused before executing | yes |
 | `game_maintenance`, `game_unavailable`, `game_error` | Before `execute`: nothing used. During fetch: see below | |
-| `game_version_outdated` | The game answered `426`: it has newer data than Toolbox knows, and a refresh found nothing newer yet (Toolbox has not caught up with a game update). Not a problem with the code. Ask the owner to try again later | before `execute` (including a `426` on the executing call itself): yes; after: no, the new code is in the snapshot and the vault |
+| `game_version_outdated` | The game answered `426`: it has newer data than Toolbox knows, and a refresh found nothing newer yet (Toolbox has not caught up with a game update). Not a problem with the code. Ask the owner to try again later | before `execute` (including a `426` on the executing call itself): yes; after: no. The new code, if one was issued, is in the snapshot, and in the vault unless a `vault_store_failed` warning says otherwise |
 | `execute_uncertain` | The executing call failed in transit: the code may have been used. Tell the owner not to retry it elsewhere and to check the vault | unknown |
 | `login_failed` | The credential is in the vault but login failed. Offer re-issue from the vault | no |
 | `fetch_failed`, `mysekai_unavailable` | Data could not be fetched. The new code (if issued) is in the snapshot and the vault | no |
@@ -330,7 +330,7 @@ Unlock errors: `password_required`, `vault_pin_required`, `vault_pin_invalid_for
 | `issue_code_failed` | No new code was issued; the credential is in the vault | Ask the owner to re-issue from the vault now: it is their only way back into the account |
 | `vault_db_unavailable` | PostgreSQL was down; the sealed credential is parked in Redis and moved over later | Informational |
 | `vault_store_failed` | The credential (or the new code) could not be stored at all | Insist that the owner writes down `new_code` now |
-| `game_version_outdated` | Accompanies `login_failed` or `issue_code_failed` when the cause was a `426` that a refresh could not cure | Say the game was just updated; re-issuing from the vault later will work |
+| `game_version_outdated` | Accompanies `login_failed` or `issue_code_failed` when the cause was a `426` that a refresh could not cure | Say the game was just updated. Re-issuing from the vault later works only when the credential was stored (no `vault_store_failed` warning) |
 
 ## 8. Storage, retention and security
 
