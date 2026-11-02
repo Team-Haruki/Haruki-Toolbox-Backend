@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -79,6 +80,40 @@ func TestVerifyAfdianOrder(t *testing.T) {
 	}
 	if _, err := SyncAfdianSponsors(ctx, openSponsorDB(t), NewAfdianConfig(AfdianConfigOptions{}), now, SyncOptions{}); !errors.Is(err, ErrAfdianNotConfigured) {
 		t.Fatalf("unconfigured sync: %v", err)
+	}
+}
+
+func TestAfdianVerificationAndSyncIdentifyClient(t *testing.T) {
+	now := time.Now().UTC()
+	upstream := afdianStub(t, []map[string]any{orderJSON("supporter", "paid-order", "plan", 0, 1, now)}, http.StatusOK, 200)
+	var orderRequests, sponsorRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Afdian rejects the generic Go user agent before validating the request.
+		if !strings.HasPrefix(r.UserAgent(), "Haruki-Toolbox-Backend/") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		switch r.URL.Path {
+		case afdianQueryOrderPath:
+			orderRequests.Add(1)
+		case afdianQuerySponsorPath:
+			sponsorRequests.Add(1)
+		}
+		upstream.Config.Handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(server.Close)
+	cfg := NewAfdianConfig(AfdianConfigOptions{UserID: "dev", APIToken: "token", APIBaseURL: server.URL})
+
+	order, found, err := VerifyAfdianOrder(t.Context(), cfg, "paid-order", now)
+	if err != nil || !found || order.AfdianUserID != "supporter" {
+		t.Fatalf("order verification: found=%v err=%v", found, err)
+	}
+	result, err := SyncAfdianSponsors(t.Context(), openSponsorDB(t), cfg, now, SyncOptions{Full: true})
+	if err != nil || result.Orders != 1 {
+		t.Fatalf("sponsor sync: result=%+v err=%v", result, err)
+	}
+	if orderRequests.Load() != 2 || sponsorRequests.Load() != 1 {
+		t.Fatalf("requests: orders=%d sponsors=%d", orderRequests.Load(), sponsorRequests.Load())
 	}
 }
 

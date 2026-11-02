@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsonvalue"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
 )
 
 // The Afdian open API is used read-only: query-order (50 orders per page,
@@ -75,6 +76,8 @@ func callAfdianList(ctx context.Context, client *http.Client, cfg AfdianConfig, 
 		return afdianPage{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Afdian rejects Go's default user agent before reaching its OpenAPI.
+	req.Header.Set("User-Agent", "Haruki-Toolbox-Backend/"+version.Version)
 
 	resp, err := client.Do(req)
 	if err != nil {
