@@ -165,9 +165,8 @@ process.stdout.write(JSON.stringify(run));
 
 // For every app's runtime: one notification for a reported upload (or none),
 // following the switch, and the response (status, headers, $done value)
-// passed through untouched exactly
-// once, also when there is nothing to report or posting the notification
-// throws.
+// passed through untouched exactly once, also when there is nothing to report
+// or posting the notification throws.
 func TestProxyNotifyScriptReportsTheUploadResultHeader(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
