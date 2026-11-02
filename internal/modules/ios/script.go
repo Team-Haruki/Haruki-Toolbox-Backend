@@ -41,9 +41,26 @@ func handleScriptGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		if !ok {
 			return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported endpoint: %s. Supported: direct, cdn", endpointStr))
 		}
+		notify, ok := iosGen.ParseNotify(c.Query("notify"))
+		if !ok {
+			return harukiAPIHelper.ErrorBadRequest(c, "notify must be true or false")
+		}
 		endpoint := endpoints.endpoint(endpointType)
-		script := iosGen.GenerateScript(uploadCode, chunkSizeMB, endpoint)
+		script := iosGen.GenerateScript(uploadCode, chunkSizeMB, endpoint, notify)
 		c.Set("Content-Type", "application/javascript; charset=utf-8")
 		return c.SendString(script)
+	}
+}
+
+// handleProxyNotifyScript serves the proxy-mode notification script. It holds
+// nothing per user, so it needs no upload code.
+func handleProxyNotifyScript() fiber.Handler {
+	return func(c fiber.Ctx) error {
+		notify, ok := iosGen.ParseNotify(c.Query("notify"))
+		if !ok {
+			return harukiAPIHelper.ErrorBadRequest(c, "notify must be true or false")
+		}
+		c.Set("Content-Type", "application/javascript; charset=utf-8")
+		return c.SendString(iosGen.GenerateProxyNotifyScript(notify))
 	}
 }

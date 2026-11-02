@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -132,4 +133,14 @@ func applyAttemptLogFields(create *postgresql.UploadLogCreate, uc *uploadContext
 			s.set(s.value)
 		}
 	}
+}
+
+// uploadFailure is the public status and error code of a failed upload, the
+// ones the HarukiProxy v3 API already reports (invalid_upload_payload,
+// upload_not_allowed, temporarily_unavailable, internal_error).
+func uploadFailure(attempt *platform.Attempt) (int, string) {
+	if attempt == nil || attempt.ErrorCode == "" || attempt.HTTPStatus < 400 {
+		return http.StatusInternalServerError, "internal_error"
+	}
+	return attempt.HTTPStatus, attempt.ErrorCode
 }

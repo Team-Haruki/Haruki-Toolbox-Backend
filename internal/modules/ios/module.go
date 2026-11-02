@@ -133,6 +133,10 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		default:
 			return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported mode: %s. Supported: proxy, script", modeStr))
 		}
+		notify, ok := iosGen.ParseNotify(c.Query("notify"))
+		if !ok {
+			return harukiAPIHelper.ErrorBadRequest(c, "notify must be true or false")
+		}
 		req := &iosGen.ModuleRequest{
 			UploadCode:  uploadCode,
 			Regions:     regions,
@@ -140,6 +144,7 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			App:         app,
 			Mode:        mode,
 			ChunkSizeMB: chunkSizeMB,
+			NotifyOff:   !notify,
 		}
 		endpoint := endpoints.endpoint(endpointType)
 		content, err := iosGen.GenerateModule(req, endpoint, endpointStr)

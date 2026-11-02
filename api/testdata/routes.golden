@@ -73,6 +73,7 @@ GET /api/inherit/vault/key
 GET /api/ios/module/:upload_code/*
 GET /api/ios/proxy/:server/suite/user/:user_id
 GET /api/ios/script/:upload_code/haruki-toolbox.js
+GET /api/ios/script/proxy-notify.js
 GET /api/misc/friend_groups
 GET /api/misc/friend_links
 GET /api/misc/sponsors
@@ -108,6 +109,7 @@ GET /internal/mysekai-birthday-events/:event_id
 GET /ios/module/:upload_code/*
 GET /ios/proxy/:server/suite/user/:user_id
 GET /ios/script/:upload_code/haruki-toolbox.js
+GET /ios/script/proxy-notify.js
 GET /public/:server/:data_type/:user_id
 GET /webhook/subscribers
 PATCH /api/admin/bot-security/alerts/:alert_id

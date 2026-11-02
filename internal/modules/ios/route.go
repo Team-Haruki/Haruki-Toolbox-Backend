@@ -8,5 +8,6 @@ func RegisterIOSRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, en
 
 		api.Get("/module/:upload_code/*", handleModuleGeneration(apiHelper, endpoints))
 		api.Get("/script/:upload_code/haruki-toolbox.js", handleScriptGeneration(apiHelper, endpoints))
+		api.Get("/script/proxy-notify.js", handleProxyNotifyScript())
 	}
 }

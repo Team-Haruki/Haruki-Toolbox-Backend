@@ -29,6 +29,13 @@ const (
 	asyncUploadTimeout   = 2 * time.Minute
 )
 
+// scriptUploadAckWait bounds how long the final chunk's response waits for
+// the upload to be processed. Processing usually takes well under a second
+// (a large suite about 1 s at p99), and the proxy app holds the game's
+// response while the script runs, so a slow upload answers 202 and finishes
+// in the background instead of keeping the game waiting.
+var scriptUploadAckWait = 15 * time.Second
+
 type dataUploadHeader struct {
 	ScriptVersion string `header:"X-Script-Version"`
 	OriginalUrl   string `header:"X-Original-Url"`
@@ -232,6 +239,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		codeID, codeValue := record.ID, strings.Clone(record.UploadCode)
 		toolboxUserIDCopy := toolboxUserID
 		attempt := newAttempt(harukiUtils.UploadMethodIOSScript, 0)
+		processed := make(chan error, 1)
 		accepted := startBackgroundTask(dependencies.BackgroundTasks, logger, "ios-upload-assembly", func() {
 			chunks := completedChunks
 			sort.Slice(chunks, func(x, y int) bool {
@@ -268,20 +276,33 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 				return nil
 			}
 			attempt.RequestBytes = int64(len(payload))
-			_, err := HandleUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
+			_, err := runUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
 			if err != nil {
 				// HandleUpload already logs every failure with full context at
-				// WARNING inside its fail() helper. This async fire-and-forget
-				// path has no response to return the error on, so it only needs
-				// a debug breadcrumb — re-logging at ERROR duplicated the line
-				// and inflated the error rate with routine user-input failures.
-				logger.Debugf("async HandleUpload finished with error: %v", err)
+				// WARNING inside its fail() helper; re-logging at ERROR here
+				// duplicated the line and inflated the error rate with routine
+				// user-input failures.
+				logger.Debugf("HandleUpload finished with error: %v", err)
 			}
+			processed <- err
 		})
 		if !accepted {
 			return harukiAPIHelper.ErrorInternal(c, "upload service is shutting down")
 		}
-		return harukiAPIHelper.Responses.SuccessResponse[string](c, "Successfully uploaded data.", nil)
+		// The upload runs as a tracked background task so shutdown drains it;
+		// the response waits for its result, up to scriptUploadAckWait.
+		timer := time.NewTimer(scriptUploadAckWait)
+		defer timer.Stop()
+		select {
+		case err := <-processed:
+			if err != nil {
+				status, code := uploadFailure(attempt)
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, status, code, nil)
+			}
+			return harukiAPIHelper.Responses.SuccessResponse[string](c, "Successfully uploaded data.", nil)
+		case <-timer.C:
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusAccepted, "upload received, still processing", nil)
+		}
 	}
 }
 
@@ -291,11 +312,15 @@ func parseIOSProxyPathInt(raw string) (int64, error) {
 
 func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	logger := harukiLogger.NewLoggerFromGlobal("HarukiSekaiIOS")
-	proxyGuard := openUploadEntryGuard(apiHelper)
+	scriptGuard := openUploadEntryGuard(apiHelper)
+	// A refused proxy upload still says so to the module's notification script.
+	proxyGuard := openUploadEntryGuard(apiHelper, func(c fiber.Ctx) {
+		setProxyUploadResult(c, proxyUploadFailed, "rate_limited")
+	})
 	for _, prefix := range []string{"/ios", "/api/ios"} {
 		api := apiHelper.Router.Group(prefix)
 
-		api.Post("/script/:upload_code/upload", proxyGuard, handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
+		api.Post("/script/:upload_code/upload", scriptGuard, handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
 		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, dependencies, logger))
 		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, dependencies, logger))
 		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, dependencies, logger))

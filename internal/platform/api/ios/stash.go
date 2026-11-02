@@ -39,6 +39,8 @@ type stashOverride struct {
 	Author          string                         `yaml:"author"`
 	Homepage        string                         `yaml:"homepage"`
 	Date            string                         `yaml:"date"`
+	ArgumentsVer    int                            `yaml:"arguments-version,omitempty"`
+	Arguments       map[string]stashArgument       `yaml:"arguments,omitempty"`
 	HTTP            stashHTTP                      `yaml:"http"`
 	ScriptProviders map[string]stashScriptProvider `yaml:"script-providers,omitempty"`
 }
@@ -57,6 +59,16 @@ type stashScript struct {
 	BinaryMode  bool   `yaml:"binary-mode"`
 	MaxSize     int    `yaml:"max-size"`
 	Timeout     int    `yaml:"timeout"`
+	Argument    string `yaml:"argument,omitempty"`
+}
+
+// stashArgument is one override argument
+// (https://stash.wiki/configuration/override, 覆写参数; iOS 3.7+, beta).
+type stashArgument struct {
+	Type        string `yaml:"type"`
+	Title       string `yaml:"title"`
+	Description string `yaml:"description,omitempty"`
+	Default     bool   `yaml:"default"`
 }
 
 type stashScriptProvider struct {
@@ -82,6 +94,12 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) (string, error) {
 	}
 	override.HTTP.URLRewrite = append(override.HTTP.URLRewrite, `^https:\/\/submit\.backtrace\.io\/ - reject`)
 
+	if len(rs.ScriptRules) > 0 {
+		override.ArgumentsVer = 1
+		override.Arguments = map[string]stashArgument{
+			notifyArgumentName: {Type: "switch", Title: notifyArgumentTitle, Description: notifyArgumentDesc, Default: !req.NotifyOff},
+		}
+	}
 	for _, rule := range rs.ScriptRules {
 		provider := stashScriptProviderName(rule.Target)
 		if override.ScriptProviders == nil {
@@ -99,6 +117,8 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) (string, error) {
 			BinaryMode:  true,
 			MaxSize:     stashScriptMaxSize,
 			Timeout:     stashScriptTimeout,
+			// A reference inside other text becomes a string: "notify=true".
+			Argument: notifyArgumentName + "=${args." + notifyArgumentName + "}",
 		})
 	}
 

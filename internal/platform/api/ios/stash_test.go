@@ -16,12 +16,13 @@ import (
 // Documented Stash override keys: metadata (https://stash.wiki/configuration/override),
 // http.mitm (https://stash.wiki/http-engine/mitm), http.url-rewrite
 // (https://stash.wiki/http-engine/rewrite), http.script
-// (https://stash.wiki/script/rewrite-requests) and script-providers
-// (https://stash.wiki/script/manage-script).
+// (https://stash.wiki/script/rewrite-requests), script-providers
+// (https://stash.wiki/script/manage-script) and override arguments
+// (https://stash.wiki/configuration/override, 覆写参数).
 var (
-	stashTopLevelKeys = []string{"name", "desc", "author", "homepage", "date", "http", "script-providers"}
+	stashTopLevelKeys = []string{"name", "desc", "author", "homepage", "date", "arguments-version", "arguments", "http", "script-providers"}
 	stashHTTPKeys     = []string{"mitm", "url-rewrite", "script"}
-	stashScriptKeys   = []string{"match", "name", "type", "require-body", "binary-mode", "max-size", "timeout"}
+	stashScriptKeys   = []string{"match", "name", "type", "require-body", "binary-mode", "max-size", "timeout", "argument"}
 	stashProviderKeys = []string{"url", "interval"}
 )
 

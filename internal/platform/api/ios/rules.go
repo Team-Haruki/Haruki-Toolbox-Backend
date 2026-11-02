@@ -2,6 +2,7 @@ package ios
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
@@ -30,6 +31,11 @@ type RuleSet struct {
 	RewriteRules []Rule
 	ScriptRules  []Rule
 	Hostnames    []string
+	// ProxyNotify, set in proxy mode, is a body-less response script on the
+	// rewritten upload URL that reports the upload. Only the Loon plugin uses
+	// it: Loon documents that response scripts match the rewritten URL
+	// (https://nsloon.app/docs/Script/script_v2); the other apps do not say.
+	ProxyNotify *Rule
 }
 
 func GetHostnames(regions []harukiUtils.SupportedDataUploadServer) []string {
@@ -71,13 +77,31 @@ func GenerateRuleSet(req *ModuleRequest, endpoint string, endpointType string) *
 			}
 		}
 	}
+	if req.Mode == UploadModeProxy {
+		rs.ProxyNotify = &Rule{
+			Pattern:  "^" + regexp.QuoteMeta(endpoint) + "/ios/proxy/",
+			Target:   endpoint + ProxyNotifyScriptPath + "?v=" + ProxyNotifyScriptVersion,
+			RuleType: "script",
+		}
+	}
+	if req.NotifyOff {
+		// The fallback for apps that pass the script no notify argument.
+		for i := range rs.ScriptRules {
+			rs.ScriptRules[i].Target += "&notify=false"
+		}
+		if rs.ProxyNotify != nil {
+			rs.ProxyNotify.Target += "&notify=false"
+		}
+	}
 	return rs
 }
 
 func generateRulesForDataType(host, region string, dt DataType, mode UploadMode, uploadCode, endpoint string, chunkSizeMB int, endpointType string) *RuleSet {
 	rs := &RuleSet{}
 	escapedHost := strings.ReplaceAll(host, ".", "\\.")
-	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d&endpoint=%s", endpoint, uploadCode, chunkSizeMB, endpointType)
+	// v names the script version, so a module update after a script change
+	// loads the new script instead of the copy the proxy app cached by URL.
+	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d&endpoint=%s&v=%s", endpoint, uploadCode, chunkSizeMB, endpointType, ScriptVersion)
 	switch dt {
 	case DataTypeSuite:
 		pattern := fmt.Sprintf(`^https://%s/api/suite/user/(\d+)(\?isLogin=true)?$`, escapedHost)

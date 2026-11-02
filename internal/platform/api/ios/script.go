@@ -63,7 +63,7 @@ function HarukiUploadClient() {
         }
         console.log(\u0060${title}\n${subtitle}\n${message}\u0060)
         if (isQuanX) $notify(title, subtitle, message, Opts(rawopts))
-        if (isSurge) $notification.post(title, subtitle, message, Opts(rawopts))
+        if (isSurge && typeof $notification != "undefined") $notification.post(title, subtitle, message, Opts(rawopts))
         if (isJSBox) $push.schedule({
             title: title,
             body: subtitle ? subtitle + "\n" + message : message
@@ -257,7 +257,7 @@ function HarukiUploadClient() {
 // Generated at {{GENERATE_DATE}}
 const $ = HarukiUploadClient();
 const scriptName = "haruki_toolbox_uploader.js";
-const version = "1.0.1";
+const version = "{{SCRIPT_VERSION}}";
 
 const upload_id = Math.random().toString(36).substr(2, 9);
 const upload_url = "{{UPLOAD_URL}}";
@@ -265,26 +265,79 @@ const chunkSize = {{CHUNK_SIZE}} * 1024 * 1024; // {{CHUNK_SIZE}}MB per chunk
 const body = (typeof $response !== 'undefined' && $response.body) ? $response.body : '';
 const url = $.isRequest ? $request.url : '';
 
-// Early return if no body
-if (!body || body.length === 0) {
-    console.log('[haruki_toolbox_uploader] No response body to upload');
-    $done({});
-}
+// Module notifications: one notification per upload saying whether it got
+// through. The module's "notify" argument switches them: Surge, Shadowrocket
+// and Stash pass it as the string "notify=<value>", Loon as an object. Only an
+// explicit off value turns them off; with no argument, or one the app left
+// unfilled, the default from the script URL applies, and that is on unless
+// the module was generated with notify=false.
+const notifyByDefault = {{NOTIFY_DEFAULT}};
+const regionLabels = {{REGION_LABELS}};
 
-const totalChunks = Math.ceil(body.length / chunkSize);
-
-let sentChunks = 0;
-let failedChunks = 0;
+{{NOTIFY_ARGUMENT_JS}}
 
 function log(message) {
     console.log(\u0060[${scriptName}-v${version}] [${upload_id}] ${message}\u0060);
 }
 
-log(\u0060start to upload response body with ${totalChunks} chunks\u0060);
-log(\u0060body length: ${body.length}\u0060);
-log(\u0060original url: ${url}\u0060);
+function regionLabel() {
+    const match = url.match(/^https?:\/\/([^\/:?#]+)/);
+    return (match && regionLabels[match[1].toLowerCase()]) || "";
+}
 
-function sendChunk(index) {
+function dataLabel() {
+    if (url.indexOf("/api/suite/") >= 0) return "Suite";
+    if (url.indexOf("/birthday-party/") >= 0) return "MySekai 生日派对";
+    if (url.indexOf("/mysekai") >= 0) return "MySekai";
+    return "游戏";
+}
+
+function notifyResult(subtitle, message) {
+    if (!notifyEnabled()) return;
+    $.notify("Haruki 工具箱", subtitle, message);
+}
+
+// The texts matched here are the upload endpoint's own error messages.
+{{UPLOAD_ERROR_TEXT_JS}}
+
+function failureMessage(status, data) {
+    let reason = "";
+    try {
+        reason = JSON.parse(data).message || "";
+    } catch (e) {
+        reason = "";
+    }
+    const known = uploadErrorText(reason);
+    if (known) {
+        return known;
+    }
+    if (status === 413) {
+        return "这份数据太大，工具箱没有接收。";
+    }
+    if (status === 429) {
+        return "上传太频繁，请稍后重进游戏再试。";
+    }
+    return "HTTP " + status + (reason ? "：" + reason : "") + "。游戏本身不受影响，稍后重进游戏即可重试。";
+}
+
+// A notification that throws must not keep the game waiting for its response.
+function finish(error, stillProcessing) {
+    try {
+        const subject = (regionLabel() ? regionLabel() + " " : "") + dataLabel() + " 数据";
+        if (error !== null) {
+            notifyResult(subject + "上传失败", error);
+        } else if (stillProcessing) {
+            notifyResult(subject + "已上传", "工具箱已收到数据，还在处理中，稍后首页「我的账号」会更新上传时间。");
+        } else {
+            notifyResult(subject + "已上传", "工具箱已保存这份数据，首页「我的账号」会显示这次的上传时间。");
+        }
+    } catch (e) {
+        log("notification failed: " + e);
+    }
+    $.done({});
+}
+
+function sendChunk(index, totalChunks) {
     const start = index * chunkSize;
     const end = Math.min(start + chunkSize, body.length);
     const chunk = body.slice(start, end);
@@ -306,27 +359,33 @@ function sendChunk(index) {
     log(\u0060uploading chunk ${index + 1}/${totalChunks} (${chunk.length} bytes)\u0060);
 
     $.post(options, (error, resp, data) => {
-        sentChunks++;
+        // The server assembles an upload only from all of its chunks, so the
+        // first failed chunk ends it.
         if (error) {
             log(\u0060chunk ${index + 1} upload failed: ${error}\u0060);
-            failedChunks++;
-        } else if (resp.status !== 200) {
+            finish("连不上 Haruki 工具箱（" + error + "）。游戏本身不受影响，稍后重进游戏即可重试。");
+        } else if (resp.status !== 200 && !(resp.status === 202 && index + 1 === totalChunks)) {
             log(\u0060chunk ${index + 1} upload failed: HTTP ${resp.status}\u0060);
-            failedChunks++;
-        } else {
+            finish(failureMessage(resp.status, data));
+        } else if (index + 1 < totalChunks) {
             log(\u0060chunk ${index + 1} upload success\u0060);
-        }
-
-        if (sentChunks === totalChunks) {
-            log(\u0060upload completed: ${failedChunks}/${sentChunks} chunks failed\u0060);
-            $.done({});
+            sendChunk(index + 1, totalChunks);
         } else {
-            sendChunk(index + 1);
+            log(\u0060upload completed: ${totalChunks} chunks, HTTP ${resp.status}\u0060);
+            // 202: the server took the upload but had not finished it in time.
+            finish(null, resp.status === 202);
         }
     });
 }
 
-if ($.isRequest && typeof $response !== 'undefined') {
-    sendChunk(0);
+if (!body || body.length === 0) {
+    console.log('[haruki_toolbox_uploader] No response body to upload');
+    $.done({});
+} else if ($.isRequest && typeof $response !== 'undefined') {
+    const totalChunks = Math.ceil(body.length / chunkSize);
+    log(\u0060start to upload response body with ${totalChunks} chunks\u0060);
+    log(\u0060body length: ${body.length}\u0060);
+    log(\u0060original url: ${url}\u0060);
+    sendChunk(0, totalChunks);
 }
 `
