@@ -44,7 +44,12 @@ var (
 func (s *InheritSession) FetchSuite(ctx context.Context) ([]byte, error) {
 	var suite []byte
 	err := s.track(SubStepSuite, func() error {
-		body, _, err := s.call(ctx, "GET", userPath("/suite/user/%s", s.userID)+s.region.suiteQuery, nil, nil)
+		var body []byte
+		err := s.retryOnUpgrade(ctx, true, func() ([]byte, error) {
+			resp, _, err := s.call(ctx, "GET", userPath("/suite/user/%s", s.userID)+s.region.suiteQuery, nil, nil)
+			body = resp
+			return resp, err
+		})
 		if err != nil {
 			return NewDataRetrievalError("suite", "api_call", "failed to call suite API", err)
 		}
@@ -129,7 +134,12 @@ func (s *InheritSession) FetchMysekai(ctx context.Context) ([]byte, error) {
 	var mysekai []byte
 	err := s.track(SubStepMysekai, func() error {
 		general, _ := base64.StdEncoding.DecodeString(requestDataGeneral)
-		body, _, err := s.call(ctx, "POST", userPath("/user/%s/mysekai?isForceAllReloadOnlyMySekai=True", s.userID), general, nil)
+		var body []byte
+		err := s.retryOnUpgrade(ctx, true, func() ([]byte, error) {
+			resp, _, err := s.call(ctx, "POST", userPath("/user/%s/mysekai?isForceAllReloadOnlyMySekai=True", s.userID), general, nil)
+			body = resp
+			return resp, err
+		})
 		if err != nil {
 			return NewDataRetrievalError("mysekai", "api_call", "failed to call MySekai API", err)
 		}

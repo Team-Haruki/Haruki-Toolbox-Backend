@@ -99,43 +99,49 @@ const (
 	codeGameMaintenance    = "game_maintenance"
 	codeGameUnavailable    = "game_unavailable"
 	codeGameError          = "game_error"
-	codeExecuteUncertain   = "execute_uncertain"
-	codeLoginFailed        = "login_failed"
-	codeIssueCodeFailed    = "issue_code_failed"
-	codeVaultFallback      = "vault_db_unavailable"
-	codeVaultStoreFailed   = "vault_store_failed"
-	codeFetchFailed        = "fetch_failed"
-	codeMysekaiUnavailable = "mysekai_unavailable"
-	codeUploadFailed       = "upload_failed"
-	codeUploadForbidden    = "upload_forbidden"
-	codeJobInterrupted     = "job_interrupted"
-	codeServerBusy         = "server_busy"
-	codeGameDegraded       = "game_degraded"
-	codeInternal           = "internal_error"
+	// codeGameVersionOutdated: the game answered 426 because the data or
+	// asset version Toolbox sends is behind, and a refresh found nothing
+	// newer. Distinct from inherit_invalid, so a lagging version source is
+	// not mistaken for a bad code.
+	codeGameVersionOutdated = "game_version_outdated"
+	codeExecuteUncertain    = "execute_uncertain"
+	codeLoginFailed         = "login_failed"
+	codeIssueCodeFailed     = "issue_code_failed"
+	codeVaultFallback       = "vault_db_unavailable"
+	codeVaultStoreFailed    = "vault_store_failed"
+	codeFetchFailed         = "fetch_failed"
+	codeMysekaiUnavailable  = "mysekai_unavailable"
+	codeUploadFailed        = "upload_failed"
+	codeUploadForbidden     = "upload_forbidden"
+	codeJobInterrupted      = "job_interrupted"
+	codeServerBusy          = "server_busy"
+	codeGameDegraded        = "game_degraded"
+	codeInternal            = "internal_error"
 )
 
 var jobMessages = map[string]string{
-	codeInheritInvalid:     "继承码无效、已使用或已过期",
-	codeInheritRestricted:  "该账号目前不能引继",
-	codeTransferRestricted: "活动期间该账号的引继次数已用完，未执行引继",
-	codeConfirmTimeout:     "等待确认超时，未执行引继，引继码仍然有效",
-	codeCancelled:          "已取消，未执行引继，引继码仍然有效",
-	codeGameMaintenance:    "游戏服务器维护中",
-	codeGameUnavailable:    "游戏服务器暂时无法访问",
-	codeGameError:          "游戏服务器返回了错误",
-	codeExecuteUncertain:   "执行引继时连接中断，引继码可能已被使用；请勿在其他设备重试，可在保险库查看是否已保存凭据",
-	codeLoginFailed:        "账号凭据已保存到保险库，但登录失败；可稍后在保险库重新签发引继码",
-	codeIssueCodeFailed:    "未能签发新引继码；账号凭据已保存到保险库，请尽快在保险库重新签发",
-	codeVaultFallback:      "数据库暂时不可用，账号凭据已临时保存，稍后会自动转存",
-	codeVaultStoreFailed:   "账号凭据保存失败；请务必立即记下本页显示的新引继码",
-	codeFetchFailed:        "获取游戏数据失败",
-	codeMysekaiUnavailable: "获取 MySekai 数据失败，可能尚未完成教程",
-	codeUploadFailed:       "上传数据处理失败",
-	codeUploadForbidden:    "该游戏账号已被其他 Toolbox 用户绑定，无法上传",
-	codeJobInterrupted:     "服务重启，任务已中断",
-	codeServerBusy:         "当前引继请求过多，未执行引继，请稍后再试",
-	codeGameDegraded:       "游戏服务器暂时不稳定，未执行引继，请稍后再试",
-	codeInternal:           "服务器内部错误",
+	codeInheritInvalid:      "继承码无效、已使用或已过期",
+	codeInheritRestricted:   "该账号目前不能引继",
+	codeTransferRestricted:  "活动期间该账号的引继次数已用完，未执行引继",
+	codeConfirmTimeout:      "等待确认超时，未执行引继，引继码仍然有效",
+	codeCancelled:           "已取消，未执行引继，引继码仍然有效",
+	codeGameMaintenance:     "游戏服务器维护中",
+	codeGameUnavailable:     "游戏服务器暂时无法访问",
+	codeGameError:           "游戏服务器返回了错误",
+	codeGameVersionOutdated: "游戏数据版本刚更新，Toolbox 尚未同步，请稍后再试",
+	codeExecuteUncertain:    "执行引继时连接中断，引继码可能已被使用；请勿在其他设备重试，可在保险库查看是否已保存凭据",
+	codeLoginFailed:         "账号凭据已保存到保险库，但登录失败；可稍后在保险库重新签发引继码",
+	codeIssueCodeFailed:     "未能签发新引继码；账号凭据已保存到保险库，请尽快在保险库重新签发",
+	codeVaultFallback:       "数据库暂时不可用，账号凭据已临时保存，稍后会自动转存",
+	codeVaultStoreFailed:    "账号凭据保存失败；请务必立即记下本页显示的新引继码",
+	codeFetchFailed:         "获取游戏数据失败",
+	codeMysekaiUnavailable:  "获取 MySekai 数据失败，可能尚未完成教程",
+	codeUploadFailed:        "上传数据处理失败",
+	codeUploadForbidden:     "该游戏账号已被其他 Toolbox 用户绑定，无法上传",
+	codeJobInterrupted:      "服务重启，任务已中断",
+	codeServerBusy:          "当前引继请求过多，未执行引继，请稍后再试",
+	codeGameDegraded:        "游戏服务器暂时不稳定，未执行引继，请稍后再试",
+	codeInternal:            "服务器内部错误",
 }
 
 func jobProblemFor(code string) *jobProblem {
@@ -150,6 +156,10 @@ func gameFailureCode(err error) string {
 		return codeGameMaintenance
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
 		return codeGameUnavailable
+	case harukiSekai.IsGameVersionOutdated(err):
+		// A 426 is the game's definite answer: on the executing call it
+		// means the code was not used, so it is never execute_uncertain.
+		return codeGameVersionOutdated
 	}
 	switch status := harukiSekai.APIStatus(err); {
 	case status == http.StatusForbidden:

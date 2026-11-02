@@ -41,8 +41,14 @@ type InheritSession struct {
 	pacing    InheritPacing
 	progress  Progress
 
-	userID      int64
-	loginBonus  bool
+	userID     int64
+	credential string
+	loginBonus bool
+	// fileData and fileAsset are the data and asset versions the version
+	// file gave when it was last read (see refreshVersions).
+	fileData    string
+	fileAsset   string
+	versionRead bool
 	previewedAt time.Time
 	executedAt  time.Time
 	// secrets are scrubbed verbatim from every error; maskedIDs are replaced

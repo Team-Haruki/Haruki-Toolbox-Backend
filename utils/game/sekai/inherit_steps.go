@@ -28,7 +28,7 @@ func (s *InheritSession) Bootstrap(ctx context.Context) error {
 			return err
 		}
 	}
-	return s.track(SubStepVersion, func() error { return s.fetchVersion(ctx) })
+	return s.track(SubStepVersion, func() error { return s.fetchVersion(ctx, false) })
 }
 
 func (s *InheritSession) fetchCookies(ctx context.Context) error {
@@ -66,7 +66,20 @@ type appVersionPayload struct {
 	AssetVersion string `json:"assetVersion"`
 }
 
-func (s *InheritSession) fetchVersion(ctx context.Context) error {
+// noCacheHeaders ask every cache between us and the version file for a fresh
+// copy; a refresh after a 426 must not be answered by a cached stale file.
+var noCacheHeaders = map[string]string{"Cache-Control": "no-cache", "Pragma": "no-cache"}
+
+// fetchVersion reads the version file and sets the version headers. The app
+// version and hash always come from it. Its data and asset versions are set
+// on the first read, and afterwards only when the file moved and is not older
+// than what the session already sends (fileVersionApplies), so a refresh with
+// a stale file keeps versions a login reported (adoptDataVersions).
+func (s *InheritSession) fetchVersion(ctx context.Context, fresh bool) error {
+	var requestHeaders map[string]string
+	if fresh {
+		requestHeaders = noCacheHeaders
+	}
 	var lastErr error
 	for i := range bootstrapAttempts {
 		if i > 0 {
@@ -74,7 +87,7 @@ func (s *InheritSession) fetchVersion(ctx context.Context) error {
 				return NewAuthError("parseAppVersion", "interrupted before retrying", err)
 			}
 		}
-		status, _, body, err := s.http.Request(ctx, "GET", s.version, nil, nil)
+		status, _, body, err := s.http.Request(ctx, "GET", s.version, requestHeaders, nil)
 		if err != nil {
 			lastErr = NewAPIError(s.version, "GET", 0, "request failed", err)
 			continue
@@ -88,10 +101,15 @@ func (s *InheritSession) fetchVersion(ctx context.Context) error {
 			lastErr = err
 			continue
 		}
-		s.headers["X-App-Version"] = v.AppVersion
-		s.headers["X-App-Hash"] = v.AppHash
-		s.headers["X-Data-Version"] = v.DataVersion
-		s.headers["X-Asset-Version"] = v.AssetVersion
+		s.headers[headerAppVersion] = v.AppVersion
+		s.headers[headerAppHash] = v.AppHash
+		if s.fileVersionApplies(v.DataVersion, s.fileData, s.headers[headerDataVersion]) {
+			s.headers[headerDataVersion] = v.DataVersion
+		}
+		if s.fileVersionApplies(v.AssetVersion, s.fileAsset, s.headers[headerAssetVersion]) {
+			s.headers[headerAssetVersion] = v.AssetVersion
+		}
+		s.fileData, s.fileAsset, s.versionRead = v.DataVersion, v.AssetVersion, true
 		return nil
 	}
 	return NewAuthError("parseAppVersion", fmt.Sprintf("%s server: failed after %d attempts", strings.ToUpper(string(s.region.server)), bootstrapAttempts), lastErr)
@@ -145,12 +163,16 @@ func (s *InheritSession) Preview(ctx context.Context, code InheritCode) (*Inheri
 	s.AddSecrets(code.InheritID, code.Password)
 	var preview *InheritPreview
 	err := s.track(SubStepInheritCheck, func() error {
-		resp, err := s.inherit(ctx, code, false)
-		if err != nil {
-			return err
-		}
-		preview, err = parseInheritPreview(resp)
-		return err
+		// The non-executing call uses nothing up, so a 426 may be retried
+		// once with refreshed versions.
+		return s.retryOnUpgrade(ctx, false, func() ([]byte, error) {
+			resp, raw, err := s.inherit(ctx, code, false)
+			if err != nil {
+				return raw, err
+			}
+			preview, err = parseInheritPreview(resp)
+			return raw, err
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -170,8 +192,9 @@ func (s *InheritSession) Execute(ctx context.Context, code InheritCode) (string,
 		return "", NewAuthError("inherit", "interrupted before the executing inherit call", err)
 	}
 	var credential string
+	// ⚠️ Never retried, not even on a 426: this call uses up the code.
 	err := s.track(SubStepInheritExecute, func() error {
-		resp, err := s.inherit(ctx, code, true)
+		resp, _, err := s.inherit(ctx, code, true)
 		if err != nil {
 			return err
 		}
@@ -186,13 +209,15 @@ func (s *InheritSession) Execute(ctx context.Context, code InheritCode) (string,
 	return credential, nil
 }
 
-func (s *InheritSession) inherit(ctx context.Context, code InheritCode, execute bool) (map[string]any, error) {
+// inherit makes the inherit call and returns the decoded answer and the raw
+// body (which a non-200 answer also returns).
+func (s *InheritSession) inherit(ctx context.Context, code InheritCode, execute bool) (map[string]any, []byte, error) {
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"inheritId": code.InheritID,
 		"password":  code.Password,
 	}).SignedString([]byte(s.jwtSecret))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	flag := "False"
 	if execute {
@@ -202,9 +227,10 @@ func (s *InheritSession) inherit(ctx context.Context, code InheritCode, execute 
 	body, _ := base64.StdEncoding.DecodeString(requestDataGeneral)
 	resp, _, err := s.call(ctx, "POST", path, body, map[string]string{headerInheritIDToken: token})
 	if err != nil {
-		return nil, err
+		return nil, resp, err
 	}
-	return s.unpack(resp)
+	m, err := s.unpack(resp)
+	return m, resp, err
 }
 
 // Login authenticates with credential as userID and keeps the session token.
@@ -220,30 +246,41 @@ func (s *InheritSession) Login(ctx context.Context, userID int64, credential str
 			return NewAuthError("login", "interrupted before login", err)
 		}
 	}
+	s.credential = credential
 	return s.track(SubStepAuth, func() error {
-		packed, err := s.pack(map[string]any{
-			"credential":      credential,
-			"deviceId":        nil,
-			"authTriggerType": "normal",
-		})
-		if err != nil {
-			return err
-		}
-		resp, _, err := s.call(ctx, "PUT", userPath("/user/%s/auth?refreshUpdatedResources=False", userID), packed, nil)
-		if err != nil {
-			return err
-		}
-		unpacked, err := s.unpack(resp)
-		if err != nil {
-			return err
-		}
-		token, err := stringField(unpacked, "sessionToken")
-		if err != nil {
-			return err
-		}
-		s.headers[headerSessionToken] = token
-		return nil
+		// Login only reads the app version from the version file, so on a 426
+		// the refresh re-reads that file (a nested login could not help).
+		return s.retryOnUpgrade(ctx, false, func() ([]byte, error) { return s.authenticate(ctx) })
 	})
+}
+
+// authenticate logs in with the session's credential, keeps the session
+// token and adopts the data and asset versions the game reports, as the game
+// client does. It never takes the app version from the answer.
+func (s *InheritSession) authenticate(ctx context.Context) ([]byte, error) {
+	packed, err := s.pack(map[string]any{
+		"credential":      s.credential,
+		"deviceId":        nil,
+		"authTriggerType": "normal",
+	})
+	if err != nil {
+		return nil, err
+	}
+	resp, _, err := s.call(ctx, "PUT", userPath("/user/%s/auth?refreshUpdatedResources=False", s.userID), packed, nil)
+	if err != nil {
+		return resp, err
+	}
+	unpacked, err := s.unpack(resp)
+	if err != nil {
+		return resp, err
+	}
+	token, err := stringField(unpacked, "sessionToken")
+	if err != nil {
+		return resp, err
+	}
+	s.headers[headerSessionToken] = token
+	s.adoptDataVersions(unpacked)
+	return resp, nil
 }
 
 // IssueInheritCode generates a new transfer code protected by password. The
@@ -256,17 +293,19 @@ func (s *InheritSession) IssueInheritCode(ctx context.Context, password string) 
 		if err != nil {
 			return err
 		}
-		resp, _, err := s.call(ctx, "PUT", userPath("/user/%s/inherit", s.userID), packed, nil)
-		if err != nil {
-			return err
-		}
-		unpacked, err := s.unpack(resp)
-		if err != nil {
-			return err
-		}
-		userInherit, _ := unpacked["userInherit"].(map[string]any)
-		inheritID, err = stringField(userInherit, "inheritId")
-		return err
+		return s.retryOnUpgrade(ctx, true, func() ([]byte, error) {
+			resp, _, err := s.call(ctx, "PUT", userPath("/user/%s/inherit", s.userID), packed, nil)
+			if err != nil {
+				return resp, err
+			}
+			unpacked, err := s.unpack(resp)
+			if err != nil {
+				return resp, err
+			}
+			userInherit, _ := unpacked["userInherit"].(map[string]any)
+			inheritID, err = stringField(userInherit, "inheritId")
+			return resp, err
+		})
 	})
 	if err != nil {
 		return "", err
