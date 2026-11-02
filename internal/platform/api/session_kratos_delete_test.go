@@ -1,11 +1,26 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestDeleteKratosIdentityDoesNotHideTransportFailures(t *testing.T) {
+	h := NewSessionHandler(nil, "")
+	h.KratosAdminURL = "://invalid"
+	if h.DeleteKratosIdentity(t.Context(), "identity-1") == nil {
+		t.Fatal("invalid provider URL succeeded")
+	}
+	h.KratosAdminURL = "http://127.0.0.1:1"
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if h.DeleteKratosIdentity(ctx, "identity-1") == nil {
+		t.Fatal("cancelled provider request succeeded")
+	}
+}
 
 func TestDeleteKratosIdentityResponse(t *testing.T) {
 	for _, tc := range []struct {

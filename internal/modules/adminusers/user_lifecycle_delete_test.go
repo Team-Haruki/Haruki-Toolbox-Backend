@@ -1,6 +1,8 @@
 package adminusers
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,8 +18,91 @@ import (
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
+	"entgo.io/ent"
 	"github.com/gofiber/fiber/v3"
+	goredis "github.com/redis/go-redis/v9"
 )
+
+type deletionRedisFailure struct{ command string }
+
+func (h deletionRedisFailure) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+func (h deletionRedisFailure) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return next
+}
+func (h deletionRedisFailure) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, cmd goredis.Cmder) error {
+		if cmd.Name() == h.command {
+			return errors.New("injected redis outage")
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func TestDeletionServiceFailuresRollBackAndReportFailure(t *testing.T) {
+	for _, scenario := range []string{"no-redis", "redis-lock", "session", "vault", "oauth", "database-update", "database-delete"} {
+		t.Run(scenario, func(t *testing.T) {
+			helper, manager, ctx := newAdminUserIntegrationSessionHelper(t)
+			helper.DBManager.DB = newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+			db := helper.DBManager.DB
+			db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SaveX(ctx)
+			db.SocialPlatformInfo.Create().SetPlatform("qq").SetPlatformUserID("123456789").SetUserID("target").SaveX(ctx)
+			var hydra *oauth2.HydraConfig
+			wantStatus := http.StatusServiceUnavailable
+			switch scenario {
+			case "no-redis":
+				helper.DBManager.Redis = nil
+			case "redis-lock":
+				manager.Redis.AddHook(deletionRedisFailure{command: "set"})
+			case "session":
+				manager.Redis.AddHook(deletionRedisFailure{command: "scan"})
+			case "vault":
+				manager.Redis.AddHook(deletionRedisFailure{command: "smembers"})
+			case "oauth":
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(503) }))
+				t.Cleanup(server.Close)
+				hydra = oauth2.NewHydraConfig(oauth2.HydraConfigOptions{Provider: oauth2.ProviderHydra, AdminURL: server.URL, RequestTimeout: time.Second})
+			case "database-update", "database-delete":
+				wantStatus = http.StatusInternalServerError
+				op := ent.OpUpdate
+				if scenario == "database-delete" {
+					op = ent.OpDeleteOne
+				}
+				db.User.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						if m.Op().Is(op) {
+							return nil, errors.New("injected database failure")
+						}
+						return next.Mutate(ctx, m)
+					})
+				})
+			}
+			app := fiber.New()
+			app.Use(func(c fiber.Ctx) error {
+				c.Locals("userID", "actor")
+				c.Locals("userRole", roleSuperAdmin)
+				return c.Next()
+			})
+			app.Delete("/users/:target_user_id/permanent", handleDeleteUser(helper, hydra))
+			req := httptest.NewRequest(http.MethodDelete, "/users/target/permanent", strings.NewReader(`{"confirmUserId":"target"}`))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != wantStatus {
+				raw, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status=%d body=%s", resp.StatusCode, raw)
+			}
+			if db.User.GetX(ctx, "target").Banned || db.SocialPlatformInfo.Query().CountX(ctx) != 1 {
+				t.Fatal("failed deletion changed account or binding")
+			}
+			if !db.SystemLog.Query().Where(systemlog.ActionEQ(adminAuditActionUserDelete), systemlog.ResultEQ("failure")).ExistX(ctx) {
+				t.Fatal("missing failure audit")
+			}
+		})
+	}
+}
 
 func TestPermanentDeletionRouteReturnsAcknowledgementAndAudit(t *testing.T) {
 	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
@@ -25,6 +110,7 @@ func TestPermanentDeletionRouteReturnsAcknowledgementAndAudit(t *testing.T) {
 	db := helper.DBManager.DB
 	db.User.Create().SetID("actor").SetName("Admin").SetEmail("actor@example.test").SetRole(userSchema.RoleSuperAdmin).SaveX(ctx)
 	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SaveX(ctx)
+	db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetUserID("target").SaveX(ctx)
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() })
 	RegisterAdminUserRoutes(helper, app.Group("/api/admin"), nil, harukiAPIHelper.UserDataBuilder{})

@@ -1,10 +1,23 @@
 package upload
 
 import (
+	"net/http"
 	"testing"
 
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 )
+
+func TestInheritAdmissionRechecksDeletedAccount(t *testing.T) {
+	env := newInheritTestEnv(t)
+	env.db.User.DeleteOneID(testOwner).ExecX(t.Context())
+	response := env.call(testOwner, http.MethodPost, "/api/inherit/jobs", validJobRequest())
+	if response.Status != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d", response.Status)
+	}
+	if env.games != 0 || env.redis.Exists(inheritActiveKeyPrefix+testOwner) {
+		t.Fatal("transfer started after account deletion or retained its lock")
+	}
+}
 
 func TestInheritAdmissionCannotReplaceAccountDeletionLock(t *testing.T) {
 	env := newInheritTestEnv(t)
