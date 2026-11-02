@@ -417,12 +417,13 @@ func TestCreateJobRejectsBadInputBeforeTheGame(t *testing.T) {
 	// A short password is fine when the new code gets a random one.
 	req := validJobRequest()
 	req["inherit_password"], req["new_password_mode"] = "1234", "random"
-	if res := env.call(testOwner, "POST", "/api/inherit/jobs", req); res.Status != http.StatusAccepted {
-		t.Fatalf("random mode with short password = %d %s", res.Status, res.Raw)
-	}
+	id := env.createJob(req)
 	if res := env.call("", "POST", "/api/inherit/jobs", validJobRequest()); res.Status != http.StatusUnauthorized {
 		t.Fatalf("anonymous = %d", res.Status)
 	}
+	// The accepted job opens its game session in the background after the 202.
+	// Once it waits for confirmation it has opened it, so the count is final.
+	env.waitStatus(id, "awaiting_confirm")
 	env.mu.Lock()
 	defer env.mu.Unlock()
 	if env.games != 1 {
