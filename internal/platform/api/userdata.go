@@ -32,20 +32,29 @@ func (b UserDataBuilder) BuildFromDBUserWithEmailVerified(user *postgresql.User,
 	avatarURL := b.buildAvatarURLFromUser(user)
 	iosUploadCode := buildIOSUploadCodeFromUser(user)
 	role := string(user.Role)
+	moduleNotifications := IOSModuleNotificationsEnabled(user.IosModuleNotificationsEnabled)
 
 	return HarukiToolboxUserData{
-		Name:                        &user.Name,
-		UserID:                      &user.ID,
-		Role:                        &role,
-		AvatarPath:                  &avatarURL,
-		AllowCNMysekai:              &user.AllowCnMysekai,
-		IOSUploadCode:               iosUploadCode,
-		EmailInfo:                   &emailInfo,
-		SocialPlatformInfo:          socialPlatformInfo,
-		AuthorizeSocialPlatformInfo: &authorizeSocialPlatformInfo,
-		GameAccountBindings:         &gameAccountBindings,
-		SessionToken:                sessionToken,
+		Name:                          &user.Name,
+		UserID:                        &user.ID,
+		Role:                          &role,
+		AvatarPath:                    &avatarURL,
+		AllowCNMysekai:                &user.AllowCnMysekai,
+		IOSUploadCode:                 iosUploadCode,
+		IOSModuleNotificationsEnabled: &moduleNotifications,
+		EmailInfo:                     &emailInfo,
+		SocialPlatformInfo:            socialPlatformInfo,
+		AuthorizeSocialPlatformInfo:   &authorizeSocialPlatformInfo,
+		GameAccountBindings:           &gameAccountBindings,
+		SessionToken:                  sessionToken,
 	}
+}
+
+// IOSModuleNotificationsEnabled resolves the stored choice for the phone
+// notifications the iOS module's upload script posts. A user who never chose
+// (NULL) gets them.
+func IOSModuleNotificationsEnabled(stored *bool) bool {
+	return stored == nil || *stored
 }
 
 func buildIOSUploadCodeFromUser(user *postgresql.User) *string {

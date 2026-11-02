@@ -22196,6 +22196,7 @@ type UserMutation struct {
 	sponsor_access_updated_at                *time.Time
 	allow_cn_mysekai                         *bool
 	ticket_email_notifications_enabled       *bool
+	ios_module_notifications_enabled         *bool
 	role                                     *user.Role
 	banned                                   *bool
 	ban_reason                               *string
@@ -22868,6 +22869,55 @@ func (m *UserMutation) ResetTicketEmailNotificationsEnabled() {
 	m.ticket_email_notifications_enabled = nil
 }
 
+// SetIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field.
+func (m *UserMutation) SetIosModuleNotificationsEnabled(b bool) {
+	m.ios_module_notifications_enabled = &b
+}
+
+// IosModuleNotificationsEnabled returns the value of the "ios_module_notifications_enabled" field in the mutation.
+func (m *UserMutation) IosModuleNotificationsEnabled() (r bool, exists bool) {
+	v := m.ios_module_notifications_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIosModuleNotificationsEnabled returns the old "ios_module_notifications_enabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldIosModuleNotificationsEnabled(ctx context.Context) (v *bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIosModuleNotificationsEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIosModuleNotificationsEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIosModuleNotificationsEnabled: %w", err)
+	}
+	return oldValue.IosModuleNotificationsEnabled, nil
+}
+
+// ClearIosModuleNotificationsEnabled clears the value of the "ios_module_notifications_enabled" field.
+func (m *UserMutation) ClearIosModuleNotificationsEnabled() {
+	m.ios_module_notifications_enabled = nil
+	m.clearedFields[user.FieldIosModuleNotificationsEnabled] = struct{}{}
+}
+
+// IosModuleNotificationsEnabledCleared returns if the "ios_module_notifications_enabled" field was cleared in this mutation.
+func (m *UserMutation) IosModuleNotificationsEnabledCleared() bool {
+	_, ok := m.clearedFields[user.FieldIosModuleNotificationsEnabled]
+	return ok
+}
+
+// ResetIosModuleNotificationsEnabled resets all changes to the "ios_module_notifications_enabled" field.
+func (m *UserMutation) ResetIosModuleNotificationsEnabled() {
+	m.ios_module_notifications_enabled = nil
+	delete(m.clearedFields, user.FieldIosModuleNotificationsEnabled)
+}
+
 // SetRole sets the "role" field.
 func (m *UserMutation) SetRole(u user.Role) {
 	m.role = &u
@@ -23508,7 +23558,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.name != nil {
 		fields = append(fields, user.FieldName)
 	}
@@ -23544,6 +23594,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.ticket_email_notifications_enabled != nil {
 		fields = append(fields, user.FieldTicketEmailNotificationsEnabled)
+	}
+	if m.ios_module_notifications_enabled != nil {
+		fields = append(fields, user.FieldIosModuleNotificationsEnabled)
 	}
 	if m.role != nil {
 		fields = append(fields, user.FieldRole)
@@ -23592,6 +23645,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.AllowCnMysekai()
 	case user.FieldTicketEmailNotificationsEnabled:
 		return m.TicketEmailNotificationsEnabled()
+	case user.FieldIosModuleNotificationsEnabled:
+		return m.IosModuleNotificationsEnabled()
 	case user.FieldRole:
 		return m.Role()
 	case user.FieldBanned:
@@ -23635,6 +23690,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldAllowCnMysekai(ctx)
 	case user.FieldTicketEmailNotificationsEnabled:
 		return m.OldTicketEmailNotificationsEnabled(ctx)
+	case user.FieldIosModuleNotificationsEnabled:
+		return m.OldIosModuleNotificationsEnabled(ctx)
 	case user.FieldRole:
 		return m.OldRole(ctx)
 	case user.FieldBanned:
@@ -23738,6 +23795,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTicketEmailNotificationsEnabled(v)
 		return nil
+	case user.FieldIosModuleNotificationsEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIosModuleNotificationsEnabled(v)
+		return nil
 	case user.FieldRole:
 		v, ok := value.(user.Role)
 		if !ok {
@@ -23827,6 +23891,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldSponsorAccessUpdatedAt) {
 		fields = append(fields, user.FieldSponsorAccessUpdatedAt)
 	}
+	if m.FieldCleared(user.FieldIosModuleNotificationsEnabled) {
+		fields = append(fields, user.FieldIosModuleNotificationsEnabled)
+	}
 	if m.FieldCleared(user.FieldBanReason) {
 		fields = append(fields, user.FieldBanReason)
 	}
@@ -23873,6 +23940,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldSponsorAccessUpdatedAt:
 		m.ClearSponsorAccessUpdatedAt()
+		return nil
+	case user.FieldIosModuleNotificationsEnabled:
+		m.ClearIosModuleNotificationsEnabled()
 		return nil
 	case user.FieldBanReason:
 		m.ClearBanReason()
@@ -23926,6 +23996,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldTicketEmailNotificationsEnabled:
 		m.ResetTicketEmailNotificationsEnabled()
+		return nil
+	case user.FieldIosModuleNotificationsEnabled:
+		m.ResetIosModuleNotificationsEnabled()
 		return nil
 	case user.FieldRole:
 		m.ResetRole()

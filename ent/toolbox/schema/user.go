@@ -30,6 +30,10 @@ func (User) Fields() []ent.Field {
 		field.Time("sponsor_access_updated_at").Optional().Nillable(),
 		field.Bool("allow_cn_mysekai").Default(false),
 		field.Bool("ticket_email_notifications_enabled").Default(false),
+		// Phone notifications posted by the iOS module's upload script. NULL
+		// (never chosen) means enabled; resolve it with
+		// api.IOSModuleNotificationsEnabled rather than reading it directly.
+		field.Bool("ios_module_notifications_enabled").Optional().Nillable(),
 		field.Enum("role").Values("user", "admin", "super_admin").Default("user"),
 		field.Bool("banned").Default(false),
 		field.String("ban_reason").Optional().Nillable(),

@@ -55,7 +55,8 @@ type profileTestResponse struct {
 	Status      int    `json:"status"`
 	Message     string `json:"message"`
 	UpdatedData *struct {
-		AvatarPath *string `json:"avatarPath"`
+		AvatarPath                    *string `json:"avatarPath"`
+		IOSModuleNotificationsEnabled *bool   `json:"iosModuleNotificationsEnabled"`
 	} `json:"updatedData"`
 }
 
@@ -144,6 +145,50 @@ func TestHandleUpdateProfileReplacesAvatar(t *testing.T) {
 	}
 	if _, err := os.Stat(oldAvatar); !os.IsNotExist(err) {
 		t.Fatalf("old avatar still present: %v", err)
+	}
+}
+
+// The module notification switch goes through the same profile update. Turning
+// it off and on again stores the choice, and a request without the field (an
+// avatar change) leaves it alone.
+func TestHandleUpdateProfileStoresModuleNotificationChoice(t *testing.T) {
+	db := newProfileTestDB(t)
+	createProfileTestUser(t, db, "u-1", "", "")
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &harukiDatabase.HarukiToolboxDBManager{DB: db}}
+	handler := handleUpdateProfile(helper, NewConfig(ConfigOptions{AvatarSaveDir: t.TempDir(), AvatarBaseURL: "https://cdn.example"}))
+
+	stored := func() *bool {
+		t.Helper()
+		user, err := db.User.Get(context.Background(), "u-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return user.IosModuleNotificationsEnabled
+	}
+	if got := stored(); got != nil {
+		t.Fatalf("a new user stores %v, want NULL (enabled)", *got)
+	}
+
+	for _, enabled := range []bool{false, true, false} {
+		status, resp := runAsUser(t, handler, "u-1", fmt.Sprintf(`{"iosModuleNotificationsEnabled":%t}`, enabled))
+		if status != fiber.StatusOK || resp.UpdatedData == nil || resp.UpdatedData.IOSModuleNotificationsEnabled == nil ||
+			*resp.UpdatedData.IOSModuleNotificationsEnabled != enabled {
+			t.Fatalf("set %t: status = %d, response = %+v", enabled, status, resp)
+		}
+		if resp.UpdatedData.AvatarPath != nil {
+			t.Fatalf("set %t: response names an avatar %q", enabled, *resp.UpdatedData.AvatarPath)
+		}
+		if got := stored(); got == nil || *got != enabled {
+			t.Fatalf("set %t: stored %v", enabled, got)
+		}
+	}
+
+	status, resp := runAsUser(t, handler, "u-1", avatarPayload(encodePNG(t, 1, 1)))
+	if status != fiber.StatusOK || resp.UpdatedData == nil || resp.UpdatedData.IOSModuleNotificationsEnabled != nil {
+		t.Fatalf("avatar update: status = %d, response = %+v", status, resp)
+	}
+	if got := stored(); got == nil || *got {
+		t.Fatalf("an avatar update changed the stored choice to %v", got)
 	}
 }
 

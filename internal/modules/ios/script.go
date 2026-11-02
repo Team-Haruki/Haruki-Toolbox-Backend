@@ -8,6 +8,7 @@ import (
 	iosGen "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/ios"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -19,8 +20,11 @@ func handleScriptGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		if uploadCode == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "missing upload_code")
 		}
-		_, err := apiHelper.DBManager.DB.IOSScriptCode.Query().
+		record, err := apiHelper.DBManager.DB.IOSScriptCode.Query().
 			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
+			WithUser(func(q *postgresql.UserQuery) {
+				q.Select(user.FieldID, user.FieldIosModuleNotificationsEnabled)
+			}).
 			Only(ctx)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -42,7 +46,11 @@ func handleScriptGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return harukiAPIHelper.ErrorBadRequest(c, fmt.Sprintf("unsupported endpoint: %s. Supported: direct, cdn", endpointStr))
 		}
 		endpoint := endpoints.endpoint(endpointType)
-		script := iosGen.GenerateScript(uploadCode, chunkSizeMB, endpoint)
+		var storedChoice *bool
+		if record.Edges.User != nil {
+			storedChoice = record.Edges.User.IosModuleNotificationsEnabled
+		}
+		script := iosGen.GenerateScript(uploadCode, chunkSizeMB, endpoint, harukiAPIHelper.IOSModuleNotificationsEnabled(storedChoice))
 		c.Set("Content-Type", "application/javascript; charset=utf-8")
 		return c.SendString(script)
 	}

@@ -968,7 +968,7 @@ func init() {
 	// user.DefaultTicketEmailNotificationsEnabled holds the default value on creation for the ticket_email_notifications_enabled field.
 	user.DefaultTicketEmailNotificationsEnabled = userDescTicketEmailNotificationsEnabled.Default.(bool)
 	// userDescBanned is the schema descriptor for banned field.
-	userDescBanned := userFields[14].Descriptor()
+	userDescBanned := userFields[15].Descriptor()
 	// user.DefaultBanned holds the default value on creation for the banned field.
 	user.DefaultBanned = userDescBanned.Default.(bool)
 	// userDescID is the schema descriptor for id field.

@@ -57,7 +57,7 @@ func removeAvatarFileIfExists(filePath string) error {
 }
 
 func hasProfileUpdatePayload(payload harukiAPIHelper.UpdateProfilePayload) bool {
-	return payload.AvatarBase64 != nil
+	return payload.AvatarBase64 != nil || payload.IOSModuleNotificationsEnabled != nil
 }
 
 func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, profileConfig Config) fiber.Handler {
@@ -69,11 +69,13 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		result := harukiAPIHelper.SystemLogResultFailure
 		reason := "unknown"
 		updatedAvatar := false
+		updatedModuleNotifications := false
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.profile.update", result, userID, map[string]any{
-				"reason":        reason,
-				"updatedName":   false,
-				"updatedAvatar": updatedAvatar,
+				"reason":                     reason,
+				"updatedName":                false,
+				"updatedAvatar":              updatedAvatar,
+				"updatedModuleNotifications": updatedModuleNotifications,
 			})
 		}()
 
@@ -165,6 +167,10 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			ub = ub.SetAvatarPath(avatarFileName)
 			updatedAvatar = true
 		}
+		if payload.IOSModuleNotificationsEnabled != nil {
+			ub = ub.SetIosModuleNotificationsEnabled(*payload.IOSModuleNotificationsEnabled)
+			updatedModuleNotifications = true
+		}
 		_, err = ub.Save(ctx)
 		if err != nil {
 			if newAvatarSavePath != "" {
@@ -186,6 +192,10 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		if payload.AvatarBase64 != nil {
 			url := profileConfig.AvatarURL(avatarFileName)
 			ud.AvatarPath = &url
+		}
+		if payload.IOSModuleNotificationsEnabled != nil {
+			enabled := *payload.IOSModuleNotificationsEnabled
+			ud.IOSModuleNotificationsEnabled = &enabled
 		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"

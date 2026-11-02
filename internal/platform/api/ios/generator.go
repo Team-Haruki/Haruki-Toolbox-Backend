@@ -1,7 +1,9 @@
 package ios
 
 import (
+	json "encoding/json/v2"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -42,14 +44,44 @@ func GenerateModule(req *ModuleRequest, endpoint string, endpointType string) (s
 	}
 }
 
-func GenerateScript(uploadCode string, chunkSizeMB int, uploadURL string) string {
-	script := HarukiIOSJavaScriptTemplate
-	script = strings.ReplaceAll(script, "{{UPLOAD_URL}}", uploadURL+"/ios/script/"+uploadCode+"/upload")
-	script = strings.ReplaceAll(script, "{{CHUNK_SIZE}}", fmt.Sprintf("%d", chunkSizeMB))
-	script = strings.ReplaceAll(script, "{{UPLOAD_CODE}}", uploadCode)
-	script = strings.ReplaceAll(script, "{{GENERATE_DATE}}", time.Now().Format("2006-01-02 15:04:05"))
-	script = strings.ReplaceAll(script, "\\u0060", "`")
-	return script
+// ScriptVersion is the uploader script's version. Bump it with every change to
+// HarukiIOSJavaScriptTemplate: the modules load the script from a URL that ends
+// in &v=<version>, and proxy apps cache a script by its URL, so updating a
+// module only loads a changed script when the URL changes with it.
+const ScriptVersion = "1.1.0"
+
+// GenerateScript renders the uploader script. notifyByDefault is the owner's
+// module notification choice, used only when an upload response does not say
+// (the server cannot be reached, or the upload code no longer exists).
+func GenerateScript(uploadCode string, chunkSizeMB int, uploadURL string, notifyByDefault bool) string {
+	regionLabels, err := json.Marshal(scriptRegionLabels())
+	if err != nil {
+		regionLabels = []byte("{}")
+	}
+	return strings.NewReplacer(
+		"{{UPLOAD_URL}}", uploadURL+"/ios/script/"+uploadCode+"/upload",
+		"{{CHUNK_SIZE}}", fmt.Sprintf("%d", chunkSizeMB),
+		"{{UPLOAD_CODE}}", uploadCode,
+		"{{GENERATE_DATE}}", time.Now().Format("2006-01-02 15:04:05"),
+		"{{SCRIPT_VERSION}}", ScriptVersion,
+		"{{NOTIFY_DEFAULT}}", strconv.FormatBool(notifyByDefault),
+		"{{REGION_LABELS}}", string(regionLabels),
+		"\\u0060", "`",
+	).Replace(HarukiIOSJavaScriptTemplate)
+}
+
+// scriptRegionLabels maps each configured game API host to the region name the
+// notification shows.
+func scriptRegionLabels() map[string]string {
+	labels := make(map[string]string)
+	for region, hosts := range getHarukiIOSMitMHostnameMapping() {
+		for _, host := range hosts {
+			if host = strings.ToLower(strings.TrimSpace(host)); host != "" {
+				labels[host] = regionNames[region]
+			}
+		}
+	}
+	return labels
 }
 
 func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {

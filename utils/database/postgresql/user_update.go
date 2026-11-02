@@ -251,6 +251,26 @@ func (_u *UserUpdate) SetNillableTicketEmailNotificationsEnabled(v *bool) *UserU
 	return _u
 }
 
+// SetIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field.
+func (_u *UserUpdate) SetIosModuleNotificationsEnabled(v bool) *UserUpdate {
+	_u.mutation.SetIosModuleNotificationsEnabled(v)
+	return _u
+}
+
+// SetNillableIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableIosModuleNotificationsEnabled(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetIosModuleNotificationsEnabled(*v)
+	}
+	return _u
+}
+
+// ClearIosModuleNotificationsEnabled clears the value of the "ios_module_notifications_enabled" field.
+func (_u *UserUpdate) ClearIosModuleNotificationsEnabled() *UserUpdate {
+	_u.mutation.ClearIosModuleNotificationsEnabled()
+	return _u
+}
+
 // SetRole sets the "role" field.
 func (_u *UserUpdate) SetRole(v user.Role) *UserUpdate {
 	_u.mutation.SetRole(v)
@@ -727,6 +747,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.TicketEmailNotificationsEnabled(); ok {
 		_spec.SetField(user.FieldTicketEmailNotificationsEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IosModuleNotificationsEnabled(); ok {
+		_spec.SetField(user.FieldIosModuleNotificationsEnabled, field.TypeBool, value)
+	}
+	if _u.mutation.IosModuleNotificationsEnabledCleared() {
+		_spec.ClearField(user.FieldIosModuleNotificationsEnabled, field.TypeBool)
 	}
 	if value, ok := _u.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeEnum, value)
@@ -1300,6 +1326,26 @@ func (_u *UserUpdateOne) SetNillableTicketEmailNotificationsEnabled(v *bool) *Us
 	return _u
 }
 
+// SetIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field.
+func (_u *UserUpdateOne) SetIosModuleNotificationsEnabled(v bool) *UserUpdateOne {
+	_u.mutation.SetIosModuleNotificationsEnabled(v)
+	return _u
+}
+
+// SetNillableIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableIosModuleNotificationsEnabled(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetIosModuleNotificationsEnabled(*v)
+	}
+	return _u
+}
+
+// ClearIosModuleNotificationsEnabled clears the value of the "ios_module_notifications_enabled" field.
+func (_u *UserUpdateOne) ClearIosModuleNotificationsEnabled() *UserUpdateOne {
+	_u.mutation.ClearIosModuleNotificationsEnabled()
+	return _u
+}
+
 // SetRole sets the "role" field.
 func (_u *UserUpdateOne) SetRole(v user.Role) *UserUpdateOne {
 	_u.mutation.SetRole(v)
@@ -1806,6 +1852,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.TicketEmailNotificationsEnabled(); ok {
 		_spec.SetField(user.FieldTicketEmailNotificationsEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IosModuleNotificationsEnabled(); ok {
+		_spec.SetField(user.FieldIosModuleNotificationsEnabled, field.TypeBool, value)
+	}
+	if _u.mutation.IosModuleNotificationsEnabledCleared() {
+		_spec.ClearField(user.FieldIosModuleNotificationsEnabled, field.TypeBool)
 	}
 	if value, ok := _u.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeEnum, value)

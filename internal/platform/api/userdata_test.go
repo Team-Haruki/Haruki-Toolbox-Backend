@@ -1,6 +1,9 @@
 package api
 
 import (
+	json "encoding/json/v2"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -124,5 +127,27 @@ func TestUserDataBuilderLeavesMissingAvatarEmpty(t *testing.T) {
 	}
 	if got := *userData.AvatarPath; got != "" {
 		t.Fatalf("AvatarPath = %q, want empty", got)
+	}
+}
+
+// A user who never chose gets the module notifications, and the settings
+// response always says which way it is, including when they are off.
+func TestBuildUserDataResolvesModuleNotifications(t *testing.T) {
+	off, on := false, true
+	for _, tc := range []struct {
+		stored *bool
+		want   bool
+	}{{nil, true}, {&on, true}, {&off, false}} {
+		ud := NewUserDataBuilder("https://assets.example.test").BuildFromDBUser(&postgresql.User{ID: "1", IosModuleNotificationsEnabled: tc.stored}, nil)
+		if ud.IOSModuleNotificationsEnabled == nil || *ud.IOSModuleNotificationsEnabled != tc.want {
+			t.Errorf("stored %v: got %v, want %t", tc.stored, ud.IOSModuleNotificationsEnabled, tc.want)
+		}
+		raw, err := json.Marshal(ud)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := fmt.Sprintf(`"iosModuleNotificationsEnabled":%t`, tc.want); !strings.Contains(string(raw), want) {
+			t.Errorf("stored %v: JSON %s lacks %s", tc.stored, raw, want)
+		}
 	}
 }

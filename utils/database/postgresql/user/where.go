@@ -115,6 +115,11 @@ func TicketEmailNotificationsEnabled(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldTicketEmailNotificationsEnabled, v))
 }
 
+// IosModuleNotificationsEnabled applies equality check predicate on the "ios_module_notifications_enabled" field. It's identical to IosModuleNotificationsEnabledEQ.
+func IosModuleNotificationsEnabled(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldIosModuleNotificationsEnabled, v))
+}
+
 // Banned applies equality check predicate on the "banned" field. It's identical to BannedEQ.
 func Banned(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBanned, v))
@@ -743,6 +748,26 @@ func TicketEmailNotificationsEnabledEQ(v bool) predicate.User {
 // TicketEmailNotificationsEnabledNEQ applies the NEQ predicate on the "ticket_email_notifications_enabled" field.
 func TicketEmailNotificationsEnabledNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldTicketEmailNotificationsEnabled, v))
+}
+
+// IosModuleNotificationsEnabledEQ applies the EQ predicate on the "ios_module_notifications_enabled" field.
+func IosModuleNotificationsEnabledEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldIosModuleNotificationsEnabled, v))
+}
+
+// IosModuleNotificationsEnabledNEQ applies the NEQ predicate on the "ios_module_notifications_enabled" field.
+func IosModuleNotificationsEnabledNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldIosModuleNotificationsEnabled, v))
+}
+
+// IosModuleNotificationsEnabledIsNil applies the IsNil predicate on the "ios_module_notifications_enabled" field.
+func IosModuleNotificationsEnabledIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldIosModuleNotificationsEnabled))
+}
+
+// IosModuleNotificationsEnabledNotNil applies the NotNil predicate on the "ios_module_notifications_enabled" field.
+func IosModuleNotificationsEnabledNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldIosModuleNotificationsEnabled))
 }
 
 // RoleEQ applies the EQ predicate on the "role" field.

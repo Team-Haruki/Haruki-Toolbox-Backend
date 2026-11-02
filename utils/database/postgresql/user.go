@@ -44,6 +44,8 @@ type User struct {
 	AllowCnMysekai bool `json:"allow_cn_mysekai,omitzero"`
 	// TicketEmailNotificationsEnabled holds the value of the "ticket_email_notifications_enabled" field.
 	TicketEmailNotificationsEnabled bool `json:"ticket_email_notifications_enabled,omitzero"`
+	// IosModuleNotificationsEnabled holds the value of the "ios_module_notifications_enabled" field.
+	IosModuleNotificationsEnabled *bool `json:"ios_module_notifications_enabled,omitzero"`
 	// Role holds the value of the "role" field.
 	Role user.Role `json:"role,omitempty"`
 	// Banned holds the value of the "banned" field.
@@ -166,7 +168,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldAllowCnMysekai, user.FieldTicketEmailNotificationsEnabled, user.FieldBanned:
+		case user.FieldAllowCnMysekai, user.FieldTicketEmailNotificationsEnabled, user.FieldIosModuleNotificationsEnabled, user.FieldBanned:
 			values[i] = new(sql.NullBool)
 		case user.FieldID, user.FieldName, user.FieldEmail, user.FieldAvatarPath, user.FieldAfdianUserID, user.FieldAfdianVerificationMethod, user.FieldSponsorAccessOverride, user.FieldSponsorAccessNote, user.FieldSponsorAccessUpdatedBy, user.FieldRole, user.FieldBanReason, user.FieldKratosIdentityID:
 			values[i] = new(sql.NullString)
@@ -272,6 +274,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field ticket_email_notifications_enabled", values[i])
 			} else if value.Valid {
 				_m.TicketEmailNotificationsEnabled = value.Bool
+			}
+		case user.FieldIosModuleNotificationsEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field ios_module_notifications_enabled", values[i])
+			} else if value.Valid {
+				_m.IosModuleNotificationsEnabled = new(bool)
+				*_m.IosModuleNotificationsEnabled = value.Bool
 			}
 		case user.FieldRole:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -433,6 +442,11 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ticket_email_notifications_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TicketEmailNotificationsEnabled))
+	builder.WriteString(", ")
+	if v := _m.IosModuleNotificationsEnabled; v != nil {
+		builder.WriteString("ios_module_notifications_enabled=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("role=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Role))

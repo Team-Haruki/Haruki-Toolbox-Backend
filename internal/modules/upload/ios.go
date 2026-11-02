@@ -15,6 +15,7 @@ import (
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -144,6 +145,9 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		record, err := apiHelper.DBManager.DB.IOSScriptCode.Query().
 			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
+			WithUser(func(q *postgresql.UserQuery) {
+				q.Select(userSchema.FieldID, userSchema.FieldIosModuleNotificationsEnabled)
+			}).
 			Only(ctx)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -151,6 +155,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to validate upload code")
 		}
+		setModuleNotifyHeader(c, record)
 		toolboxUserID := record.UserID
 		chunkIndex64, err := strconv.ParseInt(c.Get("X-Chunk-Index", ""), 10, 64)
 		if err != nil {
@@ -283,6 +288,24 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		return harukiAPIHelper.Responses.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 	}
+}
+
+// moduleNotifyHeader tells the uploader script, on every response once the
+// upload code is known, whether its owner currently wants module
+// notifications. The script prefers it over the choice baked into it when it
+// was generated, because proxy apps keep running a cached script.
+const moduleNotifyHeader = "X-Haruki-Module-Notify"
+
+func setModuleNotifyHeader(c fiber.Ctx, record *postgresql.IOSScriptCode) {
+	var stored *bool
+	if record != nil && record.Edges.User != nil {
+		stored = record.Edges.User.IosModuleNotificationsEnabled
+	}
+	value := "0"
+	if harukiAPIHelper.IOSModuleNotificationsEnabled(stored) {
+		value = "1"
+	}
+	c.Set(moduleNotifyHeader, value)
 }
 
 func parseIOSProxyPathInt(raw string) (int64, error) {

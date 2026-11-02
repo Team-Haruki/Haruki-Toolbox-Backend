@@ -76,6 +76,8 @@ type GenerateSocialPlatformCodePayload struct {
 
 type UpdateProfilePayload struct {
 	AvatarBase64 *string `json:"avatarBase64"`
+	// Omitted leaves the stored choice unchanged.
+	IOSModuleNotificationsEnabled *bool `json:"iosModuleNotificationsEnabled"`
 }
 
 type AuthorizeSocialPlatformPayload struct {
@@ -107,17 +109,20 @@ type RegisterOrLoginSuccessResponse struct {
 }
 
 type HarukiToolboxUserData struct {
-	Name                        *string                        `json:"name,omitzero"`
-	UserID                      *string                        `json:"userId,omitzero"`
-	Role                        *string                        `json:"role,omitzero"`
-	AvatarPath                  *string                        `json:"avatarPath,omitzero"`
-	AllowCNMysekai              *bool                          `json:"allowCNMysekai,omitzero"`
-	IOSUploadCode               *string                        `json:"iosUploadCode,omitzero"`
-	EmailInfo                   *EmailInfo                     `json:"emailInfo,omitzero"`
-	SocialPlatformInfo          *SocialPlatformInfo            `json:"socialPlatformInfo,omitzero"`
-	AuthorizeSocialPlatformInfo *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitzero"`
-	GameAccountBindings         *[]GameAccountBinding          `json:"gameAccountBindings,omitzero"`
-	SessionToken                *string                        `json:"sessionToken,omitzero"`
+	Name           *string `json:"name,omitzero"`
+	UserID         *string `json:"userId,omitzero"`
+	Role           *string `json:"role,omitzero"`
+	AvatarPath     *string `json:"avatarPath,omitzero"`
+	AllowCNMysekai *bool   `json:"allowCNMysekai,omitzero"`
+	IOSUploadCode  *string `json:"iosUploadCode,omitzero"`
+	// Always set when built from a database user: true unless the user turned
+	// the notifications off.
+	IOSModuleNotificationsEnabled *bool                          `json:"iosModuleNotificationsEnabled,omitzero"`
+	EmailInfo                     *EmailInfo                     `json:"emailInfo,omitzero"`
+	SocialPlatformInfo            *SocialPlatformInfo            `json:"socialPlatformInfo,omitzero"`
+	AuthorizeSocialPlatformInfo   *[]AuthorizeSocialPlatformInfo `json:"authorizeSocialPlatformInfo,omitzero"`
+	GameAccountBindings           *[]GameAccountBinding          `json:"gameAccountBindings,omitzero"`
+	SessionToken                  *string                        `json:"sessionToken,omitzero"`
 }
 
 type EmailInfo struct {

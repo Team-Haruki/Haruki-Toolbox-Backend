@@ -63,7 +63,7 @@ function HarukiUploadClient() {
         }
         console.log(\u0060${title}\n${subtitle}\n${message}\u0060)
         if (isQuanX) $notify(title, subtitle, message, Opts(rawopts))
-        if (isSurge) $notification.post(title, subtitle, message, Opts(rawopts))
+        if (isSurge && typeof $notification != "undefined") $notification.post(title, subtitle, message, Opts(rawopts))
         if (isJSBox) $push.schedule({
             title: title,
             body: subtitle ? subtitle + "\n" + message : message
@@ -257,7 +257,7 @@ function HarukiUploadClient() {
 // Generated at {{GENERATE_DATE}}
 const $ = HarukiUploadClient();
 const scriptName = "haruki_toolbox_uploader.js";
-const version = "1.0.1";
+const version = "{{SCRIPT_VERSION}}";
 
 const upload_id = Math.random().toString(36).substr(2, 9);
 const upload_url = "{{UPLOAD_URL}}";
@@ -265,26 +265,80 @@ const chunkSize = {{CHUNK_SIZE}} * 1024 * 1024; // {{CHUNK_SIZE}}MB per chunk
 const body = (typeof $response !== 'undefined' && $response.body) ? $response.body : '';
 const url = $.isRequest ? $request.url : '';
 
-// Early return if no body
-if (!body || body.length === 0) {
-    console.log('[haruki_toolbox_uploader] No response body to upload');
-    $done({});
-}
-
-const totalChunks = Math.ceil(body.length / chunkSize);
-
-let sentChunks = 0;
-let failedChunks = 0;
+// Module notifications: one notification per upload saying whether it got
+// through. The owner's choice when this script was generated is only the
+// fallback; every upload response carries the current one in
+// X-Haruki-Module-Notify, so turning them off takes effect at once even though
+// proxy apps keep running a cached copy of this script.
+const notifyByDefault = {{NOTIFY_DEFAULT}};
+const regionLabels = {{REGION_LABELS}};
 
 function log(message) {
     console.log(\u0060[${scriptName}-v${version}] [${upload_id}] ${message}\u0060);
 }
 
-log(\u0060start to upload response body with ${totalChunks} chunks\u0060);
-log(\u0060body length: ${body.length}\u0060);
-log(\u0060original url: ${url}\u0060);
+function headerValue(resp, name) {
+    const headers = (resp && resp.headers) || {};
+    const wanted = name.toLowerCase();
+    for (const key of Object.keys(headers)) {
+        if (key.toLowerCase() === wanted) return String(headers[key]);
+    }
+    return null;
+}
 
-function sendChunk(index) {
+function regionLabel() {
+    const match = url.match(/^https?:\/\/([^\/:?#]+)/);
+    return (match && regionLabels[match[1].toLowerCase()]) || "";
+}
+
+function dataLabel() {
+    if (url.indexOf("/api/suite/") >= 0) return "Suite";
+    if (url.indexOf("/birthday-party/") >= 0) return "MySekai 生日派对";
+    if (url.indexOf("/mysekai") >= 0) return "MySekai";
+    return "游戏";
+}
+
+function notifyResult(resp, subtitle, message) {
+    const choice = headerValue(resp, "X-Haruki-Module-Notify");
+    const enabled = choice === null ? notifyByDefault : choice === "1";
+    if (!enabled) return;
+    $.notify("Haruki 工具箱", subtitle, message);
+}
+
+// The texts matched here are the upload endpoint's own error messages.
+function failureMessage(status, data) {
+    let reason = "";
+    try {
+        reason = JSON.parse(data).message || "";
+    } catch (e) {
+        reason = "";
+    }
+    if (reason === "invalid upload code") {
+        return "上传码已失效：请到 Haruki 工具箱的 iOS 模块页面，用新的上传码重新安装模块。";
+    }
+    if (reason === "upload not allowed") {
+        return "这个游戏账号还没有在 Haruki 工具箱绑定并验证，或你没有它的上传授权。";
+    }
+    if (status === 413) {
+        return "这份数据太大，工具箱没有接收。";
+    }
+    if (status === 429) {
+        return "上传太频繁，请稍后重进游戏再试。";
+    }
+    return "HTTP " + status + (reason ? "：" + reason : "") + "。游戏本身不受影响，稍后重进游戏即可重试。";
+}
+
+function finish(resp, error) {
+    const subject = (regionLabel() ? regionLabel() + " " : "") + dataLabel() + " 数据";
+    if (error !== null) {
+        notifyResult(resp, subject + "上传失败", error);
+    } else {
+        notifyResult(resp, subject + "已上传", "工具箱已收到数据，处理完成后首页「我的账号」会更新上传时间。");
+    }
+    $.done({});
+}
+
+function sendChunk(index, totalChunks) {
     const start = index * chunkSize;
     const end = Math.min(start + chunkSize, body.length);
     const chunk = body.slice(start, end);
@@ -306,27 +360,32 @@ function sendChunk(index) {
     log(\u0060uploading chunk ${index + 1}/${totalChunks} (${chunk.length} bytes)\u0060);
 
     $.post(options, (error, resp, data) => {
-        sentChunks++;
+        // The server assembles an upload only from all of its chunks, so the
+        // first failed chunk ends it.
         if (error) {
             log(\u0060chunk ${index + 1} upload failed: ${error}\u0060);
-            failedChunks++;
+            finish(null, "连不上 Haruki 工具箱（" + error + "）。游戏本身不受影响，稍后重进游戏即可重试。");
         } else if (resp.status !== 200) {
             log(\u0060chunk ${index + 1} upload failed: HTTP ${resp.status}\u0060);
-            failedChunks++;
-        } else {
+            finish(resp, failureMessage(resp.status, data));
+        } else if (index + 1 < totalChunks) {
             log(\u0060chunk ${index + 1} upload success\u0060);
-        }
-
-        if (sentChunks === totalChunks) {
-            log(\u0060upload completed: ${failedChunks}/${sentChunks} chunks failed\u0060);
-            $.done({});
+            sendChunk(index + 1, totalChunks);
         } else {
-            sendChunk(index + 1);
+            log(\u0060upload completed: ${totalChunks} chunks\u0060);
+            finish(resp, null);
         }
     });
 }
 
-if ($.isRequest && typeof $response !== 'undefined') {
-    sendChunk(0);
+if (!body || body.length === 0) {
+    console.log('[haruki_toolbox_uploader] No response body to upload');
+    $.done({});
+} else if ($.isRequest && typeof $response !== 'undefined') {
+    const totalChunks = Math.ceil(body.length / chunkSize);
+    log(\u0060start to upload response body with ${totalChunks} chunks\u0060);
+    log(\u0060body length: ${body.length}\u0060);
+    log(\u0060original url: ${url}\u0060);
+    sendChunk(0, totalChunks);
 }
 `

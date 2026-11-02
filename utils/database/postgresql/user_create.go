@@ -179,6 +179,20 @@ func (_c *UserCreate) SetNillableTicketEmailNotificationsEnabled(v *bool) *UserC
 	return _c
 }
 
+// SetIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field.
+func (_c *UserCreate) SetIosModuleNotificationsEnabled(v bool) *UserCreate {
+	_c.mutation.SetIosModuleNotificationsEnabled(v)
+	return _c
+}
+
+// SetNillableIosModuleNotificationsEnabled sets the "ios_module_notifications_enabled" field if the given value is not nil.
+func (_c *UserCreate) SetNillableIosModuleNotificationsEnabled(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetIosModuleNotificationsEnabled(*v)
+	}
+	return _c
+}
+
 // SetRole sets the "role" field.
 func (_c *UserCreate) SetRole(v user.Role) *UserCreate {
 	_c.mutation.SetRole(v)
@@ -572,6 +586,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TicketEmailNotificationsEnabled(); ok {
 		_spec.SetField(user.FieldTicketEmailNotificationsEnabled, field.TypeBool, value)
 		_node.TicketEmailNotificationsEnabled = value
+	}
+	if value, ok := _c.mutation.IosModuleNotificationsEnabled(); ok {
+		_spec.SetField(user.FieldIosModuleNotificationsEnabled, field.TypeBool, value)
+		_node.IosModuleNotificationsEnabled = &value
 	}
 	if value, ok := _c.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeEnum, value)

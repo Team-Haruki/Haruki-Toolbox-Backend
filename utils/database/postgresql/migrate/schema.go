@@ -868,6 +868,7 @@ var (
 		{Name: "sponsor_access_updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "allow_cn_mysekai", Type: field.TypeBool, Default: false},
 		{Name: "ticket_email_notifications_enabled", Type: field.TypeBool, Default: false},
+		{Name: "ios_module_notifications_enabled", Type: field.TypeBool, Nullable: true},
 		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "admin", "super_admin"}, Default: "user"},
 		{Name: "banned", Type: field.TypeBool, Default: false},
 		{Name: "ban_reason", Type: field.TypeString, Nullable: true},
@@ -883,12 +884,12 @@ var (
 			{
 				Name:    "user_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[17]},
+				Columns: []*schema.Column{UsersColumns[18]},
 			},
 			{
 				Name:    "user_role_banned",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[13], UsersColumns[14]},
+				Columns: []*schema.Column{UsersColumns[14], UsersColumns[15]},
 			},
 		},
 	}

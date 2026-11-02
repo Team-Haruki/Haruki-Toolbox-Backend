@@ -38,6 +38,8 @@ const (
 	FieldAllowCnMysekai = "allow_cn_mysekai"
 	// FieldTicketEmailNotificationsEnabled holds the string denoting the ticket_email_notifications_enabled field in the database.
 	FieldTicketEmailNotificationsEnabled = "ticket_email_notifications_enabled"
+	// FieldIosModuleNotificationsEnabled holds the string denoting the ios_module_notifications_enabled field in the database.
+	FieldIosModuleNotificationsEnabled = "ios_module_notifications_enabled"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
 	// FieldBanned holds the string denoting the banned field in the database.
@@ -139,6 +141,7 @@ var Columns = []string{
 	FieldSponsorAccessUpdatedAt,
 	FieldAllowCnMysekai,
 	FieldTicketEmailNotificationsEnabled,
+	FieldIosModuleNotificationsEnabled,
 	FieldRole,
 	FieldBanned,
 	FieldBanReason,
@@ -310,6 +313,11 @@ func ByAllowCnMysekai(opts ...sql.OrderTermOption) OrderOption {
 // ByTicketEmailNotificationsEnabled orders the results by the ticket_email_notifications_enabled field.
 func ByTicketEmailNotificationsEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTicketEmailNotificationsEnabled, opts...).ToFunc()
+}
+
+// ByIosModuleNotificationsEnabled orders the results by the ios_module_notifications_enabled field.
+func ByIosModuleNotificationsEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIosModuleNotificationsEnabled, opts...).ToFunc()
 }
 
 // ByRole orders the results by the role field.
