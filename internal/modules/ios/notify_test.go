@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -44,7 +45,8 @@ func TestNotifyParameterSetsTheModuleDefault(t *testing.T) {
 
 	get := func(path string) (int, string) {
 		t.Helper()
-		resp, err := app.Test(httptest.NewRequest("GET", path, nil))
+		// Proxy-mode modules answer after a 1-3 s delay.
+		resp, err := app.Test(httptest.NewRequest("GET", path, nil), fiber.TestConfig{Timeout: 10 * time.Second, FailOnTimeout: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,6 +65,19 @@ func TestNotifyParameterSetsTheModuleDefault(t *testing.T) {
 			t.Errorf("script%s: status %d, want default %s", query, status, want)
 		}
 	}
+	// Proxy mode: the modules carry the notification script with the same
+	// default.
+	for query, wants := range map[string][]string{
+		"jp-haruki-toolbox-suite.sgmodule?mode=proxy&notify=false": {"#!arguments=notify:false\n", "proxy-notify.js?v=" + iosGen.ProxyNotifyScriptVersion + "&notify=false,"},
+		"jp-haruki-toolbox-suite.conf?mode=proxy":                  {"proxy-notify.js?v=" + iosGen.ProxyNotifyScriptVersion + "#notify=true\n"},
+	} {
+		status, body := get("/module/code/" + query)
+		for _, want := range wants {
+			if status != fiber.StatusOK || !strings.Contains(body, want) {
+				t.Errorf("module %s: status %d, want %q in\n%s", query, status, want, body)
+			}
+		}
+	}
 	for query, want := range map[string]string{"": "true", "?notify=false": "false"} {
 		status, body := get("/script/proxy-notify.js" + query)
 		if status != fiber.StatusOK || !strings.Contains(body, "const notifyByDefault = "+want+";") {
@@ -76,7 +91,7 @@ func TestNotifyParameterSetsTheModuleDefault(t *testing.T) {
 	}
 }
 
-// The proxy notification script is served at the path the Loon plugin names,
+// The proxy notification script is served at the path the proxy-mode modules name,
 // next to the per-code uploader script.
 func TestProxyNotifyScriptRoute(t *testing.T) {
 	app := fiber.New()

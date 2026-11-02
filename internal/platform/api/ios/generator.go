@@ -3,6 +3,8 @@ package ios
 import (
 	json "encoding/json/v2"
 	"fmt"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -118,7 +120,7 @@ func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 	sb.WriteString("#!homepage=https://haruki.seiunx.com/ios-modules\n")
 	sb.WriteString("#!author=Haruki Dev Team\n")
 	sb.WriteString(fmt.Sprintf("#!date=%s\n", time.Now().Format("2006-01-02")))
-	if len(rs.ScriptRules) > 0 {
+	if len(rs.ScriptRules) > 0 || rs.ProxyNotify != nil {
 		// Surge replaces {{{notify}}} with the user's value, or this default.
 		sb.WriteString(fmt.Sprintf("#!arguments=%s:%s\n", notifyArgumentName, notifyArgumentDefault(req)))
 		sb.WriteString(fmt.Sprintf("#!arguments-desc=%s：%s。true 开启，false 关闭。\n", notifyArgumentName, notifyArgumentDesc))
@@ -141,6 +143,13 @@ func generateSurgeModule(req *ModuleRequest, rs *RuleSet) string {
 			sb.WriteString(fmt.Sprintf("haruki-upload-%d = type=http-response,pattern=%s,requires-body=1,binary-body-mode=1,max-size=100000000,timeout=60,script-path=%s,argument=\"%s={{{%s}}}\"\n",
 				i+1, rule.Pattern, rule.Target, notifyArgumentName, notifyArgumentName))
 		}
+	}
+	if rs.ProxyNotify != nil {
+		// Proxy mode: no upload script, only the body-less notification
+		// script on our upload URL, which runs at the response header stage.
+		sb.WriteString("[Script]\n")
+		sb.WriteString(fmt.Sprintf("haruki-upload-notify = type=http-response,pattern=%s,requires-body=0,timeout=%d,script-path=%s,argument=\"%s={{{%s}}}\"\n",
+			rs.ProxyNotify.Pattern, proxyNotifyTimeout, rs.ProxyNotify.Target, notifyArgumentName, notifyArgumentName))
 	}
 	return sb.String()
 }
@@ -169,8 +178,8 @@ func generateLoonModule(req *ModuleRequest, rs *RuleSet) string {
 		sb.WriteString(fmt.Sprintf("%s = switch,%s,tag=%s,desc=%s\n", notifyArgumentName, notifyArgumentDefault(req), notifyArgumentTitle, notifyArgumentDesc))
 		sb.WriteString("\n")
 		sb.WriteString("[Script]\n")
-		sb.WriteString(fmt.Sprintf("http-response %s script-path=%s, requires-body=false, timeout=10, tag=haruki-upload-notify, argument={%s}\n",
-			rs.ProxyNotify.Pattern, rs.ProxyNotify.Target, notifyArgumentName))
+		sb.WriteString(fmt.Sprintf("http-response %s script-path=%s, requires-body=false, timeout=%d, tag=haruki-upload-notify, argument={%s}\n",
+			rs.ProxyNotify.Pattern, rs.ProxyNotify.Target, proxyNotifyTimeout, notifyArgumentName))
 		sb.WriteString("\n")
 	}
 	if len(rs.ScriptRules) > 0 {
@@ -205,7 +214,38 @@ func generateQuantumultXModule(req *ModuleRequest, rs *RuleSet) string {
 		}
 	}
 	sb.WriteString("^https:\\/\\/submit\\.backtrace\\.io\\/ url reject\n")
+	hostnames := rs.Hostnames
+	if rs.ProxyNotify != nil {
+		// Quantumult X has no module arguments: the switch rides in the
+		// script URL's fragment, which is never sent to the server and which
+		// the script reads from $environment
+		// (https://github.com/crossutility/Quantumult-X/blob/master/sample-task.js).
+		// Updating the module from a new URL changes it.
+		sb.WriteString(fmt.Sprintf("%s url script-response-header %s#%s=%s\n",
+			rs.ProxyNotify.Pattern, rs.ProxyNotify.Target, notifyArgumentName, notifyArgumentDefault(req)))
+		// The 307 sends the game to our URL over a new HTTPS connection, and
+		// Quantumult X only runs scripts on hosts it decrypts ("Only the TLS
+		// SNI or destination address in hostname will be handled by MitM",
+		// https://github.com/crossutility/Quantumult-X/blob/master/sample.conf).
+		if host := endpointHostname(rs.ProxyNotify.Target); host != "" && !slices.Contains(hostnames, host) {
+			hostnames = append(slices.Clone(hostnames), host)
+		}
+	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("hostname = %s, submit.backtrace.io\n", strings.Join(rs.Hostnames, ", ")))
+	sb.WriteString(fmt.Sprintf("hostname = %s, submit.backtrace.io\n", strings.Join(hostnames, ", ")))
 	return sb.String()
+}
+
+// proxyNotifyTimeout is the notification script's timeout in seconds. It reads
+// two headers and posts one notification, so a stuck run only delays the game's
+// response by this much.
+const proxyNotifyTimeout = 10
+
+// endpointHostname is the host name of an absolute URL, or "" if it has none.
+func endpointHostname(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
 }

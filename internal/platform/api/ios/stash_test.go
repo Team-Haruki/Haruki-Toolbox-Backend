@@ -160,10 +160,16 @@ func checkStashOverride(t *testing.T, out string, rs *RuleSet) {
 		}
 	}
 
-	if len(parsed.HTTP.Script) != len(rs.ScriptRules) {
-		t.Fatalf("script entries = %d, want %d", len(parsed.HTTP.Script), len(rs.ScriptRules))
+	// Script mode: one upload script per rule. Proxy mode: only the
+	// body-less notification script.
+	rules := rs.ScriptRules
+	if rs.ProxyNotify != nil {
+		rules = append(append([]Rule{}, rules...), *rs.ProxyNotify)
 	}
-	if len(rs.ScriptRules) == 0 {
+	if len(parsed.HTTP.Script) != len(rules) {
+		t.Fatalf("script entries = %d, want %d", len(parsed.HTTP.Script), len(rules))
+	}
+	if len(rules) == 0 {
 		if _, ok := doc["script-providers"]; ok {
 			t.Fatalf("script-providers without scripts: %s", out)
 		}
@@ -173,8 +179,12 @@ func checkStashOverride(t *testing.T, out string, rs *RuleSet) {
 	for i, raw := range rawScripts {
 		keys := mapKeys(t, raw)
 		assertKeysAllowed(t, "http.script", keys, stashScriptKeys)
-		if len(keys) != len(stashScriptKeys) {
-			t.Fatalf("http.script[%d] keys = %v, want %v", i, keys, stashScriptKeys)
+		wantKeys := len(stashScriptKeys)
+		if i >= len(rs.ScriptRules) {
+			wantKeys -= 2 // no binary-mode or max-size without a body
+		}
+		if len(keys) != wantKeys {
+			t.Fatalf("http.script[%d] keys = %v, want %d of %v", i, keys, wantKeys, stashScriptKeys)
 		}
 	}
 	rawProviders, ok := doc["script-providers"].(map[string]any)
@@ -185,15 +195,19 @@ func checkStashOverride(t *testing.T, out string, rs *RuleSet) {
 		assertKeysAllowed(t, "script-providers."+name, mapKeys(t, raw), stashProviderKeys)
 	}
 	for i, script := range parsed.HTTP.Script {
-		rule := rs.ScriptRules[i]
+		rule := rules[i]
 		if script.Match != rule.Pattern {
 			t.Fatalf("script match = %q, want %q (YAML round trip)", script.Match, rule.Pattern)
 		}
 		if _, err := regexp.Compile(script.Match); err != nil {
 			t.Fatalf("script match %q: %v", script.Match, err)
 		}
-		if script.Type != "response" || !script.RequireBody || !script.BinaryMode || script.MaxSize <= 0 || script.Timeout <= 0 {
-			t.Fatalf("unexpected script options: %+v", script)
+		if i < len(rs.ScriptRules) {
+			if script.Type != "response" || !script.RequireBody || !script.BinaryMode || script.MaxSize <= 0 || script.Timeout <= 0 {
+				t.Fatalf("unexpected script options: %+v", script)
+			}
+		} else if script.Type != "response" || script.RequireBody || script.BinaryMode || script.MaxSize != 0 || script.Timeout <= 0 || script.Timeout > 10 {
+			t.Fatalf("unexpected notification script options: %+v", script)
 		}
 		provider, ok := parsed.ScriptProviders[script.Name]
 		if !ok {

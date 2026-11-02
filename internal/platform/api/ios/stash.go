@@ -56,8 +56,8 @@ type stashScript struct {
 	Name        string `yaml:"name"`
 	Type        string `yaml:"type"`
 	RequireBody bool   `yaml:"require-body"`
-	BinaryMode  bool   `yaml:"binary-mode"`
-	MaxSize     int    `yaml:"max-size"`
+	BinaryMode  bool   `yaml:"binary-mode,omitempty"`
+	MaxSize     int    `yaml:"max-size,omitempty"`
 	Timeout     int    `yaml:"timeout"`
 	Argument    string `yaml:"argument,omitempty"`
 }
@@ -94,21 +94,25 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) (string, error) {
 	}
 	override.HTTP.URLRewrite = append(override.HTTP.URLRewrite, `^https:\/\/submit\.backtrace\.io\/ - reject`)
 
-	if len(rs.ScriptRules) > 0 {
+	if len(rs.ScriptRules) > 0 || rs.ProxyNotify != nil {
 		override.ArgumentsVer = 1
 		override.Arguments = map[string]stashArgument{
 			notifyArgumentName: {Type: "switch", Title: notifyArgumentTitle, Description: notifyArgumentDesc, Default: !req.NotifyOff},
 		}
 	}
-	for _, rule := range rs.ScriptRules {
-		provider := stashScriptProviderName(rule.Target)
+	addProvider := func(scriptURL string) string {
+		provider := stashScriptProviderName(scriptURL)
 		if override.ScriptProviders == nil {
 			override.ScriptProviders = make(map[string]stashScriptProvider)
 		}
 		override.ScriptProviders[provider] = stashScriptProvider{
-			URL:      rule.Target,
+			URL:      scriptURL,
 			Interval: stashScriptProviderInterval,
 		}
+		return provider
+	}
+	for _, rule := range rs.ScriptRules {
+		provider := addProvider(rule.Target)
 		override.HTTP.Script = append(override.HTTP.Script, stashScript{
 			Match:       rule.Pattern,
 			Name:        provider,
@@ -119,6 +123,19 @@ func generateStashModule(req *ModuleRequest, rs *RuleSet) (string, error) {
 			Timeout:     stashScriptTimeout,
 			// A reference inside other text becomes a string: "notify=true".
 			Argument: notifyArgumentName + "=${args." + notifyArgumentName + "}",
+		})
+	}
+	if rs.ProxyNotify != nil {
+		// Proxy mode: only the body-less notification script on our upload
+		// URL. binary-mode and max-size are left out: they only apply to a
+		// body, and max-size skips the script for larger bodies.
+		override.HTTP.Script = append(override.HTTP.Script, stashScript{
+			Match:       rs.ProxyNotify.Pattern,
+			Name:        addProvider(rs.ProxyNotify.Target),
+			Type:        "response",
+			RequireBody: false,
+			Timeout:     proxyNotifyTimeout,
+			Argument:    notifyArgumentName + "=${args." + notifyArgumentName + "}",
 		})
 	}
 
