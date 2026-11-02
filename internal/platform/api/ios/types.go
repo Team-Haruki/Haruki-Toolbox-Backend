@@ -55,6 +55,19 @@ func ParseEndpointType(s string) (EndpointType, bool) {
 	}
 }
 
+// ParseNotify reads the notify query parameter of module and script URLs.
+// Missing means on: module notifications are opt-out.
+func ParseNotify(raw string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "1", "true", "on":
+		return true, true
+	case "0", "false", "off":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
 type DataType string
 
 const (
@@ -86,6 +99,9 @@ type ModuleRequest struct {
 	App         ProxyApp
 	Mode        UploadMode
 	ChunkSizeMB int
+	// NotifyOff makes upload notifications default to off in the generated
+	// module. The zero value keeps them on: they are opt-out.
+	NotifyOff bool
 }
 
 func (app ProxyApp) ContentType() string {

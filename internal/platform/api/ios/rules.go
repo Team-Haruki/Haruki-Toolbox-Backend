@@ -71,13 +71,21 @@ func GenerateRuleSet(req *ModuleRequest, endpoint string, endpointType string) *
 			}
 		}
 	}
+	if req.NotifyOff {
+		// The fallback for apps that pass the script no notify argument.
+		for i := range rs.ScriptRules {
+			rs.ScriptRules[i].Target += "&notify=false"
+		}
+	}
 	return rs
 }
 
 func generateRulesForDataType(host, region string, dt DataType, mode UploadMode, uploadCode, endpoint string, chunkSizeMB int, endpointType string) *RuleSet {
 	rs := &RuleSet{}
 	escapedHost := strings.ReplaceAll(host, ".", "\\.")
-	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d&endpoint=%s", endpoint, uploadCode, chunkSizeMB, endpointType)
+	// v names the script version, so a module update after a script change
+	// loads the new script instead of the copy the proxy app cached by URL.
+	scriptURL := fmt.Sprintf("%s/ios/script/%s/haruki-toolbox.js?chunk=%d&endpoint=%s&v=%s", endpoint, uploadCode, chunkSizeMB, endpointType, ScriptVersion)
 	switch dt {
 	case DataTypeSuite:
 		pattern := fmt.Sprintf(`^https://%s/api/suite/user/(\d+)(\?isLogin=true)?$`, escapedHost)
