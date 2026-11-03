@@ -116,6 +116,34 @@ func TestBuildAccessibleGameAccountItemsAggregatesGrants(t *testing.T) {
 	}
 }
 
+// Both deck modes read only suite, so a suite-only grant offers recommend (the
+// mysekai deck mode included) without any mysekai capability.
+func TestBuildAccessibleGameAccountItemsSuiteOnlyGrantOffersRecommend(t *testing.T) {
+	suiteExpiry := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	accessible := &postgresql.AccessibleGameAccounts{
+		Grants: []postgresql.AccessibleGameAccountGrant{
+			{
+				Server: "cn", GameUserID: "321", DataType: "suite",
+				ExpiresAt: suiteExpiry,
+				GrantedAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+				Owner:     postgresql.AccessibleGameAccountOwner{UserID: "owner-3", Name: "Owner Three"},
+			},
+		},
+	}
+	items := buildAccessibleGameAccountItems(accessible)
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	keys := capabilityKeys(items[0].Capabilities)
+	if keys["mysekai"] {
+		t.Fatalf("mysekai capability without a mysekai grant: %v", keys)
+	}
+	got := items[0].Capabilities[gameAccountCapabilityRecommend].ExpiresAt
+	if !keys[gameAccountCapabilityRecommend] || got == nil || !got.Equal(suiteExpiry) {
+		t.Fatalf("recommend = %v (expiry %v), want offered until %v", keys, got, suiteExpiry)
+	}
+}
+
 func TestBuildAccessibleGameAccountItemsGrantWithoutSuiteHasNoRecommend(t *testing.T) {
 	accessible := &postgresql.AccessibleGameAccounts{
 		Grants: []postgresql.AccessibleGameAccountGrant{
@@ -182,9 +210,8 @@ func TestDeckRecommendRequiredDataTypes(t *testing.T) {
 	if got := deckRecommendRequiredDataTypes(deckRecommendDataModeSuite); len(got) != 1 || got[0] != ownedGameAccountDataTypeSuite {
 		t.Fatalf("suite mode requires %v, want [suite]", got)
 	}
-	got := deckRecommendRequiredDataTypes(deckRecommendDataModeMysekai)
-	if len(got) != 2 || got[0] != ownedGameAccountDataTypeSuite || got[1] != ownedGameAccountDataTypeMysekai {
-		t.Fatalf("mysekai mode requires %v, want [suite mysekai]", got)
+	if got := deckRecommendRequiredDataTypes(deckRecommendDataModeMysekai); len(got) != 1 || got[0] != ownedGameAccountDataTypeSuite {
+		t.Fatalf("mysekai mode requires %v, want [suite]", got)
 	}
 }
 

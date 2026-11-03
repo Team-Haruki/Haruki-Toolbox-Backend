@@ -17,10 +17,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// deckRecommendReadTimeout bounds the deck-recommend data read. It is wider than
-// the other read deadlines because mysekai mode issues two sequential game-data
-// fetches (suite subset + mysekai subset).
-const deckRecommendReadTimeout = 5 * time.Second
+// deckRecommendReadTimeout bounds the deck-recommend data read: the PG access
+// check plus one suite-subset fetch, for either mode. That is the same work as
+// the owned-account read (ownedGameAccountReadTimeout), on a smaller key set.
+const deckRecommendReadTimeout = 3 * time.Second
 
 type deckRecommendDataMode string
 
@@ -53,10 +53,12 @@ func parseDeckRecommendDataMode(raw string) (deckRecommendDataMode, *fiber.Error
 // recommend-data reads for a mode. It is the single source of truth shared with
 // the accessible-accounts read model (applyDerivedGameAccountCapabilities), so a
 // client can never be offered a mode this handler would then refuse.
-func deckRecommendRequiredDataTypes(mode deckRecommendDataMode) []ownedGameAccountDataType {
-	if mode == deckRecommendDataModeMysekai {
-		return []ownedGameAccountDataType{ownedGameAccountDataTypeSuite, ownedGameAccountDataTypeMysekai}
-	}
+//
+// Both modes read only suite: the mysekai deck mode's inputs (gates, canvases,
+// fixture character bonuses) are suite tables, and the mysekai upload holds
+// nothing the deck engine uses. The mode stays in the request and response for
+// compatibility.
+func deckRecommendRequiredDataTypes(deckRecommendDataMode) []ownedGameAccountDataType {
 	return []ownedGameAccountDataType{ownedGameAccountDataTypeSuite}
 }
 
@@ -125,13 +127,7 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			}
 		}
 
-		userData, err := harukiAPIData.LoadDeckRecommendUserData(
-			ctx,
-			apiHelper,
-			gameUserID,
-			server,
-			mode == deckRecommendDataModeMysekai,
-		)
+		userData, err := harukiAPIData.LoadDeckRecommendUserData(ctx, apiHelper, gameUserID, server)
 		if err != nil {
 			return respondVerifiedGameAccountDataError(c, err)
 		}
