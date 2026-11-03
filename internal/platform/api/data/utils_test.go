@@ -157,10 +157,10 @@ func TestDeckRecommendKeySets(t *testing.T) {
 		t.Fatalf("suite projection should include allowed userGamedata fields")
 	}
 
-	mysekaiProjection := buildMysekaiProjection(DeckRecommendMysekaiKeys)
-	for _, key := range DeckRecommendMysekaiKeys {
-		if mysekaiProjection[key] != 1 {
-			t.Fatalf("mysekai projection missing %s", key)
+	// The mysekai deck mode's bonus tables are suite keys.
+	for _, key := range []string{"userMysekaiCanvases", "userMysekaiFixtureGameCharacterPerformanceBonuses", "userMysekaiGates"} {
+		if suiteProjection[key] != 1 {
+			t.Fatalf("suite projection missing %s", key)
 		}
 	}
 }

@@ -28,16 +28,13 @@ func TestDeckRecommendationUsesPostgresAndPreservesNumericIDs(t *testing.T) {
 	}
 	gd := gamedata.NewService(p)
 	id := int64(28808221489823746)
-	suite := map[string]any{"upload_time": int64(100), "userGamedata": map[string]any{"userId": id, "name": "fixture", "rank": 99, "secret": "hidden"}, "userCards": []any{map[string]any{"cardId": 1}}, "userDecks": []any{}}
+	// A suite upload and no mysekai upload: the mysekai bonus tables come from suite.
+	suite := map[string]any{"upload_time": int64(100), "userGamedata": map[string]any{"userId": id, "name": "fixture", "rank": 99, "secret": "hidden"}, "userCards": []any{map[string]any{"cardId": 1}}, "userDecks": []any{}, "userMysekaiCanvases": []any{map[string]any{"mysekaiFixtureId": 7}}}
 	if _, err = gd.Suite().Write(ctx, id, "jp", suite, gamedata.WriteSuite, gd.Limits()); err != nil {
 		t.Fatal(err)
 	}
-	mysekai := map[string]any{"userMysekaiCanvases": []any{map[string]any{"id": 7}}}
-	if _, err = gd.Mysekai().Write(ctx, id, "jp", mysekai, gamedata.WriteMysekai, gd.Limits()); err != nil {
-		t.Fatal(err)
-	}
 	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{GameData: gd}}
-	got, err := LoadDeckRecommendUserData(ctx, helper, id, "jp", true)
+	got, err := LoadDeckRecommendUserData(ctx, helper, id, "jp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +46,7 @@ func TestDeckRecommendationUsesPostgresAndPreservesNumericIDs(t *testing.T) {
 		t.Fatal("profile projection leaked an unrequested field")
 	}
 	if _, ok := got["userMysekaiCanvases"]; !ok {
-		t.Fatal("mysekai recommendation data missing")
+		t.Fatal("mysekai bonus tables missing from the suite read")
 	}
 	stamp, found, err := readUploadTime(ctx, helper, "jp", "suite", id)
 	if err != nil || !found || stamp <= 0 {

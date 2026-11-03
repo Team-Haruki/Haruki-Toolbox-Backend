@@ -12,6 +12,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// DeckRecommendSuiteKeys is everything the deck engine reads from a player, in
+// every mode. The mysekai deck mode's inputs are suite tables too: the canvas,
+// fixture character and gate bonuses below are top-level suite keys, so the
+// mysekai upload is never read.
 var DeckRecommendSuiteKeys = []string{
 	"userGamedata",
 	"userAreas",
@@ -20,64 +24,23 @@ var DeckRecommendSuiteKeys = []string{
 	"userHonors",
 	"userDecks",
 	"userChallengeLiveSoloDecks",
-}
-
-var DeckRecommendMysekaiKeys = []string{
 	"userMysekaiCanvases",
 	"userMysekaiFixtureGameCharacterPerformanceBonuses",
 	"userMysekaiGates",
 }
 
+// LoadDeckRecommendUserData reads the deck-recommend subset of a player's
+// suite upload. Both recommend-data modes use it unchanged.
 func LoadDeckRecommendUserData(
 	ctx context.Context,
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	userID int64,
 	server harukiUtils.SupportedDataUploadServer,
-	includeMysekai bool,
 ) (map[string]any, error) {
-	suiteData, err := LoadDeckRecommendSuiteData(ctx, apiHelper, userID, server)
-	if err != nil {
-		return nil, err
-	}
-	if !includeMysekai {
-		return suiteData, nil
-	}
-
-	mysekaiData, err := LoadDeckRecommendMysekaiData(ctx, apiHelper, userID, server)
-	if err != nil {
-		return nil, err
-	}
-	for key, value := range mysekaiData {
-		suiteData[key] = value
-	}
-	return suiteData, nil
-}
-
-func LoadDeckRecommendSuiteData(
-	ctx context.Context,
-	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
-	userID int64,
-	server harukiUtils.SupportedDataUploadServer,
-) (map[string]any, error) {
-	return loadDeckRecommendData(ctx, apiHelper, userID, server, true)
-}
-
-func LoadDeckRecommendMysekaiData(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer) (map[string]any, error) {
-	return loadDeckRecommendData(ctx, apiHelper, userID, server, false)
-}
-
-func loadDeckRecommendData(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, suite bool) (map[string]any, error) {
 	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.GameData == nil {
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "game data source is not configured")
 	}
-	gd := apiHelper.DBManager.GameData
-	var body []byte
-	var err error
-	if suite {
-		body, err = suiteBodyFromPostgres(ctx, gd.Suite(), userID, server, DeckRecommendSuiteKeys, false)
-	} else {
-		body, err = mysekaiBodyFromPostgres(ctx, gd.Mysekai(), userID, server, DeckRecommendMysekaiKeys)
-	}
+	body, err := suiteBodyFromPostgres(ctx, apiHelper.DBManager.GameData.Suite(), userID, server, DeckRecommendSuiteKeys, false)
 	if err != nil {
 		return nil, err
 	}
