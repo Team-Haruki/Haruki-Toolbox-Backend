@@ -3,6 +3,8 @@ package ios
 import (
 	"os/exec"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,9 +60,6 @@ func TestSurgeModuleDeclaresTheNotifyArgument(t *testing.T) {
 			}
 		}
 	}
-	if proxy := mustGenerateModule(t, notifyModuleRequest(ProxyAppSurge, UploadModeProxy, false)); strings.Contains(proxy, "#!arguments") {
-		t.Fatalf("a proxy-mode module, which runs no script, declares arguments:\n%s", proxy)
-	}
 }
 
 // Loon declares a switch in [Argument] (Build 733+) and passes it with the
@@ -95,61 +94,154 @@ func TestLoonPluginDeclaresTheNotifyArgument(t *testing.T) {
 	}
 }
 
-// In proxy mode the Loon plugin runs no upload script, only the body-less
-// notification script on the rewritten upload URL, switched by the same
-// argument. Loon documents that response scripts match the rewritten URL and
-// that a script without requires-body runs at the response header stage
-// (https://nsloon.app/docs/Script/script_v2).
-func TestLoonProxyPluginNotifiesFromTheRewrittenURL(t *testing.T) {
-	useStashTestHosts(t)
-	for _, tc := range []struct {
-		notifyOff bool
-		want      string
-	}{{false, "true"}, {true, "false"}} {
-		req := notifyModuleRequest(ProxyAppLoon, UploadModeProxy, tc.notifyOff)
-		plugin := mustGenerateModule(t, req)
-		if !strings.Contains(plugin, "[Argument]\nnotify = switch,"+tc.want+",") {
-			t.Fatalf("NotifyOff=%t: plugin lacks the switch:\n%s", tc.notifyOff, plugin)
+// proxyNotifyLine is the notification script one proxy-mode module declares:
+// its URL pattern and its script URL, as the app reads them.
+type proxyNotifyLine struct {
+	pattern, scriptURL string
+}
+
+// Each app's proxy-mode module declares exactly one body-less notification
+// script and the notify switch, and runs no other script. Shadowrocket installs
+// the Surge module. The per-app docs are cited at RuleSet.ProxyNotify.
+var proxyNotifyModuleChecks = map[ProxyApp]func(t *testing.T, module, wantDefault string) proxyNotifyLine{
+	ProxyAppSurge: func(t *testing.T, module, wantDefault string) proxyNotifyLine {
+		if !strings.Contains(module, "#!arguments=notify:"+wantDefault+"\n") {
+			t.Fatalf("module lacks #!arguments=notify:%s:\n%s", wantDefault, module)
 		}
-		lines := regexp.MustCompile(`(?m)^http-response .*$`).FindAllString(plugin, -1)
+		if n := strings.Count(module, "type=http-response"); n != 1 {
+			t.Fatalf("%d http-response scripts, want the one notification script:\n%s", n, module)
+		}
+		m := regexp.MustCompile(`(?m)^haruki-upload-notify = type=http-response,pattern=([^,]+),requires-body=0,timeout=10,script-path=([^,]+),argument="notify=\{\{\{notify\}\}\}"$`).FindStringSubmatch(module)
+		if m == nil {
+			t.Fatalf("no body-less notification script line:\n%s", module)
+		}
+		return proxyNotifyLine{m[1], m[2]}
+	},
+	ProxyAppLoon: func(t *testing.T, module, wantDefault string) proxyNotifyLine {
+		if !strings.Contains(module, "[Argument]\nnotify = switch,"+wantDefault+",") {
+			t.Fatalf("plugin lacks the switch:\n%s", module)
+		}
+		lines := regexp.MustCompile(`(?m)^http-response .*$`).FindAllString(module, -1)
 		if len(lines) != 1 {
 			t.Fatalf("script lines = %q, want the one notification script", lines)
 		}
-		line := lines[0]
-		wantPath := "script-path=https://toolbox.example" + ProxyNotifyScriptPath + "?v=" + ProxyNotifyScriptVersion
-		if tc.notifyOff {
-			wantPath += "&notify=false"
+		m := regexp.MustCompile(`^http-response (\S+) script-path=([^,]+), requires-body=false, timeout=10, tag=haruki-upload-notify, argument=\{notify\}$`).FindStringSubmatch(lines[0])
+		if m == nil {
+			t.Fatalf("unexpected notification script line: %s", lines[0])
 		}
-		for _, want := range []string{wantPath + ",", "requires-body=false", "argument={notify}"} {
-			if !strings.Contains(line, want) {
-				t.Errorf("script line lacks %q: %s", want, line)
-			}
+		return proxyNotifyLine{m[1], m[2]}
+	},
+	ProxyAppQuantumultX: func(t *testing.T, module, wantDefault string) proxyNotifyLine {
+		lines := regexp.MustCompile(`(?m)^\S+ url script-.*$`).FindAllString(module, -1)
+		if len(lines) != 1 {
+			t.Fatalf("script lines = %q, want the one notification script", lines)
 		}
-		if strings.Contains(line, "binary-body-mode") {
-			t.Errorf("the notification script asks for the body: %s", line)
+		m := regexp.MustCompile(`^(\S+) url script-response-header (\S+)$`).FindStringSubmatch(lines[0])
+		if m == nil {
+			t.Fatalf("not a script-response-header line: %s", lines[0])
 		}
-		// The pattern matches every rewritten upload URL and nothing else.
-		pattern := regexp.MustCompile(strings.Fields(strings.TrimPrefix(line, "http-response "))[0])
-		rs := GenerateRuleSet(req, "https://toolbox.example", "direct")
-		if len(rs.RewriteRules) == 0 {
-			t.Fatal("no rewrite rules")
+		// The switch rides in the fragment, which the script reads.
+		scriptURL, fragment, ok := strings.Cut(m[2], "#")
+		if !ok || fragment != "notify="+wantDefault {
+			t.Fatalf("script URL %s lacks #notify=%s", m[2], wantDefault)
 		}
-		for _, rule := range rs.RewriteRules {
-			if !pattern.MatchString(rule.Target) {
-				t.Errorf("pattern %s misses the rewrite target %s", pattern, rule.Target)
-			}
+		// The game follows the 307 to our host over HTTPS: Quantumult X
+		// must decrypt it to run the script.
+		if !strings.Contains(module, "\nhostname = jp.example.com, toolbox.example, submit.backtrace.io\n") {
+			t.Fatalf("hostname line lacks the toolbox host:\n%s", module)
 		}
-		for _, other := range []string{"https://jp.example.com/api/suite/user/1", "https://toolbox.example/ios/script/code/haruki-toolbox.js", "https://toolboxXexample/ios/proxy/jp/suite/user/1"} {
-			if pattern.MatchString(other) {
-				t.Errorf("pattern %s also matches %s", pattern, other)
-			}
+		return proxyNotifyLine{m[1], scriptURL}
+	},
+	ProxyAppStash: func(t *testing.T, module, wantDefault string) proxyNotifyLine {
+		var doc struct {
+			ArgumentsVersion int `yaml:"arguments-version"`
+			Arguments        map[string]struct {
+				Type    string `yaml:"type"`
+				Default bool   `yaml:"default"`
+			} `yaml:"arguments"`
+			HTTP struct {
+				MITM   []string `yaml:"mitm"`
+				Script []struct {
+					Match       string `yaml:"match"`
+					Name        string `yaml:"name"`
+					Type        string `yaml:"type"`
+					RequireBody *bool  `yaml:"require-body"`
+					Timeout     int    `yaml:"timeout"`
+					Argument    string `yaml:"argument"`
+				} `yaml:"script"`
+			} `yaml:"http"`
+			ScriptProviders map[string]struct {
+				URL string `yaml:"url"`
+			} `yaml:"script-providers"`
 		}
-	}
-	// The other apps keep their proxy-mode modules: their docs do not say
-	// which URL a response script sees after a transparent rewrite.
-	for _, app := range []ProxyApp{ProxyAppSurge, ProxyAppQuantumultX, ProxyAppStash} {
-		if module := mustGenerateModule(t, notifyModuleRequest(app, UploadModeProxy, false)); strings.Contains(module, "proxy-notify") || strings.Contains(module, "notify") {
-			t.Errorf("%s proxy-mode module mentions notifications:\n%s", app, module)
+		if err := yaml.Unmarshal([]byte(module), &doc); err != nil {
+			t.Fatal(err)
+		}
+		arg, ok := doc.Arguments["notify"]
+		if doc.ArgumentsVersion != 1 || !ok || arg.Type != "switch" || strconv.FormatBool(arg.Default) != wantDefault {
+			t.Fatalf("arguments = %d %+v, want a notify switch defaulting to %s", doc.ArgumentsVersion, doc.Arguments, wantDefault)
+		}
+		if len(doc.HTTP.Script) != 1 {
+			t.Fatalf("scripts = %+v, want the one notification script", doc.HTTP.Script)
+		}
+		s := doc.HTTP.Script[0]
+		if s.Type != "response" || s.RequireBody == nil || *s.RequireBody || s.Timeout != 10 || s.Argument != "notify=${args.notify}" {
+			t.Fatalf("unexpected notification script: %+v", s)
+		}
+		if slices.Contains(doc.HTTP.MITM, "toolbox.example") {
+			t.Fatalf("the transparent rewrite needs no MitM of the toolbox host: %v", doc.HTTP.MITM)
+		}
+		return proxyNotifyLine{s.Match, doc.ScriptProviders[s.Name].URL}
+	},
+}
+
+// In proxy mode every module runs no upload script, only the body-less
+// notification script on our upload URL, switched by the notify argument. Its
+// pattern matches every rewrite target and nothing else: in particular not the
+// game API, where it could take the place of another module's script (Surge
+// runs one http-response script per request).
+func TestProxyModulesNotifyFromOurUploadURL(t *testing.T) {
+	useStashTestHosts(t)
+	for app, check := range proxyNotifyModuleChecks {
+		for _, notifyOff := range []bool{false, true} {
+			t.Run(string(app)+"/notifyOff="+strconv.FormatBool(notifyOff), func(t *testing.T) {
+				req := notifyModuleRequest(app, UploadModeProxy, notifyOff)
+				req.DataTypes = []DataType{DataTypeSuite, DataTypeMysekaiForce, DataTypeMysekaiBirthdayParty}
+				line := check(t, mustGenerateModule(t, req), strconv.FormatBool(!notifyOff))
+				wantURL := "https://toolbox.example" + ProxyNotifyScriptPath + "?v=" + ProxyNotifyScriptVersion
+				if notifyOff {
+					wantURL += "&notify=false"
+				}
+				if line.scriptURL != wantURL {
+					t.Errorf("script URL = %s, want %s", line.scriptURL, wantURL)
+				}
+				pattern, err := regexp.Compile(line.pattern)
+				if err != nil {
+					t.Fatalf("pattern %s: %v", line.pattern, err)
+				}
+				rs := GenerateRuleSet(req, "https://toolbox.example", "direct")
+				if len(rs.RewriteRules) == 0 {
+					t.Fatal("no rewrite rules")
+				}
+				for _, rule := range rs.RewriteRules {
+					target := strings.NewReplacer("$1", "123", "$2", "").Replace(rule.Target)
+					if !pattern.MatchString(target) {
+						t.Errorf("pattern %s misses the rewrite target %s", pattern, target)
+					}
+				}
+				for _, other := range []string{
+					"https://jp.example.com/api/suite/user/1",
+					"https://jp.example.com/api/user/1/mysekai?isForceAllReloadOnlyMysekai=True",
+					"https://toolbox.example/ios/script/code/haruki-toolbox.js",
+					"https://toolbox.example/ios/script/proxy-notify.js?v=1.1.0",
+					"https://toolboxXexample/ios/proxy/jp/suite/user/1",
+					"https://evil.example/?https://toolbox.example/ios/proxy/jp/suite/user/1",
+				} {
+					if pattern.MatchString(other) {
+						t.Errorf("pattern %s also matches %s", pattern, other)
+					}
+				}
+			})
 		}
 	}
 }
@@ -188,10 +280,6 @@ func TestStashOverrideDeclaresTheNotifyArgument(t *testing.T) {
 				t.Errorf("script argument = %q", s.Argument)
 			}
 		}
-	}
-	proxy := mustGenerateModule(t, notifyModuleRequest(ProxyAppStash, UploadModeProxy, false))
-	if strings.Contains(proxy, "arguments") {
-		t.Fatalf("a proxy-mode override declares arguments:\n%s", proxy)
 	}
 }
 

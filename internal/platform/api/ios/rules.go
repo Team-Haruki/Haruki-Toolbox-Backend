@@ -31,10 +31,25 @@ type RuleSet struct {
 	RewriteRules []Rule
 	ScriptRules  []Rule
 	Hostnames    []string
-	// ProxyNotify, set in proxy mode, is a body-less response script on the
-	// rewritten upload URL that reports the upload. Only the Loon plugin uses
-	// it: Loon documents that response scripts match the rewritten URL
-	// (https://nsloon.app/docs/Script/script_v2); the other apps do not say.
+	// ProxyNotify, set in proxy mode, is a body-less response script that
+	// reports the upload from the response headers of our upload URL. Its
+	// pattern matches only our upload URLs (the rewrite targets), never the
+	// game's, so it cannot take the place of another module's script on the
+	// game API: Surge runs only the first matching http-response script per
+	// request (https://manual.nssurge.com/scripting/http-response.html).
+	// Every app sees our URL:
+	//   - Loon (header rewrite): response scripts match the rewritten URL
+	//     (https://nsloon.app/docs/Script/script_v2).
+	//   - Surge and Shadowrocket (header rewrite, the same .sgmodule): URL
+	//     Rewrite runs before script processing
+	//     (https://manual.nssurge.com/http/overview.html); Shadowrocket has no
+	//     official docs and follows Surge.
+	//   - Stash (transparent rewrite): the docs do not say which URL a script
+	//     matches after a transparent rewrite (https://stash.wiki/http-engine/rewrite);
+	//     not verified on a device, so the frontend does not offer the switch.
+	//   - Quantumult X (307 redirect): the game itself requests our URL; the
+	//     module adds our host to its MitM hostnames, without which the script
+	//     never sees the HTTPS response.
 	ProxyNotify *Rule
 }
 
