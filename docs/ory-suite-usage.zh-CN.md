@@ -351,7 +351,7 @@ Hydra 在当前项目里负责：
 
 - `GET /api/user/:toolbox_user_id/game-account/:server/:game_user_id/recommend-data`
 - 查询参数 `mode=suite|mysekai`（别名 `data_type`），默认 `suite`
-- 两种模式都只读 suite，只需要 suite 读权限：烤森组卡用到的 `userMysekaiGates`、`userMysekaiCanvases`、`userMysekaiFixtureGameCharacterPerformanceBonuses` 都是 suite 顶层键，MySekai 上传里没有组卡引擎要用的数据。`mode` 只为兼容保留，并原样写回响应
+- 两种模式都只读 suite，只需要 suite 读权限：烤森组卡用到的 `userMysekaiGates`、`userMysekaiCanvases`、`userMysekaiFixtureGameCharacterPerformanceBonuses` 都是 suite 顶层键，MySekai 上传里没有组卡引擎要用的数据。`mode` 只为兼容保留，并写回响应：写回的是规范化后的值（去掉首尾空白、转小写后的 `suite` 或 `mysekai`，缺省为 `suite`）
 
 游戏账号数据授权（把账号数据的读或写授权给其他 Toolbox 用户）的读写规则见 [OAuth2 / OIDC 接入](oauth2-integration.zh-CN.md) §7.4。
 
