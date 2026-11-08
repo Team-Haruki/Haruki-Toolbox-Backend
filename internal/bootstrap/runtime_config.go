@@ -9,15 +9,11 @@ import (
 func runtimeConfigSnapshotFromConfig(cfg harukiConfig.Config) platformRuntimeConfig.Snapshot {
 	webhookEnabled := cfg.Webhook.Enabled
 	return platformRuntimeConfig.Snapshot{
-		AllowedKeys:          append([]string(nil), cfg.Others.AllowedKeys...),
-		PrivateAPIToken:      cfg.MongoDB.PrivateApiSecret,
-		PrivateAPIUserAgent:  cfg.MongoDB.PrivateApiUserAgent,
-		HarukiProxyUserAgent: cfg.HarukiProxy.UserAgent,
-		HarukiProxyVersion:   cfg.HarukiProxy.Version,
-		HarukiProxySecret:    cfg.HarukiProxy.Secret,
-		HarukiProxyUnpackKey: cfg.HarukiProxy.UnpackKey,
-		WebhookJWTSecret:     cfg.Webhook.JWTSecret,
-		WebhookEnabled:       &webhookEnabled,
+		AllowedKeys:         append([]string(nil), cfg.Others.AllowedKeys...),
+		PrivateAPIToken:     cfg.MongoDB.PrivateApiSecret,
+		PrivateAPIUserAgent: cfg.MongoDB.PrivateApiUserAgent,
+		WebhookJWTSecret:    cfg.Webhook.JWTSecret,
+		WebhookEnabled:      &webhookEnabled,
 	}
 }
 

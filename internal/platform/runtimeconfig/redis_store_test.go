@@ -3,6 +3,7 @@ package runtimeconfig
 import (
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+	"strings"
 	"sync"
 	"testing"
 
@@ -93,10 +94,6 @@ func TestRedisStorePreservesSnapshotJSONContract(t *testing.T) {
 		"publicApiAllowedKeys",
 		"privateApiToken",
 		"privateApiUserAgent",
-		"harukiProxyUserAgent",
-		"harukiProxyVersion",
-		"harukiProxySecret",
-		"harukiProxyUnpackKey",
 		"webhookJwtSecret",
 	}
 	if len(fields) != len(wantFields) {
@@ -122,8 +119,8 @@ func TestRedisStorePreservesSnapshotJSONContract(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &fields); err != nil {
 		t.Fatalf("decode updated persisted snapshot: %v", err)
 	}
-	if len(fields) != 9 {
-		t.Fatalf("persisted field count with webhookEnabled = %d, want 9", len(fields))
+	if len(fields) != len(wantFields)+1 {
+		t.Fatalf("persisted field count with webhookEnabled = %d, want %d", len(fields), len(wantFields)+1)
 	}
 	if got := string(fields["webhookEnabled"]); got != "false" {
 		t.Fatalf("webhookEnabled = %s, want false", got)
@@ -133,8 +130,8 @@ func TestRedisStorePreservesSnapshotJSONContract(t *testing.T) {
 func TestRedisStoreSeedsMissingRecordFromServiceSnapshot(t *testing.T) {
 	store, _ := newRuntimeConfigRedisStore(t)
 	service := New(Snapshot{
-		PrivateAPIToken:      "startup-token",
-		HarukiProxyUserAgent: "startup-agent",
+		PrivateAPIToken:     "startup-token",
+		PrivateAPIUserAgent: "startup-agent",
 	}, store)
 	secret := "runtime-secret"
 	if err := service.Update(t.Context(), Update{WebhookJWTSecret: &secret}); err != nil {
@@ -149,7 +146,7 @@ func TestRedisStoreSeedsMissingRecordFromServiceSnapshot(t *testing.T) {
 		t.Fatal("runtime snapshot was not persisted")
 	}
 	if got.PrivateAPIToken != "startup-token" ||
-		got.HarukiProxyUserAgent != "startup-agent" ||
+		got.PrivateAPIUserAgent != "startup-agent" ||
 		got.WebhookJWTSecret != secret {
 		t.Fatalf("persisted snapshot did not merge startup fallback: %#v", got)
 	}
@@ -165,5 +162,30 @@ func TestRedisStoreDecodeFailureDoesNotPublishLocalSnapshot(t *testing.T) {
 	}
 	if got := service.localSnapshot().PrivateAPIToken; got != "local-token" {
 		t.Fatalf("failed update published local token %q", got)
+	}
+}
+
+// A snapshot stored by an older backend still holds the shared-key HarukiProxy
+// settings. They are not read, and the next update writes the snapshot back
+// without them, so the stored shared key is gone after one runtime config
+// change.
+func TestRedisStoreDropsRetiredHarukiProxySettings(t *testing.T) {
+	store, server := newRuntimeConfigRedisStore(t)
+	server.Set(redis.BuildRuntimeConfigKey(), `{"publicApiAllowedKeys":["a"],"privateApiToken":"kept","harukiProxyUserAgent":"HarukiProxy","harukiProxyVersion":"v1.7.0","harukiProxySecret":"retired-secret","harukiProxyUnpackKey":"retired-key","webhookJwtSecret":"w"}`)
+	enabled := true
+	if _, err := store.Apply(t.Context(), Update{WebhookEnabled: &enabled}, Snapshot{}); err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	stored, err := server.Get(redis.BuildRuntimeConfigKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"harukiProxy", "retired-secret", "retired-key"} {
+		if strings.Contains(stored, field) {
+			t.Fatalf("rewritten snapshot still holds %q: %s", field, stored)
+		}
+	}
+	if !strings.Contains(stored, `"privateApiToken":"kept"`) {
+		t.Fatalf("rewritten snapshot lost a current setting: %s", stored)
 	}
 }

@@ -285,7 +285,7 @@ func TestHarukiProxyV3AnswersASkippedUploadWith200(t *testing.T) {
 	app := fiber.New()
 	app.Post("/:server/:user_id/:data_type/upload",
 		func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() },
-		handleHarukiProxyUploadVersion(&api.HarukiToolboxRouterHelpers{}, deps, true))
+		handleHarukiProxyUpload(&api.HarukiToolboxRouterHelpers{}, deps))
 	resp, body := doSkipRequest(t, app, httptest.NewRequest(http.MethodPost, "/jp/123/mysekai_birthday_party/upload", bytes.NewReader([]byte("payload"))))
 	checkSkippedResponse(t, resp, body)
 	if body.Data.RequestID == "" || body.Data.RequestID != resp.Header.Get("X-Request-ID") {

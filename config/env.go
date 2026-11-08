@@ -206,11 +206,6 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")
 
-	overrideString(&cfg.HarukiProxy.UserAgent, "HARUKI_PROXY_USER_AGENT")
-	overrideString(&cfg.HarukiProxy.Version, "HARUKI_PROXY_VERSION")
-	overrideString(&cfg.HarukiProxy.Secret, "HARUKI_PROXY_SECRET")
-	overrideString(&cfg.HarukiProxy.UnpackKey, "HARUKI_PROXY_UNPACK_KEY")
-
 	// Both spellings are accepted; ALLOWED_KEYS wins when both are set.
 	if err := overrideCSV(&cfg.Others.AllowedKeys, "PUBLIC_API_ALLOWED_KEYS"); err != nil {
 		return err

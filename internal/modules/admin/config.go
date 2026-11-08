@@ -19,15 +19,11 @@ type publicAPIKeysResponse struct {
 }
 
 type runtimeConfigPayload struct {
-	AllowedKeys          *([]string) `json:"publicApiAllowedKeys,omitzero"`
-	PrivateAPIToken      *string     `json:"privateApiToken,omitzero"`
-	PrivateAPIUserAgent  *string     `json:"privateApiUserAgent,omitzero"`
-	HarukiProxyUserAgent *string     `json:"harukiProxyUserAgent,omitzero"`
-	HarukiProxyVersion   *string     `json:"harukiProxyVersion,omitzero"`
-	HarukiProxySecret    *string     `json:"harukiProxySecret,omitzero"`
-	HarukiProxyUnpackKey *string     `json:"harukiProxyUnpackKey,omitzero"`
-	WebhookJWTSecret     *string     `json:"webhookJwtSecret,omitzero"`
-	WebhookEnabled       *bool       `json:"webhookEnabled,omitzero"`
+	AllowedKeys         *([]string) `json:"publicApiAllowedKeys,omitzero"`
+	PrivateAPIToken     *string     `json:"privateApiToken,omitzero"`
+	PrivateAPIUserAgent *string     `json:"privateApiUserAgent,omitzero"`
+	WebhookJWTSecret    *string     `json:"webhookJwtSecret,omitzero"`
+	WebhookEnabled      *bool       `json:"webhookEnabled,omitzero"`
 	// OAuth2DeviceFlowEnabled is the device-flow runtime switch; omitted keeps it.
 	OAuth2DeviceFlowEnabled *bool `json:"oauth2DeviceFlowEnabled,omitzero"`
 }
@@ -35,14 +31,10 @@ type runtimeConfigPayload struct {
 type runtimeConfigResponse struct {
 	AllowedKeys []string `json:"publicApiAllowedKeys"`
 
-	PrivateAPITokenConfigured      bool   `json:"privateApiTokenConfigured"`
-	PrivateAPIUserAgent            string `json:"privateApiUserAgent"`
-	HarukiProxyUserAgent           string `json:"harukiProxyUserAgent"`
-	HarukiProxyVersion             string `json:"harukiProxyVersion"`
-	HarukiProxySecretConfigured    bool   `json:"harukiProxySecretConfigured"`
-	HarukiProxyUnpackKeyConfigured bool   `json:"harukiProxyUnpackKeyConfigured"`
-	WebhookJWTSecretConfigured     bool   `json:"webhookJwtSecretConfigured"`
-	WebhookEnabled                 bool   `json:"webhookEnabled"`
+	PrivateAPITokenConfigured  bool   `json:"privateApiTokenConfigured"`
+	PrivateAPIUserAgent        string `json:"privateApiUserAgent"`
+	WebhookJWTSecretConfigured bool   `json:"webhookJwtSecretConfigured"`
+	WebhookEnabled             bool   `json:"webhookEnabled"`
 	// OAuth2DeviceFlowEnabled is the effective switch: a missing field is false.
 	OAuth2DeviceFlowEnabled bool `json:"oauth2DeviceFlowEnabled"`
 }
@@ -80,21 +72,16 @@ func sanitizeOptionalRuntimeSecret(raw *string, fieldName string) (*string, erro
 
 func buildRuntimeConfigResponse(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) runtimeConfigResponse {
 	privateAPIToken, privateAPIUserAgent := apiHelper.GetPrivateAPIAuth()
-	harukiProxyUserAgent, harukiProxyVersion, harukiProxySecret, harukiProxyUnpackKey := apiHelper.GetHarukiProxyConfig()
 	webhookJWTSecret := apiHelper.GetWebhookJWTSecret()
 
 	return runtimeConfigResponse{
 		AllowedKeys: append([]string(nil), apiHelper.GetAllowedKeys()...),
 
-		PrivateAPITokenConfigured:      strings.TrimSpace(privateAPIToken) != "",
-		PrivateAPIUserAgent:            strings.TrimSpace(privateAPIUserAgent),
-		HarukiProxyUserAgent:           strings.TrimSpace(harukiProxyUserAgent),
-		HarukiProxyVersion:             strings.TrimSpace(harukiProxyVersion),
-		HarukiProxySecretConfigured:    strings.TrimSpace(harukiProxySecret) != "",
-		HarukiProxyUnpackKeyConfigured: strings.TrimSpace(harukiProxyUnpackKey) != "",
-		WebhookJWTSecretConfigured:     strings.TrimSpace(webhookJWTSecret) != "",
-		WebhookEnabled:                 apiHelper.GetWebhookEnabled(),
-		OAuth2DeviceFlowEnabled:        apiHelper.GetOAuth2DeviceFlowEnabled(),
+		PrivateAPITokenConfigured:  strings.TrimSpace(privateAPIToken) != "",
+		PrivateAPIUserAgent:        strings.TrimSpace(privateAPIUserAgent),
+		WebhookJWTSecretConfigured: strings.TrimSpace(webhookJWTSecret) != "",
+		WebhookEnabled:             apiHelper.GetWebhookEnabled(),
+		OAuth2DeviceFlowEnabled:    apiHelper.GetOAuth2DeviceFlowEnabled(),
 	}
 }
 
@@ -196,16 +183,6 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidPrivateApiToken, nil))
 			return respondFiberOrBadRequest(c, err, "invalid privateApiToken")
 		}
-		harukiProxySecret, err := sanitizeOptionalRuntimeSecret(payload.HarukiProxySecret, "harukiProxySecret")
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidHarukiProxySecret, nil))
-			return respondFiberOrBadRequest(c, err, "invalid harukiProxySecret")
-		}
-		harukiProxyUnpackKey, err := sanitizeOptionalRuntimeSecret(payload.HarukiProxyUnpackKey, "harukiProxyUnpackKey")
-		if err != nil {
-			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidHarukiProxyUnpackKey, nil))
-			return respondFiberOrBadRequest(c, err, "invalid harukiProxyUnpackKey")
-		}
 		webhookJWTSecret, err := sanitizeOptionalRuntimeSecret(payload.WebhookJWTSecret, "webhookJwtSecret")
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionConfigRuntimeUpdate, adminAuditTargetTypeConfig, "runtime", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidWebhookJwtSecret, nil))
@@ -218,20 +195,6 @@ func handleUpdateRuntimeConfig(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		if payload.PrivateAPIUserAgent != nil {
 			privateAPIUserAgent := strings.TrimSpace(*payload.PrivateAPIUserAgent)
 			update.PrivateAPIUserAgent = &privateAPIUserAgent
-		}
-		if payload.HarukiProxyUserAgent != nil {
-			harukiProxyUserAgent := strings.TrimSpace(*payload.HarukiProxyUserAgent)
-			update.HarukiProxyUserAgent = &harukiProxyUserAgent
-		}
-		if payload.HarukiProxyVersion != nil {
-			harukiProxyVersion := strings.TrimSpace(*payload.HarukiProxyVersion)
-			update.HarukiProxyVersion = &harukiProxyVersion
-		}
-		if harukiProxySecret != nil {
-			update.HarukiProxySecret = harukiProxySecret
-		}
-		if harukiProxyUnpackKey != nil {
-			update.HarukiProxyUnpackKey = harukiProxyUnpackKey
 		}
 		if webhookJWTSecret != nil {
 			update.WebhookJWTSecret = webhookJWTSecret
