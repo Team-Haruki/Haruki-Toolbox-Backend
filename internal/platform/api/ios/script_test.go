@@ -113,7 +113,7 @@ func TestScriptVersionsChangeWithTheScripts(t *testing.T) {
 	for _, tc := range []struct {
 		name, version, pinnedVersion, pinnedSHA256, template string
 	}{
-		{"uploader", ScriptVersion, "1.1.0", "dcf802b7c9ad29446d444383e77e84e7d0cc5ff9c258fb1b13f53daccd869897", HarukiIOSJavaScriptTemplate},
+		{"uploader", ScriptVersion, "1.1.1", "9f6f9bf761da191fe50e764db66808ee1cc02c835c0e5ff4c2ec0c613c010d64", HarukiIOSJavaScriptTemplate},
 		{"proxy notify", ProxyNotifyScriptVersion, "1.1.0", "debfb2d67b6c2778008614d81a3627babf61a60f45795fbe5f740ed500f91e25", proxyNotifyScriptTemplate},
 	} {
 		sum := sha256.Sum256([]byte(tc.template + notifyArgumentJS + uploadErrorTextJS))
@@ -240,6 +240,10 @@ func TestUploaderScriptPostsOneModuleNotificationPerUpload(t *testing.T) {
 		{"save failed", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 500, body: '{"status":500,"message":"internal_error"}' })`}, "0/1", "日服 Suite 数据上传失败", "保存数据时出错"},
 		{"second tw host, mysekai", uploaderRun{notifyByDefault: true, url: "https://tw-b.example.com/api/user/1/mysekai?isForceAllReloadOnlyMysekai=True", bodyBytes: 10, respond: ok}, "0/1", "台服 MySekai 数据已上传", ""},
 		{"birthday party", uploaderRun{notifyByDefault: true, url: "https://jp.example.com/api/user/1/mysekai/birthday-party/2/delivery", bodyBytes: 10, respond: ok}, "0/1", "日服 MySekai 生日派对 数据已上传", ""},
+		{"birthday party delivery without refreshed harvest points", uploaderRun{notifyByDefault: true, url: "https://jp.example.com/api/user/1/mysekai/birthday-party/2/delivery", bodyBytes: 10, respond: `() => ({ status: 200, body: '{"status":200,"message":"Upload skipped","updatedData":{"upload_result":"skipped","reason":"birthday_party_not_refreshed"}}' })`}, "0/1", "日服 MySekai 生日派对 数据未上传", "本次投递没有刷新采集点，无需上传。"},
+		{"skipped for another reason", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 200, body: '{"status":200,"updatedData":{"upload_result":"skipped","reason":"something_new"}}' })`}, "0/1", "日服 Suite 数据未上传", "无需上传"},
+		{"skipped, argument off", uploaderRun{notifyByDefault: true, argument: `"notify=false"`, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 200, body: '{"status":200,"updatedData":{"upload_result":"skipped","reason":"birthday_party_not_refreshed"}}' })`}, "0/1", "", ""},
+		{"a success envelope is not a skip", uploaderRun{notifyByDefault: true, url: suiteURL, bodyBytes: 10, respond: `() => ({ status: 200, body: '{"status":200,"message":"Successfully uploaded data.","updatedData":null}' })`}, "0/1", uploaded, "工具箱已保存这份数据"},
 		{"no argument, default off", uploaderRun{url: suiteURL, bodyBytes: 10, respond: ok}, "0/1", "", ""},
 		{"surge argument off", uploaderRun{notifyByDefault: true, argument: `"notify=false"`, url: suiteURL, bodyBytes: 10, respond: ok}, "0/1", "", ""},
 		{"surge argument on overrides default off", uploaderRun{argument: `"notify=true"`, url: suiteURL, bodyBytes: 10, respond: ok}, "0/1", uploaded, ""},

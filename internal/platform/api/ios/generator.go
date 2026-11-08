@@ -64,7 +64,7 @@ func GenerateModule(req *ModuleRequest, endpoint string, endpointType string) (s
 // HarukiIOSJavaScriptTemplate: the modules load the script from a URL that ends
 // in &v=<version>, and proxy apps cache a script by its URL, so updating a
 // module only loads a changed script when the URL changes with it.
-const ScriptVersion = "1.1.0"
+const ScriptVersion = "1.1.1"
 
 // GenerateScript renders the uploader script. notifyByDefault applies when the
 // proxy app passes the script no "notify" argument (see the template).

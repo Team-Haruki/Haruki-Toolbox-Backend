@@ -884,6 +884,8 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 请求体是**原始游戏负载** —— 你从游戏抓到的、未解密的原文，与 `manual` / proxy / 脚本上传接口收的是同一种东西。`Content-Type` 不限，服务端读原始 body。成功返回与手动上传一致。
 
+`mysekai_birthday_party` 的投递响应如果没有刷新采集点（游戏响应的 `isRefreshed` 不是 true），上传会被跳过：返回 200、`updatedData` 为 `{"upload_result":"skipped","reason":"birthday_party_not_refreshed"}`，响应头带 `X-Haruki-Upload-Result: skipped` 与 `X-Haruki-Upload-Reason`。跳过不是失败，已保存的数据不变。刷新了采集点却没有采集点数据的投递仍返回 400。
+
 #### 账号读写授权
 
 原始载荷仍是不可信输入；可解密不代表真实，服务端保留有界解析和账号一致性校验。

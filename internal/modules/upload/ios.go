@@ -277,7 +277,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			}
 			attempt.RequestBytes = int64(len(payload))
 			_, err := runUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
-			if err != nil {
+			if _, skipped := uploadSkipReason(err); err != nil && !skipped {
 				// HandleUpload already logs every failure with full context at
 				// WARNING inside its fail() helper; re-logging at ERROR here
 				// duplicated the line and inflated the error rate with routine
@@ -295,6 +295,9 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		defer timer.Stop()
 		select {
 		case err := <-processed:
+			if reason, skipped := uploadSkipReason(err); skipped {
+				return uploadSkippedResponse(c, reason)
+			}
 			if err != nil {
 				status, code := uploadFailure(attempt)
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, status, code, nil)

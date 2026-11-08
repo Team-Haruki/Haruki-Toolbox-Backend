@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -25,7 +26,7 @@ func applyProxyResponseHeaders(c fiber.Ctx, headers map[string][]string) {
 	}
 }
 
-// Seams for the iOS upload handler tests: the game server call and the upload
+// Seams for the upload handler tests: the game server call and the upload
 // pipeline (whose success needs the game data store).
 var (
 	proxyCallAPI = sekai.HarukiSekaiProxyCallAPI
@@ -96,15 +97,23 @@ func HandleProxyUpload(
 				setProxyUploadResult(c, proxyUploadFailed, "invalid_upload_payload")
 				return fiber.NewError(fiber.StatusInternalServerError, "invalid response data format")
 			}
-			isRefreshed, ok := dataMap["isRefreshed"].(bool)
-			if !ok || !isRefreshed {
+			// The same decision HandleUpload makes, taken before it: a delivery
+			// with nothing to store hands the game its own response even when
+			// the account could not upload, instead of an upload error.
+			if !harukiDataHandler.BirthdayPartyRefreshed(dataMap) {
 				applyProxyResponseHeaders(c, resp.NewHeaders)
-				setProxyUploadResult(c, proxyUploadSkipped, "")
+				setUploadSkipped(c, harukiDataHandler.SkipReasonBirthdayPartyNotRefreshed)
 				return c.Status(resp.StatusCode).Send(resp.RawBody)
 			}
 		}
 		attempt := newAttempt(harukiUtils.UploadMethodIOSProxy, len(resp.RawBody))
-		if _, err := runUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper, dependencies, harukiUtils.UploadMethodIOSProxy, attempt); err != nil {
+		_, err = runUpload(ctx, resp.RawBody, server, dataType, &userID, nil, helper, dependencies, harukiUtils.UploadMethodIOSProxy, attempt)
+		if reason, skipped := uploadSkipReason(err); skipped {
+			applyProxyResponseHeaders(c, resp.NewHeaders)
+			setUploadSkipped(c, reason)
+			return c.Status(resp.StatusCode).Send(resp.RawBody)
+		}
+		if err != nil {
 			_, code := uploadFailure(attempt)
 			setProxyUploadResult(c, proxyUploadFailed, code)
 			if mapped := mapUploadProcessingError(err); mapped != nil {
@@ -121,8 +130,9 @@ func HandleProxyUpload(
 
 // Proxy-mode responses say how the upload went, for a module script that
 // notifies the user: X-Haruki-Upload-Result is ok, failed or skipped (the
-// response carried nothing to upload), and on failure X-Haruki-Upload-Error
-// holds the public error code (invalid_upload_payload, upload_not_allowed,
+// response carried nothing to upload; X-Haruki-Upload-Reason says why, see
+// upload_skip.go), and on failure X-Haruki-Upload-Error holds the public
+// error code (invalid_upload_payload, upload_not_allowed,
 // temporarily_unavailable, internal_error, game_server_unavailable, and
 // rate_limited from the entry guard).
 const (

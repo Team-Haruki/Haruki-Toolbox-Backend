@@ -172,6 +172,21 @@ func validateSuiteData(data map[string]any) error {
 	return nil
 }
 
+// SkipReasonBirthdayPartyNotRefreshed is the public reason for a birthday
+// party delivery that is not uploaded: the game answered without refreshing
+// the harvest points, so there is nothing new to store.
+const SkipReasonBirthdayPartyNotRefreshed = "birthday_party_not_refreshed"
+
+// BirthdayPartyRefreshed reports whether a decoded birthday party delivery
+// response refreshed the harvest points. Only such a response carries the
+// harvest maps the birthday party data is made of; any other delivery (no
+// isRefreshed, or false) is skipped, not stored and not a failure. Every
+// upload path decides with this, so they cannot disagree.
+func BirthdayPartyRefreshed(data map[string]any) bool {
+	refreshed, ok := data["isRefreshed"].(bool)
+	return ok && refreshed
+}
+
 func validateBirthdayPartyData(data map[string]any) error {
 	updatedResources, ok := data["updatedResources"].(map[string]any)
 	if !ok {

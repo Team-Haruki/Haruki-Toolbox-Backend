@@ -104,6 +104,10 @@ type proxyResponseData struct {
 	RequestID    string                     `json:"request_id"`
 	Retryable    bool                       `json:"retryable"`
 	ClientPolicy *proxyClientPolicyResponse `json:"client_policy,omitempty"`
+	// UploadResult and Reason are set only on a skipped upload (see
+	// upload_skip.go).
+	UploadResult string `json:"upload_result,omitempty"`
+	Reason       string `json:"reason,omitempty"`
 }
 
 func proxyResponse(c fiber.Ctx, status int, code, message string, retryable bool, policy *proxyClientPolicyResponse) error {
@@ -113,6 +117,15 @@ func proxyResponse(c fiber.Ctx, status int, code, message string, retryable bool
 	}
 	data := proxyResponseData{ErrorCode: code, RequestID: a.RequestID, Retryable: retryable, ClientPolicy: policy}
 	return api.Responses.UpdatedDataResponse(c, status, message, &data)
+}
+
+// proxySkippedResponse answers a skipped upload in the HarukiProxy envelope:
+// 200, so a client that predates the skip does not report a failure.
+func proxySkippedResponse(c fiber.Ctx, reason string) error {
+	a := proxyAttempt(c)
+	setUploadSkipped(c, reason)
+	data := proxyResponseData{RequestID: a.RequestID, UploadResult: proxyUploadSkipped, Reason: reason}
+	return api.Responses.UpdatedDataResponse(c, fiber.StatusOK, uploadSkippedMessage(reason), &data)
 }
 
 func proxyIngress(helper *api.HarukiToolboxRouterHelpers, protocol string) fiber.Handler {

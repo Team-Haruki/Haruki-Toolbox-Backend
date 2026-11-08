@@ -150,6 +150,15 @@ func HandleUpload(
 	if err != nil {
 		return fail(uploadStageValidateIdentity, nil, err)
 	}
+	if uploadCtx.DataType == harukiUtils.UploadDataTypeMysekaiBirthdayParty && !platform.BirthdayPartyRefreshed(unpackedMap) {
+		// Not a failure: nothing is stored, audited or fanned out, and the
+		// account's stored birthday party data stays as it was.
+		if handler.Logger != nil {
+			handler.Logger.Debugf("Upload skipped method=%s server=%s dataType=%s expectedGameUserId=%s reason=%s",
+				uploadCtx.UploadMethod, uploadCtx.Server, uploadCtx.DataType, uploadCtx.expectedGameUserIDString(), platform.SkipReasonBirthdayPartyNotRefreshed)
+		}
+		return nil, &uploadSkippedError{reason: platform.SkipReasonBirthdayPartyNotRefreshed}
+	}
 	processedData, err := handler.PreHandleData(unpackedMap, &uploadCtx.ExpectedGameUserID, uploadCtx.ParsedGameUserID, uploadCtx.Server, uploadCtx.DataType)
 	if err != nil {
 		return fail(uploadStagePreprocess, nil, err)
