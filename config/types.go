@@ -226,11 +226,10 @@ type SubscriptionConfig struct {
 }
 
 type HarukiProxyConfig struct {
+	// The shared-key (v2) settings user_agent, version, secret and
+	// unpack_key are gone with the shared-key upload channel; old config
+	// files that still set them load unchanged and the values are ignored.
 	V3ClientPolicy *HarukiProxyClientPolicy `yaml:"v3_client_policy"`
-	UserAgent      string                   `yaml:"user_agent"`
-	Version        string                   `yaml:"version"`
-	Secret         string                   `yaml:"secret"`
-	UnpackKey      string                   `yaml:"unpack_key"`
 }
 
 type SekaiClientConfig struct {

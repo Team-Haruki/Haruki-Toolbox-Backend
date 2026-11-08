@@ -64,7 +64,7 @@ func TestProxyOAuthWriteGrant(t *testing.T) {
 			token  string
 			status int
 			code   string
-		}{{"", 401, "invalid_token"}, {"inactive", 401, "invalid_token"}, {"read", 403, "insufficient_scope"}, {"stranger", 403, "upload_not_allowed"}, {"owner", 400, "invalid_upload_payload"}, {"delegate", 400, "invalid_upload_payload"}} {
+		}{{"", 401, "oauth2_required"}, {"inactive", 401, "invalid_token"}, {"read", 403, "insufficient_scope"}, {"stranger", 403, "upload_not_allowed"}, {"owner", 400, "invalid_upload_payload"}, {"delegate", 400, "invalid_upload_payload"}} {
 			req := httptest.NewRequest("POST", prefix+"/v3/jp/123/suite/upload", strings.NewReader("invalid raw game payload"))
 			req.Header.Set("User-Agent", "HarukiProxy/v3.0.0 (platform=Android)")
 			req.Header.Set("X-Haruki-Toolbox-Secret", "old-secret")

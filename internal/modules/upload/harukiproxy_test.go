@@ -2,280 +2,100 @@ package upload
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/sha256"
-	"io"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-func TestUnpackKeyFromHelper(t *testing.T) {
-	t.Parallel()
-
-	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{HarukiProxyUnpackKey: "my-secret"}
-	key, err := unpackKeyFromHelper(helper)
-	if err != nil {
-		t.Fatalf("unpackKeyFromHelper returned error: %v", err)
-	}
-	want := sha256.Sum256([]byte("my-secret"))
-	if !bytes.Equal(key, want[:]) {
-		t.Fatalf("unexpected unpack key hash")
-	}
-
-	helper.HarukiProxyUnpackKey = " "
-	if _, err := unpackKeyFromHelper(helper); err == nil {
-		t.Fatalf("unpackKeyFromHelper should fail when key is missing")
-	}
-}
-
-func TestUnpackRoundTrip(t *testing.T) {
-	t.Parallel()
-
-	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{HarukiProxyUnpackKey: "my-secret"}
-	aad := "jp|123|suite"
-	plaintext := []byte(`{"ok":true}`)
-
-	ciphertext, err := packForTest(plaintext, aad, helper.HarukiProxyUnpackKey)
-	if err != nil {
-		t.Fatalf("packForTest returned error: %v", err)
-	}
-
-	decoded, err := Unpack(ciphertext, aad, helper)
-	if err != nil {
-		t.Fatalf("Unpack returned error: %v", err)
-	}
-	if !bytes.Equal(decoded, plaintext) {
-		t.Fatalf("Unpack plaintext mismatch")
-	}
-
-	if _, err := Unpack(ciphertext, "wrong-aad", helper); err == nil {
-		t.Fatalf("Unpack should fail with wrong AAD")
-	}
-	if _, err := Unpack(ciphertext[:4], aad, helper); err == nil {
-		t.Fatalf("Unpack should fail on truncated ciphertext")
-	}
-}
-
-func TestValidateHarukiProxyClientHeader(t *testing.T) {
-	t.Parallel()
-
-	t.Run("configured middleware passes valid headers", func(t *testing.T) {
-		t.Parallel()
-		app := fiber.New()
-		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
-			HarukiProxyUserAgent: "HarukiProxy",
-			HarukiProxyVersion:   "v1.2.0",
-			HarukiProxySecret:    "secret",
-		}
-		app.Post("/",
-			validateHarukiProxyClientHeader(helper),
-			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
-		)
-
-		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		req.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
-		req.Header.Set("X-Haruki-Toolbox-Secret", "secret")
-
-		resp, err := app.Test(req)
-		if err != nil {
-			t.Fatalf("app.Test returned error: %v", err)
-		}
-		if resp.StatusCode != fiber.StatusNoContent {
-			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNoContent)
-		}
-	})
-
-	t.Run("configured middleware rejects invalid headers", func(t *testing.T) {
-		t.Parallel()
-		app := fiber.New()
-		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
-			HarukiProxyUserAgent: "HarukiProxy",
-			HarukiProxyVersion:   "v1.2.0",
-			HarukiProxySecret:    "secret",
-		}
-		app.Post("/",
-			validateHarukiProxyClientHeader(helper),
-			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
-		)
-
-		tests := []struct {
-			name      string
-			userAgent string
-			secret    string
-		}{
-			{
-				name:      "wrong secret",
-				userAgent: "HarukiProxy/v1.2.3",
-				secret:    "wrong",
-			},
-			{
-				name:      "invalid user agent format",
-				userAgent: "HarukiProxy 1.2.3",
-				secret:    "secret",
-			},
-			{
-				name:      "version too low",
-				userAgent: "HarukiProxy/v1.1.9",
-				secret:    "secret",
-			},
-		}
-
-		for _, tc := range tests {
-			tc := tc
-			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
-				req := httptest.NewRequest(http.MethodPost, "/", nil)
-				req.Header.Set("User-Agent", tc.userAgent)
-				req.Header.Set("X-Haruki-Toolbox-Secret", tc.secret)
-				resp, err := app.Test(req)
-				if err != nil {
-					t.Fatalf("app.Test returned error: %v", err)
-				}
-				if resp.StatusCode != fiber.StatusBadRequest {
-					t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
-				}
-			})
-		}
-	})
-
-	t.Run("middleware fails closed when auth not configured", func(t *testing.T) {
-		t.Parallel()
-		app := fiber.New()
-		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
-		app.Post("/",
-			validateHarukiProxyClientHeader(helper),
-			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
-		)
-
-		req := httptest.NewRequest(http.MethodPost, "/", nil)
-		resp, err := app.Test(req)
-		if err != nil {
-			t.Fatalf("app.Test returned error: %v", err)
-		}
-		if resp.StatusCode != fiber.StatusInternalServerError {
-			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
-		}
-	})
-
-	t.Run("runtime config update takes effect immediately", func(t *testing.T) {
-		t.Parallel()
-		app := fiber.New()
-		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
-		helper.SetHarukiProxyUserAgent("HarukiProxy")
-		helper.SetHarukiProxyVersion("v1.2.0")
-		helper.SetHarukiProxySecret("secret-a")
-		app.Post("/",
-			validateHarukiProxyClientHeader(helper),
-			func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) },
-		)
-
-		reqA := httptest.NewRequest(http.MethodPost, "/", nil)
-		reqA.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
-		reqA.Header.Set("X-Haruki-Toolbox-Secret", "secret-a")
-		respA, err := app.Test(reqA)
-		if err != nil {
-			t.Fatalf("app.Test returned error: %v", err)
-		}
-		if respA.StatusCode != fiber.StatusNoContent {
-			t.Fatalf("status code = %d, want %d", respA.StatusCode, fiber.StatusNoContent)
-		}
-
-		helper.SetHarukiProxySecret("secret-b")
-
-		reqOld := httptest.NewRequest(http.MethodPost, "/", nil)
-		reqOld.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
-		reqOld.Header.Set("X-Haruki-Toolbox-Secret", "secret-a")
-		respOld, err := app.Test(reqOld)
-		if err != nil {
-			t.Fatalf("app.Test returned error: %v", err)
-		}
-		if respOld.StatusCode != fiber.StatusBadRequest {
-			t.Fatalf("status code = %d, want %d", respOld.StatusCode, fiber.StatusBadRequest)
-		}
-
-		reqNew := httptest.NewRequest(http.MethodPost, "/", nil)
-		reqNew.Header.Set("User-Agent", "HarukiProxy/v1.2.3")
-		reqNew.Header.Set("X-Haruki-Toolbox-Secret", "secret-b")
-		respNew, err := app.Test(reqNew)
-		if err != nil {
-			t.Fatalf("app.Test returned error: %v", err)
-		}
-		if respNew.StatusCode != fiber.StatusNoContent {
-			t.Fatalf("status code = %d, want %d", respNew.StatusCode, fiber.StatusNoContent)
-		}
-	})
-}
-
-func packForTest(plaintext []byte, aad, keyMaterial string) ([]byte, error) {
-	key := sha256.Sum256([]byte(keyMaterial))
-	block, err := aes.NewCipher(key[:])
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
-	}
-	sealed := gcm.Seal(nil, nonce, plaintext, []byte(aad))
-	out := make([]byte, 0, len(nonce)+len(sealed))
-	out = append(out, nonce...)
-	out = append(out, sealed...)
-	return out, nil
-}
-
-func TestHarukiProxyLegacySunset(t *testing.T) {
-	cutoff := time.Date(2026, 10, 31, 16, 0, 0, 0, time.UTC)
-	for _, tc := range []struct {
-		name   string
-		now    time.Time
-		status int
-	}{
-		{"before", cutoff.Add(-time.Nanosecond), http.StatusNoContent},
-		{"exact", cutoff, http.StatusGone},
-		{"after", cutoff.Add(time.Second), http.StatusGone},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			app := fiber.New()
-			app.Post("/", harukiProxyLegacyGate(func() time.Time { return tc.now }), func(c fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
-			resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != tc.status {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
-			}
-			if resp.Header.Get("Sunset") != "Sat, 31 Oct 2026 16:00:00 GMT" {
-				t.Fatalf("Sunset = %s", resp.Header.Get("Sunset"))
-			}
-		})
-	}
-}
-
-func TestHarukiProxyV3DoesNotFallBackToLegacyAuth(t *testing.T) {
+func newHarukiProxyRoutesApp() *fiber.App {
 	app := fiber.New()
-	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, HarukiProxySecret: "legacy", HarukiProxyUnpackKey: "legacy-key"}
-	registerHarukiProxyRoutes(helper, Dependencies{})
-	req := httptest.NewRequest("POST", "/harukiproxy/v3/jp/123/suite/upload", nil)
-	req.Header.Set("X-Haruki-Toolbox-Secret", "legacy")
+	registerHarukiProxyRoutes(&harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app}, Dependencies{})
+	return app
+}
+
+func doHarukiProxyRoute(t *testing.T, app *fiber.App, path string, headers map[string]string) (*http.Response, proxyTestResponse) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader([]byte("sealed-or-raw-payload")))
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 503 {
-		t.Fatal(resp.StatusCode)
+	var body proxyTestResponse
+	if err := json.UnmarshalRead(resp.Body, &body); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Header.Get("X-Request-ID") == "" || body.Data.RequestID != resp.Header.Get("X-Request-ID") {
+		t.Fatalf("request id header %q does not match body %q", resp.Header.Get("X-Request-ID"), body.Data.RequestID)
+	}
+	return resp, body
+}
+
+// ★ The shared-key upload paths are closed for good: whatever a request
+// carries (a valid-looking secret, User-Agent and body), it is refused with
+// protocol_retired and told to log in with OAuth2, before anything reads the
+// secret or the body.
+func TestHarukiProxySharedKeyPathsAreRetired(t *testing.T) {
+	app := newHarukiProxyRoutesApp()
+	for _, path := range []string{"/harukiproxy/jp/123/suite/upload", "/api/harukiproxy/tw/456/mysekai/upload", "/harukiproxy/xx/abc/whatever/upload"} {
+		t.Run(path, func(t *testing.T) {
+			resp, body := doHarukiProxyRoute(t, app, path, map[string]string{"X-Haruki-Toolbox-Secret": "any-shared-key", "User-Agent": "HarukiProxy/v2.2.1"})
+			if resp.StatusCode != fiber.StatusGone || body.Data.ErrorCode != proxyRetiredCode || body.Data.Retryable {
+				t.Fatalf("got %d %+v, want 410 protocol_retired", resp.StatusCode, body)
+			}
+			if !strings.Contains(body.Message, "OAuth2") {
+				t.Errorf("message %q does not tell the client to log in with OAuth2", body.Message)
+			}
+			if resp.Header.Get("Sunset") != "Sat, 31 Oct 2026 16:00:00 GMT" {
+				t.Errorf("Sunset = %q", resp.Header.Get("Sunset"))
+			}
+		})
+	}
+}
+
+// ★ The v3 upload accepts only an OAuth2 bearer token. A request without one
+// (a shared-key client, or a custom endpoint set to Haruki Toolbox) gets
+// oauth2_required, not an expired-token error; a bearer token goes on to the
+// OAuth2 check, never to a shared-key fallback.
+func TestHarukiProxyV3RequiresAnOAuth2Login(t *testing.T) {
+	app := newHarukiProxyRoutesApp()
+	const path = "/harukiproxy/v3/jp/123/suite/upload"
+	for name, headers := range map[string]map[string]string{
+		"shared key":       {"X-Haruki-Toolbox-Secret": "any-shared-key"},
+		"no credentials":   {},
+		"basic auth":       {"Authorization": "Basic dXNlcjpwYXNz"},
+		"empty auth":       {"Authorization": " "},
+		"shared key, /api": {"X-Haruki-Toolbox-Secret": "any-shared-key", "X-Path": "/api"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := path
+			if headers["X-Path"] == "/api" {
+				p = "/api" + path
+			}
+			resp, body := doHarukiProxyRoute(t, app, p, headers)
+			if resp.StatusCode != fiber.StatusUnauthorized || body.Data.ErrorCode != proxyOAuth2RequiredCode || body.Data.Retryable {
+				t.Fatalf("got %d %+v, want 401 oauth2_required", resp.StatusCode, body)
+			}
+			if body.Message != proxyOAuth2RequiredMessage || !strings.HasPrefix(resp.Header.Get(fiber.HeaderWWWAuthenticate), "Bearer") {
+				t.Errorf("message %q, WWW-Authenticate %q", body.Message, resp.Header.Get(fiber.HeaderWWWAuthenticate))
+			}
+		})
+	}
+	// With a bearer token the request reaches the OAuth2 check (unavailable
+	// here, so 503), even when it also carries the shared key.
+	for _, scheme := range []string{"Bearer", "bearer"} {
+		resp, body := doHarukiProxyRoute(t, app, path, map[string]string{"Authorization": scheme + " token", "X-Haruki-Toolbox-Secret": "any-shared-key"})
+		if resp.StatusCode != fiber.StatusServiceUnavailable || body.Data.ErrorCode != "temporarily_unavailable" {
+			t.Fatalf("%s: got %d %+v, want the OAuth2 check", scheme, resp.StatusCode, body)
+		}
 	}
 }

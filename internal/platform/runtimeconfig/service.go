@@ -11,15 +11,11 @@ const defaultStoreTimeout = 500 * time.Millisecond
 // Update describes a partial runtime configuration update. Nil fields retain
 // their current values.
 type Update struct {
-	AllowedKeys          *[]string
-	PrivateAPIToken      *string
-	PrivateAPIUserAgent  *string
-	HarukiProxyUserAgent *string
-	HarukiProxyVersion   *string
-	HarukiProxySecret    *string
-	HarukiProxyUnpackKey *string
-	WebhookJWTSecret     *string
-	WebhookEnabled       *bool
+	AllowedKeys         *[]string
+	PrivateAPIToken     *string
+	PrivateAPIUserAgent *string
+	WebhookJWTSecret    *string
+	WebhookEnabled      *bool
 	// OAuth2DeviceFlowEnabled is the runtime switch of the device flow.
 	OAuth2DeviceFlowEnabled *bool
 }
@@ -33,15 +29,11 @@ type Snapshot struct {
 	// every instance, so during a rolling deploy old and new binaries share one
 	// payload: renaming the JSON member would make each version drop the field
 	// the other wrote, and every backend would lose its allowlist at once.
-	AllowedKeys          []string `json:"publicApiAllowedKeys"`
-	PrivateAPIToken      string   `json:"privateApiToken"`
-	PrivateAPIUserAgent  string   `json:"privateApiUserAgent"`
-	HarukiProxyUserAgent string   `json:"harukiProxyUserAgent"`
-	HarukiProxyVersion   string   `json:"harukiProxyVersion"`
-	HarukiProxySecret    string   `json:"harukiProxySecret"`
-	HarukiProxyUnpackKey string   `json:"harukiProxyUnpackKey"`
-	WebhookJWTSecret     string   `json:"webhookJwtSecret"`
-	WebhookEnabled       *bool    `json:"webhookEnabled,omitzero"`
+	AllowedKeys         []string `json:"publicApiAllowedKeys"`
+	PrivateAPIToken     string   `json:"privateApiToken"`
+	PrivateAPIUserAgent string   `json:"privateApiUserAgent"`
+	WebhookJWTSecret    string   `json:"webhookJwtSecret"`
+	WebhookEnabled      *bool    `json:"webhookEnabled,omitzero"`
 	// OAuth2DeviceFlowEnabled nil means OFF, unlike WebhookEnabled: the switch
 	// fails closed when the field is lost (a seed snapshot from startup config,
 	// a write by an older binary, Redis losing a recent PUT false), so a switch
@@ -166,18 +158,6 @@ func applyUpdate(snapshot *Snapshot, update Update) {
 	}
 	if update.PrivateAPIUserAgent != nil {
 		snapshot.PrivateAPIUserAgent = *update.PrivateAPIUserAgent
-	}
-	if update.HarukiProxyUserAgent != nil {
-		snapshot.HarukiProxyUserAgent = *update.HarukiProxyUserAgent
-	}
-	if update.HarukiProxyVersion != nil {
-		snapshot.HarukiProxyVersion = *update.HarukiProxyVersion
-	}
-	if update.HarukiProxySecret != nil {
-		snapshot.HarukiProxySecret = *update.HarukiProxySecret
-	}
-	if update.HarukiProxyUnpackKey != nil {
-		snapshot.HarukiProxyUnpackKey = *update.HarukiProxyUnpackKey
 	}
 	if update.WebhookJWTSecret != nil {
 		snapshot.WebhookJWTSecret = *update.WebhookJWTSecret

@@ -200,7 +200,8 @@ sekai_api:
   profile_cache_ttl_seconds: 60
 
 haruki_proxy:
-  # v3 uses OAuth2 game-data:write; no shared client/encryption key.
+  # Uploads use OAuth2 game-data:write only; there is no shared client or
+  # encryption key (the shared-key v2 channel is closed and answers 410).
   # v3 always requires structured UA with platform. Independent from legacy version.
   v3_client_policy:
     allowed_channels: [stable, preview, beta, rc, dev]
@@ -210,11 +211,6 @@ haruki_proxy:
       beta: "3.0.0-beta"
       rc: "3.0.0-rc"
       dev: "3.0.0-dev"
-  # Legacy v2 settings; old endpoints retire on 2026-11-01 00:00:00 UTC+8.
-  user_agent: "HarukiProxy"
-  version: "v1.7.0"
-  secret: ""
-  unpack_key: ""
 
 # AVSC file paths, loaded once at startup. Omitted/empty regions are disabled.
 restore_mysekai:

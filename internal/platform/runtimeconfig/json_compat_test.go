@@ -51,7 +51,7 @@ func TestSnapshotJSONStrictDecode(t *testing.T) {
 }
 
 func BenchmarkSnapshotJSON(b *testing.B) {
-	snapshot := Snapshot{AllowedKeys: []string{"public-a", "public-b"}, PrivateAPIToken: "test-only", HarukiProxyUserAgent: "Haruki"}
+	snapshot := Snapshot{AllowedKeys: []string{"public-a", "public-b"}, PrivateAPIToken: "test-only", PrivateAPIUserAgent: "Haruki"}
 	payload, err := marshalSnapshot(snapshot)
 	if err != nil {
 		b.Fatal(err)
@@ -103,7 +103,13 @@ func TestSnapshotJSONGo126Fixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(encoded, bytes.TrimSpace(payload)) {
+	// The fixture still has the shared-key HarukiProxy members, which are
+	// read past and no longer written; everything else must match byte for byte.
+	retired := []byte(`"harukiProxyUserAgent":"","harukiProxyVersion":"","harukiProxySecret":"","harukiProxyUnpackKey":"",`)
+	if !bytes.Contains(payload, retired) {
+		t.Fatal("fixture changed")
+	}
+	if !bytes.Equal(encoded, bytes.TrimSpace(bytes.Replace(payload, retired, nil, 1))) {
 		t.Fatal("native Sonic wire format changed")
 	}
 }

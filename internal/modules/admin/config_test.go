@@ -125,13 +125,9 @@ func TestSanitizeOptionalRuntimeSecret(t *testing.T) {
 
 func TestHandleUpdateRuntimeConfig(t *testing.T) {
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
-		PrivateAPIToken:      "old-token",
-		PrivateAPIUserAgent:  "old-agent",
-		HarukiProxyUserAgent: "old-proxy-agent",
-		HarukiProxyVersion:   "v0.0.1",
-		HarukiProxySecret:    "old-proxy-secret",
-		HarukiProxyUnpackKey: "old-unpack",
-		WebhookJWTSecret:     "old-webhook",
+		PrivateAPIToken:     "old-token",
+		PrivateAPIUserAgent: "old-agent",
+		WebhookJWTSecret:    "old-webhook",
 	}
 	helper.SetAllowedKeys([]string{"old-key"})
 
@@ -142,11 +138,10 @@ func TestHandleUpdateRuntimeConfig(t *testing.T) {
 		"publicApiAllowedKeys": []string{" key-a ", "key-b"},
 		"privateApiToken":      "new-token",
 		"privateApiUserAgent":  "new-agent",
-		"harukiProxyUserAgent": "new-proxy-agent",
-		"harukiProxyVersion":   "v1.2.3",
-		"harukiProxySecret":    "new-proxy-secret",
-		"harukiProxyUnpackKey": "new-unpack",
-		"webhookJwtSecret":     "new-webhook",
+		// The shared-key HarukiProxy settings are gone; an old admin client
+		// that still sends them is not refused.
+		"harukiProxySecret": "ignored",
+		"webhookJwtSecret":  "new-webhook",
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -166,10 +161,6 @@ func TestHandleUpdateRuntimeConfig(t *testing.T) {
 	privateAPIToken, privateAPIUserAgent := helper.GetPrivateAPIAuth()
 	if privateAPIToken != "new-token" || privateAPIUserAgent != "new-agent" {
 		t.Fatalf("private api runtime config not updated: token=%q ua=%q", privateAPIToken, privateAPIUserAgent)
-	}
-	harukiProxyUserAgent, harukiProxyVersion, harukiProxySecret, harukiProxyUnpackKey := helper.GetHarukiProxyConfig()
-	if harukiProxyUserAgent != "new-proxy-agent" || harukiProxyVersion != "v1.2.3" || harukiProxySecret != "new-proxy-secret" || harukiProxyUnpackKey != "new-unpack" {
-		t.Fatalf("haruki proxy runtime config not updated")
 	}
 	if helper.GetWebhookJWTSecret() != "new-webhook" {
 		t.Fatalf("webhook secret not updated")

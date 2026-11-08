@@ -29,10 +29,6 @@ type HarukiToolboxRouterHelpers struct {
 	AllowedKeys            []string
 	PrivateAPIToken        string
 	PrivateAPIUserAgent    string
-	HarukiProxyUserAgent   string
-	HarukiProxyVersion     string
-	HarukiProxySecret      string
-	HarukiProxyUnpackKey   string
 	WebhookJWTSecret       string
 	WebhookEnabled         *bool
 	BotRegistrationEnabled bool
@@ -82,15 +78,11 @@ func (h *HarukiToolboxRouterHelpers) legacyRuntimeConfigSnapshot() platformRunti
 		webhookEnabled = &value
 	}
 	return platformRuntimeConfig.Snapshot{
-		AllowedKeys:          allowedKeys,
-		PrivateAPIToken:      h.PrivateAPIToken,
-		PrivateAPIUserAgent:  h.PrivateAPIUserAgent,
-		HarukiProxyUserAgent: h.HarukiProxyUserAgent,
-		HarukiProxyVersion:   h.HarukiProxyVersion,
-		HarukiProxySecret:    h.HarukiProxySecret,
-		HarukiProxyUnpackKey: h.HarukiProxyUnpackKey,
-		WebhookJWTSecret:     h.WebhookJWTSecret,
-		WebhookEnabled:       webhookEnabled,
+		AllowedKeys:         allowedKeys,
+		PrivateAPIToken:     h.PrivateAPIToken,
+		PrivateAPIUserAgent: h.PrivateAPIUserAgent,
+		WebhookJWTSecret:    h.WebhookJWTSecret,
+		WebhookEnabled:      webhookEnabled,
 	}
 }
 
@@ -101,10 +93,6 @@ func (h *HarukiToolboxRouterHelpers) applyLegacyRuntimeConfigSnapshot(snapshot p
 	h.runtimeConfigMu.Lock()
 	h.PrivateAPIToken = snapshot.PrivateAPIToken
 	h.PrivateAPIUserAgent = snapshot.PrivateAPIUserAgent
-	h.HarukiProxyUserAgent = snapshot.HarukiProxyUserAgent
-	h.HarukiProxyVersion = snapshot.HarukiProxyVersion
-	h.HarukiProxySecret = snapshot.HarukiProxySecret
-	h.HarukiProxyUnpackKey = snapshot.HarukiProxyUnpackKey
 	h.WebhookJWTSecret = snapshot.WebhookJWTSecret
 	if snapshot.WebhookEnabled == nil {
 		h.WebhookEnabled = nil
@@ -202,27 +190,6 @@ func (h *HarukiToolboxRouterHelpers) SetPrivateAPIToken(token string) {
 
 func (h *HarukiToolboxRouterHelpers) SetPrivateAPIUserAgent(userAgent string) {
 	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{PrivateAPIUserAgent: &userAgent})
-}
-
-func (h *HarukiToolboxRouterHelpers) GetHarukiProxyConfig() (string, string, string, string) {
-	snapshot := h.currentRuntimeConfigSnapshot()
-	return snapshot.HarukiProxyUserAgent, snapshot.HarukiProxyVersion, snapshot.HarukiProxySecret, snapshot.HarukiProxyUnpackKey
-}
-
-func (h *HarukiToolboxRouterHelpers) SetHarukiProxyUserAgent(userAgent string) {
-	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{HarukiProxyUserAgent: &userAgent})
-}
-
-func (h *HarukiToolboxRouterHelpers) SetHarukiProxyVersion(version string) {
-	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{HarukiProxyVersion: &version})
-}
-
-func (h *HarukiToolboxRouterHelpers) SetHarukiProxySecret(secret string) {
-	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{HarukiProxySecret: &secret})
-}
-
-func (h *HarukiToolboxRouterHelpers) SetHarukiProxyUnpackKey(unpackKey string) {
-	_ = h.UpdateRuntimeConfig(RuntimeConfigUpdate{HarukiProxyUnpackKey: &unpackKey})
 }
 
 func (h *HarukiToolboxRouterHelpers) GetWebhookJWTSecret() string {

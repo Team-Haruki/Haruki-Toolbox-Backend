@@ -16,10 +16,6 @@ func TestRuntimeConfigCompositionCopiesMutableValues(t *testing.T) {
 	cfg.Others.AllowedKeys = []string{"key-a", "key-b"}
 	cfg.MongoDB.PrivateApiSecret = "private-token"
 	cfg.MongoDB.PrivateApiUserAgent = "private-agent"
-	cfg.HarukiProxy.UserAgent = "proxy-agent"
-	cfg.HarukiProxy.Version = "v1.2.3"
-	cfg.HarukiProxy.Secret = "proxy-secret"
-	cfg.HarukiProxy.UnpackKey = "proxy-unpack-key"
 	cfg.Webhook.JWTSecret = "webhook-secret"
 	cfg.Webhook.Enabled = true
 
@@ -66,11 +62,11 @@ func TestRuntimeConfigRedisContractRemainsStable(t *testing.T) {
 		gotFields = append(gotFields, field)
 	}
 	sort.Strings(gotFields)
+	// The shared-key HarukiProxy fields (harukiProxySecret, harukiProxyUnpackKey,
+	// harukiProxyUserAgent, harukiProxyVersion) were removed with that upload
+	// channel; a stored snapshot still holding them is read without them and
+	// rewritten without them on the next runtime config update.
 	wantFields := []string{
-		"harukiProxySecret",
-		"harukiProxyUnpackKey",
-		"harukiProxyUserAgent",
-		"harukiProxyVersion",
 		"privateApiToken",
 		"privateApiUserAgent",
 		"publicApiAllowedKeys",

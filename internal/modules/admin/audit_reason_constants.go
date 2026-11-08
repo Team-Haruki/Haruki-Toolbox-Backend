@@ -78,8 +78,6 @@ const (
 	adminFailureReasonInvalidFriendLinkId                  = "invalid_friend_link_id"
 	adminFailureReasonInvalidGameUserId                    = "invalid_game_user_id"
 	adminFailureReasonInvalidGroupId                       = "invalid_group_id"
-	adminFailureReasonInvalidHarukiProxySecret             = "invalid_haruki_proxy_secret"
-	adminFailureReasonInvalidHarukiProxyUnpackKey          = "invalid_haruki_proxy_unpack_key"
 	adminFailureReasonInvalidHours                         = "invalid_hours"
 	adminFailureReasonInvalidIncludeInactive               = "invalid_include_inactive"
 	adminFailureReasonInvalidIncludeRevoked                = "invalid_include_revoked"

@@ -94,6 +94,7 @@ Content-Type: application/octet-stream
 
 | HTTP / error_code | 客户端处理 |
 | --- | --- |
+| 401 oauth2_required | 请求没有 Bearer token（例如仍在用共享密钥，或把自定义上传端点设成了工具箱）：提示用户在应用中用 OAuth2 连接工具箱；不重试 |
 | 401 invalid_token | 串行刷新一次并重试一次；失败暂停并重新授权 |
 | 403 insufficient_scope | 重新请求用户授权，不自动重试 |
 | 403 upload_not_allowed | 刷新目标列表并提示权限失效，不自动重试 |
@@ -115,4 +116,4 @@ Content-Type: application/octet-stream
 - preview/dev/beta/rc 版本及各平台 UA；成功/失败请求 ID 与错误暂停行为。
 - 401 刷新并发串行化、最多一次刷新重试、跨域重定向不泄露 token。
 
-v2 截止：2026-11-01 00:00（UTC+8）。发布启用新版的客户端前，先向 Toolbox 管理员确认服务端已开放 OAuth2 v3、client 已登记，并完成真实设备联调。
+v2 截止：2026-11-01 00:00（UTC+8）。之后共享密钥（v2）路径对任何请求都返回 410 `protocol_retired`，不再读取密钥或载荷；服务端也不再配置或接受共享密钥。发布启用新版的客户端前，先向 Toolbox 管理员确认服务端已开放 OAuth2 v3、client 已登记，并完成真实设备联调。
