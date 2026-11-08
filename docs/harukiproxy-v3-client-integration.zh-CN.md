@@ -82,6 +82,14 @@ Content-Type: application/octet-stream
 {"status":403,"message":"upload not allowed","updatedData":{"error_code":"upload_not_allowed","request_id":"<服务端 UUID>","retryable":false}}
 ```
 
+跳过（载荷有效，但没有需要保存的新内容；目前只有没有刷新采集点的 MySekai 生日派对投递）同样返回 200，不是失败，也不会覆盖已保存的数据：
+
+```json
+{"status":200,"message":"Upload skipped: the birthday party delivery did not refresh the harvest points","updatedData":{"request_id":"<服务端 UUID>","retryable":false,"upload_result":"skipped","reason":"birthday_party_not_refreshed"}}
+```
+
+响应头同时带 `X-Haruki-Upload-Result: skipped` 与 `X-Haruki-Upload-Reason: <reason>`。客户端按 `updatedData.upload_result`（或响应头）区分跳过与成功，按 reason 选择提示文案，不依赖 message；不认识的 reason 也按跳过处理，不重试。不认识跳过的旧客户端会把它当作成功。
+
 成功和失败均从 X-Request-ID 或 updatedData.request_id 提取请求 ID；服务端生成 ID，不信任客户端自带值。使用 HTTP 状态与 error_code，不依赖 message 文案。网关/网络错误不保证 JSON。
 
 | HTTP / error_code | 客户端处理 |

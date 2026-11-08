@@ -44,6 +44,9 @@ func handleManualUpload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 			dependencies,
 			harukiUtils.UploadMethodManual, browserUploadAttempt(c),
 		)
+		if reason, skipped := uploadSkipReason(err); skipped {
+			return uploadSkippedResponse(c, reason)
+		}
 		if err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)

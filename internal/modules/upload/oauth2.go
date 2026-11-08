@@ -67,10 +67,14 @@ func handleOAuth2Upload(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, d
 		// per-account policy and the audit log all come from HandleUpload. The
 		// upload method is recorded so an audit trail can tell a delegated
 		// write from one the owner made.
-		if _, err := HandleUpload(
+		_, err = runUpload(
 			ctx, body, server, dataType, &gameUserID, &authUserID,
 			apiHelper, dependencies, harukiUtils.UploadMethodOAuth2, oauthUploadAttempt(c),
-		); err != nil {
+		)
+		if reason, skipped := uploadSkipReason(err); skipped {
+			return uploadSkippedResponse(c, reason)
+		}
+		if err != nil {
 			if mapped := mapUploadProcessingError(err); mapped != nil {
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 			}

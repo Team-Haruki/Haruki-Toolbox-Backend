@@ -173,7 +173,10 @@ func handleHarukiProxyUploadVersion(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			dispatchUploadAuditLog(apiHelper, dependencies.DataHandlerLogger, dependencies.BackgroundTasks, uc, false, &message)
 			return proxyResponse(c, 400, a.ErrorCode, message, false, nil)
 		}
-		_, err = HandleUpload(c.Context(), decryptedBody, server, dataType, &gameUserID, actor, apiHelper, requestDependencies, harukiUtils.UploadMethodHarukiProxy, a)
+		_, err = runUpload(c.Context(), decryptedBody, server, dataType, &gameUserID, actor, apiHelper, requestDependencies, harukiUtils.UploadMethodHarukiProxy, a)
+		if reason, skipped := uploadSkipReason(err); skipped {
+			return proxySkippedResponse(c, reason)
+		}
 		if err != nil {
 			if a.ErrorCode == "" {
 				classifyAttemptFailure(a, uploadStageBuildContext, err)

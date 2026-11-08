@@ -320,12 +320,29 @@ function failureMessage(status, data) {
     return "HTTP " + status + (reason ? "：" + reason : "") + "。游戏本身不受影响，稍后重进游戏即可重试。";
 }
 
+// A skipped upload answers 200 with updatedData.upload_result "skipped": the
+// data was fine but had nothing new to store, so it is neither saved nor a
+// failure. Returns the notification text, or null for any other answer.
+function skippedMessage(data) {
+    let updated = null;
+    try {
+        updated = JSON.parse(data).updatedData;
+    } catch (e) {
+        updated = null;
+    }
+    if (!updated || updated.upload_result !== "skipped") return null;
+    if (updated.reason === "birthday_party_not_refreshed") return "本次投递没有刷新采集点，无需上传。";
+    return "这份数据没有需要保存的新内容，无需上传。";
+}
+
 // A notification that throws must not keep the game waiting for its response.
-function finish(error, stillProcessing) {
+function finish(error, stillProcessing, skipped) {
     try {
         const subject = (regionLabel() ? regionLabel() + " " : "") + dataLabel() + " 数据";
         if (error !== null) {
             notifyResult(subject + "上传失败", error);
+        } else if (skipped) {
+            notifyResult(subject + "未上传", skipped);
         } else if (stillProcessing) {
             notifyResult(subject + "已上传", "工具箱已收到数据，还在处理中，稍后首页「我的账号」会更新上传时间。");
         } else {
@@ -373,7 +390,7 @@ function sendChunk(index, totalChunks) {
         } else {
             log(\u0060upload completed: ${totalChunks} chunks, HTTP ${resp.status}\u0060);
             // 202: the server took the upload but had not finished it in time.
-            finish(null, resp.status === 202);
+            finish(null, resp.status === 202, resp.status === 200 ? skippedMessage(data) : null);
         }
     });
 }
