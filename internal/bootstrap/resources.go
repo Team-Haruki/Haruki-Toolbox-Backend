@@ -251,5 +251,6 @@ func sekaiAPIOptions(cfg harukiConfig.SekaiAPIConfig) harukiSekaiAPIClient.Optio
 		ProfileViewTimeoutByServer: byServer,
 		VerifyTimeout:              time.Duration(cfg.VerifyTimeoutSeconds) * time.Second,
 		ProfileCacheTTL:            time.Duration(cfg.ProfileCacheTTLSeconds) * time.Second,
+		BackupEndpoint:             cfg.BackupEndpoint,
 	}
 }

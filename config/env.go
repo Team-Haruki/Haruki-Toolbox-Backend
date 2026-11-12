@@ -205,6 +205,7 @@ func applyEnvOverrides(cfg *Config) error {
 
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")
+	overrideString(&cfg.SekaiAPI.BackupEndpoint, "SEKAI_API_BACKUP_ENDPOINT")
 
 	// Both spellings are accepted; ALLOWED_KEYS wins when both are set.
 	if err := overrideCSV(&cfg.Others.AllowedKeys, "PUBLIC_API_ALLOWED_KEYS"); err != nil {
