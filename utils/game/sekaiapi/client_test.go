@@ -3,6 +3,7 @@ package sekaiapi
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,20 +13,40 @@ import (
 )
 
 // fakeSekaiAPI answers every profile request with the configured status and
-// body, after an optional delay, and counts the requests it receives.
+// body, after an optional delay, and counts the requests it receives. While
+// broken is set it closes the connection without answering (with a reset
+// when reset is also set).
 type fakeSekaiAPI struct {
 	status atomic.Int64
 	body   atomic.Value
 	delay  atomic.Int64
 	hits   atomic.Int64
+	broken atomic.Bool
+	reset  atomic.Bool
+	url    string
 }
 
 func newFakeSekaiAPI(t *testing.T, status int, body string) (*fakeSekaiAPI, *HarukiSekaiAPIClient) {
+	t.Helper()
+	fake := newFakeSekaiAPIServer(t, status, body)
+	return fake, NewHarukiSekaiAPIClient(fake.url, "token")
+}
+
+func newFakeSekaiAPIServer(t *testing.T, status int, body string) *fakeSekaiAPI {
 	t.Helper()
 	fake := &fakeSekaiAPI{}
 	fake.set(status, body)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fake.hits.Add(1)
+		if fake.broken.Load() {
+			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+				if tcp, ok := conn.(*net.TCPConn); ok && fake.reset.Load() {
+					_ = tcp.SetLinger(0) // close with RST instead of FIN
+				}
+				_ = conn.Close()
+			}
+			return
+		}
 		if r.Header.Get("X-Haruki-Sekai-Token") != "token" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -42,7 +63,8 @@ func newFakeSekaiAPI(t *testing.T, status int, body string) (*fakeSekaiAPI, *Har
 		_, _ = w.Write([]byte(fake.body.Load().(string)))
 	}))
 	t.Cleanup(srv.Close)
-	return fake, NewHarukiSekaiAPIClient(srv.URL, "token")
+	fake.url = srv.URL
+	return fake
 }
 
 func (f *fakeSekaiAPI) set(status int, body string) {

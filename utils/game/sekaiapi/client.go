@@ -5,6 +5,7 @@ import (
 	json "encoding/json/v2"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -76,6 +77,10 @@ type Options struct {
 	// ProfileCacheTTL is how long a successful profile view is cached; negative
 	// disables the cache.
 	ProfileCacheTTL time.Duration
+	// BackupEndpoint is a standby entry node, called with the same token, that
+	// is used only when the primary cannot be reached (see failover.go). Empty
+	// disables failover.
+	BackupEndpoint string
 }
 
 type HarukiSekaiAPIClient struct {
@@ -84,6 +89,12 @@ type HarukiSekaiAPIClient struct {
 	harukiSekaiAPIToken    string
 	options                Options
 	breaker                *circuitbreaker.Breaker[string]
+	// primary is the passive health of harukiSekaiAPIEndpoint; it is only
+	// consulted when options.BackupEndpoint is set.
+	primary *primaryHealth
+	// dialer is the transport's dialer with failoverDialTimeout; nil without a
+	// backup.
+	dialer *net.Dialer
 }
 
 type HarukiSekaiAPIResult struct {
@@ -97,12 +108,20 @@ func NewHarukiSekaiAPIClient(apiEndpoint, apiToken string) *HarukiSekaiAPIClient
 }
 
 func NewHarukiSekaiAPIClientWithOptions(apiEndpoint, apiToken string, options Options) *HarukiSekaiAPIClient {
+	options = normalizeOptions(options)
+	httpClient := jsoncodec.ConfigureResty(resty.New()).SetTimeout(sekaiAPIRequestTimeout)
+	var dialer *net.Dialer
+	if options.BackupEndpoint != "" {
+		dialer = useFailoverDialTimeout(httpClient)
+	}
 	return &HarukiSekaiAPIClient{
-		httpClient:             jsoncodec.ConfigureResty(resty.New()).SetTimeout(sekaiAPIRequestTimeout),
+		httpClient:             httpClient,
 		harukiSekaiAPIEndpoint: apiEndpoint,
 		harukiSekaiAPIToken:    apiToken,
-		options:                normalizeOptions(options),
+		options:                options,
 		breaker:                circuitbreaker.New[string](breakerFailureThreshold, breakerWindow, breakerCooldown, breakerRetryAfterFloor),
+		primary:                newPrimaryHealth(),
+		dialer:                 dialer,
 	}
 }
 
@@ -123,6 +142,7 @@ func normalizeOptions(options Options) Options {
 	if options.ProfileCacheTTL == 0 {
 		options.ProfileCacheTTL = DefaultProfileCacheTTL
 	}
+	options.BackupEndpoint = strings.TrimSpace(options.BackupEndpoint)
 	return options
 }
 
@@ -165,7 +185,7 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(ctx context.Context, userID string
 	if !allowed {
 		return &HarukiSekaiAPIResult{}, nil, &CircuitOpenError{Server: key, RetryAfter: retryAfter}
 	}
-	result, body, degraded, err := c.requestUserProfile(ctx, userID, key)
+	result, body, degraded, err := c.fetchUserProfile(ctx, userID, key)
 	if errors.Is(err, context.Canceled) {
 		// The caller gave up; that says nothing about the upstream.
 		c.breaker.ReleaseProbe(key, token)
@@ -175,21 +195,62 @@ func (c *HarukiSekaiAPIClient) GetUserProfile(ctx context.Context, userID string
 	return result, body, err
 }
 
-// requestUserProfile performs one call. degraded reports a transport error, a
-// timeout or a 5xx (including 503 maintenance): the outcomes that count toward
-// the breaker. A 404, a missing account and other 4xx answers do not.
-func (c *HarukiSekaiAPIClient) requestUserProfile(ctx context.Context, userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, bool, error) {
-	url := fmt.Sprintf("%s/api/%s/%s/profile", c.harukiSekaiAPIEndpoint, serverStr, userID)
-	resp, err := c.httpClient.R().
+// fetchUserProfile performs one call as the breaker sees it. Without a backup
+// it is a single request to the primary. With one, the primary is tried unless
+// it is marked down, and the backup is tried when there was no route to the
+// primary (primaryUnreachable). The primary attempt has the caller's full
+// deadline; any HTTP answer from it, whatever its status, is the result.
+// degraded reports a transport error, a timeout or a 5xx (including 503
+// maintenance) of the last request sent: the outcomes that count toward the
+// breaker. A 404, a missing account and other 4xx answers do not.
+func (c *HarukiSekaiAPIClient) fetchUserProfile(ctx context.Context, userID string, serverStr string) (*HarukiSekaiAPIResult, []byte, bool, error) {
+	path := fmt.Sprintf("/api/%s/%s/profile", serverStr, userID)
+	primaryURL := c.harukiSekaiAPIEndpoint + path
+	if c.options.BackupEndpoint == "" {
+		return c.requestUserProfile(ctx, primaryURL)
+	}
+	if c.primary.shouldTry() {
+		resp, err := c.get(ctx, primaryURL)
+		if err == nil {
+			c.primary.markUp()
+			return classifyUserProfileResponse(resp, primaryURL)
+		}
+		// The caller's deadline or cancellation says nothing about the
+		// primary and leaves no time for the backup. A failure after the
+		// primary started answering (a status was received) proves a route.
+		answered := resp != nil && resp.StatusCode() != 0
+		if ctx.Err() != nil || answered || !primaryUnreachable(err) {
+			return transportFailure(primaryURL, err)
+		}
+		c.primary.markDown(err)
+	}
+	return c.requestUserProfile(ctx, c.options.BackupEndpoint+path)
+}
+
+// requestUserProfile sends one request to url and classifies the outcome.
+func (c *HarukiSekaiAPIClient) requestUserProfile(ctx context.Context, url string) (*HarukiSekaiAPIResult, []byte, bool, error) {
+	resp, err := c.get(ctx, url)
+	if err != nil {
+		return transportFailure(url, err)
+	}
+	return classifyUserProfileResponse(resp, url)
+}
+
+func (c *HarukiSekaiAPIClient) get(ctx context.Context, url string) (*resty.Response, error) {
+	return c.httpClient.R().
 		SetContext(ctx).
 		SetHeader("X-Haruki-Sekai-Token", c.harukiSekaiAPIToken).
 		SetHeader("Accept", "application/json").
 		Get(url)
-	if err != nil {
-		harukiLogger.Errorf("Sekai API request failed for %s: %v", url, err)
-		return nil, nil, true, fmt.Errorf("请求失败: %w", err)
-	}
+}
 
+// transportFailure is the outcome of a request that got no HTTP response.
+func transportFailure(url string, err error) (*HarukiSekaiAPIResult, []byte, bool, error) {
+	harukiLogger.Errorf("Sekai API request failed for %s: %v", url, err)
+	return nil, nil, true, fmt.Errorf("请求失败: %w", err)
+}
+
+func classifyUserProfileResponse(resp *resty.Response, url string) (*HarukiSekaiAPIResult, []byte, bool, error) {
 	statusCode := resp.StatusCode()
 	body := resp.Body()
 

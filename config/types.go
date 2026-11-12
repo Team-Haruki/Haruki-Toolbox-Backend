@@ -277,6 +277,10 @@ type SekaiInheritPacingConfig struct {
 type SekaiAPIConfig struct {
 	APIEndpoint string `yaml:"api_endpoint"`
 	APIToken    string `yaml:"api_token"`
+	// BackupEndpoint is a standby entry node called with the same token, only
+	// while there is no route to api_endpoint (refused, reset, connect timeout,
+	// EOF before a response). Empty disables failover.
+	BackupEndpoint string `yaml:"backup_endpoint"`
 	// ProfileViewTimeoutSeconds bounds an owned-account profile view (default 5).
 	ProfileViewTimeoutSeconds int `yaml:"profile_view_timeout_seconds"`
 	// ProfileViewTimeoutSecondsByServer overrides it per server ("tw": 6). TW is

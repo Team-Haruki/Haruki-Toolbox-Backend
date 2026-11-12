@@ -205,6 +205,10 @@ func applyEnvOverrides(cfg *Config) error {
 
 	overrideString(&cfg.SekaiAPI.APIEndpoint, "SEKAI_API_ENDPOINT")
 	overrideString(&cfg.SekaiAPI.APIToken, "SEKAI_API_TOKEN")
+	// Compose passes this optional variable through as ${...:-}, so an unset
+	// deployment variable arrives empty; only a non-empty value may replace
+	// sekai_api.backup_endpoint from the YAML.
+	overrideNonEmptyString(&cfg.SekaiAPI.BackupEndpoint, "SEKAI_API_BACKUP_ENDPOINT")
 
 	// Both spellings are accepted; ALLOWED_KEYS wins when both are set.
 	if err := overrideCSV(&cfg.Others.AllowedKeys, "PUBLIC_API_ALLOWED_KEYS"); err != nil {
@@ -246,6 +250,14 @@ func applyEnvOverrides(cfg *Config) error {
 
 func overrideString(target *string, keys ...string) {
 	if value, ok := firstEnvValue(keys...); ok {
+		*target = value
+	}
+}
+
+// overrideNonEmptyString is overrideString for variables where an empty or
+// whitespace-only value means "not set" and keeps the YAML value.
+func overrideNonEmptyString(target *string, keys ...string) {
+	if value, ok := firstEnvValue(keys...); ok && value != "" {
 		*target = value
 	}
 }

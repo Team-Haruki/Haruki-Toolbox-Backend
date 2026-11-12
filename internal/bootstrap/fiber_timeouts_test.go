@@ -143,12 +143,14 @@ func TestSekaiAPIOptionsFromConfig(t *testing.T) {
 		ProfileViewTimeoutSecondsByServer: map[string]int{"tw": 6},
 		VerifyTimeoutSeconds:              9,
 		ProfileCacheTTLSeconds:            -1,
+		BackupEndpoint:                    "http://backup.example",
 	})
 	if options.ProfileViewTimeout != 4*time.Second || options.ProfileViewTimeoutByServer["tw"] != 6*time.Second ||
-		options.VerifyTimeout != 9*time.Second || options.ProfileCacheTTL != -time.Second {
+		options.VerifyTimeout != 9*time.Second || options.ProfileCacheTTL != -time.Second ||
+		options.BackupEndpoint != "http://backup.example" {
 		t.Fatalf("options = %#v", options)
 	}
-	if empty := sekaiAPIOptions(harukiConfig.SekaiAPIConfig{}); empty.ProfileViewTimeout != 0 || len(empty.ProfileViewTimeoutByServer) != 0 {
+	if empty := sekaiAPIOptions(harukiConfig.SekaiAPIConfig{}); empty.ProfileViewTimeout != 0 || len(empty.ProfileViewTimeoutByServer) != 0 || empty.BackupEndpoint != "" {
 		t.Fatalf("empty config options = %#v", empty)
 	}
 }
