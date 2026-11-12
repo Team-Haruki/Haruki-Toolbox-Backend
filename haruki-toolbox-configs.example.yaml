@@ -194,7 +194,8 @@ sekai_api:
   # api_endpoint (connection refused or reset, 2 s connect timeout, EOF before
   # a response) is the call retried here, and api_endpoint is skipped for 30 s.
   # HTTP errors (503 maintenance included) and a slow api_endpoint never fail
-  # over. Empty disables failover.
+  # over. Empty disables failover. SEKAI_API_BACKUP_ENDPOINT overrides this only
+  # when it is non-empty.
   backup_endpoint: ""
   # Deadline for an owned-account profile view; a per-server entry overrides it.
   # TW is never bounded below 5 s (its healthy tail reaches past 4 s).

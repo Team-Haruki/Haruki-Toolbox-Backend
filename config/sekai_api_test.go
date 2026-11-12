@@ -9,7 +9,8 @@ import (
 )
 
 func TestSekaiAPIBackupEndpointDefaultsAndEnv(t *testing.T) {
-	unsetSekaiAPIBackupEndpoint(t)
+	unsetEnvForTest(t, "SEKAI_API_BACKUP_ENDPOINT")
+	unsetEnvForTest(t, "SEKAI_API_ENDPOINT")
 	tmp := t.TempDir()
 	emptyPath := filepath.Join(tmp, "empty.yaml")
 	if err := os.WriteFile(emptyPath, []byte("{}\n"), 0o600); err != nil {
@@ -32,6 +33,15 @@ func TestSekaiAPIBackupEndpointDefaultsAndEnv(t *testing.T) {
 		t.Fatalf("yaml backup_endpoint = %q (err %v)", cfg.SekaiAPI.BackupEndpoint, err)
 	}
 
+	// Compose passes the variable as ${SEKAI_API_BACKUP_ENDPOINT:-}: an empty
+	// or blank value is "not set" and keeps the YAML value.
+	for _, blank := range []string{"", "   "} {
+		t.Setenv("SEKAI_API_BACKUP_ENDPOINT", blank)
+		if cfg, err = Load(yamlPath); err != nil || cfg.SekaiAPI.BackupEndpoint != "http://backup-from-yaml.example" {
+			t.Fatalf("env %q replaced yaml backup_endpoint: got %q (err %v)", blank, cfg.SekaiAPI.BackupEndpoint, err)
+		}
+	}
+
 	t.Setenv("SEKAI_API_BACKUP_ENDPOINT", " http://backup-from-env.example ")
 	if cfg, err = Load(yamlPath); err != nil || cfg.SekaiAPI.BackupEndpoint != "http://backup-from-env.example" {
 		t.Fatalf("env backup_endpoint = %q (err %v)", cfg.SekaiAPI.BackupEndpoint, err)
@@ -39,12 +49,23 @@ func TestSekaiAPIBackupEndpointDefaultsAndEnv(t *testing.T) {
 	if cfg.SekaiAPI.APIEndpoint != "http://primary.example" {
 		t.Fatalf("api_endpoint = %q", cfg.SekaiAPI.APIEndpoint)
 	}
+	t.Setenv("SEKAI_API_BACKUP_ENDPOINT", "http://backup-from-env.example")
+	if cfg, err = Load(emptyPath); err != nil || cfg.SekaiAPI.BackupEndpoint != "http://backup-from-env.example" {
+		t.Fatalf("env backup_endpoint without yaml = %q (err %v)", cfg.SekaiAPI.BackupEndpoint, err)
+	}
+
+	// The other sekai_api variables keep their behaviour: present, even
+	// empty, wins over the YAML.
+	t.Setenv("SEKAI_API_ENDPOINT", "")
+	if cfg, err = Load(yamlPath); err != nil || cfg.SekaiAPI.APIEndpoint != "" {
+		t.Fatalf("empty SEKAI_API_ENDPOINT = %q (err %v), want it to override the yaml", cfg.SekaiAPI.APIEndpoint, err)
+	}
 }
 
 // The example config, .env.example and compose ship failover disabled, and
 // compose passes the variable through.
 func TestExampleConfigSekaiAPIBackupDisabled(t *testing.T) {
-	unsetSekaiAPIBackupEndpoint(t)
+	unsetEnvForTest(t, "SEKAI_API_BACKUP_ENDPOINT")
 	cfg, err := Load("../haruki-toolbox-configs.example.yaml")
 	if err != nil {
 		t.Fatalf("load example config: %v", err)
@@ -73,12 +94,12 @@ func TestExampleConfigSekaiAPIBackupDisabled(t *testing.T) {
 	}
 }
 
-// unsetSekaiAPIBackupEndpoint removes the variable for the test and restores it
-// afterwards (t.Setenv registers the restore).
-func unsetSekaiAPIBackupEndpoint(t *testing.T) {
+// unsetEnvForTest removes key for the test and restores it afterwards
+// (t.Setenv registers the restore).
+func unsetEnvForTest(t *testing.T, key string) {
 	t.Helper()
-	t.Setenv("SEKAI_API_BACKUP_ENDPOINT", "")
-	if err := os.Unsetenv("SEKAI_API_BACKUP_ENDPOINT"); err != nil {
+	t.Setenv(key, "")
+	if err := os.Unsetenv(key); err != nil {
 		t.Fatal(err)
 	}
 }
