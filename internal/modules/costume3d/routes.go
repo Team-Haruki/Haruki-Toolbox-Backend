@@ -27,6 +27,12 @@ const (
 )
 
 // RegisterRoutes mounts the public costume3d API; s may be nil (feature off).
+const (
+	paramRegion     = "region"
+	paramFile       = "file"
+	notFoundMessage = "not found"
+)
+
 func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, s *Service) {
 	if s == nil {
 		return
@@ -67,14 +73,14 @@ func sendGzip(c fiber.Ctx, body []byte, contentType string) error {
 
 func (s *Service) upstreamError(c fiber.Ctx, what string, err error) error {
 	if errors.Is(err, errNotFound) {
-		return harukiAPIHelper.ErrorNotFound(c, "not found")
+		return harukiAPIHelper.ErrorNotFound(c, notFoundMessage)
 	}
 	s.logger.Warnf("costume3d: %s: %v", what, err)
 	return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"status": fiber.StatusBadGateway, "message": "upstream unavailable"})
 }
 
 func (s *Service) handleCurrent(c fiber.Ctx) error {
-	region := c.Params("region")
+	region := c.Params(paramRegion)
 	body, _, err := s.current(c.Context(), region)
 	if err != nil {
 		return s.upstreamError(c, region+" current.json", err)
@@ -85,7 +91,7 @@ func (s *Service) handleCurrent(c fiber.Ctx) error {
 }
 
 func (s *Service) handleCatalog(c fiber.Ctx) error {
-	region, file := c.Params("region"), c.Params("file")
+	region, file := c.Params(paramRegion), c.Params(paramFile)
 	body, err := s.catalog(c.Context(), region, file)
 	if err != nil {
 		return s.upstreamError(c, region+" catalog "+file, err)
@@ -96,10 +102,10 @@ func (s *Service) handleCatalog(c fiber.Ctx) error {
 }
 
 func (s *Service) handleBundle(c fiber.Ctx) error {
-	region := c.Params("region")
+	region := c.Params(paramRegion)
 	name, ok := strings.CutSuffix(c.Params("*"), ".bundle")
 	if !ok {
-		return harukiAPIHelper.ErrorNotFound(c, "not found")
+		return harukiAPIHelper.ErrorNotFound(c, notFoundMessage)
 	}
 	// The body streams after the handler returns, so the upstream request must not end
 	// with the request context; the client timeout bounds it.
@@ -123,7 +129,7 @@ func (s *Service) handleBundle(c fiber.Ctx) error {
 }
 
 func (s *Service) handleArchiveBackground(c fiber.Ctx) error {
-	region, file := c.Params("region"), c.Params("file")
+	region, file := c.Params(paramRegion), c.Params(paramFile)
 	resp, err := s.archiveBackground(context.Background(), region, file)
 	if err != nil {
 		return s.upstreamError(c, region+" archive background "+file, err)
@@ -139,18 +145,18 @@ func (s *Service) handleArchiveBackground(c fiber.Ctx) error {
 }
 
 func (s *Service) handleMaster(c fiber.Ctx) error {
-	region := c.Params("region")
-	idText, ok := strings.CutSuffix(c.Params("file"), ".json")
+	region := c.Params(paramRegion)
+	idText, ok := strings.CutSuffix(c.Params(paramFile), ".json")
 	characterID, err := strconv.Atoi(idText)
 	if !ok || err != nil || characterID <= 0 {
-		return harukiAPIHelper.ErrorNotFound(c, "not found")
+		return harukiAPIHelper.ErrorNotFound(c, notFoundMessage)
 	}
 	body, hash, err := s.characterMaster(c.Context(), region, characterID)
 	if err != nil {
 		return s.upstreamError(c, region+" master", err)
 	}
 	if body == nil {
-		return harukiAPIHelper.ErrorNotFound(c, "not found")
+		return harukiAPIHelper.ErrorNotFound(c, notFoundMessage)
 	}
 	etag := `"` + hash + "-" + idText + `"`
 	c.Set(fiber.HeaderETag, etag)

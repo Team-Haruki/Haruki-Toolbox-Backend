@@ -15,14 +15,16 @@ import (
 )
 
 // maxFileBytes bounds one master file (costume3ds is about 60 MB).
-const maxFileBytes = 256 << 20
+var maxFileBytes int64 = 256 << 20
 
+// Client reads one registry; it is safe for concurrent use.
 type Client struct {
 	base      string
 	userAgent string
 	http      *http.Client
 }
 
+// New returns a client of the registry at baseURL (with or without a trailing slash).
 func New(baseURL, userAgent string, httpClient *http.Client) *Client {
 	return &Client{base: strings.TrimRight(baseURL, "/"), userAgent: userAgent, http: httpClient}
 }
@@ -38,12 +40,16 @@ func (c *Client) get(ctx context.Context, u string) ([]byte, error) {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFileBytes))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: HTTP %d", u, resp.StatusCode)
+	}
+	// One byte over the bound tells a file that is too large from one that just fits.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFileBytes+1))
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: HTTP %d", u, resp.StatusCode)
+	if int64(len(body)) > maxFileBytes {
+		return nil, fmt.Errorf("GET %s: more than %d bytes", u, maxFileBytes)
 	}
 	return body, nil
 }
@@ -65,7 +71,10 @@ func (c *Client) ContentHash(ctx context.Context, region string) (string, error)
 	if v.ContentHash != "" {
 		return v.ContentHash, nil
 	}
-	return v.DataVersion, nil
+	if v.DataVersion != "" {
+		return v.DataVersion, nil
+	}
+	return "", fmt.Errorf("registry %s current names no version", region)
 }
 
 // File returns one master file (e.g. "costume3ds") of the version a ContentHash named.

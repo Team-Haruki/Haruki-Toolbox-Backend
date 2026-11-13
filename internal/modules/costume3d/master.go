@@ -12,8 +12,14 @@ import (
 
 // The master files one character's CostumeShop load reads (HarukiCostumeMasterData of the
 // 3D kernel). The first three are small and go out whole with every character.
+const (
+	tableGameCharacters     = "gameCharacters"
+	tableGameCharacterUnits = "gameCharacterUnits"
+	tableUnit3dMotions      = "gameCharacterUnit3dMotions"
+)
+
 var (
-	sharedTables    = []string{"gameCharacters", "gameCharacterUnits", "gameCharacterUnit3dMotions"}
+	sharedTables    = []string{tableGameCharacters, tableGameCharacterUnits, tableUnit3dMotions}
 	characterTables = []string{"character3ds", "costume3ds", "costume3dModels", "costume3dModelNotAvailablePatterns", "costume3dModelDefaultHairs"}
 )
 
@@ -60,9 +66,10 @@ type rows[T any] struct {
 	fields []T
 }
 
-func decodeRows[T any](body []byte, name string) (rows[T], error) {
+// decodeRows reads the master file `name` of files.
+func decodeRows[T any](files map[string][]byte, name string) (rows[T], error) {
 	var r rows[T]
-	if err := json.Unmarshal(body, &r.raw); err != nil {
+	if err := json.Unmarshal(files[name], &r.raw); err != nil {
 		return r, fmt.Errorf("%s: %w", name, err)
 	}
 	r.fields = make([]T, len(r.raw))
@@ -112,23 +119,23 @@ func fetchMasterTables(ctx context.Context, registry *masterregistry.Client, reg
 		}
 		t.shared[name] = raw
 	}
-	if err := json.Unmarshal(files["gameCharacters"], &t.chars); err != nil {
-		return nil, fmt.Errorf("gameCharacters: %w", err)
+	if err := json.Unmarshal(files[tableGameCharacters], &t.chars); err != nil {
+		return nil, fmt.Errorf("%s: %w", tableGameCharacters, err)
 	}
 	var err error
-	if t.presets, err = decodeRows[presetRow](files["character3ds"], "character3ds"); err != nil {
+	if t.presets, err = decodeRows[presetRow](files, "character3ds"); err != nil {
 		return nil, err
 	}
-	if t.costumes, err = decodeRows[costumeRow](files["costume3ds"], "costume3ds"); err != nil {
+	if t.costumes, err = decodeRows[costumeRow](files, "costume3ds"); err != nil {
 		return nil, err
 	}
-	if t.models, err = decodeRows[modelRow](files["costume3dModels"], "costume3dModels"); err != nil {
+	if t.models, err = decodeRows[modelRow](files, "costume3dModels"); err != nil {
 		return nil, err
 	}
-	if t.notAvail, err = decodeRows[patternRow](files["costume3dModelNotAvailablePatterns"], "costume3dModelNotAvailablePatterns"); err != nil {
+	if t.notAvail, err = decodeRows[patternRow](files, "costume3dModelNotAvailablePatterns"); err != nil {
 		return nil, err
 	}
-	if t.defaults, err = decodeRows[patternRow](files["costume3dModelDefaultHairs"], "costume3dModelDefaultHairs"); err != nil {
+	if t.defaults, err = decodeRows[patternRow](files, "costume3dModelDefaultHairs"); err != nil {
 		return nil, err
 	}
 	return t, nil
@@ -151,9 +158,9 @@ func (t *masterTables) characterSlice(version string, characterID int) character
 	}
 	return characterRows{
 		Version:                            version,
-		GameCharacters:                     t.shared["gameCharacters"],
-		GameCharacterUnits:                 t.shared["gameCharacterUnits"],
-		GameCharacterUnit3dMotions:         t.shared["gameCharacterUnit3dMotions"],
+		GameCharacters:                     t.shared[tableGameCharacters],
+		GameCharacterUnits:                 t.shared[tableGameCharacterUnits],
+		GameCharacterUnit3dMotions:         t.shared[tableUnit3dMotions],
 		Character3ds:                       t.presets.filter(func(p presetRow) bool { return p.CharacterID == characterID }),
 		Costume3ds:                         t.costumes.filter(func(c costumeRow) bool { return ids[c.ID] }),
 		Costume3dModels:                    t.models.filter(func(m modelRow) bool { return ids[m.Costume3dID] }),

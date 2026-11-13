@@ -110,27 +110,39 @@ func (s *Service) characterMaster(ctx context.Context, region string, characterI
 	m.build.Lock()
 	defer m.build.Unlock()
 	if m.slices == nil || time.Since(m.checkedAt) > versionCheckInterval {
-		hash, err := s.registry.ContentHash(ctx, region)
-		if err != nil {
-			if m.slices == nil {
-				return nil, "", err
-			}
-			// Keep serving the version we have while the registry is unreachable.
-			s.logger.Warnf("costume3d: %s master version check failed: %v", region, err)
-		} else if hash != m.hash || m.slices == nil {
-			tables, err := fetchMasterTables(ctx, s.registry, region, hash)
-			if err != nil {
-				return nil, "", err
-			}
-			slices, err := tables.sliceAll(hash)
-			if err != nil {
-				return nil, "", err
-			}
-			m.hash, m.slices = hash, slices
+		if err := s.refreshMaster(ctx, region, m); err != nil {
+			return nil, "", err
 		}
 		m.checkedAt = time.Now()
 	}
 	return m.slices[characterID], m.hash, nil
+}
+
+// refreshMaster asks the registry for the region's content hash and rebuilds the slices
+// when it changed. While the registry is unreachable the slices built before stay in use.
+// The caller holds m.build.
+func (s *Service) refreshMaster(ctx context.Context, region string, m *regionMaster) error {
+	hash, err := s.registry.ContentHash(ctx, region)
+	if err != nil {
+		if m.slices == nil {
+			return err
+		}
+		s.logger.Warnf("costume3d: %s master version check failed: %v", region, err)
+		return nil
+	}
+	if hash == m.hash && m.slices != nil {
+		return nil
+	}
+	tables, err := fetchMasterTables(ctx, s.registry, region, hash)
+	if err != nil {
+		return err
+	}
+	slices, err := tables.sliceAll(hash)
+	if err != nil {
+		return err
+	}
+	m.hash, m.slices = hash, slices
+	return nil
 }
 
 func (s *Service) regionMirror(region string) (*regionMirror, string, bool) {
