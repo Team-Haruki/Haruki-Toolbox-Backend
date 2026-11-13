@@ -79,6 +79,7 @@ go run ./main.go                                # 运行（需要 haruki-toolbox
 - `internal/platform/inheritvault/` — 引继码保险库：用户密钥对（私钥先经 Argon2id 由 Toolbox 密码或保险库 PIN 包裹、再经服务端主密钥包裹）、按用户公钥密封的游戏登录凭据与新引继码、PostgreSQL 写入失败时的 Redis 暂存与回填、回收器。引继任务与保险库的接口在 `internal/modules/upload/inherit_*.go`，契约见 `docs/inherit-jobs.md`
 - `utils/game/sekai/` 的 `InheritSession` — 一次引继会话（HTTP client、请求头、会话 token、按步骤调用；JP/EN 的差异只在 `inheritRegions`）。它不写日志，进度经 `Progress` 回调交给任务层
 - `internal/platform/mailtemplate/` — 所有邮件的统一版式：每封邮件是一个 `mailtemplate.Email`（数据，构造函数在 `emails.go`），`Render` 用同一份数据生成 HTML 与纯文本两部分，经 `smtp.HarukiSMTPClient.SendMessage` 以 multipart/alternative 发出。新邮件只加构造函数和测试样例，不要另写 HTML；邮件里不得出现引继码、密码或任何凭据，时间用 `FormatTime`（北京时间）。Kratos 的邮件模板（`external/kratos/courier-templates/`）也由这里生成，改版式或文案后按 `kratos.go` 顶部说明重新生成
+- `utils/masterregistry/` — Haruki master registry 客户端（`ContentHash`、`File`）；读 master 文件用它，不要另写请求（`story`、`costume3d` 都用它）
 - `utils/codec/msgpackcodec/` — 面向不可信上传数据的有界 MessagePack 解码与 JSON 转换（`ValidateMaxDepth` 校验深度、按长度封顶）；`utils/orderedmap/` 是其 OrderedMap 存储
 
 优先复用 `SessionHandler`、`admincore`、`usercore` 与 `internal/platform/oauth2/`，不要另起平行 helper。

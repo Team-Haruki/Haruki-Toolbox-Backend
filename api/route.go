@@ -16,6 +16,7 @@ import (
 	adminUsersModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminusers"
 	adminWebhookModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/adminwebhook"
 	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
+	costume3dModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/costume3d"
 	harukiBotNeoModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/harukibotneo"
 	iosModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/ios"
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
@@ -92,6 +93,8 @@ type Dependencies struct {
 	SekaiClient          harukiConfig.SekaiClientConfig
 	// Story is nil when story.enabled is false.
 	Story *storyModule.Service
+	// Costume3D is nil when costume3d.enabled is false.
+	Costume3D *costume3dModule.Service
 	// InheritVault is unavailable (not nil) when no master key is loaded.
 	InheritVault *inheritvault.Store
 }
@@ -105,6 +108,7 @@ func RegisterRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, depen
 	webhookModule.RegisterWebhookRoutes(apiHelper)
 	publicModule.RegisterPublicRoutes(apiHelper)
 	storyModule.RegisterRoutes(apiHelper, dependencies.Story)
+	costume3dModule.RegisterRoutes(apiHelper, dependencies.Costume3D)
 	subscriptionModule.RegisterSubscriptionRoutes(apiHelper)
 	uploadModule.RegisterUploadRoutes(apiHelper, uploadModule.Dependencies{
 		HarukiProxyV3ClientPolicy: dependencies.HarukiProxyV3ClientPolicy,

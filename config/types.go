@@ -198,6 +198,23 @@ type StoryConfig struct {
 	Translation  StoryTranslateConfig `yaml:"translation"`
 }
 
+// Costume3DConfig serves the CostumeShop 3D kernel's content under
+// /api/misc/costume3d/{region}/: one character's master rows from the master
+// registry, and the AssetBundleInfo and CostumeShop bundles of a region's
+// raw-bundle mirror (rawsync.py layout: current.json, catalogs/, bundles/).
+type Costume3DConfig struct {
+	// Enabled registers the /api/misc/costume3d routes.
+	Enabled bool `yaml:"enabled"`
+	// RegistryBaseURL is the Haruki master registry CDN face.
+	RegistryBaseURL string `yaml:"registry_base_url"`
+	// MirrorBaseURLs maps a region to its raw-bundle mirror root as this
+	// backend reaches it (e.g. jp: http://<asset origin>/raw-bundles/jp/android/).
+	// A region without a mirror gets master rows only.
+	MirrorBaseURLs        map[string]string `yaml:"mirror_base_urls"`
+	UserAgent             string            `yaml:"user_agent"`
+	RequestTimeoutSeconds int               `yaml:"request_timeout_seconds"`
+}
+
 // StoryTranslateConfig configures the background translator and the
 // OpenAI-compatible LLM endpoint it calls.
 type StoryTranslateConfig struct {
@@ -432,6 +449,7 @@ type Config struct {
 	Subscription           SubscriptionConfig              `yaml:"subscription"`
 	BotSecurity            BotSecurityConfig               `yaml:"bot_security"`
 	Story                  StoryConfig                     `yaml:"story"`
+	Costume3D              Costume3DConfig                 `yaml:"costume3d"`
 	InheritVault           InheritVaultConfig              `yaml:"inherit_vault"`
 	InternalUpload         InternalUploadConfig            `yaml:"internal_upload"`
 }

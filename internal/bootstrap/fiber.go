@@ -40,8 +40,10 @@ const (
 )
 
 // iOS proxy responses are the game server's encrypted octet-stream bodies:
-// compressing them burns CPU and makes them slightly larger.
-var uncompressedPathPrefixes = []string{"/ios/proxy/", "/api/ios/proxy/"}
+// compressing them burns CPU and makes them slightly larger. The costume3d
+// module streams LZ4 bundles as they are and sends its catalog and master rows
+// gzip-encoded once, from memory.
+var uncompressedPathPrefixes = []string{"/ios/proxy/", "/api/ios/proxy/", "/api/misc/costume3d/"}
 
 func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 	app := fiber.New(fiberConfig(cfg))

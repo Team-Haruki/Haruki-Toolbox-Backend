@@ -9,6 +9,7 @@ import (
 	harukiAPI "github.com/Team-Haruki/Haruki-Toolbox-Backend/api"
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
+	costume3dModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/costume3d"
 	iosModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/ios"
 	miscModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/misc"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
@@ -166,6 +167,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	costume3dService, err := costume3dModule.New(cfg.Costume3D, harukiLogger.NewLoggerFromGlobal("Costume3D"))
+	if err != nil {
+		return nil, err
+	}
 	frameCatalog, err := userSponsorModule.NewCatalog(cfg.SponsorFrames.Directory, cfg.SponsorFrames.PublicURL)
 	if err != nil {
 		return nil, err
@@ -224,6 +229,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 			DisplayName: cfg.UserSystem.SMTP.MailName,
 		},
 		Story:        storyService,
+		Costume3D:    costume3dService,
 		InheritVault: inheritVault,
 	})
 

@@ -308,6 +308,14 @@ story:
     llm_timeout_seconds: 900
     chunk_lines: 120
 
+costume3d:
+  enabled: false # env COSTUME3D_ENABLED; registers /api/misc/costume3d/* (CostumeShop 3D kernel content)
+  registry_base_url: "https://sekai-api-cdn.haruki.seiunx.com"
+  mirror_base_urls: # region -> raw-bundle mirror root (current.json, catalogs/, bundles/) as the backend reaches it
+    jp: ""
+  user_agent: "Haruki-Toolbox-Backend"
+  request_timeout_seconds: 120
+
 subscription:
   hmes_internal_base_url: "http://haruki-hmes:7910"
   hmes_internal_token: ""

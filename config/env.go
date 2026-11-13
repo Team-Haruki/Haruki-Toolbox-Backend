@@ -231,6 +231,9 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := overrideBool(&cfg.Story.Enabled, "STORY_ENABLED"); err != nil {
 		return err
 	}
+	if err := overrideBool(&cfg.Costume3D.Enabled, "COSTUME3D_ENABLED"); err != nil {
+		return err
+	}
 	if err := overrideBool(&cfg.Story.Translation.Enabled, "STORY_TRANSLATION_ENABLED"); err != nil {
 		return err
 	}

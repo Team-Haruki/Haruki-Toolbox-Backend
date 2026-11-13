@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/masterregistry"
 )
 
 // fetcher reads master files from the Haruki registry and scenario JSON from
 // the asset host. Master files are cached per region until the registry's
 // content hash changes.
 type fetcher struct {
-	registryBase string
-	assetBase    string
-	userAgent    string
-	client       *http.Client
+	registry  *masterregistry.Client
+	assetBase string
+	userAgent string
+	client    *http.Client
 
 	mu    sync.Mutex
 	hash  map[string]string            // region → contentHash of the cached set
@@ -30,12 +31,12 @@ type fetcher struct {
 
 func newFetcher(registryBase, assetBase, userAgent string, client *http.Client) *fetcher {
 	return &fetcher{
-		registryBase: strings.TrimRight(registryBase, "/"),
-		assetBase:    strings.TrimRight(assetBase, "/"),
-		userAgent:    userAgent,
-		client:       client,
-		hash:         map[string]string{},
-		cache:        map[string]map[string][]byte{},
+		registry:  masterregistry.New(registryBase, userAgent, client),
+		assetBase: strings.TrimRight(assetBase, "/"),
+		userAgent: userAgent,
+		client:    client,
+		hash:      map[string]string{},
+		cache:     map[string]map[string][]byte{},
 	}
 }
 
@@ -62,21 +63,7 @@ func (f *fetcher) getBytes(ctx context.Context, u string) ([]byte, int, error) {
 
 // contentHash returns the registry's current hash of a region's master set.
 func (f *fetcher) contentHash(ctx context.Context, region string) (string, error) {
-	body, _, err := f.getBytes(ctx, f.registryBase+"/v1/master/"+region+"/current")
-	if err != nil {
-		return "", err
-	}
-	var v struct {
-		ContentHash string `json:"contentHash"`
-		DataVersion string `json:"dataVersion"`
-	}
-	if err := json.Unmarshal(body, &v); err != nil {
-		return "", err
-	}
-	if v.ContentHash != "" {
-		return v.ContentHash, nil
-	}
-	return v.DataVersion, nil
+	return f.registry.ContentHash(ctx, region)
 }
 
 // master decodes one master file (e.g. "eventStories") of a region into out.
@@ -93,8 +80,7 @@ func (f *fetcher) master(ctx context.Context, region, name string, out any) erro
 	body, ok := f.cache[region][name]
 	f.mu.Unlock()
 	if !ok {
-		u := f.registryBase + "/v1/master/" + region + "/files/" + name + ".json?version=" + url.QueryEscape(hash)
-		if body, _, err = f.getBytes(ctx, u); err != nil {
+		if body, err = f.registry.File(ctx, region, name, hash); err != nil {
 			return err
 		}
 		f.mu.Lock()
