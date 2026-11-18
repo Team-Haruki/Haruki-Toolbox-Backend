@@ -32,6 +32,7 @@ const (
 // Hydra already issued tokens.
 var deviceSettleRetryBackoff = []time.Duration{50 * time.Millisecond, 150 * time.Millisecond}
 var tokenGrantAdmission = make(chan struct{}, 16)
+var confidentialDeviceAdmission = make(chan struct{}, 8)
 
 // handleHydraTokenEndpoint is POST /api/oauth2/token. Every request that is not
 // a form-encoded device_code grant is forwarded to Hydra byte for byte, exactly
@@ -129,25 +130,18 @@ type deviceTokenShim struct {
 
 func (s *deviceTokenShim) logger() *harukiLogger.Logger { return s.cfg.log() }
 
-func (s *deviceTokenShim) clientActive(ctx context.Context, clientID string) (string, error) {
-	lookup := func(ctx context.Context, id string) (*HydraOAuthClient, error) {
-		return GetHydraOAuthClient(ctx, s.hydraConfig, id)
-	}
-	var client *HydraOAuthClient
-	var err error
-	if s.hydraConfig.ProtectClientGrants() {
-		client, err = lookup(ctx, clientID)
-		if IsHydraNotFoundError(err) {
-			return "0", nil
-		}
-	} else {
-		client, err = s.store.clients.get(ctx, lookup, clientID)
+func (s *deviceTokenShim) clientAllowed(ctx context.Context, clientID, scope string) (string, error) {
+	client, err := GetHydraOAuthClient(ctx, s.hydraConfig, clientID)
+	if IsHydraNotFoundError(err) {
+		return "0", nil
 	}
 	if err != nil {
 		return "", err
 	}
-	// A deleted client counts as disabled.
-	if client != nil && HydraOAuthClientActive(client) {
+	if deviceClientUsable(s.cfg, client) {
+		if _, ok := checkDeviceScopePolicy(client, normalizeDeviceScope(scope)); !ok {
+			return "0", nil
+		}
 		return "1", nil
 	}
 	return "0", nil
@@ -195,9 +189,34 @@ func (s *deviceTokenShim) handle(c fiber.Ctx, form url.Values) error {
 		return respondDeviceOAuthError(c, fiber.StatusBadRequest, oauthErrorExpiredToken, deviceExpiredTokenText)
 	}
 
-	poll, err := s.store.poll(ctx, flowID, client.ClientID, s.cfg.maxIntervalSeconds(), s.cfg.maxSlowDown())
+	flow, err := s.store.readPollFlow(ctx, flowID, client.ClientID)
 	if err != nil {
 		return respondDeviceUnavailable(c)
+	}
+	if flow.Outcome != devicePollForward {
+		return respondDeviceOAuthError(c, fiber.StatusBadRequest, oauthErrorInvalidGrant, deviceInvalidGrantText)
+	}
+	confidential := flow.ClientType != oauthClientTypePublic
+	if !confidential && s.hydraConfig.ProtectClientGrants() {
+		current, err := GetHydraOAuthClient(ctx, s.hydraConfig, client.ClientID)
+		if err != nil && !IsHydraNotFoundError(err) {
+			return respondDeviceUnavailable(c)
+		}
+		confidential = current == nil || HydraClientTypeFromAuthMethod(current.TokenEndpointAuthMethod) != oauthClientTypePublic
+	}
+	poll := flow
+	if confidential {
+		select {
+		case confidentialDeviceAdmission <- struct{}{}:
+			defer func() { <-confidentialDeviceAdmission }()
+		default:
+			return respondDeviceUnavailable(c)
+		}
+	} else {
+		poll, err = s.store.poll(ctx, flowID, client.ClientID, s.cfg.maxIntervalSeconds(), s.cfg.maxSlowDown())
+		if err != nil {
+			return respondDeviceUnavailable(c)
+		}
 	}
 	switch poll.Outcome {
 	case devicePollMissing, devicePollClientMismatch:
@@ -215,7 +234,7 @@ func (s *deviceTokenShim) handle(c fiber.Ctx, form url.Values) error {
 	// used once Hydra has authenticated the client.
 	clientActive := ""
 	if isDeviceFlowApprovedClass(poll.State) {
-		clientActive, err = s.clientActive(ctx, client.ClientID)
+		clientActive, err = s.clientAllowed(ctx, client.ClientID, flow.Scope)
 		if err != nil {
 			return respondDeviceUnavailable(c)
 		}
@@ -251,11 +270,29 @@ func (s *deviceTokenShim) handle(c fiber.Ctx, form url.Values) error {
 		// flow state.
 		return respondDeviceHydraPassthrough(c, resp)
 	}
+	if confidential && result == deviceHydraResultPending {
+		// A pending response follows Hydra's client authentication. Record the
+		// poll now; unapplied or unauthenticated requests never update the flow.
+		authenticatedPoll, err := s.store.poll(ctx, flowID, client.ClientID, s.cfg.maxIntervalSeconds(), s.cfg.maxSlowDown())
+		if err != nil {
+			return respondDeviceUnavailable(c)
+		}
+		if authenticatedPoll.Outcome == devicePollSlowDown {
+			return respondDeviceOAuthBody(c, fiber.StatusBadRequest, deviceOAuthErrorBody{Error: oauthErrorSlowDown, ErrorDescription: deviceSlowDownText, Interval: authenticatedPoll.IntervalSeconds})
+		}
+	}
+	if result == deviceHydraResultOK {
+		clientActive, err = s.clientAllowed(ctx, client.ClientID, flow.Scope)
+		if err != nil {
+			s.revokeWithheldTokens(ctx, flowID, client.ClientID, poll.ConsentRequestID)
+			return respondDeviceUnavailable(c)
+		}
+	}
 
 	settled, err := s.settle(ctx, flowID, wrappedDeviceCode, result, clientActive)
 	if err == nil && settled.Action == deviceSettleCheckClient {
 		// The flow became approved after the poll script ran.
-		clientActive, err = s.clientActive(ctx, client.ClientID)
+		clientActive, err = s.clientAllowed(ctx, client.ClientID, flow.Scope)
 		if err == nil {
 			settled, err = s.settle(ctx, flowID, wrappedDeviceCode, result, clientActive)
 		}

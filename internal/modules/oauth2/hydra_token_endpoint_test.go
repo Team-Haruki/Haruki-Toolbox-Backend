@@ -215,6 +215,7 @@ func TestTokenShimHydra401PassthroughWithoutStateReveal(t *testing.T) {
 	hdc, flowID := env.issue(testConfidentialClientID)
 	env.approve(flowID, deviceFlowStateApproved, testConsentRequestID)
 	env.setFlow(flowID, "st", deviceFlowStateDenied, "dres", "user_denied")
+	lastPoll, interval, slowDowns := env.field(flowID, "lpoll"), env.field(flowID, "ivl"), env.field(flowID, "sdn")
 	env.hydra.token = hydraTokenAnswer(http.StatusUnauthorized, map[string]any{"error": "invalid_client", "error_description": "Client authentication failed"})
 
 	form := url.Values{"grant_type": {HydraGrantTypeDeviceCode}, "device_code": {hdc}}
@@ -235,6 +236,9 @@ func TestTokenShimHydra401PassthroughWithoutStateReveal(t *testing.T) {
 	if env.field(flowID, "st") != deviceFlowStateDenied || !env.inUnredeemed(flowID) {
 		t.Fatal("a 401 changed the flow")
 	}
+	if env.field(flowID, "lpoll") != lastPoll || env.field(flowID, "ivl") != interval || env.field(flowID, "sdn") != slowDowns {
+		t.Fatal("unauthenticated polling changed the confidential flow's rate state")
+	}
 	if calls := env.hydra.callsTo(http.MethodDelete, "/admin/oauth2/auth/sessions/consent"); len(calls) != 0 {
 		t.Fatal("a 401 triggered a revocation")
 	}
@@ -246,6 +250,18 @@ func TestTokenShimHydra401PassthroughWithoutStateReveal(t *testing.T) {
 		t.Fatalf("Hydra received %q", call.Body)
 	}
 	env.assertNoSecretLeaks()
+}
+
+func TestConfidentialDevicePollingAppliesPacingAfterAuthentication(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	hdc, flowID := env.issue(testConfidentialClientID)
+	env.hydra.token = hydraTokenAnswer(http.StatusBadRequest, map[string]any{"error": oauthErrorAuthorizationPending})
+	if resp := env.poll(hdc, testConfidentialClientID); resp.oauthError(t) != oauthErrorAuthorizationPending || env.field(flowID, "lpoll") == "0" {
+		t.Fatalf("first authenticated poll = %s", resp.Body)
+	}
+	if resp := env.poll(hdc, testConfidentialClientID); resp.oauthError(t) != oauthErrorSlowDown || env.field(flowID, "sdn") != "1" {
+		t.Fatalf("early authenticated poll = %s", resp.Body)
+	}
 }
 
 func TestTokenShimHydra200AfterDenyRevokesAndDenies(t *testing.T) {
@@ -348,6 +364,29 @@ func TestTokenShimIssuesTokenForApprovedFlow(t *testing.T) {
 			}
 			env.assertNoSecretLeaks()
 		})
+	}
+}
+
+func TestTokenShimWithholdsWriteTokensWhenPolicyChangesDuringRedemption(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	setWritePolicy := func(allow bool) {
+		metadata := map[string]any{"haruki": map[string]any{"active": true, "device": map[string]any{"allow_write": allow}}}
+		env.hydra.setClient(testDeviceClient(testPublicClientID, "none", testDeviceScope+" game-data:write", testDeviceGrantTypes, metadata))
+	}
+	setWritePolicy(true)
+	hdc, flowID := env.issue(testPublicClientID)
+	env.setFlow(flowID, "scope", testDeviceScope+" game-data:write")
+	env.approve(flowID, deviceFlowStateApproved, testConsentRequestID)
+	env.hydra.token = func(url.Values, http.Header) (int, any) {
+		setWritePolicy(false)
+		return http.StatusOK, testTokenResponse
+	}
+	resp := env.poll(hdc, testPublicClientID)
+	if resp.oauthError(t) != oauthErrorAccessDenied || env.field(flowID, "st") != deviceFlowStateDenied {
+		t.Fatalf("old write permission accepted: status=%d state=%s", resp.Status, env.field(flowID, "st"))
+	}
+	if calls := env.hydra.callsTo(http.MethodDelete, "/admin/oauth2/auth/sessions/consent"); len(calls) != 1 {
+		t.Fatalf("revoked %d consents, want one", len(calls))
 	}
 }
 
