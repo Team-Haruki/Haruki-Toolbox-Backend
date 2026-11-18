@@ -112,7 +112,7 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		dbUser, err := apiHelper.DBManager.DB.User.Query().
+		dbUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			WithSocialPlatformInfo().
 			WithAuthorizedSocialPlatforms(postgresql.BoundSocialGrants).
@@ -174,7 +174,7 @@ func handleForceLogoutUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		targetUser, err := apiHelper.DBManager.DB.User.Query().
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 			Only(c.Context())

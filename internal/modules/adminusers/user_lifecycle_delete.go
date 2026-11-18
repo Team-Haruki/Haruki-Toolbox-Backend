@@ -9,12 +9,14 @@ import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/avatar"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -22,7 +24,7 @@ import (
 
 const adminAuditActionUserDelete = "admin.user.delete"
 
-func handleDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
+func handleDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, avatarDir string) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		target, err := resolveManageableTargetUser(c, apiHelper, adminAuditActionUserDelete)
 		if err != nil {
@@ -46,7 +48,7 @@ func handleDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hyd
 		}
 		ctx, cancel := context.WithTimeout(c.Context(), 30*time.Second)
 		defer cancel()
-		bindings, err := permanentlyDeleteUser(ctx, apiHelper, hydraConfig, actorID, actorRole, target.ID)
+		bindings, err := permanentlyDeleteUser(ctx, apiHelper, hydraConfig, actorID, actorRole, target.ID, avatarDir)
 		if err != nil {
 			reason = "delete_failed"
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to delete user; retry the operation")
@@ -62,7 +64,7 @@ func handleDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hyd
 	}
 }
 
-func permanentlyDeleteUser(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, actorID, actorRole, targetID string) ([]*postgresql.GameAccountBinding, error) {
+func permanentlyDeleteUser(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, actorID, actorRole, targetID, avatarDir string) ([]*postgresql.GameAccountBinding, error) {
 	release, err := apiHelper.DBManager.DB.LockUserMutations(ctx, targetID)
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "account deletion unavailable; retry later")
@@ -104,6 +106,14 @@ func permanentlyDeleteUser(ctx context.Context, apiHelper *harukiAPIHelper.Haruk
 	if err != nil {
 		return nil, err
 	}
+	var avatarQueued bool
+	if target.AvatarPath != nil {
+		avatarQueued, err = avatar.QueueDeletion(avatarDir, *target.AvatarPath)
+		if err != nil {
+			harukiLogger.Warnf("Unable to queue avatar cleanup: %v", err)
+			return nil, fiber.NewError(fiber.StatusServiceUnavailable, "avatar cleanup unavailable; retry deletion")
+		}
+	}
 	bindings, err := tx.GameAccountBinding.Query().Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(targetID))).All(ctx)
 	if err != nil {
 		return nil, err
@@ -132,6 +142,13 @@ func permanentlyDeleteUser(ctx context.Context, apiHelper *harukiAPIHelper.Haruk
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit user deletion: %w", err)
+	}
+	if avatarQueued {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		if err := avatar.FinishDeletion(cleanupCtx, apiHelper.DBManager.DB, avatarDir, *target.AvatarPath); err != nil {
+			harukiLogger.Warnf("Pending avatar cleanup will retry: %v", err)
+		}
 	}
 	return bindings, nil
 }

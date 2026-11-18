@@ -20,6 +20,7 @@ import (
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
 	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/avatar"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
@@ -240,6 +241,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		Logger:      deviceFlowLogger,
 	})
 	waitInheritVaultReaper := inheritvault.StartReaper(schedulerCtx, inheritVault, inheritvault.ReaperInterval, inheritVaultLogger)
+	waitAvatarCleanup := avatar.StartCleanup(schedulerCtx, resources.databaseManager.DB, cfg.UserSystem.AvatarSaveDir, resources.logger)
 	waitStory := func() {}
 	if storyService != nil {
 		waitStory = storyService.Start(schedulerCtx)
@@ -260,6 +262,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		waitAfdianScheduler()
 		waitDeviceFlowReaper()
 		waitInheritVaultReaper()
+		waitAvatarCleanup()
 		waitStory()
 		waitStatsSampler()
 	}

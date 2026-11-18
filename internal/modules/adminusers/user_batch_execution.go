@@ -59,8 +59,8 @@ type batchUserInfo struct {
 	KratosIdentityID *string
 }
 
-func batchFetchUsers(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userIDs []string) (map[string]*batchUserInfo, error) {
-	users, err := apiHelper.DBManager.DB.User.Query().
+func batchFetchUsers(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userIDs []string, actorRole string) (map[string]*batchUserInfo, error) {
+	users, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 		Where(user.IDIn(userIDs...)).
 		Select(user.FieldID, user.FieldRole, user.FieldKratosIdentityID).
 		All(ctx)

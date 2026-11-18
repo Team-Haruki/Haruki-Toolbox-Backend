@@ -161,7 +161,7 @@ func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 	adminGroup.Use(adminCoreModule.RequireTrustedBrowserOrigin(dependencies.AdminFrontendURL))
 	requireReauth := adminModule.RequireRecentAdminReauth(apiHelper)
 	adminModule.RegisterAdminRoutes(apiHelper, adminGroup)
-	adminUsersModule.RegisterAdminUserRoutes(apiHelper, adminGroup, dependencies.HydraConfig, dependencies.UserDataBuilder, requireReauth)
+	adminUsersModule.RegisterAdminUserRoutes(apiHelper, adminGroup, dependencies.HydraConfig, dependencies.UserDataBuilder, requireReauth, dependencies.UserProfileConfig.AvatarSaveDir())
 	adminContentModule.RegisterAdminContentRoutes(apiHelper, adminGroup)
 	adminGameBindingsModule.RegisterAdminGlobalGameAccountBindingRoutes(apiHelper, adminGroup)
 	adminOAuthModule.RegisterAdminOAuthClientRoutes(apiHelper, adminGroup, dependencies.HydraConfig, requireReauth)

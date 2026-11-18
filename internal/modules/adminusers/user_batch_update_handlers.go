@@ -30,7 +30,7 @@ func handleBatchUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 		defer release()
 
 		// Batch fetch all users at once to avoid N+1 queries
-		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs)
+		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs, actorRole)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBatchRole, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDatabaseError, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch users")
@@ -116,7 +116,7 @@ func handleBatchUpdateUserAllowCNMysekai(apiHelper *harukiAPIHelper.HarukiToolbo
 		successCount := 0
 
 		// Batch fetch all users at once to avoid N+1 queries
-		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs)
+		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs, actorRole)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBatchAllowCN, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDatabaseError, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch users")

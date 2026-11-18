@@ -38,12 +38,12 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			}
 		}
 
-		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUserID)
+		release, err := lockVisibleAdminTarget(c.Context(), apiHelper.DBManager.DB, actorRole, targetUserID)
 		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to reserve password reset")
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to reserve password reset")
 		}
 		defer release()
-		targetUser, err := queryAdminTargetUser(c, apiHelper, targetUserID)
+		targetUser, err := queryAdminTargetUser(c, apiHelper, targetUserID, actorRole)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, nil))

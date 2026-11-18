@@ -109,12 +109,12 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraC
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid ban reason")
 		}
 
-		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUserID)
+		release, err := lockVisibleAdminTarget(c.Context(), apiHelper.DBManager.DB, actorRole, targetUserID)
 		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to reserve user ban")
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to reserve user ban")
 		}
 		defer release()
-		targetUser, err := apiHelper.DBManager.DB.User.Query().
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(
 				userSchema.FieldID,
@@ -166,7 +166,7 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraC
 			return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to ban user")
 		}
 
-		updatedUser, err := apiHelper.DBManager.DB.User.Query().
+		updatedUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUser.ID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldBanReason).
 			Only(c.Context())
@@ -222,7 +222,7 @@ func handleUnbanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		targetUser, err := apiHelper.DBManager.DB.User.Query().
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole).
 			Only(c.Context())
@@ -263,7 +263,7 @@ func handleUnbanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fibe
 			return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to unban user")
 		}
 
-		updatedUser, err := apiHelper.DBManager.DB.User.Query().
+		updatedUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUser.ID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).
 			Only(c.Context())

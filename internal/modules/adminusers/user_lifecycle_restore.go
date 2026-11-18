@@ -25,7 +25,7 @@ func handleRestoreUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		targetUser, err := queryAdminTargetUser(c, apiHelper, targetUserID)
+		targetUser, err := queryAdminTargetUser(c, apiHelper, targetUserID, actorRole)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserRestore, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, nil))
@@ -63,7 +63,7 @@ func handleRestoreUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return adminCoreModule.RespondFiberOrInternal(c, missErr, "failed to restore user")
 		}
 
-		updated, err := apiHelper.DBManager.DB.User.Query().
+		updated, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUser.ID)).
 			Select(userSchema.FieldID, userSchema.FieldBanned, userSchema.FieldBanReason).
 			Only(c.Context())
