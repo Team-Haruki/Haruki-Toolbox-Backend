@@ -3,6 +3,8 @@ package usergamebindings
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -356,6 +358,32 @@ func newGameBindingRedisHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRout
 		DBManager: &database.HarukiToolboxDBManager{Redis: redisManager},
 	}
 	return helper, redisManager, context.Background()
+}
+
+func TestGameVerificationTargetBudgetUsesCanonicalAccount(t *testing.T) {
+	helper, redis, ctx := newGameBindingRedisHelper(t)
+	key := harukiRedis.BuildGameAccountVerificationTargetIssueKey("jp", "12345")
+	for range gameAccountVerificationTargetLimit {
+		if _, err := redis.IncrementWithTTL(ctx, key, gameAccountVerificationTTL); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := fiber.New()
+	app.Post("/:server/:game_user_id", func(c fiber.Ctx) error { c.Locals("userID", "fixture-owner"); return c.Next() }, handleGenerateGameAccountVerificationCode(helper))
+	for path, want := range map[string]int{"/jp/00012345": 429, "/en/12345": 200, "/jp/12346": 200} {
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("%s returned %d, want %d", path, resp.StatusCode, want)
+		}
+	}
+	code := newGameAccountVerificationCode()
+	if len(code) != 20 || !profileContainsVerificationCode("verify "+code, code) || profileContainsVerificationCode(code, newGameAccountVerificationCode()) {
+		t.Fatal("issued code did not match the profile challenge format")
+	}
 }
 
 func TestGetVerificationCodeTooManyAttempts(t *testing.T) {

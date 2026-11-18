@@ -3,6 +3,7 @@ package usergamebindings
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base32"
 	"errors"
 	"strconv"
 
@@ -49,13 +50,16 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		if count > 10 {
 			return c.SendStatus(fiber.StatusTooManyRequests)
 		}
-		code := rand.Text()
+		count, err = apiHelper.DBManager.Redis.IncrementWithTTL(ctx, harukiRedis.BuildGameAccountVerificationTargetIssueKey(serverStr, gameUserIDStr), gameAccountVerificationTTL)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to check issuance limit")
+		}
+		if count > gameAccountVerificationTargetLimit {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		code := newGameAccountVerificationCode()
 		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
-		attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-		if err := apiHelper.DBManager.Redis.SetCachesAtomically(ctx, []harukiRedis.CacheItem{
-			{Key: storageKey, Value: code},
-			{Key: attemptKey, Value: 0},
-		}, gameAccountVerificationTTL); err != nil {
+		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, gameAccountVerificationTTL); err != nil {
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 		}
@@ -66,6 +70,13 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		}
 		return harukiAPIHelper.Responses.ResponseWithStruct(c, fiber.StatusOK, resp)
 	}
+}
+
+func newGameAccountVerificationCode() string {
+	// A short, unpadded ASCII code fits the in-game profile comment field.
+	var raw [12]byte
+	rand.Read(raw[:])
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:])
 }
 
 func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {

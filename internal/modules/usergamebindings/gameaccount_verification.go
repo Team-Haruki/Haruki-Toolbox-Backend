@@ -14,6 +14,7 @@ import (
 
 const (
 	gameAccountVerificationTTL         = 5 * time.Minute
+	gameAccountVerificationTargetLimit = 30
 	gameAccountVerificationMaxAttempts = 5
 )
 

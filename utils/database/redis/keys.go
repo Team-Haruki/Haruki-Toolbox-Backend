@@ -126,6 +126,10 @@ func BuildGameAccountVerificationIssueKey(userID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, "issue", userID)
 }
 
+func BuildGameAccountVerificationTargetIssueKey(server, gameUserID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, "issue-target", server, gameUserID)
+}
+
 func BuildIOSUploadChunkBudgetKey() string {
 	return buildKey(KeyPrefixHaruki, "ios", "chunk-budget")
 }

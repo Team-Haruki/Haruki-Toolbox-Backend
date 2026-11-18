@@ -2,6 +2,7 @@ package usergamebindings
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"strings"
@@ -82,8 +83,19 @@ func verifyGameAccountOwnership(ctx context.Context, apiHelper *harukiAPIHelper.
 		return errGameAccountVerificationCodeMissing
 	}
 	word = strings.TrimSpace(word)
-	if !strings.Contains(word, expectedCode) {
+	if !profileContainsVerificationCode(word, expectedCode) {
 		return errGameAccountVerificationCodeMismatch
 	}
 	return nil
+}
+
+func profileContainsVerificationCode(profile, code string) bool {
+	if code == "" {
+		return false
+	}
+	matched := 0
+	for i := 0; i+len(code) <= len(profile); i++ {
+		matched |= subtle.ConstantTimeCompare([]byte(profile[i:i+len(code)]), []byte(code))
+	}
+	return matched == 1
 }
