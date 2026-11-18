@@ -77,28 +77,9 @@ func (l *openUploadRateLimiter) cleanupLocked(now time.Time) {
 // if given, runs on a request it refuses, before the 429 is written.
 func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, onLimited ...func(fiber.Ctx)) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		now := time.Now().UTC()
-		bucketKey := buildOpenUploadRateLimitKey(c)
-
-		allowed, retryAfter, err := consumeOpenUploadRateLimit(c.Context(), apiHelper, bucketKey, now)
-		if err != nil {
-			// Fallback to in-process limiter when Redis is unavailable.
-			harukiLogger.Warnf("Open upload redis rate limiter fallback: %v", err)
-			if fallbackOpenUploadRateLimiter.allow(now, bucketKey) {
-				return c.Next()
-			}
-			retryAfter = int(openUploadRateLimitWindow / time.Second)
-		}
-
-		if allowed {
+		retryAfter := openUploadRetryAfter(c.Context(), apiHelper, buildOpenUploadRateLimitKey(c), time.Now().UTC())
+		if retryAfter == 0 {
 			return c.Next()
-		}
-
-		if retryAfter <= 0 {
-			retryAfter = int(openUploadRateLimitWindow / time.Second)
-			if retryAfter <= 0 {
-				retryAfter = 60
-			}
 		}
 		c.Set("Retry-After", strconv.Itoa(retryAfter))
 		for _, hook := range onLimited {
@@ -108,8 +89,31 @@ func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	}
 }
 
+// A verified iOS script uses its own namespace and quota, independently of
+// the apparent peer address and the anonymous proxy budget.
+func iosScriptUploadRateBucket(userID string) string {
+	return "ios-script|" + userID
+}
+
+func openUploadRetryAfter(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bucket string, now time.Time) int {
+	allowed, retryAfter, err := consumeOpenUploadRateLimit(ctx, apiHelper, bucket, now)
+	if err != nil {
+		harukiLogger.Warnf("Open upload redis rate limiter fallback: %v", err)
+		if fallbackOpenUploadRateLimiter.allow(now, bucket) {
+			return 0
+		}
+	}
+	if allowed {
+		return 0
+	}
+	if retryAfter <= 0 {
+		return int(openUploadRateLimitWindow / time.Second)
+	}
+	return retryAfter
+}
+
 func consumeOpenUploadRateLimit(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bucketKey string, now time.Time) (bool, int, error) {
-	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil || apiHelper.DBManager.Redis.Redis == nil {
 		return false, 0, fiber.NewError(fiber.StatusInternalServerError, "redis rate limiter not initialized")
 	}
 

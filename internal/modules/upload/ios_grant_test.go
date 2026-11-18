@@ -2,16 +2,17 @@ package upload
 
 import (
 	"context"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
 	config "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	redisManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"github.com/gofiber/fiber/v3"
-	"net/http/httptest"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestIOSCodeWriteGrantAndQueuedRevocation(t *testing.T) {
@@ -99,5 +100,47 @@ func TestIOSCodeWriteGrantAndQueuedRevocation(t *testing.T) {
 				t.Fatalf("unexpected audit: %+v", row)
 			}
 		})
+	}
+}
+
+func TestIOSScriptBudgetDoesNotUseTheSharedProxyAddress(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "script-quota"))
+	defer db.Close()
+	ctx := t.Context()
+	for _, id := range []string{"alice", "bob"} {
+		db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").ExecX(ctx)
+		db.IOSScriptCode.Create().SetUserID(id).SetUploadCode("fixture-" + id).ExecX(ctx)
+	}
+	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db, Redis: &redisManager.HarukiRedisManager{Redis: newIOSUploadRedisClient(t)}}}
+	for _, at := range []time.Time{time.Now().UTC(), time.Now().UTC().Add(time.Minute)} {
+		for range openUploadRateLimitPerMinute {
+			if _, _, err := consumeOpenUploadRateLimit(ctx, helper, iosScriptUploadRateBucket("alice"), at); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	app := fiber.New()
+	helper.Router = app
+	registerIOSUploadRoutes(helper, testUploadDependencies())
+	for _, tc := range []struct {
+		path string
+		want int
+	}{
+		{"/api/ios/script/fixture-alice/upload", fiber.StatusTooManyRequests},
+		{"/ios/script/fixture-alice/upload", fiber.StatusTooManyRequests},
+		{"/api/ios/script/fixture-bob/upload", fiber.StatusBadRequest},
+		{"/api/ios/script/unknown/upload", fiber.StatusUnauthorized},
+	} {
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, tc.path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Fatalf("%s returned %d, want %d", tc.path, resp.StatusCode, tc.want)
+		}
+		if resp.Header.Get(proxyUploadResultHeader) != "" {
+			t.Fatal("an authenticated script response carried proxy headers")
+		}
 	}
 }

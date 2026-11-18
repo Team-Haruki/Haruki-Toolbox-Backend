@@ -43,6 +43,20 @@ var scriptUploadAckWait = 15 * time.Second
 // finishes, including when the client receives an early 202.
 var iosUploadAssemblySlots = make(chan struct{}, 2)
 
+// The indexed upload-code lookup runs before the per-owner quota so invalid
+// credentials cannot spend a valid owner's budget on a shared proxy or NAT.
+var iosUploadCredentialSlots = make(chan struct{}, 8)
+
+func lookupIOSUploadCode(ctx context.Context, db *postgresql.Client, code string) (*postgresql.IOSScriptCode, error) {
+	select {
+	case iosUploadCredentialSlots <- struct{}{}:
+		defer func() { <-iosUploadCredentialSlots }()
+	default:
+		return nil, errIOSUploadAssemblyRetry
+	}
+	return db.IOSScriptCode.Query().Where(iosscriptcode.UploadCodeEQ(code)).Only(ctx)
+}
+
 var errIOSUploadAssemblyRetry = errors.New("upload assembly can be retried")
 
 type dataUploadHeader struct {
@@ -160,19 +174,24 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
 		uploadCode := c.Params("upload_code")
-		if uploadCode == "" {
-			return harukiAPIHelper.ErrorBadRequest(c, "missing upload_code")
+		if uploadCode == "" || len(uploadCode) > 128 {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid upload_code")
 		}
-		record, err := apiHelper.DBManager.DB.IOSScriptCode.Query().
-			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
-			Only(ctx)
+		record, err := lookupIOSUploadCode(ctx, apiHelper.DBManager.DB, uploadCode)
 		if err != nil {
+			if errors.Is(err, errIOSUploadAssemblyRetry) {
+				return retryIOSUploadAssembly(c)
+			}
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorUnauthorized(c, "invalid upload code")
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to validate upload code")
 		}
 		toolboxUserID := record.UserID
+		if retryAfter := openUploadRetryAfter(ctx, apiHelper, iosScriptUploadRateBucket(toolboxUserID), time.Now().UTC()); retryAfter > 0 {
+			c.Set(fiber.HeaderRetryAfter, strconv.Itoa(retryAfter))
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
+		}
 		chunkIndex64, err := strconv.ParseInt(c.Get("X-Chunk-Index", ""), 10, 64)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid X-Chunk-Index")
@@ -370,7 +389,6 @@ func parseIOSProxyPathInt(raw string) (int64, error) {
 
 func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	logger := harukiLogger.NewLoggerFromGlobal("HarukiSekaiIOS")
-	scriptGuard := openUploadEntryGuard(apiHelper)
 	// A refused proxy upload still says so to the module's notification script.
 	proxyGuard := openUploadEntryGuard(apiHelper, func(c fiber.Ctx) {
 		setProxyUploadResult(c, proxyUploadFailed, "rate_limited")
@@ -378,7 +396,7 @@ func registerIOSUploadRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 	for _, prefix := range []string{"/ios", "/api/ios"} {
 		api := apiHelper.Router.Group(prefix)
 
-		api.Post("/script/:upload_code/upload", scriptGuard, handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
+		api.Post("/script/:upload_code/upload", handleIOSScriptUploadWithValidation(apiHelper, dependencies, logger))
 		api.Get("/proxy/:server/suite/user/:user_id", proxyGuard, handleIOSProxySuite(apiHelper, dependencies, logger))
 		api.Post("/proxy/:server/user/:user_id/mysekai", proxyGuard, handleIOSProxyMysekai(apiHelper, dependencies, logger))
 		api.Put("/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", proxyGuard, handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper, dependencies, logger))

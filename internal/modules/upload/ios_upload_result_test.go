@@ -319,7 +319,6 @@ func TestRateLimitedProxyUploadReportsTheResult(t *testing.T) {
 		{"GET", "/ios/proxy/:server/suite/user/:user_id", "/ios/proxy/jp/suite/user/1", true},
 		{"POST", "/api/ios/proxy/:server/user/:user_id/mysekai", "/api/ios/proxy/jp/user/1/mysekai", true},
 		{"PUT", "/ios/proxy/:server/user/:user_id/mysekai/birthday-party/:party_id/delivery", "/ios/proxy/jp/user/1/mysekai/birthday-party/2/delivery", true},
-		{"POST", "/ios/script/:upload_code/upload", "/ios/script/code/upload", false},
 		{"POST", "/api/inherit/:server/:upload_type/submit", "/api/inherit/jp/suite/submit", false},
 	}
 	// Use up this window and the next for each route, so a minute boundary
