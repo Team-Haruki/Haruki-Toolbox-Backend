@@ -242,7 +242,11 @@ func TestUnlinkAndRebindNeverRestoresOldGrants(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
 		t.Fatalf("unlink status=%d, remaining grants=%d", resp.StatusCode, db.GameAccountDataGrant.Query().CountX(ctx))
 	}
-	giveGrant() // Legacy orphan from a binding deleted by a previous release.
+	// Seed an orphan left by an older version directly. Normal writes now
+	// reject an absent binding at the persistence boundary.
+	db.GameAccountDataGrant.Create().SetOwnerUserID("owner").SetGranteeUserID("delegate").
+		SetServer("jp").SetGameUserID("123").SetDataType("suite").
+		SetCanRead(true).SetCanWrite(true).SetExpiresAt(time.Now().Add(time.Hour)).ExecX(ctx)
 	createBindingViaSave(t, helper, ctx, "jp", "123", "owner")
 	access, err := db.CanWriteGameAccountData(ctx, "delegate", "jp", "123", "suite", time.Now())
 	if err != nil || access.Allowed || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {

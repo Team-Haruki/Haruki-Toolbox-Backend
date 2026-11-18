@@ -9,6 +9,9 @@ import (
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -95,7 +98,7 @@ func TestGameAccountDataGrantAccessAndCleanup(t *testing.T) {
 		t.Fatalf("explicit profile grant should be allowed via grant, got %+v", profileAccess)
 	}
 
-	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "owner", "banned", "jp", "123", "suite", now.Add(time.Hour)); err != nil {
+	if _, err := client.UpsertGameAccountDataGrant(context.Background(), "owner", "banned", "jp", "123", "suite", now.Add(time.Hour)); !errors.Is(err, dbManager.ErrGameAccountDataGrantGranteeBanned) {
 		t.Fatalf("upsert banned grantee grant returned error: %v", err)
 	}
 	bannedAccess, err := client.CanAccessGameAccountData(context.Background(), "banned", "jp", "123", "suite", now)
@@ -206,4 +209,58 @@ func TestReadWriteGrantIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDenied()
+}
+
+func TestGrantPersistenceRejectsChangedBindingOrBannedUserWithoutWriting(t *testing.T) {
+	c := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer c.Close()
+	ctx := t.Context()
+	for _, id := range []string{"holder", "receiver", "successor"} {
+		c.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").ExecX(ctx)
+	}
+	binding := c.GameAccountBinding.Create().SetServer("jp").SetGameUserID("42").SetVerified(true).SetUserID("holder").SaveX(ctx)
+	firstExpiry := time.Now().UTC().Add(time.Hour)
+	if _, err := c.UpsertGameAccountDataGrant(ctx, "holder", "receiver", "jp", "42", "suite", firstExpiry); err != nil {
+		t.Fatal(err)
+	}
+	assertDenied := func(want error) {
+		t.Helper()
+		_, err := c.UpsertGameAccountDataGrant(ctx, "holder", "receiver", "jp", "42", "suite", firstExpiry.Add(time.Hour), []string{"write"})
+		if !errors.Is(err, want) {
+			t.Fatalf("grant write returned %v, want %v", err, want)
+		}
+		if before := c.GameAccountDataGrant.Query().OnlyX(ctx); before.CanWrite || !before.ExpiresAt.Equal(firstExpiry) {
+			t.Fatalf("denial changed stored grant: %+v", before)
+		}
+	}
+	c.User.UpdateOneID("receiver").SetBanned(true).ExecX(ctx)
+	assertDenied(dbManager.ErrGameAccountDataGrantGranteeBanned)
+	c.User.UpdateOneID("receiver").SetBanned(false).ExecX(ctx)
+	c.GameAccountBinding.UpdateOneID(binding.ID).SetVerified(false).ExecX(ctx)
+	assertDenied(dbManager.ErrGameAccountDataGrantBindingUnverified)
+	c.GameAccountBinding.UpdateOneID(binding.ID).SetVerified(true).SetUserID("successor").ExecX(ctx)
+	assertDenied(dbManager.ErrGameAccountDataGrantBindingNotFound)
+}
+
+func TestPostgresGrantLocksPrincipalsAndBindingBeforeWriting(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := dbManager.NewClient(dbManager.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	defer client.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "users"\."id", "users"\."banned" FROM "users" .* ORDER BY .* FOR UPDATE`).
+		WithArgs("holder", "receiver").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "banned"}).AddRow("holder", false).AddRow("receiver", false))
+	mock.ExpectQuery(`SELECT "game_account_bindings"\."id", "game_account_bindings"\."verified" FROM "game_account_bindings" .* FOR UPDATE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "verified"}).AddRow(1, false))
+	mock.ExpectRollback()
+	_, err = client.UpsertGameAccountDataGrant(t.Context(), "holder", "receiver", "jp", "42", "suite", time.Now().Add(time.Hour))
+	if !errors.Is(err, dbManager.ErrGameAccountDataGrantBindingUnverified) {
+		t.Fatalf("unverified binding returned %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
 }
