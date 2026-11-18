@@ -82,8 +82,8 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Warnf("Failed to resolve public game data stamp (server=%s,user_id=%d): %v", server, userID, stampErr)
 			stamp = -1 // unresolved: bypass the cache, never 304
 		}
-		// Fetched once per request: resolving the allowlist costs a Redis round
-		// trip, and both the conditional gate and the read-key digest need it.
+		// Resolve the allowlist once so conditional responses and cache keys
+		// both reflect the policy used to shape the body.
 		var allowedKeys []string
 		if dataType == harukiUtils.UploadDataTypeMysekai {
 			snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
@@ -108,13 +108,12 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// selections have unbounded cardinality even if rendered bodies match.
 		if stamp > 0 && requestKey == "" {
 			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
-			// Suite bodies are shaped by the public key allowlist, so entries
+			// Published bodies are shaped by the public key allowlist, so entries
 			// are keyed by it too — an allowlist edit moves readers to fresh
 			// entries even when the stamp is unchanged. The write side appends
 			// its own digest inside the flight, from the very slice that shaped
 			// the body, so key and body stay atomic under concurrent edits.
-			readKey := cacheKey
-			readKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
+			readKey := cacheKey + ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			if cached, found, err := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, readKey); err == nil && found {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
 					return nil

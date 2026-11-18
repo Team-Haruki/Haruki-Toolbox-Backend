@@ -136,7 +136,9 @@ func TestGameDataEndpointsRejectDuplicateSelectionsBeforeStorage(t *testing.T) {
 		func(ctx context.Context, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, id int64, server harukiUtils.SupportedDataUploadServer, keys string) (any, error) {
 			return HandleSuiteRequest(ctx, helper, id, server, keys, nil, nil)
 		},
-		HandleMysekaiRequest,
+		func(ctx context.Context, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, id int64, server harukiUtils.SupportedDataUploadServer, keys string) (any, error) {
+			return HandleMysekaiRequest(ctx, helper, id, server, keys, nil)
+		},
 	} {
 		if _, err := handle(t.Context(), nil, 123, harukiUtils.SupportedDataUploadServerJP, "example,example"); err == nil {
 			t.Fatal("handler accepted a duplicate projection")
