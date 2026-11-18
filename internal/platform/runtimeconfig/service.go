@@ -2,11 +2,15 @@ package runtimeconfig
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
 
 const defaultStoreTimeout = 500 * time.Millisecond
+const maxConcurrentRefreshes = 16
+
+var errRefreshBusy = errors.New("runtime configuration refresh is busy")
 
 // Update describes a partial runtime configuration update. Nil fields retain
 // their current values.
@@ -48,13 +52,15 @@ type Store interface {
 // Service owns mutable runtime settings. Startup configuration remains
 // immutable and is only used to seed this service at the composition root.
 type Service struct {
-	// operationMu keeps a single instance from publishing committed snapshots
-	// out of order when its Current and Update methods run concurrently.
-	operationMu sync.Mutex
-	mu          sync.RWMutex
-	current     Snapshot
-	store       Store
-	timeout     time.Duration
+	writeMu      sync.Mutex
+	mu           sync.RWMutex
+	current      Snapshot
+	revision     uint64
+	store        Store
+	timeout      time.Duration
+	readSequence uint64
+	appliedRead  uint64
+	readers      chan struct{}
 }
 
 func New(initial Snapshot, store Store) *Service {
@@ -62,6 +68,7 @@ func New(initial Snapshot, store Store) *Service {
 		current: cloneSnapshot(initial),
 		store:   store,
 		timeout: defaultStoreTimeout,
+		readers: make(chan struct{}, maxConcurrentRefreshes),
 	}
 }
 
@@ -71,12 +78,41 @@ func (s *Service) Current(ctx context.Context) (Snapshot, error) {
 	if s == nil {
 		return Snapshot{}, nil
 	}
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	if err := s.refresh(ctx); err != nil {
+	if s.store == nil {
+		return s.localSnapshot(), nil
+	}
+	wait, cancel := s.storeContext(ctx)
+	defer cancel()
+	if err := wait.Err(); err != nil {
 		return s.localSnapshot(), err
 	}
-	return s.localSnapshot(), nil
+	select {
+	case s.readers <- struct{}{}:
+		defer func() { <-s.readers }()
+	default:
+		return s.localSnapshot(), errRefreshBusy
+	}
+	// Start a fresh store read for the request so an earlier lookup cannot
+	// authorize a request that began after a rotation on another replica.
+	s.mu.Lock()
+	revision := s.revision
+	s.readSequence++
+	sequence := s.readSequence
+	s.mu.Unlock()
+	latest, found, err := s.store.Load(wait)
+	if err != nil || !found {
+		return s.localSnapshot(), err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.revision != revision {
+		return cloneSnapshot(s.current), nil
+	}
+	if sequence > s.appliedRead {
+		s.current = cloneSnapshot(latest)
+		s.appliedRead = sequence
+	}
+	return cloneSnapshot(latest), nil
 }
 
 // Update applies and persists a partial update before publishing it locally.
@@ -86,8 +122,8 @@ func (s *Service) Update(ctx context.Context, update Update) error {
 	if s == nil {
 		return nil
 	}
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 
 	next := s.localSnapshot()
 	if s.store != nil {
@@ -101,23 +137,10 @@ func (s *Service) Update(ctx context.Context, update Update) error {
 	} else {
 		applyUpdate(&next, update)
 	}
-	s.setLocalSnapshot(next)
-	return nil
-}
-
-func (s *Service) refresh(ctx context.Context) error {
-	if s == nil || s.store == nil {
-		return nil
-	}
-	storeCtx, cancel := s.storeContext(ctx)
-	latest, found, err := s.store.Load(storeCtx)
-	cancel()
-	if err != nil {
-		return err
-	}
-	if found {
-		s.setLocalSnapshot(latest)
-	}
+	s.mu.Lock()
+	s.current = cloneSnapshot(next)
+	s.revision++
+	s.mu.Unlock()
 	return nil
 }
 
@@ -136,12 +159,6 @@ func (s *Service) localSnapshot() Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return cloneSnapshot(s.current)
-}
-
-func (s *Service) setLocalSnapshot(snapshot Snapshot) {
-	s.mu.Lock()
-	s.current = cloneSnapshot(snapshot)
-	s.mu.Unlock()
 }
 
 func applyUpdate(snapshot *Snapshot, update Update) {
