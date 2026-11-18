@@ -11,6 +11,7 @@ import (
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauthorizesocial"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/redact"
@@ -79,6 +80,9 @@ func requestBodyLimit(header *fasthttp.RequestHeader) fasthttp.RequestConfig {
 	}
 	if rest, ok := strings.CutPrefix(path, "/api/user/"); ok {
 		userID, route, _ := strings.Cut(rest, "/")
+		if userID != "" && route == userprofile.ProfileRouteSegment && header.IsPut() {
+			return fasthttp.RequestConfig{MaxRequestBodySize: userprofile.ProfileRequestBodyLimit}
+		}
 		action, id, hasID := strings.Cut(route, "/")
 		if userID != "" && action == userauthorizesocial.RouteSegment && ((!hasID && header.IsPost()) || (id != "" && !strings.Contains(id, "/"))) {
 			return fasthttp.RequestConfig{MaxRequestBodySize: userauthorizesocial.RequestBodyLimit}

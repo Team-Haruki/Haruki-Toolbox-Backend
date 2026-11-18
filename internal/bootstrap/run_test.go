@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -62,6 +63,7 @@ func TestRequestBodyLimitsBeforeFiberRouting(t *testing.T) {
 		{http.MethodPost, "/api/user/test-user/authorize-social-platform/", 8 << 10},
 		{http.MethodPost, "/api/user/test-user/authorize-social-platform/1", 8 << 10},
 		{http.MethodPut, "/api/user/test-user/authorize-social-platform/1/", 8 << 10},
+		{http.MethodPut, "/API/User/test-user/ProFile/?view=avatar", 3 << 20},
 	} {
 		for _, chunked := range []bool{false, true} {
 			req, err := http.NewRequestWithContext(t.Context(), endpoint.method, baseURL+endpoint.path, strings.NewReader(strings.Repeat(" ", endpoint.limit)))
@@ -100,8 +102,8 @@ func TestRequestBodyLimitsBeforeFiberRouting(t *testing.T) {
 	}
 }
 
-// The server should reject the declared size before reading its payload.
-// Sending the payload before waiting for the status can race the server's close.
+// Send a valid prefix for chunked requests before declaring a chunk over the
+// cumulative limit. Wait for the rejection before sending the excess byte.
 func oversizedRequestStatus(t *testing.T, address, method, path string, size int, chunked bool) int {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp4", address, 3*time.Second)
@@ -112,12 +114,21 @@ func oversizedRequestStatus(t *testing.T, address, method, path string, size int
 	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	framing := fmt.Sprintf("Content-Length: %d\r\n\r\n", size)
+	framing := fmt.Sprintf("Content-Length: %d", size)
 	if chunked {
-		framing = fmt.Sprintf("Transfer-Encoding: chunked\r\n\r\n%x\r\n", size)
+		framing = "Transfer-Encoding: chunked"
 	}
-	if _, err := fmt.Fprintf(conn, "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n%s", method, path, address, framing); err != nil {
+	if _, err := fmt.Fprintf(conn, "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n%s\r\n\r\n", method, path, address, framing); err != nil {
 		t.Fatal(err)
+	}
+	if chunked {
+		chunks := httputil.NewChunkedWriter(conn)
+		if _, err := io.Copy(chunks, strings.NewReader(strings.Repeat(" ", size-1))); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(conn, "1\r\n"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: method})
 	if err != nil {
