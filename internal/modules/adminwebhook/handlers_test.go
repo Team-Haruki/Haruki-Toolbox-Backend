@@ -5,6 +5,7 @@ import (
 	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -137,6 +138,9 @@ func TestAdminWebhookCRUDHandlers(t *testing.T) {
 	if err := helper.DBManager.DB.AddWebhookPushUser(context.Background(), "123", "jp", "suite", "1"); err != nil {
 		t.Fatalf("AddWebhookPushUser returned error: %v", err)
 	}
+	if err := helper.DBManager.DB.AddWebhookPushUser(t.Context(), "124", "jp", "suite", "1"); err != nil {
+		t.Fatal(err)
+	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/webhooks", nil)
 	listResp, err := app.Test(listReq)
@@ -147,13 +151,27 @@ func TestAdminWebhookCRUDHandlers(t *testing.T) {
 		t.Fatalf("list status code = %d, want %d", listResp.StatusCode, fiber.StatusOK)
 	}
 
-	subsReq := httptest.NewRequest(http.MethodGet, "/webhooks/1/subscribers", nil)
+	subsReq := httptest.NewRequest(http.MethodGet, "/webhooks/1/subscribers?page_size=1", nil)
 	subsResp, err := app.Test(subsReq)
 	if err != nil {
 		t.Fatalf("app.Test returned error: %v", err)
 	}
 	if subsResp.StatusCode != fiber.StatusOK {
 		t.Fatalf("subscribers status code = %d, want %d", subsResp.StatusCode, fiber.StatusOK)
+	}
+	var page struct {
+		Data adminWebhookSubscribersResponse `json:"updatedData"`
+	}
+	if err := json.UnmarshalRead(subsResp.Body, &page); err != nil || page.Data.Total != 2 || page.Data.NextBeforeID == 0 || len(page.Data.Items) != 1 || page.Data.Items[0].UserID != "124" {
+		t.Fatalf("first subscriber page = %#v, %v", page.Data, err)
+	}
+	subsResp, err = app.Test(httptest.NewRequest(http.MethodGet, "/webhooks/1/subscribers?page_size=1&before_id="+strconv.Itoa(page.Data.NextBeforeID), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.Data = adminWebhookSubscribersResponse{}
+	if err := json.UnmarshalRead(subsResp.Body, &page); err != nil || page.Data.Total != 2 || page.Data.NextBeforeID != 0 || len(page.Data.Items) != 1 || page.Data.Items[0].UserID != "123" {
+		t.Fatalf("second subscriber page = %#v, %v", page.Data, err)
 	}
 
 	updateReq := httptest.NewRequest(http.MethodPut, "/webhooks/1", strings.NewReader(`{"callbackUrl":"https://93.184.216.34/updated","credential":"cred-2","enabled":false,"clearBearer":true}`))

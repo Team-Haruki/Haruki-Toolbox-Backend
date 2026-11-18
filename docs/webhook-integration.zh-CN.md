@@ -60,6 +60,8 @@ X-Haruki-Suite-Webhook-Token: <token>
 - `server`: 区服
 - `type`: 数据类型
 
+订阅列表按订阅记录 ID 从新到旧返回。`page_size` 默认 200，最大 500。响应有 `X-Next-Before-ID` 时，将该值作为下一次请求的 `before_id`，并保持 `page_size` 一致。响应没有该头时，本次遍历结束。
+
 ## 4. 订阅某个用户的数据上传事件
 
 `PUT /api/webhook/:server/:data_type/:user_id`
@@ -85,7 +87,9 @@ X-Haruki-Suite-Webhook-Token: <token>
 
 - `server`: `jp` / `en` / `tw` / `kr` / `cn`
 - `data_type`: 如 `suite`、`mysekai`
-- `user_id`: 目标游戏用户 ID
+- `user_id`: 正的 64 位整数形式的游戏用户 ID。服务端以规范化后的十进制值保存，同一个订阅重复提交不会新增记录。
+
+每个 endpoint 最多保留 5,000 条订阅。新增订阅达到该上限时返回 `409 Conflict`。每个 endpoint 每分钟最多接受 120 次订阅请求，超限返回 `429 Too Many Requests` 和 `Retry-After`。取消订阅仍可用于清理记录。
 
 ## 5. 取消订阅
 

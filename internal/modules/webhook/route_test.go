@@ -2,19 +2,94 @@ package webhook
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/mattn/go-sqlite3"
+	goredis "github.com/redis/go-redis/v9"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 )
+
+func TestRegisteredWebhookBoundsSubscriptionWritesAndPages(t *testing.T) {
+	ctx := t.Context()
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	cache := miniredis.RunT(t)
+	rdb := goredis.NewClient(&goredis.Options{Addr: cache.Addr()})
+	defer rdb.Close()
+	redis := &harukiRedis.HarukiRedisManager{Redis: rdb}
+	app := fiber.New()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{Router: app, DBManager: &database.HarukiToolboxDBManager{DB: db, Redis: redis}}
+	const endpoint, other, secret = "partner", "other-partner", "fixture-webhook-signing-secret"
+	helper.SetWebhookJWTSecret(secret)
+	for _, id := range []string{endpoint, other} {
+		db.WebhookEndpoint.Create().SetID(id).SetCredential("fixture-credential").SetCallbackURL("https://example.test/").SetEnabled(true).ExecX(ctx)
+	}
+	db.WebhookSubscription.Create().SetWebhookID(other).SetUserID("999").SetServer("jp").SetDataType("suite").ExecX(ctx)
+	RegisterWebhookRoutes(helper)
+	token := mustSignHS256Token(t, jwt.MapClaims{"_id": endpoint, "credential": "fixture-credential"}, secret)
+	request := func(method, path string, want int) *http.Response {
+		t.Helper()
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set(TokenHeaderName, token)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		if resp.StatusCode != want {
+			t.Fatalf("%s %s returned %d, want %d", method, path, resp.StatusCode, want)
+		}
+		return resp
+	}
+	request(http.MethodPut, "/api/webhook/jp/suite/invalid", http.StatusBadRequest)
+	request(http.MethodPut, "/api/webhook/jp/suite/00012", http.StatusOK)
+	request(http.MethodPut, "/webhook/jp/suite/12", http.StatusOK)
+	request(http.MethodPut, "/api/webhook/jp/suite/13", http.StatusOK)
+	db.WebhookSubscription.Create().SetWebhookID(endpoint).SetUserID(strings.Repeat("x", 256)).SetServer("jp").SetDataType("suite").ExecX(ctx)
+	key := redis.KeyBuilder().BuildWebhookSubscriptionWriteKey(endpoint)
+	if count := rdb.Get(ctx, key).Val(); count != "3" {
+		t.Fatalf("validation consumed registration quota or the aliases used distinct quotas: %q", count)
+	}
+	decode := func(resp *http.Response, uid string) {
+		t.Helper()
+		var rows []postgresql.WebhookSubscriber
+		if err := json.UnmarshalRead(resp.Body, &rows); err != nil || len(rows) != 1 || rows[0].UID != uid {
+			t.Fatalf("subscription page = %v, err=%v", rows, err)
+		}
+	}
+	first := request(http.MethodGet, "/api/webhook/subscribers?page_size=1", http.StatusOK)
+	decode(first, "13")
+	cursor := first.Header.Get("X-Next-Before-ID")
+	if cursor == "" {
+		t.Fatal("page did not advertise a continuation")
+	}
+	last := request(http.MethodGet, "/api/webhook/subscribers?page_size=1&before_id="+cursor, http.StatusOK)
+	decode(last, "12")
+	if last.Header.Get("X-Next-Before-ID") != "" {
+		t.Fatal("last page advertised an extra page")
+	}
+	if err := rdb.Set(ctx, key, webhookRegistrationPerMinute, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request(http.MethodPut, "/api/webhook/jp/suite/14", http.StatusTooManyRequests)
+	request(http.MethodDelete, "/api/webhook/jp/suite/00012", http.StatusOK)
+	cache.FastForward(time.Minute)
+	request(http.MethodPut, "/api/webhook/jp/suite/14", http.StatusOK)
+}
 
 func TestValidateWebhookUser(t *testing.T) {
 	t.Run("missing token takes precedence over secret configuration", func(t *testing.T) {

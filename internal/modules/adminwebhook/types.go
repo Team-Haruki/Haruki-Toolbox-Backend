@@ -51,8 +51,9 @@ type adminWebhookMutationResponse struct {
 }
 
 type adminWebhookSubscribersResponse struct {
-	GeneratedAt time.Time                    `json:"generatedAt"`
-	WebhookID   string                       `json:"webhookId"`
-	Total       int                          `json:"total"`
-	Items       []adminWebhookSubscriberItem `json:"items"`
+	GeneratedAt  time.Time                    `json:"generatedAt"`
+	WebhookID    string                       `json:"webhookId"`
+	Total        int                          `json:"total"`
+	Items        []adminWebhookSubscriberItem `json:"items"`
+	NextBeforeID int                          `json:"nextBeforeId,omitempty"`
 }
