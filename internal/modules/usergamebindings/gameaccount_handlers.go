@@ -125,7 +125,8 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
-		switch classifyExistingBinding(existing, userID) {
+		bindingState := classifyExistingBinding(existing, userID)
+		switch bindingState {
 		case existingBindingStateVerifiedBySelf:
 			bindings, err := getUserBindings(ctx, apiHelper, userID)
 			if err != nil {
@@ -173,6 +174,16 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership PASSED, saving binding")
 
+		var notification *platformMailNotify.Reservation
+		if bindingState == existingBindingStateOwnedByOther && apiHelper.SMTPClient != nil {
+			notification = platformMailNotify.Reserve()
+			if notification == nil {
+				reason = "notification_queue_full"
+				return c.SendStatus(fiber.StatusServiceUnavailable)
+			}
+			defer notification.Cancel()
+		}
+
 		if err := consumeGameAccountVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr, code); err != nil {
 			mapped := mapGameAccountVerificationCodeLookupError(err)
 			if mapped.Code >= fiber.StatusInternalServerError {
@@ -197,6 +208,8 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 		if saveResult != nil && saveResult.Transferred {
 			previousOwnerUserID = saveResult.PreviousOwnerUserID
+		}
+		if notification != nil && previousOwnerUserID != "" {
 			// Send the transfer mail off the request path: its result was always
 			// discarded (log-only), so a slow SMTP server should not delay the
 			// binding response. Clone the params — fiber recycles their backing
@@ -204,7 +217,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			transferServer := strings.Clone(serverStr)
 			transferGameUserID := strings.Clone(gameUserIDStr)
 			transferredAt := time.Now()
-			platformMailNotify.Dispatch(func(context.Context) {
+			notification.Send(func(context.Context) {
 				notifyPreviousGameAccountBindingOwner(apiHelper, saveResult, transferServer, transferGameUserID, transferredAt)
 			})
 		}

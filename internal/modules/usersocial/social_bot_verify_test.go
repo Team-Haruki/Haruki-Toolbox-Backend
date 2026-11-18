@@ -132,14 +132,24 @@ func TestSocialChallengeConsumesOnlyTheObservedGeneration(t *testing.T) {
 	if err := redis.SetCache(t.Context(), storageKey, second, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, first); err != nil || consumed {
-		t.Fatalf("old generation consumed newer record: %t, %v", consumed, err)
+	pending := socialVerificationPendingPrefix + "status-b"
+	if reserved, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, first, pending); err != nil || reserved {
+		t.Fatalf("old generation reserved newer record: %t, %v", reserved, err)
 	}
-	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, second); err != nil || !consumed {
-		t.Fatalf("current challenge was not consumed: %t, %v", consumed, err)
+	if reserved, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, second, pending); err != nil || !reserved {
+		t.Fatalf("current challenge was not reserved: %t, %v", reserved, err)
 	}
-	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, second); err != nil || consumed {
-		t.Fatalf("consumed challenge was reused: %t, %v", consumed, err)
+	if reserved, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, second, pending); err != nil || reserved {
+		t.Fatalf("pending challenge was reused: %t, %v", reserved, err)
+	}
+	if err := redis.SetCache(t.Context(), storageKey, first, 2*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if restored, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, pending, second); err != nil || restored {
+		t.Fatalf("failed generation overwrote a replacement: %t, %v", restored, err)
+	}
+	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, pending); err != nil || consumed {
+		t.Fatalf("completed generation removed a replacement: %t, %v", consumed, err)
 	}
 }
 
@@ -246,6 +256,16 @@ func TestBotVerificationBindsAndConsumesIssuedChallenge(t *testing.T) {
 	if err := redis.SetCache(t.Context(), key, challenge, time.Minute); err != nil {
 		t.Fatal(err)
 	}
+	unavailable := enttest.Open(t, "sqlite3", "file:unavailable-social?mode=memory&cache=shared&_fk=1")
+	if err := unavailable.Close(); err != nil {
+		t.Fatal(err)
+	}
+	helper.DBManager.DB = unavailable
+	check("fixture-account", http.StatusInternalServerError)
+	if ttl := redis.Redis.PTTL(t.Context(), key).Val(); ttl != time.Minute {
+		t.Fatalf("failed verification changed the remaining challenge TTL: %v", ttl)
+	}
+	helper.DBManager.DB = db
 	check("fixture-account", http.StatusOK)
 	check("fixture-account", http.StatusBadRequest)
 	row := db.SocialPlatformInfo.Query().OnlyX(t.Context())

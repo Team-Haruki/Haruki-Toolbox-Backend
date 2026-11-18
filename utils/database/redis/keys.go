@@ -118,16 +118,16 @@ func BuildGameAccountVerifyKey(userID, server, gameUserID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, userID, server, gameUserID)
 }
 
-func BuildGameAccountVerifyAttemptKey(userID, server, gameUserID string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, KeyActionAttempt, userID, server, gameUserID)
+func (b KeyBuilder) BuildGameAccountVerifyAttemptKey(userID, server, gameUserID, code string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, "verify-attempt", userID, server, gameUserID, b.hashExactIdentifier("game-account-code", code))
 }
 
 func BuildGameAccountVerificationIssueKey(userID string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, "issue", userID)
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, "verify-issue-user", userID)
 }
 
 func BuildGameAccountVerificationTargetIssueKey(server, gameUserID string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, "issue-target", server, gameUserID)
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, "verify-issue-target", server, gameUserID)
 }
 
 func BuildIOSUploadChunkBudgetKey() string {

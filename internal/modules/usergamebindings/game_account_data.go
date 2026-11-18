@@ -70,8 +70,7 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 
-		gameUserIDStr := strings.TrimSpace(c.Params("game_user_id"))
-		gameUserID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
+		gameUserID, err := strconv.ParseInt(strings.TrimSpace(c.Params("game_user_id")), 10, 64)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
@@ -81,7 +80,8 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorBadRequest(c, parseErr.Message)
 		}
 
-		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), strconv.FormatInt(gameUserID, 10), string(dataType), time.Now().UTC())
+		gameUserIDStr := strconv.FormatInt(gameUserID, 10)
+		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), gameUserIDStr, string(dataType), time.Now().UTC())
 		if err != nil {
 			harukiLogger.Errorf("Failed to verify game account data access: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to verify game account data access")

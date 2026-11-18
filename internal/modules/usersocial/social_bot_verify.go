@@ -1,7 +1,10 @@
 package usersocial
 
 import (
+	"context"
 	"crypto/subtle"
+	"strings"
+	"time"
 
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -53,7 +56,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			reason = "get_verification_key_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to get verification key")
 		}
-		if !found {
+		if !found || strings.HasPrefix(encodedChallenge, socialVerificationPendingPrefix) {
 			reason = "verification_key_not_found"
 			return harukiAPIHelper.ErrorBadRequest(c, "verification key expired or not found")
 		}
@@ -79,15 +82,32 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorUnauthorized(c, "invalid one time password")
 		}
 
-		consumed, err := redis.DeleteCacheIfValueMatches(ctx, storageKey, encodedChallenge)
+		pending := socialVerificationPendingPrefix + challenge.StatusToken
+		reserved, err := redis.ReplaceCacheStringIfValueMatches(ctx, storageKey, encodedChallenge, pending)
 		if err != nil {
 			reason = "consume_verification_challenge_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to save verification state")
 		}
-		if !consumed {
+		if !reserved {
 			reason = "verification_key_not_found"
 			return harukiAPIHelper.ErrorBadRequest(c, "verification key expired or not found")
 		}
+		// Keep the in-flight generation at its original expiry. A definite
+		// pre-commit failure can release it without overwriting a new issuance.
+		restoreChallenge := true
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+			defer cancel()
+			var cleanupErr error
+			if restoreChallenge {
+				_, cleanupErr = redis.ReplaceCacheStringIfValueMatches(cleanupCtx, storageKey, pending, encodedChallenge)
+			} else {
+				_, cleanupErr = redis.DeleteCacheIfValueMatches(cleanupCtx, storageKey, pending)
+			}
+			if cleanupErr != nil {
+				harukiLogger.Warnf("Failed to finalize social platform verification challenge: %v", cleanupErr)
+			}
+		}()
 		targetUserID = challenge.OwnerID
 
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
@@ -100,6 +120,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
 		}
 		if exists {
+			restoreChallenge = false
 			reason = "social_platform_conflict"
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "this social platform account is already bound", nil)
 		}
@@ -120,6 +141,7 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			Save(ctx); err != nil {
 			_ = tx.Rollback()
 			if postgresql.IsConstraintError(err) {
+				restoreChallenge = false
 				reason = "social_platform_conflict"
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "this social platform account is already bound", nil)
 			}
@@ -136,6 +158,9 @@ func handleVerifySocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return harukiAPIHelper.ErrorInternal(c, "failed to save status token")
 		}
 
+		// An unsuccessful Commit can have an unknown outcome. Only restore a
+		// challenge when this transaction has never attempted a commit.
+		restoreChallenge = false
 		if err := tx.Commit(); err != nil {
 			if resetErr := apiHelper.DBManager.Redis.SetCache(ctx, statusTokenKey, "false", socialPlatformVerifyTTL); resetErr != nil {
 				harukiLogger.Warnf("Failed to restore social platform status token after commit failure: %v", resetErr)

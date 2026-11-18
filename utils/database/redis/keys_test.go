@@ -63,8 +63,13 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "game account verify attempt",
-			got:  BuildGameAccountVerifyAttemptKey("u1", "jp", "123"),
-			want: "haruki:game-account:verify:attempt:u1:jp:123",
+			got:  keys.BuildGameAccountVerifyAttemptKey("u1", "jp", "123", "fixture-code"),
+			want: "haruki:game-account:verify-attempt:u1:jp:123:" + keys.hashExactIdentifier("game-account-code", "fixture-code"),
+		},
+		{
+			name: "game account target issuance budget",
+			got:  BuildGameAccountVerificationTargetIssueKey("jp", "123"),
+			want: "haruki:game-account:verify-issue-target:jp:123",
 		},
 		{
 			name: "social platform verify",

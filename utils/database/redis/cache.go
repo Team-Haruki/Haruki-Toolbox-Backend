@@ -74,6 +74,14 @@ if current == ARGV[1] or current == ARGV[2] then
 end
 return -1
 	`
+
+	redisReplaceStringIfMatchScript = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+  return 0
+end
+redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+return 1
+`
 )
 
 func GameDataNamespace() string {
@@ -353,6 +361,21 @@ func (r *HarukiRedisManager) DeleteCacheIfValueMatches(ctx context.Context, key,
 		return false, err
 	}
 	return result == 1, nil
+}
+
+// ReplaceCacheStringIfValueMatches updates a SetCache string without changing
+// its expiration or overwriting a newer value.
+func (r *HarukiRedisManager) ReplaceCacheStringIfValueMatches(ctx context.Context, key, expected, replacement string) (bool, error) {
+	previous, err := jsoncodec.Marshal(expected)
+	if err != nil {
+		return false, err
+	}
+	next, err := jsoncodec.Marshal(replacement)
+	if err != nil {
+		return false, err
+	}
+	result, err := r.Redis.Eval(ctx, redisReplaceStringIfMatchScript, []string{key}, string(previous), string(next)).Int()
+	return result == 1, err
 }
 
 func (r *HarukiRedisManager) IncrementWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error) {

@@ -9,8 +9,10 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -54,5 +56,24 @@ func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
 	}
 	if got := db.Ticket.Query().CountX(t.Context()); got != 2 {
 		t.Fatalf("rejected bodies changed the number of tickets: %d", got)
+	}
+
+	helper.SMTPClient = &smtp.HarukiSMTPClient{}
+	var reservations []*mailnotify.Reservation
+	for reservation := mailnotify.Reserve(); reservation != nil; reservation = mailnotify.Reserve() {
+		reservations = append(reservations, reservation)
+		defer reservation.Cancel()
+	}
+	const validTicket = `{"subject":"New ticket","message":"Example report"}`
+	check(http.MethodPost, validTicket, "", http.StatusServiceUnavailable)
+	if got := db.Ticket.Query().CountX(t.Context()); got != 2 {
+		t.Fatalf("admission failure saved a ticket: count = %d", got)
+	}
+	for _, reservation := range reservations {
+		reservation.Cancel()
+	}
+	check(http.MethodPost, validTicket, "", http.StatusOK)
+	if got := db.Ticket.Query().CountX(t.Context()); got != 3 {
+		t.Fatalf("retry after admission opened saved %d tickets, want 3 total", got)
 	}
 }

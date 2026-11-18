@@ -10,10 +10,11 @@ import (
 const (
 	socialPlatformVerifyTTL         = 5 * time.Minute
 	socialPlatformVerifyMaxAttempts = 5
+	socialVerificationPendingPrefix = "pending:"
 )
 
 // The status token also identifies the issuance generation. Verification
-// consumes exactly this immutable record before writing any account binding.
+// reserves exactly this record before writing any account binding.
 type socialVerificationChallenge struct {
 	CodeDigest  string `json:"digest"`
 	OwnerID     string `json:"owner"`

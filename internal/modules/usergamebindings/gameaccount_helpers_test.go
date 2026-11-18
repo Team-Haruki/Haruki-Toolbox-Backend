@@ -12,10 +12,12 @@ import (
 
 	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekaiapi"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -391,7 +393,7 @@ func TestGetVerificationCodeTooManyAttempts(t *testing.T) {
 
 	helper, redisManager, ctx := newGameBindingRedisHelper(t)
 	userID, server, gameUserID := "u1", "jp", "12345"
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, server, gameUserID)
+	attemptKey := redisManager.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, server, gameUserID, "1/2/3/4/5/6")
 	codeKey := harukiRedis.BuildGameAccountVerifyKey(userID, server, gameUserID)
 
 	if err := redisManager.SetCache(ctx, attemptKey, gameAccountVerificationMaxAttempts, time.Minute); err != nil {
@@ -414,12 +416,137 @@ func TestGetVerificationCodeTooManyAttempts(t *testing.T) {
 	}
 }
 
+func TestReissuedGameVerificationCodeHasItsOwnAttemptBudget(t *testing.T) {
+	helper, redis, ctx := newGameBindingRedisHelper(t)
+	const userID, server, gameUserID = "u1", "jp", "12345"
+	const original = "fixture-original"
+	codeKey := harukiRedis.BuildGameAccountVerifyKey(userID, server, gameUserID)
+	attemptKey := redis.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, server, gameUserID, original)
+	if err := redis.SetCache(ctx, codeKey, original, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(ctx, attemptKey, gameAccountVerificationMaxAttempts, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	app.Post("/:server/:game_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", userID)
+		return c.Next()
+	}, handleGenerateGameAccountVerificationCode(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/jp/00012345", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reissuance status = %d", resp.StatusCode)
+	}
+	code, err := getVerificationCode(ctx, helper, userID, server, gameUserID)
+	if err != nil || code == "" || code == original {
+		t.Fatalf("replacement challenge was not usable: %v", err)
+	}
+	if err := consumeGameAccountVerificationCode(ctx, helper, userID, server, gameUserID, original); !errors.Is(err, errGameAccountVerificationCodeExpired) {
+		t.Fatalf("superseded challenge could consume the replacement: %v", err)
+	}
+}
+
+func TestPaddedGameAccountIDReusesCanonicalProfile(t *testing.T) {
+	env := newProfileTestEnv(t, sekaiapi.Options{})
+	for _, id := range []string{"000123", "123"} {
+		status, _, _ := env.get(t, "owner", id)
+		if status != fiber.StatusOK {
+			t.Fatalf("profile for %s returned %d", id, status)
+		}
+	}
+	if got := env.upstream.hits.Load(); got != 1 {
+		t.Fatalf("profile cache missed for an equivalent ID: %d requests", got)
+	}
+}
+
+func TestBindingTransferReservesNotificationBeforeConsumingCode(t *testing.T) {
+	env := newProfileTestEnv(t, sekaiapi.Options{})
+	env.helper.SMTPClient = &smtp.HarukiSMTPClient{}
+	env.app.Post("/:server/:game_user_id", handleCreateGameAccountBinding(env.helper))
+	redis := env.helper.DBManager.Redis
+	const code = "hello"
+	codeKey := harukiRedis.BuildGameAccountVerifyKey("grantee", "tw", "123")
+	if err := redis.SetCache(t.Context(), codeKey, code, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var reservations []*mailnotify.Reservation
+	for reservation := mailnotify.Reserve(); reservation != nil; reservation = mailnotify.Reserve() {
+		reservations = append(reservations, reservation)
+		defer reservation.Cancel()
+	}
+	tryTransfer := func(want int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/tw/123", strings.NewReader(`{}`))
+		req.Header.Set("X-Test-User", "grantee")
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := env.app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("transfer status = %d, want %d", resp.StatusCode, want)
+		}
+	}
+	tryTransfer(http.StatusServiceUnavailable)
+	var retained string
+	if found, err := redis.GetCache(t.Context(), codeKey, &retained); err != nil || !found || retained != code {
+		t.Fatalf("unadmitted transfer consumed its challenge: found=%v err=%v", found, err)
+	}
+	binding, err := queryExistingBinding(t.Context(), env.helper, "tw", "123")
+	if err != nil || bindingOwnerID(binding) != "owner" {
+		t.Fatalf("unadmitted transfer changed the binding: %v", err)
+	}
+	for _, reservation := range reservations {
+		reservation.Cancel()
+	}
+	mail := make(chan string, 1)
+	originalSend := sendGameAccountBindingTransferMail
+	sendGameAccountBindingTransferMail = func(_ *harukiAPIHelper.HarukiToolboxRouterHelpers, email string, _ smtp.Message) error {
+		mail <- email
+		return nil
+	}
+	t.Cleanup(func() { sendGameAccountBindingTransferMail = originalSend })
+	tryTransfer(http.StatusOK)
+	select {
+	case recipient := <-mail:
+		if recipient != "owner@example.com" {
+			t.Fatalf("transfer mail recipient = %q", recipient)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("transferred binding did not queue mail")
+	}
+}
+
+func TestGrantRouteUsesCanonicalGameAccountID(t *testing.T) {
+	app := fiber.New()
+	app.Put("/:server/:game_user_id/:data_type/:grantee_user_id", func(c fiber.Ctx) error {
+		_, id, _, _, parseErr := parseGrantRouteParams(c)
+		if parseErr != nil || id != "123" {
+			t.Errorf("parsed grant account = %q, %v", id, parseErr)
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodPut, "/jp/000123/profile/test-user", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("unexpected route status: %d", resp.StatusCode)
+	}
+}
+
 func TestGetVerificationCodeMissingDoesNotReserveAttempt(t *testing.T) {
 	t.Parallel()
 
 	helper, redisManager, ctx := newGameBindingRedisHelper(t)
 	userID, server, gameUserID := "u1", "jp", "12345"
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, server, gameUserID)
+	attemptKey := redisManager.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, server, gameUserID, "1/2/3/4/5/6")
 
 	_, err := getVerificationCode(ctx, helper, userID, server, gameUserID)
 	if !errors.Is(err, errGameAccountVerificationCodeExpired) {
@@ -438,7 +565,7 @@ func TestGetVerificationCodeAtomicallyReservesConcurrentAttempts(t *testing.T) {
 	helper, redisManager, ctx := newGameBindingRedisHelper(t)
 	userID, server, gameUserID := "u1", "jp", "12345"
 	codeKey := harukiRedis.BuildGameAccountVerifyKey(userID, server, gameUserID)
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, server, gameUserID)
+	attemptKey := redisManager.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, server, gameUserID, "1/2/3/4/5/6")
 	if err := redisManager.SetCache(ctx, codeKey, "1/2/3/4/5/6", time.Minute); err != nil {
 		t.Fatalf("seed code key error: %v", err)
 	}
@@ -494,7 +621,7 @@ func TestConsumeGameAccountVerificationCode(t *testing.T) {
 	helper, redisManager, ctx := newGameBindingRedisHelper(t)
 	userID, server, gameUserID := "u1", "jp", "12345"
 	code := "1/2/3/4/5/6"
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, server, gameUserID)
+	attemptKey := redisManager.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, server, gameUserID, "1/2/3/4/5/6")
 	codeKey := harukiRedis.BuildGameAccountVerifyKey(userID, server, gameUserID)
 
 	if err := redisManager.SetCache(ctx, attemptKey, 2, time.Minute); err != nil {

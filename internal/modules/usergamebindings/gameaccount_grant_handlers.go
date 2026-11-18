@@ -22,8 +22,8 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 	if err != nil {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "invalid server")
 	}
-	gameUserID := strings.TrimSpace(c.Params("game_user_id"))
-	if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
+	gameUserID, err := strconv.ParseInt(strings.TrimSpace(c.Params("game_user_id")), 10, 64)
+	if err != nil {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "game_user_id must be numeric")
 	}
 	dataType := strings.ToLower(strings.TrimSpace(c.Params("data_type")))
@@ -34,7 +34,7 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 	if granteeUserID == "" {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "grantee_user_id is required")
 	}
-	return server, gameUserID, dataType, granteeUserID, nil
+	return server, strconv.FormatInt(gameUserID, 10), dataType, granteeUserID, nil
 }
 
 func validateGrantOwnerBinding(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID string) *fiber.Error {
