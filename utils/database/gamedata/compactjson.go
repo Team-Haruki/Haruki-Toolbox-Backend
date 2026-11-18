@@ -43,15 +43,26 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 	if !IsCompactValue(raw) {
 		return raw, nil
 	}
+	out := compactJSONOutput{
+		body:  make([]byte, 0, min(len(raw), 1<<20)),
+		limit: DefaultLimits().MaxKeyBytes,
+	}
+	if err := renderCompactJSON(raw, &out); err != nil {
+		return nil, err
+	}
+	return out.body, nil
+}
+
+func renderCompactJSON(raw []byte, out *compactJSONOutput) error {
 	// Only this call borrows scalar bytes. The input remains live and immutable
 	// until the separately allocated output is complete; no parse tree escapes.
 	parsed, err := parseOrderedInput(raw, raw)
 	if err != nil {
-		return nil, fmt.Errorf("gamedata: parse compact value: %w", err)
+		return fmt.Errorf("gamedata: parse compact value: %w", err)
 	}
 	doc, ok := parsed.(orderedDoc)
 	if !ok {
-		return nil, fmt.Errorf("gamedata: compact value is not an object")
+		return fmt.Errorf("gamedata: compact value is not an object")
 	}
 	var enums orderedDoc
 	enumKey := nuverserestore.EnumKey
@@ -76,7 +87,7 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 		}
 		key, err := json.Marshal(p.Key)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		// Non-array columns have length zero; rows stop at the shortest column.
 		values, _ := p.Val.([]any)
@@ -87,19 +98,18 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 			rows = len(values)
 		}
 	}
-	out := make([]byte, 0, len(raw)*2)
-	out = append(out, '[')
-	for row := 0; row < rows; row++ {
+	out.append("[")
+	for row := 0; row < rows && out.err == nil; row++ {
 		if row > 0 {
-			out = append(out, ',')
+			out.append(",")
 		}
-		out = append(out, '{')
+		out.append("{")
 		for i, c := range columns {
 			if i > 0 {
-				out = append(out, ',')
+				out.append(",")
 			}
-			out = append(out, c.key...)
-			out = append(out, ':')
+			out.appendBytes(c.key)
+			out.append(":")
 			v := c.values[row]
 			if c.enumerated {
 				// Preserve the former rawIndicesToInt + RestoreColumns contract:
@@ -113,14 +123,15 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 				}
 				v = mapped
 			}
-			out, err = appendJSON(out, v)
-			if err != nil {
-				return nil, err
+			out.value(v)
+			if out.err != nil {
+				return out.err
 			}
 		}
-		out = append(out, '}')
+		out.append("}")
 	}
-	return append(out, ']'), nil
+	out.append("]")
+	return out.err
 }
 
 // --- order-preserving JSON ---------------------------------------------------
@@ -219,56 +230,82 @@ func parseOrderedValue(dec *jsontext.Decoder, input []byte) (any, error) {
 	}
 }
 
-// appendJSON renders a parsed value back to JSON text, preserving the exact
-// scalar bytes it was parsed from.
-func appendJSON(dst []byte, v any) ([]byte, error) {
-	switch t := v.(type) {
+// compactJSONOutput can count encoded bytes without building the expanded body.
+type compactJSONOutput struct {
+	body  []byte
+	size  int
+	limit int
+	err   error
+}
+
+func (out *compactJSONOutput) append(raw string) {
+	if out.reserve(len(raw)) && out.body != nil {
+		out.body = append(out.body, raw...)
+	}
+}
+
+func (out *compactJSONOutput) appendBytes(raw []byte) {
+	if out.reserve(len(raw)) && out.body != nil {
+		out.body = append(out.body, raw...)
+	}
+}
+
+func (out *compactJSONOutput) reserve(n int) bool {
+	if out.err != nil {
+		return false
+	}
+	if n > out.limit-out.size {
+		out.err = fmt.Errorf("gamedata: expanded compact value exceeds %d bytes", out.limit)
+		return false
+	}
+	out.size += n
+	return true
+}
+
+// value renders a parsed value while preserving the exact scalar bytes.
+func (out *compactJSONOutput) value(value any) {
+	if out.err != nil {
+		return
+	}
+	switch v := value.(type) {
 	case nil:
-		return append(dst, "null"...), nil
+		out.append("null")
 	case jsontext.Value:
-		return append(dst, t...), nil
+		out.appendBytes(v)
 	case jsonvalue.Number:
-		return append(dst, t.String()...), nil
-	case string:
-		b, err := json.Marshal(t)
-		if err != nil {
-			return nil, err
-		}
-		return append(dst, b...), nil
+		out.append(v.String())
 	case orderedDoc:
-		dst = append(dst, '{')
-		for i, p := range t {
+		out.append("{")
+		for i, pair := range v {
 			if i > 0 {
-				dst = append(dst, ',')
+				out.append(",")
 			}
-			kb, err := json.Marshal(p.Key)
-			if err != nil {
-				return nil, err
-			}
-			dst = append(dst, kb...)
-			dst = append(dst, ':')
-			if dst, err = appendJSON(dst, p.Val); err != nil {
-				return nil, err
+			out.value(pair.Key)
+			out.append(":")
+			out.value(pair.Val)
+			if out.err != nil {
+				return
 			}
 		}
-		return append(dst, '}'), nil
+		out.append("}")
 	case []any:
-		dst = append(dst, '[')
-		for i, e := range t {
+		out.append("[")
+		for i, element := range v {
 			if i > 0 {
-				dst = append(dst, ',')
+				out.append(",")
 			}
-			var err error
-			if dst, err = appendJSON(dst, e); err != nil {
-				return nil, err
+			out.value(element)
+			if out.err != nil {
+				return
 			}
 		}
-		return append(dst, ']'), nil
+		out.append("]")
 	default:
-		b, err := json.Marshal(t)
+		encoded, err := json.Marshal(v)
 		if err != nil {
-			return nil, fmt.Errorf("gamedata: cannot render %T as JSON: %w", v, err)
+			out.err = fmt.Errorf("gamedata: cannot render %T as JSON: %w", v, err)
+			return
 		}
-		return append(dst, b...), nil
+		out.appendBytes(encoded)
 	}
 }

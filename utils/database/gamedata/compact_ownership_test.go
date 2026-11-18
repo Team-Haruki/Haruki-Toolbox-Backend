@@ -43,9 +43,23 @@ func TestOrderedParserStillOwnsScalarBytes(t *testing.T) {
 	for i := range input {
 		input[i] = 'x'
 	}
-	got, err := appendJSON(nil, parsed)
-	if err != nil || !bytes.Equal(want, got) {
+	out := compactJSONOutput{body: make([]byte, 0), limit: DefaultLimits().MaxKeyBytes}
+	out.value(parsed)
+	if out.err != nil || !bytes.Equal(want, out.body) {
 		t.Fatal("ordinary parser borrowed input")
+	}
+}
+
+func TestCompactJSONExpansionHonorsByteBudget(t *testing.T) {
+	raw := []byte(`{"id":[1,2]}`)
+	want := []byte(`[{"id":1},{"id":2}]`)
+	out := compactJSONOutput{body: make([]byte, 0), limit: len(want)}
+	if err := renderCompactJSON(raw, &out); err != nil || !bytes.Equal(out.body, want) {
+		t.Fatalf("renderCompactJSON = %s, %v", out.body, err)
+	}
+	sizing := compactJSONOutput{limit: len(want) - 1}
+	if err := renderCompactJSON(raw, &sizing); err == nil || sizing.size > sizing.limit || sizing.body != nil {
+		t.Fatalf("sizing did not enforce its budget: size=%d, err=%v", sizing.size, err)
 	}
 }
 
