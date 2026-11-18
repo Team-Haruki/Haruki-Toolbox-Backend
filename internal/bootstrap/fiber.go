@@ -9,6 +9,7 @@ import (
 	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincontent"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauthorizesocial"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userprofile"
@@ -73,6 +74,9 @@ func requestBodyLimit(header *fasthttp.RequestHeader) fasthttp.RequestConfig {
 		return fasthttp.RequestConfig{}
 	}
 	path := strings.ToLower(strings.TrimRight(string(uri.PathOriginal()), "/"))
+	if id, hasID := strings.CutPrefix(path, admincontent.FriendLinkAdminPath+"/"); (header.IsPost() && path == admincontent.FriendLinkAdminPath) || (header.IsPut() && hasID && !strings.Contains(id, "/")) {
+		return fasthttp.RequestConfig{MaxRequestBodySize: admincontent.FriendLinkBodyLimit}
+	}
 	if header.IsPost() {
 		if secret, ok := strings.CutPrefix(path, sponsor.AfdianCallbackPath+"/"); path == sponsor.AfdianCallbackPath || (ok && !strings.Contains(secret, "/")) {
 			return fasthttp.RequestConfig{MaxRequestBodySize: sponsor.AfdianCallbackBodyLimit}

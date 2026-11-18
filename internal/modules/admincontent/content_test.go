@@ -1,14 +1,76 @@
 package admincontent
 
 import (
+	json "encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/gofiber/fiber/v3"
+	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestFriendLinkWritesAndListsEnforceTagBudgets(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	ctx := t.Context()
+	db.FriendLink.Create().SetName("legacy").SetDescription("legacy fixture").SetURL("https://example.test").SetAvatar("").
+		SetTags([]string{strings.Repeat("x", 16<<10)}).SetSortOrder(1).ExecX(ctx)
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+	app := fiber.New()
+	app.Get("/links", handleAdminListFriendLinks(helper))
+	app.Post("/links", handleAdminCreateFriendLink(helper))
+	app.Put("/links/:id", handleAdminUpdateFriendLink(helper))
+	request := func(method, path string, tags []string, want int) {
+		t.Helper()
+		payload, err := json.Marshal(adminFriendLinkPayload{Name: "fixture", Description: "desc", URL: "https://example.test", Tags: tags, SortOrder: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(method, path, strings.NewReader(string(payload)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("%s %s returned %d, want %d", method, path, resp.StatusCode, want)
+		}
+	}
+	request(http.MethodPost, "/links", make([]string, postgresql.MaxFriendLinkTags+1), http.StatusBadRequest)
+	request(http.MethodPut, "/links/1", []string{strings.Repeat("节", 45)}, http.StatusBadRequest)
+	request(http.MethodPost, "/links", []string{"tag", "small"}, http.StatusOK)
+	for _, tc := range []struct {
+		path, name, tag string
+		next            int
+	}{
+		{"/links?page_size=1", "legacy", "", 2}, {"/links?page=2&page_size=1", "fixture", "tag", 0},
+	} {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			Data adminFriendLinksResponse `json:"updatedData"`
+		}
+		err = json.UnmarshalRead(resp.Body, &body)
+		_ = resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusOK || body.Data.Total != 2 || body.Data.NextPage != tc.next || len(body.Data.Items) != 1 {
+			t.Fatalf("unexpected friend link page %+v: %v", body.Data, err)
+		}
+		got := body.Data.Items[0]
+		if got.Name != tc.name || (tc.tag == "" && len(got.Tags) != 0) || (tc.tag != "" && (len(got.Tags) == 0 || got.Tags[0] != tc.tag)) {
+			t.Fatal("legacy link was lost or its unbounded tags were returned")
+		}
+	}
+}
 
 func TestParseAdminFriendLinkPayload(t *testing.T) {
 	app := fiber.New()

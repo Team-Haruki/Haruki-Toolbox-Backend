@@ -64,6 +64,8 @@ func TestRequestBodyLimitsBeforeFiberRouting(t *testing.T) {
 		{http.MethodPost, "/api/user/test-user/authorize-social-platform/1", 8 << 10},
 		{http.MethodPut, "/api/user/test-user/authorize-social-platform/1/", 8 << 10},
 		{http.MethodPut, "/API/User/test-user/ProFile/?view=avatar", 3 << 20},
+		{http.MethodPost, "/api/admin/content/friend-links", 16 << 10},
+		{http.MethodPut, "/api/admin/content/friend-links/1", 16 << 10},
 	} {
 		for _, chunked := range []bool{false, true} {
 			req, err := http.NewRequestWithContext(t.Context(), endpoint.method, baseURL+endpoint.path, strings.NewReader(strings.Repeat(" ", endpoint.limit)))
