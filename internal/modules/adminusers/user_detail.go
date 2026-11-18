@@ -115,7 +115,7 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		dbUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
 			WithSocialPlatformInfo().
-			WithAuthorizedSocialPlatforms().
+			WithAuthorizedSocialPlatforms(postgresql.BoundSocialGrants).
 			WithGameAccountBindings().
 			WithIosScriptCode().
 			Only(c.Context())

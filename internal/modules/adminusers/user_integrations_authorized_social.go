@@ -20,9 +20,9 @@ func handleListUserAuthorizedSocialPlatforms(apiHelper *harukiAPIHelper.HarukiTo
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
 		}
 
-		rows, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
-			Where(authorizesocialplatforminfo.UserIDEQ(targetUser.ID)).
-			All(c.Context())
+		query := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().Where(authorizesocialplatforminfo.UserIDEQ(targetUser.ID))
+		postgresql.BoundSocialGrants(query)
+		rows, err := query.Order(authorizesocialplatforminfo.ByPlatformID()).Limit(postgresql.MaxSocialGrantSlots).All(c.Context())
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizedSocialPlatformsFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query authorized social platforms")
@@ -51,15 +51,21 @@ func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 
 		platformID64, err := strconv.ParseInt(strings.TrimSpace(c.Params("platform_id")), 10, 64)
 		platformID := int(platformID64)
-		if err != nil || platformID <= 0 {
+		if err != nil || platformID <= 0 || platformID > postgresql.MaxSocialGrantSlots {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidPlatformId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "platform_id must be positive integer")
 		}
 
+		if len(c.Request().Body()) > 8<<10 || (c.Get("Content-Encoding") != "" && !strings.EqualFold(c.Get("Content-Encoding"), "identity")) {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid authorization request body")
+		}
 		payload, err := parseAdminManagedAuthorizedSocialPayload(c)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
+		}
+		if !postgresql.ValidSocialGrantFields(payload.UserID, payload.Comment) {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid authorization field length or encoding")
 		}
 
 		existing, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().

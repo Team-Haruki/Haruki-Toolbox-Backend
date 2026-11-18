@@ -40,6 +40,7 @@ func handleUpdateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 				authorizesocialplatforminfo.UserID(toolboxUserID),
 				authorizesocialplatforminfo.PlatformIDEQ(userAccountID),
 			).
+			Select(authorizesocialplatforminfo.FieldID).
 			Only(ctx)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -250,29 +251,14 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			reason = "authorized_social_platform_not_found"
 			return harukiAPIHelper.ErrorNotFound(c, "authorized social platform not found")
 		}
-		infos, err := client.Query().
-			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
-			All(ctx)
+		ud, err := buildAuthorizedSocialPlatformUserData(c, client, toolboxUserID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
 			reason = "query_authorized_social_platforms_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
 		}
-		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
-		for _, i := range infos {
-			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				PlatformID:            i.PlatformID,
-				Platform:              i.Platform,
-				UserID:                i.PlatformUserID,
-				Comment:               i.Comment,
-				AllowFastVerification: i.AllowFastVerification,
-			})
-		}
-		ud := harukiAPIHelper.HarukiToolboxUserData{
-			AuthorizeSocialPlatformInfo: &resp,
-		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform updated", &ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform updated", ud)
 	}
 }

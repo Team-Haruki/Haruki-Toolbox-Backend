@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
@@ -216,7 +217,7 @@ func handleRegisterViaKratos(
 		Query().
 		Where(userSchema.IDEQ(userID)).
 		WithSocialPlatformInfo().
-		WithAuthorizedSocialPlatforms().
+		WithAuthorizedSocialPlatforms(postgresql.BoundSocialGrants).
 		WithGameAccountBindings().
 		WithIosScriptCode().
 		Only(ctx)

@@ -3,6 +3,7 @@ package userauthorizesocial
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,6 +40,49 @@ func newAuthorizeSocialTestHelper(t *testing.T) *harukiAPIHelper.HarukiToolboxRo
 		DBManager: &database.HarukiToolboxDBManager{
 			DB: client,
 		},
+	}
+}
+
+func TestSocialGrantListBoundsLegacyRowsAndPreservesDeletion(t *testing.T) {
+	helper := newAuthorizeSocialTestHelper(t)
+	db := helper.DBManager.DB
+	for slot, comment := range map[int]string{1: "normal", 2: strings.Repeat("字", 400), maxUserSocialGrants + 1: "legacy slot"} {
+		if err := db.AuthorizeSocialPlatformInfo.Create().SetUserID("u1").SetPlatform("qq").SetPlatformUserID(fmt.Sprint(slot)).
+			SetPlatformID(slot).SetComment(comment).Exec(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := fiber.New()
+	app.Get("/:toolbox_user_id", func(c fiber.Ctx) error {
+		data, err := buildAuthorizedSocialPlatformUserData(c, db.AuthorizeSocialPlatformInfo, c.Params("toolbox_user_id"))
+		if err != nil {
+			return err
+		}
+		return c.JSON(data)
+	})
+	app.Delete("/:toolbox_user_id/:id", handleDeleteAuthorizeSocialPlatform(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/u1", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "normal") || strings.Contains(string(body), "legacy slot") || strings.Contains(string(body), "字") {
+		t.Fatalf("list returned %d", resp.StatusCode)
+	}
+	resp, err = app.Test(httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/u1/%d", maxUserSocialGrants+1), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("legacy deletion returned %d", resp.StatusCode)
+	}
+	if rows, err := db.AuthorizeSocialPlatformInfo.Query().Count(t.Context()); err != nil || rows != 2 {
+		t.Fatalf("remaining grants = %d, %v", rows, err)
 	}
 }
 

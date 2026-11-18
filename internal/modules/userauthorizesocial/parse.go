@@ -3,14 +3,14 @@ package userauthorizesocial
 import (
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-const maxUserSocialGrants = 128
+const maxUserSocialGrants = postgresql.MaxSocialGrantSlots
 
 func parseAuthorizeSocialPlatformID(c fiber.Ctx) (int, error) {
 	idParam := c.Params("id")
@@ -43,7 +43,7 @@ func parseAuthorizeSocialPlatformPayload(c fiber.Ctx) (harukiAPIHelper.Authorize
 	if payload.UserID == "" {
 		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "userId is required")
 	}
-	if len(payload.UserID) > 128 || len(payload.Comment) > 1024 || !utf8.ValidString(payload.UserID) || !utf8.ValidString(payload.Comment) {
+	if !postgresql.ValidSocialGrantFields(payload.UserID, payload.Comment) {
 		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "invalid authorization field length or encoding")
 	}
 	return payload, nil
