@@ -130,10 +130,7 @@ func StoreBirthdayMonitorEvent(ctx context.Context, redisManager *harukiRedis.Ha
 	if ttl <= 0 {
 		return nil, fmt.Errorf("monitor has expired")
 	}
-	if err := redisManager.SetCache(ctx, event.PayloadRef, event, ttl); err != nil {
-		return nil, err
-	}
-	return &event, nil
+	return storePendingBirthdayEvent(ctx, redisManager.Redis, event, ttl)
 }
 
 func FetchBirthdayMonitorEvent(ctx context.Context, redisManager *harukiRedis.HarukiRedisManager, eventID string, subscriptionID string, subscriptionVersion string) (*BirthdayMonitorEvent, error) {
@@ -167,7 +164,7 @@ func AckBirthdayMonitorEvent(ctx context.Context, redisManager *harukiRedis.Haru
 	if eventID == "" || subscriptionID == "" || subscriptionVersion == "" {
 		return fmt.Errorf("event_id, subscription_id and subscription_version are required")
 	}
-	return redisManager.DeleteCache(ctx, harukiRedis.BuildMysekaiBirthdayEventKey(subscriptionID, subscriptionVersion, eventID))
+	return deletePendingBirthdayEvents(ctx, redisManager.Redis, harukiRedis.BuildMysekaiBirthdayEventKey(subscriptionID, subscriptionVersion, eventID))
 }
 
 func deleteBirthdayEventsBySubscription(ctx context.Context, redisClient *goredis.Client, subscriptionID string) error {
@@ -182,7 +179,7 @@ func deleteBirthdayEventsBySubscription(ctx context.Context, redisClient *goredi
 			return fmt.Errorf("scan birthday monitor events: %w", err)
 		}
 		if len(keys) > 0 {
-			if err := redisClient.Del(ctx, keys...).Err(); err != nil {
+			if err := deletePendingBirthdayEvents(ctx, redisClient, keys...); err != nil {
 				return fmt.Errorf("delete birthday monitor events: %w", err)
 			}
 		}
