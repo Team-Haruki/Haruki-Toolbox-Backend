@@ -24,15 +24,15 @@ type statisticsUploadBucketCount struct {
 // remains a bound parameter. A timestamptz is converted to local wall time,
 // truncated, then re-anchored so its epoch matches truncateStatisticsTimeByBucket.
 const (
-	registrationCountsHourSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('hour', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
-	registrationCountsDaySQL   = "SELECT EXTRACT(EPOCH FROM date_trunc('day', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
-	registrationCountsWeekSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('week', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
-	registrationCountsMonthSQL = "SELECT EXTRACT(EPOCH FROM date_trunc('month', created_at AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 GROUP BY bucket_unix"
+	registrationCountsHourSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('hour', created_at AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 AND ($3::boolean OR (role <> 'super_admin' AND id <> $4)) GROUP BY bucket_unix"
+	registrationCountsDaySQL   = "SELECT EXTRACT(EPOCH FROM date_trunc('day', created_at AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 AND ($3::boolean OR (role <> 'super_admin' AND id <> $4)) GROUP BY bucket_unix"
+	registrationCountsWeekSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('week', created_at AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 AND ($3::boolean OR (role <> 'super_admin' AND id <> $4)) GROUP BY bucket_unix"
+	registrationCountsMonthSQL = "SELECT EXTRACT(EPOCH FROM date_trunc('month', created_at AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS count FROM users WHERE created_at IS NOT NULL AND created_at >= $1 AND created_at <= $2 AND ($3::boolean OR (role <> 'super_admin' AND id <> $4)) GROUP BY bucket_unix"
 
-	uploadCountsHourSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('hour', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
-	uploadCountsDaySQL   = "SELECT EXTRACT(EPOCH FROM date_trunc('day', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
-	uploadCountsWeekSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('week', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
-	uploadCountsMonthSQL = "SELECT EXTRACT(EPOCH FROM date_trunc('month', upload_time AT TIME ZONE $3) AT TIME ZONE $3)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs WHERE upload_time >= $1 AND upload_time <= $2 GROUP BY bucket_unix"
+	uploadCountsHourSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('hour', upload_time AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs l WHERE upload_time >= $1 AND upload_time <= $2 AND " + uploadLogVisibilitySQL + " GROUP BY bucket_unix"
+	uploadCountsDaySQL   = "SELECT EXTRACT(EPOCH FROM date_trunc('day', upload_time AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs l WHERE upload_time >= $1 AND upload_time <= $2 AND " + uploadLogVisibilitySQL + " GROUP BY bucket_unix"
+	uploadCountsWeekSQL  = "SELECT EXTRACT(EPOCH FROM date_trunc('week', upload_time AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs l WHERE upload_time >= $1 AND upload_time <= $2 AND " + uploadLogVisibilitySQL + " GROUP BY bucket_unix"
+	uploadCountsMonthSQL = "SELECT EXTRACT(EPOCH FROM date_trunc('month', upload_time AT TIME ZONE $5) AT TIME ZONE $5)::bigint AS bucket_unix, COUNT(*)::bigint AS total, SUM(CASE WHEN success THEN 1 ELSE 0 END)::bigint AS success FROM upload_logs l WHERE upload_time >= $1 AND upload_time <= $2 AND " + uploadLogVisibilitySQL + " GROUP BY bucket_unix"
 )
 
 func registrationCountsSQL(bucket string) (string, error) {
@@ -65,12 +65,12 @@ func uploadCountsSQL(bucket string) (string, error) {
 	}
 }
 
-func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz string) (map[int64]int, error) {
+func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz, actorID string, all bool) (map[int64]int, error) {
 	query, err := registrationCountsSQL(bucket)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), tz)
+	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), all, actorID, tz)
 	if err != nil {
 		return nil, err
 	}
@@ -93,12 +93,12 @@ func queryRegistrationCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, f
 	return counts, nil
 }
 
-func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz string) (map[int64]statisticsUploadBucketCount, error) {
+func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, to time.Time, bucket, tz, actorID string, all bool) (map[int64]statisticsUploadBucketCount, error) {
 	query, err := uploadCountsSQL(bucket)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), tz)
+	rows, err := sqlDB.QueryContext(queryCtx, query, from.UTC(), to.UTC(), all, actorID, tz)
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +130,10 @@ func queryUploadCountsRawSQL(queryCtx context.Context, sqlDB *stdsql.DB, from, t
 	return counts, nil
 }
 
-func queryRegistrationCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string, loc *time.Location) (map[int64]int, error) {
+func queryRegistrationCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string, loc *time.Location, actorID string, all bool) (map[int64]int, error) {
 	rows, err := apiHelper.DBManager.DB.User.Query().
 		Where(
+			visibleStatisticsUsers(actorID, all),
 			userSchema.CreatedAtNotNil(),
 			userSchema.CreatedAtGTE(from),
 			userSchema.CreatedAtLTE(to),
@@ -153,12 +154,16 @@ func queryRegistrationCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.H
 	return counts, nil
 }
 
-func queryUploadCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string, loc *time.Location) (map[int64]statisticsUploadBucketCount, error) {
-	rows, err := apiHelper.DBManager.DB.UploadLog.Query().
-		Where(
-			uploadlog.UploadTimeGTE(from),
-			uploadlog.UploadTimeLTE(to),
-		).
+func queryUploadCountsFallback(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket string, loc *time.Location, actorID, role string) (map[int64]statisticsUploadBucketCount, error) {
+	db := apiHelper.DBManager.DB
+	base, err := scopeUploadLogsForAdminActor(ctx.Context(), db, db.UploadLog.Query(), role, actorID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := base.Where(
+		uploadlog.UploadTimeGTE(from),
+		uploadlog.UploadTimeLTE(to),
+	).
 		Select(uploadlog.FieldUploadTime, uploadlog.FieldSuccess).
 		All(ctx.Context())
 	if err != nil {

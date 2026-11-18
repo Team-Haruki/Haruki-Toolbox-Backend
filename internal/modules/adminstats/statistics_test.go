@@ -217,7 +217,7 @@ func TestStatisticsQueriesAreSelectedFromAllowList(t *testing.T) {
 		t.Fatalf("hour query = %q, expected hour date_trunc", hourQuery)
 	}
 	// The timezone must be bound as a parameter and re-anchored, not inlined.
-	if !strings.Contains(hourQuery, "AT TIME ZONE $3) AT TIME ZONE $3") {
+	if !strings.Contains(hourQuery, "AT TIME ZONE $5) AT TIME ZONE $5") {
 		t.Fatalf("hour query = %q, expected re-anchored tz placeholder", hourQuery)
 	}
 
