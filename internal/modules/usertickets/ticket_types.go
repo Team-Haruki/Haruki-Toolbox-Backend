@@ -32,8 +32,9 @@ type userTicketMessageItem struct {
 }
 
 type userTicketDetailResponse struct {
-	Ticket   userTicketListItem      `json:"ticket"`
-	Messages []userTicketMessageItem `json:"messages"`
+	Ticket              userTicketListItem      `json:"ticket"`
+	Messages            []userTicketMessageItem `json:"messages"`
+	NextBeforeMessageID int                     `json:"nextBeforeMessageId,omitempty"`
 }
 
 type createUserTicketPayload struct {

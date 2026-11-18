@@ -98,6 +98,15 @@ func notifyAdmins(ctx context.Context, db *postgresql.Client, event Event, kind 
 			userSchema.TicketEmailNotificationsEnabledEQ(true),
 			userSchema.BannedEQ(false),
 			userSchema.RoleIn(userSchema.RoleAdmin, userSchema.RoleSuperAdmin),
+			func(recipient *sql.Selector) {
+				t := sql.Table(ticket.Table).As("notification_ticket")
+				visible := sql.Select(t.C(ticket.FieldID)).From(t)
+				visible.Where(sql.And(
+					sql.EQ(t.C(ticket.FieldTicketID), event.Ticket.PublicID),
+					sql.Or(sql.EQ(recipient.C(userSchema.FieldRole), userSchema.RoleSuperAdmin), ordinaryAdminTicketVisibility(visible)),
+				))
+				recipient.Where(sql.Exists(visible))
+			},
 		)
 	if actorUserID := strings.TrimSpace(event.ActorUserID); actorUserID != "" {
 		query = query.Where(userSchema.IDNEQ(actorUserID))

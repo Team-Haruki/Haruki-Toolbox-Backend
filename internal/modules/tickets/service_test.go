@@ -1,6 +1,7 @@
 package tickets
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,9 +9,57 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestTicketRepliesStopAtBudgetWithoutChangingTicket(t *testing.T) {
+	client := newTicketServiceTestClient(t)
+	service := NewService(client, time.Now)
+	row := seedServiceTicket(t, client, "TK-MESSAGE-BUDGET", ticket.StatusOpen)
+	fixtures := make([]*postgresql.TicketMessageCreate, 0, maxUserTicketMessages-1)
+	for range maxUserTicketMessages - 1 {
+		fixtures = append(fixtures, client.TicketMessage.Create().SetTicketID(row.ID).SetSenderRole(ticketmessage.SenderRoleUser).SetMessage("existing"))
+	}
+	client.TicketMessage.CreateBulk(fixtures...).ExecX(t.Context())
+	if _, err := service.AppendUserMessage(t.Context(), row, "user-1", "final allowed reply"); err != nil {
+		t.Fatal(err)
+	}
+	row = client.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusResolved).SaveX(t.Context())
+	if _, err := service.AppendUserMessage(t.Context(), row, "user-1", "reply over limit"); !errors.Is(err, ErrTicketMessageLimit) {
+		t.Fatalf("reply limit error = %v", err)
+	}
+	if got := client.Ticket.GetX(t.Context(), row.ID); got.Status != ticket.StatusResolved || !got.UpdatedAt.Equal(row.UpdatedAt) {
+		t.Fatal("rejected reply changed ticket state")
+	}
+	if got := row.QueryMessages().CountX(t.Context()); got != maxUserTicketMessages {
+		t.Fatalf("message count = %d, want %d", got, maxUserTicketMessages)
+	}
+	if _, _, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin", "support follow-up", false); err != nil {
+		t.Fatalf("support cannot reply after the owner's budget: %v", err)
+	}
+}
+
+func TestAdminTicketWritesRecheckScopeAgainstCurrentParticipation(t *testing.T) {
+	client := newTicketServiceTestClient(t)
+	service := NewService(client, time.Now)
+	client.User.Create().SetID("super-1").SetName("Super").SetEmail("super@example.test").SetRole(userSchema.RoleSuperAdmin).ExecX(t.Context())
+	stale := seedServiceTicket(t, client, "TK-PROTECTED-ASSIGNEE", ticket.StatusOpen)
+	current := client.Ticket.UpdateOneID(stale.ID).SetAssigneeAdminID("super-1").SaveX(t.Context())
+	if _, _, err := service.AppendAdminMessage(t.Context(), stale, "admin-1", "admin", "must be denied", true); !postgresql.IsNotFound(err) {
+		t.Fatalf("reply error = %v, want hidden ticket", err)
+	}
+	if _, err := service.UpdateStatus(t.Context(), stale, "admin-1", "admin", ticket.StatusClosed); !postgresql.IsNotFound(err) {
+		t.Fatalf("status error = %v, want hidden ticket", err)
+	}
+	if got := client.Ticket.GetX(t.Context(), stale.ID); got.Status != current.Status || !got.UpdatedAt.Equal(current.UpdatedAt) {
+		t.Fatal("rejected writes changed the ticket")
+	}
+	if count := stale.QueryMessages().CountX(t.Context()); count != 0 {
+		t.Fatalf("rejected writes saved %d replies", count)
+	}
+}
 
 func newTicketServiceTestClient(t *testing.T) *postgresql.Client {
 	t.Helper()
@@ -50,7 +99,7 @@ func TestServiceSharesUserAndAdminMessageTransitions(t *testing.T) {
 		t.Fatalf("status after user reply = %q, %v", row.Status, err)
 	}
 
-	adminMessage, status, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin reply", false)
+	adminMessage, status, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin", "admin reply", false)
 	if err != nil {
 		t.Fatalf("AppendAdminMessage: %v", err)
 	}
@@ -65,7 +114,7 @@ func TestServiceSharesUserAndAdminMessageTransitions(t *testing.T) {
 		t.Fatalf("status after admin reply = %q, %v", row.Status, err)
 	}
 
-	if _, _, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "private note", true); err != nil {
+	if _, _, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin", "private note", true); err != nil {
 		t.Fatalf("AppendAdminMessage internal: %v", err)
 	}
 	afterInternal, err := client.Ticket.Get(t.Context(), row.ID)
@@ -81,7 +130,7 @@ func TestAppendAdminMessageReturnsStatusOfTicketClosedSinceRead(t *testing.T) {
 	if _, err := service.Close(t.Context(), row); err != nil {
 		t.Fatal(err)
 	}
-	message, status, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "final reply", false)
+	message, status, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin", "final reply", false)
 	if err != nil || status != ticket.StatusClosed || message == nil {
 		t.Fatalf("closed ticket reply = %v, %q, %v", message, status, err)
 	}
@@ -96,7 +145,7 @@ func TestServiceUpdateStatusWritesSystemEventAndCloseTimestamp(t *testing.T) {
 	service := NewService(client, func() time.Time { return fixedNow })
 	row := seedServiceTicket(t, client, "TK-SERVICE-2", ticket.StatusOpen)
 
-	updated, err := service.UpdateStatus(t.Context(), row, ticket.StatusClosed)
+	updated, err := service.UpdateStatus(t.Context(), row, "admin-1", "admin", ticket.StatusClosed)
 	if err != nil {
 		t.Fatalf("UpdateStatus: %v", err)
 	}

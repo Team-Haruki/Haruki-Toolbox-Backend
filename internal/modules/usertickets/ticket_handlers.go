@@ -244,15 +244,11 @@ func handleGetOwnTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket_id is required")
 		}
 
-		row, err := apiHelper.DBManager.DB.Ticket.Query().
-			Where(
-				ticket.TicketIDEQ(publicTicketID),
-				ticket.CreatorUserIDEQ(userID),
-			).
-			WithMessages(func(q *postgresql.TicketMessageQuery) {
-				q.Where(ticketmessage.InternalEQ(false)).Order(ticketmessage.ByCreatedAt(sql.OrderAsc()), ticketmessage.ByID(sql.OrderAsc()))
-			}).
-			Only(c.Context())
+		beforeID, err := platformPagination.ParsePositiveInt(c.Query("before_message_id"), 0, "before_message_id")
+		if err != nil {
+			return respondUserTicketBadRequest(c, err, "invalid message cursor")
+		}
+		row, err := queryOwnTicketByPublicID(c, apiHelper, userID, publicTicketID)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
@@ -260,9 +256,17 @@ func handleGetOwnTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket detail")
 		}
 
+		messages, nextBeforeID, err := ticketsModule.ReadMessagePage(c.Context(), row.QueryMessages().Where(ticketmessage.InternalEQ(false)), beforeID)
+		if postgresql.IsNotFound(err) {
+			return harukiAPIHelper.ErrorNotFound(c, "ticket message not found")
+		}
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket messages")
+		}
 		resp := userTicketDetailResponse{
-			Ticket:   buildUserTicketListItem(row),
-			Messages: buildUserTicketMessageItems(row.Edges.Messages),
+			Ticket:              buildUserTicketListItem(row),
+			Messages:            buildUserTicketMessageItems(messages),
+			NextBeforeMessageID: nextBeforeID,
 		}
 		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
@@ -308,6 +312,9 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		createdMessage, err := ticketsModule.NewService(apiHelper.DBManager.DB, time.Now).
 			AppendUserMessage(c.Context(), row, userID, message)
 		if err != nil {
+			if errors.Is(err, ticketsModule.ErrTicketMessageLimit) {
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, err.Error(), nil)
+			}
 			if errors.Is(err, ticketsModule.ErrTicketClosed) {
 				return harukiAPIHelper.ErrorBadRequest(c, "ticket is closed")
 			}

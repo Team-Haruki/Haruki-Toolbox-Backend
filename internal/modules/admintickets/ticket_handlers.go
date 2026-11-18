@@ -31,18 +31,16 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid filters")
 		}
 
-		baseQuery := applyAdminTicketFilters(apiHelper.DBManager.DB.Ticket.Query(), filters)
-		baseQuery, err = scopeAdminTicketQueryForActor(c.Context(), apiHelper.DBManager.DB, baseQuery, actorRole)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to scope tickets")
-		}
+		baseQuery := applyAdminTicketFilters(apiHelper.DBManager.DB.Ticket.Query(), filters).
+			Where(ticketsModule.LimitAdminTicketVisibility(actorRole))
 		total, err := baseQuery.Clone().Count(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to count tickets")
 		}
 		rows, err := baseQuery.Clone().
 			WithMessages(func(q *postgresql.TicketMessageQuery) {
-				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
+				q.Where(ticketsModule.LimitAdminMessageVisibility(actorRole)).
+					Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
 			}).
 			Order(ticket.ByUpdatedAt(sql.OrderDesc()), ticket.ByID(sql.OrderDesc())).
 			Offset((filters.Page-1)*filters.PageSize).
@@ -56,7 +54,7 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 
 		totalPages := platformPagination.CalculateTotalPages(total, filters.PageSize)
-		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketUserIDs(rows))
+		userNameByUserID, err := loadAdminTicketUserNames(c.Context(), apiHelper.DBManager.DB, collectAdminTicketUserIDs(rows))
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}
@@ -88,12 +86,11 @@ func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		if publicTicketID == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket_id is required")
 		}
-		row, err := apiHelper.DBManager.DB.Ticket.Query().
-			Where(ticket.TicketIDEQ(publicTicketID)).
-			WithMessages(func(q *postgresql.TicketMessageQuery) {
-				q.Order(ticketmessage.ByCreatedAt(sql.OrderAsc()), ticketmessage.ByID(sql.OrderAsc()))
-			}).
-			Only(c.Context())
+		beforeID, err := platformPagination.ParsePositiveInt(c.Query("before_message_id"), 0, "before_message_id")
+		if err != nil {
+			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid message cursor")
+		}
+		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID, actorRole)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
@@ -107,15 +104,24 @@ func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to authorize ticket")
 		}
 
-		userIDs := append(collectAdminTicketUserIDs([]*postgresql.Ticket{row}), collectAdminTicketMessageSenderUserIDs(row.Edges.Messages)...)
-		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, userIDs)
+		messages, nextBeforeID, err := ticketsModule.ReadMessagePage(c.Context(), row.QueryMessages().Where(ticketsModule.LimitAdminMessageVisibility(actorRole)), beforeID)
+		if postgresql.IsNotFound(err) {
+			return harukiAPIHelper.ErrorNotFound(c, "ticket message not found")
+		}
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket messages")
+		}
+		row.Edges.Messages = messages
+		userIDs := append(collectAdminTicketUserIDs([]*postgresql.Ticket{row}), collectAdminTicketMessageSenderUserIDs(messages)...)
+		userNameByUserID, err := loadAdminTicketUserNames(c.Context(), apiHelper.DBManager.DB, userIDs)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}
 
 		resp := adminTicketDetailResponse{
-			Ticket:   buildAdminTicketListItem(row, userNameByUserID),
-			Messages: buildAdminTicketMessageItems(row.Edges.Messages, userNameByUserID),
+			Ticket:              buildAdminTicketListItem(row, userNameByUserID),
+			Messages:            buildAdminTicketMessageItems(messages, userNameByUserID),
+			NextBeforeMessageID: nextBeforeID,
 		}
 		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}
@@ -141,7 +147,7 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorBadRequest(c, "message must be 1-4000 characters")
 		}
 
-		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID)
+		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID, actorRole)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
@@ -165,8 +171,11 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 
 		savedMessage, status, err := ticketsModule.NewService(apiHelper.DBManager.DB, adminNow).
-			AppendAdminMessage(c.Context(), row, actorUserID, message, payload.Internal)
+			AppendAdminMessage(c.Context(), row, actorUserID, actorRole, message, payload.Internal)
 		if err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
+			}
 			if errors.Is(err, ticketsModule.ErrPersistTicketStatus) {
 				return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
 			}
@@ -183,7 +192,7 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				ticketsModule.NotifyUserOfAdminReply(ctx, apiHelper.DBManager.DB, event)
 			})
 		}
-		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketMessageSenderUserIDs([]*postgresql.TicketMessage{savedMessage}))
+		userNameByUserID, err := loadAdminTicketUserNames(c.Context(), apiHelper.DBManager.DB, collectAdminTicketMessageSenderUserIDs([]*postgresql.TicketMessage{savedMessage}))
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}
@@ -215,7 +224,7 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid status")
 		}
 
-		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID)
+		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID, actorRole)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
@@ -230,24 +239,21 @@ func handleAdminUpdateTicketStatus(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 		}
 
 		updated, err := ticketsModule.NewService(apiHelper.DBManager.DB, adminNow).
-			UpdateStatus(c.Context(), row, statusValue)
+			UpdateStatus(c.Context(), row, actorUserID, actorRole, statusValue)
 		if err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
+			}
 			if errors.Is(err, ticketsModule.ErrAppendSystemMessage) {
 				return harukiAPIHelper.ErrorInternal(c, "failed to append ticket system message")
 			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to update ticket status")
 		}
-		updated, err = apiHelper.DBManager.DB.Ticket.Query().
-			Where(ticket.IDEQ(updated.ID)).
-			WithMessages(func(q *postgresql.TicketMessageQuery) {
-				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
-			}).
-			Only(c.Context())
-		if err != nil {
+		if err := loadLatestAdminTicketMessage(c.Context(), apiHelper.DBManager.DB, actorRole, updated); err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query updated ticket")
 		}
 
-		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketUserIDs([]*postgresql.Ticket{updated}))
+		userNameByUserID, err := loadAdminTicketUserNames(c.Context(), apiHelper.DBManager.DB, collectAdminTicketUserIDs([]*postgresql.Ticket{updated}))
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}
@@ -275,7 +281,7 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 		}
 
-		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID)
+		row, err := queryAdminTicketByPublicID(c, apiHelper, publicTicketID, actorRole)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
@@ -293,12 +299,20 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if payload.AssigneeAdminID != nil {
 			assignee = strings.TrimSpace(*payload.AssigneeAdminID)
 		}
-		previousAssignee := ""
-		if row.AssigneeAdminID != nil {
-			previousAssignee = strings.TrimSpace(*row.AssigneeAdminID)
+		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
+		}
+		defer tx.Rollback()
+		row, err = ticketsModule.LockAdminTicket(c.Context(), tx, row.ID, actorRole)
+		if postgresql.IsNotFound(err) {
+			return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
+		}
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
 		}
 		if assignee != "" {
-			assigneeUser, err := apiHelper.DBManager.DB.User.Query().
+			assigneeUser, err := tx.User.Query().
 				Where(userSchema.IDEQ(assignee)).
 				Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).
 				Only(c.Context())
@@ -319,50 +333,40 @@ func handleAdminAssignTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 				return adminCoreModule.RespondFiberOrForbidden(c, err, "insufficient permissions")
 			}
 		}
-		assigneeNameByUserID := map[string]string{}
-		if previousAssignee != assignee {
-			assigneeNameByUserID, err = loadAdminTicketUserNames(c, apiHelper, []string{previousAssignee, assignee})
-			if err != nil {
-				return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
-			}
+		previousAssignee := ""
+		if row.AssigneeAdminID != nil {
+			previousAssignee = strings.TrimSpace(*row.AssigneeAdminID)
 		}
 
-		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
-		}
-
-		update := tx.Ticket.UpdateOneID(row.ID)
+		update := tx.Ticket.UpdateOneID(row.ID).Where(ticketsModule.LimitAdminTicketVisibility(actorRole))
 		if assignee == "" {
 			update.ClearAssigneeAdminID()
 		} else {
 			update.SetAssigneeAdminID(assignee)
 		}
 		updated, err := update.Save(c.Context())
+		if postgresql.IsNotFound(err) {
+			return harukiAPIHelper.ErrorNotFound(c, "ticket not found")
+		}
 		if err != nil {
-			_ = tx.Rollback()
 			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
 		}
 		if previousAssignee != assignee {
-			if err := ticketsModule.AppendSystemMessage(c.Context(), tx, row.ID, buildAdminTicketAssigneeEventMessage(previousAssignee, assignee, assigneeNameByUserID)); err != nil {
-				_ = tx.Rollback()
+			names, err := loadAdminTicketUserNames(c.Context(), tx.Client(), []string{previousAssignee, assignee})
+			if err != nil {
+				return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
+			}
+			if err := ticketsModule.AppendSystemMessage(c.Context(), tx, row.ID, actorUserID, buildAdminTicketAssigneeEventMessage(previousAssignee, assignee, names)); err != nil {
 				return harukiAPIHelper.ErrorInternal(c, "failed to append ticket system message")
 			}
 		}
 		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
 			return harukiAPIHelper.ErrorInternal(c, "failed to assign ticket")
 		}
-		updated, err = apiHelper.DBManager.DB.Ticket.Query().
-			Where(ticket.IDEQ(updated.ID)).
-			WithMessages(func(q *postgresql.TicketMessageQuery) {
-				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
-			}).
-			Only(c.Context())
-		if err != nil {
+		if err := loadLatestAdminTicketMessage(c.Context(), apiHelper.DBManager.DB, actorRole, updated); err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query updated ticket")
 		}
-		userNameByUserID, err := loadAdminTicketUserNames(c, apiHelper, collectAdminTicketUserIDs([]*postgresql.Ticket{updated}))
+		userNameByUserID, err := loadAdminTicketUserNames(c.Context(), apiHelper.DBManager.DB, collectAdminTicketUserIDs([]*postgresql.Ticket{updated}))
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket users")
 		}

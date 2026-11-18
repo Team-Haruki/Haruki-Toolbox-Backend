@@ -2,6 +2,7 @@ package admintickets
 
 import (
 	json "encoding/json/v2"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
@@ -178,8 +180,8 @@ func TestAdminTicketOperationsRejectSuperAdminCreatorForPlainAdmin(t *testing.T)
 				t.Fatalf("app.Test returned error: %v", err)
 			}
 			defer resp.Body.Close()
-			if resp.StatusCode != fiber.StatusForbidden {
-				t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+			if resp.StatusCode != fiber.StatusNotFound {
+				t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNotFound)
 			}
 		})
 	}
@@ -213,6 +215,95 @@ func TestAdminTicketOperationsRejectSuperAdminCreatorForPlainAdmin(t *testing.T)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("super admin detail status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+}
+
+func TestAdminTicketScopeCoversAssigneeAndMessageAuthors(t *testing.T) {
+	helper := newAdminTicketVisibilityTestHelper(t)
+	seedAdminTicketVisibilityUser(t, helper, "admin", adminCoreModule.RoleAdmin)
+	seedAdminTicketVisibilityUser(t, helper, "super", adminCoreModule.RoleSuperAdmin)
+	seedAdminTicketVisibilityUser(t, helper, "creator", adminCoreModule.RoleUser)
+	db := helper.DBManager.DB
+	db.Ticket.Create().SetTicketID("assigned").SetCreatorUserID("creator").SetSubject("fixture").SetAssigneeAdminID("super").ExecX(t.Context())
+	note := db.Ticket.Create().SetTicketID("noted").SetCreatorUserID("creator").SetSubject("fixture").SaveX(t.Context())
+	db.TicketMessage.Create().SetTicketID(note.ID).SetSenderUserID("super").SetSenderRole(ticketmessage.SenderRoleAdmin).
+		SetInternal(true).SetMessage("restricted").ExecX(t.Context())
+	app := newAdminTicketVisibilityTestApp("admin", adminCoreModule.RoleAdmin)
+	app.Get("/tickets", handleAdminListTickets(helper))
+	app.Get("/tickets/:ticket_id", handleAdminGetTicketDetail(helper))
+	app.Put("/tickets/:ticket_id/assign", handleAdminAssignTicket(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/tickets", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list struct {
+		UpdatedData adminTicketListResponse `json:"updatedData"`
+	}
+	err = json.UnmarshalRead(resp.Body, &list)
+	_ = resp.Body.Close()
+	if err != nil || resp.StatusCode != http.StatusOK || list.UpdatedData.Total != 1 || len(list.UpdatedData.Items) != 1 || list.UpdatedData.Items[0].TicketID != "noted" || list.UpdatedData.Items[0].LastMessagePreview != "" {
+		t.Fatalf("protected tickets listed: status=%d total=%d err=%v", resp.StatusCode, list.UpdatedData.Total, err)
+	}
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodGet, "/tickets/assigned", ""},
+		{http.MethodPut, "/tickets/assigned/assign", `{"assigneeAdminId":null}`},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s %s: %d", tc.method, tc.path, resp.StatusCode)
+		}
+	}
+	resp, err = app.Test(httptest.NewRequest(http.MethodGet, "/tickets/noted", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil || resp.StatusCode != http.StatusOK || strings.Contains(string(data), "restricted") || strings.Contains(string(data), `"senderUserId":"super"`) {
+		t.Fatalf("visible ticket revealed protected author or note: status=%d err=%v", resp.StatusCode, err)
+	}
+	assigned := db.Ticket.Query().Where(ticket.TicketIDEQ("assigned")).OnlyX(t.Context())
+	if assigned.AssigneeAdminID == nil || *assigned.AssigneeAdminID != "super" {
+		t.Fatal("protected assignment was changed")
+	}
+}
+
+func TestAdminTicketDetailHidesLegacyAssignmentHistoryFromOrdinaryAdmins(t *testing.T) {
+	helper := newAdminTicketVisibilityTestHelper(t)
+	seedAdminTicketVisibilityUser(t, helper, "admin", adminCoreModule.RoleAdmin)
+	seedAdminTicketVisibilityUser(t, helper, "super", adminCoreModule.RoleSuperAdmin)
+	seedAdminTicketVisibilityUser(t, helper, "creator", adminCoreModule.RoleUser)
+	db := helper.DBManager.DB
+	row := db.Ticket.Create().SetTicketID("history").SetCreatorUserID("creator").SetSubject("test").SaveX(t.Context())
+	visible := db.TicketMessage.Create().SetTicketID(row.ID).SetSenderUserID("creator").SetMessage("ticket contents").SaveX(t.Context())
+	db.TicketMessage.Create().SetTicketID(row.ID).SetSenderRole(ticketmessage.SenderRoleSystem).SetInternal(true).
+		SetMessage(ticketsModule.AssignmentEventPrefix + "super -> Unassigned").ExecX(t.Context())
+	for _, tc := range []struct {
+		actor, role string
+		messages    int
+	}{
+		{"admin", adminCoreModule.RoleAdmin, 1}, {"super", adminCoreModule.RoleSuperAdmin, 2},
+	} {
+		app := newAdminTicketVisibilityTestApp(tc.actor, tc.role)
+		app.Get("/tickets/:ticket_id", handleAdminGetTicketDetail(helper))
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/tickets/history", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body struct {
+			UpdatedData adminTicketDetailResponse `json:"updatedData"`
+		}
+		err = json.UnmarshalRead(resp.Body, &body)
+		_ = resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusOK || len(body.UpdatedData.Messages) != tc.messages || body.UpdatedData.Messages[0].ID != visible.ID {
+			t.Fatalf("unexpected %s ticket detail: status %d, messages %d, err %v", tc.role, resp.StatusCode, len(body.UpdatedData.Messages), err)
+		}
 	}
 }
 
