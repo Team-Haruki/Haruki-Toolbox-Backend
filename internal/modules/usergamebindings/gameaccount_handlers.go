@@ -125,8 +125,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
-		bindingState := classifyExistingBinding(existing, userID)
-		switch bindingState {
+		switch classifyExistingBinding(existing, userID) {
 		case existingBindingStateVerifiedBySelf:
 			bindings, err := getUserBindings(ctx, apiHelper, userID)
 			if err != nil {
@@ -173,9 +172,18 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 		}
 		harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership PASSED, saving binding")
+		release, err := apiHelper.DBManager.DB.LockGameAccountMutation(ctx, serverStr, gameUserIDStr)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
+		}
+		defer release()
+		existing, err = queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query existing binding")
+		}
 
 		var notification *platformMailNotify.Reservation
-		if bindingState == existingBindingStateOwnedByOther && apiHelper.SMTPClient != nil {
+		if classifyExistingBinding(existing, userID) == existingBindingStateOwnedByOther && apiHelper.SMTPClient != nil {
 			notification = platformMailNotify.Reserve()
 			if notification == nil {
 				reason = "notification_queue_full"
@@ -265,6 +273,17 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
+		server, serverErr := utils.ParseSupportedDataUploadServer(serverStr)
+		gameID, idErr := strconv.ParseInt(gameUserIDStr, 10, 64)
+		if serverErr != nil || idErr != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid game account")
+		}
+		serverStr, gameUserIDStr = string(server), strconv.FormatInt(gameID, 10)
+		release, err := apiHelper.DBManager.DB.LockGameAccountMutation(ctx, serverStr, gameUserIDStr)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
+		}
+		defer release()
 
 		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
 			Query().
@@ -324,11 +343,15 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
 			}
 			if _, txErr = tx.GameAccountBinding.UpdateOneID(existing.ID).
+				Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(userID)), gameaccountbinding.VerifiedEQ(true)).
 				SetSuite(req.Suite).
 				SetMysekai(req.MySekai).
 				SetIsDefault(true).
 				Save(ctx); txErr != nil {
 				_ = tx.Rollback()
+				if postgresql.IsNotFound(txErr) {
+					return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+				}
 				harukiLogger.Errorf("Failed to update game account binding: %v", txErr)
 				reason = "update_binding_failed"
 				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
@@ -340,13 +363,16 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
 			}
 		} else {
-			update := existing.Update().
+			update := existing.Update().Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(userID)), gameaccountbinding.VerifiedEQ(true)).
 				SetSuite(req.Suite).
 				SetMysekai(req.MySekai)
 			if req.IsDefault != nil {
 				update = update.SetIsDefault(false)
 			}
 			if _, err = update.Save(ctx); err != nil {
+				if postgresql.IsNotFound(err) {
+					return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+				}
 				harukiLogger.Errorf("Failed to update game account binding: %v", err)
 				reason = "update_binding_failed"
 				return harukiAPIHelper.ErrorInternal(c, "failed to update binding")
@@ -388,6 +414,17 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			})
 		}()
 
+		server, serverErr := utils.ParseSupportedDataUploadServer(serverStr)
+		gameID, idErr := strconv.ParseInt(gameUserIDStr, 10, 64)
+		if serverErr != nil || idErr != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid game account")
+		}
+		serverStr, gameUserIDStr = string(server), strconv.FormatInt(gameID, 10)
+		release, err := apiHelper.DBManager.DB.LockGameAccountMutation(ctx, serverStr, gameUserIDStr)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
+		}
+		defer release()
 		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
 			Query().
 			Where(
@@ -421,8 +458,11 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorForbidden(c, "not authorized to delete this binding")
 		}
 
-		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Exec(ctx)
+		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(userID))).Exec(ctx)
 		if err != nil {
+			if postgresql.IsNotFound(err) {
+				return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+			}
 			harukiLogger.Errorf("Failed to delete game account binding: %v", err)
 			reason = "delete_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")

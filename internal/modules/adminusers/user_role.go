@@ -76,6 +76,11 @@ func handleUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid role")
 		}
 
+		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUserID)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve user role update")
+		}
+		defer release()
 		targetUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).

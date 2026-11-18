@@ -23,6 +23,11 @@ func handleBatchUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 
 		results := make([]batchUserOperationItemResult, 0, len(payload.UserIDs))
 		successCount := 0
+		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), payload.UserIDs...)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve batch role updates")
+		}
+		defer release()
 
 		// Batch fetch all users at once to avoid N+1 queries
 		userMap, err := batchFetchUsers(c.Context(), apiHelper, payload.UserIDs)

@@ -340,3 +340,47 @@ func ensureAdminCanManageBindingOwner(actorUserID, actorRole string, row *postgr
 	}
 	return adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, row.Edges.User.ID, string(row.Edges.User.Role))
 }
+
+func mutateManagedGameBinding(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, row *postgresql.GameAccountBinding, actorID, actorRole, targetID string) error {
+	if row.Edges.User == nil {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	db := helper.DBManager.DB
+	releaseGame, err := db.LockGameAccountMutation(c.Context(), row.Server, row.GameUserID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "binding change in progress")
+	}
+	defer releaseGame()
+	ownerID := row.Edges.User.ID
+	releaseUsers, err := db.LockUserMutations(c.Context(), ownerID, targetID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "user change in progress")
+	}
+	defer releaseUsers()
+	current, err := queryGameBindingWithOwner(c, helper, row.Server, row.GameUserID)
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	if err != nil {
+		return err
+	}
+	if current.ID != row.ID || current.Edges.User == nil || current.Edges.User.ID != ownerID {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	if err := ensureAdminCanManageBindingOwner(actorID, actorRole, current); err != nil {
+		return err
+	}
+	owner := gameaccountbinding.HasUserWith(userSchema.IDEQ(ownerID))
+	if targetID == "" {
+		err = db.GameAccountBinding.DeleteOneID(current.ID).Where(owner).Exec(c.Context())
+	} else {
+		if _, err := queryManageableTargetUserByID(c, helper, actorID, actorRole, targetID); err != nil {
+			return err
+		}
+		_, err = db.GameAccountBinding.UpdateOneID(current.ID).Where(owner).SetUserID(targetID).ClearSponsorFrameID().Save(c.Context())
+	}
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	return err
+}

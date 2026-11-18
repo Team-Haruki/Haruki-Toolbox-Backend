@@ -2,6 +2,9 @@ package usergamebindings
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
@@ -11,6 +14,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 
+	"entgo.io/ent"
+	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,6 +29,43 @@ func newDefaultBindingTestHelper(t *testing.T, dbName string) (*harukiAPIHelper.
 		DBManager: &database.HarukiToolboxDBManager{DB: client},
 	}
 	return helper, client, context.Background()
+}
+
+func TestDefaultBindingUpdateRollsBackWhenTargetIsNoLongerVerified(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, "binding-default-guard")
+	createDefaultBindingTestUser(t, db, ctx, "owner")
+	createBindingViaSave(t, helper, ctx, "jp", "111", "owner")
+	createBindingViaSave(t, helper, ctx, "jp", "222", "owner")
+	targetID := db.GameAccountBinding.Query().Where(gameaccountbinding.GameUserIDEQ("222")).OnlyIDX(ctx)
+	db.GameAccountBinding.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			binding := mutation.(*postgresql.GameAccountBindingMutation)
+			if value, ok := binding.IsDefault(); binding.Op().Is(ent.OpUpdateOne) && ok && value {
+				if err := binding.Client().GameAccountBinding.Update().Where(gameaccountbinding.IDEQ(targetID)).SetVerified(false).Exec(ctx); err != nil {
+					return nil, err
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	app := fiber.New()
+	app.Put("/:server/:game_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleUpdateGameAccountBinding(helper))
+	req := httptest.NewRequest(http.MethodPut, "/jp/222", strings.NewReader(`{"suite":{},"mysekai":{},"isDefault":true}`))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	response, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", response.StatusCode)
+	}
+	if !queryBindingIsDefault(t, db, ctx, "jp", "111") || queryBindingIsDefault(t, db, ctx, "jp", "222") {
+		t.Fatal("the rejected update changed the user's default binding")
+	}
 }
 
 func createDefaultBindingTestUser(t *testing.T, client *postgresql.Client, ctx context.Context, id string) {

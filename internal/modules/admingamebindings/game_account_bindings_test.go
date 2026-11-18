@@ -7,7 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/gofiber/fiber/v3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestParseAdminGlobalGameBindingSort(t *testing.T) {
@@ -222,4 +227,33 @@ func TestAdminGlobalGameBindingRoutePermissions(t *testing.T) {
 			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusOK)
 		}
 	})
+}
+
+func TestManagedBindingReassignmentChecksBothCurrentRoles(t *testing.T) {
+	for _, promoted := range []string{"owner", "destination"} {
+		t.Run(promoted, func(t *testing.T) {
+			ctx := t.Context()
+			db := enttest.Open(t, "sqlite3", "file:managed-binding-"+promoted+"?mode=memory&cache=shared&_fk=1")
+			t.Cleanup(func() { _ = db.Close() })
+			for _, id := range []string{"owner", "destination"} {
+				db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").SaveX(ctx)
+			}
+			binding := db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetVerified(true).SetUserID("owner").SaveX(ctx)
+			stale := db.GameAccountBinding.Query().WithUser().OnlyX(ctx)
+			db.User.UpdateOneID(promoted).SetRole(user.RoleSuperAdmin).SaveX(ctx)
+			helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+			app := fiber.New()
+			app.Put("/", func(c fiber.Ctx) error {
+				return mutateManagedGameBinding(c, helper, stale, "actor", roleAdmin, "destination")
+			})
+			response, err := app.Test(httptest.NewRequest(http.MethodPut, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusForbidden || db.GameAccountBinding.GetX(ctx, binding.ID).QueryUser().OnlyIDX(ctx) != "owner" {
+				t.Fatalf("reassignment with protected %s returned %d", promoted, response.StatusCode)
+			}
+		})
+	}
 }

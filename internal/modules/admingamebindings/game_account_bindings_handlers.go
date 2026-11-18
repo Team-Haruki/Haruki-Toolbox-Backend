@@ -113,9 +113,9 @@ func handleAdminDeleteGlobalGameAccountBinding(apiHelper *harukiAPIHelper.Haruki
 			return adminCoreModule.RespondFiberOrForbidden(c, err, "insufficient permissions")
 		}
 
-		if err := apiHelper.DBManager.DB.GameAccountBinding.DeleteOneID(row.ID).Exec(c.Context()); err != nil {
+		if err := mutateManagedGameBinding(c, apiHelper, row, actorUserID, actorRole, ""); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalDelete, adminAuditTargetTypeGameAccount, server+":"+gameUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteBindingFailed, nil))
-			return harukiAPIHelper.ErrorInternal(c, "failed to delete binding")
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to delete binding")
 		}
 		clearGlobalBindingPublicCaches(c.Context(), apiHelper, server, gameUserID)
 
@@ -173,9 +173,9 @@ func handleAdminReassignGlobalGameAccountBinding(apiHelper *harukiAPIHelper.Haru
 			Changed:      row.Edges.User.ID != targetUser.ID,
 		}
 		if resp.Changed {
-			if _, err := row.Update().SetUserID(targetUser.ID).ClearSponsorFrameID().Save(c.Context()); err != nil {
+			if err := mutateManagedGameBinding(c, apiHelper, row, actorUserID, actorRole, targetUser.ID); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionGameAccountGlobalReassign, adminAuditTargetTypeGameAccount, server+":"+gameUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonReassignBindingFailed, nil))
-				return harukiAPIHelper.ErrorInternal(c, "failed to reassign binding")
+				return adminCoreModule.RespondFiberOrInternal(c, err, "failed to reassign binding")
 			}
 		}
 
@@ -235,9 +235,13 @@ func handleAdminBatchDeleteGlobalGameAccountBindings(apiHelper *harukiAPIHelper.
 				continue
 			}
 
-			if err := apiHelper.DBManager.DB.GameAccountBinding.DeleteOneID(row.ID).Exec(c.Context()); err != nil {
+			if err := mutateManagedGameBinding(c, apiHelper, row, actorUserID, actorRole, ""); err != nil {
 				result.Code = adminBatchResultCodeDeleteBindingFailed
 				result.Message = "failed to delete binding"
+				if denied, ok := err.(*fiber.Error); ok && denied.Code == fiber.StatusForbidden {
+					result.Code = adminFailureReasonPermissionDenied
+					result.Message = denied.Message
+				}
 				results = append(results, result)
 				continue
 			}
@@ -335,12 +339,17 @@ func handleAdminBatchReassignGlobalGameAccountBindings(apiHelper *harukiAPIHelpe
 			result.FromUserID = row.Edges.User.ID
 			result.Changed = row.Edges.User.ID != targetUser.ID
 			if result.Changed {
-				if _, err := row.Update().SetUserID(targetUser.ID).ClearSponsorFrameID().Save(c.Context()); err != nil {
+				if err := mutateManagedGameBinding(c, apiHelper, row, actorUserID, actorRole, targetUser.ID); err != nil {
 					result.Code = adminBatchResultCodeReassignBindingFailed
 					result.Message = "failed to reassign binding"
+					if denied, ok := err.(*fiber.Error); ok && denied.Code == fiber.StatusForbidden {
+						result.Code = adminFailureReasonPermissionDenied
+						result.Message = denied.Message
+					}
 					results = append(results, result)
 					continue
 				}
+				clearGlobalBindingPublicCaches(c.Context(), apiHelper, item.Server, item.GameUserID)
 			}
 
 			result.Success = true

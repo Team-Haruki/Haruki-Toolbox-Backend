@@ -22,7 +22,7 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 	if err != nil {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "invalid server")
 	}
-	gameUserID, err := strconv.ParseInt(strings.TrimSpace(c.Params("game_user_id")), 10, 64)
+	numericID, err := strconv.ParseInt(strings.TrimSpace(c.Params("game_user_id")), 10, 64)
 	if err != nil {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "game_user_id must be numeric")
 	}
@@ -34,7 +34,7 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 	if granteeUserID == "" {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "grantee_user_id is required")
 	}
-	return server, strconv.FormatInt(gameUserID, 10), dataType, granteeUserID, nil
+	return server, strconv.FormatInt(numericID, 10), dataType, granteeUserID, nil
 }
 
 func validateGrantOwnerBinding(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID string) *fiber.Error {
@@ -129,6 +129,11 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 		if expiresAt.IsZero() || !expiresAt.After(time.Now().UTC()) {
 			return harukiAPIHelper.ErrorBadRequest(c, "expiresAt must be a future time")
 		}
+		release, err := apiHelper.DBManager.DB.LockGameAccountMutation(c.Context(), string(server), gameUserID)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve grant update")
+		}
+		defer release()
 		if err := validateGrantOwnerBinding(c, apiHelper, ownerUserID, server, gameUserID); err != nil {
 			return respondVerifiedGameAccountDataError(c, err)
 		}

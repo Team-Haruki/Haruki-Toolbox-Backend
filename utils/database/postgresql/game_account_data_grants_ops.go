@@ -258,6 +258,11 @@ func (c *Client) DeleteGameAccountDataGrant(ctx context.Context, ownerUserID, gr
 	if err != nil {
 		return 0, err
 	}
+	release, err := c.LockGameAccountMutation(ctx, server, gameUserID)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
 	return c.GameAccountDataGrant.Delete().
 		Where(
 			gameaccountdatagrant.OwnerUserIDEQ(ownerUserID),

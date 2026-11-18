@@ -38,6 +38,11 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 
 		results := make([]batchUserOperationItemResult, 0, len(userIDs))
 		successCount := 0
+		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), userIDs...)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve batch user operation")
+		}
+		defer release()
 
 		// Batch fetch all users at once to avoid N+1 queries
 		userMap, err := batchFetchUsers(c.Context(), apiHelper, userIDs)
@@ -68,7 +73,7 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			switch action {
 			case adminBatchActionBan:
 				affected, err = executeBatchBan(c.Context(), apiHelper, actorUserID, actorRole, targetUser.ID, reason)
-				if err == nil {
+				if err == nil && affected == 1 {
 					sessionClearFailed, oauthRevokeFailed := cleanupManagedUserAccessAfterBan(c.Context(), apiHelper, hydraConfig, targetUser.ID, targetUser.KratosIdentityID)
 					if sessionClearFailed || oauthRevokeFailed {
 						item.Message, _ = resolveManagedUserBanFinalizeOutcome(sessionClearFailed, oauthRevokeFailed)
