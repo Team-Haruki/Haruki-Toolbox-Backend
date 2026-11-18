@@ -1,6 +1,7 @@
 package runtimeconfig
 
 import (
+	"errors"
 	"regexp"
 	"testing"
 
@@ -38,6 +39,69 @@ func TestDurableRuntimeSettingsSurviveCacheLossAndRestart(t *testing.T) {
 	got, err := New(initial, store).Current(t.Context())
 	if err != nil || got.PrivateAPIToken != secret || got.WebhookJWTSecret != "" {
 		t.Fatalf("unexpected durable credential state: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostgresRuntimeStoreImportsLegacyCredentialsOnce(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const read = `SELECT snapshot FROM runtime_configurations WHERE id = $1`
+	const imported = `{"publicApiAllowedKeys":null,"privateApiToken":"rotated-token","privateApiUserAgent":"","webhookJwtSecret":"rotated-signer"}`
+	legacy := &memoryStore{
+		found: true,
+		snapshot: Snapshot{
+			PrivateAPIToken:  "rotated-token",
+			WebhookJWTSecret: "rotated-signer",
+		},
+	}
+	startup := Snapshot{PrivateAPIToken: "stale-config-token", WebhookJWTSecret: "stale-config-signer"}
+	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	mock.ExpectExec("INSERT INTO runtime_configurations").WithArgs(1, imported).WillReturnResult(sqlmock.NewResult(1, 1))
+	if _, err := NewPostgresStore(t.Context(), db, legacy, startup); err != nil {
+		t.Fatal(err)
+	}
+
+	legacy.snapshot = Snapshot{PrivateAPIToken: "stale-cache-token"}
+	legacy.loadErr = errors.New("legacy Redis is unavailable")
+	for range 2 {
+		mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}).AddRow(imported))
+	}
+	store, err := NewPostgresStore(t.Context(), db, legacy, startup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, found, err := store.Load(t.Context())
+	if err != nil || !found || snapshot.PrivateAPIToken != "rotated-token" || snapshot.WebhookJWTSecret != "rotated-signer" {
+		t.Fatalf("durable store did not preserve imported settings: found=%v err=%v", found, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPostgresRuntimeStoreFailsClosedWhenDurableRowDisappears(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const read = `SELECT snapshot FROM runtime_configurations WHERE id = $1`
+	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	store := &postgresStore{db: db}
+	if _, found, err := store.Load(t.Context()); found || !errors.Is(err, errMissingRuntimeConfiguration) {
+		t.Fatalf("missing durable row: found=%v err=%v", found, err)
+	}
+	enabled := false
+	mock.ExpectQuery("UPDATE runtime_configurations").WithArgs(1, `{"webhookEnabled":false}`).
+		WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	if _, err := store.Apply(t.Context(), Update{WebhookEnabled: &enabled}, Snapshot{}); !errors.Is(err, errMissingRuntimeConfiguration) {
+		t.Fatalf("update on missing durable row: %v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

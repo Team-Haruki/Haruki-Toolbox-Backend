@@ -1,6 +1,7 @@
 package usersocial
 
 import (
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -137,4 +139,56 @@ func TestSocialChallengeConsumesOnlyTheObservedGeneration(t *testing.T) {
 	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, second); err != nil || consumed {
 		t.Fatalf("consumed challenge was reused: %t, %v", consumed, err)
 	}
+}
+
+func TestSocialVerificationIssuanceBindsChallengeAndEnforcesPerUserBudget(t *testing.T) {
+	helper := newSocialRateLimitTestHelper(t)
+	redis := helper.DBManager.Redis
+	app := fiber.New()
+	app.Post("/code/:user", func(c fiber.Ctx) error {
+		c.Locals("userID", c.Params("user"))
+		return c.Next()
+	}, handleGenerateVerificationCode(helper))
+	request := func(user, platformUser string, want int) harukiAPIHelper.GenerateSocialPlatformCodeResponse {
+		t.Helper()
+		raw, err := json.Marshal(harukiAPIHelper.GenerateSocialPlatformCodePayload{
+			Platform: harukiAPIHelper.SocialPlatformQQ, UserID: platformUser,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/code/"+user, strings.NewReader(string(raw)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("issuance returned %d, want %d", resp.StatusCode, want)
+		}
+		var result harukiAPIHelper.GenerateSocialPlatformCodeResponse
+		if want == http.StatusOK {
+			if err := json.UnmarshalRead(resp.Body, &result); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return result
+	}
+
+	request("owner", "invalid value", http.StatusBadRequest)
+	key := harukiRedis.BuildSocialPlatformVerificationIssueKey("owner")
+	if err := redis.Redis.Set(t.Context(), key, 14, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	issued := request("owner", "fixture-target", http.StatusOK)
+	if issued.StatusToken == "" || issued.OneTimePassword == "" {
+		t.Fatal("verification response is missing required values")
+	}
+	var binding socialStatusTokenBinding
+	if found, err := redis.GetCache(t.Context(), harukiRedis.BuildStatusTokenBindingKey(issued.StatusToken), &binding); err != nil || !found || binding.Platform != "qq" || binding.UserID != "fixture-target" {
+		t.Fatalf("status token did not preserve its binding: found=%v err=%v", found, err)
+	}
+	request("owner", "other-target", http.StatusTooManyRequests)
+	request("another-owner", "other-target", http.StatusOK)
 }
