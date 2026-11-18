@@ -2,6 +2,7 @@ package gamedata
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -87,4 +88,24 @@ func TestCompactExpansionConcurrentRows(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestWriteChecksExpandedSizeBeforeStorage(t *testing.T) {
+	store := NewStore(&Pool{}, catalog.Suite())
+	data := map[string]any{"compactUserMusicResults": map[string]any{"musicId": []int{1, 2, 3}}}
+	for _, tc := range []struct {
+		name   string
+		limits Limits
+		want   string
+	}{
+		{"expanded column", Limits{MaxKeyBytes: 36}, `compact key "userMusicResults"`},
+		{"expanded row", Limits{MaxRowBytes: 36}, "upload totals"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := store.Write(context.Background(), 1, "jp", data, WriteSuite, tc.limits)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Write error = %v, want %q", err, tc.want)
+			}
+		})
+	}
 }

@@ -83,6 +83,9 @@ func TestIOSScriptUploadAnswersWithTheProcessingResult(t *testing.T) {
 		}
 		raw, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
+		if resp.StatusCode == fiber.StatusTooManyRequests {
+			return resp.StatusCode, string(raw)
+		}
 		var body struct {
 			Message string `json:"message"`
 		}
@@ -92,6 +95,35 @@ func TestIOSScriptUploadAnswersWithTheProcessingResult(t *testing.T) {
 		return resp.StatusCode, body.Message
 	}
 
+	t.Run("assembly capacity permits retry of the same upload", func(t *testing.T) {
+		stubRunUpload(t, succeedingUpload)
+		d := testUploadDependencies()
+		d.BackgroundTasks = background.InlineRunner{}
+		func() {
+			for range cap(iosUploadAssemblySlots) {
+				iosUploadAssemblySlots <- struct{}{}
+				defer func() { <-iosUploadAssemblySlots }()
+			}
+			if status, _ := post(t, d, "capacity"); status != fiber.StatusTooManyRequests {
+				t.Fatalf("busy assembly returned %d", status)
+			}
+		}()
+		if status, _ := post(t, d, "capacity"); status != fiber.StatusOK {
+			t.Fatalf("assembly retry returned %d", status)
+		}
+	})
+	t.Run("storage budget refuses within the upload size limit", func(t *testing.T) {
+		redis := helper.DBManager.Redis.Redis
+		budget := redisManager.BuildIOSUploadChunkBudgetKey()
+		if err := redis.HSet(ctx, budget, "owner:owner", iosChunkPerOwnerBudget).Err(); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = redis.HDel(ctx, budget, "owner:owner").Err() }()
+		d := testUploadDependencies()
+		if status, _ := post(t, d, "storage-budget"); status != fiber.StatusTooManyRequests {
+			t.Fatalf("storage budget returned %d", status)
+		}
+	})
 	t.Run("an undecodable payload fails in the real pipeline", func(t *testing.T) {
 		d := testUploadDependencies()
 		d.BackgroundTasks = background.InlineRunner{}

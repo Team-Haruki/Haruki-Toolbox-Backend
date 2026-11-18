@@ -446,3 +446,30 @@ func assertLatestAuditRow(t *testing.T, helper *harukiAPIHelper.HarukiToolboxRou
 		}
 	}
 }
+
+func TestHydraClientWebhookListsRedactCallbackURLForOrdinaryAdmins(t *testing.T) {
+	hydra := newFakeHydraClients(t, confidentialBotClient)
+	helper := newAdminOAuthTestHelper(t)
+	const callback = "https://example.test/events?key=fixture"
+	helper.DBManager.DB.OAuth2ClientWebhookEndpoint.Create().SetID("hook").SetClientID("bot-1").SetCallbackURL(callback).ExecX(t.Context())
+	for _, role := range []string{adminCoreModule.RoleAdmin, adminCoreModule.RoleSuperAdmin} {
+		app := newHydraClientHandlerTestAppAs(helper, hydra.config, "actor", role)
+		app.Get("/oauth-clients/:client_id/webhooks", handleListHydraOAuthClientWebhooks(helper, hydra.config))
+		status, body := doAdminOAuthClientRequest(t, app, http.MethodGet, "/oauth-clients/bot-1/webhooks", "")
+		if status != http.StatusOK {
+			t.Fatalf("webhook list returned %d", status)
+		}
+		var result adminOAuthClientWebhookListResponse
+		decodeUpdatedData(t, body, &result)
+		if result.Total != 1 || len(result.Items) != 1 || result.Items[0].ID != "hook" {
+			t.Fatalf("unexpected webhook list for %s", role)
+		}
+		want := ""
+		if role == adminCoreModule.RoleSuperAdmin {
+			want = callback
+		}
+		if result.Items[0].CallbackURL != want {
+			t.Errorf("unexpected callback visibility for %s", role)
+		}
+	}
+}

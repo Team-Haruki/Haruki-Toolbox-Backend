@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -136,5 +138,22 @@ func TestFanoutRechecksSharingAfterProviderLookup(t *testing.T) {
 	}
 	if h.currentUploadPrivacy(t.Context(), settings, gameID, utils.SupportedDataUploadServerJP).AllowsPublicAPI(utils.UploadDataTypeSuite) {
 		t.Fatal("the earlier public opt-in survived the privacy update")
+	}
+}
+
+func TestWebhookCallbackRejectsCleartextCredentialAndRedactsItsURL(t *testing.T) {
+	var logs bytes.Buffer
+	h := &DataHandler{}
+	h.Logger = harukiLogger.NewLogger("WebhookTest", "DEBUG", &logs)
+	h.CallbackWebhookAPI(t.Context(), "http://127.0.0.1/callback?secret=local-fixture", "fixture-bearer")
+	h.CallbackWebhookAPI(t.Context(), "http://192.0.2.1/callback?secret=public-fixture", "fixture-bearer")
+	got := logs.String()
+	if !strings.Contains(got, "URL validation failed") || !strings.Contains(got, "Webhook callback request failed") {
+		t.Fatalf("did not reject both callbacks: %s", got)
+	}
+	for _, secret := range []string{"local-fixture", "public-fixture", "fixture-bearer"} {
+		if strings.Contains(got, secret) {
+			t.Error("callback error logged sensitive input")
+		}
 	}
 }

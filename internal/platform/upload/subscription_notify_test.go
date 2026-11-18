@@ -414,3 +414,17 @@ func TestInlineRetryObservesParentShutdown(t *testing.T) {
 	}
 	assertNotifyRequests(t, server, 1)
 }
+
+func TestDeliverBirthdayEventDropsOversizedRetryMetadata(t *testing.T) {
+	server := newNotifyTestServer(t, respondWithStatuses(http.StatusBadGateway, http.StatusOK))
+	logs := &lockedBuffer{}
+	// Use an inline runner so an admitted retry would complete before the assertions.
+	handler := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
+	event := testBirthdayEvent()
+	event.PayloadRef = strings.Repeat("a", maxBirthdayRetryBytes+1)
+	handler.deliverBirthdayEvent(event)
+	assertNotifyRequests(t, server, 1)
+	if !strings.Contains(logs.String(), "metadata is too large") {
+		t.Error("did not report oversized retry metadata")
+	}
+}

@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	json "encoding/json/v2"
 	"strings"
 	"testing"
@@ -100,5 +101,45 @@ func TestPrivateProfileBodyFromPostgresErrors(t *testing.T) {
 	_, err = PrivateProfileBodyFromPostgres(t.Context(), nil, 1, "jp", nil)
 	if fe, ok := err.(*fiber.Error); !ok || fe.Code != fiber.StatusInternalServerError {
 		t.Fatalf("read failure: err = %v, want 500", err)
+	}
+}
+
+func TestPublishedGameDataReadAdmissionReleasesCapacity(t *testing.T) {
+	releases := make([]func(), 0, cap(publishedReadSlots))
+	defer func() {
+		for _, release := range releases {
+			release()
+		}
+	}()
+	for range cap(publishedReadSlots) {
+		release, ok := ReservePublishedGameDataRead()
+		if !ok {
+			t.Fatal("capacity exhausted early")
+		}
+		releases = append(releases, release)
+	}
+	if release, ok := ReservePublishedGameDataRead(); ok {
+		release()
+		t.Fatal("admission exceeded capacity")
+	}
+	releases[len(releases)-1]()
+	releases = releases[:len(releases)-1]
+	release, ok := ReservePublishedGameDataRead()
+	if !ok {
+		t.Fatal("released capacity could not be reused")
+	}
+	release()
+}
+
+func TestGameDataEndpointsRejectDuplicateSelectionsBeforeStorage(t *testing.T) {
+	for _, handle := range []func(context.Context, *harukiAPIHelper.HarukiToolboxRouterHelpers, int64, harukiUtils.SupportedDataUploadServer, string) (any, error){
+		func(ctx context.Context, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, id int64, server harukiUtils.SupportedDataUploadServer, keys string) (any, error) {
+			return HandleSuiteRequest(ctx, helper, id, server, keys, nil, nil)
+		},
+		HandleMysekaiRequest,
+	} {
+		if _, err := handle(t.Context(), nil, 123, harukiUtils.SupportedDataUploadServerJP, "example,example"); err == nil {
+			t.Fatal("handler accepted a duplicate projection")
+		}
 	}
 }
