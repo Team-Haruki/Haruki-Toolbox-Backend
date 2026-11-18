@@ -62,6 +62,7 @@ type HydraOAuthClient struct {
 	ClientID                string         `json:"client_id"`
 	ClientSecret            string         `json:"client_secret,omitempty"`
 	ClientName              string         `json:"client_name"`
+	SubjectType             string         `json:"subject_type,omitempty"`
 	TokenEndpointAuthMethod string         `json:"token_endpoint_auth_method,omitempty"`
 	RedirectURIs            []string       `json:"redirect_uris,omitempty"`
 	PostLogoutRedirectURIs  []string       `json:"post_logout_redirect_uris,omitempty"`

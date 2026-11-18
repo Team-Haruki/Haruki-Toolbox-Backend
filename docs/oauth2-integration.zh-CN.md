@@ -58,7 +58,7 @@ OIDC 客户端应从 Discovery 文档读取端点。`/api/oauth2/authorize` 是�
 
 发起登录时至少请求 `openid`，常见组合是 `scope=openid profile email`。
 
-授权成功后 token 响应会包含 `id_token`。客户端必须使用 Discovery 中的 JWKS 校验签名，并校验 `iss`、`aud`、`exp` 与自己生成的 `nonce`；**账户主键应使用标准 `sub`，不要使用可能变化的邮箱**。`uid` 是兼容既有 Toolbox API 的本地用户 ID 扩展 claim。
+授权成功后 token 响应会包含 `id_token`。客户端必须使用 Discovery 中的 JWKS 校验签名，并校验 `iss`、`aud`、`exp` 与自己生成的 `nonce`；**账户主键应使用标准 `sub`，不要使用可能变化的邮箱**。`uid` 是兼容既有 Toolbox API 的本地用户 ID 扩展 claim。使用 pairwise subject 的客户端在 ID token 中只使用其专属 `sub`。
 
 标准 claims 按用户实际授权的 scope 最小化发放：
 

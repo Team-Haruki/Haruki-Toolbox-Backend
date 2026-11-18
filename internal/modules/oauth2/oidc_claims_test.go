@@ -58,3 +58,16 @@ func TestBuildHydraOIDCIDTokenClaimsOmitsBlankEmail(t *testing.T) {
 		t.Fatalf("email_verified must not be exposed without email")
 	}
 }
+
+func TestPairwiseConsentOmitsStableIDFromIDToken(t *testing.T) {
+	body := buildHydraConsentAcceptBody(hydraConsentAcceptBodyInput{
+		UserID: "id-fixture", SubjectType: "pairwise", GrantScope: []string{"openid"},
+	})
+	session := body["session"].(map[string]any)
+	if _, exists := session["id_token"].(map[string]any)["uid"]; exists {
+		t.Fatal("pairwise consent exposed a global ID")
+	}
+	if session["access_token"].(map[string]any)["uid"] != "id-fixture" {
+		t.Fatal("Toolbox access-token attribution changed")
+	}
+}

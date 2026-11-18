@@ -204,6 +204,7 @@ func acceptHydraConsent(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 		Remember:      remember,
 		RememberFor:   rememberFor,
 		UserID:        dbUser.ID,
+		SubjectType:   consentReq.Client.SubjectType,
 		UserName:      dbUser.Name,
 		UserEmail:     dbUser.Email,
 		EmailVerified: verifiedEmail != "" && strings.EqualFold(strings.TrimSpace(dbUser.Email), verifiedEmail),
@@ -232,6 +233,7 @@ type hydraConsentAcceptBodyInput struct {
 	UserName      string
 	UserEmail     string
 	EmailVerified bool
+	SubjectType   string
 	// Device is nil on the browser consent path.
 	Device *hydraConsentDeviceContext
 }
@@ -244,6 +246,10 @@ type hydraConsentAcceptBodyInput struct {
 // context.haruki block (visible in the consent session list).
 func buildHydraConsentAcceptBody(input hydraConsentAcceptBodyInput) map[string]any {
 	accessToken := map[string]any{"uid": input.UserID}
+	idToken := buildHydraOIDCIDTokenClaims(input.UserID, input.UserName, input.UserEmail, input.EmailVerified, input.GrantScope)
+	if strings.EqualFold(strings.TrimSpace(input.SubjectType), "pairwise") {
+		delete(idToken, "uid")
+	}
 	body := map[string]any{
 		"grant_scope":                 input.GrantScope,
 		"grant_access_token_audience": input.GrantAudience,
@@ -251,7 +257,7 @@ func buildHydraConsentAcceptBody(input hydraConsentAcceptBodyInput) map[string]a
 		"remember_for":                input.RememberFor,
 		"session": map[string]any{
 			"access_token": accessToken,
-			"id_token":     buildHydraOIDCIDTokenClaims(input.UserID, input.UserName, input.UserEmail, input.EmailVerified, input.GrantScope),
+			"id_token":     idToken,
 		},
 	}
 	if device := input.Device; device != nil {
