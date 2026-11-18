@@ -50,3 +50,29 @@ func TestValidateMaxDepthRejectsTrailingBytes(t *testing.T) {
 		t.Fatalf("expected trailing-bytes payload to be rejected")
 	}
 }
+
+func TestValidateGenericDecodeRejectsNestedNonComparableMapKeys(t *testing.T) {
+	tests := []struct {
+		name string
+		key  []byte
+	}{
+		{name: "binary8", key: []byte{msgpackBin8, 0}},
+		{name: "binary16", key: []byte{msgpackBin16, 0, 0}},
+		{name: "binary32", key: []byte{msgpackBin32, 0, 0, 0, 0}},
+		{name: "array", key: []byte{msgpackFixArrMin}},
+		{name: "map", key: []byte{msgpackFixMapMin}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// A one-item array containing a map with the supplied key.
+			data := append([]byte{msgpackFixArrMin | 1, msgpackFixMapMin | 1}, tt.key...)
+			data = append(data, msgpackNil)
+			if err := ValidateMaxDepth(data, DefaultMaxUploadDepth); err != nil {
+				t.Fatalf("test input is structurally invalid: %v", err)
+			}
+			if err := ValidateGenericDecode(data); err == nil || !strings.Contains(err.Error(), "unsupported generic map key") {
+				t.Fatalf("expected a map key validation error, got %v", err)
+			}
+		})
+	}
+}

@@ -8,15 +8,18 @@
 | --- | --- |
 | `msgpackcodec.WriteJSON(w, data, options)` | 完整 MessagePack 输入，先校验结构和深度，再逐步输出 JSON；不构建完整对象树 |
 | `msgpackcodec.ValidateMaxDepth(data, maxDepth)` | 只扫描，不构建解码结果；拒绝长度越界和尾部多余字节 |
+| `msgpackcodec.ValidateGenericDecode(data)` | 在结构校验之外检查普通上传解码的 map key，拒绝嵌套 map 的二进制键和任意 map 的复合键 |
 | `msgpackcodec.DecodeOrdered(data)` | 完整顶层 map 解码，最大深度 512；返回拥有字符串和二进制存储的 OrderedMap |
 | `msgpackcodec.Marshal/MarshalWrite` | 保留 OrderedMap 顺序；普通 Go map 不承诺稳定顺序。MarshalWrite 仍先完整编码再写 |
-| `msgpackcodec.Unmarshal/UnmarshalRead` | 保留有序目的对象与外部库通用目的对象的兼容分支；通用分支处理不可信输入前须显式校验深度 |
+| `msgpackcodec.Unmarshal/UnmarshalRead` | 保留有序目的对象与外部库通用目的对象的兼容分支；通用分支处理不可信输入前须显式校验结构，字节切片版的通用分支可能让结果引用输入 |
 | `msgpackcodec.DecodeOrderedRead` | 完整读入后解码，调用方负责 Reader 的字节上限 |
 | `data.ProviderJSONOptions()` | 业务层返回 userGamedata/userId/userIdString 规则；调用方直接传给 `msgpackcodec.WriteJSON` |
 
 新核心不依赖游戏字段名、HTTP、数据库或压缩器。provider 规则通过 `JSONOptions.DerivedStringField` 指定；零值 options 不派生字段。具体字段名位于 `internal/platform/api/data`，每次返回独立的配置值。上传 handler 直接调用新包，不再经过旧转换函数。Sekai 的普通值解码也统一从新包进入；外部 MessagePack 库仅保留在 codec 内部作为类型兼容实现。
 
 游标输入仅在同步调用期间借用，调用结束前不能修改输入。游标切片不会作为 OrderedMap 的持久字符串或二进制值逃逸。没有 unsafe 转换、全局字段名缓存或可变对象池。
+
+Sekai 上传和已解密的后处理共用通用解码入口。解码前检查结构、深度和 map key，遇到解码器的意外 panic 会返回不含明文的错误。普通解码保留顶层二进制键转字符串的兼容行为，并在返回前为结果中的二进制值建立独立存储。任意类型的 `UnpackInto` 目标使用请求独占的输入副本。
 
 ## 保留的行为
 

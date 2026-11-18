@@ -6,8 +6,7 @@ import "fmt"
 // The shamaton msgpack decoder used on the upload path recurses once per nesting
 // level with no depth limit, so a deeply nested payload (e.g. a long run of
 // fixarray headers) triggers an unrecoverable Go stack-overflow fatal error that
-// recover() cannot catch. Pre-validate depth with ValidateMaxDepth before handing
-// bytes to that decoder.
+// recover() cannot catch. Pre-validate structure before handing bytes to it.
 const DefaultMaxUploadDepth = 256
 
 // ValidateMaxDepth walks a msgpack byte stream and returns an error if its
@@ -16,8 +15,24 @@ const DefaultMaxUploadDepth = 256
 // values — it only skips them. Its own recursion is bounded by maxDepth, so it
 // cannot overflow the stack while guarding against a decoder that would.
 func ValidateMaxDepth(data []byte, maxDepth int) error {
-	d := cursor{data: data}
-	if err := d.validateValue(0, maxDepth); err != nil {
+	return validateStructure(data, maxDepth, false)
+}
+
+// ValidateGenericDecode checks upload structure and rejects non-comparable keys
+// in nested maps. A binary key at the root can decode into a string-keyed map.
+func ValidateGenericDecode(data []byte) error {
+	return validateStructure(data, DefaultMaxUploadDepth, true)
+}
+
+type structureValidator struct {
+	cursor
+	maxDepth    int
+	genericKeys bool
+}
+
+func validateStructure(data []byte, maxDepth int, genericKeys bool) error {
+	d := structureValidator{cursor: cursor{data: data}, maxDepth: maxDepth, genericKeys: genericKeys}
+	if err := d.validateValue(0, false); err != nil {
 		return err
 	}
 	if d.off != len(data) {
@@ -26,22 +41,25 @@ func ValidateMaxDepth(data []byte, maxDepth int) error {
 	return nil
 }
 
-func (d *cursor) validateValue(depth, maxDepth int) error {
-	if depth > maxDepth {
-		return fmt.Errorf("maximum nesting depth %d exceeded", maxDepth)
+func (d *structureValidator) validateValue(depth int, mapKey bool) error {
+	if depth > d.maxDepth {
+		return fmt.Errorf("maximum nesting depth %d exceeded", d.maxDepth)
 	}
 	b, err := d.readByte()
 	if err != nil {
 		return fmt.Errorf("read type byte: %w", err)
+	}
+	if mapKey && d.genericKeys && unsupportedGenericMapKey(b, depth) {
+		return fmt.Errorf("unsupported generic map key type at offset %d", d.off-1)
 	}
 
 	switch {
 	case b <= msgpackFixPosIntMax, b >= msgpackFixNegIntMin:
 		return nil
 	case b >= msgpackFixMapMin && b <= msgpackFixMapMax:
-		return d.validateMap(int(b&0x0f), depth+1, maxDepth)
+		return d.validateMap(int(b&0x0f), depth+1)
 	case b >= msgpackFixArrMin && b <= msgpackFixArrMax:
-		return d.validateArray(int(b&0x0f), depth+1, maxDepth)
+		return d.validateArray(int(b&0x0f), depth+1)
 	case b >= msgpackFixStrMin && b <= msgpackFixStrMax:
 		_, err := d.reserve(int(b & 0x1f))
 		return err
@@ -124,55 +142,66 @@ func (d *cursor) validateValue(depth, maxDepth int) error {
 		if err != nil {
 			return err
 		}
-		return d.validateArray(int(n), depth+1, maxDepth)
+		return d.validateArray(int(n), depth+1)
 	case msgpackArray32:
 		n, err := d.readUint32()
 		if err != nil {
 			return err
 		}
-		return d.validateArray(int(n), depth+1, maxDepth)
+		return d.validateArray(int(n), depth+1)
 	case msgpackMap16:
 		n, err := d.readUint16()
 		if err != nil {
 			return err
 		}
-		return d.validateMap(int(n), depth+1, maxDepth)
+		return d.validateMap(int(n), depth+1)
 	case msgpackMap32:
 		n, err := d.readUint32()
 		if err != nil {
 			return err
 		}
-		return d.validateMap(int(n), depth+1, maxDepth)
+		return d.validateMap(int(n), depth+1)
 	default:
 		return fmt.Errorf("unsupported msgpack type byte: 0x%02x", b)
 	}
 }
 
-func (d *cursor) validateArray(n, depth, maxDepth int) error {
+func (d *structureValidator) validateArray(n, depth int) error {
 	// Each element consumes at least one byte, so a valid array of n elements
 	// needs at least n remaining bytes; reject impossible lengths cheaply.
 	if n < 0 || n > len(d.data)-d.off {
 		return fmt.Errorf("array length %d exceeds remaining bytes %d", n, len(d.data)-d.off)
 	}
 	for range n {
-		if err := d.validateValue(depth, maxDepth); err != nil {
+		if err := d.validateValue(depth, false); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (d *cursor) validateMap(n, depth, maxDepth int) error {
-	if n < 0 || n > len(d.data)-d.off {
-		return fmt.Errorf("map length %d exceeds remaining bytes %d", n, len(d.data)-d.off)
+func (d *structureValidator) validateMap(n, depth int) error {
+	if n < 0 || n > d.remaining()/2 {
+		return fmt.Errorf("map length %d exceeds remaining bytes %d", n, d.remaining())
 	}
 	for range n {
-		if err := d.validateValue(depth, maxDepth); err != nil { // key
+		if err := d.validateValue(depth, true); err != nil {
 			return err
 		}
-		if err := d.validateValue(depth, maxDepth); err != nil { // value
+		if err := d.validateValue(depth, false); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func unsupportedGenericMapKey(marker byte, depth int) bool {
+	switch marker {
+	case msgpackBin8, msgpackBin16, msgpackBin32:
+		return depth > 1
+	case msgpackArray16, msgpackArray32, msgpackMap16, msgpackMap32:
+		return true
+	default:
+		return marker >= msgpackFixMapMin && marker <= msgpackFixArrMax
+	}
 }

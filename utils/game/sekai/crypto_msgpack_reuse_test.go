@@ -3,6 +3,7 @@ package sekai
 import (
 	"bytes"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -40,5 +41,50 @@ func TestUnpackMsgpackRejectsDeepAndTruncatedInput(t *testing.T) {
 		if _, err := UnpackMsgpack(data); err == nil {
 			t.Fatal("unsafe msgpack accepted")
 		}
+	}
+}
+
+func TestUnpackMsgpackRejectsUnsupportedMapKey(t *testing.T) {
+	data := []byte{0x81, 0xa1, 'k', 0x81, 0x90, 0xc0} // {"k": {[]: nil}}
+	if _, err := UnpackMsgpack(data); err == nil || !strings.Contains(err.Error(), "msgpack validation: unsupported generic map key") {
+		t.Fatalf("expected a map key validation error, got %v", err)
+	}
+}
+
+func TestUnpackMsgpackKeepsBinaryRootKeyCompatibility(t *testing.T) {
+	data := []byte{0x81, 0xc4, 0x01, 'k', 0xc3} // {bin("k"): true}
+	got, err := UnpackMsgpack(data)
+	if err != nil || !reflect.DeepEqual(got, map[string]any{"k": true}) {
+		t.Fatalf("UnpackMsgpack = %#v, %v", got, err)
+	}
+}
+
+func TestUnpackMsgpackOwnsBinaryValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+	}{
+		{name: "scalar", value: []byte("scalar")},
+		{name: "array", value: []any{[]byte("array")}},
+		{name: "map", value: map[string]any{
+			"binary": []byte("map"),
+			"nested": []any{map[string]any{"binary": []byte("nested")}},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := msgpackcodec.Marshal(tt.value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := UnpackMsgpack(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			clear(data)
+			if !reflect.DeepEqual(got, tt.value) {
+				t.Fatalf("decoded value changed after input reuse: got %#v, want %#v", got, tt.value)
+			}
+		})
 	}
 }
