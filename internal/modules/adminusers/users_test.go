@@ -103,13 +103,23 @@ func TestBatchBanGuardMissSkipsAccessRevocation(t *testing.T) {
 	}
 }
 
-func TestManagedCredentialChangesWaitForTargetRole(t *testing.T) {
+func TestManagedUserMutationsWaitForTargetRole(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
 		handler    func(*harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler
 	}{
 		{"password", `{}`, handleResetUserPassword},
 		{"email", `{"email":"updated@example.test"}`, handleUpdateUserEmail},
+		{"ios-regenerate", `{}`, handleRegenerateUserIOSUploadCode},
+		{"ios-clear", `{}`, handleClearUserIOSUploadCode},
+		{"force-logout", `{}`, handleForceLogoutUser},
+		{"revoke-oauth", `{"revokeAll":true}`, func(h *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+			return handleRevokeUserOAuth(h, nil)
+		}},
+		{"social-link", `{}`, handleUpsertUserSocialPlatform},
+		{"social-unlink", `{}`, handleClearUserSocialPlatform},
+		{"social-grant", `{}`, handleUpsertUserAuthorizedSocialPlatform},
+		{"social-revoke", `{}`, handleDeleteUserAuthorizedSocialPlatform},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			helper := newAdminUserTicketNotificationTestHelper(t)

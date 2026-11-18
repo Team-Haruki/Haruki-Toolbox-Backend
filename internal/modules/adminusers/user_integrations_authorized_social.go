@@ -42,7 +42,7 @@ func handleListUserAuthorizedSocialPlatforms(apiHelper *harukiAPIHelper.HarukiTo
 }
 
 func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		const action = adminAuditActionUserAuthorizedUpsert
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
@@ -123,11 +123,11 @@ func handleUpsertUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 			"created":    created,
 		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform upserted", &resp)
-	}
+	})
 }
 
 func handleDeleteUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		const action = adminAuditActionUserAuthorizedDelete
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
@@ -160,5 +160,5 @@ func handleDeleteUserAuthorizedSocialPlatform(apiHelper *harukiAPIHelper.HarukiT
 			"platformID": platformID,
 		})
 		return harukiAPIHelper.Responses.SuccessResponse[string](c, "authorized social platform deleted", nil)
-	}
+	})
 }

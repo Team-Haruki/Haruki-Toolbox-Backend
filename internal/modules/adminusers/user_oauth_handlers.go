@@ -82,7 +82,7 @@ func handleListUserOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxR
 }
 
 func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		targetUserID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetUserID == "" {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingTargetUserID, nil))
@@ -148,7 +148,7 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		resp := adminRevokeOAuthResponse{UserID: targetUser.ID, ClientID: responseClientID, RevokedAuthorizations: revokedAuthorizations, RevokedAuthorizationsExact: &revokedAuthorizationsExact, RevokedTokens: revokedTokens, RevokedTokensExact: &revokedTokensExact}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, metadata)
 		return harukiAPIHelper.Responses.SuccessResponse(c, "oauth authorizations revoked", &resp)
-	}
+	})
 }
 
 func stableHydraAuthorizationID(consentRequestID string, clientID string) int {

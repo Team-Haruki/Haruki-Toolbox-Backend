@@ -47,7 +47,7 @@ func handleGetUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 }
 
 func handleUpsertUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		const action = adminAuditActionUserSocialUpsert
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
@@ -131,11 +131,11 @@ func handleUpsertUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			"verified": *payload.Verified,
 		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform upserted", &resp)
-	}
+	})
 }
 
 func handleClearUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		const action = adminAuditActionUserSocialClear
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
@@ -159,5 +159,5 @@ func handleClearUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			"deleted": affected > 0,
 		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform cleared", &resp)
-	}
+	})
 }

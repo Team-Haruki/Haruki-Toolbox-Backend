@@ -10,7 +10,7 @@ import (
 )
 
 func handleRegenerateUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		const action = adminAuditActionUserIOSCodeRegenerate
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
@@ -53,11 +53,11 @@ func handleRegenerateUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxR
 		resp := adminUserIOSUploadCodeResponse{UserID: targetUser.ID, UploadCode: code}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultSuccess, nil)
 		return harukiAPIHelper.Responses.SuccessResponse(c, "ios upload code regenerated", &resp)
-	}
+	})
 }
 
 func handleClearUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
-	return func(c fiber.Ctx) error {
+	return withManagedUserMutation(apiHelper, func(c fiber.Ctx) error {
 		const action = adminAuditActionUserIOSCodeClear
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
@@ -80,5 +80,5 @@ func handleClearUserIOSUploadCode(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			"cleared": resp.Cleared,
 		})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "ios upload code cleared", &resp)
-	}
+	})
 }
