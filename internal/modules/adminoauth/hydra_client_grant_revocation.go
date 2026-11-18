@@ -46,7 +46,7 @@ func revokeHydraClientGrantsPerSubject(ctx context.Context, apiHelper *harukiAPI
 	if err != nil {
 		return hydraClientGrantRevocation{}, err
 	}
-	records, recordsErr := collectHydraClientAuthorizationRecordsForUsers(ctx, hydraConfig, clientID, users)
+	records, recordsErr := collectHydraClientAuthorizationRecordsForUsers(ctx, hydraConfig, clientID, users, 0)
 	result := hydraClientGrantRevocation{records: records, recordsErr: recordsErr, users: users}
 	subjects := hydraClientAuthorizationSubjects(users)
 	if len(subjects) == 0 {

@@ -2,9 +2,11 @@ package adminoauth
 
 import (
 	"context"
+	"errors"
 	"hash/fnv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
@@ -23,7 +25,14 @@ type hydraClientAuthorizationRecord struct {
 	Subject string
 }
 
-const hydraClientAuthorizationScanWorkers = 8
+const (
+	hydraClientAuthorizationScanWorkers = 8
+	maxAuthorizationScanSubjects        = 1024
+	maxAuthorizationScanRecords         = 4096
+)
+
+var authorizationScanSlots = make(chan struct{}, 2)
+var errAuthorizationScanLimited = errors.New("oauth authorization scan capacity exceeded")
 
 func scopeHydraClientAuthorizationRecordsForActor(records []hydraClientAuthorizationRecord, actorUserID, actorRole string) []hydraClientAuthorizationRecord {
 	visible := make([]hydraClientAuthorizationRecord, 0, len(records))
@@ -39,12 +48,43 @@ func scopeHydraClientAuthorizationRecordsForActor(records []hydraClientAuthoriza
 	return visible
 }
 
-func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, clientID string) ([]hydraClientAuthorizationRecord, error) {
-	users, err := loadHydraAuthorizationUsers(ctx, apiHelper.DBManager.DB)
+func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, clientID, actorRole string) ([]hydraClientAuthorizationRecord, error) {
+	select {
+	case authorizationScanSlots <- struct{}{}:
+		defer func() { <-authorizationScanSlots }()
+	default:
+		return nil, errAuthorizationScanLimited
+	}
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	subjects, err := hydraConfig.ListConsentSubjects(ctx, clientID, maxAuthorizationScanSubjects+1)
+	query := apiHelper.DBManager.DB.User.Query().
+		Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldKratosIdentityID).
+		Limit(maxAuthorizationScanSubjects + 1)
+	if actorRole != adminCoreModule.RoleSuperAdmin {
+		query.Where(userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
+	}
+	switch {
+	case errors.Is(err, harukiOAuth2.ErrConsentIndexUnavailable):
+		// The Admin API is subject-scoped. Keep compatibility for small
+		// installations, with a hard bound before an upstream scan begins.
+	case err != nil:
+		return nil, err
+	case len(subjects) > maxAuthorizationScanSubjects:
+		return nil, errAuthorizationScanLimited
+	case len(subjects) == 0:
+		return []hydraClientAuthorizationRecord{}, nil
+	default:
+		query.Where(userSchema.Or(userSchema.IDIn(subjects...), userSchema.KratosIdentityIDIn(subjects...)))
+	}
+	users, err := query.Order(userSchema.ByID()).All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return collectHydraClientAuthorizationRecordsForUsers(ctx, hydraConfig, clientID, users)
+	if len(users) > maxAuthorizationScanSubjects {
+		return nil, errAuthorizationScanLimited
+	}
+	return collectHydraClientAuthorizationRecordsForUsers(ctx, hydraConfig, clientID, users, maxAuthorizationScanRecords)
 }
 
 func loadHydraAuthorizationUsers(ctx context.Context, db *postgresql.Client) ([]*postgresql.User, error) {
@@ -54,7 +94,7 @@ func loadHydraAuthorizationUsers(ctx context.Context, db *postgresql.Client) ([]
 		All(ctx)
 }
 
-func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, users []*postgresql.User) ([]hydraClientAuthorizationRecord, error) {
+func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, users []*postgresql.User, recordLimit int) ([]hydraClientAuthorizationRecord, error) {
 	if len(users) == 0 {
 		return []hydraClientAuthorizationRecord{}, nil
 	}
@@ -68,6 +108,7 @@ func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraCo
 	userCh := make(chan *postgresql.User)
 	records := make([]hydraClientAuthorizationRecord, 0, len(users)) // pre-allocate for expected records
 	var recordsMu sync.Mutex
+	var retained atomic.Int64
 
 	for i := 0; i < workerCount; i++ {
 		g.Go(func() error {
@@ -84,6 +125,9 @@ func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraCo
 				for _, session := range sessions {
 					if strings.TrimSpace(session.ConsentRequest.Client.ClientID) != clientID {
 						continue
+					}
+					if recordLimit > 0 && retained.Add(1) > int64(recordLimit) {
+						return errAuthorizationScanLimited
 					}
 					localRecords = append(localRecords, hydraClientAuthorizationRecord{
 						User:    user,

@@ -68,6 +68,11 @@ func handleCreateHydraOAuthClientWebhook(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
 		}
 
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client")
+		}
+		defer unlock()
 		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientWebhookCreate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))

@@ -49,3 +49,21 @@ func TestHydraGrantStoreWiring(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestHydraConsentSubjectCandidatesAreBoundToClientAndNetwork(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery(`SELECT DISTINCT flow.subject FROM hydra_oauth2_flow AS flow WHERE flow.client_id = .* AND flow.nid = .* ORDER BY flow.subject LIMIT`).
+		WithArgs("example-client", 12).
+		WillReturnRows(sqlmock.NewRows([]string{"subject"}).AddRow("first").AddRow("second"))
+	subjects, err := hydraConsentSubjects(db)(t.Context(), "example-client", 12)
+	if err != nil || len(subjects) != 2 || subjects[0] != "first" {
+		t.Fatalf("consent candidate subjects=%v, %v", subjects, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

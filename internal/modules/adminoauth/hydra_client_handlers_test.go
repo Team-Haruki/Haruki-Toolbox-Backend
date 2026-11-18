@@ -114,7 +114,7 @@ func TestSetActivePatchPreservesGrantTypesAndLifespans(t *testing.T) {
 
 func TestRotateSecretUsesJSONPatch(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 	before := hydra.client("bot-1")
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/rotate-secret", "")
@@ -143,7 +143,7 @@ func TestRotateSecretUsesJSONPatch(t *testing.T) {
 
 func TestRotateSecretRejectsPublicClient(t *testing.T) {
 	hydra := newFakeHydraClients(t, publicViewerClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/viewer-1/rotate-secret", "")
 	if status != http.StatusBadRequest {
@@ -164,7 +164,7 @@ func TestRotateSecretRejectsPublicClient(t *testing.T) {
 
 func TestUpdateClientPatchKeepsUnknownFields(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 	before := hydra.client("bot-1")
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/bot-1", `{
@@ -213,7 +213,7 @@ func TestUpdateClientPatchKeepsUnknownFields(t *testing.T) {
 
 func TestUpdateOmittedGrantTypesKeepsCurrent(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 	before := hydra.client("bot-1")
 
 	// No grantTypes and no postLogoutRedirectUris: both registered lists are kept.
@@ -243,7 +243,7 @@ func TestUpdateOmittedGrantTypesKeepsCurrent(t *testing.T) {
 
 func TestSwitchToConfidentialPatchesSecret(t *testing.T) {
 	hydra := newFakeHydraClients(t, publicViewerClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/viewer-1", `{
 		"name": "Viewer",
@@ -290,7 +290,7 @@ func TestSwitchToConfidentialPatchesSecret(t *testing.T) {
 
 func TestCreateClientRegistersPostLogoutRedirectURIs(t *testing.T) {
 	hydra := newFakeHydraClients(t)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", `{
 		"clientId": "web-app",
@@ -338,7 +338,7 @@ func TestCreateClientRegistersPostLogoutRedirectURIs(t *testing.T) {
 
 func TestUpdateRejectsKeptPostLogoutURIsOutsideNewRedirectOrigins(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/bot-1", `{
 		"name": "Bot",
@@ -356,7 +356,7 @@ func TestUpdateRejectsKeptPostLogoutURIsOutsideNewRedirectOrigins(t *testing.T) 
 
 func TestListClientsEchoesPostLogoutRedirectURIs(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodGet, "/oauth-clients", "")
 	if status != http.StatusOK {
@@ -449,8 +449,8 @@ func TestFakeHydraConsentRevokeMatchesHydra(t *testing.T) {
 	}
 }
 
-func newHydraClientHandlerTestApp(hydraConfig *harukiOAuth2.HydraConfig) *fiber.App {
-	return newHydraClientHandlerTestAppAs(nil, hydraConfig, "super-admin-1", adminCoreModule.RoleSuperAdmin)
+func newHydraClientHandlerTestApp(t *testing.T, hydraConfig *harukiOAuth2.HydraConfig) *fiber.App {
+	return newHydraClientHandlerTestAppAs(newAdminOAuthTestHelper(t), hydraConfig, "super-admin-1", adminCoreModule.RoleSuperAdmin)
 }
 
 // newHydraClientHandlerTestAppAs serves the handlers as the given actor. Handlers that
@@ -855,6 +855,58 @@ func assertClientMembersUnchanged(t *testing.T, before, after map[string]any, me
 	for _, member := range members {
 		if !reflect.DeepEqual(before[member], after[member]) {
 			t.Fatalf("%s changed: before %#v, after %#v", member, before[member], after[member])
+		}
+	}
+}
+
+func TestDeletingAndReusingHydraClientClearsPreviousWebhooks(t *testing.T) {
+	hydra := newFakeHydraClients(t, publicViewerClient)
+	helper := newAdminOAuthTestHelper(t)
+	db := helper.DBManager.DB
+	app := newHydraClientHandlerTestAppAs(helper, hydra.config, "admin", adminCoreModule.RoleSuperAdmin)
+	addCallback := func(id string) {
+		t.Helper()
+		db.OAuth2ClientWebhookEndpoint.Create().SetID(id).SetClientID("viewer-1").
+			SetCallbackURL("https://previous.example.test/callback").SetEnabled(true).SaveX(t.Context())
+	}
+	addCallback("old-callback")
+	if status, body := doAdminOAuthClientRequest(t, app, http.MethodDelete, "/oauth-clients/viewer-1", ""); status != http.StatusOK || db.OAuth2ClientWebhookEndpoint.Query().CountX(t.Context()) != 0 {
+		t.Fatalf("delete status=%d, body=%+v", status, body)
+	}
+
+	addCallback("legacy-orphan")
+	payload := `{"clientId":"viewer-1","clientType":"public","name":"New Viewer","redirectUris":["https://viewer.example.test/callback"],"scopes":["user:read"]}`
+	if status, body := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", payload); status != http.StatusOK || db.OAuth2ClientWebhookEndpoint.Query().CountX(t.Context()) != 0 {
+		t.Fatalf("recreation allowed stale callbacks: status=%d, body=%+v", status, body)
+	}
+}
+
+func TestAuthorizationScanUsesClientCandidatesBeforeReadingHydra(t *testing.T) {
+	hydra := newFakeHydraClients(t, publicViewerClient)
+	helper := newAdminOAuthTestHelper(t)
+	seedAdminOAuthTestUser(t, helper, "matching", "identity-matching", userSchema.RoleUser)
+	seedAdminOAuthTestUser(t, helper, "unrelated", "identity-unrelated", userSchema.RoleUser)
+	hydra.addConsent("identity-matching", "viewer-1", "expected-consent")
+	adminURL, err := hydra.config.AdminEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL: adminURL,
+		ConsentSubjects: func(_ context.Context, clientID string, limit int) ([]string, error) {
+			if clientID != "viewer-1" || limit != maxAuthorizationScanSubjects+1 {
+				return nil, fmt.Errorf("unexpected subject lookup")
+			}
+			return []string{"identity-matching"}, nil
+		},
+	})
+	records, err := collectHydraClientAuthorizationRecords(t.Context(), helper, cfg, "viewer-1", adminCoreModule.RoleSuperAdmin)
+	if err != nil || len(records) != 1 || records[0].User.ID != "matching" {
+		t.Fatalf("client-specific records = %+v, %v", records, err)
+	}
+	for _, req := range hydra.takeRequests() {
+		if strings.Contains(req.Query.Get("subject"), "unrelated") {
+			t.Fatal("queried consent for an unrelated Toolbox user")
 		}
 	}
 }
