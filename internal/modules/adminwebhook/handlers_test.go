@@ -173,6 +173,16 @@ func TestAdminWebhookCRUDHandlers(t *testing.T) {
 	if err := json.UnmarshalRead(subsResp.Body, &page); err != nil || page.Data.Total != 2 || page.Data.NextBeforeID != 0 || len(page.Data.Items) != 1 || page.Data.Items[0].UserID != "123" {
 		t.Fatalf("second subscriber page = %#v, %v", page.Data, err)
 	}
+	for _, query := range []string{"before_id=0", "page_size=invalid", "page_size=501"} {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/webhooks/1/subscribers?"+query, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("subscribers with %q returned %d, want 400", query, resp.StatusCode)
+		}
+	}
 
 	updateReq := httptest.NewRequest(http.MethodPut, "/webhooks/1", strings.NewReader(`{"callbackUrl":"https://93.184.216.34/updated","credential":"cred-2","enabled":false,"clearBearer":true}`))
 	updateReq.Header.Set("Content-Type", "application/json")

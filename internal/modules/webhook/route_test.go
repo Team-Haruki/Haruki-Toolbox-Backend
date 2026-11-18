@@ -12,6 +12,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/alicebob/miniredis/v2"
@@ -82,12 +83,25 @@ func TestRegisteredWebhookBoundsSubscriptionWritesAndPages(t *testing.T) {
 	if last.Header.Get("X-Next-Before-ID") != "" {
 		t.Fatal("last page advertised an extra page")
 	}
+	for _, query := range []string{"before_id=0", "page_size=invalid", "page_size=501"} {
+		request(http.MethodGet, "/api/webhook/subscribers?"+query, http.StatusBadRequest)
+	}
+	helper.DBManager.Redis = nil
+	request(http.MethodPut, "/api/webhook/jp/suite/14", http.StatusServiceUnavailable)
+	helper.DBManager.Redis = redis
+	if err := rdb.Set(ctx, key, "invalid-counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request(http.MethodPut, "/api/webhook/jp/suite/14", http.StatusServiceUnavailable)
 	if err := rdb.Set(ctx, key, webhookRegistrationPerMinute, time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}
 	request(http.MethodPut, "/api/webhook/jp/suite/14", http.StatusTooManyRequests)
 	request(http.MethodDelete, "/api/webhook/jp/suite/00012", http.StatusOK)
 	cache.FastForward(time.Minute)
+	if count := db.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(endpoint), webhooksubscription.UserIDEQ("14")).CountX(ctx); count != 0 {
+		t.Fatalf("rejected subscription requests wrote %d rows", count)
+	}
 	request(http.MethodPut, "/api/webhook/jp/suite/14", http.StatusOK)
 }
 
