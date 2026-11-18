@@ -36,6 +36,9 @@ type InheritVaultEntry func(*sql.Selector)
 // InheritVaultKey is the predicate function for inheritvaultkey builders.
 type InheritVaultKey func(*sql.Selector)
 
+// InheritVaultTombstone is the predicate function for inheritvaulttombstone builders.
+type InheritVaultTombstone func(*sql.Selector)
+
 // OAuth2ClientWebhookEndpoint is the predicate function for oauth2clientwebhookendpoint builders.
 type OAuth2ClientWebhookEndpoint func(*sql.Selector)
 

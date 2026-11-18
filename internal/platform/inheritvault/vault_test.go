@@ -343,7 +343,9 @@ func TestReapReconcilesAndPurges(t *testing.T) {
 	defer u.Close()
 	putCredential(t, env.store, u, "keep", "a")
 	putCredential(t, env.store, u, "destroy", "b")
-	_, _ = env.store.PutCode(ctx, CodeInput{EntryID: "keep", UserID: "u1", Server: "jp", KeyVersion: 1, PublicKey: u.PublicKey, InheritID: "c", Password: "p"})
+	if _, err := env.store.PutCode(ctx, codeInput(u, "keep", "c")); err != nil {
+		t.Fatal(err)
+	}
 	if err := env.store.Destroy(ctx, "u1", "destroy"); err != nil {
 		t.Fatal(err)
 	}
@@ -452,9 +454,7 @@ func TestResetKeyDiscardsEverything(t *testing.T) {
 }
 
 // A job that unlocked the key before a reset may still write after the owner
-// has created a new key. The entry is sealed to the discarded key, so it must
-// be reported as stale, not as undecryptable; and a Rewrap that read the old
-// key must not overwrite the new one.
+// has created a new key. The stale write and rewrap must leave the new vault intact.
 func TestKeyCreatedAfterAResetHasANewVersion(t *testing.T) {
 	env := newStoreEnv(t)
 	ctx := context.Background()
@@ -476,13 +476,12 @@ func TestKeyCreatedAfterAResetHasANewVersion(t *testing.T) {
 	}
 
 	// The in-flight job still holds the old public key and version.
-	putCredential(t, env.store, old, "late", "cred")
-	e, err := env.store.Get(ctx, "u1", "late")
-	if err != nil {
-		t.Fatal(err)
+	_, err = env.store.PutCredential(ctx, CredentialInput{EntryID: "late", UserID: "u1", Server: "jp", KeyVersion: old.KeyVersion, PublicKey: old.PublicKey, Credential: []byte("cred")})
+	if !errors.Is(err, ErrStale) {
+		t.Fatalf("PutCredential = %v, want ErrStale", err)
 	}
-	if _, err := fresh.OpenCredential(e); !errors.Is(err, ErrStale) {
-		t.Fatalf("OpenCredential = %v, want ErrStale", err)
+	if _, err := env.store.Get(ctx, "u1", "late"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Get = %v, want ErrNotFound", err)
 	}
 
 	// A Rewrap guarded by the old version leaves the new key untouched.

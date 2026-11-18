@@ -24,6 +24,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaulttombstone"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
@@ -68,6 +69,8 @@ type Client struct {
 	InheritVaultEntry *InheritVaultEntryClient
 	// InheritVaultKey is the client for interacting with the InheritVaultKey builders.
 	InheritVaultKey *InheritVaultKeyClient
+	// InheritVaultTombstone is the client for interacting with the InheritVaultTombstone builders.
+	InheritVaultTombstone *InheritVaultTombstoneClient
 	// OAuth2ClientWebhookEndpoint is the client for interacting with the OAuth2ClientWebhookEndpoint builders.
 	OAuth2ClientWebhookEndpoint *OAuth2ClientWebhookEndpointClient
 	// RiskEvent is the client for interacting with the RiskEvent builders.
@@ -121,6 +124,7 @@ func (c *Client) init() {
 	c.IOSScriptCode = NewIOSScriptCodeClient(c.config)
 	c.InheritVaultEntry = NewInheritVaultEntryClient(c.config)
 	c.InheritVaultKey = NewInheritVaultKeyClient(c.config)
+	c.InheritVaultTombstone = NewInheritVaultTombstoneClient(c.config)
 	c.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(c.config)
 	c.RiskEvent = NewRiskEventClient(c.config)
 	c.RiskRule = NewRiskRuleClient(c.config)
@@ -239,6 +243,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
 		InheritVaultEntry:           NewInheritVaultEntryClient(cfg),
 		InheritVaultKey:             NewInheritVaultKeyClient(cfg),
+		InheritVaultTombstone:       NewInheritVaultTombstoneClient(cfg),
 		OAuth2ClientWebhookEndpoint: NewOAuth2ClientWebhookEndpointClient(cfg),
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
@@ -284,6 +289,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IOSScriptCode:               NewIOSScriptCodeClient(cfg),
 		InheritVaultEntry:           NewInheritVaultEntryClient(cfg),
 		InheritVaultKey:             NewInheritVaultKeyClient(cfg),
+		InheritVaultTombstone:       NewInheritVaultTombstoneClient(cfg),
 		OAuth2ClientWebhookEndpoint: NewOAuth2ClientWebhookEndpointClient(cfg),
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
@@ -332,10 +338,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.InheritVaultEntry, c.InheritVaultKey,
-		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.RuntimeConfiguration,
-		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
-		c.StoryTranslation, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog,
-		c.User, c.WebhookEndpoint, c.WebhookSubscription,
+		c.InheritVaultTombstone, c.OAuth2ClientWebhookEndpoint, c.RiskEvent,
+		c.RiskRule, c.RuntimeConfiguration, c.SocialPlatformInfo, c.Sponsor,
+		c.SponsorAfdianOrder, c.SponsorManualDuration, c.StoryTranslation, c.SystemLog,
+		c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
+		c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -348,10 +355,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.InheritVaultEntry, c.InheritVaultKey,
-		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.RuntimeConfiguration,
-		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
-		c.StoryTranslation, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog,
-		c.User, c.WebhookEndpoint, c.WebhookSubscription,
+		c.InheritVaultTombstone, c.OAuth2ClientWebhookEndpoint, c.RiskEvent,
+		c.RiskRule, c.RuntimeConfiguration, c.SocialPlatformInfo, c.Sponsor,
+		c.SponsorAfdianOrder, c.SponsorManualDuration, c.StoryTranslation, c.SystemLog,
+		c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
+		c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -380,6 +388,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.InheritVaultEntry.mutate(ctx, m)
 	case *InheritVaultKeyMutation:
 		return c.InheritVaultKey.mutate(ctx, m)
+	case *InheritVaultTombstoneMutation:
+		return c.InheritVaultTombstone.mutate(ctx, m)
 	case *OAuth2ClientWebhookEndpointMutation:
 		return c.OAuth2ClientWebhookEndpoint.mutate(ctx, m)
 	case *RiskEventMutation:
@@ -1888,6 +1898,139 @@ func (c *InheritVaultKeyClient) mutate(ctx context.Context, m *InheritVaultKeyMu
 		return (&InheritVaultKeyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("postgresql: unknown InheritVaultKey mutation op: %q", m.Op())
+	}
+}
+
+// InheritVaultTombstoneClient is a client for the InheritVaultTombstone schema.
+type InheritVaultTombstoneClient struct {
+	config
+}
+
+// NewInheritVaultTombstoneClient returns a client for the InheritVaultTombstone from the given config.
+func NewInheritVaultTombstoneClient(c config) *InheritVaultTombstoneClient {
+	return &InheritVaultTombstoneClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `inheritvaulttombstone.Hooks(f(g(h())))`.
+func (c *InheritVaultTombstoneClient) Use(hooks ...Hook) {
+	c.hooks.InheritVaultTombstone = append(c.hooks.InheritVaultTombstone, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `inheritvaulttombstone.Intercept(f(g(h())))`.
+func (c *InheritVaultTombstoneClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InheritVaultTombstone = append(c.inters.InheritVaultTombstone, interceptors...)
+}
+
+// Create returns a builder for creating a InheritVaultTombstone entity.
+func (c *InheritVaultTombstoneClient) Create() *InheritVaultTombstoneCreate {
+	mutation := newInheritVaultTombstoneMutation(c.config, OpCreate)
+	return &InheritVaultTombstoneCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InheritVaultTombstone entities.
+func (c *InheritVaultTombstoneClient) CreateBulk(builders ...*InheritVaultTombstoneCreate) *InheritVaultTombstoneCreateBulk {
+	return &InheritVaultTombstoneCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InheritVaultTombstoneClient) MapCreateBulk(slice any, setFunc func(*InheritVaultTombstoneCreate, int)) *InheritVaultTombstoneCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InheritVaultTombstoneCreateBulk{err: fmt.Errorf("calling to InheritVaultTombstoneClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InheritVaultTombstoneCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InheritVaultTombstoneCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InheritVaultTombstone.
+func (c *InheritVaultTombstoneClient) Update() *InheritVaultTombstoneUpdate {
+	mutation := newInheritVaultTombstoneMutation(c.config, OpUpdate)
+	return &InheritVaultTombstoneUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InheritVaultTombstoneClient) UpdateOne(_m *InheritVaultTombstone) *InheritVaultTombstoneUpdateOne {
+	mutation := newInheritVaultTombstoneMutation(c.config, OpUpdateOne, withInheritVaultTombstone(_m))
+	return &InheritVaultTombstoneUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InheritVaultTombstoneClient) UpdateOneID(id int) *InheritVaultTombstoneUpdateOne {
+	mutation := newInheritVaultTombstoneMutation(c.config, OpUpdateOne, withInheritVaultTombstoneID(id))
+	return &InheritVaultTombstoneUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InheritVaultTombstone.
+func (c *InheritVaultTombstoneClient) Delete() *InheritVaultTombstoneDelete {
+	mutation := newInheritVaultTombstoneMutation(c.config, OpDelete)
+	return &InheritVaultTombstoneDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InheritVaultTombstoneClient) DeleteOne(_m *InheritVaultTombstone) *InheritVaultTombstoneDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InheritVaultTombstoneClient) DeleteOneID(id int) *InheritVaultTombstoneDeleteOne {
+	builder := c.Delete().Where(inheritvaulttombstone.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InheritVaultTombstoneDeleteOne{builder}
+}
+
+// Query returns a query builder for InheritVaultTombstone.
+func (c *InheritVaultTombstoneClient) Query() *InheritVaultTombstoneQuery {
+	return &InheritVaultTombstoneQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInheritVaultTombstone},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InheritVaultTombstone entity by its id.
+func (c *InheritVaultTombstoneClient) Get(ctx context.Context, id int) (*InheritVaultTombstone, error) {
+	return c.Query().Where(inheritvaulttombstone.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InheritVaultTombstoneClient) GetX(ctx context.Context, id int) *InheritVaultTombstone {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InheritVaultTombstoneClient) Hooks() []Hook {
+	return c.hooks.InheritVaultTombstone
+}
+
+// Interceptors returns the client interceptors.
+func (c *InheritVaultTombstoneClient) Interceptors() []Interceptor {
+	return c.inters.InheritVaultTombstone
+}
+
+func (c *InheritVaultTombstoneClient) mutate(ctx context.Context, m *InheritVaultTombstoneMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InheritVaultTombstoneCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InheritVaultTombstoneUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InheritVaultTombstoneUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InheritVaultTombstoneDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown InheritVaultTombstone mutation op: %q", m.Op())
 	}
 }
 
@@ -4232,17 +4375,18 @@ type (
 	hooks struct {
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode, InheritVaultEntry,
-		InheritVaultKey, OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule,
-		RuntimeConfiguration, SocialPlatformInfo, Sponsor, SponsorAfdianOrder,
-		SponsorManualDuration, StoryTranslation, SystemLog, Ticket, TicketMessage,
-		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
+		InheritVaultKey, InheritVaultTombstone, OAuth2ClientWebhookEndpoint, RiskEvent,
+		RiskRule, RuntimeConfiguration, SocialPlatformInfo, Sponsor,
+		SponsorAfdianOrder, SponsorManualDuration, StoryTranslation, SystemLog, Ticket,
+		TicketMessage, UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
 	}
 	inters struct {
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode, InheritVaultEntry,
-		InheritVaultKey, OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule,
-		RuntimeConfiguration, SocialPlatformInfo, Sponsor, SponsorAfdianOrder,
-		SponsorManualDuration, StoryTranslation, SystemLog, Ticket, TicketMessage,
-		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Interceptor
+		InheritVaultKey, InheritVaultTombstone, OAuth2ClientWebhookEndpoint, RiskEvent,
+		RiskRule, RuntimeConfiguration, SocialPlatformInfo, Sponsor,
+		SponsorAfdianOrder, SponsorManualDuration, StoryTranslation, SystemLog, Ticket,
+		TicketMessage, UploadLog, User, WebhookEndpoint,
+		WebhookSubscription []ent.Interceptor
 	}
 )

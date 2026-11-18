@@ -190,6 +190,12 @@ func prepareToolboxDatabase(cfg harukiConfig.Config, entClient *dbManager.Client
 		cancelUploadSchema()
 		return err
 	}
+	if strings.TrimSpace(cfg.InheritVault.MasterKeyFile) != "" {
+		if _, err := entClient.InheritVaultTombstone.Query().Limit(1).IDs(uploadSchemaCtx); err != nil {
+			cancelUploadSchema()
+			return fmt.Errorf("check inherit_vault_tombstones; apply the Toolbox Ent schema migration: %w", err)
+		}
+	}
 	if err := ensureCanonicalGameAccountBindings(uploadSchemaCtx, entClient.SQLDB(), cfg.Backend.AutoMigrate); err != nil {
 		cancelUploadSchema()
 		return fmt.Errorf("ensure canonical game account identities: %w", err)

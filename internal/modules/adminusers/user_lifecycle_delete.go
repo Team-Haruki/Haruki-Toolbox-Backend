@@ -63,6 +63,11 @@ func handleDeleteUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hyd
 }
 
 func permanentlyDeleteUser(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, actorID, actorRole, targetID string) ([]*postgresql.GameAccountBinding, error) {
+	release, err := apiHelper.DBManager.DB.LockUserMutations(ctx, targetID)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "account deletion unavailable; retry later")
+	}
+	defer release()
 	rdb := apiHelper.RedisClient()
 	if rdb == nil {
 		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "account deletion unavailable; retry later")

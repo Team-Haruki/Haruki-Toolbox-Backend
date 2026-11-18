@@ -15,6 +15,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaulttombstone"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
@@ -303,6 +304,16 @@ func init() {
 	inheritvaultkeyDescMasterKeyVersion := inheritvaultkeyFields[7].Descriptor()
 	// inheritvaultkey.MasterKeyVersionValidator is a validator for the "master_key_version" field. It is called by the builders before save.
 	inheritvaultkey.MasterKeyVersionValidator = inheritvaultkeyDescMasterKeyVersion.Validators[0].(func(int) error)
+	inheritvaulttombstoneFields := schema.InheritVaultTombstone{}.Fields()
+	_ = inheritvaulttombstoneFields
+	// inheritvaulttombstoneDescUserID is the schema descriptor for user_id field.
+	inheritvaulttombstoneDescUserID := inheritvaulttombstoneFields[0].Descriptor()
+	// inheritvaulttombstone.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	inheritvaulttombstone.UserIDValidator = inheritvaulttombstoneDescUserID.Validators[0].(func(string) error)
+	// inheritvaulttombstoneDescEntryID is the schema descriptor for entry_id field.
+	inheritvaulttombstoneDescEntryID := inheritvaulttombstoneFields[1].Descriptor()
+	// inheritvaulttombstone.EntryIDValidator is a validator for the "entry_id" field. It is called by the builders before save.
+	inheritvaulttombstone.EntryIDValidator = inheritvaulttombstoneDescEntryID.Validators[0].(func(string) error)
 	oauth2clientwebhookendpointFields := schema.OAuth2ClientWebhookEndpoint{}.Fields()
 	_ = oauth2clientwebhookendpointFields
 	// oauth2clientwebhookendpointDescClientID is the schema descriptor for client_id field.

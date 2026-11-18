@@ -21,6 +21,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaulttombstone"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
@@ -60,6 +61,7 @@ const (
 	TypeIOSScriptCode               = "IOSScriptCode"
 	TypeInheritVaultEntry           = "InheritVaultEntry"
 	TypeInheritVaultKey             = "InheritVaultKey"
+	TypeInheritVaultTombstone       = "InheritVaultTombstone"
 	TypeOAuth2ClientWebhookEndpoint = "OAuth2ClientWebhookEndpoint"
 	TypeRiskEvent                   = "RiskEvent"
 	TypeRiskRule                    = "RiskRule"
@@ -8467,6 +8469,440 @@ func (m *InheritVaultKeyMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown InheritVaultKey edge %s", name)
+}
+
+// InheritVaultTombstoneMutation represents an operation that mutates the InheritVaultTombstone nodes in the graph.
+type InheritVaultTombstoneMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	user_id       *string
+	entry_id      *string
+	expires_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*InheritVaultTombstone, error)
+	predicates    []predicate.InheritVaultTombstone
+}
+
+var _ ent.Mutation = (*InheritVaultTombstoneMutation)(nil)
+
+// inheritvaulttombstoneOption allows management of the mutation configuration using functional options.
+type inheritvaulttombstoneOption func(*InheritVaultTombstoneMutation)
+
+// newInheritVaultTombstoneMutation creates new mutation for the InheritVaultTombstone entity.
+func newInheritVaultTombstoneMutation(c config, op Op, opts ...inheritvaulttombstoneOption) *InheritVaultTombstoneMutation {
+	m := &InheritVaultTombstoneMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeInheritVaultTombstone,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withInheritVaultTombstoneID sets the ID field of the mutation.
+func withInheritVaultTombstoneID(id int) inheritvaulttombstoneOption {
+	return func(m *InheritVaultTombstoneMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *InheritVaultTombstone
+		)
+		m.oldValue = func(ctx context.Context) (*InheritVaultTombstone, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().InheritVaultTombstone.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withInheritVaultTombstone sets the old InheritVaultTombstone of the mutation.
+func withInheritVaultTombstone(node *InheritVaultTombstone) inheritvaulttombstoneOption {
+	return func(m *InheritVaultTombstoneMutation) {
+		m.oldValue = func(context.Context) (*InheritVaultTombstone, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m InheritVaultTombstoneMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m InheritVaultTombstoneMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *InheritVaultTombstoneMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *InheritVaultTombstoneMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().InheritVaultTombstone.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetUserID sets the "user_id" field.
+func (m *InheritVaultTombstoneMutation) SetUserID(s string) {
+	m.user_id = &s
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *InheritVaultTombstoneMutation) UserID() (r string, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the InheritVaultTombstone entity.
+// If the InheritVaultTombstone object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultTombstoneMutation) OldUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *InheritVaultTombstoneMutation) ResetUserID() {
+	m.user_id = nil
+}
+
+// SetEntryID sets the "entry_id" field.
+func (m *InheritVaultTombstoneMutation) SetEntryID(s string) {
+	m.entry_id = &s
+}
+
+// EntryID returns the value of the "entry_id" field in the mutation.
+func (m *InheritVaultTombstoneMutation) EntryID() (r string, exists bool) {
+	v := m.entry_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntryID returns the old "entry_id" field's value of the InheritVaultTombstone entity.
+// If the InheritVaultTombstone object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultTombstoneMutation) OldEntryID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntryID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntryID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntryID: %w", err)
+	}
+	return oldValue.EntryID, nil
+}
+
+// ResetEntryID resets all changes to the "entry_id" field.
+func (m *InheritVaultTombstoneMutation) ResetEntryID() {
+	m.entry_id = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *InheritVaultTombstoneMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *InheritVaultTombstoneMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the InheritVaultTombstone entity.
+// If the InheritVaultTombstone object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InheritVaultTombstoneMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *InheritVaultTombstoneMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// Where appends a list predicates to the InheritVaultTombstoneMutation builder.
+func (m *InheritVaultTombstoneMutation) Where(ps ...predicate.InheritVaultTombstone) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the InheritVaultTombstoneMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *InheritVaultTombstoneMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.InheritVaultTombstone, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *InheritVaultTombstoneMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *InheritVaultTombstoneMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (InheritVaultTombstone).
+func (m *InheritVaultTombstoneMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *InheritVaultTombstoneMutation) Fields() []string {
+	fields := make([]string, 0, 3)
+	if m.user_id != nil {
+		fields = append(fields, inheritvaulttombstone.FieldUserID)
+	}
+	if m.entry_id != nil {
+		fields = append(fields, inheritvaulttombstone.FieldEntryID)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, inheritvaulttombstone.FieldExpiresAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *InheritVaultTombstoneMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case inheritvaulttombstone.FieldUserID:
+		return m.UserID()
+	case inheritvaulttombstone.FieldEntryID:
+		return m.EntryID()
+	case inheritvaulttombstone.FieldExpiresAt:
+		return m.ExpiresAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *InheritVaultTombstoneMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case inheritvaulttombstone.FieldUserID:
+		return m.OldUserID(ctx)
+	case inheritvaulttombstone.FieldEntryID:
+		return m.OldEntryID(ctx)
+	case inheritvaulttombstone.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown InheritVaultTombstone field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InheritVaultTombstoneMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case inheritvaulttombstone.FieldUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case inheritvaulttombstone.FieldEntryID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntryID(v)
+		return nil
+	case inheritvaulttombstone.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultTombstone field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *InheritVaultTombstoneMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *InheritVaultTombstoneMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *InheritVaultTombstoneMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown InheritVaultTombstone numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *InheritVaultTombstoneMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *InheritVaultTombstoneMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *InheritVaultTombstoneMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown InheritVaultTombstone nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *InheritVaultTombstoneMutation) ResetField(name string) error {
+	switch name {
+	case inheritvaulttombstone.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case inheritvaulttombstone.FieldEntryID:
+		m.ResetEntryID()
+		return nil
+	case inheritvaulttombstone.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown InheritVaultTombstone field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *InheritVaultTombstoneMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *InheritVaultTombstoneMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *InheritVaultTombstoneMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *InheritVaultTombstoneMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *InheritVaultTombstoneMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *InheritVaultTombstoneMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *InheritVaultTombstoneMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown InheritVaultTombstone unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *InheritVaultTombstoneMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown InheritVaultTombstone edge %s", name)
 }
 
 // OAuth2ClientWebhookEndpointMutation represents an operation that mutates the OAuth2ClientWebhookEndpoint nodes in the graph.

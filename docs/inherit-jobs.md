@@ -265,9 +265,11 @@ The backend logs in with the stored credential and issues a new code, which repl
 
 Errors: `entry_not_found`, `entry_stale`, `no_previous_password`, `game_degraded`, `server_busy`, `reissue_login_failed` (502: the stored credential no longer works), `reissue_rejected`, `reissue_failed` (502), unlock errors.
 
+Reissue, entry destruction, vault reset, and permanent account deletion are serialized per owner. Reissue requires an active account and a live entry. An unavailable vault store returns `store_unavailable` before reissue starts.
+
 ### 5.5 Destroy an entry ("我已恢复")
 
-`DELETE /api/inherit/vault/entries/{entry_id}` → `200`. The entry becomes unreadable at once and is deleted shortly after. No unlock needed.
+`DELETE /api/inherit/vault/entries/{entry_id}` → `200`. The entry becomes unreadable at once and is deleted shortly after. The vault records the destruction in PostgreSQL to prevent a pending Redis record from restoring the entry. No unlock needed.
 
 ### 5.6 Reset the vault
 

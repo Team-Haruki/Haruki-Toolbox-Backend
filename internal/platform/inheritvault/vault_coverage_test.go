@@ -480,8 +480,11 @@ func TestResetKeyReportsDatabaseErrors(t *testing.T) {
 
 	failKeys := failKeyOps(env.store.db, ent.OpDelete)
 	failKeys.Store(true)
-	if n, err := env.store.ResetKey(ctx, "u1"); n != 1 || !errors.Is(err, errInjected) {
+	if n, err := env.store.ResetKey(ctx, "u1"); n != 0 || !errors.Is(err, errInjected) {
 		t.Fatalf("key delete failure: %d, %v", n, err)
+	}
+	if _, err := env.store.Get(ctx, "u1", "e1"); err != nil {
+		t.Fatalf("entry was not restored by rollback: %v", err)
 	}
 }
 
@@ -945,6 +948,10 @@ func TestDestroyParkedEntry(t *testing.T) {
 	ctx := context.Background()
 	u := newUser(t, env, "u1", "pw-123456")
 	env.withDBDown(t, func() { putCredential(t, env.store, u, "parked", "cred") })
+	parked, err := env.redis.Get(fallbackKeyPrefix + "parked")
+	if err != nil {
+		t.Fatal(err)
+	}
 	failCreate := failEntryOps(env.store.db, ent.OpCreate)
 	failCreate.Store(true) // keep it parked through Get's reconcile
 
@@ -957,15 +964,56 @@ func TestDestroyParkedEntry(t *testing.T) {
 	if err := env.store.Destroy(ctx, "u1", "parked"); err != nil {
 		t.Fatal(err)
 	}
-	if keys := env.redis.Keys(); len(keys) != 0 {
+	if keys := env.redis.Keys(); len(keys) != 1 || keys[0] != fallbackTombstonePrefix+"u1:parked" {
 		t.Fatalf("redis keys left: %v", keys)
 	}
 	failCreate.Store(false)
+	// A stale Redis restore can contain a parked record after the database
+	// transaction already acknowledged destruction.
+	env.redis.Del(fallbackTombstonePrefix + "u1:parked")
+	if err := env.redis.Set(fallbackKeyPrefix+"parked", parked); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.redis.SAdd(fallbackUserPrefix+"u1", "parked"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.Reconcile(ctx, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	if exists, err := env.store.db.InheritVaultEntry.Query().Exist(ctx); err != nil || exists {
+		t.Fatalf("destroyed entry reappeared: %v", err)
+	}
 	if _, err := env.store.Get(ctx, "u1", "parked"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get after destroy: %v", err)
 	}
 	if err := env.store.Destroy(ctx, "u1", "parked"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second Destroy: %v", err)
+	}
+}
+
+func TestLiveOwnerReservationBlocksEntryDestruction(t *testing.T) {
+	env := newStoreEnv(t)
+	u := newUser(t, env, "u1", "pw-123456")
+	putCredential(t, env.store, u, "entry", "sealed-fixture")
+	ctx, release, err := env.store.ReserveLiveOwner(t.Context(), "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	wait, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if err := env.store.Destroy(wait, "u1", "entry"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("destroy during use = %v", err)
+	}
+	if _, err := env.store.Get(ctx, "u1", "entry"); err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if err := env.store.Destroy(t.Context(), "u1", "entry"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.Get(t.Context(), "u1", "entry"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Get after destruction: %v", err)
 	}
 }
 

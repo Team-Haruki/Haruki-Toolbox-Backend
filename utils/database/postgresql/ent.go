@@ -21,6 +21,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/grouplist"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaulttombstone"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/iosscriptcode"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
@@ -108,6 +109,7 @@ func checkColumn(t, c string) error {
 			iosscriptcode.Table:               iosscriptcode.ValidColumn,
 			inheritvaultentry.Table:           inheritvaultentry.ValidColumn,
 			inheritvaultkey.Table:             inheritvaultkey.ValidColumn,
+			inheritvaulttombstone.Table:       inheritvaulttombstone.ValidColumn,
 			oauth2clientwebhookendpoint.Table: oauth2clientwebhookendpoint.ValidColumn,
 			riskevent.Table:                   riskevent.ValidColumn,
 			riskrule.Table:                    riskrule.ValidColumn,
