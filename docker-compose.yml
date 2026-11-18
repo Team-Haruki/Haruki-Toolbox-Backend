@@ -29,6 +29,14 @@ services:
 
   postgres:
     image: postgres:18-alpine
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        case "$${POSTGRES_PASSWORD:-}" in
+          ''|change-me-*) echo "Set a deployment-specific POSTGRES_PASSWORD" >&2; exit 1 ;;
+        esac
+        exec docker-entrypoint.sh postgres
     restart: unless-stopped
     depends_on:
       mihomo:
@@ -65,14 +73,23 @@ services:
         condition: service_healthy
     networks:
       - haruki-net
-    command: redis-server --save 60 1 --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        case "$${REDIS_PASSWORD:-}" in
+          ''|change-me-*) echo "Set a deployment-specific REDIS_PASSWORD" >&2; exit 1 ;;
+        esac
+        exec docker-entrypoint.sh redis-server --save 60 1 --requirepass "$$REDIS_PASSWORD"
     ports:
       - "127.0.0.1:${REDIS_PORT}:6379"
       - "${TAILSCALE_IP}:${REDIS_PORT}:6379"
     volumes:
       - ${REDIS_DATA_PATH}:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -110,7 +127,6 @@ services:
       - "127.0.0.1:${KRATOS_PUBLIC_PORT}:4433"
       - "${TAILSCALE_IP}:${KRATOS_PUBLIC_PORT}:4433"
       - "127.0.0.1:${KRATOS_ADMIN_PORT}:4434"
-      - "${TAILSCALE_IP}:${KRATOS_ADMIN_PORT}:4434"
     environment:
       DSN: postgres://${KRATOS_DB_USER}:${KRATOS_DB_PASSWORD}@postgres:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
       LOG_LEVEL: info
@@ -166,7 +182,7 @@ services:
       SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ID: ${KRATOS_PASSKEY_RP_ID:-toolbox.example.com}
       SELFSERVICE_METHODS_WEBAUTHN_CONFIG_RP_ORIGINS_0: ${KRATOS_PASSKEY_RP_ORIGIN:-https://toolbox.example.com}
       SELFSERVICE_FLOWS_SETTINGS_REQUIRED_AAL: highest_available
-      SESSION_WHOAMI_REQUIRED_AAL: aal1
+      SESSION_WHOAMI_REQUIRED_AAL: highest_available
       SECRETS_COOKIE_0: ${KRATOS_COOKIE_SECRET}
       SECRETS_CIPHER_0: ${KRATOS_CIPHER_SECRET}
       COURIER_SMTP_CONNECTION_URI: ${SMTP_CONNECTION_URI}
@@ -259,7 +275,7 @@ services:
       HARUKI_CONFIG_PATH: /app/config/haruki-toolbox-configs.yaml
       AUTH_PROVIDER: kratos
       AUTH_PROXY_ENABLED: "true"
-      AUTH_PROXY_TRUSTED_VALUE: ${OATHKEEPER_SHARED_SECRET}
+      AUTH_PROXY_TRUSTED_VALUE: ${OATHKEEPER_SHARED_SECRET:?Set a deployment-specific OATHKEEPER_SHARED_SECRET}
       AUTH_PROXY_SESSION_HEADER: X-Auth-Proxy-Session-Id
       HARUKI_DB_TYPE: postgres
       HARUKI_DB_URL: postgresql://${HARUKI_DB_USER}:${HARUKI_DB_PASSWORD}@postgres:5432/toolbox?sslmode=disable
@@ -372,7 +388,7 @@ services:
     environment:
       LOG_LEVEL: info
       SERVE_PROXY_CORS_ALLOWED_ORIGINS_0: ${FRONTEND_PUBLIC_URL}
-      MUTATORS_HEADER_CONFIG_HEADERS_X_AUTH_PROXY_SECRET: ${OATHKEEPER_SHARED_SECRET}
+      MUTATORS_HEADER_CONFIG_HEADERS_X_AUTH_PROXY_SECRET: ${OATHKEEPER_SHARED_SECRET:?Set a deployment-specific OATHKEEPER_SHARED_SECRET}
     volumes:
       - ${STACK_HOST_ROOT}/oathkeeper/oathkeeper.yml:/etc/config/oathkeeper/oathkeeper.yml:ro
       - ${STACK_HOST_ROOT}/oathkeeper/access-rules.yml:/etc/config/oathkeeper/access-rules.yml:ro

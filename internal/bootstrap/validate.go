@@ -39,7 +39,7 @@ func validateUserSystemConfig(cfg harukiConfig.Config) error {
 		}
 		// This single secret is the entire identity-forging trust boundary, so refuse
 		// to start with the shipped placeholder or an obviously weak value.
-		if trustedValue == "change-me-auth-proxy-secret" || len(trustedValue) < 16 {
+		if harukiConfig.IsExampleCredential(trustedValue) || len(trustedValue) < 16 {
 			return fmt.Errorf("user_system.auth_proxy_trusted_value must be changed from the placeholder and be at least 16 characters")
 		}
 		if strings.TrimSpace(cfg.UserSystem.AuthProxySubjectHeader) == "" {
