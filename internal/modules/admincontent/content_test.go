@@ -46,6 +46,14 @@ func TestFriendLinkWritesAndListsEnforceTagBudgets(t *testing.T) {
 	}
 	request(http.MethodPost, "/links", make([]string, postgresql.MaxFriendLinkTags+1), http.StatusBadRequest)
 	request(http.MethodPut, "/links/1", []string{strings.Repeat("节", 45)}, http.StatusBadRequest)
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/links?page_size=201", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("oversized friend link page returned %d, want 400", resp.StatusCode)
+	}
 	request(http.MethodPost, "/links", []string{"tag", "small"}, http.StatusOK)
 	for _, tc := range []struct {
 		path, name, tag string
@@ -115,6 +123,27 @@ func TestParseAdminFriendLinkPayload(t *testing.T) {
 			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusBadRequest)
 		}
 	})
+	for _, tc := range []struct {
+		name, encoding, body string
+		want                 int
+	}{
+		{"compressed", "gzip", "fixture", http.StatusUnsupportedMediaType},
+		{"oversized", "identity", strings.Repeat(" ", FriendLinkBodyLimit+1), http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Content-Encoding", tc.encoding)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.want {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.want)
+			}
+		})
+	}
 }
 
 func TestParseAdminFriendGroupPayload(t *testing.T) {

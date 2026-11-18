@@ -23,6 +23,14 @@ func TestPublicFriendLinksKeepOrderedBoundedPages(t *testing.T) {
 		SetSortOrder(1).SetTags([]string{"normal"}).ExecX(t.Context())
 	app := fiber.New()
 	registerFriendLinksRoutes(&api.HarukiToolboxRouterHelpers{Router: app, DBManager: &database.HarukiToolboxDBManager{DB: db}}, AssetsConfig{})
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/misc/friend_links?page_size=201", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("oversized friend link page returned %d, want 400", resp.StatusCode)
+	}
 	for _, want := range []struct {
 		query, name, next string
 		tags              int
