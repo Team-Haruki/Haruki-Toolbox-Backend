@@ -555,3 +555,27 @@ func TestAdminSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestProtectedReviewerScopesBotAlertsAndWrites(t *testing.T) {
+	env := newAdminTestEnv(t, nil)
+	current := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
+	hidden := mustCreateAlert(t, env.db, "auth_failed", "30042043", "203.0.113.8", "node-a", testNow.Add(-2*time.Minute))
+	hidden.Update().SetStatus(botsecurityalert.StatusResolved).SetHandledByUserID("super-1").SetNote("protected review").SaveX(t.Context())
+	list := env.list(t, url.Values{})
+	if list.Total != 1 || !equalIDs(itemIDs(list.Items), current.ID) {
+		t.Fatalf("ordinary admin list includes protected review: %+v", list)
+	}
+	response := env.patch(t, hidden.ID, "admin-1", `{"status":"resolved","note":"should never persist"}`)
+	if response.Status != fiber.StatusNotFound || env.db.BotSecurityAlert.GetX(t.Context(), hidden.ID).Note != "protected review" {
+		t.Fatalf("ordinary admin changed review: status=%d", response.Status)
+	}
+	response = env.do(t, http.MethodGet, "/api/admin/bot-security/summary", "admin-1", "")
+	data := decodeJSON[envelope[alertSummaryResponse]](t, response.Body)
+	if response.Status != fiber.StatusOK || data.UpdatedData == nil || data.UpdatedData.Last7d != 1 {
+		t.Fatalf("ordinary admin summary counted hidden review: status=%d data=%+v", response.Status, data.UpdatedData)
+	}
+	response = env.patch(t, hidden.ID, "super-1", `{"status":"resolved","note":"current review"}`)
+	if response.Status != fiber.StatusOK || env.db.BotSecurityAlert.GetX(t.Context(), hidden.ID).Note != "current review" {
+		t.Fatalf("super admin lost review access: status=%d", response.Status)
+	}
+}

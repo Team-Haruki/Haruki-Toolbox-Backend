@@ -14,6 +14,7 @@ import (
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/botsecurityalert"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -174,6 +175,19 @@ func (h *adminHandlers) db() *postgresql.Client {
 	return h.apiHelper.DBManager.DB
 }
 
+func visibleBotAlert(actorRole string) predicate.BotSecurityAlert {
+	return func(alerts *sql.Selector) {
+		if actorRole == adminCoreModule.RoleSuperAdmin {
+			return
+		}
+		users := sql.Table(userSchema.Table)
+		protected := sql.Select(users.C(userSchema.FieldID)).From(users).
+			Where(sql.EQ(users.C(userSchema.FieldRole), userSchema.RoleSuperAdmin))
+		reviewer := alerts.C(botsecurityalert.FieldHandledByUserID)
+		alerts.Where(sql.Or(sql.IsNull(reviewer), sql.NotIn(reviewer, protected)))
+	}
+}
+
 func (h *adminHandlers) list(c fiber.Ctx) error {
 	filters, err := parseAlertFilters(c)
 	if err != nil {
@@ -183,7 +197,8 @@ func (h *adminHandlers) list(c fiber.Ctx) error {
 	if db == nil {
 		return harukiAPIHelper.ErrorInternal(c, "database unavailable")
 	}
-	query := applyAlertFilters(db.BotSecurityAlert.Query(), filters)
+	role, _ := c.Locals("userRole").(string)
+	query := applyAlertFilters(db.BotSecurityAlert.Query().Where(visibleBotAlert(role)), filters)
 	total, err := query.Clone().Count(c.Context())
 	if err != nil {
 		return harukiAPIHelper.ErrorInternal(c, "failed to count bot security alerts")
@@ -206,7 +221,7 @@ func (h *adminHandlers) list(c fiber.Ctx) error {
 }
 
 func (h *adminHandlers) update(c fiber.Ctx) error {
-	actorUserID, _, err := adminCoreModule.CurrentAdminActor(c)
+	actorUserID, role, err := adminCoreModule.CurrentAdminActor(c)
 	if err != nil {
 		return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 	}
@@ -240,7 +255,7 @@ func (h *adminHandlers) update(c fiber.Ctx) error {
 	if db == nil {
 		return harukiAPIHelper.ErrorInternal(c, "database unavailable")
 	}
-	row, err := db.BotSecurityAlert.Get(c.Context(), id)
+	row, err := db.BotSecurityAlert.Query().Where(botsecurityalert.IDEQ(id), visibleBotAlert(role)).Only(c.Context())
 	if err != nil {
 		if postgresql.IsNotFound(err) {
 			h.audit(c, idValue, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonNotFound, nil))
@@ -249,7 +264,11 @@ func (h *adminHandlers) update(c fiber.Ctx) error {
 		return harukiAPIHelper.ErrorInternal(c, "failed to query bot security alert")
 	}
 
-	builder := row.Update().SetStatus(status)
+	sameReviewer := botsecurityalert.HandledByUserIDIsNil()
+	if row.HandledByUserID != nil {
+		sameReviewer = botsecurityalert.HandledByUserIDEQ(*row.HandledByUserID)
+	}
+	builder := row.Update().Where(visibleBotAlert(role), sameReviewer, botsecurityalert.StatusEQ(row.Status), botsecurityalert.NoteEQ(row.Note)).SetStatus(status)
 	switch {
 	case status == botsecurityalert.StatusOpen:
 		builder.ClearHandledByUserID().ClearHandledAt()
@@ -264,6 +283,9 @@ func (h *adminHandlers) update(c fiber.Ctx) error {
 	updated, err := builder.Save(c.Context())
 	if err != nil {
 		h.audit(c, idValue, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonSaveFailed, nil))
+		if postgresql.IsNotFound(err) {
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "alert changed; refresh before updating", nil)
+		}
 		return harukiAPIHelper.ErrorInternal(c, "failed to update bot security alert")
 	}
 	h.audit(c, idValue, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
@@ -289,9 +311,11 @@ func (h *adminHandlers) summary(c fiber.Ctx) error {
 	}
 	ctx := c.Context()
 	now := h.now().UTC()
+	role, _ := c.Locals("userRole").(string)
+	base := db.BotSecurityAlert.Query().Where(visibleBotAlert(role))
 
 	var byKind []kindCount
-	if err := db.BotSecurityAlert.Query().
+	if err := base.Clone().
 		Where(botsecurityalert.StatusEQ(botsecurityalert.StatusOpen)).
 		GroupBy(botsecurityalert.FieldKind).
 		Aggregate(postgresql.Count()).
@@ -311,10 +335,10 @@ func (h *adminHandlers) summary(c fiber.Ctx) error {
 	}
 
 	var err error
-	if resp.Last24h, err = db.BotSecurityAlert.Query().Where(botsecurityalert.AlertTimeGTE(now.Add(-24 * time.Hour))).Count(ctx); err != nil {
+	if resp.Last24h, err = base.Clone().Where(botsecurityalert.AlertTimeGTE(now.Add(-24 * time.Hour))).Count(ctx); err != nil {
 		return harukiAPIHelper.ErrorInternal(c, "failed to summarize bot security alerts")
 	}
-	if resp.Last7d, err = db.BotSecurityAlert.Query().Where(botsecurityalert.AlertTimeGTE(now.Add(-7 * 24 * time.Hour))).Count(ctx); err != nil {
+	if resp.Last7d, err = base.Clone().Where(botsecurityalert.AlertTimeGTE(now.Add(-7 * 24 * time.Hour))).Count(ctx); err != nil {
 		return harukiAPIHelper.ErrorInternal(c, "failed to summarize bot security alerts")
 	}
 	return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
