@@ -108,7 +108,7 @@ func (c *HydraConfig) LockClientGrants(ctx context.Context, clientID string, exc
 	return c.lockClientGrants(ctx, clientID, exclusive)
 }
 
-var ErrConsentIndexUnavailable = errors.New("Hydra consent subject index unavailable")
+var ErrConsentIndexUnavailable = errors.New("consent subject index unavailable for Hydra")
 
 func (c *HydraConfig) ListConsentSubjects(ctx context.Context, clientID string, limit int) ([]string, error) {
 	if c == nil || c.consentSubjects == nil {
