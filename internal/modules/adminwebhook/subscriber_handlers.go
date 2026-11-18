@@ -3,6 +3,7 @@ package adminwebhook
 import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
 
@@ -30,8 +31,20 @@ func handleListAdminWebhookSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxR
 			return harukiAPIHelper.ErrorNotFound(c, "webhook not found")
 		}
 
-		rows, err := apiHelper.DBManager.DB.WebhookSubscription.Query().
-			Where(webhooksubscription.WebhookIDEQ(webhookID)).
+		db := apiHelper.DBManager.DB
+		query := db.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(webhookID))
+		role, _ := c.Locals("userRole").(string)
+		if role != adminCoreModule.RoleSuperAdmin {
+			query.Where(func(s *sql.Selector) {
+				users := sql.Table(userSchema.Table)
+				s.Where(sql.Exists(sql.Select(users.C(userSchema.FieldID)).From(users).
+					Where(sql.And(
+						sql.ColumnsEQ(users.C(userSchema.FieldID), s.C(webhooksubscription.FieldUserID)),
+						sql.NEQ(users.C(userSchema.FieldRole), userSchema.RoleSuperAdmin),
+					))))
+			})
+		}
+		rows, err := query.
 			Order(webhooksubscription.ByCreatedAt(sql.OrderDesc()), webhooksubscription.ByID(sql.OrderAsc())).
 			All(c.Context())
 		if err != nil {

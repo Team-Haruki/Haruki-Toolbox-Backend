@@ -13,6 +13,7 @@ func RegisterAdminUserRoutes(
 	adminGroup fiber.Router,
 	hydraConfig *harukiOAuth2.HydraConfig,
 	userDataBuilder harukiAPIHelper.UserDataBuilder,
+	requireReauth fiber.Handler,
 ) {
 	users := adminGroup.Group("/users", adminCoreModule.RequireAdmin(apiHelper))
 
@@ -20,13 +21,13 @@ func RegisterAdminUserRoutes(
 	users.Post("/batch-ban", handleBatchBanUsers(apiHelper, hydraConfig))
 	users.Post("/batch-unban", handleBatchUnbanUsers(apiHelper))
 	users.Post("/batch-force-logout", handleBatchForceLogoutUsers(apiHelper))
-	users.Post("/batch-role", adminCoreModule.RequireSuperAdmin(apiHelper), handleBatchUpdateUserRole(apiHelper))
+	users.Post("/batch-role", adminCoreModule.RequireSuperAdmin(apiHelper), requireReauth, handleBatchUpdateUserRole(apiHelper))
 	users.Post("/batch-allow-cn-mysekai", handleBatchUpdateUserAllowCNMysekai(apiHelper))
 	users.Get("/ticket-notification-recipients", adminCoreModule.RequireSuperAdmin(apiHelper), handleListAdminTicketNotificationRecipients(apiHelper))
 	users.Get("/:target_user_id/detail", handleGetUserDetail(apiHelper, userDataBuilder))
 	users.Get("/:target_user_id/activity", handleGetUserActivity(apiHelper))
 	users.Get("/:target_user_id/oauth-authorizations", handleListUserOAuthAuthorizations(apiHelper, hydraConfig))
-	users.Post("/:target_user_id/revoke-oauth", handleRevokeUserOAuth(apiHelper, hydraConfig))
+	users.Post("/:target_user_id/revoke-oauth", requireReauth, handleRevokeUserOAuth(apiHelper, hydraConfig))
 	users.Put("/:target_user_id/email", handleUpdateUserEmail(apiHelper))
 	users.Put("/:target_user_id/allow-cn-mysekai", handleUpdateUserAllowCNMysekai(apiHelper))
 	users.Put("/:target_user_id/ticket-notifications", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateUserTicketNotificationPreference(apiHelper))
@@ -48,8 +49,8 @@ func RegisterAdminUserRoutes(
 	users.Delete("/:target_user_id/permanent", handleDeleteUser(apiHelper, hydraConfig))
 	users.Delete("/:target_user_id", handleDeleteUser(apiHelper, hydraConfig))
 	users.Post("/:target_user_id/restore", handleRestoreUser(apiHelper))
-	users.Post("/:target_user_id/reset-password", handleResetUserPassword(apiHelper))
+	users.Post("/:target_user_id/reset-password", requireReauth, handleResetUserPassword(apiHelper))
 	users.Post("/:target_user_id/force-logout", handleForceLogoutUser(apiHelper))
 	users.Get("/:target_user_id/role", handleGetUserRole(apiHelper))
-	users.Put("/:target_user_id/role", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateUserRole(apiHelper))
+	users.Put("/:target_user_id/role", adminCoreModule.RequireSuperAdmin(apiHelper), requireReauth, handleUpdateUserRole(apiHelper))
 }

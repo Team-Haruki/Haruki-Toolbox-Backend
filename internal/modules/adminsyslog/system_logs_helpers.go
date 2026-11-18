@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	platformFiltering "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/filtering"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
@@ -225,6 +226,13 @@ func buildSystemLogCSV(rows []systemLogListItem) ([]byte, error) {
 			row.Path,
 			row.RequestID,
 			metadataStr,
+		}
+		for i, value := range record {
+			trimmed := strings.TrimLeftFunc(value, unicode.IsSpace)
+			if strings.HasPrefix(value, "\t") || strings.HasPrefix(value, "\r") ||
+				strings.HasPrefix(value, "\n") || (len(trimmed) > 0 && strings.ContainsRune("=+-@", rune(trimmed[0]))) {
+				record[i] = "'" + value
+			}
 		}
 		if err := writer.Write(record); err != nil {
 			return nil, err

@@ -113,7 +113,7 @@ func TestPermanentDeletionRouteReturnsAcknowledgementAndAudit(t *testing.T) {
 	db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetUserID("target").SaveX(ctx)
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() })
-	RegisterAdminUserRoutes(helper, app.Group("/api/admin"), nil, harukiAPIHelper.UserDataBuilder{})
+	RegisterAdminUserRoutes(helper, app.Group("/api/admin"), nil, harukiAPIHelper.UserDataBuilder{}, func(c fiber.Ctx) error { return c.Next() })
 	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/target/permanent", strings.NewReader(`{"confirmUserId":"target"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)

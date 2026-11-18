@@ -98,6 +98,10 @@ func handleGetUserActivity(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 				),
 			),
 		)
+		systemLogBase, err = adminCoreModule.ScopeSystemLogsForAdminActor(c.Context(), apiHelper.DBManager.DB, systemLogBase, actorRole)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to scope system logs")
+		}
 
 		systemLogTotal, err := systemLogBase.Clone().Count(c.Context())
 		if err != nil {
