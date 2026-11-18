@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"github.com/alicebob/miniredis/v2"
@@ -29,7 +30,7 @@ func TestRecordInvalidVerificationAttemptUsesAtomicLimit(t *testing.T) {
 	}
 
 	for attempt := 1; attempt <= maxVerifyAttempts; attempt++ {
-		limited, err := recordInvalidVerificationAttempt(ctx, manager, attemptKey, codeKey)
+		limited, err := recordInvalidVerificationAttempt(ctx, manager, attemptKey, codeKey, "123456")
 		if err != nil {
 			t.Fatalf("attempt %d returned error: %v", attempt, err)
 		}
@@ -38,7 +39,7 @@ func TestRecordInvalidVerificationAttemptUsesAtomicLimit(t *testing.T) {
 		}
 	}
 
-	limited, err := recordInvalidVerificationAttempt(ctx, manager, attemptKey, codeKey)
+	limited, err := recordInvalidVerificationAttempt(ctx, manager, attemptKey, codeKey, "123456")
 	if err != nil {
 		t.Fatalf("over-limit attempt returned error: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestRecordInvalidVerificationAttemptCannotResetUnderConcurrency(t *testing.
 			defer finished.Done()
 			ready.Done()
 			<-start
-			wasLimited, err := recordInvalidVerificationAttempt(ctx, manager, attemptKey, codeKey)
+			wasLimited, err := recordInvalidVerificationAttempt(ctx, manager, attemptKey, codeKey, "123456")
 			switch {
 			case err != nil:
 				failed.Add(1)
@@ -113,5 +114,26 @@ func TestRecordInvalidVerificationAttemptCannotResetUnderConcurrency(t *testing.
 	}
 	if server.Exists(codeKey) {
 		t.Fatal("verification code remained after concurrent limit was exceeded")
+	}
+}
+
+func TestBotVerificationUsesIndependentActorAndRecipientBudgets(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	keys := harukiRedis.NewKeyBuilder("fixture")
+	if keys.BuildBotVerifyCodeKey("first", "123") == keys.BuildBotVerifyCodeKey("other", "123") {
+		t.Fatal("verification codes share state across actors")
+	}
+	if keys.BuildBotRegisterRateLimitUserKey("first") == keys.BuildBotRegisterRateLimitUserKey("other") {
+		t.Fatal("pre-proof register limits share state across actors")
+	}
+	redisKeys := []string{"ip", "recipient"}
+	if err := client.Set(t.Context(), redisKeys[0], sendMailIPLimit, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	limits, err := client.Eval(t.Context(), sendMailRateLimitScript, redisKeys, sendMailIPLimit, sendMailTargetLimit, 60000).Int64Slice()
+	if err != nil || limits[0] != rateLimitLimitedByIP || server.Exists(redisKeys[1]) {
+		t.Fatalf("rejected sender spent recipient budget: %v, %v", limits, err)
 	}
 }

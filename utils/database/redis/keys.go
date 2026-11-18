@@ -86,12 +86,12 @@ func NewKeyBuilder(identifierHashSecret string) KeyBuilder {
 	return KeyBuilder{identifierHashSecret: identifierHashSecret}
 }
 
-func (b KeyBuilder) BuildBotVerifyCodeKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, b.hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotVerifyCodeKey(actorID, qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, b.hashExactIdentifier("bot-verify-owner", actorID), b.hashNormalizedIdentifier(qq))
 }
 
-func (b KeyBuilder) BuildBotVerifyAttemptKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, b.hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotVerifyAttemptKey(challengeID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, b.hashExactIdentifier("bot-verify-challenge", challengeID))
 }
 
 func BuildBotSendMailRateLimitIPKey(clientIP string) string {
@@ -102,8 +102,8 @@ func (b KeyBuilder) BuildBotSendMailRateLimitTargetKey(qq string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(qq))
 }
 
-func (b KeyBuilder) BuildBotRegisterRateLimitTargetKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, b.hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotRegisterRateLimitUserKey(actorID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, b.hashExactIdentifier("bot-register-actor", actorID))
 }
 
 func (b KeyBuilder) BuildEmailVerifyKey(email string) string {

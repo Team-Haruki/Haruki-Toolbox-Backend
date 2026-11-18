@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg"
 	botUser "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/user"
@@ -53,22 +54,26 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, "missing verification_code")
 		}
 
+		actorID, err := usercore.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "missing user session")
+		}
 		qqStr := strconv.FormatInt(payload.QQNumber, 10)
 		ctx := c.Context()
 
 		// Register rate limit
-		rlKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotRegisterRateLimitTargetKey(qqStr)
+		rlKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotRegisterRateLimitUserKey(actorID)
 		count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, rlKey, registerRateLimitWindow)
 		if err != nil {
 			harukiLogger.Errorf("Failed to check register rate limit: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "registration service unavailable")
 		}
-		if count > int64(registerTargetLimit) {
+		if count > int64(registerActorLimit) {
 			return respondRateLimited(c, rlKey, "too many registration attempts", apiHelper, registerRateLimitWindow)
 		}
 
 		// Verify code
-		codeKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyCodeKey(qqStr)
+		codeKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyCodeKey(actorID, qqStr)
 		var storedCode string
 		found, err := apiHelper.DBManager.Redis.GetCache(ctx, codeKey, &storedCode)
 		if err != nil {
@@ -78,9 +83,13 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		if !found {
 			return harukiAPIHelper.ErrorBadRequest(c, "verification code not found or expired")
 		}
-		if subtle.ConstantTimeCompare([]byte(payload.VerificationCode), []byte(storedCode)) != 1 {
-			attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(qqStr)
-			limited, err := recordInvalidVerificationAttempt(ctx, apiHelper.DBManager.Redis, attemptKey, codeKey)
+		challengeID, code, valid := strings.Cut(storedCode, ".")
+		if !valid || challengeID == "" || len(code) != verifyCodeLen {
+			return harukiAPIHelper.ErrorBadRequest(c, "verification code not found or expired")
+		}
+		attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(challengeID)
+		if subtle.ConstantTimeCompare([]byte(payload.VerificationCode), []byte(code)) != 1 {
+			limited, err := recordInvalidVerificationAttempt(ctx, apiHelper.DBManager.Redis, attemptKey, codeKey, storedCode)
 			if err != nil {
 				harukiLogger.Errorf("Failed to track verification attempts: %v", err)
 				return harukiAPIHelper.ErrorInternal(c, "registration service unavailable")
@@ -165,7 +174,6 @@ func handleRegister(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 		}
 
 		// Cleanup Redis
-		attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(qqStr)
 		_ = apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey)
 
 		result := registrationResultData{
@@ -183,7 +191,7 @@ func recordInvalidVerificationAttempt(
 	ctx context.Context,
 	redisManager *harukiRedis.HarukiRedisManager,
 	attemptKey string,
-	codeKey string,
+	codeKey, expectedCode string,
 ) (bool, error) {
 	count, err := redisManager.IncrementWithTTL(ctx, attemptKey, verifyCodeTTL)
 	if err != nil {
@@ -192,7 +200,7 @@ func recordInvalidVerificationAttempt(
 	if count <= int64(maxVerifyAttempts) {
 		return false, nil
 	}
-	_ = redisManager.DeleteCache(ctx, codeKey)
+	_, _ = redisManager.DeleteCacheIfValueMatches(ctx, codeKey, expectedCode)
 	// Keep the over-limit counter until its TTL expires. Deleting it here would
 	// let already in-flight wrong guesses recreate the key at 1 and slip back
 	// below the limit after another request crossed the threshold.

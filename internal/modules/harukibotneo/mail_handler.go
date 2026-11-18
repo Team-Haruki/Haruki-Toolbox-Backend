@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailtemplate"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 )
 
 func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -29,6 +31,10 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			return harukiAPIHelper.ErrorBadRequest(c, "missing qq_number")
 		}
 
+		actorID, err := usercore.CurrentUserID(c)
+		if err != nil {
+			return harukiAPIHelper.ErrorUnauthorized(c, "missing user session")
+		}
 		qqStr := strconv.FormatInt(payload.QQNumber, 10)
 		ctx := c.Context()
 
@@ -49,24 +55,13 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
 		}
-		redisKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyCodeKey(qqStr)
-		if err := apiHelper.DBManager.Redis.SetCache(ctx, redisKey, code, verifyCodeTTL); err != nil {
+		redisKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyCodeKey(actorID, qqStr)
+		challenge := uuid.NewString() + "." + code
+		if err := apiHelper.DBManager.Redis.SetCache(ctx, redisKey, challenge, verifyCodeTTL); err != nil {
 			harukiLogger.Errorf("Failed to store verification code: %v", err)
 			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save verification code")
 		}
-		// A newly issued code starts a new bounded verification window. The
-		// over-limit counter is deliberately retained when a code is invalidated
-		// so concurrent stale guesses cannot recreate it below the limit; reset it
-		// only here, while issuing the replacement code requested by the user.
-		attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildBotVerifyAttemptKey(qqStr)
-		if err := apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey); err != nil {
-			_ = apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey)
-			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
-			harukiLogger.Errorf("Failed to reset verification attempts: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to save verification code")
-		}
-
 		// Send email
 		email := fmt.Sprintf("%s@qq.com", qqStr)
 		msg, err := mailtemplate.Render(mailtemplate.BotVerificationCode(code, verifyCodeTTL))
@@ -74,7 +69,7 @@ func handleSendMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber
 			err = apiHelper.SMTPClient.SendMessage([]string{email}, msg, botMailDisplayName)
 		}
 		if err != nil {
-			if delErr := apiHelper.DBManager.Redis.DeleteCache(ctx, redisKey); delErr != nil {
+			if _, delErr := apiHelper.DBManager.Redis.DeleteCacheIfValueMatches(ctx, redisKey, challenge); delErr != nil {
 				harukiLogger.Warnf("Failed to rollback verification code for QQ %s: %v", qqStr, delErr)
 			}
 			releaseSendMailRateLimit(c, apiHelper, clientIP, qqStr)
