@@ -130,6 +130,22 @@ func BuildGameAccountVerificationTargetIssueKey(server, gameUserID string) strin
 	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, "verify-issue-target", server, gameUserID)
 }
 
+func (b KeyBuilder) BuildGameAccountProfileCheckUserKey(userID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, "profile-check-user", b.hashExactIdentifier("game-profile-check-user", userID))
+}
+
+func BuildGameAccountProfileCheckTargetKey(server, gameUserID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, "profile-check-target", server, gameUserID)
+}
+
+func (b KeyBuilder) BuildWebhookSubscriptionWriteKey(endpointID string) string {
+	return buildKey(KeyPrefixHaruki, "rate-limit", "webhook-subscription", b.hashExactIdentifier("webhook-subscription-endpoint", endpointID))
+}
+
+func (b KeyBuilder) BuildTicketNotificationRateKey(userID string) string {
+	return buildKey(KeyPrefixHaruki, "rate-limit", "ticket-notifications", b.hashExactIdentifier("ticket-notification-user", userID))
+}
+
 func BuildIOSUploadChunkBudgetKey() string {
 	return buildKey(KeyPrefixHaruki, "ios", "chunk-budget")
 }
