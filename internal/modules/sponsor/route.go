@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	AfdianCallbackPath            = "/api/sponsor/afdian/callback"
+	AfdianCallbackBodyLimit       = 64 << 10
 	afdianCallbackRateLimitWindow = time.Minute
 	afdianCallbackRateLimitMax    = 60
 )
@@ -25,8 +27,8 @@ const (
 func RegisterSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, afdianConfig AfdianConfig) {
 	apiHelper.Router.Get("/api/misc/sponsors", handleGetSponsors(apiHelper))
 	apiHelper.Router.Get("/api/sponsor/afdian", handleGetSponsors(apiHelper))
-	apiHelper.Router.Post("/api/sponsor/afdian/callback", handleAfdianCallback(apiHelper, afdianConfig))
-	apiHelper.Router.Post("/api/sponsor/afdian/callback/:secret", handleAfdianCallback(apiHelper, afdianConfig))
+	apiHelper.Router.Post(AfdianCallbackPath, handleAfdianCallback(apiHelper, afdianConfig))
+	apiHelper.Router.Post(AfdianCallbackPath+"/:secret", handleAfdianCallback(apiHelper, afdianConfig))
 }
 
 // afdianAck returns the minimal response Afdian expects so it does not retry the
@@ -73,7 +75,7 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 			return c.SendStatus(fiber.StatusUnsupportedMediaType)
 		}
 		body := c.Request().Body()
-		if len(body) > 64<<10 {
+		if len(body) > AfdianCallbackBodyLimit {
 			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
 		}
 		// Charge traffic after the URL secret gate when that gate is enabled.

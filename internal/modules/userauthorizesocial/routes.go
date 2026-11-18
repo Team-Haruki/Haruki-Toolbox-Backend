@@ -7,8 +7,10 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+const RouteSegment = "authorize-social-platform"
+
 func RegisterUserAuthorizeSocialRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) {
-	base := apiHelper.Router.Group("/api/user/:toolbox_user_id/authorize-social-platform")
+	base := apiHelper.Router.Group("/api/user/:toolbox_user_id/" + RouteSegment)
 	verifiedSelf := func(handlers ...fiber.Handler) (any, []any) {
 		routeHandler, routeRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedVerifiedSelf(apiHelper, "toolbox_user_id"), handlers...)
 		return routeHandler, routeRest

@@ -2,8 +2,9 @@ package bootstrap
 
 import (
 	"context"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -20,8 +22,79 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/gofiber/fiber/v3"
 	goredis "github.com/redis/go-redis/v9"
 )
+
+func TestRequestBodyLimitsBeforeFiberRouting(t *testing.T) {
+	app, cleanup, err := newFiberApp(harukiConfig.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	app.Use(func(c fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := make(chan error, 1)
+	go func() { served <- app.Listener(listener, fiber.ListenConfig{DisableStartupMessage: true}) }()
+	t.Cleanup(func() {
+		if err := app.ShutdownWithTimeout(time.Second); err != nil {
+			t.Error(err)
+		}
+		if err := <-served; err != nil {
+			t.Error(err)
+		}
+	})
+	client := &http.Client{Timeout: 3 * time.Second}
+	defer client.CloseIdleConnections()
+	baseURL := "http://" + listener.Addr().String()
+
+	for _, endpoint := range []struct {
+		method, path string
+		limit        int
+	}{
+		{http.MethodPost, "/api/sponsor/afdian/callback", 64 << 10},
+		{http.MethodPost, "/API/Sponsor/afdian/callback/test-secret/?x=1", 64 << 10},
+		{http.MethodPost, "/api/user/test-user/authorize-social-platform/", 8 << 10},
+		{http.MethodPost, "/api/user/test-user/authorize-social-platform/1", 8 << 10},
+		{http.MethodPut, "/api/user/test-user/authorize-social-platform/1/", 8 << 10},
+	} {
+		for _, chunked := range []bool{false, true} {
+			for extra, want := range map[int]int{0: http.StatusNoContent, 1: http.StatusRequestEntityTooLarge} {
+				req, err := http.NewRequestWithContext(t.Context(), endpoint.method, baseURL+endpoint.path, strings.NewReader(strings.Repeat(" ", endpoint.limit+extra)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if chunked {
+					req.ContentLength = -1
+					req.TransferEncoding = []string{"chunked"}
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = resp.Body.Close()
+				if resp.StatusCode != want {
+					t.Errorf("%s %s chunked=%v extra=%d: status %d, want %d", endpoint.method, endpoint.path, chunked, extra, resp.StatusCode, want)
+				}
+			}
+		}
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, baseURL+"/api/ios/proxy/upload", strings.NewReader(strings.Repeat(" ", 65<<10)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("unrelated upload status = %d", resp.StatusCode)
+	}
+}
 
 func TestOpenMainLogWriterStdout(t *testing.T) {
 	writer, cleanup, err := openMainLogWriter("")

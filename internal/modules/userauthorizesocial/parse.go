@@ -11,6 +11,7 @@ import (
 )
 
 const maxUserSocialGrants = postgresql.MaxSocialGrantSlots
+const RequestBodyLimit = 8 << 10
 
 func parseAuthorizeSocialPlatformID(c fiber.Ctx) (int, error) {
 	idParam := c.Params("id")
@@ -30,7 +31,7 @@ func parseAuthorizeSocialPlatformPayload(c fiber.Ctx) (harukiAPIHelper.Authorize
 	if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
 		return payload, fiber.NewError(fiber.StatusUnsupportedMediaType, "compressed authorization bodies are not supported")
 	}
-	if len(c.Request().Body()) > 8<<10 {
+	if len(c.Request().Body()) > RequestBodyLimit {
 		return payload, fiber.NewError(fiber.StatusRequestEntityTooLarge, "authorization body is too large")
 	}
 	if err := c.Bind().Body(&payload); err != nil {
