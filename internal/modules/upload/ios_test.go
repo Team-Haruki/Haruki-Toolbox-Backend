@@ -199,6 +199,31 @@ func TestIOSUploadChunkStoreLifecycle(t *testing.T) {
 	if exists != 0 {
 		t.Fatalf("expected upload keys to be cleared")
 	}
+	reserved, err := client.HGet(ctx, harukiRedis.BuildIOSUploadChunkBudgetKey(), "total").Int()
+	if err != nil || reserved != 0 {
+		t.Fatalf("completed upload reservation = %d, %v", reserved, err)
+	}
+}
+
+func TestIOSUploadChunkStoreRespectsOwnerBudget(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := t.Context()
+	budgetKey := harukiRedis.BuildIOSUploadChunkBudgetKey()
+	if err := client.HSet(ctx, budgetKey, "owner:busy", iosChunkPerOwnerBudget, "total", iosChunkPerOwnerBudget).Err(); err != nil {
+		t.Fatal(err)
+	}
+	busy := buildChunkUploadKey("busy", harukiUtils.SupportedDataUploadServerJP, 123, "new")
+	got, err := persistIOSUploadChunk(ctx, client, busy, 2, 0, []byte("one"))
+	if err != nil || got.State != iosUploadChunkStateBudgetExceeded {
+		t.Fatalf("busy owner persist = %#v, %v", got, err)
+	}
+	other := buildChunkUploadKey("other", harukiUtils.SupportedDataUploadServerJP, 456, "new")
+	got, err = persistIOSUploadChunk(ctx, client, other, 2, 0, []byte("one"))
+	if err != nil || got.State != iosUploadChunkStateIncomplete {
+		t.Fatalf("other owner persist = %#v, %v", got, err)
+	}
 }
 
 func TestIOSUploadChunkStoreRejectsInconsistentTotals(t *testing.T) {

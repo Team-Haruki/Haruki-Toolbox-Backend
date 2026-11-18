@@ -78,14 +78,27 @@ func GenerateRuleSet(req *ModuleRequest, endpoint string, endpointType string) *
 	rs := &RuleSet{
 		Hostnames: GetHostnames(req.Regions),
 	}
+	var dataTypes []DataType
+	seenDataTypes := make(map[DataType]struct{})
+	for _, dataType := range req.DataTypes {
+		if _, seen := seenDataTypes[dataType]; !seen {
+			seenDataTypes[dataType] = struct{}{}
+			dataTypes = append(dataTypes, dataType)
+		}
+	}
+	regions := make(map[harukiUtils.SupportedDataUploadServer]struct{}, len(mapping))
 	for _, region := range req.Regions {
+		if _, seen := regions[region]; seen {
+			continue
+		}
+		regions[region] = struct{}{}
 		hosts := mapping[region]
 		for _, host := range hosts {
 			host = strings.TrimSpace(host)
 			if host == "" {
 				continue
 			}
-			for _, dt := range req.DataTypes {
+			for _, dt := range dataTypes {
 				rules := generateRulesForDataType(host, string(region), dt, req.Mode, req.UploadCode, endpoint, req.ChunkSizeMB, endpointType)
 				rs.RewriteRules = append(rs.RewriteRules, rules.RewriteRules...)
 				rs.ScriptRules = append(rs.ScriptRules, rules.ScriptRules...)

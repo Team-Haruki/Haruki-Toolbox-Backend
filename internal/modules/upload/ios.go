@@ -36,6 +36,11 @@ const (
 // in the background instead of keeping the game waiting.
 var scriptUploadAckWait = 15 * time.Second
 
+// Each assembler can hold both a full upload's chunks and the joined body.
+// Admit before reading any chunks from Redis and hold the slot until processing
+// finishes, including when the client receives an early 202.
+var iosUploadAssemblySlots = make(chan struct{}, 2)
+
 type dataUploadHeader struct {
 	ScriptVersion string `header:"X-Script-Version"`
 	OriginalUrl   string `header:"X-Original-Url"`
@@ -220,10 +225,28 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorBadRequest(c, "inconsistent X-Total-Chunks for this upload")
 		case iosUploadChunkStateTooLarge:
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusRequestEntityTooLarge, "upload is too large", nil)
+		case iosUploadChunkStateBudgetExceeded:
+			c.Set("Retry-After", "30")
+			return c.SendStatus(fiber.StatusTooManyRequests)
 		case iosUploadChunkStateIncomplete, iosUploadChunkStateCompleteAlreadyClaimed:
 			return harukiAPIHelper.Responses.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 		}
 
+		select {
+		case iosUploadAssemblySlots <- struct{}{}:
+		default:
+			if err := resetIOSUploadClaim(ctx, redisClient, uploadKey); err != nil {
+				logger.Warnf("Failed to reset upload claim for %s: %v", uploadKey, err)
+			}
+			c.Set("Retry-After", "1")
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		slotTransferred := false
+		defer func() {
+			if !slotTransferred {
+				<-iosUploadAssemblySlots
+			}
+		}()
 		completedChunks, err := loadIOSUploadChunks(ctx, redisClient, uploadKey, header.TotalChunks)
 		if err != nil {
 			if resetErr := resetIOSUploadClaim(ctx, redisClient, uploadKey); resetErr != nil {
@@ -241,6 +264,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		attempt := newAttempt(harukiUtils.UploadMethodIOSScript, 0)
 		processed := make(chan error, 1)
 		accepted := startBackgroundTask(dependencies.BackgroundTasks, logger, "ios-upload-assembly", func() {
+			defer func() { <-iosUploadAssemblySlots }()
 			chunks := completedChunks
 			sort.Slice(chunks, func(x, y int) bool {
 				return chunks[x].ChunkIndex < chunks[y].ChunkIndex
@@ -289,6 +313,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if !accepted {
 			return harukiAPIHelper.ErrorInternal(c, "upload service is shutting down")
 		}
+		slotTransferred = true
 		// The upload runs as a tracked background task so shutdown drains it;
 		// the response waits for its result, up to scriptUploadAckWait.
 		timer := time.NewTimer(scriptUploadAckWait)
