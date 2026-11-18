@@ -3,6 +3,8 @@ package misc
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -12,14 +14,41 @@ import (
 )
 
 const dependencyHealthTimeout = 2 * time.Second
+const dependencyHealthCacheTTL = 5 * time.Second
+
+type healthSnapshot struct {
+	dependencies fiber.Map
+	expires      time.Time
+}
 
 func handleHealth(
 	apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 	suiteRestoreService *harukiHandler.SuiteRestoreService,
 ) fiber.Handler {
+	var snapshot atomic.Pointer[healthSnapshot]
+	var refresh sync.Mutex
 	return func(c fiber.Ctx) error {
 		loadedRegions, failedRegions := suiteRestoreService.LoadStatus()
-		dependencies := buildDependencyHealth(c.Context(), apiHelper)
+		for region := range failedRegions {
+			failedRegions[region] = "schema unavailable"
+		}
+		current := snapshot.Load()
+		if (current == nil || time.Now().After(current.expires)) && refresh.TryLock() {
+			latest := snapshot.Load()
+			if latest == nil || time.Now().After(latest.expires) {
+				latest = &healthSnapshot{
+					dependencies: buildDependencyHealth(c.Context(), apiHelper),
+					expires:      time.Now().Add(dependencyHealthCacheTTL),
+				}
+				snapshot.Store(latest)
+			}
+			current = latest
+			refresh.Unlock()
+		}
+		if current == nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"status": "initializing"})
+		}
+		dependencies := current.dependencies
 
 		status := "ok"
 		httpStatus := fiber.StatusOK

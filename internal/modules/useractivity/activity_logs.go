@@ -242,13 +242,17 @@ func sanitizeOwnActivityMetadataMap(metadata map[string]any) map[string]any {
 func buildOwnActivityLogItems(rows []*postgresql.SystemLog) []ownActivityLogListItem {
 	items := make([]ownActivityLogListItem, 0, len(rows))
 	for _, row := range rows {
+		metadata := sanitizeOwnActivityMetadataMap(row.Metadata)
+		if row.Action == "admin.sponsor.toolbox_access.update" {
+			delete(metadata, "note")
+		}
 		items = append(items, ownActivityLogListItem{
 			ID:        row.ID,
 			EventTime: row.EventTime.UTC(),
 			ActorType: string(row.ActorType),
 			Action:    row.Action,
 			Result:    string(row.Result),
-			Metadata:  sanitizeOwnActivityMetadataMap(row.Metadata),
+			Metadata:  metadata,
 		})
 	}
 	return items
@@ -258,37 +262,21 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 	return func(c fiber.Ctx) error {
 		toolboxUserID := strings.TrimSpace(c.Params("toolbox_user_id"))
 		authUserID, authErr := userCoreModule.CurrentUserID(c)
-		result := harukiAPIHelper.SystemLogResultFailure
-		reason := "unknown"
-		total := 0
-
-		defer func() {
-			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.activity_logs.query", result, authUserID, map[string]any{
-				"reason": reason,
-				"total":  total,
-			})
-		}()
-
 		if toolboxUserID == "" {
-			reason = "missing_user_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "missing toolbox_user_id")
 		}
 		if authErr != nil {
-			reason = "missing_user_session"
 			return harukiAPIHelper.ErrorUnauthorized(c, "missing user session")
 		}
 		if authUserID != toolboxUserID {
-			reason = "permission_denied"
 			return harukiAPIHelper.ErrorForbidden(c, "you can only access your own activity logs")
 		}
 		if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.DB == nil {
-			reason = "db_unavailable"
 			return harukiAPIHelper.ErrorInternal(c, "database unavailable")
 		}
 
 		filters, err := parseOwnActivityLogQueryFilters(c, time.Now())
 		if err != nil {
-			reason = "invalid_query_filters"
 			if fiberErr, ok := err.(*fiber.Error); ok {
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiberErr.Code, fiberErr.Message, nil)
 			}
@@ -314,9 +302,8 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			baseQuery = baseQuery.Where(systemlog.ResultEQ(systemlog.Result(filters.Result)))
 		}
 
-		total, err = baseQuery.Clone().Count(c.Context())
+		total, err := baseQuery.Clone().Count(c.Context())
 		if err != nil {
-			reason = "count_activity_logs_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to count activity logs")
 		}
 
@@ -326,7 +313,6 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			Limit(filters.PageSize).
 			All(c.Context())
 		if err != nil {
-			reason = "query_activity_logs_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query activity logs")
 		}
 
@@ -353,8 +339,6 @@ func handleListOwnActivityLogs(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			Items: buildOwnActivityLogItems(rows),
 		}
 
-		result = harukiAPIHelper.SystemLogResultSuccess
-		reason = "ok"
 		return harukiAPIHelper.Responses.SuccessResponse(c, "ok", &resp)
 	}
 }

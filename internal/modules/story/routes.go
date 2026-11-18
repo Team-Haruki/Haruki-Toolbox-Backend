@@ -97,11 +97,18 @@ func (s *Service) handleTranslation(c fiber.Ctx) error {
 }
 
 func (s *Service) handleRetranslate(c fiber.Ctx) error {
+	if s.tr == nil {
+		return harukiAPIHelper.ErrorForbidden(c, "story translation is disabled")
+	}
 	id := c.Params("scenario_id")
-	if _, err := s.db.StoryTranslation.Delete().
+	deleted, err := s.db.StoryTranslation.Delete().
 		Where(storytranslation.ScenarioID(id), storytranslation.Lang(TranslationLang)).
-		Exec(c.Context()); err != nil {
+		Exec(c.Context())
+	if err != nil {
 		return harukiAPIHelper.ErrorInternal(c, "failed to reset translation")
+	}
+	if deleted == 0 {
+		return harukiAPIHelper.ErrorNotFound(c, "translation not found")
 	}
 	s.Kick()
 	return harukiAPIHelper.Responses.SuccessResponse[string](c, "queued", nil)

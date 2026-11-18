@@ -77,6 +77,14 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			})
 		}()
 
+		if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+			reason = "invalid_payload"
+			return c.SendStatus(fiber.StatusUnsupportedMediaType)
+		}
+		if len(c.Request().Body()) > 3<<20 {
+			reason = "avatar_too_large"
+			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
+		}
 		var payload harukiAPIHelper.UpdateProfilePayload
 		if err := c.Bind().Body(&payload); err != nil {
 			reason = "invalid_payload"
@@ -107,6 +115,11 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 		}
 
 		ub := apiHelper.DBManager.DB.User.Update().Where(userSchema.IDEQ(userID))
+		if currentUser.AvatarPath == nil {
+			ub.Where(userSchema.AvatarPathIsNil())
+		} else {
+			ub.Where(userSchema.AvatarPathEQ(*currentUser.AvatarPath))
+		}
 		var avatarFileName string
 		var newAvatarSavePath string
 		if payload.AvatarBase64 != nil {
@@ -117,13 +130,18 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 					base64Data = parts[1]
 				}
 			}
+			const maxAvatarBytes = 2 << 20
+			if len(base64Data) > base64.StdEncoding.EncodedLen(maxAvatarBytes) {
+				reason = "avatar_too_large"
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image is too large (max 2MB)", nil)
+			}
 			decodedAvatar, err := base64.StdEncoding.DecodeString(base64Data)
 			if err != nil {
 				reason = "invalid_avatar_base64"
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Invalid base64 avatar data", nil)
 			}
 
-			if len(decodedAvatar) > 2*1024*1024 {
+			if len(decodedAvatar) > maxAvatarBytes {
 				reason = "avatar_too_large"
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusBadRequest, "Avatar image is too large (max 2MB)", nil)
 			}
@@ -163,19 +181,23 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			}
 			newAvatarSavePath = savePath
 			ub = ub.SetAvatarPath(avatarFileName)
-			updatedAvatar = true
 		}
-		_, err = ub.Save(ctx)
-		if err != nil {
+		affected, err := ub.Save(ctx)
+		if err != nil || affected == 0 {
 			if newAvatarSavePath != "" {
 				if cleanupErr := removeAvatarFileIfExists(newAvatarSavePath); cleanupErr != nil {
 					harukiLogger.Warnf("Failed to cleanup avatar file after profile update failure: %v", cleanupErr)
 				}
 			}
+			if err == nil {
+				reason = "avatar_concurrently_changed"
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "Avatar changed, please retry", nil)
+			}
 			harukiLogger.Errorf("Failed to update user profile: %v", err)
 			reason = "update_profile_failed"
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusInternalServerError, "Failed to update profile", nil)
 		}
+		updatedAvatar = newAvatarSavePath != ""
 		if updatedAvatar && oldAvatarPath != "" && oldAvatarPath != avatarFileName {
 			oldAvatarFullPath := buildAvatarFilePath(profileConfig.AvatarSaveDir(), oldAvatarPath)
 			if err := removeAvatarFileIfExists(oldAvatarFullPath); err != nil {
