@@ -26,9 +26,8 @@ func handleListRiskEvents(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		}
 
 		baseQuery := applyRiskEventFilters(apiHelper.DBManager.DB.RiskEvent.Query(), filters)
-		baseQuery, err = scopeRiskEventsForAdminActor(c.Context(), apiHelper.DBManager.DB, baseQuery, actorRole)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to scope risk events")
+		if actorRole != adminCoreModule.RoleSuperAdmin {
+			baseQuery.Where(excludeProtectedRiskEventReferences)
 		}
 		total, err := baseQuery.Clone().Count(c.Context())
 		if err != nil {
@@ -169,6 +168,10 @@ func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to validate risk event user references")
 		}
 
+		if err := ensureRiskEventUserReferenceManageable(c.Context(), apiHelper.DBManager.DB, actorUserID, actorRole, optionalRiskEventUserID(row.ResolvedBy), true); err != nil {
+			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to validate risk event resolver")
+		}
+
 		metadata := row.Metadata
 		if metadata == nil {
 			metadata = map[string]any{}
@@ -178,12 +181,23 @@ func handleResolveRiskEvent(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		}
 		resolvedAt := adminNowUTC()
 
-		updated, err := row.Update().
+		update := row.Update().
 			SetStatus(riskevent.StatusResolved).
 			SetResolvedAt(resolvedAt).
 			SetResolvedBy(actorUserID).
-			SetMetadata(metadata).
-			Save(c.Context())
+			SetMetadata(metadata)
+		if actorRole != adminCoreModule.RoleSuperAdmin {
+			update.Where(excludeProtectedRiskEventReferences)
+			if row.ResolvedBy == nil {
+				update.Where(riskevent.ResolvedByIsNil())
+			} else {
+				update.Where(riskevent.ResolvedByEQ(*row.ResolvedBy))
+			}
+		}
+		updated, err := update.Save(c.Context())
+		if postgresql.IsNotFound(err) {
+			return harukiAPIHelper.ErrorNotFound(c, "risk event not found")
+		}
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to resolve risk event")
 		}
