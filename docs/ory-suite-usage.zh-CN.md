@@ -177,6 +177,8 @@ Hydra 在当前项目里负责：
 
 Kratos 的会话校验要求达到身份已配置的最高认证等级。已启用第二因素的用户需要完成第二因素才能访问浏览器受保护 API。
 
+管理员路由另行要求会话达到 AAL2。管理员须先注册第二因素；Oathkeeper 从已验证会话写入 `X-Auth-Proxy-Session-Aal`，直接 Kratos 模式使用同一会话响应中的认证等级。
+
 #### 模式 B：直接 Kratos 模式
 
 如果不是 Auth Proxy 模式，`VerifySessionToken` 会尝试从以下来源解析 Kratos session：

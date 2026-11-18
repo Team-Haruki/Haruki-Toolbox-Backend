@@ -50,6 +50,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 				c.Locals("kratosSessionID", sessionID)
 			}
 		}
+		c.Locals(browserSessionAssuranceKey{}, strings.TrimSpace(c.Get("X-Auth-Proxy-Session-Aal")))
 		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified)
 	}
 	if s.UsesAuthProxy() {
@@ -69,8 +70,19 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		return respondSessionVerifyError(c, err)
 	}
 	c.Locals("kratosSessionID", resolved.SessionID)
+	c.Locals(browserSessionAssuranceKey{}, resolved.AssuranceLevel)
 	c.Locals("kratosSessionEmail", resolved.Email)
 	return applyResolvedUserIdentity(resolved.UserID, resolved.IdentityID, resolved.DisplayName, resolved.EmailVerified)
+}
+
+type browserSessionAssuranceKey struct{}
+
+// RequireBrowserAAL2 only accepts assurance carried by a verified session.
+func RequireBrowserAAL2(c fiber.Ctx) error {
+	if c.Locals(browserSessionAssuranceKey{}) != "aal2" {
+		return ErrorForbidden(c, "administrator access requires two-factor authentication")
+	}
+	return c.Next()
 }
 
 func respondSessionVerifyError(c fiber.Ctx, err error) error {

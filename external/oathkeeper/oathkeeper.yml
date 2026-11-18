@@ -78,6 +78,7 @@ mutators:
         # is "@this", so .Extra.id is the whoami session id) so the backend's admin
         # reauth is keyed to a proxy-vouched session, not a client-supplied value.
         X-Auth-Proxy-Session-Id: "{{ print .Extra.id }}"
+        X-Auth-Proxy-Session-Aal: "{{ print .Extra.authenticator_assurance_level }}"
         # Overwrite/clear any client-supplied X-User-Id. The backend never trusts
         # it as authoritative (identity comes from X-Kratos-Identity-Id), but
         # clearing it here is defense-in-depth.
