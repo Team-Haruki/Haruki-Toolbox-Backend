@@ -45,6 +45,9 @@ type RiskEvent func(*sql.Selector)
 // RiskRule is the predicate function for riskrule builders.
 type RiskRule func(*sql.Selector)
 
+// RuntimeConfiguration is the predicate function for runtimeconfiguration builders.
+type RuntimeConfiguration func(*sql.Selector)
+
 // SocialPlatformInfo is the predicate function for socialplatforminfo builders.
 type SocialPlatformInfo func(*sql.Selector)
 

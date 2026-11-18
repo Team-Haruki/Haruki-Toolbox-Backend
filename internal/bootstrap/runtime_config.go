@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"context"
+	"database/sql"
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	platformRuntimeConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
@@ -21,4 +23,13 @@ func newRuntimeConfigService(cfg harukiConfig.Config, redisClient *harukiRedis.H
 	initial := runtimeConfigSnapshotFromConfig(cfg)
 	store := platformRuntimeConfig.NewRedisStore(redisClient)
 	return platformRuntimeConfig.New(initial, store)
+}
+
+func newDurableRuntimeConfigService(ctx context.Context, cfg harukiConfig.Config, db *sql.DB, redisClient *harukiRedis.HarukiRedisManager) (*platformRuntimeConfig.Service, error) {
+	initial := runtimeConfigSnapshotFromConfig(cfg)
+	store, err := platformRuntimeConfig.NewPostgresStore(ctx, db, platformRuntimeConfig.NewRedisStore(redisClient), initial)
+	if err != nil {
+		return nil, err
+	}
+	return platformRuntimeConfig.New(platformRuntimeConfig.Snapshot{}, store), nil
 }

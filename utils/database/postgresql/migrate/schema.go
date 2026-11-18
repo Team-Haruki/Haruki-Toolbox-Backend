@@ -449,6 +449,17 @@ var (
 			},
 		},
 	}
+	// RuntimeConfigurationsColumns holds the columns for the "runtime_configurations" table.
+	RuntimeConfigurationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "snapshot", Type: field.TypeJSON},
+	}
+	// RuntimeConfigurationsTable holds the schema information for the "runtime_configurations" table.
+	RuntimeConfigurationsTable = &schema.Table{
+		Name:       "runtime_configurations",
+		Columns:    RuntimeConfigurationsColumns,
+		PrimaryKey: []*schema.Column{RuntimeConfigurationsColumns[0]},
+	}
 	// SocialPlatformInfosColumns holds the columns for the "social_platform_infos" table.
 	SocialPlatformInfosColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -969,6 +980,7 @@ var (
 		Oauth2ClientWebhookEndpointsTable,
 		RiskEventsTable,
 		RiskRulesTable,
+		RuntimeConfigurationsTable,
 		SocialPlatformInfosTable,
 		SponsorsTable,
 		SponsorAfdianOrdersTable,
@@ -1010,6 +1022,9 @@ func init() {
 	}
 	RiskRulesTable.Annotation = &entsql.Annotation{
 		Table: "risk_rules",
+	}
+	RuntimeConfigurationsTable.Annotation = &entsql.Annotation{
+		Table: "runtime_configurations",
 	}
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 	SponsorsTable.Annotation = &entsql.Annotation{

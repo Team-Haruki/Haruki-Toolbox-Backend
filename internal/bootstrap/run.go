@@ -120,9 +120,13 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		return nil, err
 	}
 
-	// Runtime-mutable settings are seeded from immutable startup configuration
-	// and distributed through the existing Redis record.
-	runtimeConfig := newRuntimeConfigService(cfg, resources.redisClient)
+	// PostgreSQL owns runtime settings after a one-time import of the Redis record.
+	runtimeCtx, cancelRuntimeInit := startupContext()
+	runtimeConfig, err := newDurableRuntimeConfigService(runtimeCtx, cfg, resources.toolboxSQLDB, resources.redisClient)
+	cancelRuntimeInit()
+	if err != nil {
+		return nil, fmt.Errorf("init durable runtime settings: %w", err)
+	}
 	apiHelper := harukiAPIHelper.NewHarukiToolboxRouterHelpers(
 		resources.fiberApp,
 		resources.databaseManager,

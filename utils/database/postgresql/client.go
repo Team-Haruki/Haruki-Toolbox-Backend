@@ -28,6 +28,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtimeconfiguration"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
@@ -73,6 +74,8 @@ type Client struct {
 	RiskEvent *RiskEventClient
 	// RiskRule is the client for interacting with the RiskRule builders.
 	RiskRule *RiskRuleClient
+	// RuntimeConfiguration is the client for interacting with the RuntimeConfiguration builders.
+	RuntimeConfiguration *RuntimeConfigurationClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
 	// Sponsor is the client for interacting with the Sponsor builders.
@@ -121,6 +124,7 @@ func (c *Client) init() {
 	c.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(c.config)
 	c.RiskEvent = NewRiskEventClient(c.config)
 	c.RiskRule = NewRiskRuleClient(c.config)
+	c.RuntimeConfiguration = NewRuntimeConfigurationClient(c.config)
 	c.SocialPlatformInfo = NewSocialPlatformInfoClient(c.config)
 	c.Sponsor = NewSponsorClient(c.config)
 	c.SponsorAfdianOrder = NewSponsorAfdianOrderClient(c.config)
@@ -238,6 +242,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		OAuth2ClientWebhookEndpoint: NewOAuth2ClientWebhookEndpointClient(cfg),
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
+		RuntimeConfiguration:        NewRuntimeConfigurationClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
 		Sponsor:                     NewSponsorClient(cfg),
 		SponsorAfdianOrder:          NewSponsorAfdianOrderClient(cfg),
@@ -282,6 +287,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		OAuth2ClientWebhookEndpoint: NewOAuth2ClientWebhookEndpointClient(cfg),
 		RiskEvent:                   NewRiskEventClient(cfg),
 		RiskRule:                    NewRiskRuleClient(cfg),
+		RuntimeConfiguration:        NewRuntimeConfigurationClient(cfg),
 		SocialPlatformInfo:          NewSocialPlatformInfoClient(cfg),
 		Sponsor:                     NewSponsorClient(cfg),
 		SponsorAfdianOrder:          NewSponsorAfdianOrderClient(cfg),
@@ -326,10 +332,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.InheritVaultEntry, c.InheritVaultKey,
-		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
-		c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration, c.StoryTranslation,
-		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
-		c.WebhookSubscription,
+		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.RuntimeConfiguration,
+		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
+		c.StoryTranslation, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog,
+		c.User, c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -342,10 +348,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthorizeSocialPlatformInfo, c.BotSecurityAlert, c.FriendLink,
 		c.GameAccountBinding, c.GameAccountDataGrant, c.Group, c.GroupList,
 		c.IOSScriptCode, c.InheritVaultEntry, c.InheritVaultKey,
-		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.SocialPlatformInfo,
-		c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration, c.StoryTranslation,
-		c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog, c.User, c.WebhookEndpoint,
-		c.WebhookSubscription,
+		c.OAuth2ClientWebhookEndpoint, c.RiskEvent, c.RiskRule, c.RuntimeConfiguration,
+		c.SocialPlatformInfo, c.Sponsor, c.SponsorAfdianOrder, c.SponsorManualDuration,
+		c.StoryTranslation, c.SystemLog, c.Ticket, c.TicketMessage, c.UploadLog,
+		c.User, c.WebhookEndpoint, c.WebhookSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -380,6 +386,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.RiskEvent.mutate(ctx, m)
 	case *RiskRuleMutation:
 		return c.RiskRule.mutate(ctx, m)
+	case *RuntimeConfigurationMutation:
+		return c.RuntimeConfiguration.mutate(ctx, m)
 	case *SocialPlatformInfoMutation:
 		return c.SocialPlatformInfo.mutate(ctx, m)
 	case *SponsorMutation:
@@ -2282,6 +2290,139 @@ func (c *RiskRuleClient) mutate(ctx context.Context, m *RiskRuleMutation) (Value
 	}
 }
 
+// RuntimeConfigurationClient is a client for the RuntimeConfiguration schema.
+type RuntimeConfigurationClient struct {
+	config
+}
+
+// NewRuntimeConfigurationClient returns a client for the RuntimeConfiguration from the given config.
+func NewRuntimeConfigurationClient(c config) *RuntimeConfigurationClient {
+	return &RuntimeConfigurationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `runtimeconfiguration.Hooks(f(g(h())))`.
+func (c *RuntimeConfigurationClient) Use(hooks ...Hook) {
+	c.hooks.RuntimeConfiguration = append(c.hooks.RuntimeConfiguration, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `runtimeconfiguration.Intercept(f(g(h())))`.
+func (c *RuntimeConfigurationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RuntimeConfiguration = append(c.inters.RuntimeConfiguration, interceptors...)
+}
+
+// Create returns a builder for creating a RuntimeConfiguration entity.
+func (c *RuntimeConfigurationClient) Create() *RuntimeConfigurationCreate {
+	mutation := newRuntimeConfigurationMutation(c.config, OpCreate)
+	return &RuntimeConfigurationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RuntimeConfiguration entities.
+func (c *RuntimeConfigurationClient) CreateBulk(builders ...*RuntimeConfigurationCreate) *RuntimeConfigurationCreateBulk {
+	return &RuntimeConfigurationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RuntimeConfigurationClient) MapCreateBulk(slice any, setFunc func(*RuntimeConfigurationCreate, int)) *RuntimeConfigurationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RuntimeConfigurationCreateBulk{err: fmt.Errorf("calling to RuntimeConfigurationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RuntimeConfigurationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RuntimeConfigurationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RuntimeConfiguration.
+func (c *RuntimeConfigurationClient) Update() *RuntimeConfigurationUpdate {
+	mutation := newRuntimeConfigurationMutation(c.config, OpUpdate)
+	return &RuntimeConfigurationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RuntimeConfigurationClient) UpdateOne(_m *RuntimeConfiguration) *RuntimeConfigurationUpdateOne {
+	mutation := newRuntimeConfigurationMutation(c.config, OpUpdateOne, withRuntimeConfiguration(_m))
+	return &RuntimeConfigurationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RuntimeConfigurationClient) UpdateOneID(id int) *RuntimeConfigurationUpdateOne {
+	mutation := newRuntimeConfigurationMutation(c.config, OpUpdateOne, withRuntimeConfigurationID(id))
+	return &RuntimeConfigurationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RuntimeConfiguration.
+func (c *RuntimeConfigurationClient) Delete() *RuntimeConfigurationDelete {
+	mutation := newRuntimeConfigurationMutation(c.config, OpDelete)
+	return &RuntimeConfigurationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RuntimeConfigurationClient) DeleteOne(_m *RuntimeConfiguration) *RuntimeConfigurationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RuntimeConfigurationClient) DeleteOneID(id int) *RuntimeConfigurationDeleteOne {
+	builder := c.Delete().Where(runtimeconfiguration.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RuntimeConfigurationDeleteOne{builder}
+}
+
+// Query returns a query builder for RuntimeConfiguration.
+func (c *RuntimeConfigurationClient) Query() *RuntimeConfigurationQuery {
+	return &RuntimeConfigurationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRuntimeConfiguration},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RuntimeConfiguration entity by its id.
+func (c *RuntimeConfigurationClient) Get(ctx context.Context, id int) (*RuntimeConfiguration, error) {
+	return c.Query().Where(runtimeconfiguration.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RuntimeConfigurationClient) GetX(ctx context.Context, id int) *RuntimeConfiguration {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *RuntimeConfigurationClient) Hooks() []Hook {
+	return c.hooks.RuntimeConfiguration
+}
+
+// Interceptors returns the client interceptors.
+func (c *RuntimeConfigurationClient) Interceptors() []Interceptor {
+	return c.inters.RuntimeConfiguration
+}
+
+func (c *RuntimeConfigurationClient) mutate(ctx context.Context, m *RuntimeConfigurationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RuntimeConfigurationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RuntimeConfigurationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RuntimeConfigurationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RuntimeConfigurationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("postgresql: unknown RuntimeConfiguration mutation op: %q", m.Op())
+	}
+}
+
 // SocialPlatformInfoClient is a client for the SocialPlatformInfo schema.
 type SocialPlatformInfoClient struct {
 	config
@@ -4092,16 +4233,16 @@ type (
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode, InheritVaultEntry,
 		InheritVaultKey, OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule,
-		SocialPlatformInfo, Sponsor, SponsorAfdianOrder, SponsorManualDuration,
-		StoryTranslation, SystemLog, Ticket, TicketMessage, UploadLog, User,
-		WebhookEndpoint, WebhookSubscription []ent.Hook
+		RuntimeConfiguration, SocialPlatformInfo, Sponsor, SponsorAfdianOrder,
+		SponsorManualDuration, StoryTranslation, SystemLog, Ticket, TicketMessage,
+		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Hook
 	}
 	inters struct {
 		AuthorizeSocialPlatformInfo, BotSecurityAlert, FriendLink, GameAccountBinding,
 		GameAccountDataGrant, Group, GroupList, IOSScriptCode, InheritVaultEntry,
 		InheritVaultKey, OAuth2ClientWebhookEndpoint, RiskEvent, RiskRule,
-		SocialPlatformInfo, Sponsor, SponsorAfdianOrder, SponsorManualDuration,
-		StoryTranslation, SystemLog, Ticket, TicketMessage, UploadLog, User,
-		WebhookEndpoint, WebhookSubscription []ent.Interceptor
+		RuntimeConfiguration, SocialPlatformInfo, Sponsor, SponsorAfdianOrder,
+		SponsorManualDuration, StoryTranslation, SystemLog, Ticket, TicketMessage,
+		UploadLog, User, WebhookEndpoint, WebhookSubscription []ent.Interceptor
 	}
 )
