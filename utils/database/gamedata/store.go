@@ -58,8 +58,9 @@ type Row struct {
 	extraMembers map[string]jsontext.Value
 	extraParsed  bool
 	// expanded is keyed by canonical column, so compact aliases share work.
-	expanded map[string]rowValue
-	parent   *rowValue
+	expanded      map[string]rowValue
+	parent        *rowValue
+	expandedBytes int
 }
 
 type rowValue struct {
@@ -91,7 +92,7 @@ func (s *Store) Fetch(ctx context.Context, userID int64, server string, keys []s
 	}
 
 	cols, entries := s.selectFor(keys)
-	return s.fetchSelected(ctx, userID, server, code, cols, entries)
+	return s.fetchSelected(ctx, s.pool.QueryRow, userID, server, code, cols, entries)
 }
 
 // FetchWithout reads one row with every column except those serving the
@@ -108,7 +109,7 @@ func (s *Store) FetchWithout(ctx context.Context, userID int64, server string, o
 		return nil, ErrNoRow
 	}
 	cols, entries := s.selectWithout(omit)
-	return s.fetchSelected(ctx, userID, server, code, cols, entries)
+	return s.fetchSelected(ctx, s.pool.QueryRow, userID, server, code, cols, entries)
 }
 
 // selectWithout returns every data column except those the omitted keys
@@ -137,29 +138,44 @@ func (s *Store) selectWithout(omit []string) (quoted []string, plain []string) {
 }
 
 // fetchSelected runs the row read for an already-resolved column list.
-func (s *Store) fetchSelected(ctx context.Context, userID int64, server string, code int16, cols, entries []string) (*Row, error) {
+func (s *Store) fetchSelected(ctx context.Context, queryRow func(context.Context, string, ...any) pgx.Row, userID int64, server string, code int16, cols, entries []string) (*Row, error) {
+	sizes := make([]string, len(cols))
+	guarded := make([]string, len(cols))
+	for i, col := range cols {
+		sizes[i] = "COALESCE(octet_length(" + col + "::text),0)::bigint"
+		guarded[i] = "CASE WHEN NOT oversized THEN " + col + " END"
+	}
 	sql := fmt.Sprintf(
-		`SELECT %s, %s FROM %s WHERE %s = $1 AND %s = $2`,
+		`WITH measured AS MATERIALIZED (SELECT %s, %s, (%s) > $3 AS oversized FROM %s WHERE %s = $1 AND %s = $2)
+		SELECT %s, oversized, %s FROM measured`,
 		catalog.QuoteIdent(catalog.ColUploadTime),
 		strings.Join(cols, ", "),
+		strings.Join(sizes, " + "),
 		catalog.QuoteIdent(s.cat.Table),
 		catalog.QuoteIdent(catalog.ColUserID),
 		catalog.QuoteIdent(catalog.ColServer),
+		catalog.QuoteIdent(catalog.ColUploadTime),
+		strings.Join(guarded, ", "),
 	)
 
-	dest := make([]any, len(cols)+1)
+	dest := make([]any, len(cols)+2)
 	var uploadTime *int64
+	var oversized bool
 	dest[0] = &uploadTime
+	dest[1] = &oversized
 	raw := make([][]byte, len(cols))
 	for i := range raw {
-		dest[i+1] = &raw[i]
+		dest[i+2] = &raw[i]
 	}
 
-	if err := s.pool.QueryRow(ctx, sql, userID, code).Scan(dest...); err != nil {
+	if err := queryRow(ctx, sql, userID, code, int64(DefaultLimits().MaxRowBytes)).Scan(dest...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoRow
 		}
 		return nil, fmt.Errorf("gamedata: read %s: %w", s.cat.Table, err)
+	}
+	if oversized {
+		return nil, ErrPublishedResponseTooLarge
 	}
 
 	row := &Row{
@@ -287,30 +303,28 @@ func (r *Row) columnValue(e *catalog.Entry) ([]byte, bool, error) {
 	if !present {
 		return nil, false, nil
 	}
-	if r.restorer.Fingerprint(r.Server) != "" && (e.Key == nuverserestore.HarvestMaps || e.Child == nuverserestore.HarvestMaps) {
-		if cached, ok := r.expanded[e.Column]; ok {
-			return cached.raw, cached.ok, cached.err
-		}
-		raw, err := r.restorer.JSON(r.Server, v)
-		if r.expanded == nil {
-			r.expanded = make(map[string]rowValue)
-		}
-		r.expanded[e.Column] = rowValue{raw: raw, ok: err == nil, err: err}
-		return raw, err == nil, err
-	}
-	if e.Storage != catalog.StorageCompactJSON {
+	restoreHarvest := (e.Key == nuverserestore.HarvestMaps || e.Child == nuverserestore.HarvestMaps) && r.restorer.Fingerprint(r.Server) != ""
+	if !restoreHarvest && (e.Storage != catalog.StorageCompactJSON || !IsCompactValue(v)) {
 		return v, true, nil
 	}
 	if cached, ok := r.expanded[e.Column]; ok {
 		return cached.raw, cached.ok, cached.err
 	}
-	if !IsCompactValue(v) {
-		return v, true, nil
+	remaining := min(DefaultLimits().MaxKeyBytes, maxPrivateResponseBytes-r.expandedBytes)
+	var raw []byte
+	var err error
+	if restoreHarvest {
+		raw, err = r.restorer.JSONWithLimit(r.Server, v, remaining)
+		if errors.Is(err, nuverserestore.ErrRestoredJSONTooLarge) {
+			err = ErrPublishedResponseTooLarge
+		}
+	} else {
+		raw, err = expandCompactJSONWithLimit(v, remaining)
 	}
-	raw, err := ExpandCompactJSON(v)
 	if err != nil {
 		raw = nil
 	}
+	r.expandedBytes += len(raw)
 	if r.expanded == nil {
 		r.expanded = make(map[string]rowValue)
 	}
@@ -334,7 +348,10 @@ func (r *Row) flattenParent() ([]byte, bool, error) {
 		if !present {
 			continue
 		}
-		out = appendMember(out, &first, child.Child, v)
+		out, err = appendBoundedMember(out, &first, child.Child, v, maxPrivateResponseBytes)
+		if err != nil {
+			return nil, false, err
+		}
 		any = true
 	}
 
@@ -342,7 +359,10 @@ func (r *Row) flattenParent() ([]byte, bool, error) {
 		var m map[string]jsontext.Value
 		if err := json.Unmarshal(parked, &m); err == nil {
 			for k, v := range m {
-				out = appendMember(out, &first, k, v)
+				out, err = appendBoundedMember(out, &first, k, v, maxPrivateResponseBytes)
+				if err != nil {
+					return nil, false, err
+				}
 				any = true
 			}
 		}

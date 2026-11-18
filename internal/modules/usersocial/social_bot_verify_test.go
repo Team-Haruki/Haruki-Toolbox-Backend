@@ -1,7 +1,7 @@
 package usersocial
 
 import (
-	"context"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,7 +10,9 @@ import (
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -55,8 +57,14 @@ func TestVerifySocialPlatformAtomicallyLimitsConcurrentGuesses(t *testing.T) {
 	const requestCount = 32
 
 	apiHelper := newSocialRateLimitTestHelper(t)
-	storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(harukiAPIHelper.SocialPlatformQQ), "target-user")
-	if err := apiHelper.DBManager.Redis.SetCache(context.Background(), storageKey, "correct-code", time.Minute); err != nil {
+	redis := apiHelper.DBManager.Redis
+	keys := redis.KeyBuilder()
+	storageKey := keys.BuildSocialVerificationChallengeKey(string(harukiAPIHelper.SocialPlatformQQ), "target-user")
+	challenge, err := encodeSocialVerificationChallenge(keys, "correct-code", "owner", "status-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(t.Context(), storageKey, challenge, time.Minute); err != nil {
 		t.Fatalf("SetCache() error: %v", err)
 	}
 
@@ -106,5 +114,166 @@ func TestVerifySocialPlatformAtomicallyLimitsConcurrentGuesses(t *testing.T) {
 	}
 	if tooManyAttempts != requestCount-socialPlatformVerifyMaxAttempts {
 		t.Fatalf("limited guesses = %d, want %d", tooManyAttempts, requestCount-socialPlatformVerifyMaxAttempts)
+	}
+}
+
+func TestSocialChallengeConsumesOnlyTheObservedGeneration(t *testing.T) {
+	redis := newSocialRateLimitTestHelper(t).DBManager.Redis
+	keys := redis.KeyBuilder()
+	storageKey := keys.BuildSocialVerificationChallengeKey("qq", "target-user")
+	first, err := encodeSocialVerificationChallenge(keys, "code-a", "owner-a", "status-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := encodeSocialVerificationChallenge(keys, "code-b", "owner-b", "status-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(t.Context(), storageKey, second, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	pending := socialVerificationPendingPrefix + "status-b"
+	if reserved, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, first, pending); err != nil || reserved {
+		t.Fatalf("old generation reserved newer record: %t, %v", reserved, err)
+	}
+	if reserved, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, second, pending); err != nil || !reserved {
+		t.Fatalf("current challenge was not reserved: %t, %v", reserved, err)
+	}
+	if reserved, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, second, pending); err != nil || reserved {
+		t.Fatalf("pending challenge was reused: %t, %v", reserved, err)
+	}
+	if err := redis.SetCache(t.Context(), storageKey, first, 2*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if restored, err := redis.ReplaceCacheStringIfValueMatches(t.Context(), storageKey, pending, second); err != nil || restored {
+		t.Fatalf("failed generation overwrote a replacement: %t, %v", restored, err)
+	}
+	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, pending); err != nil || consumed {
+		t.Fatalf("completed generation removed a replacement: %t, %v", consumed, err)
+	}
+}
+
+func TestSocialVerificationIssuanceBindsChallengeAndEnforcesPerUserBudget(t *testing.T) {
+	helper := newSocialRateLimitTestHelper(t)
+	redis := helper.DBManager.Redis
+	app := fiber.New()
+	app.Post("/code/:user", func(c fiber.Ctx) error {
+		c.Locals("userID", c.Params("user"))
+		return c.Next()
+	}, handleGenerateVerificationCode(helper))
+	request := func(user, platformUser string, want int) harukiAPIHelper.GenerateSocialPlatformCodeResponse {
+		t.Helper()
+		raw, err := json.Marshal(harukiAPIHelper.GenerateSocialPlatformCodePayload{
+			Platform: harukiAPIHelper.SocialPlatformQQ, UserID: platformUser,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/code/"+user, strings.NewReader(string(raw)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("issuance returned %d, want %d", resp.StatusCode, want)
+		}
+		var result harukiAPIHelper.GenerateSocialPlatformCodeResponse
+		if want == http.StatusOK {
+			if err := json.UnmarshalRead(resp.Body, &result); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return result
+	}
+
+	request("owner", "invalid value", http.StatusBadRequest)
+	key := harukiRedis.BuildSocialPlatformVerificationIssueKey("owner")
+	if err := redis.Redis.Set(t.Context(), key, 14, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	issued := request("owner", "fixture-target", http.StatusOK)
+	if issued.StatusToken == "" || issued.OneTimePassword == "" {
+		t.Fatal("verification response is missing required values")
+	}
+	var binding socialStatusTokenBinding
+	if found, err := redis.GetCache(t.Context(), harukiRedis.BuildStatusTokenBindingKey(issued.StatusToken), &binding); err != nil || !found || binding.Platform != "qq" || binding.UserID != "fixture-target" {
+		t.Fatalf("status token did not preserve its binding: found=%v err=%v", found, err)
+	}
+	request("owner", "other-target", http.StatusTooManyRequests)
+	request("another-owner", "other-target", http.StatusOK)
+	global := harukiRedis.BuildSocialPlatformVerificationIssueKey("")
+	if err := redis.Redis.Set(t.Context(), global, 10000, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request("fresh-owner", "fixture-target", http.StatusTooManyRequests)
+	if err := redis.Redis.Set(t.Context(), global, "invalid-counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request("fresh-owner", "fixture-target", http.StatusInternalServerError)
+	if err := redis.Redis.Set(t.Context(), harukiRedis.BuildSocialPlatformVerificationIssueKey("broken-owner"), "invalid-counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request("broken-owner", "fixture-target", http.StatusInternalServerError)
+}
+
+func TestBotVerificationBindsAndConsumesIssuedChallenge(t *testing.T) {
+	helper := newSocialRateLimitTestHelper(t)
+	redis := helper.DBManager.Redis
+	keys := redis.KeyBuilder()
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	helper.DBManager.DB = db
+	db.User.Create().SetID("owner").SetName("Owner").SetEmail("owner@example.test").ExecX(t.Context())
+	app := fiber.New()
+	app.Post("/verify", handleVerifySocialPlatform(helper, NewBotVerifyConfig(BotVerifyConfigOptions{Token: "fixture-bot-secret"})))
+	check := func(account string, want int) {
+		t.Helper()
+		body := `{"platform":"qq","userId":"` + account + `","oneTimePassword":"fixture-code"}`
+		req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer fixture-bot-secret")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("verification returned %d, want %d", resp.StatusCode, want)
+		}
+	}
+	check("invalid account", http.StatusBadRequest)
+	key := keys.BuildSocialVerificationChallengeKey("qq", "fixture-account")
+	if err := redis.SetCache(t.Context(), key, "unreadable-legacy-state", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	check("fixture-account", http.StatusInternalServerError)
+	challenge, err := encodeSocialVerificationChallenge(keys, "fixture-code", "owner", "fixture-status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(t.Context(), key, challenge, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	unavailable := enttest.Open(t, "sqlite3", "file:unavailable-social?mode=memory&cache=shared&_fk=1")
+	if err := unavailable.Close(); err != nil {
+		t.Fatal(err)
+	}
+	helper.DBManager.DB = unavailable
+	check("fixture-account", http.StatusInternalServerError)
+	if ttl := redis.Redis.PTTL(t.Context(), key).Val(); ttl != time.Minute {
+		t.Fatalf("failed verification changed the remaining challenge TTL: %v", ttl)
+	}
+	helper.DBManager.DB = db
+	check("fixture-account", http.StatusOK)
+	check("fixture-account", http.StatusBadRequest)
+	row := db.SocialPlatformInfo.Query().OnlyX(t.Context())
+	if !row.Verified || row.QueryUser().OnlyIDX(t.Context()) != "owner" || row.PlatformUserID != "fixture-account" {
+		t.Fatalf("unexpected verified account: %s", row.PlatformUserID)
+	}
+	var status string
+	if found, err := redis.GetCache(t.Context(), harukiRedis.BuildStatusTokenKey("fixture-status"), &status); err != nil || !found || status != "true" {
+		t.Fatalf("verification state was not advanced: found=%v err=%v", found, err)
 	}
 }

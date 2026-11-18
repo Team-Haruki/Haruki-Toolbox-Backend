@@ -2,6 +2,10 @@ package useractivity
 
 import (
 	json "encoding/json/v2"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	_ "github.com/mattn/go-sqlite3"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -248,5 +252,37 @@ func TestHandleListOwnActivityLogsDatabaseUnavailable(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+	}
+}
+
+func TestOwnActivityLogsHideSponsorAdminNoteWithoutWritingMoreLogs(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+	eventTime := time.Now().UTC().Add(-time.Minute)
+	db.SystemLog.Create().SetEventTime(eventTime).SetAction("admin.sponsor.toolbox_access.update").SetActorType("admin").
+		SetTargetType("user").SetTargetID("owner").SetMetadata(map[string]any{"note": "private fixture note", "status": "granted"}).ExecX(t.Context())
+	db.SystemLog.Create().SetEventTime(eventTime).SetAction("other.account.activity").SetActorUserID("other").ExecX(t.Context())
+	app := fiber.New()
+	app.Get("/:toolbox_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleListOwnActivityLogs(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/owner", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("activity listing returned %d: %v", resp.StatusCode, err)
+	}
+	got := string(body)
+	if !strings.Contains(got, "admin.sponsor.toolbox_access.update") || strings.Contains(got, "private fixture note") ||
+		strings.Contains(got, "other.account.activity") {
+		t.Fatalf("unexpected activity projection: %s", got)
+	}
+	if count := db.SystemLog.Query().CountX(t.Context()); count != 2 {
+		t.Fatalf("activity read created more audit rows: %d", count)
 	}
 }

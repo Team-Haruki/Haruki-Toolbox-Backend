@@ -22,8 +22,8 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 	if err != nil {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "invalid server")
 	}
-	gameUserID := strings.TrimSpace(c.Params("game_user_id"))
-	if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
+	gameUserID, err := strconv.ParseInt(strings.TrimSpace(c.Params("game_user_id")), 10, 64)
+	if err != nil {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "game_user_id must be numeric")
 	}
 	dataType := strings.ToLower(strings.TrimSpace(c.Params("data_type")))
@@ -34,35 +34,32 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 	if granteeUserID == "" {
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "grantee_user_id is required")
 	}
-	return server, gameUserID, dataType, granteeUserID, nil
+	return server, strconv.FormatInt(gameUserID, 10), dataType, granteeUserID, nil
 }
 
-func validateGrantOwnerBinding(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID string) error {
+func validateGrantOwnerBinding(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID string) *fiber.Error {
 	binding, err := queryExistingBinding(c.Context(), apiHelper, string(server), gameUserID)
 	if err != nil {
 		harukiLogger.Errorf("Failed to query game account grant binding: %v", err)
-		return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to query binding")
 	}
-	if bindingErr := validateVerifiedOwnedGameAccountBinding(binding, ownerUserID); bindingErr != nil {
-		return respondVerifiedGameAccountDataError(c, bindingErr)
-	}
-	return nil
+	return validateVerifiedOwnedGameAccountBinding(binding, ownerUserID)
 }
 
-func validateGrantTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, granteeUserID string) error {
+func validateGrantTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, granteeUserID string) *fiber.Error {
 	target, err := apiHelper.DBManager.DB.User.Query().
 		Where(userSchema.IDEQ(granteeUserID)).
 		Select(userSchema.FieldID, userSchema.FieldBanned, userSchema.FieldBanReason).
 		Only(c.Context())
 	if err != nil {
 		if postgresql.IsNotFound(err) {
-			return harukiAPIHelper.ErrorNotFound(c, "grantee user not found")
+			return fiber.NewError(fiber.StatusNotFound, "grantee user not found")
 		}
 		harukiLogger.Errorf("Failed to query grant target user: %v", err)
-		return harukiAPIHelper.ErrorInternal(c, "failed to query grantee user")
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to query grantee user")
 	}
 	if target.Banned {
-		return harukiAPIHelper.ErrorForbidden(c, "grantee user is banned")
+		return fiber.NewError(fiber.StatusForbidden, "grantee user is banned")
 	}
 	return nil
 }
@@ -133,10 +130,10 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return harukiAPIHelper.ErrorBadRequest(c, "expiresAt must be a future time")
 		}
 		if err := validateGrantOwnerBinding(c, apiHelper, ownerUserID, server, gameUserID); err != nil {
-			return err
+			return respondVerifiedGameAccountDataError(c, err)
 		}
 		if err := validateGrantTargetUser(c, apiHelper, granteeUserID); err != nil {
-			return err
+			return respondVerifiedGameAccountDataError(c, err)
 		}
 
 		var permissions [][]string

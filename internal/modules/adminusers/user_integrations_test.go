@@ -1,6 +1,8 @@
 package adminusers
 
 import (
+	"fmt"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -328,5 +330,59 @@ func TestResolveAdminUserEmailUpdateFinalizeOutcome(t *testing.T) {
 				t.Fatalf("result = %q, want %q", gotResult, tc.wantResult)
 			}
 		})
+	}
+}
+
+func TestAdminSocialGrantLimitsKeepLegacyEntriesOutOfResponse(t *testing.T) {
+	helper := newAdminUserTicketNotificationTestHelper(t)
+	seedAdminUserTicketNotificationTestUser(t, helper, "admin", "Admin", "admin@example.test", roleAdmin, false, false)
+	seedAdminUserTicketNotificationTestUser(t, helper, "member", "Member", "member@example.test", roleUser, false, false)
+	grants := helper.DBManager.DB.AuthorizeSocialPlatformInfo
+	for _, item := range []struct {
+		slot int
+		note string
+	}{
+		{1, "visible fixture"},
+		{2, strings.Repeat("字", 400)},
+		{postgresql.MaxSocialGrantSlots + 1, "legacy outside slot range"},
+	} {
+		grants.Create().SetUserID("member").SetPlatform("qq").SetPlatformUserID(fmt.Sprint(item.slot)).
+			SetPlatformID(item.slot).SetComment(item.note).ExecX(t.Context())
+	}
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "admin")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	})
+	app.Get("/:target_user_id", handleListUserAuthorizedSocialPlatforms(helper))
+	app.Put("/:target_user_id/:platform_id", handleUpsertUserAuthorizedSocialPlatform(helper))
+	check := func(method, path, body, encoding string, want int) string {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", encoding)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != want {
+			t.Fatalf("%s %s returned %d, body %s, err %v", method, path, resp.StatusCode, raw, err)
+		}
+		return string(raw)
+	}
+	got := check(http.MethodGet, "/member", "", "", http.StatusOK)
+	if !strings.Contains(got, "visible fixture") || strings.Contains(got, "legacy outside") || strings.Contains(got, "字") {
+		t.Fatal("admin listing included legacy grants outside the limits")
+	}
+	body := `{"platform":"qq","userId":"updated"}`
+	check(http.MethodPut, fmt.Sprintf("/member/%d", postgresql.MaxSocialGrantSlots+1), body, "", http.StatusBadRequest)
+	check(http.MethodPut, "/member/1", body, "gzip", http.StatusBadRequest)
+	check(http.MethodPut, "/member/1", strings.Repeat(" ", (8<<10)+1), "", http.StatusBadRequest)
+	check(http.MethodPut, "/member/1", `{"platform":"qq","userId":"a","comment":"`+strings.Repeat("字", 400)+`"}`, "", http.StatusBadRequest)
+	if !strings.Contains(check(http.MethodGet, "/member", "", "", http.StatusOK), "visible fixture") {
+		t.Fatal("rejected requests modified the existing grant")
 	}
 }

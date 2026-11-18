@@ -56,12 +56,15 @@ func (s Service) AppendUserMessage(ctx context.Context, row *postgresql.Ticket, 
 		return nil, err
 	}
 
-	update := tx.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusPendingAdmin)
+	update := tx.Ticket.UpdateOneID(row.ID).Where(ticket.StatusNEQ(ticket.StatusClosed)).SetStatus(ticket.StatusPendingAdmin)
 	if row.ClosedAt != nil {
 		update.ClearClosedAt()
 	}
 	if _, err := update.Save(ctx); err != nil {
 		rollback()
+		if postgresql.IsNotFound(err) {
+			return nil, ErrTicketClosed
+		}
 		return nil, fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -71,14 +74,14 @@ func (s Service) AppendUserMessage(ctx context.Context, row *postgresql.Ticket, 
 	return created, nil
 }
 
-func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket, actorUserID, message string, internal bool) (*postgresql.TicketMessage, error) {
+func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket, actorUserID, message string, internal bool) (*postgresql.TicketMessage, ticket.Status, error) {
 	if s.db == nil || row == nil {
-		return nil, ErrServiceUnavailable
+		return nil, "", ErrServiceUnavailable
 	}
 
 	tx, err := s.db.Tx(ctx)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	rollback := func() { _ = tx.Rollback() }
 
@@ -91,24 +94,30 @@ func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket,
 		Save(ctx)
 	if err != nil {
 		rollback()
-		return nil, err
+		return nil, "", err
 	}
 
-	if !internal && row.Status != ticket.StatusClosed {
-		update := tx.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusPendingUser)
-		if row.ClosedAt != nil {
-			update.ClearClosedAt()
-		}
-		if _, err := update.Save(ctx); err != nil {
+	var current *postgresql.Ticket
+	if !internal {
+		current, err = tx.Ticket.UpdateOneID(row.ID).Where(ticket.StatusNEQ(ticket.StatusClosed)).
+			SetStatus(ticket.StatusPendingUser).ClearClosedAt().Save(ctx)
+		if err != nil && !postgresql.IsNotFound(err) {
 			rollback()
-			return nil, fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
+			return nil, "", fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
+		}
+	}
+	if current == nil {
+		current, err = tx.Ticket.Get(ctx, row.ID)
+		if err != nil {
+			rollback()
+			return nil, "", fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		rollback()
-		return nil, err
+		return nil, "", err
 	}
-	return created, nil
+	return created, current.Status, nil
 }
 
 func (s Service) Close(ctx context.Context, row *postgresql.Ticket) (*postgresql.Ticket, error) {

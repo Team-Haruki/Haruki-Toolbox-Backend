@@ -114,16 +114,13 @@ func handleGetDeckRecommendData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		// and live grants both qualify, one check per data type the mode needs.
 		now := time.Now().UTC()
 		for _, requiredDataType := range deckRecommendRequiredDataTypes(mode) {
-			access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, userID, string(server), gameUserIDStr, string(requiredDataType), now)
+			access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, userID, string(server), strconv.FormatInt(gameUserID, 10), string(requiredDataType), now)
 			if err != nil {
 				harukiLogger.Errorf("Failed to verify deck recommend data access: %v", err)
 				return harukiAPIHelper.ErrorInternal(c, "failed to verify game account data access")
 			}
 			if access == nil || !access.Allowed {
-				if access == nil || access.OwnerUserID == "" {
-					return harukiAPIHelper.ErrorNotFound(c, "binding not found")
-				}
-				return harukiAPIHelper.ErrorForbidden(c, "not authorized to access this binding")
+				return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 			}
 		}
 

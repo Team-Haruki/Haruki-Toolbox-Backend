@@ -36,7 +36,7 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 		)
 		g, gCtx := errgroup.WithContext(ctx)
 		g.Go(func() error {
-			entries, err := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
+			grantQuery := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
 				Where(
 					authorizesocialplatforminfo.PlatformEQ(platform),
 					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
@@ -46,8 +46,9 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 					query.WithGameAccountBindings(func(bQuery *postgresql.GameAccountBindingQuery) {
 						bQuery.Where(gameaccountbinding.VerifiedEQ(true))
 					})
-				}).
-				All(gCtx)
+				})
+			postgresql.BoundSocialGrants(grantQuery)
+			entries, err := grantQuery.All(gCtx)
 			if err != nil {
 				return err
 			}
@@ -61,6 +62,7 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 				Where(
 					socialplatforminfo.PlatformEQ(platform),
 					socialplatforminfo.PlatformUserIDEQ(platformUserID),
+					socialplatforminfo.VerifiedEQ(true),
 				).
 				WithUser(func(query *postgresql.UserQuery) {
 					query.WithGameAccountBindings(func(bQuery *postgresql.GameAccountBindingQuery) {

@@ -5,9 +5,13 @@ import (
 	"strings"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+const maxUserSocialGrants = postgresql.MaxSocialGrantSlots
+const RequestBodyLimit = 8 << 10
 
 func parseAuthorizeSocialPlatformID(c fiber.Ctx) (int, error) {
 	idParam := c.Params("id")
@@ -24,6 +28,12 @@ func parseAuthorizeSocialPlatformID(c fiber.Ctx) (int, error) {
 
 func parseAuthorizeSocialPlatformPayload(c fiber.Ctx) (harukiAPIHelper.AuthorizeSocialPlatformPayload, error) {
 	var payload harukiAPIHelper.AuthorizeSocialPlatformPayload
+	if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		return payload, fiber.NewError(fiber.StatusUnsupportedMediaType, "compressed authorization bodies are not supported")
+	}
+	if len(c.Request().Body()) > RequestBodyLimit {
+		return payload, fiber.NewError(fiber.StatusRequestEntityTooLarge, "authorization body is too large")
+	}
 	if err := c.Bind().Body(&payload); err != nil {
 		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, err
 	}
@@ -33,6 +43,9 @@ func parseAuthorizeSocialPlatformPayload(c fiber.Ctx) (harukiAPIHelper.Authorize
 	payload.UserID = strings.TrimSpace(payload.UserID)
 	if payload.UserID == "" {
 		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "userId is required")
+	}
+	if !postgresql.ValidSocialGrantFields(payload.UserID, payload.Comment) {
+		return harukiAPIHelper.AuthorizeSocialPlatformPayload{}, fiber.NewError(fiber.StatusBadRequest, "invalid authorization field length or encoding")
 	}
 	return payload, nil
 }

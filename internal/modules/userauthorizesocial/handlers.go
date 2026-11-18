@@ -3,7 +3,6 @@ package userauthorizesocial
 import (
 	"strconv"
 
-	"entgo.io/ent/dialect/sql"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -41,6 +40,7 @@ func handleUpdateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 				authorizesocialplatforminfo.UserID(toolboxUserID),
 				authorizesocialplatforminfo.PlatformIDEQ(userAccountID),
 			).
+			Select(authorizesocialplatforminfo.FieldID).
 			Only(ctx)
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -97,18 +97,27 @@ func handleCreateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
-		newPlatformID := 1
-		latest, err := client.Query().
-			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
-			Order(authorizesocialplatforminfo.ByPlatformID(sql.OrderDesc())).
-			First(ctx)
-		if err != nil && !postgresql.IsNotFound(err) {
+		ids, err := client.Query().
+			Where(authorizesocialplatforminfo.UserID(toolboxUserID),
+				authorizesocialplatforminfo.PlatformIDGT(0), authorizesocialplatforminfo.PlatformIDLTE(maxUserSocialGrants)).
+			Select(authorizesocialplatforminfo.FieldPlatformID).
+			Ints(ctx)
+		if err != nil {
 			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
 			reason = "query_authorized_social_platforms_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query social platforms")
 		}
-		if latest != nil {
-			newPlatformID = latest.PlatformID + 1
+		var used [maxUserSocialGrants + 1]bool
+		for _, id := range ids {
+			used[id] = true
+		}
+		newPlatformID := 1
+		for newPlatformID <= maxUserSocialGrants && used[newPlatformID] {
+			newPlatformID++
+		}
+		if newPlatformID > maxUserSocialGrants {
+			reason = "authorization_limit"
+			return harukiAPIHelper.ErrorBadRequest(c, "social authorization limit reached")
 		}
 		_, err = client.Create().
 			SetUserID(toolboxUserID).
@@ -159,6 +168,10 @@ func handleCreateAuthorizeSocialPlatformAtID(apiHelper *harukiAPIHelper.HarukiTo
 		if err != nil {
 			reason = "invalid_platform_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid id parameter")
+		}
+		if userAccountID > maxUserSocialGrants {
+			reason = "invalid_platform_id"
+			return harukiAPIHelper.ErrorBadRequest(c, "id exceeds the social authorization limit")
 		}
 		payload, err := parseAuthorizeSocialPlatformPayload(c)
 		if err != nil {
@@ -238,29 +251,14 @@ func handleDeleteAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 			reason = "authorized_social_platform_not_found"
 			return harukiAPIHelper.ErrorNotFound(c, "authorized social platform not found")
 		}
-		infos, err := client.Query().
-			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
-			All(ctx)
+		ud, err := buildAuthorizedSocialPlatformUserData(c, client, toolboxUserID)
 		if err != nil {
 			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
 			reason = "query_authorized_social_platforms_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch authorized social platforms")
 		}
-		resp := make([]harukiAPIHelper.AuthorizeSocialPlatformInfo, 0, len(infos))
-		for _, i := range infos {
-			resp = append(resp, harukiAPIHelper.AuthorizeSocialPlatformInfo{
-				PlatformID:            i.PlatformID,
-				Platform:              i.Platform,
-				UserID:                i.PlatformUserID,
-				Comment:               i.Comment,
-				AllowFastVerification: i.AllowFastVerification,
-			})
-		}
-		ud := harukiAPIHelper.HarukiToolboxUserData{
-			AuthorizeSocialPlatformInfo: &resp,
-		}
 		result = harukiAPIHelper.SystemLogResultSuccess
 		reason = "ok"
-		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform updated", &ud)
+		return harukiAPIHelper.Responses.SuccessResponse(c, "authorized social platform updated", ud)
 	}
 }

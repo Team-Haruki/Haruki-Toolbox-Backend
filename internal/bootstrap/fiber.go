@@ -9,12 +9,15 @@ import (
 	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/sponsor"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/userauthorizesocial"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/redact"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/compress"
 	"github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/valyala/fasthttp"
 )
 
 // requestHeaderBufferSize bounds the request line plus all headers. Fiber's
@@ -45,6 +48,7 @@ var uncompressedPathPrefixes = []string{"/ios/proxy/", "/api/ios/proxy/"}
 
 func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 	app := fiber.New(fiberConfig(cfg))
+	app.Server().HeaderReceived = requestBodyLimit
 
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed, Next: skipCompression}))
 	app.Use(cspMiddleware(cfg))
@@ -54,6 +58,33 @@ func newFiberApp(cfg harukiConfig.Config) (*fiber.App, func() error, error) {
 		return nil, nil, err
 	}
 	return app, closeAccessLogFile, nil
+}
+
+// Apply request-specific limits before fasthttp reads either fixed-length or
+// chunked bodies. Match Fiber's case-insensitive, trailing-slash-tolerant
+// routing against the same original URI path Fiber uses.
+func requestBodyLimit(header *fasthttp.RequestHeader) fasthttp.RequestConfig {
+	if !header.IsPost() && !header.IsPut() {
+		return fasthttp.RequestConfig{}
+	}
+	var uri fasthttp.URI
+	if uri.Parse(header.Host(), header.RequestURI()) != nil {
+		return fasthttp.RequestConfig{}
+	}
+	path := strings.ToLower(strings.TrimRight(string(uri.PathOriginal()), "/"))
+	if header.IsPost() {
+		if secret, ok := strings.CutPrefix(path, sponsor.AfdianCallbackPath+"/"); path == sponsor.AfdianCallbackPath || (ok && !strings.Contains(secret, "/")) {
+			return fasthttp.RequestConfig{MaxRequestBodySize: sponsor.AfdianCallbackBodyLimit}
+		}
+	}
+	if rest, ok := strings.CutPrefix(path, "/api/user/"); ok {
+		userID, route, _ := strings.Cut(rest, "/")
+		action, id, hasID := strings.Cut(route, "/")
+		if userID != "" && action == userauthorizesocial.RouteSegment && ((!hasID && header.IsPost()) || (id != "" && !strings.Contains(id, "/"))) {
+			return fasthttp.RequestConfig{MaxRequestBodySize: userauthorizesocial.RequestBodyLimit}
+		}
+	}
+	return fasthttp.RequestConfig{}
 }
 
 func fiberConfig(cfg harukiConfig.Config) fiber.Config {

@@ -15,13 +15,18 @@ import (
 )
 
 const MaxPublishedResponseBytes = 64 << 20
+const maxPrivateResponseBytes = 192 << 20
 
 var ErrPublishedResponseTooLarge = errors.New("game data exceeds the response size limit")
 
 func appendPublishedMember(dst []byte, first *bool, key string, value []byte) ([]byte, error) {
+	return appendBoundedMember(dst, first, key, value, MaxPublishedResponseBytes)
+}
+
+func appendBoundedMember(dst []byte, first *bool, key string, value []byte, limit int) ([]byte, error) {
 	// JSON escapes can use up to six bytes per input byte. Reserve the quotes,
 	// colon, optional comma and closing object brace as well.
-	if len(dst)+len(value)+6*len(key)+5 > MaxPublishedResponseBytes {
+	if len(dst)+len(value)+6*len(key)+5 > limit {
 		return nil, ErrPublishedResponseTooLarge
 	}
 	return appendMember(dst, first, key, value), nil
@@ -218,6 +223,9 @@ func (r *Row) PrivateBody(keys []string) ([]byte, error) {
 			// find — including a dotted path, which it never descended.
 			return []byte("null"), nil
 		}
+		if len(v) > maxPrivateResponseBytes {
+			return nil, ErrPublishedResponseTooLarge
+		}
 		return v, nil
 	}
 	out := make([]byte, 0, 1024)
@@ -231,9 +239,15 @@ func (r *Row) PrivateBody(keys []string) ([]byte, error) {
 		if !ok {
 			v = []byte("null")
 		}
-		out = appendMember(out, &first, key, v)
+		out, err = appendBoundedMember(out, &first, key, v, maxPrivateResponseBytes)
+		if err != nil {
+			return nil, err
+		}
 		if ok {
 			out = appendIDString(out, &first, key, v)
+			if len(out)+1 > maxPrivateResponseBytes {
+				return nil, ErrPublishedResponseTooLarge
+			}
 		}
 	}
 	return append(out, '}'), nil
@@ -305,11 +319,12 @@ func (r *Row) documentWithout(withIdentity bool, omit map[string]bool) ([]byte, 
 	var flattened []byte
 	flatFirst := true
 	hasFlattened := false
+	limit := MaxPublishedResponseBytes
+	if withIdentity {
+		limit = maxPrivateResponseBytes
+	}
 	appendData := func(dst []byte, first *bool, key string, value []byte) ([]byte, error) {
-		if withIdentity {
-			return appendMember(dst, first, key, value), nil
-		}
-		return appendPublishedMember(dst, first, key, value)
+		return appendBoundedMember(dst, first, key, value, limit)
 	}
 
 	for i := range r.cat.Entries {

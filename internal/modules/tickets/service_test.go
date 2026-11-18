@@ -50,24 +50,43 @@ func TestServiceSharesUserAndAdminMessageTransitions(t *testing.T) {
 		t.Fatalf("status after user reply = %q, %v", row.Status, err)
 	}
 
-	adminMessage, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin reply", false)
+	adminMessage, status, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "admin reply", false)
 	if err != nil {
 		t.Fatalf("AppendAdminMessage: %v", err)
 	}
 	if adminMessage.SenderRole != ticketmessage.SenderRoleAdmin || adminMessage.Internal {
 		t.Fatalf("admin message = %#v", adminMessage)
 	}
+	if status != ticket.StatusPendingUser {
+		t.Fatalf("returned status = %q", status)
+	}
 	row, err = client.Ticket.Get(t.Context(), row.ID)
 	if err != nil || row.Status != ticket.StatusPendingUser {
 		t.Fatalf("status after admin reply = %q, %v", row.Status, err)
 	}
 
-	if _, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "private note", true); err != nil {
+	if _, _, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "private note", true); err != nil {
 		t.Fatalf("AppendAdminMessage internal: %v", err)
 	}
 	afterInternal, err := client.Ticket.Get(t.Context(), row.ID)
 	if err != nil || afterInternal.Status != ticket.StatusPendingUser {
 		t.Fatalf("status after internal note = %q, %v", afterInternal.Status, err)
+	}
+}
+
+func TestAppendAdminMessageReturnsStatusOfTicketClosedSinceRead(t *testing.T) {
+	client := newTicketServiceTestClient(t)
+	service := NewService(client, time.Now)
+	row := seedServiceTicket(t, client, "TK-SERVICE-CLOSED", ticket.StatusOpen)
+	if _, err := service.Close(t.Context(), row); err != nil {
+		t.Fatal(err)
+	}
+	message, status, err := service.AppendAdminMessage(t.Context(), row, "admin-1", "final reply", false)
+	if err != nil || status != ticket.StatusClosed || message == nil {
+		t.Fatalf("closed ticket reply = %v, %q, %v", message, status, err)
+	}
+	if got := client.Ticket.GetX(t.Context(), row.ID); got.Status != ticket.StatusClosed || got.ClosedAt == nil {
+		t.Fatal("reply changed a closed ticket")
 	}
 }
 

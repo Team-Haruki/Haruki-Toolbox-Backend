@@ -73,10 +73,14 @@ func (f *fetcher) contentHash(ctx context.Context, region string) (string, error
 	if err := json.Unmarshal(body, &v); err != nil {
 		return "", err
 	}
-	if v.ContentHash != "" {
-		return v.ContentHash, nil
+	if hash := strings.TrimSpace(v.ContentHash); hash != "" {
+		return hash, nil
 	}
-	return v.DataVersion, nil
+	version := strings.TrimSpace(v.DataVersion)
+	if version == "" {
+		return "", fmt.Errorf("registry returned no master version for %s", region)
+	}
+	return version, nil
 }
 
 // master decodes one master file (e.g. "eventStories") of a region into out.

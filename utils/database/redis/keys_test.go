@@ -63,8 +63,13 @@ func TestBuildKeys(t *testing.T) {
 		},
 		{
 			name: "game account verify attempt",
-			got:  BuildGameAccountVerifyAttemptKey("u1", "jp", "123"),
-			want: "haruki:game-account:verify:attempt:u1:jp:123",
+			got:  keys.BuildGameAccountVerifyAttemptKey("u1", "jp", "123", "fixture-code"),
+			want: "haruki:game-account:verify-attempt:u1:jp:123:" + keys.hashExactIdentifier("game-account-code", "fixture-code"),
+		},
+		{
+			name: "game account target issuance budget",
+			got:  BuildGameAccountVerificationTargetIssueKey("jp", "123"),
+			want: "haruki:game-account:verify-issue-target:jp:123",
 		},
 		{
 			name: "social platform verify",
@@ -313,5 +318,33 @@ func TestHashExactIdentifierKeepsCaseAndWhitespace(t *testing.T) {
 	}
 	if NewKeyBuilder("secret-a-0123456789").hashExactIdentifier("dc", "abc") == NewKeyBuilder("secret-b-0123456789").hashExactIdentifier("dc", "abc") {
 		t.Fatal("hashExactIdentifier must depend on the secret")
+	}
+}
+
+func TestVerificationKeysSeparateActorsTargetsAndChallenges(t *testing.T) {
+	keys := NewKeyBuilder("fixture-secret")
+	const account, generation, code = "platform-account", "generation-fixture", "code-fixture"
+	challenge := keys.BuildSocialVerificationChallengeKey("qq", account)
+	attempt := keys.BuildSocialVerificationChallengeAttemptKey(generation)
+	digest := keys.SocialVerificationCodeDigest(generation, code)
+	for _, check := range [][2]string{
+		{challenge, account}, {attempt, generation}, {digest, code},
+	} {
+		if strings.Contains(check[0], check[1]) {
+			t.Fatal("verification identifier was exposed in a Redis key or digest")
+		}
+	}
+	for _, check := range [][2]string{
+		{challenge, keys.BuildSocialVerificationChallengeKey("discord", account)},
+		{attempt, keys.BuildSocialVerificationChallengeAttemptKey("another-generation")},
+		{digest, keys.SocialVerificationCodeDigest("another-generation", code)},
+		{digest, keys.SocialVerificationCodeDigest(generation, "another-code")},
+		{BuildSocialPlatformVerificationIssueKey("user-1"), BuildSocialPlatformVerificationIssueKey("")},
+		{BuildGameAccountVerificationIssueKey("user-1"), BuildGameAccountVerificationIssueKey("user-2")},
+		{BuildGameAccountVerificationTargetIssueKey("jp", "123"), BuildGameAccountVerificationTargetIssueKey("en", "123")},
+	} {
+		if check[0] == check[1] {
+			t.Fatal("different verification scopes collided")
+		}
 	}
 }

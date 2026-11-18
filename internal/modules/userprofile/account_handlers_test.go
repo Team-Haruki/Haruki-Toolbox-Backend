@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	json "encoding/json/v2"
+	"entgo.io/ent"
 	"fmt"
 	"hash/crc32"
 	"image"
@@ -339,5 +340,57 @@ func TestHandleChangePasswordViaKratosErrors(t *testing.T) {
 				t.Fatalf("failure recorded as result=%q sessionClearFailed=%v", result, sessionClearFailed)
 			}
 		})
+	}
+}
+
+func TestProfileBodyLimitsAndConcurrentAvatarChange(t *testing.T) {
+	db := newProfileTestDB(t)
+	createProfileTestUser(t, db, "owner", "original.png", "")
+	dir := t.TempDir()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &harukiDatabase.HarukiToolboxDBManager{DB: db}}
+	handler := handleUpdateProfile(helper, NewConfig(ConfigOptions{AvatarSaveDir: dir}))
+	app := fiber.New(fiber.Config{BodyLimit: 4 << 20})
+	app.Put("/", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return handler(c)
+	})
+	for _, tc := range []struct {
+		body, encoding string
+		status         int
+	}{
+		{"{}", "gzip", http.StatusUnsupportedMediaType},
+		{strings.Repeat(" ", (3<<20)+1), "", http.StatusRequestEntityTooLarge},
+		{`{"avatarBase64":"` + strings.Repeat("A", base64.StdEncoding.EncodedLen(2<<20)+4) + `"}`, "", http.StatusBadRequest},
+	} {
+		req := httptest.NewRequest(http.MethodPut, "/", strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", tc.encoding)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.status {
+			t.Fatalf("invalid representation returned %d, want %d", resp.StatusCode, tc.status)
+		}
+	}
+	db.User.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if m.Op() == ent.OpUpdate {
+				if err := db.User.UpdateOneID("owner").SetAvatarPath("newer.png").Exec(ctx); err != nil {
+					return nil, err
+				}
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	status, response := runAsUser(t, handler, "owner", avatarPayload(encodePNG(t, 1, 1)))
+	if status != http.StatusConflict || !strings.Contains(response.Message, "Avatar changed") {
+		t.Fatalf("concurrent update returned %d %q", status, response.Message)
+	}
+	avatar := db.User.GetX(t.Context(), "owner").AvatarPath
+	files, err := os.ReadDir(dir)
+	if avatar == nil || *avatar != "newer.png" || err != nil || len(files) != 0 {
+		t.Fatalf("conflicting update replaced the newer avatar or left a file: %v", err)
 	}
 }

@@ -148,8 +148,8 @@ func TestDeckRecommendMysekaiModeNeedsOnlySuiteAccess(t *testing.T) {
 			}
 		}
 	}
-	if status, _ := getRecommendData(t, app, "stranger", "?mode=mysekai"); status != fiber.StatusForbidden {
-		t.Fatalf("stranger got %d, want 403", status)
+	if status, _ := getRecommendData(t, app, "stranger", "?mode=mysekai"); status != fiber.StatusNotFound {
+		t.Fatalf("stranger got %d, want 404", status)
 	}
 }
 

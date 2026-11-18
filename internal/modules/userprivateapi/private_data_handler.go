@@ -38,8 +38,8 @@ const privateReadSlowThreshold = 500 * time.Millisecond
 // split also keeps a whitespace-only ?key= (which the cache key trims to
 // nothing but which renders null) from sharing the full document's entry.
 const (
-	privateCacheSurfaceFull  = "private"
-	privateCacheSurfaceKeyed = "private-keyed-v2"
+	privateCacheSurfaceFull  = "private-bounded"
+	privateCacheSurfaceKeyed = "private-keyed-v2-bounded"
 )
 
 // privateCacheSurface picks the cache-key surface for a private request. The
@@ -118,7 +118,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		gameAccountBinding, bindingErr := apiHelper.DBManager.DB.GameAccountBinding.Query().
 			Where(
 				gameaccountbinding.ServerEQ(string(server)),
-				gameaccountbinding.GameUserIDEQ(userIDStr),
+				gameaccountbinding.GameUserIDEQ(strconv.FormatInt(userID, 10)),
 				gameaccountbinding.VerifiedEQ(true),
 			).
 			WithUser(func(query *postgresql.UserQuery) {
@@ -158,17 +158,19 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		// only). Both must be scoped to the resolved owner (dbUser.ID); querying
 		// the authorize table without the owner constraint is a cross-user IDOR.
 		authorized := dbUser.Edges.SocialPlatformInfo != nil &&
+			dbUser.Edges.SocialPlatformInfo.Verified &&
 			dbUser.Edges.SocialPlatformInfo.Platform == platform &&
 			dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID
 		if !authorized {
 			authStart := time.Now()
-			exists, authErr := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
+			grantQuery := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo.Query().
 				Where(
 					authorizesocialplatforminfo.UserIDEQ(dbUser.ID),
 					authorizesocialplatforminfo.PlatformEQ(platform),
 					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
-				).
-				Exist(ctx)
+				)
+			postgresql.BoundSocialGrants(grantQuery)
+			exists, authErr := grantQuery.Exist(ctx)
 			dAuth = time.Since(authStart)
 			if authErr != nil {
 				harukiLogger.Errorf("Failed to verify private api authorization (platform=%s,platform_user_id=%s): %v", platform, platformUserID, authErr)

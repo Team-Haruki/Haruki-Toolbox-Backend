@@ -26,6 +26,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtimeconfiguration"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
@@ -62,6 +63,7 @@ const (
 	TypeOAuth2ClientWebhookEndpoint = "OAuth2ClientWebhookEndpoint"
 	TypeRiskEvent                   = "RiskEvent"
 	TypeRiskRule                    = "RiskRule"
+	TypeRuntimeConfiguration        = "RuntimeConfiguration"
 	TypeSocialPlatformInfo          = "SocialPlatformInfo"
 	TypeSponsor                     = "Sponsor"
 	TypeSponsorAfdianOrder          = "SponsorAfdianOrder"
@@ -10801,6 +10803,332 @@ func (m *RiskRuleMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *RiskRuleMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown RiskRule edge %s", name)
+}
+
+// RuntimeConfigurationMutation represents an operation that mutates the RuntimeConfiguration nodes in the graph.
+type RuntimeConfigurationMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	snapshot      *map[string]interface{}
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*RuntimeConfiguration, error)
+	predicates    []predicate.RuntimeConfiguration
+}
+
+var _ ent.Mutation = (*RuntimeConfigurationMutation)(nil)
+
+// runtimeconfigurationOption allows management of the mutation configuration using functional options.
+type runtimeconfigurationOption func(*RuntimeConfigurationMutation)
+
+// newRuntimeConfigurationMutation creates new mutation for the RuntimeConfiguration entity.
+func newRuntimeConfigurationMutation(c config, op Op, opts ...runtimeconfigurationOption) *RuntimeConfigurationMutation {
+	m := &RuntimeConfigurationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeRuntimeConfiguration,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withRuntimeConfigurationID sets the ID field of the mutation.
+func withRuntimeConfigurationID(id int) runtimeconfigurationOption {
+	return func(m *RuntimeConfigurationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *RuntimeConfiguration
+		)
+		m.oldValue = func(ctx context.Context) (*RuntimeConfiguration, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().RuntimeConfiguration.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withRuntimeConfiguration sets the old RuntimeConfiguration of the mutation.
+func withRuntimeConfiguration(node *RuntimeConfiguration) runtimeconfigurationOption {
+	return func(m *RuntimeConfigurationMutation) {
+		m.oldValue = func(context.Context) (*RuntimeConfiguration, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m RuntimeConfigurationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m RuntimeConfigurationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("postgresql: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *RuntimeConfigurationMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *RuntimeConfigurationMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().RuntimeConfiguration.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSnapshot sets the "snapshot" field.
+func (m *RuntimeConfigurationMutation) SetSnapshot(value map[string]interface{}) {
+	m.snapshot = &value
+}
+
+// Snapshot returns the value of the "snapshot" field in the mutation.
+func (m *RuntimeConfigurationMutation) Snapshot() (r map[string]interface{}, exists bool) {
+	v := m.snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSnapshot returns the old "snapshot" field's value of the RuntimeConfiguration entity.
+// If the RuntimeConfiguration object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RuntimeConfigurationMutation) OldSnapshot(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSnapshot: %w", err)
+	}
+	return oldValue.Snapshot, nil
+}
+
+// ResetSnapshot resets all changes to the "snapshot" field.
+func (m *RuntimeConfigurationMutation) ResetSnapshot() {
+	m.snapshot = nil
+}
+
+// Where appends a list predicates to the RuntimeConfigurationMutation builder.
+func (m *RuntimeConfigurationMutation) Where(ps ...predicate.RuntimeConfiguration) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the RuntimeConfigurationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *RuntimeConfigurationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.RuntimeConfiguration, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *RuntimeConfigurationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *RuntimeConfigurationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (RuntimeConfiguration).
+func (m *RuntimeConfigurationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *RuntimeConfigurationMutation) Fields() []string {
+	fields := make([]string, 0, 1)
+	if m.snapshot != nil {
+		fields = append(fields, runtimeconfiguration.FieldSnapshot)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *RuntimeConfigurationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case runtimeconfiguration.FieldSnapshot:
+		return m.Snapshot()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *RuntimeConfigurationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case runtimeconfiguration.FieldSnapshot:
+		return m.OldSnapshot(ctx)
+	}
+	return nil, fmt.Errorf("unknown RuntimeConfiguration field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RuntimeConfigurationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case runtimeconfiguration.FieldSnapshot:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSnapshot(v)
+		return nil
+	}
+	return fmt.Errorf("unknown RuntimeConfiguration field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *RuntimeConfigurationMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *RuntimeConfigurationMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *RuntimeConfigurationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown RuntimeConfiguration numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *RuntimeConfigurationMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *RuntimeConfigurationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *RuntimeConfigurationMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown RuntimeConfiguration nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *RuntimeConfigurationMutation) ResetField(name string) error {
+	switch name {
+	case runtimeconfiguration.FieldSnapshot:
+		m.ResetSnapshot()
+		return nil
+	}
+	return fmt.Errorf("unknown RuntimeConfiguration field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *RuntimeConfigurationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *RuntimeConfigurationMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *RuntimeConfigurationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *RuntimeConfigurationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *RuntimeConfigurationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *RuntimeConfigurationMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *RuntimeConfigurationMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown RuntimeConfiguration unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *RuntimeConfigurationMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown RuntimeConfiguration edge %s", name)
 }
 
 // SocialPlatformInfoMutation represents an operation that mutates the SocialPlatformInfo nodes in the graph.

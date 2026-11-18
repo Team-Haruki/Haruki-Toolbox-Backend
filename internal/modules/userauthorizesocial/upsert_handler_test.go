@@ -3,6 +3,7 @@ package userauthorizesocial
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,6 +40,49 @@ func newAuthorizeSocialTestHelper(t *testing.T) *harukiAPIHelper.HarukiToolboxRo
 		DBManager: &database.HarukiToolboxDBManager{
 			DB: client,
 		},
+	}
+}
+
+func TestSocialGrantListBoundsLegacyRowsAndPreservesDeletion(t *testing.T) {
+	helper := newAuthorizeSocialTestHelper(t)
+	db := helper.DBManager.DB
+	for slot, comment := range map[int]string{1: "normal", 2: strings.Repeat("字", 400), maxUserSocialGrants + 1: "legacy slot"} {
+		if err := db.AuthorizeSocialPlatformInfo.Create().SetUserID("u1").SetPlatform("qq").SetPlatformUserID(fmt.Sprint(slot)).
+			SetPlatformID(slot).SetComment(comment).Exec(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app := fiber.New()
+	app.Get("/:toolbox_user_id", func(c fiber.Ctx) error {
+		data, err := buildAuthorizedSocialPlatformUserData(c, db.AuthorizeSocialPlatformInfo, c.Params("toolbox_user_id"))
+		if err != nil {
+			return err
+		}
+		return c.JSON(data)
+	})
+	app.Delete("/:toolbox_user_id/:id", handleDeleteAuthorizeSocialPlatform(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/u1", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "normal") || strings.Contains(string(body), "legacy slot") || strings.Contains(string(body), "字") {
+		t.Fatalf("list returned %d", resp.StatusCode)
+	}
+	resp, err = app.Test(httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/u1/%d", maxUserSocialGrants+1), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("legacy deletion returned %d", resp.StatusCode)
+	}
+	if rows, err := db.AuthorizeSocialPlatformInfo.Query().Count(t.Context()); err != nil || rows != 2 {
+		t.Fatalf("remaining grants = %d, %v", rows, err)
 	}
 }
 
@@ -175,4 +219,43 @@ func TestHandleUpdateAuthorizeSocialPlatformReturnsNotFoundWhenSlotDoesNotExist(
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNotFound)
 	}
+}
+
+func TestAutomaticSocialGrantAllocationReusesFreeSlot(t *testing.T) {
+	helper := newAuthorizeSocialTestHelper(t)
+	grants := helper.DBManager.DB.AuthorizeSocialPlatformInfo
+	for slot := 1; slot <= maxUserSocialGrants; slot++ {
+		if slot != 2 {
+			grants.Create().SetUserID("u1").SetPlatform("qq").SetPlatformUserID(fmt.Sprint(slot)).
+				SetPlatformID(slot).ExecX(t.Context())
+		}
+	}
+	app := fiber.New()
+	app.Post("/:toolbox_user_id", handleCreateAuthorizeSocialPlatform(helper))
+	app.Post("/:toolbox_user_id/:id", handleCreateAuthorizeSocialPlatformAtID(helper))
+	post := func(path, body, encoding string, want int, message string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", encoding)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != want || !strings.Contains(string(raw), message) {
+			t.Fatalf("grant at %s: status %d, body %s, err %v", path, resp.StatusCode, raw, err)
+		}
+	}
+	body := `{"platform":"qq","userId":"fixture-account"}`
+	post("/u1", body, "gzip", http.StatusBadRequest, "compressed authorization")
+	post("/u1", strings.Repeat(" ", (8<<10)+1), "identity", http.StatusBadRequest, "body is too large")
+	post("/u1", `{"platform":"qq","userId":"a","comment":"`+strings.Repeat("字", 400)+`"}`, "", http.StatusBadRequest, "invalid authorization field")
+	post(fmt.Sprintf("/u1/%d", maxUserSocialGrants+1), body, "", http.StatusBadRequest, "exceeds the social authorization limit")
+	post("/u1", body, "", http.StatusOK, "social platform created")
+	if got := grants.Query().Where(authorizesocialplatforminfo.PlatformIDEQ(2)).OnlyX(t.Context()); got.PlatformUserID != "fixture-account" {
+		t.Fatal("automatic allocation did not reuse slot 2")
+	}
+	post("/u1", body, "", http.StatusBadRequest, "authorization limit reached")
 }

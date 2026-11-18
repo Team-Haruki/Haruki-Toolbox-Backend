@@ -25,6 +25,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskrule"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtimeconfiguration"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsor"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/sponsorafdianorder"
@@ -110,6 +111,7 @@ func checkColumn(t, c string) error {
 			oauth2clientwebhookendpoint.Table: oauth2clientwebhookendpoint.ValidColumn,
 			riskevent.Table:                   riskevent.ValidColumn,
 			riskrule.Table:                    riskrule.ValidColumn,
+			runtimeconfiguration.Table:        runtimeconfiguration.ValidColumn,
 			socialplatforminfo.Table:          socialplatforminfo.ValidColumn,
 			sponsor.Table:                     sponsor.ValidColumn,
 			sponsorafdianorder.Table:          sponsorafdianorder.ValidColumn,

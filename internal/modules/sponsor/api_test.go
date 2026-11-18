@@ -4,6 +4,9 @@ import (
 	"context"
 	json "encoding/json/v2"
 	"errors"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	"github.com/alicebob/miniredis/v2"
+	goredis "github.com/redis/go-redis/v9"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -358,5 +361,45 @@ func TestSplitIsClaimedOnce(t *testing.T) {
 	report, err := SplitLegacySponsorDurations(ctx, db, now, SplitOptions{OrdersComplete: true})
 	if err != nil || report.AlreadySplit != 1 || !strings.Contains(report.String(), "already_split=1") {
 		t.Fatalf("report = %v err=%v", report, err)
+	}
+}
+
+func TestAfdianCallbackLimitsBeforeOrderVerification(t *testing.T) {
+	cfg := NewAfdianConfig(AfdianConfigOptions{WebhookSecret: "fixture-callback"})
+	cache := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: cache.Addr()})
+	defer client.Close()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{DB: openSponsorDB(t), Redis: &harukiRedis.HarukiRedisManager{Redis: client}},
+	}
+	app := fiber.New()
+	handler := handleAfdianCallback(helper, cfg)
+	app.Post("/:secret", func(c fiber.Ctx) error {
+		if err := client.Set(c.Context(), harukiRedis.BuildAfdianCallbackRateLimitIPKey(c.IP()), afdianCallbackRateLimitMax, time.Minute).Err(); err != nil {
+			return err
+		}
+		return handler(c)
+	})
+	for _, tc := range []struct {
+		body, encoding string
+		want           int
+	}{
+		{"{}", "gzip", http.StatusUnsupportedMediaType},
+		{strings.Repeat(" ", (64<<10)+1), "identity", http.StatusRequestEntityTooLarge},
+		{"{}", "", http.StatusTooManyRequests},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/fixture-callback", strings.NewReader(tc.body))
+		req.Header.Set("Content-Encoding", tc.encoding)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want || (tc.want == http.StatusTooManyRequests && resp.Header.Get("Retry-After") == "") {
+			t.Fatalf("callback returned %d with Retry-After %q, want %d", resp.StatusCode, resp.Header.Get("Retry-After"), tc.want)
+		}
+	}
+	if n := helper.DBManager.DB.SponsorAfdianOrder.Query().CountX(t.Context()); n != 0 {
+		t.Fatalf("rejected callback wrote %d orders", n)
 	}
 }

@@ -38,6 +38,8 @@ type Tx struct {
 	RiskEvent *RiskEventClient
 	// RiskRule is the client for interacting with the RiskRule builders.
 	RiskRule *RiskRuleClient
+	// RuntimeConfiguration is the client for interacting with the RuntimeConfiguration builders.
+	RuntimeConfiguration *RuntimeConfigurationClient
 	// SocialPlatformInfo is the client for interacting with the SocialPlatformInfo builders.
 	SocialPlatformInfo *SocialPlatformInfoClient
 	// Sponsor is the client for interacting with the Sponsor builders.
@@ -206,6 +208,7 @@ func (tx *Tx) init() {
 	tx.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(tx.config)
 	tx.RiskEvent = NewRiskEventClient(tx.config)
 	tx.RiskRule = NewRiskRuleClient(tx.config)
+	tx.RuntimeConfiguration = NewRuntimeConfigurationClient(tx.config)
 	tx.SocialPlatformInfo = NewSocialPlatformInfoClient(tx.config)
 	tx.Sponsor = NewSponsorClient(tx.config)
 	tx.SponsorAfdianOrder = NewSponsorAfdianOrderClient(tx.config)

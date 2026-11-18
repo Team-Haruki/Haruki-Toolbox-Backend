@@ -48,18 +48,20 @@ func (t *kratosRequestMetadataTransport) RoundTrip(req *http.Request) (*http.Res
 }
 
 type resolvedKratosSession struct {
-	SessionID     string
-	UserID        string
-	IdentityID    string
-	Email         string
-	DisplayName   *string
-	EmailVerified *bool
+	SessionID      string
+	AssuranceLevel string
+	UserID         string
+	IdentityID     string
+	Email          string
+	DisplayName    *string
+	EmailVerified  *bool
 }
 
 type kratosSessionWhoamiResponse struct {
-	ID       string               `json:"id"`
-	Active   bool                 `json:"active"`
-	Identity kratosIdentityRecord `json:"identity"`
+	ID             string               `json:"id"`
+	AssuranceLevel string               `json:"authenticator_assurance_level"`
+	Active         bool                 `json:"active"`
+	Identity       kratosIdentityRecord `json:"identity"`
 }
 
 type kratosAdminSessionRecord struct {

@@ -18,6 +18,8 @@ type Message struct {
 	Subject string
 	HTML    string
 	Text    string
+	// HideRecipients keeps the SMTP envelope while hiding addresses in To.
+	HideRecipients bool
 }
 
 func (m Message) validate() error {
@@ -70,7 +72,11 @@ func buildMIME(from mail.Address, to []string, msg Message, now time.Time) ([]by
 		b.WriteString("\r\n")
 	}
 	writeHeader("From", from.String())
-	writeHeader("To", strings.Join(to, ", "))
+	if msg.HideRecipients && len(to) > 1 {
+		writeHeader("To", "undisclosed-recipients:;")
+	} else {
+		writeHeader("To", strings.Join(to, ", "))
+	}
 	writeHeader("Subject", mime.BEncoding.Encode("UTF-8", singleLine(msg.Subject)))
 	writeHeader("Date", now.Format(time.RFC1123Z))
 	writeHeader("Message-ID", fmt.Sprintf("<%s@%s>", messageID, domain))

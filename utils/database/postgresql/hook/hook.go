@@ -165,6 +165,18 @@ func (f RiskRuleFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgr
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.RiskRuleMutation", m)
 }
 
+// The RuntimeConfigurationFunc type is an adapter to allow the use of ordinary
+// function as RuntimeConfiguration mutator.
+type RuntimeConfigurationFunc func(context.Context, *postgresql.RuntimeConfigurationMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RuntimeConfigurationFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.RuntimeConfigurationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.RuntimeConfigurationMutation", m)
+}
+
 // The SocialPlatformInfoFunc type is an adapter to allow the use of ordinary
 // function as SocialPlatformInfo mutator.
 type SocialPlatformInfoFunc func(context.Context, *postgresql.SocialPlatformInfoMutation) (postgresql.Value, error)

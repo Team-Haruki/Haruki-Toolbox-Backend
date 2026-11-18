@@ -2,6 +2,7 @@ package usertickets
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"errors"
 	"math"
 	"strings"
@@ -36,10 +37,25 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			})
 		}()
 
+		if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+			reason = "invalid_payload"
+			return c.SendStatus(fiber.StatusUnsupportedMediaType)
+		}
+		if len(c.Request().Body()) > 64<<10 {
+			reason = "invalid_payload"
+			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
+		}
 		var payload createUserTicketPayload
 		if err := c.Bind().Body(&payload); err != nil {
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
+		}
+		if payload.Metadata != nil {
+			encoded, err := json.Marshal(payload.Metadata)
+			if err != nil || len(encoded) > 16<<10 {
+				reason = "invalid_metadata"
+				return harukiAPIHelper.ErrorBadRequest(c, "ticket metadata exceeds 16 KiB")
+			}
 		}
 
 		subject, err := normalizeUserTicketSubject(payload.Subject)
@@ -74,6 +90,13 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			reason = "generate_ticket_id_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate ticket id")
 		}
+
+		notification, accepted := reserveTicketNotification(apiHelper)
+		if !accepted {
+			reason = "notification_queue_full"
+			return c.SendStatus(fiber.StatusServiceUnavailable)
+		}
+		defer notification.Cancel()
 
 		tx, err := apiHelper.DBManager.DB.Tx(c.Context())
 		if err != nil {
@@ -125,10 +148,12 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 		// (log-only), so the response should not wait on the SMTP conversation.
 		// BuildEvent clones every request-derived string, so the event is safe
 		// to read after this handler returns.
-		event := ticketsModule.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient, notificationConfig)
-		platformMailNotify.Dispatch(func(ctx context.Context) {
-			ticketsModule.NotifyAdminsOfNewTicket(ctx, apiHelper.DBManager.DB, event)
-		})
+		if notification != nil {
+			event := ticketsModule.BuildEvent(createdTicket, userID, message, apiHelper.SMTPClient, notificationConfig)
+			notification.Send(func(ctx context.Context) {
+				ticketsModule.NotifyAdminsOfNewTicket(ctx, apiHelper.DBManager.DB, event)
+			})
+		}
 		resp := createUserTicketResponse{TicketID: ticketID}
 		return harukiAPIHelper.Responses.SuccessResponse(c, "ticket created", &resp)
 	}
@@ -176,8 +201,11 @@ func handleListOwnTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		}
 		rows, err := baseQuery.Clone().
 			Order(ticket.ByUpdatedAt(sql.OrderDesc()), ticket.ByID(sql.OrderDesc())).
-			Offset((page - 1) * pageSize).
+			Offset((page-1)*pageSize).
 			Limit(pageSize).
+			Select(ticket.FieldID, ticket.FieldTicketID, ticket.FieldSubject, ticket.FieldPriority,
+				ticket.FieldStatus, ticket.FieldCategory, ticket.FieldAssigneeAdminID,
+				ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldClosedAt).
 			All(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query tickets")
@@ -271,6 +299,12 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket is closed")
 		}
 
+		notification, accepted := reserveTicketNotification(apiHelper)
+		if !accepted {
+			return c.SendStatus(fiber.StatusServiceUnavailable)
+		}
+		defer notification.Cancel()
+
 		createdMessage, err := ticketsModule.NewService(apiHelper.DBManager.DB, time.Now).
 			AppendUserMessage(c.Context(), row, userID, message)
 		if err != nil {
@@ -283,14 +317,24 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
 		}
 
-		event := ticketsModule.BuildEvent(row, userID, message, apiHelper.SMTPClient, notificationConfig)
-		event.Ticket.Status = ticket.StatusPendingAdmin
-		platformMailNotify.Dispatch(func(ctx context.Context) {
-			ticketsModule.NotifyAdminsOfUserReply(ctx, apiHelper.DBManager.DB, event)
-		})
+		if notification != nil {
+			event := ticketsModule.BuildEvent(row, userID, message, apiHelper.SMTPClient, notificationConfig)
+			event.Ticket.Status = ticket.StatusPendingAdmin
+			notification.Send(func(ctx context.Context) {
+				ticketsModule.NotifyAdminsOfUserReply(ctx, apiHelper.DBManager.DB, event)
+			})
+		}
 		items := buildUserTicketMessageItems([]*postgresql.TicketMessage{createdMessage})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "message added", &items[0])
 	}
+}
+
+func reserveTicketNotification(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (*platformMailNotify.Reservation, bool) {
+	if apiHelper.SMTPClient == nil {
+		return nil, true
+	}
+	reservation := platformMailNotify.Reserve()
+	return reservation, reservation != nil
 }
 
 func handleCloseOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {

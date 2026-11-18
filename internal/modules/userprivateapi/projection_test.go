@@ -58,8 +58,8 @@ func TestPrivateCacheSurface(t *testing.T) {
 	if got := privateCacheSurface(""); got != privateCacheSurfaceFull {
 		t.Fatalf("full document surface = %q", got)
 	}
-	if privateCacheSurfaceFull != "private" {
-		t.Fatalf("full-document surface changed to %q; that drops every warm full body", privateCacheSurfaceFull)
+	if privateCacheSurfaceFull == "private" {
+		t.Fatal("bounded rendering must not reuse the old full-document cache")
 	}
 	for _, key := range []string{"userGamedata", "userCards,userGamedata", " ", " , "} {
 		if got := privateCacheSurface(key); got != privateCacheSurfaceKeyed {

@@ -14,6 +14,7 @@ import (
 
 const (
 	gameAccountVerificationTTL         = 5 * time.Minute
+	gameAccountVerificationTargetLimit = 30
 	gameAccountVerificationMaxAttempts = 5
 )
 
@@ -35,18 +36,19 @@ func getVerificationCode(ctx context.Context, apiHelper *harukiAPIHelper.HarukiT
 	if !ok {
 		return "", errGameAccountVerificationCodeExpired
 	}
-	if err := reserveGameAccountVerificationAttempt(ctx, apiHelper, userID, serverStr, gameUserIDStr); err != nil {
+	if err := reserveGameAccountVerificationAttempt(ctx, apiHelper, userID, serverStr, gameUserIDStr, code); err != nil {
 		return "", err
 	}
 	return code, nil
 }
 
 // reserveGameAccountVerificationAttempt atomically claims one of the bounded
-// upstream profile checks. Incrementing before the profile request prevents
-// concurrent callers from all passing a separate read-before-increment gate.
-func reserveGameAccountVerificationAttempt(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr string) error {
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-	count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, gameAccountVerificationTTL)
+// upstream profile checks for this issuance. A replacement code has its own
+// budget, even when another request still holds the previous code.
+func reserveGameAccountVerificationAttempt(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, serverStr, gameUserIDStr, code string) error {
+	redis := apiHelper.DBManager.Redis
+	attemptKey := redis.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr, code)
+	count, err := redis.IncrementWithTTL(ctx, attemptKey, gameAccountVerificationTTL)
 	if err != nil {
 		return errGameAccountVerificationServiceUnstable
 	}
@@ -66,7 +68,7 @@ func consumeGameAccountVerificationCode(ctx context.Context, apiHelper *harukiAP
 		return errGameAccountVerificationCodeExpired
 	}
 
-	attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
+	attemptKey := apiHelper.DBManager.Redis.KeyBuilder().BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr, expectedCode)
 	if err := apiHelper.DBManager.Redis.DeleteCache(ctx, attemptKey); err != nil {
 		harukiLogger.Warnf("Failed to clear game account verification attempt key: %v", err)
 	}

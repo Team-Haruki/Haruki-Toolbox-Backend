@@ -29,7 +29,7 @@ func TestRegisterAdminRoutesRunsSessionMiddlewareOncePerRequest(t *testing.T) {
 		}
 		whoamiCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":"session-1","active":true,"identity":{"id":"identity-1","traits":{}}}`)
+		_, _ = io.WriteString(w, `{"id":"session-1","active":true,"authenticator_assurance_level":"aal2","identity":{"id":"identity-1","traits":{}}}`)
 	}))
 	defer kratos.Close()
 

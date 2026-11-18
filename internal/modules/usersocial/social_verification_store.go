@@ -1,38 +1,31 @@
 package usersocial
 
 import (
-	"context"
 	"time"
 
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
-	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
-
-	"github.com/gofiber/fiber/v3"
 )
 
 const (
 	socialPlatformVerifyTTL         = 5 * time.Minute
 	socialPlatformVerifyMaxAttempts = 5
+	socialVerificationPendingPrefix = "pending:"
 )
 
-func reserveSocialPlatformVerifyAttempt(
-	ctx context.Context,
-	redisManager *harukiRedis.HarukiRedisManager,
-	platform harukiAPIHelper.SocialPlatform,
-	platformUserID string,
-) (bool, error) {
-	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
-	attemptCount, err := redisManager.IncrementWithTTL(ctx, attemptKey, socialPlatformVerifyTTL)
-	if err != nil {
-		return false, err
-	}
-	return attemptCount > int64(socialPlatformVerifyMaxAttempts), nil
+// The status token also identifies the issuance generation. Verification
+// reserves exactly this record before writing any account binding.
+type socialVerificationChallenge struct {
+	CodeDigest  string `json:"digest"`
+	OwnerID     string `json:"owner"`
+	StatusToken string `json:"statusToken"`
 }
 
-func clearSocialPlatformVerifyAttempt(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, platform harukiAPIHelper.SocialPlatform, platformUserID string) {
-	attemptKey := harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(platform), platformUserID)
-	if err := apiHelper.DBManager.Redis.DeleteCache(c.Context(), attemptKey); err != nil {
-		harukiLogger.Warnf("Failed to clear social platform verify attempt key: %v", err)
-	}
+func encodeSocialVerificationChallenge(keys harukiRedis.KeyBuilder, code, ownerID, statusToken string) (string, error) {
+	record, err := jsoncodec.Marshal(socialVerificationChallenge{
+		CodeDigest:  keys.SocialVerificationCodeDigest(statusToken, code),
+		OwnerID:     ownerID,
+		StatusToken: statusToken,
+	})
+	return string(record), err
 }

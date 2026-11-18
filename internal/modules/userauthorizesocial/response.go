@@ -13,9 +13,9 @@ func buildAuthorizedSocialPlatformUserData(
 	client *postgresql.AuthorizeSocialPlatformInfoClient,
 	toolboxUserID string,
 ) (*harukiAPIHelper.HarukiToolboxUserData, error) {
-	infos, err := client.Query().
-		Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
-		All(ctx.Context())
+	query := client.Query().Where(authorizesocialplatforminfo.UserID(toolboxUserID))
+	postgresql.BoundSocialGrants(query)
+	infos, err := query.Order(authorizesocialplatforminfo.ByPlatformID()).Limit(maxUserSocialGrants).All(ctx.Context())
 	if err != nil {
 		return nil, err
 	}

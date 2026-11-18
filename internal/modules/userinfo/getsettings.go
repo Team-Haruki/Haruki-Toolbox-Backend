@@ -25,7 +25,7 @@ func loadCurrentUserData(
 		Query().
 		Where(userSchema.IDEQ(userID)).
 		WithSocialPlatformInfo().
-		WithAuthorizedSocialPlatforms().
+		WithAuthorizedSocialPlatforms(postgresql.BoundSocialGrants).
 		WithGameAccountBindings().
 		WithIosScriptCode().
 		Only(ctx)

@@ -45,8 +45,11 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
 			}).
 			Order(ticket.ByUpdatedAt(sql.OrderDesc()), ticket.ByID(sql.OrderDesc())).
-			Offset((filters.Page - 1) * filters.PageSize).
+			Offset((filters.Page-1)*filters.PageSize).
 			Limit(filters.PageSize).
+			Select(ticket.FieldID, ticket.FieldTicketID, ticket.FieldCreatorUserID, ticket.FieldSubject,
+				ticket.FieldPriority, ticket.FieldStatus, ticket.FieldCategory, ticket.FieldAssigneeAdminID,
+				ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldClosedAt).
 			All(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query tickets")
@@ -152,7 +155,16 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to authorize ticket")
 		}
 
-		savedMessage, err := ticketsModule.NewService(apiHelper.DBManager.DB, adminNow).
+		var notification *platformMailNotify.Reservation
+		if !payload.Internal && apiHelper.SMTPClient != nil {
+			notification = platformMailNotify.Reserve()
+			if notification == nil {
+				return c.SendStatus(fiber.StatusServiceUnavailable)
+			}
+			defer notification.Cancel()
+		}
+
+		savedMessage, status, err := ticketsModule.NewService(apiHelper.DBManager.DB, adminNow).
 			AppendAdminMessage(c.Context(), row, actorUserID, message, payload.Internal)
 		if err != nil {
 			if errors.Is(err, ticketsModule.ErrPersistTicketStatus) {
@@ -161,13 +173,13 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorInternal(c, "failed to append ticket message")
 		}
 
-		if !payload.Internal {
+		if notification != nil {
 			// Notify off the request path: the send result was always discarded
 			// (log-only). BuildEvent clones every request-derived string, so the
 			// event is safe to read after this handler returns.
 			event := ticketsModule.BuildEvent(row, actorUserID, message, apiHelper.SMTPClient, notificationConfig)
-			event.Ticket.Status = ticket.StatusPendingUser
-			platformMailNotify.Dispatch(func(ctx context.Context) {
+			event.Ticket.Status = status
+			notification.Send(func(ctx context.Context) {
 				ticketsModule.NotifyUserOfAdminReply(ctx, apiHelper.DBManager.DB, event)
 			})
 		}

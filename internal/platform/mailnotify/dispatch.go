@@ -1,47 +1,81 @@
-// Package mailnotify dispatches best-effort notification mail off the request
-// path. Every caller already discarded the send result (log-only), so the HTTP
-// response never depended on SMTP completing — blocking the handler on a
-// 10-30s worst-case SMTP conversation bought nothing. Dispatch keeps the same
-// delivery semantics while removing that latency from the user-visible request.
+// Package mailnotify admits best-effort mail jobs to a bounded background queue.
 package mailnotify
 
 import (
 	"context"
+	"sync"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
 const (
-	// maxConcurrentSends bounds background notification goroutines so an SMTP
-	// outage under sustained traffic cannot grow goroutines without bound.
 	maxConcurrentSends = 16
-	// jobTimeout bounds the whole notification job (recipient DB query plus the
-	// SMTP conversation, which additionally enforces its own dial/conversation
-	// deadlines internally).
-	jobTimeout = 30 * time.Second
+	maxAdmittedJobs    = maxConcurrentSends + 128
+	jobTimeout         = 30 * time.Second
 )
 
-var sendSlots = make(chan struct{}, maxConcurrentSends)
+var (
+	admitted     = make(chan struct{}, maxAdmittedJobs)
+	jobs         = make(chan func(context.Context), maxAdmittedJobs)
+	startWorkers sync.Once
+)
 
-// Dispatch runs job on a background goroutine when a worker slot is free and
-// falls back to running it synchronously when all slots are busy — saturation
-// degrades to the pre-async behavior instead of dropping notifications or
-// spawning unbounded goroutines. The job receives a background-derived context:
-// callers must not capture the fiber request context (or any request-buffer
-// backed strings) because fiber recycles them after the handler returns.
-func Dispatch(job func(ctx context.Context)) {
+// Reservation holds space for one job. Its owner must call Send after a
+// successful write or Cancel when the write fails or has no mail to send.
+// Reservations are owned by a single request and are not shared concurrently.
+type Reservation struct{ active bool }
+
+// Reserve returns immediately. A caller that requires queue admission can
+// reserve before writing, so saturation never turns a committed write into a
+// retryable HTTP error.
+func Reserve() *Reservation {
 	select {
-	case sendSlots <- struct{}{}:
-		go func() {
-			defer func() { <-sendSlots }()
-			run(job)
-		}()
+	case admitted <- struct{}{}:
+		return &Reservation{active: true}
 	default:
-		run(job)
+		return nil
 	}
 }
 
-func run(job func(ctx context.Context)) {
-	ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
-	defer cancel()
-	job(ctx)
+func (r *Reservation) Cancel() {
+	if r != nil && r.active {
+		r.active = false
+		<-admitted
+	}
+}
+
+// Send publishes a job using its reserved capacity. The job must only capture
+// data owned by the caller, since Fiber reuses request buffers after return.
+func (r *Reservation) Send(job func(context.Context)) {
+	if !r.active {
+		return
+	}
+	r.active = false
+	startWorkers.Do(func() {
+		for range maxConcurrentSends {
+			go func() {
+				for next := range jobs {
+					ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
+					next(ctx)
+					cancel()
+					<-admitted
+				}
+			}()
+		}
+	})
+	// Every queued or running job owns one admission. A new job with a
+	// reservation always fits even if every worker is busy.
+	jobs <- job
+}
+
+// Dispatch is for best-effort read notifications that can proceed even when
+// the queue is full. Saturation is logged without exposing email contents.
+func Dispatch(job func(context.Context)) {
+	reservation := Reserve()
+	if reservation == nil {
+		logger.Warnf("Mail notification queue full; skipping best-effort notification")
+		return
+	}
+	reservation.Send(job)
 }

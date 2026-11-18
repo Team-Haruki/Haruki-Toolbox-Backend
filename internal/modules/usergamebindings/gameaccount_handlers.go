@@ -2,13 +2,15 @@ package usergamebindings
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base32"
 	"errors"
+	"strconv"
 
 	"strings"
 	"time"
 
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
-	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -31,24 +33,33 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
-		if _, err := utils.ParseSupportedDataUploadServer(serverStr); err != nil {
+		server, err := utils.ParseSupportedDataUploadServer(serverStr)
+		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 
-		if strings.TrimSpace(gameUserIDStr) == "" {
-			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
-		}
-		code, err := userEmailModule.GenerateCode(true)
+		numericID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
 		if err != nil {
-			harukiLogger.Errorf("Failed to generate code: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
+		serverStr, gameUserIDStr = string(server), strconv.FormatInt(numericID, 10)
+		count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, harukiRedis.BuildGameAccountVerificationIssueKey(userID), gameAccountVerificationTTL)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to check issuance limit")
+		}
+		if count > 10 {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		count, err = apiHelper.DBManager.Redis.IncrementWithTTL(ctx, harukiRedis.BuildGameAccountVerificationTargetIssueKey(serverStr, gameUserIDStr), gameAccountVerificationTTL)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to check issuance limit")
+		}
+		if count > gameAccountVerificationTargetLimit {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		code := newGameAccountVerificationCode()
 		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
-		attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
-		if err := apiHelper.DBManager.Redis.SetCachesAtomically(ctx, []harukiRedis.CacheItem{
-			{Key: storageKey, Value: code},
-			{Key: attemptKey, Value: 0},
-		}, gameAccountVerificationTTL); err != nil {
+		if err := apiHelper.DBManager.Redis.SetCache(ctx, storageKey, code, gameAccountVerificationTTL); err != nil {
 			harukiLogger.Errorf("Failed to set redis cache: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save code")
 		}
@@ -59,6 +70,13 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		}
 		return harukiAPIHelper.Responses.ResponseWithStruct(c, fiber.StatusOK, resp)
 	}
+}
+
+func newGameAccountVerificationCode() string {
+	// A short, unpadded ASCII code fits the in-game profile comment field.
+	var raw [12]byte
+	rand.Read(raw[:])
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:])
 }
 
 func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -83,10 +101,17 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}()
 		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
 
-		if !isNumericGameUserID(gameUserIDStr) {
+		numericID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
+		if err != nil {
 			reason = "invalid_game_user_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
+		server, err := utils.ParseSupportedDataUploadServer(serverStr)
+		if err != nil {
+			reason = "invalid_server"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
+		}
+		serverStr, gameUserIDStr = string(server), strconv.FormatInt(numericID, 10)
 		var req harukiAPIHelper.CreateGameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
 			reason = "invalid_payload"
@@ -100,7 +125,8 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] existing binding: %v", existing != nil)
 
-		switch classifyExistingBinding(existing, userID) {
+		bindingState := classifyExistingBinding(existing, userID)
+		switch bindingState {
 		case existingBindingStateVerifiedBySelf:
 			bindings, err := getUserBindings(ctx, apiHelper, userID)
 			if err != nil {
@@ -148,6 +174,16 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership PASSED, saving binding")
 
+		var notification *platformMailNotify.Reservation
+		if bindingState == existingBindingStateOwnedByOther && apiHelper.SMTPClient != nil {
+			notification = platformMailNotify.Reserve()
+			if notification == nil {
+				reason = "notification_queue_full"
+				return c.SendStatus(fiber.StatusServiceUnavailable)
+			}
+			defer notification.Cancel()
+		}
+
 		if err := consumeGameAccountVerificationCode(ctx, apiHelper, userID, serverStr, gameUserIDStr, code); err != nil {
 			mapped := mapGameAccountVerificationCodeLookupError(err)
 			if mapped.Code >= fiber.StatusInternalServerError {
@@ -172,6 +208,8 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		clearGameAccountPublicCaches(ctx, apiHelper, serverStr, gameUserIDStr)
 		if saveResult != nil && saveResult.Transferred {
 			previousOwnerUserID = saveResult.PreviousOwnerUserID
+		}
+		if notification != nil && previousOwnerUserID != "" {
 			// Send the transfer mail off the request path: its result was always
 			// discarded (log-only), so a slow SMTP server should not delay the
 			// binding response. Clone the params — fiber recycles their backing
@@ -179,7 +217,7 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			transferServer := strings.Clone(serverStr)
 			transferGameUserID := strings.Clone(gameUserIDStr)
 			transferredAt := time.Now()
-			platformMailNotify.Dispatch(func(context.Context) {
+			notification.Send(func(context.Context) {
 				notifyPreviousGameAccountBindingOwner(apiHelper, saveResult, transferServer, transferGameUserID, transferredAt)
 			})
 		}

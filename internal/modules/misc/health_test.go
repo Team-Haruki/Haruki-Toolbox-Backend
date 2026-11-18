@@ -12,6 +12,10 @@ import (
 
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -105,5 +109,38 @@ func TestDependencyHealthRequiresGameDataAndDoesNotProbeMongo(t *testing.T) {
 	entry, ok := dependencies["game_data"].(fiber.Map)
 	if !ok || entry["status"] != "down" {
 		t.Fatalf("missing game-data pool must be unhealthy: %v", dependencies)
+	}
+}
+
+func TestHealthHandlerReusesDependencyProbeWithinRefreshInterval(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{DB: postgresql.NewClient(postgresql.Driver(entsql.OpenDB("postgres", db)))},
+	}
+	app := fiber.New()
+	app.Get("/health", handleHealth(helper, harukiHandler.NewSuiteRestoreService(harukiHandler.SuiteRestoreServiceOptions{})))
+	mock.ExpectPing()
+	for range 2 {
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/health", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var payload struct {
+			Dependencies map[string]struct {
+				Status string `json:"status"`
+			} `json:"dependencies"`
+		}
+		decodeErr := json.UnmarshalRead(resp.Body, &payload)
+		resp.Body.Close()
+		if decodeErr != nil || resp.StatusCode != http.StatusServiceUnavailable || payload.Dependencies["postgresql"].Status != "up" {
+			t.Fatalf("unexpected fixture health: status=%d dependencies=%+v err=%v", resp.StatusCode, payload.Dependencies, decodeErr)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

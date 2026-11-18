@@ -96,6 +96,33 @@ func TestClearUserSessionsWithNilRedisClient(t *testing.T) {
 	}
 }
 
+func TestAdminAssuranceRequiresTrustedAAL2(t *testing.T) {
+	s := NewSessionHandler(nil, "")
+	s.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "test-fixture", "X-Kratos-Identity-Id", "", "", "", "")
+	s.KratosIdentityResolver = func(context.Context, string, string) (string, error) { return "user", nil }
+	app := fiber.New()
+	app.Get("/admin", s.VerifySessionToken, RequireBrowserAAL2, func(c fiber.Ctx) error { return c.SendStatus(204) })
+	for _, tc := range []struct {
+		secret, aal string
+		want        int
+	}{
+		{"test-fixture", "aal2", 204}, {"test-fixture", "aal1", 403}, {"test-fixture", "", 403}, {"", "aal2", 401},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.Header.Set("X-Auth-Proxy-Secret", tc.secret)
+		req.Header.Set("X-Kratos-Identity-Id", "identity")
+		req.Header.Set("X-Auth-Proxy-Session-Aal", tc.aal)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Fatalf("AAL %q returned %d, want %d", tc.aal, resp.StatusCode, tc.want)
+		}
+	}
+}
+
 func TestVerifySessionTokenUsesTrustedAuthProxyHeaders(t *testing.T) {
 	handler := NewSessionHandler(nil, "")
 	handler.ConfigureAuthProxy(true, "X-Auth-Proxy-Secret", "proxy-secret", "X-Kratos-Identity-Id", "X-User-Name", "X-User-Email", "X-User-Email-Verified", "X-User-Id")

@@ -2,6 +2,8 @@ package sponsor
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,8 +84,13 @@ func DisplayName(row *postgresql.Sponsor) string {
 func sponsorItemFromRow(row *postgresql.Sponsor, now time.Time) SponsorItem {
 	category := SponsorCategory(row, now)
 	planName := DisplayPlanName(row)
+	publicID := row.ID
+	if strings.HasPrefix(publicID, "afdian_") {
+		digest := sha256.Sum256([]byte("sponsor-wall:" + publicID))
+		publicID = "sponsor_" + hex.EncodeToString(digest[:16])
+	}
 	return SponsorItem{
-		ID:     row.ID,
+		ID:     publicID,
 		Name:   DisplayName(row),
 		Avatar: stringPtrValue(row.Avatar),
 		Plan: &SponsorPlan{
