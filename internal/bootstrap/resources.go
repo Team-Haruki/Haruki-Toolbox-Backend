@@ -190,6 +190,10 @@ func prepareToolboxDatabase(cfg harukiConfig.Config, entClient *dbManager.Client
 		cancelUploadSchema()
 		return err
 	}
+	if err := ensureCanonicalGameAccountBindings(uploadSchemaCtx, entClient.SQLDB(), cfg.Backend.AutoMigrate); err != nil {
+		cancelUploadSchema()
+		return fmt.Errorf("ensure canonical game account identities: %w", err)
+	}
 	cancelUploadSchema()
 	grantsCleanupCtx, cancelGrantsCleanup := startupContext()
 	if deleted, err := entClient.CleanupExpiredGameAccountDataGrants(grantsCleanupCtx, time.Now().UTC()); err != nil {
