@@ -169,7 +169,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 					authorizesocialplatforminfo.PlatformEQ(platform),
 					authorizesocialplatforminfo.PlatformUserIDEQ(platformUserID),
 				)
-			postgresql.BoundSocialGrants(grantQuery)
+			postgresql.ActiveSocialGrants(grantQuery)
 			exists, authErr := grantQuery.Exist(ctx)
 			dAuth = time.Since(authStart)
 			if authErr != nil {

@@ -13,8 +13,13 @@ func verifyUserHasVerifiedSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 	return func(c fiber.Ctx) error {
 		toolboxUserID := c.Params("toolbox_user_id")
 		ctx := c.Context()
-		client := apiHelper.DBManager.DB.SocialPlatformInfo
-		info, err := client.Query().
+		db := apiHelper.DBManager.DB
+		unlock, err := db.LockUserMutations(ctx, toolboxUserID)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve social authorization")
+		}
+		defer unlock()
+		info, err := db.SocialPlatformInfo.Query().
 			Where(
 				socialplatforminfo.UserSocialPlatformInfoEQ(toolboxUserID),
 				socialplatforminfo.Verified(true),

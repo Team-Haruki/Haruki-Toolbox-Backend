@@ -142,9 +142,7 @@ func handleClearUserSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
 		}
 
-		affected, err := apiHelper.DBManager.DB.SocialPlatformInfo.Delete().
-			Where(socialplatforminfo.HasUserWith(userSchema.IDEQ(targetUser.ID))).
-			Exec(c.Context())
+		affected, err := apiHelper.DBManager.DB.ClearSocialLinkAndGrants(c.Context(), targetUser.ID)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClearSocialPlatformFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to clear social platform info")

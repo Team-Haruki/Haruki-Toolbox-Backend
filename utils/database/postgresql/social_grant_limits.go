@@ -1,12 +1,15 @@
 package postgresql
 
 import (
+	"context"
 	"fmt"
 	"unicode/utf8"
 
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/authorizesocialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
 
 const (
@@ -36,4 +39,30 @@ func octetLengthSQL(s *sql.Selector, column string) string {
 		return "octet_length(" + s.C(column) + "::text)"
 	}
 	return "length(CAST(" + s.C(column) + " AS BLOB))"
+}
+
+// ActiveSocialGrants applies the bounds used by lists and requires the
+// delegating account to still have a verified social link.
+func ActiveSocialGrants(q *AuthorizeSocialPlatformInfoQuery) {
+	BoundSocialGrants(q)
+	q.Where(authorizesocialplatforminfo.HasUserWith(user.HasSocialPlatformInfoWith(socialplatforminfo.Verified(true))))
+}
+
+// ClearSocialLinkAndGrants removes the primary link and any legacy or current
+// delegations in one transaction. The caller holds the user's mutation lock.
+func (c *Client) ClearSocialLinkAndGrants(ctx context.Context, userID string) (int, error) {
+	tx, err := c.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	count, err := tx.SocialPlatformInfo.Delete().Where(socialplatforminfo.UserSocialPlatformInfoEQ(userID)).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	grants, err := tx.AuthorizeSocialPlatformInfo.Delete().Where(authorizesocialplatforminfo.UserIDEQ(userID)).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return count + grants, tx.Commit()
 }

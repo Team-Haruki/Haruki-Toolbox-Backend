@@ -3,8 +3,6 @@ package usersocial
 import (
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/socialplatforminfo"
-	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -25,28 +23,22 @@ func handleClearSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			})
 		}()
 
-		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.
-			Query().
-			Where(socialplatforminfo.HasUserWith(userSchema.IDEQ(userID))).
-			Exist(ctx)
+		db := apiHelper.DBManager.DB
+		unlock, err := db.LockUserMutations(ctx, userID)
 		if err != nil {
-			harukiLogger.Errorf("Failed to query social platform info: %v", err)
-			reason = "query_social_platform_failed"
-			return harukiAPIHelper.ErrorInternal(c, "failed to query social platform info")
+			reason = "lock_social_platform_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve social platform update")
 		}
-		if !exists {
-			reason = "social_platform_not_found"
-			return harukiAPIHelper.ErrorBadRequest(c, "no social platform info found")
-		}
-
-		_, err = apiHelper.DBManager.DB.SocialPlatformInfo.
-			Delete().
-			Where(socialplatforminfo.HasUserWith(userSchema.IDEQ(userID))).
-			Exec(ctx)
+		defer unlock()
+		deleted, err := db.ClearSocialLinkAndGrants(ctx, userID)
 		if err != nil {
-			harukiLogger.Errorf("Failed to delete social platform info: %v", err)
+			harukiLogger.Errorf("Failed to clear social platform info: %v", err)
 			reason = "clear_social_platform_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to clear social platform info")
+		}
+		if deleted == 0 {
+			reason = "social_platform_not_found"
+			return harukiAPIHelper.ErrorBadRequest(c, "no social platform info found")
 		}
 
 		result = harukiAPIHelper.SystemLogResultSuccess
