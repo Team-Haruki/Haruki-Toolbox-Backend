@@ -81,16 +81,13 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			return harukiAPIHelper.ErrorBadRequest(c, parseErr.Message)
 		}
 
-		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), gameUserIDStr, string(dataType), time.Now().UTC())
+		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), strconv.FormatInt(gameUserID, 10), string(dataType), time.Now().UTC())
 		if err != nil {
 			harukiLogger.Errorf("Failed to verify game account data access: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to verify game account data access")
 		}
 		if access == nil || !access.Allowed {
-			if access == nil || access.OwnerUserID == "" {
-				return harukiAPIHelper.ErrorNotFound(c, "binding not found")
-			}
-			return harukiAPIHelper.ErrorForbidden(c, "not authorized to access this binding")
+			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
 		}
 
 		requestKey := c.Query("key")

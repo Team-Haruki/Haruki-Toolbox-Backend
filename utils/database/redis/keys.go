@@ -122,12 +122,32 @@ func BuildGameAccountVerifyAttemptKey(userID, server, gameUserID string) string 
 	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, KeyActionAttempt, userID, server, gameUserID)
 }
 
+func BuildGameAccountVerificationIssueKey(userID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, "issue", userID)
+}
+
 func BuildIOSUploadChunkBudgetKey() string {
 	return buildKey(KeyPrefixHaruki, "ios", "chunk-budget")
 }
 
 func BuildIOSUploadChunkBudgetExpiryKey() string {
 	return buildKey(KeyPrefixHaruki, "ios", "chunk-budget-expiry")
+}
+
+func BuildSocialPlatformVerificationIssueKey(userID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionVerify, "issue", userID)
+}
+
+func (b KeyBuilder) BuildSocialVerificationChallengeKey(platform, platformUserID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "challenge", platform, b.hashExactIdentifier("social-platform-id", platformUserID))
+}
+
+func (b KeyBuilder) BuildSocialVerificationChallengeAttemptKey(generation string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleSocial, "challenge", KeyActionAttempt, b.hashExactIdentifier("social-challenge-attempt", generation))
+}
+
+func (b KeyBuilder) SocialVerificationCodeDigest(generation, code string) string {
+	return b.hashExactIdentifier("social-challenge-code", generation+"\x00"+code)
 }
 
 func BuildSocialPlatformVerifyKey(platform, platformUserID string) string {

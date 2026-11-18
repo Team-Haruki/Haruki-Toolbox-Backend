@@ -2,13 +2,14 @@ package usergamebindings
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"strconv"
 
 	"strings"
 	"time"
 
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
-	userEmailModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/useremail"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	platformMailNotify "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -31,18 +32,24 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		serverStr := c.Params("server")
 		gameUserIDStr := c.Params("game_user_id")
 
-		if _, err := utils.ParseSupportedDataUploadServer(serverStr); err != nil {
+		server, err := utils.ParseSupportedDataUploadServer(serverStr)
+		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
 		}
 
-		if strings.TrimSpace(gameUserIDStr) == "" {
-			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
-		}
-		code, err := userEmailModule.GenerateCode(true)
+		numericID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
 		if err != nil {
-			harukiLogger.Errorf("Failed to generate code: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
+		serverStr, gameUserIDStr = string(server), strconv.FormatInt(numericID, 10)
+		count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, harukiRedis.BuildGameAccountVerificationIssueKey(userID), gameAccountVerificationTTL)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to check issuance limit")
+		}
+		if count > 10 {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		code := rand.Text()
 		storageKey := harukiRedis.BuildGameAccountVerifyKey(userID, serverStr, gameUserIDStr)
 		attemptKey := harukiRedis.BuildGameAccountVerifyAttemptKey(userID, serverStr, gameUserIDStr)
 		if err := apiHelper.DBManager.Redis.SetCachesAtomically(ctx, []harukiRedis.CacheItem{
@@ -83,10 +90,17 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}()
 		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
 
-		if !isNumericGameUserID(gameUserIDStr) {
+		numericID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
+		if err != nil {
 			reason = "invalid_game_user_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
+		server, err := utils.ParseSupportedDataUploadServer(serverStr)
+		if err != nil {
+			reason = "invalid_server"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid server")
+		}
+		serverStr, gameUserIDStr = string(server), strconv.FormatInt(numericID, 10)
 		var req harukiAPIHelper.CreateGameAccountBindingPayload
 		if err := c.Bind().Body(&req); err != nil {
 			reason = "invalid_payload"

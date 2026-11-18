@@ -118,7 +118,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		gameAccountBinding, bindingErr := apiHelper.DBManager.DB.GameAccountBinding.Query().
 			Where(
 				gameaccountbinding.ServerEQ(string(server)),
-				gameaccountbinding.GameUserIDEQ(userIDStr),
+				gameaccountbinding.GameUserIDEQ(strconv.FormatInt(userID, 10)),
 				gameaccountbinding.VerifiedEQ(true),
 			).
 			WithUser(func(query *postgresql.UserQuery) {
@@ -158,6 +158,7 @@ func handleGetPrivateData(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers)
 		// only). Both must be scoped to the resolved owner (dbUser.ID); querying
 		// the authorize table without the owner constraint is a cross-user IDOR.
 		authorized := dbUser.Edges.SocialPlatformInfo != nil &&
+			dbUser.Edges.SocialPlatformInfo.Verified &&
 			dbUser.Edges.SocialPlatformInfo.Platform == platform &&
 			dbUser.Edges.SocialPlatformInfo.PlatformUserID == platformUserID
 		if !authorized {

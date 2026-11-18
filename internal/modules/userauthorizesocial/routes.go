@@ -24,7 +24,8 @@ func RegisterUserAuthorizeSocialRoutes(apiHelper *harukiAPIHelper.HarukiToolboxR
 	r := base.Group("/:id")
 	createAtIDHandler, createAtIDRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleCreateAuthorizeSocialPlatformAtID(apiHelper))
 	updateHandler, updateRest := verifiedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleUpdateAuthorizeSocialPlatform(apiHelper))
-	deleteHandler, deleteRest := authenticatedSelf(verifyUserHasVerifiedSocialPlatform(apiHelper), handleDeleteAuthorizeSocialPlatform(apiHelper))
+	// Owners can withdraw existing delegations after removing their social link.
+	deleteHandler, deleteRest := authenticatedSelf(handleDeleteAuthorizeSocialPlatform(apiHelper))
 	r.RouteChain("/").
 		Post(createAtIDHandler, createAtIDRest...).
 		Put(updateHandler, updateRest...).

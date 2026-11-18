@@ -3,7 +3,6 @@ package userauthorizesocial
 import (
 	"strconv"
 
-	"entgo.io/ent/dialect/sql"
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
@@ -97,18 +96,27 @@ func handleCreateAuthorizeSocialPlatform(apiHelper *harukiAPIHelper.HarukiToolbo
 		}
 		ctx := c.Context()
 		client := apiHelper.DBManager.DB.AuthorizeSocialPlatformInfo
-		newPlatformID := 1
-		latest, err := client.Query().
-			Where(authorizesocialplatforminfo.UserID(toolboxUserID)).
-			Order(authorizesocialplatforminfo.ByPlatformID(sql.OrderDesc())).
-			First(ctx)
-		if err != nil && !postgresql.IsNotFound(err) {
+		ids, err := client.Query().
+			Where(authorizesocialplatforminfo.UserID(toolboxUserID),
+				authorizesocialplatforminfo.PlatformIDGT(0), authorizesocialplatforminfo.PlatformIDLTE(maxUserSocialGrants)).
+			Select(authorizesocialplatforminfo.FieldPlatformID).
+			Ints(ctx)
+		if err != nil {
 			harukiLogger.Errorf("Failed to query authorized social platforms: %v", err)
 			reason = "query_authorized_social_platforms_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query social platforms")
 		}
-		if latest != nil {
-			newPlatformID = latest.PlatformID + 1
+		var used [maxUserSocialGrants + 1]bool
+		for _, id := range ids {
+			used[id] = true
+		}
+		newPlatformID := 1
+		for newPlatformID <= maxUserSocialGrants && used[newPlatformID] {
+			newPlatformID++
+		}
+		if newPlatformID > maxUserSocialGrants {
+			reason = "authorization_limit"
+			return harukiAPIHelper.ErrorBadRequest(c, "social authorization limit reached")
 		}
 		_, err = client.Create().
 			SetUserID(toolboxUserID).
@@ -159,6 +167,10 @@ func handleCreateAuthorizeSocialPlatformAtID(apiHelper *harukiAPIHelper.HarukiTo
 		if err != nil {
 			reason = "invalid_platform_id"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid id parameter")
+		}
+		if userAccountID > maxUserSocialGrants {
+			reason = "invalid_platform_id"
+			return harukiAPIHelper.ErrorBadRequest(c, "id exceeds the social authorization limit")
 		}
 		payload, err := parseAuthorizeSocialPlatformPayload(c)
 		if err != nil {

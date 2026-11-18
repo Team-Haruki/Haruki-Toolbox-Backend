@@ -63,10 +63,12 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingGameUserId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id is required")
 		}
-		if _, err := strconv.ParseInt(gameUserID, 10, 64); err != nil {
+		numericID, err := strconv.ParseInt(gameUserID, 10, 64)
+		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidGameUserId, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
+		gameUserID = strconv.FormatInt(numericID, 10)
 
 		payload, err := parseAdminGameBindingPayload(c)
 		if err != nil {

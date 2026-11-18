@@ -40,6 +40,29 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "unsupported_platform"
 			return harukiAPIHelper.ErrorBadRequest(c, "unsupported platform")
 		}
+		if !validSocialVerificationUserID(req.UserID) {
+			reason = "invalid_platform_user_id"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid platform user ID")
+		}
+		redis := apiHelper.DBManager.Redis
+		userAttempts, err := redis.IncrementWithTTL(ctx, harukiRedis.BuildSocialPlatformVerificationIssueKey(userID), socialPlatformVerifyTTL)
+		if err != nil {
+			reason = "issue_limit_unavailable"
+			return harukiAPIHelper.ErrorInternal(c, "failed to check issuance limit")
+		}
+		if userAttempts > 15 {
+			reason = "issue_limit"
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		globalAttempts, err := redis.IncrementWithTTL(ctx, harukiRedis.BuildSocialPlatformVerificationIssueKey(""), socialPlatformVerifyTTL)
+		if err != nil {
+			reason = "issue_limit_unavailable"
+			return harukiAPIHelper.ErrorInternal(c, "failed to check issuance limit")
+		}
+		if globalAttempts > 10000 {
+			reason = "issue_limit"
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
 		// Do not probe cross-account binding existence here: it let an authenticated
 		// user enumerate whether any (platform, user_id) is already bound. Uniqueness
 		// is enforced by the unique index and surfaced as a conflict at verify/commit.
@@ -49,21 +72,22 @@ func handleGenerateVerificationCode(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "generate_code_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate verification code")
 		}
-		storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(req.Platform), req.UserID)
+		keys := redis.KeyBuilder()
+		storageKey := keys.BuildSocialVerificationChallengeKey(string(req.Platform), req.UserID)
 		statusToken := uuid.NewString()
+		challenge, err := encodeSocialVerificationChallenge(keys, code, userID, statusToken)
+		if err != nil {
+			reason = "encode_verification_challenge_failed"
+			return harukiAPIHelper.ErrorInternal(c, "failed to save verification state")
+		}
 		statusTokenKey := harukiRedis.BuildStatusTokenKey(statusToken)
 		statusTokenOwnerKey := harukiRedis.BuildStatusTokenOwnerKey(statusToken)
 		statusTokenBindingKey := harukiRedis.BuildStatusTokenBindingKey(statusToken)
-		userIDKey := harukiRedis.BuildSocialPlatformUserIDKey(string(req.Platform), req.UserID)
-		statusTokenMappingKey := harukiRedis.BuildSocialPlatformStatusTokenKey(string(req.Platform), req.UserID)
-		if err := apiHelper.DBManager.Redis.SetCachesAtomically(ctx, []harukiRedis.CacheItem{
-			{Key: storageKey, Value: code},
+		if err := redis.SetCachesAtomically(ctx, []harukiRedis.CacheItem{
+			{Key: storageKey, Value: challenge},
 			{Key: statusTokenKey, Value: "false"},
 			{Key: statusTokenOwnerKey, Value: userID},
 			{Key: statusTokenBindingKey, Value: socialStatusTokenBinding{Platform: string(req.Platform), UserID: req.UserID}},
-			{Key: userIDKey, Value: userID},
-			{Key: statusTokenMappingKey, Value: statusToken},
-			{Key: harukiRedis.BuildSocialPlatformVerifyAttemptKey(string(req.Platform), req.UserID), Value: 0},
 		}, socialPlatformVerifyTTL); err != nil {
 			harukiLogger.Errorf("Failed to save social verification state: %v", err)
 			reason = "save_verification_state_failed"

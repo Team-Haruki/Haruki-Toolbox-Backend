@@ -61,6 +61,7 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 				Where(
 					socialplatforminfo.PlatformEQ(platform),
 					socialplatforminfo.PlatformUserIDEQ(platformUserID),
+					socialplatforminfo.VerifiedEQ(true),
 				).
 				WithUser(func(query *postgresql.UserQuery) {
 					query.WithGameAccountBindings(func(bQuery *postgresql.GameAccountBindingQuery) {

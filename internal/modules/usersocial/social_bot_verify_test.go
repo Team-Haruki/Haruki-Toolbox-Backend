@@ -1,7 +1,6 @@
 package usersocial
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
-	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -55,8 +53,14 @@ func TestVerifySocialPlatformAtomicallyLimitsConcurrentGuesses(t *testing.T) {
 	const requestCount = 32
 
 	apiHelper := newSocialRateLimitTestHelper(t)
-	storageKey := harukiRedis.BuildSocialPlatformVerifyKey(string(harukiAPIHelper.SocialPlatformQQ), "target-user")
-	if err := apiHelper.DBManager.Redis.SetCache(context.Background(), storageKey, "correct-code", time.Minute); err != nil {
+	redis := apiHelper.DBManager.Redis
+	keys := redis.KeyBuilder()
+	storageKey := keys.BuildSocialVerificationChallengeKey(string(harukiAPIHelper.SocialPlatformQQ), "target-user")
+	challenge, err := encodeSocialVerificationChallenge(keys, "correct-code", "owner", "status-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(t.Context(), storageKey, challenge, time.Minute); err != nil {
 		t.Fatalf("SetCache() error: %v", err)
 	}
 
@@ -106,5 +110,31 @@ func TestVerifySocialPlatformAtomicallyLimitsConcurrentGuesses(t *testing.T) {
 	}
 	if tooManyAttempts != requestCount-socialPlatformVerifyMaxAttempts {
 		t.Fatalf("limited guesses = %d, want %d", tooManyAttempts, requestCount-socialPlatformVerifyMaxAttempts)
+	}
+}
+
+func TestSocialChallengeConsumesOnlyTheObservedGeneration(t *testing.T) {
+	redis := newSocialRateLimitTestHelper(t).DBManager.Redis
+	keys := redis.KeyBuilder()
+	storageKey := keys.BuildSocialVerificationChallengeKey("qq", "target-user")
+	first, err := encodeSocialVerificationChallenge(keys, "code-a", "owner-a", "status-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := encodeSocialVerificationChallenge(keys, "code-b", "owner-b", "status-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(t.Context(), storageKey, second, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, first); err != nil || consumed {
+		t.Fatalf("old generation consumed newer record: %t, %v", consumed, err)
+	}
+	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, second); err != nil || !consumed {
+		t.Fatalf("current challenge was not consumed: %t, %v", consumed, err)
+	}
+	if consumed, err := redis.DeleteCacheIfValueMatches(t.Context(), storageKey, second); err != nil || consumed {
+		t.Fatalf("consumed challenge was reused: %t, %v", consumed, err)
 	}
 }
