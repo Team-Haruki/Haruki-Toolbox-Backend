@@ -1,6 +1,13 @@
 package data
 
-import "testing"
+import (
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/gofiber/fiber/v3"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"testing"
+)
 
 func TestNotModifiedDecision(t *testing.T) {
 	const now = int64(1752600100)
@@ -116,5 +123,55 @@ func TestParseKnownUploadTime(t *testing.T) {
 				t.Fatalf("ParseKnownUploadTime(%q) = %d, want %d", tc.raw, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMysekaiDefaultAndExplicitReadsRespectAllowlist(t *testing.T) {
+	keys, err := mysekaiAllowedProjection("", []string{"upload_time", "userMysekaiGates", "userMysekaiGates", "invalid.path"})
+	if err != nil || !slices.Equal(keys, []string{"upload_time", "userMysekaiGates"}) {
+		t.Fatalf("projection=%v, %v", keys, err)
+	}
+	for _, key := range []string{"upload_time,userMysekaiMaterials", "userGamedata"} {
+		if _, err := mysekaiAllowedProjection(key, keys); err == nil {
+			t.Fatalf("unlisted field accepted: %q", key)
+		}
+	}
+	if _, err := mysekaiAllowedProjection("", nil); err == nil {
+		t.Fatal("empty allowlist could read the whole record")
+	}
+}
+
+func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
+	const stamp = 1752600000
+	const path = "/mysekai/123"
+	current := []string{"upload_time"}
+	app := fiber.New()
+	app.Get(path, func(c fiber.Ctx) error {
+		if CheckNotModified(c, utils.UploadDataTypeMysekai, "", true, current, stamp) {
+			return c.SendStatus(http.StatusNotModified)
+		}
+		return c.SendStatus(http.StatusOK)
+	})
+	for _, tc := range []struct {
+		etag   string
+		status int
+	}{
+		{"", http.StatusOK},
+		{mysekaiPolicyETag(path, "", []string{"upload_time", "userMysekaiGates"}, stamp), http.StatusOK},
+		{mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
+	} {
+		req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
+		req.Header.Set(fiber.HeaderIfNoneMatch, tc.etag)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.status || resp.Header.Get(fiber.HeaderETag) != mysekaiPolicyETag(path, "", current, stamp) {
+			t.Fatalf("conditional read: status=%d etag=%q", resp.StatusCode, resp.Header.Get(fiber.HeaderETag))
+		}
+	}
+	if PublicAllowlistDigest([]string{"a,b"}) == PublicAllowlistDigest([]string{"a", "b"}) {
+		t.Fatal("different field policies share a cache generation")
 	}
 }

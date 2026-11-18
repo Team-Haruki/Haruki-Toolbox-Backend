@@ -1,6 +1,9 @@
 package data
 
 import (
+	"crypto/sha256"
+	"fmt"
+
 	"strconv"
 	"strings"
 	"time"
@@ -62,6 +65,21 @@ func CheckNotModified(
 	publicAllowedKeys []string,
 	stamp int64,
 ) bool {
+	if publicKeyFiltered && dataType == harukiUtils.UploadDataTypeMysekai {
+		if _, err := mysekaiAllowedProjection("upload_time", publicAllowedKeys); err != nil {
+			return false
+		}
+		if _, err := mysekaiAllowedProjection(requestKey, publicAllowedKeys); err != nil || stamp <= 0 {
+			return false
+		}
+		etag := mysekaiPolicyETag(c.Path(), requestKey, publicAllowedKeys, stamp)
+		c.Set(fiber.HeaderETag, etag)
+		// A timestamp alone cannot prove the client has this field policy.
+		if c.Get(fiber.HeaderIfNoneMatch) != etag {
+			return false
+		}
+	}
+
 	known := ParseKnownUploadTime(c.Query(QueryKnownUploadTime))
 	if known <= 0 {
 		return false
@@ -105,6 +123,10 @@ func CheckNotModified(
 	appendVaryAcceptEncoding(c)
 	c.Set(HeaderUploadTime, strconv.FormatInt(stamp, 10))
 	return true
+}
+
+func mysekaiPolicyETag(path, requestKey string, allowedKeys []string, stamp int64) string {
+	return fmt.Sprintf(`"%x"`, sha256.Sum256(fmt.Appendf(nil, "%d:%q:%q:%q", stamp, path, requestKey, allowedKeys)))
 }
 
 // notModifiedDecision holds the pure 304 decision: the document must exist with

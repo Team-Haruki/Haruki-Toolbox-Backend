@@ -164,6 +164,18 @@ func (r *Row) suiteBareValue(key string) ([]byte, error) {
 // a single key is NOT unwrapped to a bare value, and an absent key is OMITTED
 // rather than rendered as [].
 func (r *Row) MysekaiBody(keys []string) ([]byte, error) {
+	return r.mysekaiBody(keys, true)
+}
+
+// FilteredMysekaiBody renders exactly the supplied top-level projection.
+func (r *Row) FilteredMysekaiBody(keys []string) ([]byte, error) {
+	if len(keys) == 0 {
+		return []byte("{}"), nil
+	}
+	return r.mysekaiBody(keys, false)
+}
+
+func (r *Row) mysekaiBody(keys []string, includeDerivedID bool) ([]byte, error) {
 	if len(keys) == 0 {
 		return r.wholeDocument(false)
 	}
@@ -182,7 +194,9 @@ func (r *Row) MysekaiBody(keys []string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = appendIDString(out, &first, key, v)
+		if includeDerivedID {
+			out = appendIDString(out, &first, key, v)
+		}
 		if len(out)+1 > MaxPublishedResponseBytes {
 			return nil, ErrPublishedResponseTooLarge
 		}
