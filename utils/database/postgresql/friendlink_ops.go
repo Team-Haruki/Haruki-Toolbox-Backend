@@ -67,7 +67,9 @@ func (c *Client) ReadFriendLinkPage(ctx context.Context, page, pageSize int) ([]
 		ids = append(ids, row.ID)
 	}
 	tags, err := c.FriendLink.Query().Where(friendlink.IDIn(ids...), func(s *sql.Selector) {
-		s.Where(sql.ExprP(octetLengthSQL(s, friendlink.FieldTags)+" <= ?", maxFriendLinkTagsJSON))
+		s.Where(sql.P(func(b *sql.Builder) {
+			b.WriteString(octetLengthSQL(s, friendlink.FieldTags)).WriteString(" <= ").Arg(maxFriendLinkTagsJSON)
+		}))
 	}).Select(friendlink.FieldID, friendlink.FieldTags).All(ctx)
 	if err != nil {
 		return nil, false, err
