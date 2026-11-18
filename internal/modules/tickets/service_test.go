@@ -11,6 +11,9 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -58,6 +61,70 @@ func TestAdminTicketWritesRecheckScopeAgainstCurrentParticipation(t *testing.T) 
 	}
 	if count := stale.QueryMessages().CountX(t.Context()); count != 0 {
 		t.Fatalf("rejected writes saved %d replies", count)
+	}
+}
+
+func TestAdminTicketPostgresAuthorizationFollowsRowLock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := postgresql.NewClient(postgresql.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	defer client.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "tickets"\."id" FROM "tickets" WHERE .* FOR UPDATE`).WithArgs(42).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+	mock.ExpectQuery(`SELECT .* FROM "tickets" WHERE .*"protected_users"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectRollback()
+	tx, err := client.Tx(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err := LockAdminTicket(t.Context(), tx, 42, "admin"); !postgresql.IsNotFound(err) {
+		t.Fatalf("role-scoped read after reserving the row: %v", err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAdminMessagePagesKeepHistoricalVisibilityAndChronology(t *testing.T) {
+	client := newTicketServiceTestClient(t)
+	client.User.Create().SetID("protected-editor").SetName("Super").SetEmail("editor@example.test").SetRole(userSchema.RoleSuperAdmin).ExecX(t.Context())
+	row := seedServiceTicket(t, client, "TK-MESSAGE-PAGE", ticket.StatusOpen)
+	stamp := time.Now().UTC()
+	fixtures := make([]*postgresql.TicketMessageCreate, 0, maxTicketMessagesPerPage)
+	for range maxTicketMessagesPerPage {
+		fixtures = append(fixtures, client.TicketMessage.Create().SetTicketID(row.ID).SetMessage("current").SetCreatedAt(stamp))
+	}
+	current := client.TicketMessage.CreateBulk(fixtures...).SaveX(t.Context())
+	historical := client.TicketMessage.Create().SetTicketID(row.ID).SetMessage("earlier").SetCreatedAt(stamp.Add(-time.Minute)).SaveX(t.Context())
+	protected := client.TicketMessage.Create().SetTicketID(row.ID).SetSenderUserID("protected-editor").SetInternal(true).SetMessage("protected note").SaveX(t.Context())
+	legacy := client.TicketMessage.Create().SetTicketID(row.ID).SetSenderRole(ticketmessage.SenderRoleSystem).SetInternal(true).
+		SetMessage(AssignmentEventPrefix + "protected-editor -> Unassigned").SaveX(t.Context())
+	byRole := func(role string) *postgresql.TicketMessageQuery {
+		return row.QueryMessages().Where(LimitAdminMessageVisibility(role))
+	}
+	page, cursor, err := ReadMessagePage(t.Context(), byRole("admin"), 0)
+	if err != nil || len(page) != maxTicketMessagesPerPage || cursor != current[0].ID || page[0].ID != cursor || page[len(page)-1].ID != current[len(current)-1].ID {
+		t.Fatalf("recent page: size=%d cursor=%d err=%v", len(page), cursor, err)
+	}
+	older, next, err := ReadMessagePage(t.Context(), byRole("admin"), cursor)
+	if err != nil || next != 0 || len(older) != 1 || older[0].ID != historical.ID {
+		t.Fatalf("earlier page: next=%d rows=%v err=%v", next, older, err)
+	}
+	for _, hidden := range []int{protected.ID, legacy.ID} {
+		if _, _, err := ReadMessagePage(t.Context(), byRole("admin"), hidden); !postgresql.IsNotFound(err) {
+			t.Fatalf("hidden message accepted as cursor: %v", err)
+		}
+		if _, _, err := ReadMessagePage(t.Context(), byRole("super_admin"), hidden); err != nil {
+			t.Fatalf("super admin lost access to historical cursor: %v", err)
+		}
 	}
 }
 

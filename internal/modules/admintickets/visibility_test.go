@@ -307,6 +307,35 @@ func TestAdminTicketDetailHidesLegacyAssignmentHistoryFromOrdinaryAdmins(t *test
 	}
 }
 
+func TestOrdinaryAdminCanReplyAndResolveVisibleTicket(t *testing.T) {
+	helper := newAdminTicketVisibilityTestHelper(t)
+	seedAdminTicketVisibilityUser(t, helper, "admin", adminCoreModule.RoleAdmin)
+	seedAdminTicketVisibilityUser(t, helper, "creator", adminCoreModule.RoleUser)
+	seedAdminTicketVisibilityTicket(t, helper, "visible", "creator", time.Now().UTC())
+	app := newAdminTicketVisibilityTestApp("admin", adminCoreModule.RoleAdmin)
+	app.Post("/tickets/:ticket_id/messages", handleAdminAppendTicketMessage(helper, ticketsModule.NotificationConfig{}))
+	app.Put("/tickets/:ticket_id/status", handleAdminUpdateTicketStatus(helper))
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodPost, "/tickets/visible/messages", `{"message":"support reply"}`},
+		{http.MethodPut, "/tickets/visible/status", `{"status":"resolved"}`},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s returned %d", tc.method, tc.path, resp.StatusCode)
+		}
+	}
+	row := helper.DBManager.DB.Ticket.Query().Where(ticket.TicketIDEQ("visible")).OnlyX(t.Context())
+	if row.Status != ticket.StatusResolved || row.QueryMessages().CountX(t.Context()) != 2 {
+		t.Fatal("ordinary support could not update and reply to a visible ticket")
+	}
+}
+
 func TestHandleAdminAssignTicketEnforcesAssigneeRoleBoundary(t *testing.T) {
 	apiHelper := newAdminTicketVisibilityTestHelper(t)
 	seedAdminTicketVisibilityUser(t, apiHelper, "admin-actor", adminCoreModule.RoleAdmin)

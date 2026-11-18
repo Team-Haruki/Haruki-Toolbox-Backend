@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -180,7 +182,11 @@ func (s Service) UpdateStatus(ctx context.Context, row *postgresql.Ticket, actor
 // LockAdminTicket serializes ticket writes, then checks the ticket audience
 // again in a fresh statement while the ticket row is reserved.
 func LockAdminTicket(ctx context.Context, tx *postgresql.Tx, id int, actorRole string) (*postgresql.Ticket, error) {
-	if _, err := tx.Ticket.Update().Where(ticket.IDEQ(id)).SetUpdatedAt(time.Now().UTC()).Save(ctx); err != nil {
+	if _, err := tx.Ticket.Query().Where(ticket.IDEQ(id), func(s *sql.Selector) {
+		if s.Dialect() == dialect.Postgres {
+			s.ForUpdate()
+		}
+	}).OnlyID(ctx); err != nil {
 		return nil, err
 	}
 	return tx.Ticket.Query().Where(ticket.IDEQ(id), LimitAdminTicketVisibility(actorRole)).Only(ctx)
