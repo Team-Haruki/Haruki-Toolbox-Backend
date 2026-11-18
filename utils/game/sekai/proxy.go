@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net/http"
 	urlParse "net/url"
 	"strings"
 	"time"
@@ -21,7 +22,6 @@ var proxyPathByUploadType = map[harukiUtils.UploadDataType]string{
 
 var proxyAllowedHeaderSet = map[string]struct{}{
 	"user-agent":        {},
-	"cookie":            {},
 	"accept-language":   {},
 	"accept":            {},
 	"accept-encoding":   {},
@@ -71,15 +71,37 @@ func buildAPIEndpoints() map[harukiUtils.SupportedDataUploadServer][2]string {
 	}
 }
 
-func filterHeaders(headers map[string]string) map[string]string {
+func filterHeaders(headers map[string]string, server harukiUtils.SupportedDataUploadServer) map[string]string {
 	filtered := make(map[string]string)
 	for k, v := range headers {
 		kl := strings.ToLower(k)
+		if kl == "cookie" && server == harukiUtils.SupportedDataUploadServerJP {
+			if signed := proxyGameCookies(v); signed != "" {
+				if previous := filtered[kl]; previous != "" {
+					signed = previous + "; " + signed
+				}
+				filtered[kl] = signed
+			}
+			continue
+		}
 		if _, ok := proxyAllowedHeaderSet[kl]; ok {
 			filtered[kl] = v
 		}
 	}
 	return filtered
+}
+
+func proxyGameCookies(header string) string {
+	request := http.Request{Header: http.Header{"Cookie": {header}}}
+	var allowed []string
+	// JP needs CloudFront's signed cookies to reach the game origin.
+	for _, cookie := range request.Cookies() {
+		switch cookie.Name {
+		case "CloudFront-Policy", "CloudFront-Signature", "CloudFront-Key-Pair-Id", "CloudFront-Expires":
+			allowed = append(allowed, cookie.String())
+		}
+	}
+	return strings.Join(allowed, "; ")
 }
 
 func resolveProxyEndpoint(server harukiUtils.SupportedDataUploadServer) (baseURL, host string, err error) {
@@ -146,7 +168,7 @@ func HarukiSekaiProxyCallAPI(
 	if err != nil {
 		return nil, err
 	}
-	filteredHeaders := filterHeaders(headers)
+	filteredHeaders := filterHeaders(headers, server)
 	filteredHeaders["Host"] = host
 	url := appendQueryParams(baseURL+path, params)
 	client := harukiHttp.NewClient(proxy, 30*time.Second)
