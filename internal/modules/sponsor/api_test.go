@@ -435,3 +435,16 @@ func TestAfdianCallbackCapsConcurrentWorkAndReadsVerificationFields(t *testing.T
 		t.Fatal("invalid order reference accepted")
 	}
 }
+
+func TestAfdianCallbackSecretOnlyAcceptsDocumentedOrderFields(t *testing.T) {
+	now := time.Now()
+	actual, ok := parseAfdianCallbackBody([]byte(`{"order":{"status":2,"out_trade_no":"fixture","user_id":"7","remark":"receipt"}}`), now, false)
+	if !ok || actual.Remark != "receipt" {
+		t.Fatalf("authenticated callback lost its order details: %+v", actual)
+	}
+	for _, apiConfigured := range []bool{false, true} {
+		if _, ok := parseAfdianCallbackBody([]byte(`{"order":`), now, apiConfigured); ok {
+			t.Fatal("incomplete callback payload was accepted")
+		}
+	}
+}
