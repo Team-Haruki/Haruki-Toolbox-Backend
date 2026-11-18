@@ -288,6 +288,7 @@ services:
       HYDRA_PUBLIC_URL: http://hydra:4444
       HYDRA_BROWSER_URL: ${BACKEND_PUBLIC_BASE_URL}
       HYDRA_ADMIN_URL: http://hydra:4445
+      HYDRA_GRANT_STORE_URL: ${HYDRA_GRANT_STORE_URL:-}
       # Device authorization: the user-code charset, length and TTL come from
       # the same DEVICE_FLOW_* variables as Hydra's. Startup validation only
       # checks the backend's own values; drift from Hydra is caught per request

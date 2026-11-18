@@ -275,6 +275,14 @@ func SetHydraOAuthClientActive(ctx context.Context, hydraConfig *harukiOAuth2.Hy
 	if err != nil {
 		return nil, err
 	}
+	if active && !HydraOAuthClientActive(current) && hydraConfig.ProtectClientGrants() {
+		if err := hydraConfig.PurgeRefreshGrants(ctx, clientID); err != nil {
+			return nil, err
+		}
+		if err := DeleteHydraOAuthTokensByClientID(ctx, hydraConfig, clientID); err != nil {
+			return nil, err
+		}
+	}
 	return PatchHydraOAuthClient(ctx, hydraConfig, clientID, hydraClientMetadataPatchOps(current.Metadata, []string{hydraClientMetadataNamespace}, []hydraClientMetadataMember{
 		{key: hydraClientActiveKey, value: active},
 	}))

@@ -19,7 +19,9 @@ func registerHydraOAuth2Routes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 	// startup and runtime switches.
 	deviceFlowStore := newDeviceFlowStore(apiHelper.DBManager)
 	apiHelper.Router.Post("/api/oauth2/device/auth", handleHydraDeviceAuthorization(hydraConfig, deviceFlow, deviceFlowStore))
-	apiHelper.Router.Post("/api/oauth2/token", handleHydraTokenEndpoint(apiHelper, hydraConfig, deviceFlow, deviceFlowStore))
+	tokenHandler := handleHydraTokenEndpoint(apiHelper, hydraConfig, deviceFlow, deviceFlowStore)
+	apiHelper.Router.Post("/api/oauth2/token", tokenHandler)
+	apiHelper.Router.Post("/oauth2/token", tokenHandler)
 	apiHelper.Router.Post("/api/oauth2/revoke", handleHydraPublicProxy(hydraConfig, "/oauth2/revoke"))
 	// Browser device decisions: signed-in users only, behind the same session
 	// guard as consent; the handlers never answer 401 themselves.

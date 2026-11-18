@@ -344,7 +344,7 @@ Kratos 的会话校验要求达到身份已配置的最高认证等级。已启�
 | `/api/oauth2/device/lookup`、`/approve`、`/deny` | POST | `haruki-protected-oauth-consent` | cookie_session + header mutator |
 | `/api/user/:toolbox_user_id/oauth2/authorizations[/:client_id[/consents/:consent_request_id]]` | GET / DELETE | `haruki-protected-user-get` / `haruki-protected-user`（未新增规则） | cookie_session + header mutator |
 | `/oauth2/device/auth`、`/oauth2/device/verify`、`/oauth2/fallbacks/device`（Hydra） | 任意 | **无**（404） | — |
-| `/oauth2/token`（Hydra 直连，给写死地址的授权码客户端） | POST | `hydra-public-oauth`（不变） | noop |
+| `/oauth2/token`（兼容写死地址的授权码客户端） | POST | `haruki-public-legacy-token` | noop |
 
 - `TestDeviceAuthRoutesToPublicProxyOnly`：`/api/oauth2/device/` 下只有 `device/auth` 可匿名访问，且只到 backend
 - `TestDeviceDecisionRoutesRequireCookieSession`：lookup / approve / deny 任何方法都不能匿名命中
@@ -396,10 +396,10 @@ Kratos 的会话校验要求达到身份已配置的最高认证等级。已启�
 
 `/api/oauth2/token` 是令牌端点兼容层（`hydra_token_endpoint.go`）：
 
-- 兼容层接收最多 64 KiB 的未压缩请求体。不是表单、或 `grant_type` 不是 `urn:ietf:params:oauth:grant-type:device_code` 的请求，与 `/api/oauth2/revoke` 一样经 `handleHydraPublicProxy` 逐字节转发（原始 body、查询串、`Authorization` / `Content-Type` / `Accept`），响应原样返回。`TestTokenShimNonDeviceGrantVerbatim` 守护这一点
+- 兼容层接收最多 64 KiB 的未压缩请求体。非设备授权表单通过客户端启用检查后逐字节转发，响应原样返回。`TestTokenShimNonDeviceGrantVerbatim` 和 `TestTokenEndpointsDenyDisabledClientAndPreserveActiveRequest` 覆盖转发契约与停用检查
 - 设备授权许可的请求带的是后端签发的包装设备码 `hdc_…`：兼容层用它找到流程、在本地执行 `slow_down`（早于 `interval` 的轮询不调用 Hydra），其余轮询解封出 Hydra 的 `ory_dc_…` 后转发 `POST /oauth2/token`，由 Hydra 认证客户端，再按流程状态改写 Hydra 的回答（`access_denied`、`expired_token`，或对已拒绝 / 已停用的流程不交出令牌并按 `consent_request_id` 撤销）。客户端认证之前只会本地回答参数错误、`slow_down`、未知码（`invalid_grant`）、功能关闭（`expired_token`）和 503
 - 设备分支的每个响应（包括透传的 Hydra 响应）都带 `Cache-Control: no-store` 与 `Pragma: no-cache`
-- Hydra 自己的 `/oauth2/token` 仍由 Oathkeeper `hydra-public-oauth` 直通，供写死 Hydra 地址的授权码客户端使用；它不认识 `hdc_…`，只会返回 `invalid_grant`
+- 旧 `/oauth2/token` 由后端兼容层处理，并与发现文档中的令牌端点共用客户端启用检查。设备码继续使用 `/api/oauth2/token`
 
 `/api/oauth2/device/lookup`、`approve`、`deny` 是 `/device` 页面调用的浏览器端点（`hydra_device_browser.go`、`hydra_device_verification.go`），与 consent 一样经会话守卫：
 
@@ -503,7 +503,7 @@ helper 会尝试把响应解析成 `redirect_to`，空 body 会解析失败 —�
 停用、撤销全部授权和删除客户端时，授权按 subject 撤销：
 
 - Hydra v25.4.0 的授权会话撤销接口（`DELETE /admin/oauth2/auth/sessions/consent`）只接受三种参数组合：只带 `consent_request_id`；`subject`+`client`；`subject`+`all=true`。按客户端整体撤销（`client=X&all=true`，或只带 `client`）返回 400，所以撤销一个客户端的授权要对每个 subject 各调用一次 `subject`+`client`
-- 停用或撤销全部授权会对每个本地用户的两个兼容 subject（`kratos_identity_id` 和 `users.id`）直接发起撤销。Hydra 的 consent 列表可能漏掉跳过同意页或记忆期已过的授权，列表只用于计数。已无本地用户对应的 subject 无法用这次扫查覆盖。指定用户撤销也按该用户的 subject 直接操作。
+- 停用或撤销全部授权时同时清理该客户端在 Hydra 中的刷新授权，覆盖没有本地账号或可枚举 consent 的历史记录。后端对本地用户的两个兼容 subject（`kratos_identity_id` 和 `users.id`）仍直接发起 consent 撤销。指定用户撤销也按该用户的 subject 直接操作。
 - 查询串用 `url.Values` 构造，subject 中的 `+` 编码为 `%2B`。未编码的 `+` 会被 Hydra 解成空格，返回 204 但什么都没删
 - 撤销授权会话会级联删除该会话签发的 access token 和 refresh token，这才是真正的撤销。`DELETE /admin/oauth2/tokens?client_id=` 只删 access token，refresh token 仍能换出新的 access token，只作补充清理
 - 停用（`PUT /api/admin/oauth-clients/:client_id/active`，`active=false`）：先改 metadata，再逐 subject 撤销，最后删 access token。metadata 改完后一律返回 200，响应带 `revokedSubjects`（Hydra 接受撤销的 subject 数）、`failedSubjects`（撤销失败、且当前管理员有权管理的用户的 subject，以及管理员本人的 subject。这几个路由只有超级管理员能访问，所以目前不会过滤掉任何 subject；按角色层级过滤是纵深防御，防止将来放宽路由守卫后普通管理员看到超级管理员的 subject）和 `revocationComplete`（任何一步失败即为 false，包括已识别但撤销失败的 subject）。停用之后界面上只剩「启用」，没撤销完的授权用「撤销全部授权」补救
@@ -596,7 +596,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 
 - **服务端代驱，而不是让浏览器跳到 Hydra**：只有驱动方能把 login / consent 和用户码对应起来；同时避开 device CSRF Cookie 被覆盖、API 主机上的裸 JSON 页、应用内 webview 的 Cookie 问题、verifier 重放与登录会话 skip。
 - **包装设备码**：交给设备的是 `hdc_` + base64url(32 随机字节)，Hydra 的 `ory_dc_` 以 AES-256-GCM 密封在 Redis。Hydra 换不了 `hdc_`，所有轮询必经兼容层；拿到 Redis 转储也换不出令牌。
-- **上线当天**就把发现文档的 `token_endpoint` 覆盖为后端，否则按发现文档配置的库会把 `hdc_` 发给 Hydra。非设备授权逐字节透传，授权码 RP 不受影响；Hydra 直连的 `/oauth2/token` 仍然路由。
+- 发现文档中的 `token_endpoint` 指向后端。受支持的非设备授权请求通过客户端状态检查后逐字节透传。旧 `/oauth2/token` 保留为同一后端的兼容地址。
 - **统一 `invalid_code`**：未知、认领前已过期、被其他账号认领或处理的码一律 400 `invalid_code` 并计入失败预算，文案点明「已被其他账号使用」；猜码者拿不到额外信号。
 - **拒绝只写 Redis**，不调用 Hydra reject（它什么都不保存）；最后一跳结果未知时 Hydra 可能已完成同意，所以有 `crid` 就按它撤销。
 - **不按 IP 限流**：`c.IP()` 是 Oathkeeper 的地址，边缘 WAF 也不支持按路径规则；预算全部由后端的全局、按用户、按客户端计数承担。

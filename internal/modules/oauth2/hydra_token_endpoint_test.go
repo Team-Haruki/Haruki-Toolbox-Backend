@@ -1,6 +1,7 @@
 package oauth2
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,6 +25,59 @@ func hydraTokenAnswer(status int, body map[string]any) func(url.Values, http.Hea
 
 func hydraOAuthError(code string) map[string]any {
 	return map[string]any{"error": code, "error_description": "hydra: " + code}
+}
+
+func TestTokenEndpointsDenyDisabledClientAndPreserveActiveRequest(t *testing.T) {
+	const form = "grant_type=refresh_token&refresh_token=fixture-token"
+	checked := make(chan string, 4)
+	forwarded := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/admin/clients/disabled":
+			_, _ = w.Write([]byte(`{"client_id":"disabled","metadata":{"haruki":{"active":false}}}`))
+		case "/admin/clients/enabled":
+			_, _ = w.Write([]byte(`{"client_id":"enabled","metadata":{"haruki":{"active":true}}}`))
+		case "/oauth2/token":
+			raw := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(raw)
+			forwarded <- string(raw)
+			_, _ = w.Write([]byte(`{"token_type":"Bearer"}`))
+		}
+	}))
+	defer server.Close()
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: server.URL, PublicURL: server.URL,
+		LockClientGrants: func(_ context.Context, client string, _ bool) (func(), error) {
+			checked <- client
+			return func() {}, nil
+		},
+	})
+	app := fiber.New()
+	handler := handleHydraTokenEndpoint(nil, cfg, DeviceFlowConfig{}, newDeviceFlowStore(nil))
+	for _, path := range []string{"/api/oauth2/token", "/oauth2/token"} {
+		app.Post(path, handler)
+	}
+	for _, path := range []string{"/api/oauth2/token", "/oauth2/token"} {
+		for _, client := range []string{"disabled", "enabled"} {
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form))
+			req.Header.Set("Content-Type", formURLEncodedMediaType)
+			req.SetBasicAuth(client, "fixture-password")
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			want := http.StatusOK
+			if client == "disabled" {
+				want = http.StatusUnauthorized
+			}
+			if resp.StatusCode != want || <-checked != client {
+				t.Fatalf("%s for %s returned %d", path, client, resp.StatusCode)
+			}
+		}
+	}
+	if len(forwarded) != 2 || <-forwarded != form || <-forwarded != form {
+		t.Fatal("unexpected token forwarding")
+	}
 }
 
 // The non-device branch must forward exactly what handleHydraPublicProxy

@@ -23,7 +23,6 @@ const (
 	protectedUserRuleID    = "haruki-protected-user"
 	protectedUserGetRuleID = "haruki-protected-user-get"
 	hydraPublicOpenIDRule  = "hydra-public-openid"
-	hydraPublicOAuthRuleID = "hydra-public-oauth"
 )
 
 var oathkeeperProbeMethods = []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
@@ -226,7 +225,10 @@ func TestHydraDeviceEndpointsAreNotRouted(t *testing.T) {
 		for _, path := range []string{"/.well-known/openid-configuration", "/.well-known/oauth-authorization-server"} {
 			assertSingleRule(t, rules, "GET", base+path, hydraPublicOpenIDRule)
 		}
-		assertSingleRule(t, rules, "POST", base+"/oauth2/token", hydraPublicOAuthRuleID)
+		legacy := assertSingleRule(t, rules, "POST", base+"/oauth2/token", "haruki-public-legacy-token")
+		if legacy.Upstream.URL != backendUpstream {
+			t.Fatalf("legacy token requests bypass the backend: %s", legacy.Upstream.URL)
+		}
 	}
 	for _, candidate := range rules {
 		if strings.Contains(candidate.rule.Match.URL, "fallbacks") {

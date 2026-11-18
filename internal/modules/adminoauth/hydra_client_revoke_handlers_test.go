@@ -272,6 +272,8 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		helper := newAdminOAuthTestHelper(t)
 		seedAdminOAuthTestUser(t, helper, "u-4", "kratos-4", userSchema.RoleUser)
 		hydra.addConsent("kratos-4", "other-1", "consent-4")
+		hydra.refreshGrants["bot-1"] = []string{"detached-fixture-subject"}
+		hydra.refreshGrants["other-1"] = []string{"unrelated-fixture-subject"}
 		app := newHydraClientHandlerTestAppAs(helper, hydra.config, "super-admin-1", adminCoreModule.RoleSuperAdmin)
 
 		status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/revoke", "")
@@ -280,6 +282,12 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		}
 		var resp adminOAuthClientRevokeResponse
 		decodeUpdatedData(t, envelope, &resp)
+		hydra.mu.Lock()
+		remaining, unrelated := len(hydra.refreshGrants["bot-1"]), len(hydra.refreshGrants["other-1"])
+		hydra.mu.Unlock()
+		if remaining != 0 || unrelated != 1 {
+			t.Fatalf("remaining refresh grants: target=%d unrelated=%d", remaining, unrelated)
+		}
 		if resp.RevokedSubjects != 2 || resp.RevokedAuthorizations != 0 || len(resp.FailedSubjects) != 0 || !resp.RevocationComplete {
 			t.Fatalf("response = %#v", resp)
 		}

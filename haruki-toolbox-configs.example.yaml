@@ -82,6 +82,8 @@ oauth2:
   hydra_public_url: "http://hydra-public:4444" # backend internal call target
   hydra_browser_url: "" # optional browser-facing public entrypoint; defaults to hydra_public_url
   hydra_admin_url: "http://hydra-admin:4445"
+  # Dedicated PostgreSQL role for client-wide refresh grant revocation.
+  hydra_grant_store_url: ""
   hydra_client_id: ""
   hydra_client_secret: ""
   hydra_request_timeout_seconds: 10

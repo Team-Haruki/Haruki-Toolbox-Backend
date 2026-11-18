@@ -206,6 +206,11 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientActiveUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client update")
+		}
+		defer unlock()
 		updatedClient, err := oauth2Module.SetHydraOAuthClientActive(c.Context(), hydraConfig, clientID, active)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
@@ -232,9 +237,8 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 				harukiLogger.Warnf("Failed to list grants of disabled oauth client %s: %v", clientID, err)
 				metadata["queryAuthorizationsFailed"] = true
 			}
-			// Access tokens only: refresh tokens die with the consent sessions revoked
-			// above. This also reaches subjects the enumeration cannot find.
-			tokensErr := oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID)
+			tokensErr := errors.Join(hydraConfig.PurgeRefreshGrants(c.Context(), clientID),
+				oauth2Module.DeleteHydraOAuthTokensByClientID(c.Context(), hydraConfig, clientID))
 			if tokensErr != nil {
 				harukiLogger.Warnf("Failed to delete access tokens of disabled oauth client %s: %v", clientID, tokensErr)
 				metadata["revokeTokensFailed"] = true
@@ -271,6 +275,11 @@ func handleUpdateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientUpdate, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminOAuthClientPayloadFailureMetadata(err, nil))
 			return respondAdminOAuthClientPayloadError(c, err)
 		}
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client update")
+		}
+		defer unlock()
 		currentClient, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {

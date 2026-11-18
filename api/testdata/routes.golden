@@ -200,6 +200,7 @@ POST /internal/oauth2/introspect
 POST /internal/upload/:server/:user_id/:data_type
 POST /ios/proxy/:server/user/:user_id/mysekai
 POST /ios/script/:upload_code/upload
+POST /oauth2/token
 PUT /api/admin/config/public-api-keys
 PUT /api/admin/config/runtime
 PUT /api/admin/content/friend-groups/:group_id

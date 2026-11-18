@@ -47,7 +47,7 @@ https://toolbox-api-direct.haruki.seiunx.com
 | End Session | `/oauth2/sessions/logout` | ✅ 可用，见下方 |
 | Device Authorization | `/api/oauth2/device/auth`（Discovery 公布的 `device_authorization_endpoint`） | 可用，见 §4A |
 
-OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码**。`/api/oauth2/authorize` 是浏览器入口（§3.1）。`/api/oauth2/token` 是 Discovery 公布的令牌端点：它是后端的令牌端点兼容层，授权码与刷新令牌请求原样转发给 Hydra、响应原样返回，只额外处理设备授权许可；以前写死的 Hydra 直连 `/oauth2/token` 对授权码与刷新令牌仍然可用，但设备授权只能用 `/api/oauth2/token`（§12.9）。
+OIDC 客户端应从 Discovery 文档读取端点。`/api/oauth2/authorize` 是浏览器入口（§3.1）。Discovery 公布 `/api/oauth2/token` 作为令牌端点。授权码与刷新令牌请求通过客户端启用检查后原样转发给 Hydra。旧 `/oauth2/token` 地址适用相同规则，设备授权请使用 `/api/oauth2/token`（§12.9）。
 
 令牌兼容层接收最多 64 KiB 的未压缩请求体。带明确 audience 的 access token 用于 Toolbox 资源接口时，audience 必须包含 Toolbox API 的公开基址（去掉末尾的 `/`）。
 
@@ -1162,9 +1162,9 @@ token 交换会失败。
 
 业务资源接口面向"用户授权后的 bearer token"，不是给 bot 自己拿一个机器 token 就能读所有用户数据。
 
-### 12.9 直连 Hydra 的 `/oauth2/token` 轮询设备码
+### 12.9 通过旧 `/oauth2/token` 地址轮询设备码
 
-设备授权返回的 `device_code` 是 Toolbox 签发的 `hdc_…`，Hydra 不认识它：发给 Hydra 直连的 `/oauth2/token` 只会得到 `invalid_grant`，程序会以为授权失败，而且收不到拒绝、过期与降速信号。设备授权只能经 `/api/oauth2/device/auth` 发起、经 `/api/oauth2/token` 轮询；从 Discovery 读端点就不会出错（§4A.1）。同理，Hydra 的 `/oauth2/device/auth`、`/oauth2/device/verify` 不对外开放，请求它们得到 404。
+旧 `/oauth2/token` 兼容授权码和刷新令牌。设备授权由 `/api/oauth2/device/auth` 发起，通过 Discovery 公布的 `/api/oauth2/token` 轮询。设备码发到旧地址会得到 `invalid_grant`。Hydra 的 `/oauth2/device/auth` 和 `/oauth2/device/verify` 对外返回 404。
 
 ---
 

@@ -67,6 +67,17 @@ func handleRevokeHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true, "targetUserID": targetUser.ID}))
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusNotImplemented, "targeted token revocation is unavailable while oauth2 is backed by hydra", nil)
 		}
+		unlock, lockErr := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if lockErr != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth revocation")
+		}
+		defer unlock()
+		if targetUser == nil {
+			if err := hydraConfig.PurgeRefreshGrants(c.Context(), clientID); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to revoke refresh grants")
+			}
+		}
 		revokedAuthorizations := 0
 		revokedSubjects := 0
 		failedSubjects := []string{}
