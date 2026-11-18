@@ -34,7 +34,7 @@ func lockHydraClientGrants(db *sql.DB) func(context.Context, string, bool) (func
 func purgeHydraRefreshGrants(db *sql.DB) func(context.Context, string) error {
 	return func(ctx context.Context, clientID string) error {
 		if strings.TrimSpace(clientID) == "" {
-			return fmt.Errorf("Hydra client ID is required")
+			return fmt.Errorf("missing Hydra client ID")
 		}
 		ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()

@@ -93,7 +93,7 @@ func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
 
 func (c *HydraConfig) PurgeRefreshGrants(ctx context.Context, clientID string) error {
 	if c == nil || c.purgeRefreshGrants == nil {
-		return errors.New("Hydra refresh grant store is not configured")
+		return errors.New("refresh grant store is not configured for Hydra")
 	}
 	return c.purgeRefreshGrants(ctx, clientID)
 }
