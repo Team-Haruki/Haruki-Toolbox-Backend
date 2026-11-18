@@ -2,15 +2,19 @@ package adminstats
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"testing"
 	"time"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/DATA-DOG/go-sqlmock"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/gofiber/fiber/v3"
@@ -107,5 +111,44 @@ func TestTimeseriesSQLBindsActorScopeForBothAggregates(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTimeseriesFailsClosedOnUnavailablePostgresAggregate(t *testing.T) {
+	for _, stage := range []string{"registration", "upload"} {
+		t.Run(stage, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := postgresql.NewClient(postgresql.Driver(entsql.OpenDB(dialect.Postgres, db)))
+			defer client.Close()
+			failure := errors.New("test aggregate unavailable")
+			if stage == "registration" {
+				mock.ExpectQuery(regexp.QuoteMeta(registrationCountsHourSQL)).WillReturnError(failure)
+			} else {
+				mock.ExpectQuery(regexp.QuoteMeta(registrationCountsHourSQL)).
+					WillReturnRows(sqlmock.NewRows([]string{"bucket_unix", "count"}))
+				mock.ExpectQuery(regexp.QuoteMeta(uploadCountsHourSQL)).WillReturnError(failure)
+			}
+			helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: client}}
+			app := fiber.New()
+			app.Get("/", func(c fiber.Ctx) error {
+				c.Locals("userID", "actor")
+				c.Locals("userRole", "admin")
+				return c.Next()
+			}, handleGetStatisticsTimeseries(helper))
+			res, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusInternalServerError {
+				t.Fatalf("failed aggregate returned %d", res.StatusCode)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
