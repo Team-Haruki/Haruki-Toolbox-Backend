@@ -293,14 +293,7 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		}
 		defer release()
 
-		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
-			Query().
-			Where(
-				gameaccountbinding.ServerEQ(serverStr),
-				gameaccountbinding.GameUserID(gameUserIDStr),
-			).
-			WithUser().
-			Only(ctx)
+		existing, err := queryOwnedBinding(ctx, apiHelper.DBManager.DB, userID, serverStr, gameUserIDStr)
 
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -310,18 +303,6 @@ func handleUpdateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			harukiLogger.Errorf("Failed to query game account binding: %v", err)
 			reason = "query_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
-		}
-		if existing == nil {
-			reason = "binding_not_found"
-			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
-		}
-		if bindingOwnerMissing(existing) {
-			reason = "binding_owner_missing"
-			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding owner missing", nil)
-		}
-		if !isBindingOwnedByUser(existing, userID) {
-			reason = "binding_owned_by_other_user"
-			return harukiAPIHelper.ErrorForbidden(c, "this account is bound by another user")
 		}
 		if !existing.Verified {
 			reason = "binding_not_verified"
@@ -433,14 +414,7 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
 		}
 		defer release()
-		existing, err := apiHelper.DBManager.DB.GameAccountBinding.
-			Query().
-			Where(
-				gameaccountbinding.ServerEQ(serverStr),
-				gameaccountbinding.GameUserID(gameUserIDStr),
-			).
-			WithUser().
-			Only(ctx)
+		existing, err := queryOwnedBinding(ctx, apiHelper.DBManager.DB, userID, serverStr, gameUserIDStr)
 
 		if err != nil {
 			if postgresql.IsNotFound(err) {
@@ -451,21 +425,6 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			reason = "query_binding_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to query binding")
 		}
-		if existing == nil {
-			reason = "binding_not_found"
-			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
-		}
-
-		if bindingOwnerMissing(existing) {
-			reason = "binding_owner_missing"
-			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding owner missing", nil)
-		}
-
-		if !isBindingOwnedByUser(existing, userID) {
-			reason = "binding_owned_by_other_user"
-			return harukiAPIHelper.ErrorForbidden(c, "not authorized to delete this binding")
-		}
-
 		err = apiHelper.DBManager.DB.ChangeGameAccountBinding(ctx, serverStr, gameUserIDStr, true, func(db *postgresql.Client) error {
 			return db.GameAccountBinding.DeleteOne(existing).Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(userID))).Exec(ctx)
 		})

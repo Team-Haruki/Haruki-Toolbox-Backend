@@ -2,6 +2,7 @@ package usergamebindings
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +20,45 @@ import (
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestBindingMutationsTreatForeignAndMissingAccountsTheSame(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, "binding-mutation-scope")
+	createDefaultBindingTestUser(t, db, ctx, "actor")
+	createDefaultBindingTestUser(t, db, ctx, "owner")
+	createBindingViaSave(t, helper, ctx, "jp", "111", "owner")
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() })
+	app.Put("/:server/:game_user_id", handleUpdateGameAccountBinding(helper))
+	app.Delete("/:server/:game_user_id", handleDeleteGameAccountBinding(helper))
+	app.Put("/:server/:game_user_id/grants/:data_type/:grantee_user_id", handleUpsertGameAccountDataGrant(helper))
+	for _, tc := range []struct{ method, suffix, body string }{
+		{http.MethodPut, "", `{}`},
+		{http.MethodDelete, "", ""},
+		{http.MethodPut, "/grants/profile/owner", `{"expiresAt":"` + time.Now().UTC().Add(time.Hour).Format(time.RFC3339) + `"}`},
+	} {
+		var responses []string
+		for _, id := range []string{"999", "000111"} {
+			req := httptest.NewRequest(tc.method, "/jp/"+id+tc.suffix, strings.NewReader(tc.body))
+			req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err != nil || resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("%s %s%s: status %d, body %q, err %v", tc.method, id, tc.suffix, resp.StatusCode, body, err)
+			}
+			responses = append(responses, string(body))
+		}
+		if responses[0] != responses[1] {
+			t.Fatalf("%s %s distinguishes foreign and missing bindings", tc.method, tc.suffix)
+		}
+	}
+	if db.GameAccountBinding.Query().CountX(ctx) != 1 || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
+		t.Fatal("denied request changed bindings or grants")
+	}
+}
 
 func newDefaultBindingTestHelper(t *testing.T, dbName string) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *postgresql.Client, context.Context) {
 	t.Helper()
