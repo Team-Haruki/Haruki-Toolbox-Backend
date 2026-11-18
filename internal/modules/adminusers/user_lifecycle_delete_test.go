@@ -295,3 +295,28 @@ func TestDeleteUserFailureKeepsAccountAndBindings(t *testing.T) {
 		t.Fatal("active account disappeared")
 	}
 }
+
+func TestPermanentDeletionDoesNotCommitWhenAvatarCleanupCannotBeQueued(t *testing.T) {
+	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
+	db := newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+	helper.DBManager.DB = db
+	dir := t.TempDir()
+	const filename = "2265ef0c-23e6-43ca-b90e-980b6dc2b4e4.png"
+	file := filepath.Join(dir, filename)
+	if err := os.WriteFile(file, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".pending-avatar-deletions"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetAvatarPath(filename).ExecX(ctx)
+	if _, err := permanentlyDeleteUser(ctx, helper, nil, "actor", roleSuperAdmin, "target", dir); err == nil {
+		t.Fatal("account deletion proceeded when cleanup could not be queued")
+	}
+	if db.User.GetX(ctx, "target").Banned {
+		t.Fatal("failed cleanup changed the account")
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("failed cleanup removed the avatar: %v", err)
+	}
+}

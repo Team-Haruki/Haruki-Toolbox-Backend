@@ -535,3 +535,49 @@ func TestOrdinaryAdminCannotDistinguishProtectedAndMissingTargets(t *testing.T) 
 		t.Fatalf("batch distinguished protected and absent users: %s, %v", body, err)
 	}
 }
+
+func TestVisibleAccountLifecycleStillWorksForOrdinaryAdmin(t *testing.T) {
+	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
+	db := newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+	helper.DBManager.DB = db
+	db.User.Create().SetID("actor").SetName("Actor").SetEmail("actor@example.test").SetRole(user.RoleAdmin).ExecX(ctx)
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").ExecX(ctx)
+	db.User.Create().SetID("protected").SetName("Protected").SetEmail("protected@example.test").SetRole(user.RoleSuperAdmin).ExecX(ctx)
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	})
+	app.Put("/ban/:target_user_id", handleBanUser(helper, nil))
+	app.Put("/unban/:target_user_id", handleUnbanUser(helper))
+	app.Post("/restore/:target_user_id", handleRestoreUser(helper))
+	app.Post("/batch", handleBatchUpdateUserAllowCNMysekai(helper))
+	for _, tc := range []struct {
+		method, path, body string
+		want               int
+		banned             bool
+	}{
+		{http.MethodPut, "/ban/protected", `{}`, http.StatusNotFound, false},
+		{http.MethodPut, "/ban/target", `{}`, http.StatusOK, true},
+		{http.MethodPut, "/unban/target", `{}`, http.StatusOK, false},
+		{http.MethodPut, "/ban/target", `{}`, http.StatusOK, true},
+		{http.MethodPost, "/restore/target", `{}`, http.StatusOK, false},
+		{http.MethodPost, "/batch", `{"userIds":["target","protected"],"allowCnMysekai":true}`, http.StatusOK, false},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want || db.User.GetX(ctx, "target").Banned != tc.banned {
+			t.Fatalf("%s returned %d: %s", tc.path, resp.StatusCode, body)
+		}
+	}
+	if !db.User.GetX(ctx, "target").AllowCnMysekai || db.User.GetX(ctx, "protected").AllowCnMysekai {
+		t.Fatal("batch action did not respect user visibility")
+	}
+}
