@@ -388,7 +388,7 @@ services:
     environment:
       LOG_LEVEL: info
       SERVE_PROXY_CORS_ALLOWED_ORIGINS_0: ${FRONTEND_PUBLIC_URL}
-      MUTATORS_HEADER_CONFIG_HEADERS_X_AUTH_PROXY_SECRET: ${OATHKEEPER_SHARED_SECRET:?Set a deployment-specific OATHKEEPER_SHARED_SECRET}
+      OATHKEEPER_SHARED_SECRET: ${OATHKEEPER_SHARED_SECRET:?Set a deployment-specific OATHKEEPER_SHARED_SECRET}
     volumes:
       - ${STACK_HOST_ROOT}/oathkeeper/oathkeeper.yml:/etc/config/oathkeeper/oathkeeper.yml:ro
       - ${STACK_HOST_ROOT}/oathkeeper/access-rules.yml:/etc/config/oathkeeper/access-rules.yml:ro

@@ -68,11 +68,12 @@ mutators:
     enabled: true
     config:
       headers:
-        X-Auth-Proxy-Secret: "change-me-auth-proxy-secret"
+        # The header mutator uses the same deployment secret as the backend.
+        X-Auth-Proxy-Secret: '{{ env "OATHKEEPER_SHARED_SECRET" }}'
         X-Kratos-Identity-Id: "{{ print .Subject }}"
         X-User-Name: "{{ print .Extra.identity.traits.name }}"
         X-User-Email: "{{ print .Extra.identity.traits.email }}"
-        X-User-Email-Verified: '{{ $email := .Extra.identity.traits.email }}{{ $verified := false }}{{ range .Extra.identity.verifiable_addresses }}{{ if and (eq .value $email) .verified }}{{ $verified = true }}{{ end }}{{ end }}{{ print $verified }}'
+        X-User-Email-Verified: '{{ $email := .Extra.identity.traits.email | print | trim | lower }}{{ $verified := false }}{{ range .Extra.identity.verifiable_addresses }}{{ if and $email .verified (eq (.value | print | trim | lower) $email) }}{{ $verified = true }}{{ end }}{{ end }}{{ print $verified }}'
         # Bind the proxy session marker to the real Kratos session id (extra_from
         # is "@this", so .Extra.id is the whoami session id) so the backend's admin
         # reauth is keyed to a proxy-vouched session, not a client-supplied value.

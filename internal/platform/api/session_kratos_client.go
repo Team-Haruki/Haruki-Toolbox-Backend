@@ -24,9 +24,14 @@ func (s *SessionHandler) ResolveUserIDFromKratosSession(ctx context.Context, ses
 }
 
 func (s *SessionHandler) LoginWithKratosPassword(ctx context.Context, identifier string, password string) (string, error) {
+	result, err := s.loginWithKratosPassword(ctx, identifier, password)
+	return result.SessionToken, err
+}
+
+func (s *SessionHandler) loginWithKratosPassword(ctx context.Context, identifier string, password string) (kratosAuthSubmitResponse, error) {
 	flowID, err := s.initKratosSelfServiceFlow(ctx, "/self-service/login/api")
 	if err != nil {
-		return "", err
+		return kratosAuthSubmitResponse{}, err
 	}
 
 	payload := map[string]any{
@@ -58,7 +63,8 @@ func (s *SessionHandler) RegisterWithKratosPassword(ctx context.Context, email s
 		"password": password,
 		"traits":   traits,
 	}
-	return s.submitKratosSelfServiceFlow(ctx, "/self-service/registration", flowID, payload)
+	result, err := s.submitKratosSelfServiceFlow(ctx, "/self-service/registration", flowID, payload)
+	return result.SessionToken, err
 }
 
 func (s *SessionHandler) StartKratosRecoveryByEmail(ctx context.Context, email string) error {
@@ -250,18 +256,18 @@ func (s *SessionHandler) initKratosSelfServiceFlow(ctx context.Context, initPath
 	return flowID, nil
 }
 
-func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submitPath string, flowID string, payload map[string]any) (string, error) {
+func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submitPath string, flowID string, payload map[string]any) (kratosAuthSubmitResponse, error) {
 	if !s.hasKratosProviderConfigured() {
-		return "", fmt.Errorf("%w: kratos public url is not configured", errIdentityProviderUnavailable)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: kratos public url is not configured", errIdentityProviderUnavailable)
 	}
 	targetURL, err := buildProviderEndpoint(s.KratosPublicURL, submitPath)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: %v", errIdentityProviderUnavailable, err)
 	}
 
 	endpoint, err := url.Parse(targetURL)
 	if err != nil {
-		return "", fmt.Errorf("%w: invalid submit url: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: invalid submit url: %v", errIdentityProviderUnavailable, err)
 	}
 	query := endpoint.Query()
 	query.Set("flow", strings.TrimSpace(flowID))
@@ -269,19 +275,19 @@ func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submit
 
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("%w: encode payload: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: encode payload: %v", errIdentityProviderUnavailable, err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(encoded))
 	if err != nil {
-		return "", fmt.Errorf("%w: build submit request: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: build submit request: %v", errIdentityProviderUnavailable, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.kratosHTTPClient().Do(req)
 	if err != nil {
-		return "", fmt.Errorf("%w: submit flow request failed: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: submit flow request failed: %v", errIdentityProviderUnavailable, err)
 	}
 	defer func(body io.ReadCloser) {
 		_ = body.Close()
@@ -289,21 +295,21 @@ func (s *SessionHandler) submitKratosSelfServiceFlow(ctx context.Context, submit
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("%w: read submit response: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: read submit response: %v", errIdentityProviderUnavailable, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", classifyKratosFlowError(resp.StatusCode, body)
+		return kratosAuthSubmitResponse{}, classifyKratosFlowError(resp.StatusCode, body)
 	}
 
 	var parsed kratosAuthSubmitResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("%w: decode submit response: %v", errIdentityProviderUnavailable, err)
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: decode submit response: %v", errIdentityProviderUnavailable, err)
 	}
-	sessionToken := strings.TrimSpace(parsed.SessionToken)
-	if sessionToken == "" {
-		return "", fmt.Errorf("%w: empty session token in response", errIdentityProviderUnavailable)
+	parsed.SessionToken = strings.TrimSpace(parsed.SessionToken)
+	if parsed.SessionToken == "" {
+		return kratosAuthSubmitResponse{}, fmt.Errorf("%w: empty session token in response", errIdentityProviderUnavailable)
 	}
-	return sessionToken, nil
+	return parsed, nil
 }
 
 func (s *SessionHandler) submitKratosRecoveryFlow(ctx context.Context, flowID string, method string, email string) error {

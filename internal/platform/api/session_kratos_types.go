@@ -63,6 +63,9 @@ type kratosSessionWhoamiResponse struct {
 }
 
 type kratosAdminSessionRecord struct {
+	Identity struct {
+		ID string `json:"id"`
+	} `json:"identity"`
 	ID        string     `json:"id"`
 	Active    bool       `json:"active"`
 	ExpiresAt *time.Time `json:"expires_at"`
@@ -94,6 +97,9 @@ type kratosFlowResponse struct {
 
 type kratosAuthSubmitResponse struct {
 	SessionToken string `json:"session_token"`
+	Session      struct {
+		ID string `json:"id"`
+	} `json:"session"`
 }
 
 type kratosRecoveryFlowSubmitResponse struct {

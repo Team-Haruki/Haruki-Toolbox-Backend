@@ -3,6 +3,7 @@ package gamedata
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -59,7 +60,7 @@ func TestCompactJSONExpansionHonorsByteBudget(t *testing.T) {
 		t.Fatalf("renderCompactJSON = %s, %v", out.body, err)
 	}
 	sizing := compactJSONOutput{limit: len(want) - 1}
-	if err := renderCompactJSON(raw, &sizing); err == nil || sizing.size > sizing.limit || sizing.body != nil {
+	if err := renderCompactJSON(raw, &sizing); !errors.Is(err, ErrPublishedResponseTooLarge) || sizing.size > sizing.limit || sizing.body != nil {
 		t.Fatalf("sizing did not enforce its budget: size=%d, err=%v", sizing.size, err)
 	}
 }
@@ -105,6 +106,10 @@ func TestWriteChecksExpandedSizeBeforeStorage(t *testing.T) {
 			_, err := store.Write(context.Background(), 1, "jp", data, WriteSuite, tc.limits)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Write error = %v, want %q", err, tc.want)
+			}
+			_, dryRunErr := store.EncodeOnly(data, WriteMigrate, tc.limits)
+			if dryRunErr == nil || dryRunErr.Error() != err.Error() {
+				t.Fatalf("migration dry run error = %v, want %v", dryRunErr, err)
 			}
 		})
 	}

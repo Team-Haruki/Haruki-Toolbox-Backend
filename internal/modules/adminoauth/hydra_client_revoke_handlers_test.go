@@ -16,6 +16,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -471,5 +472,26 @@ func TestHydraClientWebhookListsRedactCallbackURLForOrdinaryAdmins(t *testing.T)
 		if result.Items[0].CallbackURL != want {
 			t.Errorf("unexpected callback visibility for %s", role)
 		}
+	}
+}
+
+func TestAdminOAuthClientUpdateRequiresReauthentication(t *testing.T) {
+	hydra := newFakeHydraClients(t, confidentialBotClient)
+	helper := newAdminOAuthTestHelper(t)
+	seedAdminOAuthTestUser(t, helper, "actor", "identity-actor", userSchema.RoleSuperAdmin)
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		return c.Next()
+	})
+	RegisterAdminOAuthClientRoutes(helper, app, hydra.config, func(c fiber.Ctx) error {
+		return harukiAPIHelper.ErrorForbidden(c, "recent reauthentication required")
+	})
+	status, body := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/bot-1", "{}")
+	if status != http.StatusForbidden || body.Message != "recent reauthentication required" {
+		t.Fatalf("update status %d, message %q", status, body.Message)
+	}
+	if requests := hydra.takeRequests(); len(requests) != 0 {
+		t.Fatalf("update without reauthentication contacted Hydra")
 	}
 }

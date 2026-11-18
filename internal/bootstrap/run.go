@@ -62,6 +62,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		return nil, err
 	}
 
+	if strings.TrimSpace(cfg.Backend.BackendURL) == "" {
+		return nil, fmt.Errorf("backend.backend_url is required as the OAuth2 resource audience")
+	}
 	if strings.TrimSpace(cfg.GameData.URL) == "" {
 		return nil, fmt.Errorf("game_data.url is required")
 	}

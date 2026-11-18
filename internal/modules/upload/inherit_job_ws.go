@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	wsPingInterval = 15 * time.Second
-	wsReadTimeout  = 60 * time.Second
-	wsWriteTimeout = 10 * time.Second
-	wsReadLimit    = 4096
+	wsPingInterval   = 15 * time.Second
+	wsUpgradeTimeout = 10 * time.Second
+	wsReadTimeout    = 60 * time.Second
+	wsWriteTimeout   = 10 * time.Second
+	wsReadLimit      = 4096
 )
 
 // The ticket, not the Origin header, is what ties a socket to its owner, and
@@ -102,11 +103,20 @@ func (s *inheritService) handleWS(c fiber.Ctx) error {
 		release()
 		return respondProblem(c, errUnauthenticated)
 	}
+	// fasthttp skips the hijack callback if it cannot send the 101 response.
+	// The timer and the callback compete for the pending reservation.
+	pending := time.AfterFunc(wsUpgradeTimeout, release)
 	if err := inheritWSUpgrader.Upgrade(c.RequestCtx(), func(conn *websocket.Conn) {
+		if !pending.Stop() {
+			_ = conn.Close()
+			return
+		}
 		defer release()
 		s.serveWS(conn, meta, jobID, sessionActive)
 	}); err != nil {
-		release()
+		if pending.Stop() {
+			release()
+		}
 		// The upgrader has already written the error response.
 		return nil
 	}
@@ -123,17 +133,7 @@ func (s *inheritService) checkWSBrowserSession(ctx context.Context, userID, iden
 	if err != nil || !activeUser {
 		return false
 	}
-	sessions, err := s.api.SessionHandler.ListKratosSessionsByIdentityID(ctx, identityID)
-	if err != nil {
-		return false
-	}
-	now := time.Now()
-	for _, session := range sessions {
-		if session.ID == sessionID {
-			return session.Active && (session.ExpiresAt == nil || session.ExpiresAt.After(now))
-		}
-	}
-	return false
+	return s.api.SessionHandler.IsKratosSessionActive(ctx, identityID, sessionID)
 }
 
 type wsConn struct {
@@ -190,10 +190,18 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 	}
 
 	conn.SetReadLimit(wsReadLimit)
-	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
-	conn.SetPongHandler(func(string) error {
+	var readDeadlineMu sync.Mutex
+	stoppingReader := false
+	refreshReadDeadline := func() error {
+		readDeadlineMu.Lock()
+		defer readDeadlineMu.Unlock()
+		if stoppingReader {
+			return nil
+		}
 		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
-	})
+	}
+	_ = refreshReadDeadline()
+	conn.SetPongHandler(func(string) error { return refreshReadDeadline() })
 	readerDone := make(chan struct{})
 	// commandMu is held while a client command is handled, so the closing
 	// frame of a finished job never overtakes the reply to the command that
@@ -206,7 +214,7 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 			if err != nil {
 				return
 			}
-			_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+			_ = refreshReadDeadline()
 			var msg wsClientMessage
 			if json.Unmarshal(body, &msg) != nil {
 				_ = ws.write(wsMessage{Type: "error", Code: errInvalidRequest.Code, Message: errInvalidRequest.Message})
@@ -224,8 +232,13 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 	// The reader must be gone before serveWS returns: once the hijack
 	// handler returns, fasthttp pools the connection's buffers, and a reader
 	// still inside ReadMessage would share them with the next request.
-	// Closing the connection ends a pending read at once.
+	// The hijacked wrapper may ignore Close. An expired read deadline wakes
+	// the reader, and refreshing it is disabled before waiting for exit.
 	defer func() {
+		readDeadlineMu.Lock()
+		stoppingReader = true
+		_ = conn.SetReadDeadline(time.Now())
+		readDeadlineMu.Unlock()
 		_ = conn.Close()
 		<-readerDone
 	}()

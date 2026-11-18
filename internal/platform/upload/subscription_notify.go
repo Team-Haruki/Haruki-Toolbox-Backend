@@ -55,6 +55,9 @@ func (b *birthdayRetryBudget) reserve(subscription string) (func(), bool) {
 	}, true
 }
 
+// All request-scoped upload handlers share the process's pending retry budget.
+var pendingBirthdayRetries birthdayRetryBudget
+
 // deliverBirthdayEvent notifies the push gateway about a stored event. The
 // first attempt runs in the caller; when it fails for any reason other than a
 // stale subscription, the remaining attempts are handed to a separate
@@ -76,7 +79,7 @@ func (h *DataHandler) deliverBirthdayEvent(event *BirthdayMonitorEvent) {
 		h.Logger.Warnf("birthday subscription notify retry dropped: notification metadata is too large")
 		return
 	}
-	release, admitted := h.birthdayRetries.reserve(event.SubscriptionID)
+	release, admitted := pendingBirthdayRetries.reserve(event.SubscriptionID)
 	if !admitted {
 		h.Logger.Warnf("birthday subscription notify retry dropped: capacity reached event=%s subscription=%s", event.EventID, event.SubscriptionID)
 		return

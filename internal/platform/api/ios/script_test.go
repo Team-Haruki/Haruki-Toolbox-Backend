@@ -71,36 +71,54 @@ func TestUploaderScriptRunsAgainstStrictHTTPClient(t *testing.T) {
 	}
 	harness := `
 const vm = require("vm"), fs = require("fs");
-const posts = [];
+const posts = [], delays = [];
+let attempts = 0;
 const sandbox = {
   console: { log() {} },
   $request: { url: "https://jp.example.com/api/suite/user/1" },
   $response: { body: new Uint8Array(2.5 * 1024 * 1024) },
   $done() {},
+  setTimeout(cb, delay) { delays.push(delay); cb(); },
   $httpClient: {
     post(options, cb) {
       for (const [k, v] of Object.entries(options.headers)) {
         if (typeof v !== "string") { cb("invalid type for header " + k + ": " + typeof v, null, null); posts.push("bad"); return; }
       }
       posts.push(options.headers["X-Chunk-Index"] + "/" + options.headers["X-Total-Chunks"]);
+      if (options.headers["X-Chunk-Index"] === "2") {
+        attempts++;
+        const mode = process.argv[3];
+        if (mode === "full" || attempts === 1) {
+          cb(null, { status: 429, headers: { "rEtRy-AfTeR": mode === "long" ? "30" : "3" } }, "{}");
+          return;
+        }
+      }
       cb(null, { status: 200 }, "{}");
     },
     get(options, cb) { cb(null, { status: 200 }, "{}"); },
   },
 };
 vm.runInNewContext(fs.readFileSync(process.argv[2], "utf8"), sandbox);
-process.stdout.write(posts.join(","));
+process.stdout.write(posts.join(",") + "|" + delays.join(","));
 `
 	harnessPath := filepath.Join(dir, "harness.js")
 	if err := os.WriteFile(harnessPath, []byte(harness), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out, err := exec.Command(node, harnessPath, scriptPath).CombinedOutput()
-	if err != nil {
-		t.Fatalf("node: %v\n%s", err, out)
-	}
-	if got, want := string(out), "0/3,1/3,2/3"; got != want {
-		t.Fatalf("posted chunks = %q, want %q", got, want)
+	for _, tc := range []struct {
+		mode, posts, delays string
+	}{
+		{"once", "0/3,1/3,2/3,2/3", "3000"},
+		{"full", "0/3,1/3" + strings.Repeat(",2/3", 8), "3000" + strings.Repeat(",3000", 6)},
+		{"long", "0/3,1/3,2/3", ""},
+	} {
+		out, err := exec.Command(node, harnessPath, scriptPath, tc.mode).CombinedOutput()
+		if err != nil {
+			t.Fatalf("node (%s): %v\n%s", tc.mode, err, out)
+		}
+		if got, want := string(out), tc.posts+"|"+tc.delays; got != want {
+			t.Fatalf("%s chunks and retry delays = %q, want %q", tc.mode, got, want)
+		}
 	}
 }
 
@@ -113,7 +131,7 @@ func TestScriptVersionsChangeWithTheScripts(t *testing.T) {
 	for _, tc := range []struct {
 		name, version, pinnedVersion, pinnedSHA256, template string
 	}{
-		{"uploader", ScriptVersion, "1.1.1", "9f6f9bf761da191fe50e764db66808ee1cc02c835c0e5ff4c2ec0c613c010d64", HarukiIOSJavaScriptTemplate},
+		{"uploader", ScriptVersion, "1.1.2", "cb0e780f4e95d7411e36fa96eed361c1044e68b9ff9d04e1b74f21d5184b55ed", HarukiIOSJavaScriptTemplate},
 		{"proxy notify", ProxyNotifyScriptVersion, "1.1.0", "debfb2d67b6c2778008614d81a3627babf61a60f45795fbe5f740ed500f91e25", proxyNotifyScriptTemplate},
 	} {
 		sum := sha256.Sum256([]byte(tc.template + notifyArgumentJS + uploadErrorTextJS))

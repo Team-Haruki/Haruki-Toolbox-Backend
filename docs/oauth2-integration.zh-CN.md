@@ -922,6 +922,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 一次上传成功后，服务端异步检查：
 
+- 管理端的 Webhook 总开关处于启用状态。该开关同时控制 OAuth2 回调与 public API Webhook，缺省启用
 - 上传账号存在已验证的游戏账号绑定
 - 绑定 owner 未被封禁
 - OAuth2 client 本身处于启用状态（被管理员停用或已删除的 client 不再收到回调，即使用户的 consent session 还在）

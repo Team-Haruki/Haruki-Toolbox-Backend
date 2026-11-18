@@ -101,10 +101,10 @@ func newNotifyTestHandler(baseURL string, runner background.Runner, delays []tim
 	}
 }
 
-func testBirthdayEvent() *BirthdayMonitorEvent {
+func testBirthdayEvent(t *testing.T) *BirthdayMonitorEvent {
 	return &BirthdayMonitorEvent{
 		EventID:             "event-1",
-		SubscriptionID:      "subscription-1",
+		SubscriptionID:      t.Name(),
 		SubscriptionVersion: "v1",
 		PayloadRef:          "payload-ref",
 	}
@@ -126,7 +126,7 @@ func TestDeliverBirthdayEventSucceedsOnFirstAttempt(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 1)
 	if strings.Contains(logs.String(), "WARNING") {
@@ -140,7 +140,7 @@ func TestDeliverBirthdayEventRetriesTransientFailureOnce(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 2)
 	if strings.Contains(logs.String(), "WARNING") {
@@ -154,7 +154,7 @@ func TestDeliverBirthdayEventDoesNotRetryStaleSubscription(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 1)
 	output := logs.String()
@@ -172,11 +172,11 @@ func TestDeliverBirthdayEventGivesUpAfterFourAttempts(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 4)
 	output := logs.String()
-	if !strings.Contains(output, "[WARNING]") || !strings.Contains(output, "event=event-1 subscription=subscription-1 version=v1 attempts=4") {
+	if !strings.Contains(output, "[WARNING]") || !strings.Contains(output, "event=event-1 subscription="+t.Name()+" version=v1 attempts=4") {
 		t.Fatalf("expected a final warning with the attempt count: %s", output)
 	}
 	if strings.Count(output, "[WARNING]") != 1 {
@@ -203,7 +203,7 @@ func TestDeliverBirthdayEventRetriesTransportError(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 2)
 }
@@ -214,7 +214,7 @@ func TestDeliverBirthdayEventSchedulesRetryAsNamedBackgroundTask(t *testing.T) {
 	runner := &capturedHandlerRunner{accept: true}
 	h := newNotifyTestHandler(server.URL, runner, fastNotifyRetryDelays, &lockedBuffer{})
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 1)
 	runner.mu.Lock()
@@ -270,7 +270,7 @@ func TestDeliverBirthdayEventDropsRetryWhenSubmitRejected(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, &capturedHandlerRunner{accept: false}, fastNotifyRetryDelays, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	assertNotifyRequests(t, server, 1)
 	if !strings.Contains(logs.String(), "notify retry dropped") {
@@ -283,7 +283,7 @@ func TestNotifyHMESBirthdayEventReturnsStaleSentinelOnConflict(t *testing.T) {
 	server := newNotifyTestServer(t, respondWithStatuses(http.StatusConflict))
 	h := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, &lockedBuffer{})
 
-	err := h.notifyHMESBirthdayEvent(context.Background(), testBirthdayEvent())
+	err := h.notifyHMESBirthdayEvent(context.Background(), testBirthdayEvent(t))
 	if !errors.Is(err, errBirthdaySubscriptionStale) {
 		t.Fatalf("err = %v, want errBirthdaySubscriptionStale", err)
 	}
@@ -376,7 +376,7 @@ func TestRetryStopsWhenShutdownBeginsDuringBackoff(t *testing.T) {
 	logs := &lockedBuffer{}
 	h := newNotifyTestHandler(server.URL, tasks, []time.Duration{time.Hour, time.Hour, time.Hour}, logs)
 
-	h.deliverBirthdayEvent(testBirthdayEvent())
+	h.deliverBirthdayEvent(testBirthdayEvent(t))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -388,7 +388,7 @@ func TestRetryStopsWhenShutdownBeginsDuringBackoff(t *testing.T) {
 		t.Fatalf("drain took %v", elapsed)
 	}
 	assertNotifyRequests(t, server, 1)
-	if output := logs.String(); !strings.Contains(output, "[WARNING]") || !strings.Contains(output, "retry dropped: shutdown in progress event=event-1 subscription=subscription-1 version=v1 attempts=1") {
+	if output := logs.String(); !strings.Contains(output, "[WARNING]") || !strings.Contains(output, "retry dropped: shutdown in progress event=event-1 subscription="+t.Name()+" version=v1 attempts=1") {
 		t.Fatalf("expected the dropped retry to be logged at Warn: %s", output)
 	}
 }
@@ -405,7 +405,7 @@ func TestInlineRetryObservesParentShutdown(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		h.deliverBirthdayEvent(testBirthdayEvent())
+		h.deliverBirthdayEvent(testBirthdayEvent(t))
 	}()
 	select {
 	case <-done:
@@ -420,11 +420,34 @@ func TestDeliverBirthdayEventDropsOversizedRetryMetadata(t *testing.T) {
 	logs := &lockedBuffer{}
 	// Use an inline runner so an admitted retry would complete before the assertions.
 	handler := newNotifyTestHandler(server.URL, background.InlineRunner{}, fastNotifyRetryDelays, logs)
-	event := testBirthdayEvent()
+	event := testBirthdayEvent(t)
 	event.PayloadRef = strings.Repeat("a", maxBirthdayRetryBytes+1)
 	handler.deliverBirthdayEvent(event)
 	assertNotifyRequests(t, server, 1)
 	if !strings.Contains(logs.String(), "metadata is too large") {
 		t.Error("did not report oversized retry metadata")
 	}
+}
+
+func TestBirthdayRetryBudgetIsSharedAcrossUploadHandlers(t *testing.T) {
+	const attempts = maxBirthdayRetriesPerSub + 1
+	server := newNotifyTestServer(t, func(n int32, w http.ResponseWriter) bool {
+		if n <= attempts {
+			w.WriteHeader(http.StatusBadGateway)
+			return true
+		}
+		return false
+	})
+	runner := &capturedHandlerRunner{accept: true}
+	for range attempts {
+		h := newNotifyTestHandler(server.URL, runner, fastNotifyRetryDelays, &lockedBuffer{})
+		h.deliverBirthdayEvent(testBirthdayEvent(t))
+	}
+	for _, task := range runner.tasks {
+		task()
+	}
+	if got := len(runner.tasks); got != maxBirthdayRetriesPerSub {
+		t.Fatalf("queued %d retries across handlers, want %d", got, maxBirthdayRetriesPerSub)
+	}
+	assertNotifyRequests(t, server, attempts+maxBirthdayRetriesPerSub)
 }

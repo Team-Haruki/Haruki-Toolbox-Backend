@@ -95,14 +95,8 @@ func (s *Store) Write(ctx context.Context, userID int64, server string, data map
 	if err != nil {
 		return stats, err
 	}
-	if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes); err != nil {
-		return stats, err
-	}
-	compactExtraBytes, err := s.compactExpansionBytes(enc, limits)
+	compactExtraBytes, err := s.validateEncodedUpload(enc, &stats, limits)
 	if err != nil {
-		return stats, err
-	}
-	if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes+compactExtraBytes); err != nil {
 		return stats, err
 	}
 
@@ -116,6 +110,17 @@ func (s *Store) Write(ctx context.Context, userID int64, server string, data map
 	default:
 		return stats, s.writeMysekai(ctx, userID, code, enc)
 	}
+}
+
+func (s *Store) validateEncodedUpload(enc *encoded, stats *WriteStats, limits Limits) (int, error) {
+	if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes); err != nil {
+		return 0, err
+	}
+	compactExtraBytes, err := s.compactExpansionBytes(enc, limits)
+	if err != nil {
+		return 0, err
+	}
+	return compactExtraBytes, checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes+compactExtraBytes)
 }
 
 func (s *Store) compactExpansionBytes(enc *encoded, limits Limits) (int, error) {
@@ -763,5 +768,6 @@ func (s *Store) EncodeOnly(data map[string]any, mode WriteMode, limits Limits) (
 	if err != nil {
 		return stats, err
 	}
-	return stats, checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes)
+	_, err = s.validateEncodedUpload(enc, &stats, limits)
+	return stats, err
 }

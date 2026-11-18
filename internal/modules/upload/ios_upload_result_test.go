@@ -2,8 +2,10 @@ package upload
 
 import (
 	"context"
+	"crypto/sha256"
 	json "encoding/json/v2"
 	"errors"
+	"fmt"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -21,6 +23,14 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+type uploadAssemblyHook func()
+
+func (beforeAssembly uploadAssemblyHook) Go(_ string, task func()) bool {
+	beforeAssembly()
+	task()
+	return true
+}
 
 type uploadFunc = func(context.Context, []byte, harukiUtils.SupportedDataUploadServer, harukiUtils.UploadDataType, *int64, *string, *api.HarukiToolboxRouterHelpers, Dependencies, harukiUtils.UploadMethod, ...*platform.Attempt) (*harukiUtils.HandleDataResult, error)
 
@@ -63,8 +73,10 @@ func TestIOSScriptUploadAnswersWithTheProcessingResult(t *testing.T) {
 	if _, err := db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetVerified(true).SetUserID("owner").Save(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.IOSScriptCode.Create().SetUserID("owner").SetUploadCode("owner-code").Save(ctx); err != nil {
-		t.Fatal(err)
+	record := db.IOSScriptCode.Create().SetUserID("owner").SetUploadCode("owner-code").SaveX(ctx)
+	keyFor := func(id string) string {
+		return buildChunkUploadKey("owner", harukiUtils.SupportedDataUploadServerJP, 123,
+			fmt.Sprintf("%d:%x:%s:%s", record.ID, sha256.Sum256([]byte(record.UploadCode)), harukiUtils.UploadDataTypeSuite, id))
 	}
 	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db, Redis: &redisManager.HarukiRedisManager{Redis: newIOSUploadRedisClient(t)}}}
 
@@ -84,6 +96,9 @@ func TestIOSScriptUploadAnswersWithTheProcessingResult(t *testing.T) {
 		raw, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode == fiber.StatusTooManyRequests {
+			if resp.Header.Get(fiber.HeaderRetryAfter) == "" {
+				t.Fatal("retryable upload response omitted Retry-After")
+			}
 			return resp.StatusCode, string(raw)
 		}
 		var body struct {
@@ -110,6 +125,63 @@ func TestIOSScriptUploadAnswersWithTheProcessingResult(t *testing.T) {
 		}()
 		if status, _ := post(t, d, "capacity"); status != fiber.StatusOK {
 			t.Fatalf("assembly retry returned %d", status)
+		}
+	})
+	t.Run("shutdown refuses admission and leaves the upload retryable", func(t *testing.T) {
+		stubRunUpload(t, succeedingUpload)
+		d := testUploadDependencies()
+		d.BackgroundTasks = &queuedUploadRunner{accept: false}
+		if status, _ := post(t, d, "shutting-down"); status != fiber.StatusTooManyRequests {
+			t.Fatalf("draining worker returned %d", status)
+		}
+		d.BackgroundTasks = background.InlineRunner{}
+		if status, _ := post(t, d, "shutting-down"); status != fiber.StatusOK {
+			t.Fatalf("assembly on retry returned %d", status)
+		}
+	})
+	t.Run("competing claim is retryable and remains owned by its worker", func(t *testing.T) {
+		stubRunUpload(t, succeedingUpload)
+		d := testUploadDependencies()
+		d.BackgroundTasks = background.InlineRunner{}
+		const uploadID = "existing-claim"
+		key := keyFor(uploadID)
+		redis := helper.DBManager.Redis.Redis
+		if _, err := persistIOSUploadChunk(ctx, redis, key, 1, 0, []byte("payload")); err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := claimIOSUploadChunks(ctx, redis, key, 1, "other-worker"); err != nil || !ok {
+			t.Fatalf("claim = %t, %v", ok, err)
+		}
+		if status, _ := post(t, d, uploadID); status != fiber.StatusTooManyRequests {
+			t.Fatalf("active claim returned %d", status)
+		}
+		_, _, claimKey := iosUploadRedisKeys(key)
+		if got, err := redis.Get(ctx, claimKey).Result(); err != nil || got != "other-worker" {
+			t.Fatalf("claim holder = %q, %v", got, err)
+		}
+		if err := resetIOSUploadClaim(ctx, redis, key, "other-worker"); err != nil {
+			t.Fatal(err)
+		}
+		if status, _ := post(t, d, uploadID); status != fiber.StatusOK {
+			t.Fatalf("recovered claim returned %d", status)
+		}
+	})
+	t.Run("expired assembly claim leaves stored chunks retryable", func(t *testing.T) {
+		stubRunUpload(t, succeedingUpload)
+		d := testUploadDependencies()
+		const uploadID = "expired-claim"
+		_, _, claimKey := iosUploadRedisKeys(keyFor(uploadID))
+		d.BackgroundTasks = uploadAssemblyHook(func() {
+			if err := helper.DBManager.Redis.Redis.Del(ctx, claimKey).Err(); err != nil {
+				t.Error(err)
+			}
+		})
+		if status, _ := post(t, d, uploadID); status != fiber.StatusTooManyRequests {
+			t.Fatalf("lost assembly claim returned %d", status)
+		}
+		d.BackgroundTasks = background.InlineRunner{}
+		if status, _ := post(t, d, uploadID); status != fiber.StatusOK {
+			t.Fatalf("assembly after lost claim returned %d", status)
 		}
 	})
 	t.Run("storage budget refuses within the upload size limit", func(t *testing.T) {

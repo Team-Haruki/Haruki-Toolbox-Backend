@@ -250,12 +250,22 @@ func (out *compactJSONOutput) appendBytes(raw []byte) {
 	}
 }
 
+type compactExpansionLimitError int
+
+func (e compactExpansionLimitError) Error() string {
+	return fmt.Sprintf("gamedata: expanded compact value exceeds %d bytes", e)
+}
+
+func (compactExpansionLimitError) Unwrap() error {
+	return ErrPublishedResponseTooLarge
+}
+
 func (out *compactJSONOutput) reserve(n int) bool {
 	if out.err != nil {
 		return false
 	}
 	if n > out.limit-out.size {
-		out.err = fmt.Errorf("gamedata: expanded compact value exceeds %d bytes", out.limit)
+		out.err = compactExpansionLimitError(out.limit)
 		return false
 	}
 	out.size += n

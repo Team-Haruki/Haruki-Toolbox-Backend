@@ -501,3 +501,21 @@ func TestPublishedWholeDocumentChecksTopLevelAndFlattenedSize(t *testing.T) {
 		})
 	}
 }
+
+func TestPublishedWholeDocumentPreservesSmallExtraFields(t *testing.T) {
+	c := catalog.Mysekai()
+	r := newTestRow(t, c, map[string]string{"updatedResources.userMysekaiPhotos": "[1]"},
+		`{"additionalField":[2],"updatedResources":{"additionalChild":[3]}}`)
+	body, err := r.MysekaiBody(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	children, _ := got["updatedResources"].(map[string]any)
+	if got["additionalField"] == nil || children["additionalChild"] == nil || children["userMysekaiPhotos"] == nil {
+		t.Fatalf("published document lost an extra field: %s", body)
+	}
+}

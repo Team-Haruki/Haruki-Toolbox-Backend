@@ -25,9 +25,11 @@ const iosChunkUploadTTL = 5 * time.Minute
 // chunk, as one idle for longer than iosChunkUploadTTL always has.
 const iosChunkPartTTL = 3 * iosChunkUploadTTL
 
+const iosChunkClaimTTL = 20 * time.Second
+
 const (
 	iosUploadChunkStateIncomplete int64 = iota
-	iosUploadChunkStateCompleteClaimed
+	iosUploadChunkStateComplete
 	iosUploadChunkStateCompleteAlreadyClaimed
 	iosUploadChunkStateInconsistentTotal = -1
 	iosUploadChunkStateTooLarge          = -2
@@ -142,16 +144,26 @@ redis.call('PEXPIRE', KEYS[1], ARGV[5])
 redis.call('PEXPIRE', KEYS[2], ARGV[5])
 local count = redis.call('HLEN', KEYS[2])
 if count ~= tonumber(ARGV[1]) then
-  redis.call('DEL', KEYS[4])
   return {0, count, newSize}
 end
-if redis.call('SET', KEYS[4], '1', 'NX', 'PX', ARGV[5]) then
-  return {1, count, newSize}
+return {1, count, newSize}
+`)
+
+var claimIOSUploadChunksScript = goredis.NewScript(`
+local total = redis.call('HGET', KEYS[1], 'total')
+if not total or tonumber(total) ~= tonumber(ARGV[1]) or redis.call('HLEN', KEYS[2]) ~= tonumber(total) then
+  return 0
 end
-return {2, count, newSize}
+if redis.call('SET', KEYS[3], ARGV[2], 'NX', 'PX', ARGV[3]) then
+  return 1
+end
+return 0
 `)
 
 var clearIOSUploadChunksScript = goredis.NewScript(iosChunkBudgetReleaseLua + `
+if redis.call('GET', KEYS[3]) ~= ARGV[1] then
+  return 0
+end
 redis.call('UNLINK', unpack(KEYS, 1, #KEYS-2))
 release(KEYS[1])
 return 1
@@ -212,9 +224,16 @@ func persistIOSUploadChunk(
 	}, nil
 }
 
+// claimIOSUploadChunks is called after acquiring local assembly capacity.
+func claimIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int, claim string) (bool, error) {
+	meta, index, key := iosUploadRedisKeys(uploadKey)
+	value, err := claimIOSUploadChunksScript.Run(ctx, redisClient, []string{meta, index, key}, totalChunks, claim, iosChunkClaimTTL.Milliseconds()).Int()
+	return value == 1, err
+}
+
 // loadIOSUploadChunks reads every chunk of a claimed upload in index order with
 // pipelined GETs, so no single Redis command carries the whole upload. No lock is
-// needed: the claim SETNX in the persist script elects a single assembler, and
+// needed: the claim script elects a single assembler, and
 // the claim is only granted once every chunk is stored.
 func loadIOSUploadChunks(
 	ctx context.Context,
@@ -253,7 +272,7 @@ func loadIOSUploadChunks(
 	return chunks, nil
 }
 
-func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int) error {
+func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int, claim string) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client is nil")
 	}
@@ -261,14 +280,25 @@ func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uplo
 	metaKey, chunkIndexKey, claimKey := iosUploadRedisKeys(uploadKey)
 	keys := append([]string{metaKey, chunkIndexKey, claimKey}, iosUploadChunkPartKeys(uploadKey, max(totalChunks, 0))...)
 	keys = append(keys, harukiRedis.BuildIOSUploadChunkBudgetKey(), harukiRedis.BuildIOSUploadChunkBudgetExpiryKey())
-	return clearIOSUploadChunksScript.Run(ctx, redisClient, keys).Err()
+	cleared, err := clearIOSUploadChunksScript.Run(ctx, redisClient, keys, claim).Int()
+	if err == nil && cleared == 0 {
+		return errors.New("upload assembly claim expired")
+	}
+	return err
 }
 
-func resetIOSUploadClaim(ctx context.Context, redisClient *goredis.Client, uploadKey string) error {
+var resetIOSUploadClaimScript = goredis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`)
+
+func resetIOSUploadClaim(ctx context.Context, redisClient *goredis.Client, uploadKey, claim string) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client is nil")
 	}
 
 	_, _, claimKey := iosUploadRedisKeys(uploadKey)
-	return redisClient.Del(ctx, claimKey).Err()
+	return resetIOSUploadClaimScript.Run(ctx, redisClient, []string{claimKey}, claim).Err()
 }

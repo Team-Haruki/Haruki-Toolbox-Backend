@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	json "encoding/json/v2"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -837,5 +838,105 @@ func TestUpdateKratosEmailByIdentityIDConflict(t *testing.T) {
 	}
 	if !IsKratosIdentityConflictError(err) {
 		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestKratosPasswordVerificationRevokesNativeSessionWithoutWhoami(t *testing.T) {
+	calls := make(chan string, 4)
+	kratos := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls <- r.Method + " " + r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/self-service/login/api":
+			_, _ = io.WriteString(w, `{"id":"verification-flow"}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/self-service/login":
+			_, _ = io.WriteString(w, `{"session_token":"temporary-token","session":{"id":"password-session","authenticator_assurance_level":"aal1"}}`)
+		case r.Method == http.MethodDelete && r.URL.Path == "/admin/sessions/password-session":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusForbidden)
+		}
+	}))
+	defer kratos.Close()
+	handler := NewSessionHandler(nil, "")
+	handler.ConfigureIdentityProvider("kratos", kratos.URL, kratos.URL, "", "", false, false, time.Second, nil)
+	if err := handler.VerifyKratosPassword(t.Context(), "fixture@example.test", "fixture-password"); err != nil {
+		t.Fatal(err)
+	}
+	close(calls)
+	var requests []string
+	for call := range calls {
+		requests = append(requests, call)
+	}
+	if len(requests) != 3 || requests[2] != "DELETE /admin/sessions/password-session" {
+		t.Fatalf("unexpected temporary session cleanup requests: %v", requests)
+	}
+}
+
+func TestKratosAdminSessionUsesExactIdentityAndExpiry(t *testing.T) {
+	const id = "existing-session"
+	for _, tc := range []struct {
+		name, body string
+		status     int
+		want       bool
+	}{
+		{"active", `{"id":"existing-session","active":true,"expires_at":"2099-01-01T00:00:00Z","identity":{"id":"expected-owner"}}`, http.StatusOK, true},
+		{"different owner", `{"id":"existing-session","active":true,"expires_at":"2099-01-01T00:00:00Z","identity":{"id":"different-owner"}}`, http.StatusOK, false},
+		{"inactive", `{"id":"existing-session","active":false,"expires_at":"2099-01-01T00:00:00Z","identity":{"id":"expected-owner"}}`, http.StatusOK, false},
+		{"expired", `{"id":"existing-session","active":true,"expires_at":"2000-01-01T00:00:00Z","identity":{"id":"expected-owner"}}`, http.StatusOK, false},
+		{"missing", "", http.StatusNotFound, false},
+		{"invalid response", "invalid", http.StatusOK, false},
+		{"response exceeds size limit", strings.Repeat(" ", (1<<20)+1), http.StatusOK, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/admin/sessions/"+id || r.URL.Query().Get("expand") != "Identity" {
+					http.Error(w, "unexpected session query", http.StatusBadRequest)
+					return
+				}
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			handler := &SessionHandler{KratosAdminURL: provider.URL, KratosHTTPClient: provider.Client()}
+			if got := handler.IsKratosSessionActive(t.Context(), "expected-owner", id); got != tc.want {
+				t.Errorf("session active = %v, want %v", got, tc.want)
+			}
+			provider.Close()
+			if handler.IsKratosSessionActive(t.Context(), "expected-owner", id) {
+				t.Error("admitted session while provider was unavailable")
+			}
+		})
+	}
+	var missing *SessionHandler
+	if missing.IsKratosSessionActive(t.Context(), "expected-owner", id) {
+		t.Fatal("admitted session without a provider")
+	}
+}
+
+func TestKratosPasswordVerificationRejectsIncompleteNativeLogin(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+	}{
+		{"invalid JSON", "invalid"},
+		{"missing session token", `{"session":{"id":"no-token"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kratos := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/self-service/login/api":
+					_, _ = io.WriteString(w, `{"id":"verification-flow"}`)
+				case "/self-service/login":
+					_, _ = io.WriteString(w, tc.body)
+				default:
+					t.Errorf("failed login attempted cleanup: %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer kratos.Close()
+			handler := NewSessionHandler(nil, "")
+			handler.ConfigureIdentityProvider("kratos", kratos.URL, kratos.URL, "", "", false, false, time.Second, nil)
+			if err := handler.VerifyKratosPassword(t.Context(), "fixture@example.test", "fixture-password"); err == nil {
+				t.Fatal("accepted a missing or malformed native session")
+			}
+		})
 	}
 }

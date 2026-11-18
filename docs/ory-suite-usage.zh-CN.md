@@ -1046,6 +1046,8 @@ backend 位于 Oathkeeper 之后，`c.IP()` 取到的是 Oathkeeper 的地址而
 
 `hydra` 服务另有 `URLS_DEVICE_VERIFICATION=${FRONTEND_PUBLIC_URL}/device`、`URLS_DEVICE_SUCCESS=${FRONTEND_PUBLIC_URL}/device/done`（代驱链只解析这两个 Location，从不请求），以及发现文档覆盖 `WEBFINGER_OIDC_DISCOVERY_DEVICE_AUTHORIZATION_URL=${BACKEND_PUBLIC_BASE_URL}/api/oauth2/device/auth`、`WEBFINGER_OIDC_DISCOVERY_TOKEN_URL=${BACKEND_PUBLIC_BASE_URL}/api/oauth2/token`。后者同时改变两份发现文档；`private_key_jwt` 的 audience 新旧令牌地址都接受，issuer、`authorization_endpoint` 不变。`backend` 服务另有 `OAUTH2_DEVICE_FLOW_HYDRA_ISSUER_URL=${HYDRA_PUBLIC_BASE_URL}`（与 `HYDRA_BROWSER_URL` 今天取值相同但语义不同，所以单独传入）。
 
+Toolbox 使用公开 API 基址（`backend.backend_url`）作为 Hydra access token 的资源 audience，启动时必须配置该值。
+
 硬性约束（`internal/architecture/ory_oidc_contract_test.go` 与 `config/compose_device_flow_test.go` 守护）：
 
 - 用户码只用 LENGTH + CHARACTER_SET，**永远不要**再设 Hydra 的 user_code 熵预设（`..._ENTROPY_PRESET`）：Hydra schema 中二者是 `oneOf`。字符集与长度只改 `DEVICE_FLOW_USER_CODE_*`，Hydra 与 backend 同时生效（§12.9）

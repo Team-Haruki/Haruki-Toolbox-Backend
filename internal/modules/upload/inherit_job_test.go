@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1256,11 +1257,26 @@ func TestInheritWSChecksCurrentBrowserSession(t *testing.T) {
 	const identity = "owner-browser-identity"
 	env.db.User.UpdateOneID(testOwner).SetKratosIdentityID(identity).ExecX(ctx)
 	admin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/admin/identities/"+identity+"/sessions" {
+		if r.URL.Query().Get("expand") != "Identity" {
+			http.Error(w, "missing identity expansion", http.StatusBadRequest)
+			return
+		}
+		session := strings.TrimPrefix(r.URL.Path, "/admin/sessions/")
+		var status, expires, owner string
+		switch session {
+		case "active":
+			status, expires, owner = "true", "2099-01-01T00:00:00Z", identity
+		case "expired":
+			status, expires, owner = "true", "2000-01-01T00:00:00Z", identity
+		case "revoked":
+			status, expires, owner = "false", "2099-01-01T00:00:00Z", identity
+		case "other-owner":
+			status, expires, owner = "true", "2099-01-01T00:00:00Z", "another-identity"
+		default:
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = io.WriteString(w, `[{"id":"active","active":true,"expires_at":"2099-01-01T00:00:00Z"},{"id":"expired","active":true,"expires_at":"2000-01-01T00:00:00Z"},{"id":"revoked","active":false}]`)
+		_, _ = fmt.Fprintf(w, `{"id":%q,"active":%s,"expires_at":%q,"identity":{"id":%q}}`, session, status, expires, owner)
 	}))
 	defer admin.Close()
 	env.svc.api.SessionHandler = &harukiAPIHelper.SessionHandler{KratosAdminURL: admin.URL, KratosHTTPClient: admin.Client()}
@@ -1273,6 +1289,7 @@ func TestInheritWSChecksCurrentBrowserSession(t *testing.T) {
 		{identity, "expired", false},
 		{identity, "revoked", false},
 		{identity, "missing", false},
+		{identity, "other-owner", false},
 		{"different-identity", "active", false},
 		{identity, "", false},
 	} {
@@ -1333,4 +1350,36 @@ func TestInheritWSRefusesUpgradeAfterSessionRevocation(t *testing.T) {
 		defer release()
 	}
 	check("capacity", http.StatusTooManyRequests)
+}
+
+func TestInheritWSStopsCommandsAfterSessionRevocation(t *testing.T) {
+	env := newInheritTestEnv(t)
+	env.svc.confirmTimeout = time.Minute
+	var revoked atomic.Bool
+	env.svc.wsSessionActive = func(context.Context, string, string, string) bool { return !revoked.Load() }
+	base := wsTestServer(t, env)
+	id := env.createJob(validJobRequest())
+	env.waitStatus(id, "awaiting_confirm")
+	conn := dialJobWS(t, env, base, id, "")
+	if snapshot := readWS(t, conn); snapshot.Type != "snapshot" {
+		t.Fatalf("first frame = %q, want snapshot", snapshot.Type)
+	}
+	revoked.Store(true)
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"cancel"}`)); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		_, body, err := conn.ReadMessage()
+		if err != nil {
+			if e, ok := err.(net.Error); ok && e.Timeout() {
+				t.Fatal("revoked socket stayed open")
+			}
+			break
+		}
+		var msg wsMessage
+		if json.Unmarshal(body, &msg) != nil || msg.Type != "event" {
+			t.Fatalf("revoked socket received a command response: %s", body)
+		}
+	}
+	env.waitStatus(id, "awaiting_confirm")
 }

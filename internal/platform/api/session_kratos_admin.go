@@ -17,11 +17,20 @@ import (
 )
 
 func (s *SessionHandler) VerifyKratosPassword(ctx context.Context, identifier string, password string) error {
-	sessionToken, err := s.LoginWithKratosPassword(ctx, identifier, password)
+	result, err := s.loginWithKratosPassword(ctx, identifier, password)
 	if err != nil {
 		return err
 	}
-	if err := s.RevokeKratosSessionByToken(ctx, sessionToken); err != nil {
+	// The native login response identifies the temporary session even when
+	// the public whoami endpoint requires a higher assurance level.
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	if sessionID := strings.TrimSpace(result.Session.ID); sessionID != "" {
+		err = s.RevokeKratosSessionByID(cleanup, sessionID)
+	} else {
+		err = s.RevokeKratosSessionByToken(cleanup, result.SessionToken)
+	}
+	if err != nil {
 		harukiLogger.Warnf("Failed to revoke temporary Kratos verification session: %v", err)
 		return fmt.Errorf("%w: revoke temporary verification session failed: %v", errIdentityProviderUnavailable, err)
 	}
@@ -80,6 +89,41 @@ func (s *SessionHandler) UpdateKratosEmailByIdentityID(ctx context.Context, iden
 	} else {
 		return err
 	}
+}
+
+// IsKratosSessionActive checks the exact session and its owner through the admin API.
+func (s *SessionHandler) IsKratosSessionActive(ctx context.Context, identityID, sessionID string) bool {
+	if s == nil || strings.TrimSpace(s.KratosAdminURL) == "" || identityID == "" || sessionID == "" {
+		return false
+	}
+	endpoint, err := buildProviderEndpoint(s.KratosAdminURL, "/admin/sessions/"+url.PathEscape(sessionID))
+	if err != nil {
+		return false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?expand=Identity", nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := s.kratosHTTPClient().Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	const maxResponse = 1 << 20
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
+	if err != nil || len(body) > maxResponse {
+		return false
+	}
+	var session kratosAdminSessionRecord
+	if json.Unmarshal(body, &session) != nil {
+		return false
+	}
+	return session.ID == sessionID && session.Identity.ID == identityID && session.Active &&
+		session.ExpiresAt != nil && session.ExpiresAt.After(time.Now())
 }
 
 func (s *SessionHandler) ListKratosSessionsByIdentityID(ctx context.Context, identityID string) ([]KratosSessionInfo, error) {

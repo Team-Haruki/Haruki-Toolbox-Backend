@@ -46,7 +46,7 @@ func suiteBodyFromPostgres(
 	}
 	body, err := row.SuiteBody(keys, unwrapSingle)
 	if errors.Is(err, harukiGameData.ErrPublishedResponseTooLarge) {
-		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, harukiGameData.ErrPublishedResponseTooLarge.Error())
 	}
 	if err != nil {
 		harukiLogger.Errorf("Failed to render suite body: %v", err)
@@ -76,7 +76,7 @@ func mysekaiBodyFromPostgres(
 	}
 	body, err := row.MysekaiBody(keys)
 	if errors.Is(err, harukiGameData.ErrPublishedResponseTooLarge) {
-		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, harukiGameData.ErrPublishedResponseTooLarge.Error())
 	}
 	if err != nil {
 		harukiLogger.Errorf("Failed to render mysekai body: %v", err)

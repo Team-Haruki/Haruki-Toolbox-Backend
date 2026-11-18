@@ -80,7 +80,6 @@ type DataHandler struct {
 	Logger                  *harukiLogger.Logger
 	OAuth2WebhookAuthorizer OAuth2WebhookAuthorizer
 	BirthdaySubscription    BirthdaySubscriptionConfig
-	birthdayRetries         birthdayRetryBudget
 	SuiteRestoreService     *SuiteRestoreService
 	ServerCryptor           harukiSekai.ServerCryptor
 	WebhookAllowed          func(context.Context) bool
