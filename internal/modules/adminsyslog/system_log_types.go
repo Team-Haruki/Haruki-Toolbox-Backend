@@ -46,14 +46,15 @@ type systemLogQueryResponse struct {
 }
 
 type systemLogSummaryResponse struct {
-	GeneratedAt time.Time       `json:"generatedAt"`
-	From        time.Time       `json:"from"`
-	To          time.Time       `json:"to"`
-	Total       int             `json:"total"`
-	Success     int             `json:"success"`
-	Failure     int             `json:"failure"`
-	ByAction    []categoryCount `json:"byAction"`
-	ByActorType []categoryCount `json:"byActorType"`
-	ByResult    []categoryCount `json:"byResult"`
-	ByReason    []categoryCount `json:"byReason"`
+	GeneratedAt             time.Time       `json:"generatedAt"`
+	From                    time.Time       `json:"from"`
+	To                      time.Time       `json:"to"`
+	Total                   int             `json:"total"`
+	Success                 int             `json:"success"`
+	Failure                 int             `json:"failure"`
+	ByAction                []categoryCount `json:"byAction"`
+	ByActorType             []categoryCount `json:"byActorType"`
+	ByResult                []categoryCount `json:"byResult"`
+	ByReason                []categoryCount `json:"byReason"`
+	OtherFailureReasonCount int             `json:"otherFailureReasonCount,omitempty"`
 }

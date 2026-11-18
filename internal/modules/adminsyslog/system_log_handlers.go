@@ -1,6 +1,7 @@
 package adminsyslog
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -84,7 +85,8 @@ func handleGetSystemLogSummary(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		dbCtx := c.Context()
+		dbCtx, cancel := context.WithTimeout(c.Context(), systemLogSummaryTimeout)
+		defer cancel()
 		baseQuery, err := scopeSystemLogsForActor(dbCtx, apiHelper.DBManager.DB, applySystemLogFilters(apiHelper.DBManager.DB.SystemLog.Query(), filters), isSuperAdmin)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to scope system logs")
@@ -148,25 +150,27 @@ func handleGetSystemLogSummary(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 			byResultCounts = append(byResultCounts, groupedFieldCount{Key: row.Key, Count: row.Count})
 		}
 
-		failureReasonRows, err := baseQuery.Clone().
-			Where(systemlog.ResultEQ(systemlog.ResultFailure)).
-			Select(systemlog.FieldMetadata).
-			All(dbCtx)
+		byReason, err := summarizeSystemLogFailureReasons(dbCtx, baseQuery.Clone())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to aggregate system log reason summary")
 		}
+		remainingFailures := failureCount
+		for _, reason := range byReason {
+			remainingFailures -= reason.Count
+		}
 
 		resp := systemLogSummaryResponse{
-			GeneratedAt: adminNowUTC(),
-			From:        filters.From.UTC(),
-			To:          filters.To.UTC(),
-			Total:       total,
-			Success:     successCount,
-			Failure:     failureCount,
-			ByAction:    normalizeCategoryCounts(byActionCounts),
-			ByActorType: normalizeCategoryCounts(byActorTypeCounts),
-			ByResult:    normalizeCategoryCounts(byResultCounts),
-			ByReason:    buildSystemLogFailureReasonCounts(failureReasonRows),
+			GeneratedAt:             adminNowUTC(),
+			From:                    filters.From.UTC(),
+			To:                      filters.To.UTC(),
+			Total:                   total,
+			Success:                 successCount,
+			Failure:                 failureCount,
+			ByAction:                normalizeCategoryCounts(byActionCounts),
+			ByActorType:             normalizeCategoryCounts(byActorTypeCounts),
+			ByResult:                normalizeCategoryCounts(byResultCounts),
+			ByReason:                byReason,
+			OtherFailureReasonCount: max(0, remainingFailures),
 		}
 		return harukiAPIHelper.Responses.SuccessResponse(c, "success", &resp)
 	}

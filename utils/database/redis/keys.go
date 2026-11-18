@@ -244,6 +244,10 @@ func BuildLoginRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionIP, clientIP)
 }
 
+func (b KeyBuilder) BuildAdminAccessDeniedAuditKey(userID, reason string) string {
+	return buildKey(KeyPrefixHaruki, "audit", "admin-denied", reason, b.hashExactIdentifier("admin-denied-actor", userID))
+}
+
 func (b KeyBuilder) BuildLoginRateLimitTargetKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionLogin, KeyActionAttempt, KeyDimensionUser, b.hashNormalizedIdentifier(email))
 }

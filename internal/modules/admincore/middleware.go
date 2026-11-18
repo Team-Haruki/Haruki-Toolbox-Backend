@@ -1,7 +1,10 @@
 package admincore
 
 import (
+	"context"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
@@ -18,7 +21,11 @@ const (
 const (
 	adminAuditTargetTypeRoute = "route"
 	adminAuditActionAccess    = "admin.access"
+	accessDeniedAuditWindow   = time.Minute
+	accessDeniedCacheTimeout  = 250 * time.Millisecond
 )
+
+var fallbackAccessDeniedAuditUntil atomic.Int64
 
 const (
 	adminFailureReasonRoleMiddlewareMisconfigured = "role_middleware_misconfigured"
@@ -89,7 +96,11 @@ func writeAdminAuditLog(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRou
 }
 
 func logAdminAccessDenied(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, reason string, requiredRoles []string, resolvedRole string) {
-	if apiHelper == nil {
+	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.DB == nil {
+		return
+	}
+	userID, _ := c.Locals("userID").(string)
+	if !admitAccessDeniedAudit(c.Context(), apiHelper, userID, reason) {
 		return
 	}
 
@@ -101,6 +112,21 @@ func logAdminAccessDenied(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxR
 		metadata["resolvedRole"] = normalizeRole(resolvedRole)
 	}
 	writeAdminAuditLog(c, apiHelper, adminAuditActionAccess, adminAuditTargetTypeRoute, c.Path(), harukiAPIHelper.SystemLogResultFailure, metadata)
+}
+
+func admitAccessDeniedAudit(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID, reason string) bool {
+	if cache := apiHelper.DBManager.Redis; cache != nil && cache.Redis != nil {
+		key := cache.KeyBuilder().BuildAdminAccessDeniedAuditKey(userID, reason)
+		cacheCtx, cancel := context.WithTimeout(ctx, accessDeniedCacheTimeout)
+		defer cancel()
+		if first, err := cache.Redis.WithTimeout(accessDeniedCacheTimeout).SetNX(cacheCtx, key, 1, accessDeniedAuditWindow).Result(); err == nil {
+			return first
+		}
+	}
+	// Keep a local sample during a Redis outage with a single bounded bucket.
+	now := time.Now()
+	until := fallbackAccessDeniedAuditUntil.Load()
+	return now.UnixNano() >= until && fallbackAccessDeniedAuditUntil.CompareAndSwap(until, now.Add(accessDeniedAuditWindow).UnixNano())
 }
 
 func requireAnyRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, lookup userRoleLookup, allowedRoles ...string) fiber.Handler {
