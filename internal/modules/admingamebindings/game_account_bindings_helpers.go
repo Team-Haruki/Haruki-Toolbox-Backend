@@ -371,14 +371,17 @@ func mutateManagedGameBinding(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolbox
 		return err
 	}
 	owner := gameaccountbinding.HasUserWith(userSchema.IDEQ(ownerID))
-	if targetID == "" {
-		err = db.GameAccountBinding.DeleteOneID(current.ID).Where(owner).Exec(c.Context())
-	} else {
+	if targetID != "" {
 		if _, err := queryManageableTargetUserByID(c, helper, actorID, actorRole, targetID); err != nil {
 			return err
 		}
-		_, err = db.GameAccountBinding.UpdateOneID(current.ID).Where(owner).SetUserID(targetID).ClearSponsorFrameID().Save(c.Context())
 	}
+	err = db.ChangeGameAccountBinding(c.Context(), current.Server, current.GameUserID, true, func(db *postgresql.Client) error {
+		if targetID == "" {
+			return db.GameAccountBinding.DeleteOneID(current.ID).Where(owner).Exec(c.Context())
+		}
+		return db.GameAccountBinding.UpdateOneID(current.ID).Where(owner).SetUserID(targetID).ClearSponsorFrameID().Exec(c.Context())
+	})
 	if postgresql.IsNotFound(err) {
 		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
 	}

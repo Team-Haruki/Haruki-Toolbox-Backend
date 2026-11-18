@@ -458,7 +458,9 @@ func handleDeleteGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.ErrorForbidden(c, "not authorized to delete this binding")
 		}
 
-		err = apiHelper.DBManager.DB.GameAccountBinding.DeleteOne(existing).Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(userID))).Exec(ctx)
+		err = apiHelper.DBManager.DB.ChangeGameAccountBinding(ctx, serverStr, gameUserIDStr, true, func(db *postgresql.Client) error {
+			return db.GameAccountBinding.DeleteOne(existing).Where(gameaccountbinding.HasUserWith(userSchema.IDEQ(userID))).Exec(ctx)
+		})
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				return harukiAPIHelper.ErrorNotFound(c, "binding not found")

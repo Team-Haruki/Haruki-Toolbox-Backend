@@ -12,7 +12,6 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
@@ -119,39 +118,17 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 			return nil, err
 		}
 
-		tx, err := apiHelper.DBManager.DB.Tx(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// A (re)bound account never keeps a previous owner's default flag; it
-		// becomes the new owner's default only when they have none yet.
-		update := tx.GameAccountBinding.UpdateOneID(existing.ID).
-			SetVerified(true).
-			SetSuite(req.Suite).
-			SetMysekai(req.MySekai).
-			SetIsDefault(!hasOtherDefault).
-			SetUserID(userID)
-		if result.Transferred {
-			update.ClearSponsorFrameID()
-		}
-		if _, err = update.Save(ctx); err != nil {
-			_ = tx.Rollback()
-			return nil, err
-		}
-		if result.Transferred {
-			if _, err = tx.GameAccountDataGrant.Delete().
-				Where(
-					gameaccountdatagrant.OwnerUserIDEQ(result.PreviousOwnerUserID),
-					gameaccountdatagrant.ServerEQ(serverStr),
-					gameaccountdatagrant.GameUserIDEQ(gameUserIDStr),
-				).
-				Exec(ctx); err != nil {
-				_ = tx.Rollback()
-				return nil, err
+		err = apiHelper.DBManager.DB.ChangeGameAccountBinding(ctx, serverStr, gameUserIDStr, result.Transferred || !existing.Verified || previousOwnerID == "", func(db *postgresql.Client) error {
+			// A re-bound account becomes the new owner's default only when they have none.
+			update := db.GameAccountBinding.UpdateOneID(existing.ID).
+				SetVerified(true).SetSuite(req.Suite).SetMysekai(req.MySekai).
+				SetIsDefault(!hasOtherDefault).SetUserID(userID)
+			if result.Transferred {
+				update.ClearSponsorFrameID()
 			}
-		}
-		if err = tx.Commit(); err != nil {
-			_ = tx.Rollback()
+			return update.Exec(ctx)
+		})
+		if err != nil {
 			return nil, err
 		}
 		return result, nil
@@ -162,16 +139,18 @@ func saveGameAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haru
 		return nil, err
 	}
 
-	_, err = apiHelper.DBManager.DB.GameAccountBinding.
-		Create().
-		SetServer(serverStr).
-		SetGameUserID(gameUserIDStr).
-		SetVerified(true).
-		SetSuite(req.Suite).
-		SetMysekai(req.MySekai).
-		SetIsDefault(!hasDefault).
-		SetUserID(userID).
-		Save(ctx)
+	err = apiHelper.DBManager.DB.ChangeGameAccountBinding(ctx, serverStr, gameUserIDStr, true, func(db *postgresql.Client) error {
+		return db.GameAccountBinding.
+			Create().
+			SetServer(serverStr).
+			SetGameUserID(gameUserIDStr).
+			SetVerified(true).
+			SetSuite(req.Suite).
+			SetMysekai(req.MySekai).
+			SetIsDefault(!hasDefault).
+			SetUserID(userID).
+			Exec(ctx)
+	})
 	if err != nil {
 		return nil, err
 	}

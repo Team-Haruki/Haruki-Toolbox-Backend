@@ -352,3 +352,25 @@ func ParseGrantPermissions(dataType string, permissions []string) (bool, bool, e
 	}
 	return read, write, nil
 }
+
+// ChangeGameAccountBinding discards grants when a binding's ownership or
+// verified lifecycle ends or begins. The caller holds the game mutation lock.
+func (c *Client) ChangeGameAccountBinding(ctx context.Context, server, gameUserID string, invalidateGrants bool, mutate func(*Client) error) error {
+	if !invalidateGrants {
+		return mutate(c)
+	}
+	tx, err := c.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := mutate(tx.Client()); err != nil {
+		return err
+	}
+	if _, err := tx.GameAccountDataGrant.Delete().Where(
+		gameaccountdatagrant.ServerEQ(server), gameaccountdatagrant.GameUserIDEQ(gameUserID),
+	).Exec(ctx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
