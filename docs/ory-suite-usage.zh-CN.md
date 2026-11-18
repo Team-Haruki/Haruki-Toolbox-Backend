@@ -175,6 +175,8 @@ Hydra 在当前项目里负责：
 
 管理员角色变更、代重置密码、代撤销用户 OAuth 授权、轮换 OAuth 客户端密钥和修改 webhook 签名设置前，需先在当前会话完成管理员重认证。
 
+Oathkeeper 从环境变量 `OATHKEEPER_SHARED_SECRET` 加载 Toolbox 代理凭据。Event Tracker 的受保护路由使用独立的 `TRACKER_AUTH_PROXY_SECRET`，Event Tracker 需校验同一个独立凭据。
+
 管理端写请求必须带有与 `user_system.frontend_url` 同源的 `Origin`。代重置密码时，若提交密码则使用 `application/json`。代撤销单个客户端授权时传入 `clientId`，撤销该用户全部 OAuth 授权时显式提交 JSON `{"revokeAll":true}`。
 
 Kratos 的会话校验要求达到身份已配置的最高认证等级。已启用第二因素的用户需要完成第二因素才能访问浏览器受保护 API。
