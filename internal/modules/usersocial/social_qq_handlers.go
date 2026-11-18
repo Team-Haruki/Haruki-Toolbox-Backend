@@ -1,7 +1,7 @@
 package usersocial
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
@@ -17,7 +17,6 @@ import (
 
 func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
 		userID, err := userCoreModule.CurrentUserID(c)
 		if err != nil {
 			return harukiAPIHelper.ErrorUnauthorized(c, "user not authenticated")
@@ -27,36 +26,13 @@ func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, tur
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 		req.QQ = strings.TrimSpace(req.QQ)
-		if req.QQ == "" {
-			return harukiAPIHelper.ErrorBadRequest(c, "qq is required")
+		if !validQQMailID(req.QQ) {
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid QQ number")
 		}
-		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
-			Where(socialplatforminfo.PlatformEQ(
-				string(harukiAPIHelper.SocialPlatformQQ)),
-				socialplatforminfo.PlatformUserID(req.QQ)).
-			Exist(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to query social platform info: %v", err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
+		if err := userEmailModule.SendEmailHandler(c, userID, req.QQ+"@qq.com", req.ChallengeToken, apiHelper, turnstileVerifier); err != nil {
+			return respondQQVerificationError(c, err)
 		}
-		if exists {
-			return harukiAPIHelper.ErrorBadRequest(c, "QQ binding already exists")
-		}
-		limited, limitKey, limitMessage, err := checkQQMailSendRateLimit(c, apiHelper, userID, req.QQ)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
-		}
-		if limited {
-			return respondQQMailRateLimited(c, limitKey, limitMessage, apiHelper)
-		}
-		email := fmt.Sprintf("%s@qq.com", req.QQ)
-		if err := userEmailModule.SendEmailHandler(c, email, req.ChallengeToken, apiHelper, turnstileVerifier); err != nil {
-			if releaseErr := releaseQQMailSendRateLimitReservation(c, apiHelper, userID, req.QQ); releaseErr != nil {
-				harukiLogger.Warnf("Failed to release QQ mail send rate limit reservation for %s/%s: %v", userID, req.QQ, releaseErr)
-			}
-			return err
-		}
-		return nil
+		return harukiAPIHelper.Responses.SuccessResponse[string](c, "verification code sent", nil)
 	}
 }
 
@@ -81,19 +57,13 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request body")
 		}
 		req.QQ = strings.TrimSpace(req.QQ)
-		if req.QQ == "" {
+		if !validQQMailID(req.QQ) {
 			reason = "invalid_payload"
-			return harukiAPIHelper.ErrorBadRequest(c, "qq is required")
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid QQ number")
 		}
-		email := fmt.Sprintf("%s@qq.com", req.QQ)
-		ok, err := userEmailModule.VerifyEmailHandler(c, email, req.OneTimePassword, apiHelper)
-		if err != nil {
+		if err := userEmailModule.VerifyEmailHandler(c, userID, req.QQ+"@qq.com", req.OneTimePassword, apiHelper); err != nil {
 			reason = "verify_email_otp_failed"
-			return err
-		}
-		if !ok {
-			reason = "verify_email_otp_failed"
-			return harukiAPIHelper.ErrorBadRequest(c, "verification failed")
+			return respondQQVerificationError(c, err)
 		}
 
 		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
@@ -137,4 +107,24 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		reason = "ok"
 		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform verified", &ud)
 	}
+}
+
+func validQQMailID(id string) bool {
+	if len(id) == 0 || len(id) > 20 || id[0] == '0' {
+		return false
+	}
+	for i := range len(id) {
+		if id[i] < '0' || id[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func respondQQVerificationError(c fiber.Ctx, err error) error {
+	var requestErr *fiber.Error
+	if errors.As(err, &requestErr) {
+		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, requestErr.Code, requestErr.Message, nil)
+	}
+	return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
 }

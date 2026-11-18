@@ -110,6 +110,14 @@ func (b KeyBuilder) BuildEmailVerifyKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, b.hashNormalizedIdentifier(email))
 }
 
+func (b KeyBuilder) BuildOwnedEmailVerifyKey(ownerID, email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, b.hashExactIdentifier("email-verify-owner", ownerID), b.hashNormalizedIdentifier(email))
+}
+
+func (b KeyBuilder) BuildOwnedEmailAttemptKey(generation string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionAttempt, b.hashExactIdentifier("email-verify-generation", generation))
+}
+
 func (b KeyBuilder) BuildResetPasswordKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, b.hashNormalizedIdentifier(email))
 }
