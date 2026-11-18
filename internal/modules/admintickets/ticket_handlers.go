@@ -167,7 +167,7 @@ func handleAdminAppendTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRout
 
 		var notification *platformMailNotify.Reservation
 		if !payload.Internal && apiHelper.SMTPClient != nil {
-			notification = platformMailNotify.Reserve()
+			notification = platformMailNotify.ReserveTicket()
 			if notification == nil {
 				return c.SendStatus(fiber.StatusServiceUnavailable)
 			}

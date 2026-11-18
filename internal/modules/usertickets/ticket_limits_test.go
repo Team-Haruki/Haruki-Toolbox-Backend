@@ -17,9 +17,12 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 func TestOwnTicketDetailPagesMessagesAndRejectsForeignCursors(t *testing.T) {
@@ -122,8 +125,12 @@ func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
 	}
 
 	helper.SMTPClient = &smtp.HarukiSMTPClient{}
+	cache := miniredis.RunT(t)
+	rdb := goredis.NewClient(&goredis.Options{Addr: cache.Addr()})
+	defer rdb.Close()
+	helper.DBManager.Redis = &harukiRedis.HarukiRedisManager{Redis: rdb}
 	var reservations []*mailnotify.Reservation
-	for reservation := mailnotify.Reserve(); reservation != nil; reservation = mailnotify.Reserve() {
+	for reservation := mailnotify.ReserveTicket(); reservation != nil; reservation = mailnotify.ReserveTicket() {
 		reservations = append(reservations, reservation)
 		defer reservation.Cancel()
 	}
@@ -148,4 +155,16 @@ func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
 	if got := db.TicketMessage.Query().CountX(t.Context()); got != 2 {
 		t.Fatalf("expected one initial message and one reply, got %d", got)
 	}
+	key := helper.DBManager.Redis.KeyBuilder().BuildTicketNotificationRateKey("owner")
+	if err := rdb.Set(t.Context(), key, ticketNotificationsPerUser-1, ticketNotificationWindow).Err(); err != nil {
+		t.Fatal(err)
+	}
+	check(http.MethodPost, "/tickets/owner-ticket/messages", validReply, "", http.StatusOK)
+	check(http.MethodPost, "/tickets", validTicket, "", http.StatusTooManyRequests)
+	check(http.MethodPost, "/tickets/owner-ticket/messages", validReply, "", http.StatusTooManyRequests)
+	if got := db.TicketMessage.Query().CountX(t.Context()); got != 3 || db.Ticket.Query().CountX(t.Context()) != 3 {
+		t.Fatalf("per-user budget failed to protect writes: %d messages", got)
+	}
+	cache.FastForward(ticketNotificationWindow)
+	check(http.MethodPost, "/tickets/owner-ticket/messages", validReply, "", http.StatusOK)
 }

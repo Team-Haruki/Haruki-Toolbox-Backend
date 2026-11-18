@@ -8,6 +8,7 @@ import (
 )
 
 func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
+	maxAdmittedJobs := cap(securityMail.admitted)
 	started := make(chan struct{}, maxAdmittedJobs)
 	finished := make(chan struct{}, maxAdmittedJobs)
 	unblock := make(chan struct{})
@@ -32,7 +33,7 @@ func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
 		reservation.Cancel()
 	}
 	deadline := time.After(3 * time.Second)
-	for range maxConcurrentSends {
+	for range securityMailWorkers {
 		select {
 		case <-started:
 		case <-deadline:
@@ -52,8 +53,8 @@ func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
 			t.Fatal("accepted jobs did not drain")
 		}
 	}
-	if peak.Load() != maxConcurrentSends {
-		t.Fatalf("peak concurrency = %d, want %d", peak.Load(), maxConcurrentSends)
+	if peak.Load() != securityMailWorkers {
+		t.Fatalf("peak concurrency = %d, want %d", peak.Load(), securityMailWorkers)
 	}
 	reservation := Reserve()
 	if reservation == nil {
@@ -61,4 +62,46 @@ func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
 	}
 	reservation.Cancel()
 	reservation.Cancel()
+}
+
+func TestSaturatedTicketMailKeepsSecurityWorkersAvailable(t *testing.T) {
+	started := make(chan struct{}, ticketMailWorkers)
+	unblock := make(chan struct{})
+	defer close(unblock)
+	for range ticketMailWorkers {
+		reservation := ReserveTicket()
+		if reservation == nil {
+			t.Fatal("ticket worker was not available")
+		}
+		reservation.Send(func(context.Context) {
+			started <- struct{}{}
+			<-unblock
+		})
+	}
+	for range ticketMailBacklog {
+		reservation := ReserveTicket()
+		if reservation == nil {
+			t.Fatal("ticket backlog filled too early")
+		}
+		defer reservation.Cancel()
+	}
+	deadline := time.After(3 * time.Second)
+	for range ticketMailWorkers {
+		select {
+		case <-started:
+		case <-deadline:
+			t.Fatal("ticket workers did not start")
+		}
+	}
+	if extra := ReserveTicket(); extra != nil {
+		extra.Cancel()
+		t.Fatal("extra ticket job admitted while support queue was full")
+	}
+	securitySent := make(chan struct{})
+	Dispatch(func(context.Context) { close(securitySent) })
+	select {
+	case <-securitySent:
+	case <-deadline:
+		t.Fatal("ticket mail blocked the account security queue")
+	}
 }
