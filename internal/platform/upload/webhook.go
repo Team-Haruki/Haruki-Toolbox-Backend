@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiVersion "github.com/Team-Haruki/Haruki-Toolbox-Backend/version"
@@ -92,6 +93,9 @@ func doWebhookCallback(ctx context.Context, url string, headers map[string]strin
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
+	if req.Header.Get("Authorization") != "" && req.URL.Scheme != "https" {
+		return 0, fmt.Errorf("webhook authorization requires HTTPS")
+	}
 	resp, err := webhookCallbackHTTPClient.Do(req)
 	if err != nil {
 		return 0, err
@@ -169,7 +173,6 @@ func ValidateWebhookCallbackURL(rawURL string) (string, bool) {
 }
 
 func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string) {
-	h.Logger.Infof("Calling back WebHook API: %s", url)
 	headers := map[string]string{
 		"User-Agent": fmt.Sprintf("Haruki-Toolbox-Backend/%s", harukiVersion.Version),
 	}
@@ -179,18 +182,20 @@ func (h *DataHandler) CallbackWebhookAPI(ctx context.Context, url, bearer string
 	if validatedURL, ok := ValidateWebhookCallbackURL(url); ok {
 		url = validatedURL
 	} else {
-		h.Logger.Warnf("Skipped webhook callback after URL validation failed: %s", url)
+		h.Logger.Warnf("Skipped webhook callback after URL validation failed")
 		return
 	}
 	statusCode, err := doWebhookCallback(ctx, url, headers)
 	if err != nil {
-		h.Logger.Errorf("WebHook API call failed: %v", err)
+		// A transport error can include the entire URL, including credentials
+		// supplied by the integration in its query or path.
+		h.Logger.Errorf("Webhook callback request failed (%T)", err)
 		return
 	}
 	if isHTTPSuccessStatus(statusCode) {
-		h.Logger.Infof("Called back WebHook API %s successfully.", url)
+		h.Logger.Infof("Webhook callback succeeded")
 	} else {
-		h.Logger.Errorf("Called back WebHook API %s failed, status code: %d", url, statusCode)
+		h.Logger.Errorf("Webhook callback failed, status code: %d", statusCode)
 	}
 }
 
@@ -246,24 +251,28 @@ func applyWebhookPlaceholders(rawURL string, userID int64, server utils.Supporte
 	return url
 }
 
-func (h *DataHandler) CallWebhook(
+func (h *DataHandler) callPublicWebhook(
 	ctx context.Context,
 	userID int64,
 	server utils.SupportedDataUploadServer,
 	dataType utils.UploadDataType,
+	original apiHelper.HarukiToolboxGameAccountPrivacySettings,
 ) {
-	if h == nil || !h.WebhookEnabled || h.DBManager == nil || h.DBManager.DB == nil {
+	if h == nil || h.WebhookAllowed == nil || !h.WebhookAllowed(ctx) || h.DBManager == nil || h.DBManager.DB == nil {
 		return
 	}
 	callbacks, err := h.DBManager.DB.GetWebhookPushAPI(ctx, userID, string(server), string(dataType))
 	if err != nil || len(callbacks) == 0 {
 		return
 	}
+	if !h.currentUploadPrivacy(ctx, original, userID, server).AllowsPublicAPI(dataType) {
+		return
+	}
 	var wg sync.WaitGroup
 	for _, cb := range callbacks {
 		url, bearer, ok := parseWebhookCallback(cb)
 		if !ok {
-			h.Logger.Warnf("Skip invalid webhook callback payload: %v", cb)
+			h.Logger.Warnf("Skipped invalid webhook callback")
 			continue
 		}
 		url = applyWebhookPlaceholders(url, userID, server, dataType)
@@ -276,19 +285,13 @@ func (h *DataHandler) CallWebhook(
 	wg.Wait()
 }
 
-func (h *DataHandler) CallWebhookAsync(userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType) {
-	ctx, cancel := context.WithTimeout(context.Background(), webhookCallbackTimeout)
-	defer cancel()
-	h.CallWebhook(ctx, userID, server, dataType)
-}
-
 func (h *DataHandler) CallOAuth2Webhook(
 	ctx context.Context,
 	userID int64,
 	server utils.SupportedDataUploadServer,
 	dataType utils.UploadDataType,
 ) {
-	if h == nil || !h.WebhookEnabled || h.DBManager == nil || h.DBManager.DB == nil || h.OAuth2WebhookAuthorizer == nil {
+	if h == nil || h.WebhookAllowed == nil || !h.WebhookAllowed(ctx) || h.DBManager == nil || h.DBManager.DB == nil || h.OAuth2WebhookAuthorizer == nil {
 		return
 	}
 	if !h.OAuth2WebhookAuthorizer.Enabled() {
@@ -328,7 +331,7 @@ func (h *DataHandler) CallOAuth2Webhook(
 	for _, cb := range callbacks {
 		url, bearer, ok := parseWebhookCallback(cb)
 		if !ok {
-			h.Logger.Warnf("Skip invalid OAuth2 webhook callback payload: %v", cb)
+			h.Logger.Warnf("Skipped invalid OAuth2 webhook callback")
 			continue
 		}
 		url = applyWebhookPlaceholders(url, userID, server, dataType)

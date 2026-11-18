@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -224,6 +225,43 @@ func TestDeliverBirthdayEventSchedulesRetryAsNamedBackgroundTask(t *testing.T) {
 	}
 	tasks[0]()
 	assertNotifyRequests(t, server, 2)
+}
+
+func TestBirthdayRetryBudgetBoundsSubscriptionsAndReleasesCapacity(t *testing.T) {
+	var budget birthdayRetryBudget
+	var releases []func()
+	for range maxBirthdayRetriesPerSub {
+		release, ok := budget.reserve("subscription-a")
+		if !ok {
+			t.Fatal("rejected retry below subscription cap")
+		}
+		releases = append(releases, release)
+	}
+	if _, ok := budget.reserve("subscription-a"); ok {
+		t.Fatal("accepted retry above subscription cap")
+	}
+	for len(releases) < maxBirthdayRetries {
+		release, ok := budget.reserve(strconv.Itoa(len(releases)))
+		if !ok {
+			t.Fatal("rejected retry below shared cap")
+		}
+		releases = append(releases, release)
+	}
+	if _, ok := budget.reserve("subscription-b"); ok {
+		t.Fatal("accepted retry above shared cap")
+	}
+	releases[0]()
+	if release, ok := budget.reserve("subscription-a"); !ok {
+		t.Fatal("did not release subscription and shared capacity")
+	} else {
+		release()
+	}
+	for _, release := range releases[1:] {
+		release()
+	}
+	if len(budget.bySubscription) != 0 || budget.active != 0 {
+		t.Fatal("retry budget did not drain")
+	}
 }
 
 func TestDeliverBirthdayEventDropsRetryWhenSubmitRejected(t *testing.T) {

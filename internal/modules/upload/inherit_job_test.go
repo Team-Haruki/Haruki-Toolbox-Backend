@@ -194,6 +194,7 @@ func newInheritTestEnv(t *testing.T) *inheritTestEnv {
 	deps := testUploadDependencies()
 	deps.InheritVault = inheritvault.NewStore(vaultClient, rdb.Redis, master)
 	svc := newInheritService(api, deps)
+	svc.wsSessionActive = func(context.Context, string, string, string) bool { return true }
 	svc.limiter = newInheritConcurrencyLimiter(4)
 	svc.breaker = newInheritCircuitBreaker(5, time.Minute, time.Second)
 	svc.confirmTimeout = 2 * time.Second

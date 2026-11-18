@@ -43,6 +43,7 @@ type inheritService struct {
 	runner   harukiBackground.Runner
 	limiter  *inheritConcurrencyLimiter
 	breaker  *inheritCircuitBreaker
+	wsSlots  inheritWSSlots
 
 	now            func() time.Time
 	confirmTimeout time.Duration
@@ -50,13 +51,14 @@ type inheritService struct {
 	slotWait       time.Duration
 	issueBackoff   func(attempt int) time.Duration
 
-	newGame        func(server harukiUtils.SupportedInheritUploadServer, progress harukiSekai.Progress) (inheritGame, error)
-	upload         func(ctx context.Context, job *inheritJob, gameUserID int64, suite, mysekai []byte) error
-	verifyPassword func(ctx context.Context, identityID, password string) error
-	hasPassword    func(ctx context.Context, identityID string) (bool, error)
-	hasVerifiedQQ  func(ctx context.Context, userID string) (bool, error)
-	userEmail      func(ctx context.Context, userID string) (email, identityID string, err error)
-	sendMail       func(to string, msg harukiSMTP.Message)
+	newGame         func(server harukiUtils.SupportedInheritUploadServer, progress harukiSekai.Progress) (inheritGame, error)
+	upload          func(ctx context.Context, job *inheritJob, gameUserID int64, suite, mysekai []byte) error
+	verifyPassword  func(ctx context.Context, identityID, password string) error
+	hasPassword     func(ctx context.Context, identityID string) (bool, error)
+	hasVerifiedQQ   func(ctx context.Context, userID string) (bool, error)
+	userEmail       func(ctx context.Context, userID string) (email, identityID string, err error)
+	sendMail        func(to string, msg harukiSMTP.Message)
+	wsSessionActive func(ctx context.Context, userID, identityID, sessionID string) bool
 }
 
 func newInheritService(api *harukiAPIHelper.HarukiToolboxRouterHelpers, deps Dependencies) *inheritService {
@@ -92,6 +94,7 @@ func newInheritService(api *harukiAPIHelper.HarukiToolboxRouterHelpers, deps Dep
 	s.hasVerifiedQQ = s.queryVerifiedQQ
 	s.userEmail = s.queryUserEmail
 	s.sendMail = s.sendSMTP
+	s.wsSessionActive = s.checkWSBrowserSession
 	return s
 }
 

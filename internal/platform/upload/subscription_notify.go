@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
@@ -19,7 +20,40 @@ var errBirthdaySubscriptionStale = errors.New("birthday subscription is stale")
 
 // maxNotifyErrorBodyBytes bounds how much of a failed response body is kept in
 // the error and therefore in logs.
-const maxNotifyErrorBodyBytes = 256
+const (
+	maxNotifyErrorBodyBytes  = 256
+	maxBirthdayRetries       = 64
+	maxBirthdayRetriesPerSub = 4
+	maxBirthdayRetryBytes    = 4096
+)
+
+type birthdayRetryBudget struct {
+	mu             sync.Mutex
+	bySubscription map[string]int
+	active         int
+}
+
+func (b *birthdayRetryBudget) reserve(subscription string) (func(), bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.active >= maxBirthdayRetries || b.bySubscription[subscription] >= maxBirthdayRetriesPerSub {
+		return nil, false
+	}
+	if b.bySubscription == nil {
+		b.bySubscription = make(map[string]int)
+	}
+	b.bySubscription[subscription]++
+	b.active++
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		b.bySubscription[subscription]--
+		if b.bySubscription[subscription] == 0 {
+			delete(b.bySubscription, subscription)
+		}
+		b.active--
+	}, true
+}
 
 // deliverBirthdayEvent notifies the push gateway about a stored event. The
 // first attempt runs in the caller; when it fails for any reason other than a
@@ -38,10 +72,30 @@ func (h *DataHandler) deliverBirthdayEvent(event *BirthdayMonitorEvent) {
 		h.logBirthdayNotifyGaveUp(event, 1, err)
 		return
 	}
+	if len(event.EventID)+len(event.SubscriptionID)+len(event.SubscriptionVersion)+len(event.PayloadRef) > maxBirthdayRetryBytes {
+		h.Logger.Warnf("birthday subscription notify retry dropped: notification metadata is too large")
+		return
+	}
+	release, admitted := h.birthdayRetries.reserve(event.SubscriptionID)
+	if !admitted {
+		h.Logger.Warnf("birthday subscription notify retry dropped: capacity reached event=%s subscription=%s", event.EventID, event.SubscriptionID)
+		return
+	}
+	// Retain only the reference and the fields used by the notification API.
+	// The stored upload payload can be large and has its own lifetime in Redis.
+	notification := &BirthdayMonitorEvent{
+		EventID:             event.EventID,
+		SubscriptionID:      event.SubscriptionID,
+		SubscriptionVersion: event.SubscriptionVersion,
+		PayloadRef:          event.PayloadRef,
+		EmptyResult:         event.EmptyResult,
+	}
 	h.Logger.Infof("birthday subscription notify failed, scheduling retry: event=%s subscription=%s version=%s attempt=1 err=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, err)
 	if !h.submitBackgroundTask("birthday-subscription-notify-retry", func() {
-		h.retryBirthdayEventNotify(event, delays, err)
+		defer release()
+		h.retryBirthdayEventNotify(notification, delays, err)
 	}) {
+		release()
 		h.Logger.Warnf("birthday subscription notify retry dropped: shutdown in progress event=%s subscription=%s version=%s attempts=1 err=%v", event.EventID, event.SubscriptionID, event.SubscriptionVersion, err)
 	}
 }

@@ -113,7 +113,7 @@ X-Haruki-Suite-Webhook-Token: <token>
 当用户上传对应数据，并且满足以下条件时，服务端会发起回调：
 
 1. 上传成功
-2. 该数据上传允许公开触发 webhook
+2. 对应数据类型在上传时和投递前均允许公开访问。投递前会检查原绑定仍然有效、已验证，且属主未停权
 3. webhook 全局开关为开启
 4. 当前 endpoint 开关为开启
 5. 该 endpoint 已订阅该 `server + data_type + user_id`
@@ -173,6 +173,8 @@ https://example.com/apiwebhook/jp/suite/123456789
 - 回 DNS 后落到内网/回环地址
 
 因此 callback URL 必须是公网可访问地址。
+
+配置了回调 Bearer 凭据时，回调地址必须使用 HTTPS。
 
 ## 10. 接入建议
 

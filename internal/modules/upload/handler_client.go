@@ -1,6 +1,8 @@
 package upload
 
 import (
+	"context"
+
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 )
@@ -17,6 +19,9 @@ func newUploadDataHandler(helper *harukiAPIHelper.HarukiToolboxRouterHelpers, de
 		BirthdaySubscription:    dependencies.BirthdaySubscription,
 		SuiteRestoreService:     dependencies.SuiteRestoreService,
 		ServerCryptor:           dependencies.ServerCryptor,
-		WebhookEnabled:          helper.GetWebhookEnabled(),
+		WebhookAllowed: func(ctx context.Context) bool {
+			snapshot, err := helper.CurrentRuntimeConfig(ctx)
+			return err == nil && (snapshot.WebhookEnabled == nil || *snapshot.WebhookEnabled)
+		},
 	}
 }

@@ -3,10 +3,15 @@ package upload
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
 	"sync"
+	"time"
 
 	apiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/perfstats"
 )
@@ -135,12 +140,21 @@ func (h *DataHandler) RunUploadFanout(raw []byte, data map[string]any, server ut
 		}
 		if len(syncBody) > 0 {
 			start("data-sync", func() {
-				runDataSyncerTargets(targets, userID, server, dataType, syncBody, h.ServerCryptor, h.SuiteRestoreService, sendData)
+				refreshTargets := func(queued []syncTarget) []syncTarget {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					current := h.currentUploadPrivacy(ctx, settings, userID, server)
+					allowed := buildSyncTargets(h.DataSync.providers, dataType, current)
+					return slices.DeleteFunc(queued, func(target syncTarget) bool { return !slices.Contains(allowed, target) })
+				}
+				runDataSyncerTargets(targets, userID, server, dataType, syncBody, h.ServerCryptor, h.SuiteRestoreService, sendData, refreshTargets)
 			})
 		}
 		if isPublicAPI {
 			start("webhook", func() {
-				h.CallWebhookAsync(userID, server, dataType)
+				ctx, cancel := context.WithTimeout(context.Background(), webhookCallbackTimeout)
+				defer cancel()
+				h.callPublicWebhook(ctx, userID, server, dataType, settings)
 			})
 		}
 		start("oauth2-webhook", func() {
@@ -148,6 +162,23 @@ func (h *DataHandler) RunUploadFanout(raw []byte, data map[string]any, server ut
 		})
 		fanout.Wait()
 	})
+}
+
+func (h *DataHandler) currentUploadPrivacy(ctx context.Context, original apiHelper.HarukiToolboxGameAccountPrivacySettings, userID int64, server utils.SupportedDataUploadServer) apiHelper.HarukiToolboxGameAccountPrivacySettings {
+	if original.BindingID == 0 || original.OwnerID == "" || h.DBManager == nil || h.DBManager.DB == nil {
+		return apiHelper.HarukiToolboxGameAccountPrivacySettings{}
+	}
+	binding, err := h.DBManager.DB.GameAccountBinding.Query().Where(
+		gameaccountbinding.IDEQ(original.BindingID),
+		gameaccountbinding.ServerEQ(string(server)),
+		gameaccountbinding.GameUserIDEQ(strconv.FormatInt(userID, 10)),
+		gameaccountbinding.VerifiedEQ(true),
+		gameaccountbinding.HasUserWith(user.IDEQ(original.OwnerID), user.BannedEQ(false)),
+	).Select(gameaccountbinding.FieldSuite, gameaccountbinding.FieldMysekai).Only(ctx)
+	if err != nil {
+		return apiHelper.HarukiToolboxGameAccountPrivacySettings{}
+	}
+	return apiHelper.HarukiToolboxGameAccountPrivacySettings{Suite: binding.Suite, Mysekai: binding.Mysekai}
 }
 
 func (h *DataHandler) submitBackgroundTask(name string, task func()) bool {

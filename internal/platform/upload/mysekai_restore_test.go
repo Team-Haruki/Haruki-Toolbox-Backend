@@ -55,7 +55,7 @@ func TestMysekaiJSONSyncUsesConfiguredRegion(t *testing.T) {
 		if _, ok := got[0].(map[string]any); !ok {
 			t.Errorf("not restored: %#v", got)
 		}
-	})
+	}, nil)
 	if sent != 1 {
 		t.Fatalf("sent=%d", sent)
 	}

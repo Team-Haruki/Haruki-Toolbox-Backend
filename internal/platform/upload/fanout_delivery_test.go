@@ -3,6 +3,7 @@ package upload
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,27 @@ import (
 	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+
+	_ "github.com/mattn/go-sqlite3"
 )
+
+func uploadDeliveryBinding(t *testing.T, h *DataHandler) api.HarukiToolboxGameAccountPrivacySettings {
+	t.Helper()
+	db := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", t.Name()))
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.User.Create().SetID("owner").SetName("Owner").SetEmail("owner@example.com").Save(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	suite := &schema.SuiteDataPrivacySettings{AllowSakura: true, AllowPublicApi: true}
+	binding, err := db.GameAccountBinding.Create().SetUserID("owner").SetGameUserID("123").SetServer("jp").SetVerified(true).SetSuite(suite).Save(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.DBManager = &database.HarukiToolboxDBManager{DB: db}
+	return api.HarukiToolboxGameAccountPrivacySettings{BindingID: binding.ID, OwnerID: "owner", Suite: suite}
+}
 
 func TestFanoutSlowHTTPPreservesCopiedPayloadAndDrains(t *testing.T) {
 	entered := make(chan struct{}, 6)
@@ -38,7 +59,7 @@ func TestFanoutSlowHTTPPreservesCopiedPayloadAndDrains(t *testing.T) {
 	defer unblock()
 	group := background.NewTaskGroup(func(name string, recovered any) { t.Errorf("task %s panicked: %v", name, recovered) })
 	h := &DataHandler{BackgroundTasks: group, Logger: testLogger(), DataSync: NewDataSyncConfig(cfg.ThirdPartyDataProviderConfig{EndpointSakura: server.URL})}
-	settings := api.HarukiToolboxGameAccountPrivacySettings{Suite: &schema.SuiteDataPrivacySettings{AllowSakura: true}}
+	settings := uploadDeliveryBinding(t, h)
 	var callers sync.WaitGroup
 	for range 6 {
 		callers.Go(func() {
@@ -80,5 +101,40 @@ func TestFanoutSlowHTTPPreservesCopiedPayloadAndDrains(t *testing.T) {
 	}
 	if st := uploadFanoutLimit.snapshot(); st.Active != 0 || st.Waiting != 0 || st.ActiveInputBytes != 0 {
 		t.Fatalf("capacity leaked after drain: %+v", st)
+	}
+}
+
+func TestFanoutRechecksSharingAfterProviderLookup(t *testing.T) {
+	var checked, delivered atomic.Bool
+	const gameID = int64(123)
+	runner := &capturedHandlerRunner{accept: true}
+	h := &DataHandler{BackgroundTasks: runner, Logger: testLogger()}
+	settings := uploadDeliveryBinding(t, h)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/check" {
+			delivered.Store(true)
+			return
+		}
+		checked.Store(true)
+		if err := h.DBManager.DB.GameAccountBinding.UpdateOneID(settings.BindingID).SetSuite(&schema.SuiteDataPrivacySettings{}).Exec(r.Context()); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+	h.DataSync = NewDataSyncConfig(cfg.ThirdPartyDataProviderConfig{
+		EndpointSakura: server.URL + "/deliver", CheckEnabledSakura: true, CheckURLSakura: server.URL + "/check",
+	})
+	id := gameID
+	h.RunUploadFanout([]byte("raw"), nil, utils.SupportedDataUploadServerJP, utils.UploadDataTypeSuite, &id, settings, true)
+	if len(runner.tasks) != 1 {
+		t.Fatal("fanout not queued")
+	}
+	runner.tasks[0]()
+	if !checked.Load() || delivered.Load() {
+		t.Fatalf("provider lookup = %t, delivery = %t", checked.Load(), delivered.Load())
+	}
+	if h.currentUploadPrivacy(t.Context(), settings, gameID, utils.SupportedDataUploadServerJP).AllowsPublicAPI(utils.UploadDataTypeSuite) {
+		t.Fatal("the earlier public opt-in survived the privacy update")
 	}
 }

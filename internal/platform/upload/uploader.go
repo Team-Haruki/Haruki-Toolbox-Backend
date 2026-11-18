@@ -201,12 +201,15 @@ func runDataSyncer(
 	suiteRestoreService *SuiteRestoreService,
 	sender syncDataSender,
 ) {
-	runDataSyncerTargets(buildSyncTargets(cfg, dataType, settings), userID, server, dataType, rawData, serverCryptor, suiteRestoreService, sender)
+	runDataSyncerTargets(buildSyncTargets(cfg, dataType, settings), userID, server, dataType, rawData, serverCryptor, suiteRestoreService, sender, nil)
 }
 
 var syncEncodingSlots = make(chan struct{}, 2)
 
-func runDataSyncerTargets(targets []syncTarget, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, serverCryptor sekai.ServerCryptor, suiteRestoreService *SuiteRestoreService, sender syncDataSender) {
+func runDataSyncerTargets(targets []syncTarget, userID int64, server utils.SupportedDataUploadServer, dataType utils.UploadDataType, rawData []byte, serverCryptor sekai.ServerCryptor, suiteRestoreService *SuiteRestoreService, sender syncDataSender, refreshTargets func([]syncTarget) []syncTarget) {
+	if refreshTargets != nil {
+		targets = refreshTargets(targets)
+	}
 	targets = eligibleSyncTargets(targets, userID, server, dataType)
 	if len(targets) == 0 {
 		return
@@ -248,6 +251,9 @@ func runDataSyncerTargets(targets []syncTarget, userID int64, server utils.Suppo
 		}()
 	}
 
+	if refreshTargets != nil {
+		targets = refreshTargets(targets)
+	}
 	var sendTasks sync.WaitGroup
 	for _, t := range targets {
 		t := t
