@@ -2,6 +2,7 @@ package data
 
 import (
 	json "encoding/json/v2"
+	"strings"
 	"testing"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -12,6 +13,17 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestPublishedGameDataRejectsDuplicateAndOversizedSelections(t *testing.T) {
+	for _, query := range []string{"userCards,userCards", strings.Repeat("userCards,", 256), strings.Repeat("x", 8193)} {
+		if err := ValidateGameDataKeySelection(query); err == nil {
+			t.Fatal("accepted an invalid game data projection")
+		}
+	}
+	if err := ValidateGameDataKeySelection("userCards,userDecks"); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // The PostgreSQL read path hands back an ALREADY RENDERED body as []byte.
 // Marshalling that again does not re-emit it: encoding/json and sonic both

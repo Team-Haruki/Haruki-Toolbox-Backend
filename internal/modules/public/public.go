@@ -72,6 +72,9 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		requestKey := c.Query("key")
+		if err := data.ValidateGameDataKeySelection(requestKey); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		}
 		// Resolve the document generation once: it drives both the conditional
 		// 304 answer and which versioned cache entry this request may read.
 		stamp, stampConfirmed, stampErr := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, userID)
@@ -88,9 +91,17 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
+		release, admitted := data.ReservePublishedGameDataRead()
+		if !admitted {
+			c.Set(fiber.HeaderRetryAfter, "1")
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game data reads are busy", nil)
+		}
+		defer release()
 		var cacheKey string
-		if stamp > 0 {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
+		// Only the default projection gets a cache entry. Arbitrary field
+		// selections have unbounded cardinality even if rendered bodies match.
+		if stamp > 0 && requestKey == "" {
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
 			// Suite bodies are shaped by the public key allowlist, so entries
 			// are keyed by it too — an allowlist edit moves readers to fresh
 			// entries even when the stamp is unchanged. The write side appends
@@ -110,11 +121,14 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 				harukiLogger.Warnf("Failed to read public game data cache: %v", err)
 			}
 		}
-		body, err := loadPublicGameData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp)
+		body, err := loadPublicGameData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp, suiteAllowedKeys)
 		if err != nil {
 			if fErr, ok := err.(*fiber.Error); ok {
 				if fErr.Code == fiber.StatusInternalServerError {
 					return harukiAPIHelper.ErrorInternal(c, "failed to get user data")
+				}
+				if fErr.Code == fiber.StatusUnprocessableEntity {
+					return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fErr.Code, fErr.Message, nil)
 				}
 				return harukiAPIHelper.ErrorNotFound(c, "not found")
 			}
@@ -144,19 +158,22 @@ func loadPublicGameData(
 	userID int64,
 	requestKey string,
 	stamp int64,
+	allowedKeys []string,
 ) (string, error) {
 	// The flight key is generation-independent (coalesce all concurrent misses
 	// for one document+filter) and uses the raw request key: only byte-identical
 	// requests may share a result, since a padded key fails validation while its
 	// trimmed twin succeeds.
 	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(userID, 10) + "\x00" + requestKey
+	if dataType == harukiUtils.UploadDataTypeSuite {
+		flightKey += "\x00" + data.PublicAllowlistDigest(allowedKeys)
+	}
 	v, err, _ := publicDataGroup.Do(flightKey, func() (any, error) {
 		// Detached from any single caller's request lifetime: this fetch serves
 		// every coalesced waiter, so a leader disconnecting must not fail the
 		// others. Still bounded so it cannot run away.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), publicReadTimeout)
 		defer cancel()
-		allowedKeys := apiHelper.GetAllowedKeys()
 		allowedKeySet := make(map[string]struct{}, len(allowedKeys))
 		for _, k := range allowedKeys {
 			allowedKeySet[k] = struct{}{}
@@ -225,7 +242,7 @@ func parseParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, harukiUtil
 	if err != nil {
 		return "", "", 0, "", fiber.NewError(fiber.StatusBadRequest, "invalid user_id")
 	}
-	return server, dataType, userID, userIDStr, nil
+	return server, dataType, userID, strconv.FormatInt(userID, 10), nil
 }
 
 func fetchAccountBinding(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, server harukiUtils.SupportedDataUploadServer, userIDStr string) (*postgresql.GameAccountBinding, error) {

@@ -12,6 +12,42 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// PublishedGameDataCacheVersion separates entries written before the response
+// size limit from entries known to fit it.
+const PublishedGameDataCacheVersion = ":bounded-v1"
+
+var publishedReadSlots = make(chan struct{}, 4)
+
+// ReservePublishedGameDataRead bounds concurrent reads, cache decoding, and
+// rendering shared by the public and OAuth game-data endpoints.
+func ReservePublishedGameDataRead() (func(), bool) {
+	select {
+	case publishedReadSlots <- struct{}{}:
+		return func() { <-publishedReadSlots }, true
+	default:
+		return nil, false
+	}
+}
+
+// ValidateGameDataKeySelection bounds selection cost before reading or
+// rendering game data. Duplicate fields could expand a small stored row.
+func ValidateGameDataKeySelection(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	if len(raw) > 8192 || strings.Count(raw, ",") >= 256 {
+		return fiber.NewError(fiber.StatusBadRequest, "too many game data keys")
+	}
+	seen := make(map[string]struct{})
+	for key := range strings.SplitSeq(raw, ",") {
+		if _, exists := seen[key]; exists {
+			return fiber.NewError(fiber.StatusBadRequest, "duplicate game data key")
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
 func compactFieldName(key string) string {
 	if len(key) == 0 {
 		return ""
@@ -84,6 +120,9 @@ func InvalidMysekaiRequestKey(requestKey string) (string, bool) {
 // fiber request) so callers can bound the game-data PostgreSQL read with a
 // deadline — Fiber v3 request contexts carry none.
 func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeySet map[string]struct{}, allowedKeys []string) (any, error) {
+	if err := ValidateGameDataKeySelection(requestKey); err != nil {
+		return nil, err
+	}
 	var keys []string
 	if requestKey == "" {
 		keys = allowedKeys
@@ -101,6 +140,9 @@ func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 // HandleMysekaiRequest takes an explicit ctx for the same reason as
 // HandleSuiteRequest: the caller owns the read deadline.
 func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
+	if err := ValidateGameDataKeySelection(requestKey); err != nil {
+		return nil, err
+	}
 	var keys []string
 	if requestKey != "" {
 		if key, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
