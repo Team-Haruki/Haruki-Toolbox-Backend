@@ -47,6 +47,7 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 		if sessionHeader := strings.TrimSpace(s.AuthProxySessionHeader); sessionHeader != "" {
 			if sessionID := strings.TrimSpace(c.Get(sessionHeader)); sessionID != "" {
 				c.Locals("authProxySessionID", sessionID)
+				c.Locals("kratosSessionID", sessionID)
 			}
 		}
 		return applyResolvedUserIdentity(proxyUserID, proxyIdentityID, proxyDisplayName, proxyEmailVerified)
@@ -67,6 +68,8 @@ func (s *SessionHandler) VerifySessionToken(c fiber.Ctx) error {
 	if err != nil {
 		return respondSessionVerifyError(c, err)
 	}
+	c.Locals("kratosSessionID", resolved.SessionID)
+	c.Locals("kratosSessionEmail", resolved.Email)
 	return applyResolvedUserIdentity(resolved.UserID, resolved.IdentityID, resolved.DisplayName, resolved.EmailVerified)
 }
 

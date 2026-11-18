@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,15 +24,16 @@ import (
 )
 
 type hydraIntrospectionResponse struct {
-	Active   bool   `json:"active"`
-	Subject  string `json:"sub"`
-	Username string `json:"username"`
-	ClientID string `json:"client_id"`
-	Scope    string `json:"scope"`
-	TokenUse string `json:"token_use"`
-	Exp      int64  `json:"exp"`
-	Nbf      int64  `json:"nbf"`
-	Iat      int64  `json:"iat"`
+	Active   bool     `json:"active"`
+	Subject  string   `json:"sub"`
+	Username string   `json:"username"`
+	ClientID string   `json:"client_id"`
+	Scope    string   `json:"scope"`
+	Audience []string `json:"aud"`
+	TokenUse string   `json:"token_use"`
+	Exp      int64    `json:"exp"`
+	Nbf      int64    `json:"nbf"`
+	Iat      int64    `json:"iat"`
 	// Ext is session.access_token of the consent; decoded leniently by
 	// introspectionDeviceLabel so an unexpected shape never fails bearer auth.
 	Ext jsontext.Value `json:"ext"`
@@ -54,6 +56,7 @@ type oauth2BearerAuthResult struct {
 	IdentityID  string
 	ClientID    string
 	Scopes      []string
+	Audience    []string
 	Exp         int64
 	Iat         int64
 	DeviceLabel string
@@ -130,14 +133,20 @@ func authenticateOAuth2BearerToken(c fiber.Ctx, hydraConfig *HydraConfig, db *po
 	if !ok {
 		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, Message: "missing or invalid authorization header"}
 	}
-	return authenticateOAuth2AccessToken(c.Context(), hydraConfig, db, tokenStr, requiredScope, clientActiveChecker)
+	result, failure := authenticateOAuth2AccessToken(c.Context(), hydraConfig, db, tokenStr, requiredScope, clientActiveChecker)
+	if failure != nil {
+		return nil, failure
+	}
+	if len(result.Audience) > 0 && (hydraConfig.resourceAudience == "" || !slices.Contains(result.Audience, hydraConfig.resourceAudience)) {
+		return nil, &oauth2BearerAuthFailure{Status: fiber.StatusUnauthorized, ErrorCode: "invalid_token", Message: "token audience does not include this API"}
+	}
+	return result, nil
 }
 
 // authenticateOAuth2AccessToken validates an access token through Hydra admin
 // introspection: active, an access token (not a refresh token), unexpired, a
 // subject that resolves to a local user who is not banned, and a client that
-// is still enabled. Bearer middleware and the internal introspection API share
-// it, so both accept exactly the same tokens.
+// is still enabled. Each caller also checks its own resource audience.
 func authenticateOAuth2AccessToken(ctx context.Context, hydraConfig *HydraConfig, db *postgresql.Client, tokenStr, requiredScope string, clientActiveChecker ClientActiveChecker) (*oauth2BearerAuthResult, *oauth2BearerAuthFailure) {
 	introspection, err := introspectHydraToken(ctx, hydraConfig, tokenStr)
 	if err != nil {
@@ -208,6 +217,7 @@ func authenticateOAuth2AccessToken(ctx context.Context, hydraConfig *HydraConfig
 		IdentityID:  resolvedIdentityID,
 		ClientID:    clientID,
 		Scopes:      scopes,
+		Audience:    introspection.Audience,
 		Exp:         introspection.Exp,
 		Iat:         introspection.Iat,
 		DeviceLabel: introspectionDeviceLabel(introspection.Ext),

@@ -39,6 +39,9 @@ func handleHydraTokenEndpoint(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 	proxy := handleHydraPublicProxy(hydraConfig, deviceHydraTokenEndpointPath)
 	shim := &deviceTokenShim{apiHelper: apiHelper, hydraConfig: hydraConfig, cfg: cfg, store: store}
 	return func(c fiber.Ctx) error {
+		if p := validateOAuthFormBody(c); p != nil {
+			return c.Status(p.Code).JSON(fiber.Map{"error": "invalid_request", "error_description": p.Message})
+		}
 		form, ok := parseDeviceForm(c)
 		if !ok || form.Get("grant_type") != HydraGrantTypeDeviceCode {
 			return proxy(c)

@@ -48,8 +48,10 @@ func (t *kratosRequestMetadataTransport) RoundTrip(req *http.Request) (*http.Res
 }
 
 type resolvedKratosSession struct {
+	SessionID     string
 	UserID        string
 	IdentityID    string
+	Email         string
 	DisplayName   *string
 	EmailVerified *bool
 }

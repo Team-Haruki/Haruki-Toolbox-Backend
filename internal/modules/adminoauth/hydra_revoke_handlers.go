@@ -97,7 +97,7 @@ func handleRevokeHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 				// failed subject. That is a failure, not a partial success. revocation.revoked
 				// cannot decide this, because it also counts a holder's empty second subject.
 				// Revoking is idempotent, so the admin can simply retry.
-				if len(revocation.records) > 0 && revocation.revokedAuthorizations() == 0 {
+				if !revocation.complete() && (revocation.revoked == 0 || len(revocation.records) > 0 && revocation.revokedAuthorizations() == 0) {
 					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeAuthorizationsFailed, map[string]any{"hydraMode": true, "revokedSubjects": revocation.revoked, "failedSubjects": len(revocation.failed)}))
 					return harukiAPIHelper.ErrorInternal(c, "failed to revoke oauth authorizations")
 				}

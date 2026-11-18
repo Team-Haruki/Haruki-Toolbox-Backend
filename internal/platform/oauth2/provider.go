@@ -17,27 +17,29 @@ const (
 // HydraConfigOptions is copied by NewHydraConfig. Callers may freely reuse or
 // mutate the input after construction without changing the resulting config.
 type HydraConfigOptions struct {
-	Provider       string
-	PublicURL      string
-	BrowserURL     string
-	AdminURL       string
-	ClientID       string
-	ClientSecret   string
-	RequestTimeout time.Duration
+	Provider         string
+	PublicURL        string
+	BrowserURL       string
+	AdminURL         string
+	ResourceAudience string
+	ClientID         string
+	ClientSecret     string
+	RequestTimeout   time.Duration
 }
 
 // HydraConfig is an immutable, process-scoped view of Hydra endpoints and
 // credentials. It is constructed by the composition root and explicitly passed
 // to consumers instead of reading mutable global application configuration.
 type HydraConfig struct {
-	provider       string
-	publicURL      string
-	browserURL     string
-	adminURL       string
-	clientID       string
-	clientSecret   string
-	requestTimeout time.Duration
-	httpClient     *http.Client
+	provider         string
+	publicURL        string
+	browserURL       string
+	adminURL         string
+	resourceAudience string
+	clientID         string
+	clientSecret     string
+	requestTimeout   time.Duration
+	httpClient       *http.Client
 	// noRedirectClient never follows redirects and keeps no cookies: the
 	// device-approval chain inspects every Hydra Location itself and carries
 	// its own per-approval cookie jar. It does not keep connections alive
@@ -62,14 +64,15 @@ func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
 		timeout = defaultHydraRequestTimeout
 	}
 	return &HydraConfig{
-		provider:       provider,
-		publicURL:      publicURL,
-		browserURL:     browserURL,
-		adminURL:       strings.TrimSpace(options.AdminURL),
-		clientID:       strings.TrimSpace(options.ClientID),
-		clientSecret:   options.ClientSecret,
-		requestTimeout: timeout,
-		httpClient:     &http.Client{Timeout: timeout},
+		provider:         provider,
+		publicURL:        publicURL,
+		browserURL:       browserURL,
+		adminURL:         strings.TrimSpace(options.AdminURL),
+		resourceAudience: strings.TrimRight(strings.TrimSpace(options.ResourceAudience), "/"),
+		clientID:         strings.TrimSpace(options.ClientID),
+		clientSecret:     options.ClientSecret,
+		requestTimeout:   timeout,
+		httpClient:       &http.Client{Timeout: timeout},
 		noRedirectClient: &http.Client{
 			Timeout:   timeout,
 			Transport: newNoKeepAliveTransport(),

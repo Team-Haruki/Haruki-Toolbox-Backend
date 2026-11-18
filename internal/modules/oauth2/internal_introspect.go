@@ -242,10 +242,8 @@ func cachedClientActiveChecker(hydraConfig *harukiOAuth2.HydraConfig) harukiOAut
 // internalIntrospectionResponse is the active answer, shaped for an RFC 7662
 // client. It never carries a username, email or raw Hydra field: sub is the
 // local users.id (the same value as user_id), not Hydra's subject, and aud is
-// the configured oauth2.internal_api.audience. The endpoint vouches for the
-// token to its single internal caller, so aud names that caller rather than
-// echoing the audience Hydra granted (usually empty). iss is omitted: an
-// RFC 7662 client checks it only when present.
+// the intersection of the caller's configured audiences and any explicit
+// token restriction. Unrestricted tokens use the caller's configured list.
 type internalIntrospectionResponse struct {
 	Active      bool     `json:"active"`
 	Sub         string   `json:"sub"`
@@ -283,12 +281,24 @@ func handleInternalOAuth2Introspect(hydraConfig *harukiOAuth2.HydraConfig, cfg I
 		if !result.Active {
 			return c.JSON(fiber.Map{"active": false})
 		}
+		aud := cfg.audience
+		if len(result.Audience) > 0 {
+			aud = nil
+			for _, accepted := range cfg.audience {
+				if slices.Contains(result.Audience, accepted) {
+					aud = append(aud, accepted)
+				}
+			}
+			if len(aud) == 0 {
+				return c.JSON(fiber.Map{"active": false})
+			}
+		}
 		return c.JSON(internalIntrospectionResponse{
 			Active:      true,
 			Sub:         result.UserID,
 			UserID:      result.UserID,
 			ClientID:    result.ClientID,
-			Aud:         cfg.audience,
+			Aud:         aud,
 			Scope:       strings.Join(result.Scopes, " "),
 			TokenType:   internalIntrospectTokenType,
 			Exp:         result.Exp,

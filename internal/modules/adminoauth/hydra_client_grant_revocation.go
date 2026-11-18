@@ -18,43 +18,37 @@ import (
 // by subject.
 type hydraClientGrantRevocation struct {
 	// records are the client's consent sessions held by local users.
-	records []hydraClientAuthorizationRecord
+	records    []hydraClientAuthorizationRecord
+	recordsErr error
 	// revoked counts the subjects whose revocation Hydra accepted, including a
-	// user's second subject when it held nothing.
+	// subject when it held nothing.
 	revoked int
 	// failed lists the subjects whose revocation failed.
 	failed []string
+	// Local users cover subjects omitted by the consent-session listing.
+	users []*postgresql.User
 }
 
-// revokeHydraClientGrantsPerSubject revokes every grant of clientID. Hydra v25.4.0
-// answers a client-wide revoke (client=X&all=true) with 400, so the subjects come
-// from collectHydraClientAuthorizationRecords. Both subjects of each user found are
-// revoked: a record only names the preferred subject, but the session may sit under
-// the fallback users.id. Revoking a consent session invalidates its access and
-// refresh tokens.
+// Hydra v25.4.0 requires a subject for consent revocation by client. Revoke
+// directly for both subjects of every local user: the consent list omits some
+// grants whose refresh tokens are still valid, so it is for counts only.
+// Subjects with no local user are outside this sweep.
 //
-// Two kinds of grant cannot be found this way: those of subjects without a local
-// user, and those of users whose every flow for the client is hidden from Hydra's
-// consent-session list (consent_skip=TRUE, or a remember_for window that has
-// expired). Once the client is disabled, the bearer middleware refuses their
-// tokens, but they work again if the client is re-enabled. Revoking a user who is
-// found also removes that user's hidden flows, because Hydra's subject+client
-// revoke does not filter them.
-//
-// The error means the enumeration failed and nothing was revoked. Per-subject
-// failures are reported in failed instead.
+// A local user lookup failure prevents the sweep. Consent counts are best effort
+// and a failed consent listing does not prevent the revocations.
 func revokeHydraClientGrantsPerSubject(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, clientID string) (hydraClientGrantRevocation, error) {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {
 		// An empty client ID would revoke every client of each subject.
 		return hydraClientGrantRevocation{}, errors.New("client id is required")
 	}
-	records, err := collectHydraClientAuthorizationRecords(ctx, apiHelper, hydraConfig, clientID)
+	users, err := loadHydraAuthorizationUsers(ctx, apiHelper.DBManager.DB)
 	if err != nil {
 		return hydraClientGrantRevocation{}, err
 	}
-	result := hydraClientGrantRevocation{records: records}
-	subjects := hydraClientAuthorizationSubjects(records)
+	records, recordsErr := collectHydraClientAuthorizationRecordsForUsers(ctx, hydraConfig, clientID, users)
+	result := hydraClientGrantRevocation{records: records, recordsErr: recordsErr, users: users}
+	subjects := hydraClientAuthorizationSubjects(users)
 	if len(subjects) == 0 {
 		return result, nil
 	}
@@ -65,16 +59,11 @@ func revokeHydraClientGrantsPerSubject(ctx context.Context, apiHelper *harukiAPI
 	return result, nil
 }
 
-// hydraClientAuthorizationSubjects returns every Hydra subject of the users behind
-// records, de-duplicated.
-func hydraClientAuthorizationSubjects(records []hydraClientAuthorizationRecord) []string {
-	subjects := make([]string, 0, len(records))
-	seen := make(map[string]struct{}, len(records))
-	for _, record := range records {
-		if record.User == nil {
-			continue
-		}
-		for _, subject := range oauth2Module.HydraSubjectsForUser(record.User.ID, record.User.KratosIdentityID) {
+func hydraClientAuthorizationSubjects(users []*postgresql.User) []string {
+	subjects := make([]string, 0, len(users))
+	seen := make(map[string]struct{}, len(users))
+	for _, user := range users {
+		for _, subject := range oauth2Module.HydraSubjectsForUser(user.ID, user.KratosIdentityID) {
 			if _, ok := seen[subject]; ok {
 				continue
 			}
@@ -122,12 +111,17 @@ func (r hydraClientGrantRevocation) failedSubjectsVisibleTo(actorUserID, actorRo
 		return visible
 	}
 	owners := make(map[string]*postgresql.User)
-	for _, record := range r.records {
-		if record.User == nil {
-			continue
+	users := r.users
+	if len(users) == 0 {
+		for _, record := range r.records {
+			if record.User != nil {
+				users = append(users, record.User)
+			}
 		}
-		for _, subject := range oauth2Module.HydraSubjectsForUser(record.User.ID, record.User.KratosIdentityID) {
-			owners[subject] = record.User
+	}
+	for _, user := range users {
+		for _, subject := range oauth2Module.HydraSubjectsForUser(user.ID, user.KratosIdentityID) {
+			owners[subject] = user
 		}
 	}
 	for _, subject := range r.failed {

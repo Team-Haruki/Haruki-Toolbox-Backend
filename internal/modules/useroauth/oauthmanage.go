@@ -96,18 +96,12 @@ func handleRevokeOAuthAuthorization(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		defer func() {
 			userCoreModule.WriteUserAuditLog(c, apiHelper, "user.oauth.authorization.revoke", result, userID, map[string]any{"reason": reason, "clientID": clientID})
 		}()
-		if strings.TrimSpace(clientID) != "" {
-			exists, err := oauth2Module.HydraConsentSessionExistsForSubjects(ctx, hydraConfig, hydraSubjects, clientID)
-			if err != nil {
-				harukiLogger.Errorf("Failed to query hydra oauth consent sessions before revoke: %v", err)
-				reason = "query_client_failed"
-				return harukiAPIHelper.ErrorInternal(c, "failed to query client")
-			}
-			if !exists {
-				reason = "client_not_found"
-				return harukiAPIHelper.ErrorNotFound(c, "client not found")
-			}
+		if clientID != "" && strings.TrimSpace(clientID) == "" {
+			reason = "invalid_client_id"
+			return harukiAPIHelper.ErrorBadRequest(c, "invalid client id")
 		}
+		// Hydra's consent list omits some valid grants. Revoking directly is
+		// safe because both candidate subjects come from the current session.
 		if _, _, err := oauth2Module.RevokeHydraConsentSessionsForSubjects(ctx, hydraConfig, clientID, hydraSubjects); err != nil {
 			harukiLogger.Errorf("Failed to revoke hydra oauth consent sessions: %v", err)
 			reason = "revoke_authorization_failed"

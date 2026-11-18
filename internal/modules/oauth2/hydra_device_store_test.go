@@ -182,6 +182,58 @@ func TestDeviceClientCacheIsBounded(t *testing.T) {
 	}
 }
 
+func TestDeviceClientLookupsShareBoundedAdmission(t *testing.T) {
+	cache := newDeviceClientCache(time.Now)
+	entered := make(chan string, deviceClientMaxLookups)
+	finished := make(chan error, deviceClientMaxLookups)
+	release := make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	lookup := func(ctx context.Context, id string) (*HydraOAuthClient, error) {
+		entered <- id
+		select {
+		case <-release:
+			return &HydraOAuthClient{ClientID: id}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	for i := range deviceClientMaxLookups {
+		go func() {
+			_, err := cache.get(ctx, lookup, strconv.Itoa(i))
+			finished <- err
+		}()
+	}
+	for range deviceClientMaxLookups {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatal("Hydra lookup did not start")
+		}
+	}
+	unexpectedLookup := func(context.Context, string) (*HydraOAuthClient, error) {
+		t.Error("issued an extra Hydra lookup")
+		return nil, nil
+	}
+	if _, err := cache.get(ctx, unexpectedLookup, "extra"); !errors.Is(err, errDeviceClientLookupBusy) {
+		t.Fatalf("unexpected miss error: %v", err)
+	}
+	waitCtx, cancelWait := context.WithCancel(ctx)
+	cancelWait()
+	if _, err := cache.get(waitCtx, unexpectedLookup, "0"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("same-client waiter did not join existing lookup: %v", err)
+	}
+	close(release)
+	for range deviceClientMaxLookups {
+		if err := <-finished; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if client, err := cache.get(ctx, unexpectedLookup, "0"); err != nil || client == nil || client.ClientID != "0" {
+		t.Fatalf("cached client = %v, %v", client, err)
+	}
+}
+
 func TestDeviceFlowReaper(t *testing.T) {
 	env := newDeviceTestEnv(t)
 	reaper := &deviceFlowReaper{store: env.store, hydraConfig: env.hydraConfig, logger: env.logger, grace: time.Minute}

@@ -31,19 +31,32 @@ func handleHydraAuthorizeRedirect(hydraConfig *harukiOAuth2.HydraConfig) fiber.H
 
 func handleHydraPublicProxy(hydraConfig *harukiOAuth2.HydraConfig, endpointPath string) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		if p := validateOAuthFormBody(c); p != nil {
+			return c.Status(p.Code).JSON(fiber.Map{"error": "invalid_request", "error_description": p.Message})
+		}
 		header := http.Header{}
 		for _, name := range []string{"Authorization", "Content-Type", "Accept"} {
 			if value := strings.TrimSpace(c.Get(name)); value != "" {
 				header.Set(name, value)
 			}
 		}
-		resp, failure, err := forwardHydraPublicRequest(c.Context(), hydraConfig, c.Method(), endpointPath, string(c.Request().URI().QueryString()), c.Body(), header)
+		resp, failure, err := forwardHydraPublicRequest(c.Context(), hydraConfig, c.Method(), endpointPath, string(c.Request().URI().QueryString()), c.Request().Body(), header)
 		if err != nil {
 			harukiLogger.Errorf("Hydra public proxy to %s failed (%s): %v", endpointPath, failure, err)
 			return harukiAPIHelper.ErrorInternal(c, failure)
 		}
 		return writeHydraPublicResponse(c, resp)
 	}
+}
+
+func validateOAuthFormBody(c fiber.Ctx) *fiber.Error {
+	if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		return fiber.NewError(fiber.StatusUnsupportedMediaType, "compressed OAuth request bodies are not supported")
+	}
+	if len(c.Request().Body()) > 64<<10 {
+		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "OAuth request body exceeds 64 KiB")
+	}
+	return nil
 }
 
 // hydraPublicResponse is a buffered Hydra public-endpoint response.

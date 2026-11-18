@@ -71,5 +71,6 @@ func (s *SessionHandler) verifyAuthProxySession(ctx context.Context, c fiber.Ctx
 		return "", "", displayNamePtr, emailVerified, true, fmt.Errorf("%w: auth proxy user id header mismatch", errSessionUnauthorized)
 	}
 	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr, profile)
+	c.Locals("kratosSessionEmail", email)
 	return userID, identityID, displayNamePtr, emailVerified, true, nil
 }

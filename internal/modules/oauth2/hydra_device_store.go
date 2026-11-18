@@ -521,21 +521,35 @@ func (s *deviceFlowStore) requeueUnredeemed(ctx context.Context, flowID, consent
 const (
 	deviceClientCacheTTL        = 5 * time.Second
 	deviceClientCacheMaxEntries = 4096
+	deviceClientMaxLookups      = 8
 )
+
+var errDeviceClientLookupBusy = errors.New("device client lookups are busy")
 
 type deviceClientCacheEntry struct {
 	client *HydraOAuthClient
 	at     time.Time
 }
 
+type deviceClientLookup struct {
+	done   chan struct{}
+	client *HydraOAuthClient
+	err    error
+}
+
 type deviceClientCache struct {
-	mu      sync.Mutex
-	now     func() time.Time
-	entries map[string]deviceClientCacheEntry
+	mu       sync.Mutex
+	now      func() time.Time
+	entries  map[string]deviceClientCacheEntry
+	inflight map[string]*deviceClientLookup
 }
 
 func newDeviceClientCache(now func() time.Time) *deviceClientCache {
-	return &deviceClientCache{now: now, entries: make(map[string]deviceClientCacheEntry)}
+	return &deviceClientCache{
+		now:      now,
+		entries:  make(map[string]deviceClientCacheEntry),
+		inflight: make(map[string]*deviceClientLookup),
+	}
 }
 
 // get returns the client, nil when Hydra answered 404, or the lookup error.
@@ -544,19 +558,45 @@ func (c *deviceClientCache) get(ctx context.Context, lookup func(context.Context
 	now := c.now()
 	c.mu.Lock()
 	entry, ok := c.entries[clientID]
-	c.mu.Unlock()
 	if ok && now.Sub(entry.at) < deviceClientCacheTTL {
+		c.mu.Unlock()
 		return entry.client, nil
 	}
-	client, err := lookup(ctx, clientID)
-	if err != nil {
-		if !IsHydraNotFoundError(err) {
-			return nil, err
+	if pending := c.inflight[clientID]; pending != nil {
+		c.mu.Unlock()
+		select {
+		case <-pending.done:
+			return pending.client, pending.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
-		client = nil
 	}
+	if len(c.inflight) >= deviceClientMaxLookups {
+		c.mu.Unlock()
+		return nil, errDeviceClientLookupBusy
+	}
+	pending := &deviceClientLookup{done: make(chan struct{})}
+	c.inflight[clientID] = pending
+	c.mu.Unlock()
+
+	client, err := lookup(ctx, clientID)
+	if IsHydraNotFoundError(err) {
+		client, err = nil, nil
+	}
+	now = c.now()
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	pending.client, pending.err = client, err
+	delete(c.inflight, clientID)
+	close(pending.done)
+	if err == nil {
+		c.put(clientID, client, now)
+	}
+	c.mu.Unlock()
+	return client, err
+}
+
+// put stores successful and negative results. The caller holds c.mu.
+func (c *deviceClientCache) put(clientID string, client *HydraOAuthClient, now time.Time) {
 	if len(c.entries) >= deviceClientCacheMaxEntries {
 		for id, cached := range c.entries {
 			if now.Sub(cached.at) >= deviceClientCacheTTL {
@@ -569,5 +609,4 @@ func (c *deviceClientCache) get(ctx context.Context, lookup func(context.Context
 	if len(c.entries) < deviceClientCacheMaxEntries {
 		c.entries[clientID] = deviceClientCacheEntry{client: client, at: now}
 	}
-	return client, nil
 }

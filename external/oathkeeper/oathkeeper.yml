@@ -72,7 +72,7 @@ mutators:
         X-Kratos-Identity-Id: "{{ print .Subject }}"
         X-User-Name: "{{ print .Extra.identity.traits.name }}"
         X-User-Email: "{{ print .Extra.identity.traits.email }}"
-        X-User-Email-Verified: "{{ if gt (len .Extra.identity.verifiable_addresses) 0 }}{{ (index .Extra.identity.verifiable_addresses 0).verified }}{{ else }}false{{ end }}"
+        X-User-Email-Verified: '{{ $email := .Extra.identity.traits.email }}{{ $verified := false }}{{ range .Extra.identity.verifiable_addresses }}{{ if and (eq .value $email) .verified }}{{ $verified = true }}{{ end }}{{ end }}{{ print $verified }}'
         # Bind the proxy session marker to the real Kratos session id (extra_from
         # is "@this", so .Extra.id is the whoami session id) so the backend's admin
         # reauth is keyed to a proxy-vouched session, not a client-supplied value.

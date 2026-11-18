@@ -41,7 +41,7 @@ https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration
 支持 `authorization_code` + PKCE（`S256` 与 `plain`），签名算法 RS256。
 
 **Token 端点的两个地址都能用。** Discovery 的 `token_endpoint` 是 `https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token`：
-它是 Haruki 后端的令牌端点兼容层，授权码与刷新令牌请求原样转发给 Hydra、响应原样返回，只额外处理设备授权许可。
+它是 Haruki 后端的令牌端点兼容层。未压缩且不超过 64 KiB 的授权码与刷新令牌请求原样转发给 Hydra，响应原样返回。兼容层也处理设备授权许可。
 以前写死在配置里的 `/oauth2/token` 仍然可用，不需要改；`private_key_jwt` 的 `aud` 写两个地址中的任何一个都会被接受。
 Issuer、`authorization_endpoint`、`jwks_uri` 与 `userinfo_endpoint` 不变。
 `/.well-known/oauth-authorization-server`（RFC 8414）与上面的 Discovery 公布同样的 `token_endpoint` 和
@@ -107,7 +107,7 @@ uid    ← Haruki 本地用户 ID 的扩展 claim，仅为兼容既有 Toolbox A
 | --- | --- |
 | `openid` | `sub` |
 | `profile` | 增加 `name` |
-| `email` | 增加 `email`、`email_verified` |
+| `email` | 增加 `email`、`email_verified`。当前会话验证过的邮箱与发出的 `email` 一致时才发出 `email_verified: true` |
 
 授权页目前不能逐项勾选，用户只能整体允许或拒绝；但没有邮箱的账号即使授权了 `email` 也不会带 `email` claim，所以**你的代码必须容忍 `name` 或 `email` 缺失**。
 

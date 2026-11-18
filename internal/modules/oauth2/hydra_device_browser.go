@@ -601,6 +601,7 @@ func (h *deviceBrowserHandlers) handleDeviceApprove(c fiber.Ctx) error {
 	}
 
 	scopes := normalizeDeviceScope(flow.Scope)
+	verifiedEmail := userCoreModule.CurrentUserVerifiedEmail(c)
 	chain := &deviceApprovalChain{
 		hydra:           h.hydraConfig,
 		cfg:             h.cfg,
@@ -620,7 +621,7 @@ func (h *deviceBrowserHandlers) handleDeviceApprove(c fiber.Ctx) error {
 			UserID:        dbUser.ID,
 			UserName:      dbUser.Name,
 			UserEmail:     dbUser.Email,
-			EmailVerified: userCoreModule.IsCurrentUserEmailVerified(c),
+			EmailVerified: verifiedEmail != "" && strings.EqualFold(strings.TrimSpace(dbUser.Email), verifiedEmail),
 			Device:        &hydraConsentDeviceContext{FlowID: flowID, Label: label, LabelSource: labelSource},
 		}),
 	}

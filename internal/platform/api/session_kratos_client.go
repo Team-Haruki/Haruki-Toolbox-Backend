@@ -149,8 +149,10 @@ func (s *SessionHandler) resolveKratosSession(ctx context.Context, sessionToken 
 	}
 	s.syncResolvedUserProfile(ctx, userID, identityID, email, displayNamePtr, profile)
 	return &resolvedKratosSession{
+		SessionID:     strings.TrimSpace(whoami.ID),
 		UserID:        userID,
 		IdentityID:    identityID,
+		Email:         email,
 		DisplayName:   displayNamePtr,
 		EmailVerified: emailVerified,
 	}, nil

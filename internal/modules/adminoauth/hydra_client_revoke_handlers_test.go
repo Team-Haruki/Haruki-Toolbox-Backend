@@ -39,13 +39,13 @@ func TestDisableClientRevokesPerSubject(t *testing.T) {
 	}
 	var resp adminOAuthClientActiveResponse
 	decodeUpdatedData(t, envelope, &resp)
-	if resp.Active || resp.RevokedSubjects != 4 || !reflect.DeepEqual(resp.FailedSubjects, []string{"u-3"}) || resp.RevocationComplete {
-		t.Fatalf("response = %#v, want inactive, 4 revoked, [u-3] failed, incomplete", resp)
+	if resp.Active || resp.RevokedSubjects != 6 || !reflect.DeepEqual(resp.FailedSubjects, []string{"u-3"}) || resp.RevocationComplete {
+		t.Fatalf("response = %#v, want inactive, 6 revocations accepted, [u-3] failed, incomplete", resp)
 	}
 
 	requests := hydra.takeRequests()
-	// One subject+client call per subject, both subjects of each holder included.
-	if got, want := consentRevocations(t, requests), []string{"kratos-1 bot-1", "kratos-2 bot-1", "u-1 bot-1", "u-2 bot-1", "u-3 bot-1"}; !reflect.DeepEqual(got, want) {
+	// Include both subjects of users absent from the client consent listing.
+	if got, want := consentRevocations(t, requests), []string{"kratos-1 bot-1", "kratos-2 bot-1", "kratos-4 bot-1", "u-1 bot-1", "u-2 bot-1", "u-3 bot-1", "u-4 bot-1"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("consent revocations = %v, want %v", got, want)
 	}
 	// The access-token delete is only a supplement and comes last.
@@ -57,7 +57,7 @@ func TestDisableClientRevokesPerSubject(t *testing.T) {
 		t.Fatalf("haruki.active = %#v, want false", active)
 	}
 	assertLatestAuditMetadata(t, helper, adminAuditActionOAuthClientActiveUpdate, map[string]any{
-		"active": false, "revokedSubjects": float64(4), "failedSubjects": float64(1), "revocationComplete": false,
+		"active": false, "revokedSubjects": float64(6), "failedSubjects": float64(1), "revocationComplete": false,
 	})
 
 	// Enabling revokes nothing.
@@ -81,11 +81,14 @@ func TestDisableClientNeverFailsAfterMetadataPatch(t *testing.T) {
 		breakHydra      func(*fakeHydraClients)
 		wantRevocations []string
 		wantAuditFlag   string
+		wantComplete    bool
 	}{
 		{
-			name:          "grants cannot be listed",
-			breakHydra:    func(f *fakeHydraClients) { f.failConsentList = true },
-			wantAuditFlag: "queryAuthorizationsFailed",
+			name:            "grants cannot be listed",
+			breakHydra:      func(f *fakeHydraClients) { f.failConsentList = true },
+			wantRevocations: []string{"kratos-1 bot-1", "u-1 bot-1"},
+			wantAuditFlag:   "queryAuthorizationsFailed",
+			wantComplete:    true,
 		},
 		{
 			name:            "access tokens cannot be deleted",
@@ -110,8 +113,8 @@ func TestDisableClientNeverFailsAfterMetadataPatch(t *testing.T) {
 			}
 			var resp adminOAuthClientActiveResponse
 			decodeUpdatedData(t, envelope, &resp)
-			if resp.Active || resp.RevocationComplete || resp.FailedSubjects == nil {
-				t.Fatalf("response = %#v, want inactive and incomplete with a non-nil failedSubjects", resp)
+			if resp.Active || resp.RevocationComplete != tc.wantComplete || resp.FailedSubjects == nil {
+				t.Fatalf("response = %#v, want inactive, complete=%t, with a non-nil failedSubjects", resp, tc.wantComplete)
 			}
 			requests := hydra.takeRequests()
 			if got := consentRevocations(t, requests); !slices.Equal(got, tc.wantRevocations) {
@@ -120,7 +123,8 @@ func TestDisableClientNeverFailsAfterMetadataPatch(t *testing.T) {
 			if !slices.ContainsFunc(requests, func(r fakeHydraRequest) bool { return r.Path == "/admin/oauth2/tokens" }) {
 				t.Fatalf("requests = %v, want the access-token delete attempted", requestLines(requests))
 			}
-			assertLatestAuditMetadata(t, helper, adminAuditActionOAuthClientActiveUpdate, map[string]any{"revocationComplete": false, tc.wantAuditFlag: true})
+			assertConsentClients(t, hydra, map[string][]string{"kratos-1": {}})
+			assertLatestAuditMetadata(t, helper, adminAuditActionOAuthClientActiveUpdate, map[string]any{"revocationComplete": tc.wantComplete, tc.wantAuditFlag: true})
 		})
 	}
 }
@@ -156,7 +160,7 @@ func TestDisableClientHidesSuperAdminSubjectsFromPlainAdmin(t *testing.T) {
 }
 
 func TestAdminRevokeAllPerSubject(t *testing.T) {
-	allSubjects := []string{"kratos-1 bot-1", "kratos-2 bot-1", "u-1 bot-1", "u-2 bot-1", "u-3 bot-1"}
+	allSubjects := []string{"kratos-1 bot-1", "kratos-2 bot-1", "kratos-4 bot-1", "u-1 bot-1", "u-2 bot-1", "u-3 bot-1", "u-4 bot-1"}
 
 	t.Run("every subject revoked", func(t *testing.T) {
 		hydra := newFakeHydraClients(t, confidentialBotClient)
@@ -170,7 +174,7 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		}
 		var resp adminOAuthClientRevokeResponse
 		decodeUpdatedData(t, envelope, &resp)
-		if resp.RevokedSubjects != 5 || len(resp.FailedSubjects) != 0 || !resp.RevocationComplete || resp.RevokedAuthorizations != 3 || !resp.RevokeTokens {
+		if resp.RevokedSubjects != 7 || len(resp.FailedSubjects) != 0 || !resp.RevocationComplete || resp.RevokedAuthorizations != 3 || !resp.RevokeTokens {
 			t.Fatalf("response = %#v", resp)
 		}
 		if !bytes.Contains(envelope.UpdatedData, []byte(`"failedSubjects":[]`)) {
@@ -185,7 +189,7 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		}
 		assertConsentClients(t, hydra, map[string][]string{"kratos-1": {}, "u-2": {}, "u-3": {}, "kratos-4": {"other-1"}})
 		assertLatestAuditMetadata(t, helper, adminAuditActionOAuthClientRevoke, map[string]any{
-			"revokedSubjects": float64(5), "failedSubjects": float64(0), "revocationComplete": true, "revokedAuthorizations": float64(3),
+			"revokedSubjects": float64(7), "failedSubjects": float64(0), "revocationComplete": true, "revokedAuthorizations": float64(3),
 		})
 	})
 
@@ -203,7 +207,7 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		var resp adminOAuthClientRevokeResponse
 		decodeUpdatedData(t, envelope, &resp)
 		// u-2's legacy session stays, so only the other two authorizations count.
-		if resp.RevokedSubjects != 4 || !reflect.DeepEqual(resp.FailedSubjects, []string{"u-2"}) || resp.RevocationComplete || resp.RevokedAuthorizations != 2 {
+		if resp.RevokedSubjects != 6 || !reflect.DeepEqual(resp.FailedSubjects, []string{"u-2"}) || resp.RevocationComplete || resp.RevokedAuthorizations != 2 {
 			t.Fatalf("response = %#v", resp)
 		}
 		if got := consentRevocations(t, hydra.takeRequests()); !reflect.DeepEqual(got, allSubjects) {
@@ -216,7 +220,7 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		hydra := newFakeHydraClients(t, confidentialBotClient)
 		helper := newAdminOAuthTestHelper(t)
 		seedBotGrantHolders(t, helper, hydra)
-		hydra.failRevoke("kratos-1", "u-1", "kratos-2", "u-2", "u-3")
+		hydra.failRevoke("kratos-1", "u-1", "kratos-2", "u-2", "u-3", "kratos-4", "u-4")
 		app := newHydraClientHandlerTestAppAs(helper, hydra.config, "super-admin-1", adminCoreModule.RoleSuperAdmin)
 
 		status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/revoke", "")
@@ -231,7 +235,7 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 			t.Fatalf("requests = %v, want no token delete after a failed revoke", requestLines(requests))
 		}
 		assertLatestAuditRow(t, helper, adminAuditActionOAuthClientRevoke, systemlog.ResultFailure, map[string]any{
-			"reason": adminFailureReasonRevokeAuthorizationsFailed, "revokedSubjects": float64(0), "failedSubjects": float64(5),
+			"reason": adminFailureReasonRevokeAuthorizationsFailed, "revokedSubjects": float64(0), "failedSubjects": float64(7),
 		})
 	})
 
@@ -275,12 +279,12 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		}
 		var resp adminOAuthClientRevokeResponse
 		decodeUpdatedData(t, envelope, &resp)
-		if resp.RevokedSubjects != 0 || resp.RevokedAuthorizations != 0 || len(resp.FailedSubjects) != 0 || !resp.RevocationComplete {
+		if resp.RevokedSubjects != 2 || resp.RevokedAuthorizations != 0 || len(resp.FailedSubjects) != 0 || !resp.RevocationComplete {
 			t.Fatalf("response = %#v", resp)
 		}
 		requests := hydra.takeRequests()
-		if got := consentRevocations(t, requests); len(got) != 0 {
-			t.Fatalf("consent revocations = %v, want none", got)
+		if got, want := consentRevocations(t, requests), []string{"kratos-4 bot-1", "u-4 bot-1"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("consent revocations = %v, want %v", got, want)
 		}
 		if last := requests[len(requests)-1]; last.Path != "/admin/oauth2/tokens" || last.Query.Get("client_id") != "bot-1" {
 			t.Fatalf("last request = %s %s, want the access-token delete", last.Method, last.Path)
