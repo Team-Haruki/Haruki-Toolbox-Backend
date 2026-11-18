@@ -139,10 +139,8 @@ func (s *Store) selectWithout(omit []string) (quoted []string, plain []string) {
 
 // fetchSelected runs the row read for an already-resolved column list.
 func (s *Store) fetchSelected(ctx context.Context, queryRow func(context.Context, string, ...any) pgx.Row, userID int64, server string, code int16, cols, entries []string) (*Row, error) {
-	sizes := make([]string, len(cols))
 	guarded := make([]string, len(cols))
 	for i, col := range cols {
-		sizes[i] = "COALESCE(octet_length(" + col + "::text),0)::bigint"
 		guarded[i] = "CASE WHEN NOT oversized THEN " + col + " END"
 	}
 	sql := fmt.Sprintf(
@@ -150,7 +148,7 @@ func (s *Store) fetchSelected(ctx context.Context, queryRow func(context.Context
 		SELECT %s, oversized, %s FROM measured`,
 		catalog.QuoteIdent(catalog.ColUploadTime),
 		strings.Join(cols, ", "),
-		strings.Join(sizes, " + "),
+		storedJSONBytesSQL(cols),
 		catalog.QuoteIdent(s.cat.Table),
 		catalog.QuoteIdent(catalog.ColUserID),
 		catalog.QuoteIdent(catalog.ColServer),
@@ -199,6 +197,14 @@ func (s *Store) fetchSelected(ctx context.Context, queryRow func(context.Context
 		row.byColumn[entries[i]] = raw[i]
 	}
 	return row, nil
+}
+
+func storedJSONBytesSQL(quotedColumns []string) string {
+	sizes := make([]string, len(quotedColumns))
+	for i, col := range quotedColumns {
+		sizes[i] = "COALESCE(octet_length(" + col + "::text),0)::bigint"
+	}
+	return strings.Join(sizes, " + ")
 }
 
 // selectFor returns the quoted column list and, positionally, the plain column

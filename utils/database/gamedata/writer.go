@@ -70,6 +70,8 @@ type WriteStats struct {
 	UnchangedBytes int
 }
 
+var errStoredMysekaiRowTooLarge = errors.New("stored Mysekai row exceeds the upload byte limit")
+
 // Write persists one upload.
 func (s *Store) Write(ctx context.Context, userID int64, server string, data map[string]any, mode WriteMode, limits Limits) (WriteStats, error) {
 	var stats WriteStats
@@ -106,9 +108,9 @@ func (s *Store) Write(ctx context.Context, userID int64, server string, data map
 	case WriteMigrate:
 		return stats, s.writeReplace(ctx, userID, code, enc)
 	case WriteBirthdayParty:
-		return stats, s.writeBirthdayParty(ctx, userID, code, enc)
+		return stats, s.writeBirthdayParty(ctx, userID, code, enc, limits.MaxRowBytes)
 	default:
-		return stats, s.writeMysekai(ctx, userID, code, enc)
+		return stats, s.writeMysekai(ctx, userID, code, enc, limits.MaxRowBytes)
 	}
 }
 
@@ -312,13 +314,9 @@ func (e *encoded) setColumn(col string, b []byte) {
 // the upload stopped carrying is gone there. Merging those children here made
 // the row a union over every upload the player ever sent, which showed up as
 // PostgreSQL reporting resources MongoDB had already dropped.
-func (s *Store) writeMysekai(ctx context.Context, userID int64, code int16, enc *encoded) error {
+func (s *Store) writeMysekai(ctx context.Context, userID int64, code int16, enc *encoded, maxRowBytes int) error {
 	sql, args := s.upsertStatement(userID, code, enc, clearFlattened)
-	_, err := s.pool.Exec(ctx, sql, args...)
-	if err != nil {
-		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
-	}
-	return nil
+	return s.writeBoundedMysekaiRow(ctx, s.pool.Begin, userID, code, maxRowBytes, sql, args)
 }
 
 // writeReplace overwrites every data column, clearing the ones the source did
@@ -333,7 +331,7 @@ func (s *Store) writeReplace(ctx context.Context, userID int64, code int16, enc 
 }
 
 // writeBirthdayParty writes the three columns a birthday-party payload owns.
-func (s *Store) writeBirthdayParty(ctx context.Context, userID int64, code int16, enc *encoded) error {
+func (s *Store) writeBirthdayParty(ctx context.Context, userID int64, code int16, enc *encoded, maxRowBytes int) error {
 	e, place := s.cat.Resolve(s.cat.FlattenKey + ".userMysekaiHarvestMaps")
 	if place != catalog.PlaceColumn {
 		return fmt.Errorf("gamedata: no column for the birthday-party harvest map")
@@ -353,10 +351,33 @@ func (s *Store) writeBirthdayParty(ctx context.Context, userID int64, code int16
 	if enc.hasUpload {
 		ut = *enc.uploadTime
 	}
-	if _, err := s.pool.Exec(ctx, sql, userID, code, ut, harvest); err != nil {
-		return fmt.Errorf("gamedata: birthday party write: %w", err)
+	return s.writeBoundedMysekaiRow(ctx, s.pool.Begin, userID, code, maxRowBytes, sql, []any{userID, code, ut, harvest})
+}
+
+func (s *Store) writeBoundedMysekaiRow(ctx context.Context, begin func(context.Context) (pgx.Tx, error), userID int64, code int16, maxRowBytes int, upsert string, args []any) error {
+	tx, err := begin(ctx)
+	if err != nil {
+		return fmt.Errorf("gamedata: begin Mysekai write: %w", err)
 	}
-	return nil
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, upsert, args...); err != nil {
+		return fmt.Errorf("gamedata: upsert %s: %w", s.cat.Table, err)
+	}
+	if maxRowBytes > 0 {
+		// The upsert holds the row lock until commit. Measure the resulting
+		// JSON byte total in PostgreSQL without reading retained values into Go.
+		cols, _ := s.selectWithout(nil)
+		query := fmt.Sprintf("SELECT %s FROM %s WHERE %s = $1 AND %s = $2",
+			storedJSONBytesSQL(cols), catalog.QuoteIdent(s.cat.Table), catalog.QuoteIdent(catalog.ColUserID), catalog.QuoteIdent(catalog.ColServer))
+		var total int64
+		if err := tx.QueryRow(ctx, query, userID, code).Scan(&total); err != nil {
+			return fmt.Errorf("gamedata: measure stored Mysekai row: %w", err)
+		}
+		if total > int64(maxRowBytes) {
+			return fmt.Errorf("%w: %d bytes, limit %d", errStoredMysekaiRowTooLarge, total, maxRowBytes)
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // writeSuite performs the merge upload inside ONE transaction, because the three
