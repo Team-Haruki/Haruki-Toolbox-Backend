@@ -21,7 +21,7 @@ func TestDurableRuntimeSettingsSurviveCacheLossAndRestart(t *testing.T) {
 	seed := `{"publicApiAllowedKeys":null,"privateApiToken":"","privateApiUserAgent":"","webhookJwtSecret":""}`
 	mock.ExpectExec("INSERT INTO runtime_configurations").WithArgs(1, seed).WillReturnResult(sqlmock.NewResult(1, 1))
 	initial := Snapshot{PrivateAPIToken: "retired-fixture", WebhookJWTSecret: "retired-signer"}
-	store, err := NewPostgresStore(t.Context(), db, nil, initial)
+	store, err := NewPostgresStore(t.Context(), db, nil, initial, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestDurableRuntimeSettingsSurviveCacheLossAndRestart(t *testing.T) {
 	for range 2 {
 		mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}).AddRow(`{"privateApiToken":"rotated-fixture"}`))
 	}
-	store, err = NewPostgresStore(t.Context(), db, nil, initial)
+	store, err = NewPostgresStore(t.Context(), db, nil, initial, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,12 @@ func TestPostgresRuntimeStoreImportsLegacyCredentialsOnce(t *testing.T) {
 	}
 	startup := Snapshot{PrivateAPIToken: "stale-config-token", WebhookJWTSecret: "stale-config-signer"}
 	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	if _, err := NewPostgresStore(t.Context(), db, legacy, startup, false); !errors.Is(err, ErrRuntimeConfigCutoverRequired) {
+		t.Fatalf("initialized without explicit cutoff confirmation: %v", err)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
 	mock.ExpectExec("INSERT INTO runtime_configurations").WithArgs(1, imported).WillReturnResult(sqlmock.NewResult(1, 1))
-	if _, err := NewPostgresStore(t.Context(), db, legacy, startup); err != nil {
+	if _, err := NewPostgresStore(t.Context(), db, legacy, startup, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +78,7 @@ func TestPostgresRuntimeStoreImportsLegacyCredentialsOnce(t *testing.T) {
 	for range 2 {
 		mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}).AddRow(imported))
 	}
-	store, err := NewPostgresStore(t.Context(), db, legacy, startup)
+	store, err := NewPostgresStore(t.Context(), db, legacy, startup, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,11 +123,11 @@ func TestPostgresRuntimeStorePreservesDependencyErrorsAndAtomicUpdates(t *testin
 	const read = `SELECT snapshot FROM runtime_configurations WHERE id = $1`
 	outage := errors.New("fixture settings storage unavailable")
 	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnError(outage)
-	if _, err := NewPostgresStore(t.Context(), db, nil, Snapshot{}); !errors.Is(err, outage) {
+	if _, err := NewPostgresStore(t.Context(), db, nil, Snapshot{}, false); !errors.Is(err, outage) {
 		t.Fatalf("startup did not surface database outage: %v", err)
 	}
 	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
-	if _, err := NewPostgresStore(t.Context(), db, &memoryStore{loadErr: outage}, Snapshot{}); !errors.Is(err, outage) {
+	if _, err := NewPostgresStore(t.Context(), db, &memoryStore{loadErr: outage}, Snapshot{}, true); !errors.Is(err, outage) {
 		t.Fatalf("startup did not surface legacy storage outage: %v", err)
 	}
 

@@ -262,7 +262,7 @@ func (_q *RuntimeConfigurationQuery) Clone() *RuntimeConfigurationQuery {
 // Example:
 //
 //	var v []struct {
-//		Snapshot jsontext.Value `json:"snapshot,omitempty"`
+//		Snapshot map[string]interface {} `json:"snapshot,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -285,7 +285,7 @@ func (_q *RuntimeConfigurationQuery) GroupBy(field string, fields ...string) *Ru
 // Example:
 //
 //	var v []struct {
-//		Snapshot jsontext.Value `json:"snapshot,omitempty"`
+//		Snapshot map[string]interface {} `json:"snapshot,omitempty"`
 //	}
 //
 //	client.RuntimeConfiguration.Query().

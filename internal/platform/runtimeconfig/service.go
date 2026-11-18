@@ -21,14 +21,9 @@ type Update struct {
 }
 
 // Snapshot is the persisted runtime configuration contract. Its JSON field
-// names intentionally match the existing Redis payload so extracting this
-// service does not invalidate settings written by older backend instances.
+// names match the legacy Redis payload imported during the offline cutover.
 type Snapshot struct {
-	// AllowedKeys keeps the WIRE name `publicApiAllowedKeys` even though the Go
-	// field was renamed. The snapshot is persisted in Redis and read back by
-	// every instance, so during a rolling deploy old and new binaries share one
-	// payload: renaming the JSON member would make each version drop the field
-	// the other wrote, and every backend would lose its allowlist at once.
+	// AllowedKeys keeps the persisted name `publicApiAllowedKeys`.
 	AllowedKeys         []string `json:"publicApiAllowedKeys"`
 	PrivateAPIToken     string   `json:"privateApiToken"`
 	PrivateAPIUserAgent string   `json:"privateApiUserAgent"`

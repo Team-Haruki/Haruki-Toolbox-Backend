@@ -1026,6 +1026,9 @@ func init() {
 	RuntimeConfigurationsTable.Annotation = &entsql.Annotation{
 		Table: "runtime_configurations",
 	}
+	RuntimeConfigurationsTable.Annotation.Checks = map[string]string{
+		"runtime_config_snapshot_object": "TRIM(CAST(snapshot AS TEXT)) LIKE '{%}'",
+	}
 	SocialPlatformInfosTable.ForeignKeys[0].RefTable = UsersTable
 	SponsorsTable.Annotation = &entsql.Annotation{
 		Table: "sponsors",

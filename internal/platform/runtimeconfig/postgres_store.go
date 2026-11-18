@@ -12,15 +12,19 @@ import (
 const runtimeConfigurationID = 1
 
 var errMissingRuntimeConfiguration = errors.New("durable runtime configuration is missing")
+var ErrRuntimeConfigCutoverRequired = errors.New("stop all Redis-backed backend instances and set HARUKI_RUNTIME_CONFIG_CUTOVER=1 for the initial runtime configuration import")
 
 type postgresStore struct{ db *sql.DB }
 
-// NewPostgresStore migrates the last Redis snapshot once. The database row is
-// authoritative thereafter, including when Redis is empty or unavailable.
-func NewPostgresStore(ctx context.Context, db *sql.DB, legacy Store, initial Snapshot) (Store, error) {
+// NewPostgresStore imports the last Redis snapshot after an explicit offline
+// cutover. PostgreSQL is authoritative thereafter, including on restarts.
+func NewPostgresStore(ctx context.Context, db *sql.DB, legacy Store, initial Snapshot, cutoverConfirmed bool) (Store, error) {
 	s := &postgresStore{db: db}
 	if _, found, err := s.load(ctx); err != nil || found {
 		return s, err
+	}
+	if !cutoverConfirmed {
+		return nil, ErrRuntimeConfigCutoverRequired
 	}
 	// There is no way to establish whether startup credentials were previously
 	// rotated when no legacy snapshot survives. Require an explicit update.

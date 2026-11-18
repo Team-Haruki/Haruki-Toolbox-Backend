@@ -4,7 +4,6 @@ package postgresql
 
 import (
 	"context"
-	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"sync"
@@ -10809,15 +10808,14 @@ func (m *RiskRuleMutation) ResetEdge(name string) error {
 // RuntimeConfigurationMutation represents an operation that mutates the RuntimeConfiguration nodes in the graph.
 type RuntimeConfigurationMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int
-	snapshot       *jsontext.Value
-	appendsnapshot jsontext.Value
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*RuntimeConfiguration, error)
-	predicates     []predicate.RuntimeConfiguration
+	op            Op
+	typ           string
+	id            *int
+	snapshot      *map[string]interface{}
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*RuntimeConfiguration, error)
+	predicates    []predicate.RuntimeConfiguration
 }
 
 var _ ent.Mutation = (*RuntimeConfigurationMutation)(nil)
@@ -10919,13 +10917,12 @@ func (m *RuntimeConfigurationMutation) IDs(ctx context.Context) ([]int, error) {
 }
 
 // SetSnapshot sets the "snapshot" field.
-func (m *RuntimeConfigurationMutation) SetSnapshot(j jsontext.Value) {
-	m.snapshot = &j
-	m.appendsnapshot = nil
+func (m *RuntimeConfigurationMutation) SetSnapshot(value map[string]interface{}) {
+	m.snapshot = &value
 }
 
 // Snapshot returns the value of the "snapshot" field in the mutation.
-func (m *RuntimeConfigurationMutation) Snapshot() (r jsontext.Value, exists bool) {
+func (m *RuntimeConfigurationMutation) Snapshot() (r map[string]interface{}, exists bool) {
 	v := m.snapshot
 	if v == nil {
 		return
@@ -10936,7 +10933,7 @@ func (m *RuntimeConfigurationMutation) Snapshot() (r jsontext.Value, exists bool
 // OldSnapshot returns the old "snapshot" field's value of the RuntimeConfiguration entity.
 // If the RuntimeConfiguration object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RuntimeConfigurationMutation) OldSnapshot(ctx context.Context) (v jsontext.Value, err error) {
+func (m *RuntimeConfigurationMutation) OldSnapshot(ctx context.Context) (v map[string]interface{}, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSnapshot is only allowed on UpdateOne operations")
 	}
@@ -10950,23 +10947,9 @@ func (m *RuntimeConfigurationMutation) OldSnapshot(ctx context.Context) (v jsont
 	return oldValue.Snapshot, nil
 }
 
-// AppendSnapshot adds j to the "snapshot" field.
-func (m *RuntimeConfigurationMutation) AppendSnapshot(j jsontext.Value) {
-	m.appendsnapshot = append(m.appendsnapshot, j...)
-}
-
-// AppendedSnapshot returns the list of values that were appended to the "snapshot" field in this mutation.
-func (m *RuntimeConfigurationMutation) AppendedSnapshot() (jsontext.Value, bool) {
-	if len(m.appendsnapshot) == 0 {
-		return nil, false
-	}
-	return m.appendsnapshot, true
-}
-
 // ResetSnapshot resets all changes to the "snapshot" field.
 func (m *RuntimeConfigurationMutation) ResetSnapshot() {
 	m.snapshot = nil
-	m.appendsnapshot = nil
 }
 
 // Where appends a list predicates to the RuntimeConfigurationMutation builder.
@@ -11038,7 +11021,7 @@ func (m *RuntimeConfigurationMutation) OldField(ctx context.Context, name string
 func (m *RuntimeConfigurationMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case runtimeconfiguration.FieldSnapshot:
-		v, ok := value.(jsontext.Value)
+		v, ok := value.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

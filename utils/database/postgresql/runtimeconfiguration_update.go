@@ -4,13 +4,11 @@ package postgresql
 
 import (
 	"context"
-	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/runtimeconfiguration"
@@ -30,14 +28,8 @@ func (_u *RuntimeConfigurationUpdate) Where(ps ...predicate.RuntimeConfiguration
 }
 
 // SetSnapshot sets the "snapshot" field.
-func (_u *RuntimeConfigurationUpdate) SetSnapshot(v jsontext.Value) *RuntimeConfigurationUpdate {
+func (_u *RuntimeConfigurationUpdate) SetSnapshot(v map[string]interface{}) *RuntimeConfigurationUpdate {
 	_u.mutation.SetSnapshot(v)
-	return _u
-}
-
-// AppendSnapshot appends value to the "snapshot" field.
-func (_u *RuntimeConfigurationUpdate) AppendSnapshot(v jsontext.Value) *RuntimeConfigurationUpdate {
-	_u.mutation.AppendSnapshot(v)
 	return _u
 }
 
@@ -85,11 +77,6 @@ func (_u *RuntimeConfigurationUpdate) sqlSave(ctx context.Context) (_node int, e
 	if value, ok := _u.mutation.Snapshot(); ok {
 		_spec.SetField(runtimeconfiguration.FieldSnapshot, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.AppendedSnapshot(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, runtimeconfiguration.FieldSnapshot, value)
-		})
-	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{runtimeconfiguration.Label}
@@ -111,14 +98,8 @@ type RuntimeConfigurationUpdateOne struct {
 }
 
 // SetSnapshot sets the "snapshot" field.
-func (_u *RuntimeConfigurationUpdateOne) SetSnapshot(v jsontext.Value) *RuntimeConfigurationUpdateOne {
+func (_u *RuntimeConfigurationUpdateOne) SetSnapshot(v map[string]interface{}) *RuntimeConfigurationUpdateOne {
 	_u.mutation.SetSnapshot(v)
-	return _u
-}
-
-// AppendSnapshot appends value to the "snapshot" field.
-func (_u *RuntimeConfigurationUpdateOne) AppendSnapshot(v jsontext.Value) *RuntimeConfigurationUpdateOne {
-	_u.mutation.AppendSnapshot(v)
 	return _u
 }
 
@@ -195,11 +176,6 @@ func (_u *RuntimeConfigurationUpdateOne) sqlSave(ctx context.Context) (_node *Ru
 	}
 	if value, ok := _u.mutation.Snapshot(); ok {
 		_spec.SetField(runtimeconfiguration.FieldSnapshot, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.AppendedSnapshot(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, runtimeconfiguration.FieldSnapshot, value)
-		})
 	}
 	_node = &RuntimeConfiguration{config: _u.config}
 	_spec.Assign = _node.assignValues

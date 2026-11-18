@@ -1,17 +1,45 @@
 package bootstrap
 
 import (
+	"database/sql"
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"errors"
-	"github.com/DATA-DOG/go-sqlmock"
 	"reflect"
 	"sort"
 	"testing"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	platformRuntimeConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestEntRuntimeConfigurationOnlyStoresObjects(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := postgresql.NewClient(postgresql.Driver(entsql.OpenDB(dialect.SQLite, db)))
+	defer client.Close()
+	if err := client.Schema.Create(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{`[]`, `"{}"`, `null`, `false`} {
+		_, err := db.ExecContext(t.Context(), "INSERT INTO runtime_configurations (id, snapshot) VALUES (1, ?)", invalid)
+		if err == nil {
+			t.Fatalf("database accepted non-object runtime settings: %s", invalid)
+		}
+	}
+	row, err := client.RuntimeConfiguration.Create().SetSnapshot(map[string]any{"webhookEnabled": false}).Save(t.Context())
+	if err != nil || row.Snapshot["webhookEnabled"] != false {
+		t.Fatalf("object did not round-trip through Ent: %v", err)
+	}
+}
 
 func TestRuntimeConfigCompositionCopiesMutableValues(t *testing.T) {
 	cfg := harukiConfig.Config{}
@@ -84,6 +112,7 @@ func TestRuntimeConfigRedisContractRemainsStable(t *testing.T) {
 }
 
 func TestDurableRuntimeConfigCompositionFailsClosedAndReadsPostgres(t *testing.T) {
+	t.Setenv("HARUKI_RUNTIME_CONFIG_CUTOVER", "0")
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +126,17 @@ func TestDurableRuntimeConfigCompositionFailsClosedAndReadsPostgres(t *testing.T
 	if service, err := newDurableRuntimeConfigService(t.Context(), cfg, db, nil); service != nil || !errors.Is(err, outage) {
 		t.Fatalf("configuration startup did not reject database failure: %v", err)
 	}
+	mock.ExpectQuery("SELECT snapshot FROM runtime_configurations").WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	if service, err := newDurableRuntimeConfigService(t.Context(), cfg, db, nil); service != nil || !errors.Is(err, platformRuntimeConfig.ErrRuntimeConfigCutoverRequired) {
+		t.Fatalf("settings import bypassed cutover confirmation: %v", err)
+	}
+	t.Setenv("HARUKI_RUNTIME_CONFIG_CUTOVER", "1")
+	mock.ExpectQuery("SELECT snapshot FROM runtime_configurations").WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	mock.ExpectExec("INSERT INTO runtime_configurations").WithArgs(1, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+	if _, err := newDurableRuntimeConfigService(t.Context(), cfg, db, nil); err != nil {
+		t.Fatalf("confirmed settings import failed: %v", err)
+	}
+	t.Setenv("HARUKI_RUNTIME_CONFIG_CUTOVER", "0")
 	for range 2 {
 		mock.ExpectQuery("SELECT snapshot FROM runtime_configurations").WithArgs(1).
 			WillReturnRows(sqlmock.NewRows([]string{"snapshot"}).AddRow(`{"privateApiToken":"durable-fixture","publicApiAllowedKeys":["userCards"]}`))

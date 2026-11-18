@@ -3,7 +3,6 @@
 package postgresql
 
 import (
-	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"fmt"
 	"strings"
@@ -19,7 +18,7 @@ type RuntimeConfiguration struct {
 	// ID of the ent.
 	ID int `json:"id,omitzero"`
 	// Snapshot holds the value of the "snapshot" field.
-	Snapshot     jsontext.Value `json:"snapshot,omitempty"`
+	Snapshot     map[string]interface{} `json:"-"`
 	selectValues sql.SelectValues
 }
 
@@ -97,8 +96,7 @@ func (_m *RuntimeConfiguration) String() string {
 	var builder strings.Builder
 	builder.WriteString("RuntimeConfiguration(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("snapshot=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Snapshot))
+	builder.WriteString("snapshot=<sensitive>")
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -4,7 +4,6 @@ package postgresql
 
 import (
 	"context"
-	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 
@@ -21,7 +20,7 @@ type RuntimeConfigurationCreate struct {
 }
 
 // SetSnapshot sets the "snapshot" field.
-func (_c *RuntimeConfigurationCreate) SetSnapshot(v jsontext.Value) *RuntimeConfigurationCreate {
+func (_c *RuntimeConfigurationCreate) SetSnapshot(v map[string]interface{}) *RuntimeConfigurationCreate {
 	_c.mutation.SetSnapshot(v)
 	return _c
 }

@@ -273,6 +273,7 @@ services:
         condition: service_healthy
     environment:
       HARUKI_CONFIG_PATH: /app/config/haruki-toolbox-configs.yaml
+      HARUKI_RUNTIME_CONFIG_CUTOVER: "${HARUKI_RUNTIME_CONFIG_CUTOVER:-0}"
       AUTH_PROVIDER: kratos
       AUTH_PROXY_ENABLED: "true"
       AUTH_PROXY_TRUSTED_VALUE: ${OATHKEEPER_SHARED_SECRET:?Set a deployment-specific OATHKEEPER_SHARED_SECRET}
