@@ -376,8 +376,15 @@ func TestStartRunsLoopsUntilCancelled(t *testing.T) {
 	for s.currentCatalog() == nil && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
+	s.retranslate <- "missing-scenario"
+	for len(s.retranslate) != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	cancel()
 	wait()
+	if len(s.retranslate) != 0 {
+		t.Fatal("worker did not drain the targeted retranslation")
+	}
 	if s.currentCatalog() == nil {
 		t.Fatal("the loop did not run")
 	}
