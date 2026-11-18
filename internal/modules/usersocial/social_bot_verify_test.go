@@ -10,7 +10,9 @@ import (
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -191,4 +193,67 @@ func TestSocialVerificationIssuanceBindsChallengeAndEnforcesPerUserBudget(t *tes
 	}
 	request("owner", "other-target", http.StatusTooManyRequests)
 	request("another-owner", "other-target", http.StatusOK)
+	global := harukiRedis.BuildSocialPlatformVerificationIssueKey("")
+	if err := redis.Redis.Set(t.Context(), global, 10000, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request("fresh-owner", "fixture-target", http.StatusTooManyRequests)
+	if err := redis.Redis.Set(t.Context(), global, "invalid-counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request("fresh-owner", "fixture-target", http.StatusInternalServerError)
+	if err := redis.Redis.Set(t.Context(), harukiRedis.BuildSocialPlatformVerificationIssueKey("broken-owner"), "invalid-counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request("broken-owner", "fixture-target", http.StatusInternalServerError)
+}
+
+func TestBotVerificationBindsAndConsumesIssuedChallenge(t *testing.T) {
+	helper := newSocialRateLimitTestHelper(t)
+	redis := helper.DBManager.Redis
+	keys := redis.KeyBuilder()
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	helper.DBManager.DB = db
+	db.User.Create().SetID("owner").SetName("Owner").SetEmail("owner@example.test").ExecX(t.Context())
+	app := fiber.New()
+	app.Post("/verify", handleVerifySocialPlatform(helper, NewBotVerifyConfig(BotVerifyConfigOptions{Token: "fixture-bot-secret"})))
+	check := func(account string, want int) {
+		t.Helper()
+		body := `{"platform":"qq","userId":"` + account + `","oneTimePassword":"fixture-code"}`
+		req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer fixture-bot-secret")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("verification returned %d, want %d", resp.StatusCode, want)
+		}
+	}
+	check("invalid account", http.StatusBadRequest)
+	key := keys.BuildSocialVerificationChallengeKey("qq", "fixture-account")
+	if err := redis.SetCache(t.Context(), key, "unreadable-legacy-state", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	check("fixture-account", http.StatusInternalServerError)
+	challenge, err := encodeSocialVerificationChallenge(keys, "fixture-code", "owner", "fixture-status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetCache(t.Context(), key, challenge, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	check("fixture-account", http.StatusOK)
+	check("fixture-account", http.StatusBadRequest)
+	row := db.SocialPlatformInfo.Query().OnlyX(t.Context())
+	if !row.Verified || row.QueryUser().OnlyIDX(t.Context()) != "owner" || row.PlatformUserID != "fixture-account" {
+		t.Fatalf("unexpected verified account: %s", row.PlatformUserID)
+	}
+	var status string
+	if found, err := redis.GetCache(t.Context(), harukiRedis.BuildStatusTokenKey("fixture-status"), &status); err != nil || !found || status != "true" {
+		t.Fatalf("verification state was not advanced: found=%v err=%v", found, err)
+	}
 }

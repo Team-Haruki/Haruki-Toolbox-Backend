@@ -397,3 +397,55 @@ func TestParallelSeriesKeepEpisodeOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestStoryRegistryUsesCurrentHashAndFallsBackToDataVersion(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/master/jp/current":
+			_, _ = io.WriteString(w, `{"contentHash":" fixture-hash ","dataVersion":"older"}`)
+		case "/v1/master/en/current":
+			_, _ = io.WriteString(w, `{"dataVersion":" fixture-version "}`)
+		case "/v1/master/tw/current":
+			_, _ = io.WriteString(w, `{"contentHash":" ","dataVersion":""}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	fetch := newFetcher(upstream.URL, upstream.URL, "fixture-client", upstream.Client())
+	for region, want := range map[string]string{"jp": "fixture-hash", "en": "fixture-version"} {
+		if got, err := fetch.contentHash(t.Context(), region); err != nil || got != want {
+			t.Fatalf("%s master version = %q, %v, want %q", region, got, err, want)
+		}
+	}
+	if _, err := fetch.contentHash(t.Context(), "tw"); err == nil {
+		t.Fatal("registry without a version was treated as a fresh master set")
+	}
+}
+
+func TestRetranslatePreservesStateWhenUnavailable(t *testing.T) {
+	db := newStoryDB(t)
+	db.StoryTranslation.Create().SetScenarioID("saved").SetLang(TranslationLang).ExecX(t.Context())
+	for _, tc := range []struct {
+		name, scenario string
+		translation    *translator
+		want           int
+	}{
+		{"disabled", "saved", nil, http.StatusForbidden},
+		{"missing", "unknown", &translator{}, http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &Service{db: db, tr: tc.translation}
+			app := fiber.New()
+			app.Post("/:scenario_id", service.handleRetranslate)
+			resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/"+tc.scenario, nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.want || db.StoryTranslation.Query().CountX(t.Context()) != 1 {
+				t.Fatalf("retranslation returned %d or changed the stored translation", resp.StatusCode)
+			}
+		})
+	}
+}

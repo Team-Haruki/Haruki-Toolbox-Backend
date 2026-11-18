@@ -646,3 +646,71 @@ func TestMapGameAccountOwnershipVerificationError(t *testing.T) {
 		})
 	}
 }
+
+func TestGameVerificationRejectsInvalidIDsAndFailsClosedOnQuotaErrors(t *testing.T) {
+	helper, redis, _ := newGameBindingRedisHelper(t)
+	app := fiber.New()
+	app.Post("/:actor/:server/:game_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", c.Params("actor"))
+		return c.Next()
+	}, handleGenerateGameAccountVerificationCode(helper))
+	check := func(path string, want int) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("issuance for %s returned %d, want %d", path, resp.StatusCode, want)
+		}
+	}
+	ctx := t.Context()
+	check("/owner/jp/not-a-number", http.StatusBadRequest)
+	user := harukiRedis.BuildGameAccountVerificationIssueKey("owner")
+	if err := redis.Redis.Set(ctx, user, 10, time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	check("/owner/jp/43", http.StatusTooManyRequests)
+	for _, key := range []string{harukiRedis.BuildGameAccountVerificationIssueKey("faulty"), harukiRedis.BuildGameAccountVerificationTargetIssueKey("jp", "44")} {
+		if err := redis.Redis.Set(ctx, key, "fixture-invalid-counter", time.Minute).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check("/faulty/jp/45", http.StatusInternalServerError)
+	check("/other/jp/44", http.StatusInternalServerError)
+}
+
+func TestBindingCreationValidatesInputAndReusesCanonicalVerifiedAccount(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, t.Name())
+	createDefaultBindingTestUser(t, db, ctx, "owner")
+	db.GameAccountBinding.Create().SetUserID("owner").SetServer("jp").SetGameUserID("42").SetVerified(true).ExecX(ctx)
+	app := fiber.New()
+	app.Post("/:server/:game_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleCreateGameAccountBinding(helper))
+	for _, tc := range []struct {
+		path, body string
+		want       int
+	}{
+		{"/jp/invalid", "{}", http.StatusBadRequest},
+		{"/unknown/42", "{}", http.StatusBadRequest},
+		{"/jp/42", "{", http.StatusBadRequest},
+		{"/jp/00042", "{}", http.StatusOK},
+	} {
+		req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Fatalf("binding at %s returned %d, want %d", tc.path, resp.StatusCode, tc.want)
+		}
+	}
+	if count := db.GameAccountBinding.Query().CountX(ctx); count != 1 {
+		t.Fatalf("canonical lookup produced %d bindings", count)
+	}
+}

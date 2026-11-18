@@ -220,3 +220,42 @@ func TestHandleUpdateAuthorizeSocialPlatformReturnsNotFoundWhenSlotDoesNotExist(
 		t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusNotFound)
 	}
 }
+
+func TestAutomaticSocialGrantAllocationReusesFreeSlot(t *testing.T) {
+	helper := newAuthorizeSocialTestHelper(t)
+	grants := helper.DBManager.DB.AuthorizeSocialPlatformInfo
+	for slot := 1; slot <= maxUserSocialGrants; slot++ {
+		if slot != 2 {
+			grants.Create().SetUserID("u1").SetPlatform("qq").SetPlatformUserID(fmt.Sprint(slot)).
+				SetPlatformID(slot).ExecX(t.Context())
+		}
+	}
+	app := fiber.New()
+	app.Post("/:toolbox_user_id", handleCreateAuthorizeSocialPlatform(helper))
+	app.Post("/:toolbox_user_id/:id", handleCreateAuthorizeSocialPlatformAtID(helper))
+	post := func(path, body, encoding string, want int, message string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", encoding)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != want || !strings.Contains(string(raw), message) {
+			t.Fatalf("grant at %s: status %d, body %s, err %v", path, resp.StatusCode, raw, err)
+		}
+	}
+	body := `{"platform":"qq","userId":"fixture-account"}`
+	post("/u1", body, "gzip", http.StatusBadRequest, "compressed authorization")
+	post("/u1", strings.Repeat(" ", (8<<10)+1), "identity", http.StatusBadRequest, "body is too large")
+	post("/u1", `{"platform":"qq","userId":"a","comment":"`+strings.Repeat("字", 400)+`"}`, "", http.StatusBadRequest, "invalid authorization field")
+	post(fmt.Sprintf("/u1/%d", maxUserSocialGrants+1), body, "", http.StatusBadRequest, "exceeds the social authorization limit")
+	post("/u1", body, "", http.StatusOK, "social platform created")
+	if got := grants.Query().Where(authorizesocialplatforminfo.PlatformIDEQ(2)).OnlyX(t.Context()); got.PlatformUserID != "fixture-account" {
+		t.Fatal("automatic allocation did not reuse slot 2")
+	}
+	post("/u1", body, "", http.StatusBadRequest, "authorization limit reached")
+}

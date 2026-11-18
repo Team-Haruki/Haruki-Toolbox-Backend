@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+	"errors"
+	"github.com/DATA-DOG/go-sqlmock"
 	"reflect"
 	"sort"
 	"testing"
@@ -78,5 +80,37 @@ func TestRuntimeConfigRedisContractRemainsStable(t *testing.T) {
 	}
 	if got := harukiRedis.BuildRuntimeConfigKey(); got != "haruki:config:runtime" {
 		t.Fatalf("runtime config Redis key = %q, want %q", got, "haruki:config:runtime")
+	}
+}
+
+func TestDurableRuntimeConfigCompositionFailsClosedAndReadsPostgres(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	cfg := harukiConfig.Config{}
+	cfg.MongoDB.PrivateApiSecret = "startup-fixture"
+	cfg.Webhook.JWTSecret = "startup-signer"
+	outage := errors.New("fixture database unavailable")
+	mock.ExpectQuery("SELECT snapshot FROM runtime_configurations").WithArgs(1).WillReturnError(outage)
+	if service, err := newDurableRuntimeConfigService(t.Context(), cfg, db, nil); service != nil || !errors.Is(err, outage) {
+		t.Fatalf("configuration startup did not reject database failure: %v", err)
+	}
+	for range 2 {
+		mock.ExpectQuery("SELECT snapshot FROM runtime_configurations").WithArgs(1).
+			WillReturnRows(sqlmock.NewRows([]string{"snapshot"}).AddRow(`{"privateApiToken":"durable-fixture","publicApiAllowedKeys":["userCards"]}`))
+	}
+	service, err := newDurableRuntimeConfigService(t.Context(), cfg, db, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := service.Current(t.Context())
+	if err != nil || got.PrivateAPIToken != "durable-fixture" || got.WebhookJWTSecret != "" ||
+		!reflect.DeepEqual(got.AllowedKeys, []string{"userCards"}) {
+		t.Fatalf("service did not use authoritative settings: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

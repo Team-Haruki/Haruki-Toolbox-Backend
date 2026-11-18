@@ -92,7 +92,7 @@ func (s *Store) Fetch(ctx context.Context, userID int64, server string, keys []s
 	}
 
 	cols, entries := s.selectFor(keys)
-	return s.fetchSelected(ctx, userID, server, code, cols, entries)
+	return s.fetchSelected(ctx, s.pool.QueryRow, userID, server, code, cols, entries)
 }
 
 // FetchWithout reads one row with every column except those serving the
@@ -109,7 +109,7 @@ func (s *Store) FetchWithout(ctx context.Context, userID int64, server string, o
 		return nil, ErrNoRow
 	}
 	cols, entries := s.selectWithout(omit)
-	return s.fetchSelected(ctx, userID, server, code, cols, entries)
+	return s.fetchSelected(ctx, s.pool.QueryRow, userID, server, code, cols, entries)
 }
 
 // selectWithout returns every data column except those the omitted keys
@@ -138,7 +138,7 @@ func (s *Store) selectWithout(omit []string) (quoted []string, plain []string) {
 }
 
 // fetchSelected runs the row read for an already-resolved column list.
-func (s *Store) fetchSelected(ctx context.Context, userID int64, server string, code int16, cols, entries []string) (*Row, error) {
+func (s *Store) fetchSelected(ctx context.Context, queryRow func(context.Context, string, ...any) pgx.Row, userID int64, server string, code int16, cols, entries []string) (*Row, error) {
 	sizes := make([]string, len(cols))
 	guarded := make([]string, len(cols))
 	for i, col := range cols {
@@ -168,7 +168,7 @@ func (s *Store) fetchSelected(ctx context.Context, userID int64, server string, 
 		dest[i+2] = &raw[i]
 	}
 
-	if err := s.pool.QueryRow(ctx, sql, userID, code, int64(DefaultLimits().MaxRowBytes)).Scan(dest...); err != nil {
+	if err := queryRow(ctx, sql, userID, code, int64(DefaultLimits().MaxRowBytes)).Scan(dest...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoRow
 		}

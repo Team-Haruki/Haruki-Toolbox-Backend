@@ -315,3 +315,31 @@ func TestHashExactIdentifierKeepsCaseAndWhitespace(t *testing.T) {
 		t.Fatal("hashExactIdentifier must depend on the secret")
 	}
 }
+
+func TestVerificationKeysSeparateActorsTargetsAndChallenges(t *testing.T) {
+	keys := NewKeyBuilder("fixture-secret")
+	const account, generation, code = "platform-account", "generation-fixture", "code-fixture"
+	challenge := keys.BuildSocialVerificationChallengeKey("qq", account)
+	attempt := keys.BuildSocialVerificationChallengeAttemptKey(generation)
+	digest := keys.SocialVerificationCodeDigest(generation, code)
+	for _, check := range [][2]string{
+		{challenge, account}, {attempt, generation}, {digest, code},
+	} {
+		if strings.Contains(check[0], check[1]) {
+			t.Fatal("verification identifier was exposed in a Redis key or digest")
+		}
+	}
+	for _, check := range [][2]string{
+		{challenge, keys.BuildSocialVerificationChallengeKey("discord", account)},
+		{attempt, keys.BuildSocialVerificationChallengeAttemptKey("another-generation")},
+		{digest, keys.SocialVerificationCodeDigest("another-generation", code)},
+		{digest, keys.SocialVerificationCodeDigest(generation, "another-code")},
+		{BuildSocialPlatformVerificationIssueKey("user-1"), BuildSocialPlatformVerificationIssueKey("")},
+		{BuildGameAccountVerificationIssueKey("user-1"), BuildGameAccountVerificationIssueKey("user-2")},
+		{BuildGameAccountVerificationTargetIssueKey("jp", "123"), BuildGameAccountVerificationTargetIssueKey("en", "123")},
+	} {
+		if check[0] == check[1] {
+			t.Fatal("different verification scopes collided")
+		}
+	}
+}

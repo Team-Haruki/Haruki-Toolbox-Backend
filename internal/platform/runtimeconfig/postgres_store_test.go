@@ -1,8 +1,10 @@
 package runtimeconfig
 
 import (
+	"database/sql/driver"
 	"errors"
 	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -106,4 +108,52 @@ func TestPostgresRuntimeStoreFailsClosedWhenDurableRowDisappears(t *testing.T) {
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestPostgresRuntimeStorePreservesDependencyErrorsAndAtomicUpdates(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const read = `SELECT snapshot FROM runtime_configurations WHERE id = $1`
+	outage := errors.New("fixture settings storage unavailable")
+	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnError(outage)
+	if _, err := NewPostgresStore(t.Context(), db, nil, Snapshot{}); !errors.Is(err, outage) {
+		t.Fatalf("startup did not surface database outage: %v", err)
+	}
+	mock.ExpectQuery(regexp.QuoteMeta(read)).WithArgs(1).WillReturnRows(sqlmock.NewRows([]string{"snapshot"}))
+	if _, err := NewPostgresStore(t.Context(), db, &memoryStore{loadErr: outage}, Snapshot{}); !errors.Is(err, outage) {
+		t.Fatalf("startup did not surface legacy storage outage: %v", err)
+	}
+
+	store := &postgresStore{db: db}
+	keys, enabled := []string{"userCards"}, true
+	update := Update{AllowedKeys: &keys, OAuth2DeviceFlowEnabled: &enabled}
+	match := &runtimePatchMatch{wantKeys: keys[0]}
+	mock.ExpectQuery("UPDATE runtime_configurations").WithArgs(1, match).WillReturnError(outage)
+	if _, err := store.Apply(t.Context(), update, Snapshot{}); !errors.Is(err, outage) {
+		t.Fatalf("settings write did not surface database outage: %v", err)
+	}
+	mock.ExpectQuery("UPDATE runtime_configurations").WithArgs(1, match).
+		WillReturnRows(sqlmock.NewRows([]string{"snapshot"}).AddRow(`{"publicApiAllowedKeys":["userCards"],"oauth2DeviceFlowEnabled":true,"privateApiToken":"existing-fixture"}`))
+	got, err := store.Apply(t.Context(), update, Snapshot{})
+	if err != nil || !got.OAuth2DeviceFlowSwitchOn() || !slices.Equal(got.AllowedKeys, keys) || got.PrivateAPIToken != "existing-fixture" {
+		t.Fatalf("partial update did not return the committed settings: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type runtimePatchMatch struct{ wantKeys string }
+
+func (m *runtimePatchMatch) Match(value driver.Value) bool {
+	raw, ok := value.(string)
+	if !ok {
+		return false
+	}
+	var patch Snapshot
+	return unmarshalSnapshot([]byte(raw), &patch) == nil && patch.OAuth2DeviceFlowSwitchOn() &&
+		slices.Equal(patch.AllowedKeys, []string{m.wantKeys})
 }
