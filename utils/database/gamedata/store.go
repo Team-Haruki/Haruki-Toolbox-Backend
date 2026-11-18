@@ -303,28 +303,24 @@ func (r *Row) columnValue(e *catalog.Entry) ([]byte, bool, error) {
 	if !present {
 		return nil, false, nil
 	}
-	if r.restorer.Fingerprint(r.Server) != "" && (e.Key == nuverserestore.HarvestMaps || e.Child == nuverserestore.HarvestMaps) {
-		if cached, ok := r.expanded[e.Column]; ok {
-			return cached.raw, cached.ok, cached.err
-		}
-		raw, err := r.restorer.JSON(r.Server, v)
-		if r.expanded == nil {
-			r.expanded = make(map[string]rowValue)
-		}
-		r.expanded[e.Column] = rowValue{raw: raw, ok: err == nil, err: err}
-		return raw, err == nil, err
-	}
-	if e.Storage != catalog.StorageCompactJSON {
+	restoreHarvest := (e.Key == nuverserestore.HarvestMaps || e.Child == nuverserestore.HarvestMaps) && r.restorer.Fingerprint(r.Server) != ""
+	if !restoreHarvest && (e.Storage != catalog.StorageCompactJSON || !IsCompactValue(v)) {
 		return v, true, nil
 	}
 	if cached, ok := r.expanded[e.Column]; ok {
 		return cached.raw, cached.ok, cached.err
 	}
-	if !IsCompactValue(v) {
-		return v, true, nil
-	}
 	remaining := min(DefaultLimits().MaxKeyBytes, maxPrivateResponseBytes-r.expandedBytes)
-	raw, err := expandCompactJSONWithLimit(v, remaining)
+	var raw []byte
+	var err error
+	if restoreHarvest {
+		raw, err = r.restorer.JSONWithLimit(r.Server, v, remaining)
+		if errors.Is(err, nuverserestore.ErrRestoredJSONTooLarge) {
+			err = ErrPublishedResponseTooLarge
+		}
+	} else {
+		raw, err = expandCompactJSONWithLimit(v, remaining)
+	}
 	if err != nil {
 		raw = nil
 	}

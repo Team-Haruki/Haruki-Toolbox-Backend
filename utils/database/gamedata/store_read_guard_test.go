@@ -1,6 +1,7 @@
 package gamedata
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"slices"
@@ -8,8 +9,38 @@ import (
 	"testing"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/nuverserestore"
 	"github.com/jackc/pgx/v5"
 )
+
+func TestHarvestRestorationUsesRemainingRowBudget(t *testing.T) {
+	const raw = `[[5,[[111,-3,7,20,"spawned",null]],[ ["mysekai_item",24,-3,7,10,13,"before_drop",2,null] ]]]`
+	const key = "userMysekaiHarvestMaps"
+	restorer, err := nuverserestore.NewMysekai(map[string]string{"cn": "../../../data/suite_user_cn_6.4.0.avsc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expanded, err := restorer.JSON("cn", []byte(raw))
+	if err != nil || len(expanded) <= len(raw) {
+		t.Fatalf("fixture must expand: %v", err)
+	}
+	for _, shortfall := range []int{0, 1} {
+		r := newTestRow(t, catalog.Suite(), map[string]string{key: raw}, "")
+		r.Server, r.restorer = "cn", restorer
+		used := maxPrivateResponseBytes - len(expanded) + shortfall
+		r.expandedBytes = used
+		for range 2 {
+			value, present, err := r.RawValue(key)
+			if shortfall == 0 {
+				if err != nil || !present || len(value) != len(expanded) || !bytes.Contains(value, []byte(`"resourceType":"mysekai_item"`)) || r.expandedBytes != maxPrivateResponseBytes {
+					t.Fatalf("exact-budget restoration was not counted once: %v", err)
+				}
+			} else if !errors.Is(err, ErrPublishedResponseTooLarge) || present || value != nil || r.expandedBytes != used {
+				t.Fatalf("oversized restoration was retained: %v", err)
+			}
+		}
+	}
+}
 
 type scannedGameDataRow func(...any) error
 

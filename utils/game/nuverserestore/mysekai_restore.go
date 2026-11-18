@@ -3,6 +3,7 @@ package nuverserestore
 import (
 	"bytes"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -15,6 +16,8 @@ const HarvestMaps = "userMysekaiHarvestMaps"
 
 // Extra retains future positional fields without guessing their names.
 const Extra = "_msgpackExtra"
+
+var ErrRestoredJSONTooLarge = errors.New("restored harvest maps exceed the JSON size limit")
 
 type definition struct {
 	name     string
@@ -60,21 +63,47 @@ func (r *MysekaiRestorer) Document(server string, data map[string]any) (map[stri
 // JSON restores one stored harvest-map column, preserving exact numbers and
 // returning the original bytes when the column contains only old objects.
 func (r *MysekaiRestorer) JSON(server string, raw []byte) ([]byte, error) {
-	if r.Fingerprint(server) == "" {
-		return raw, nil
+	return r.JSONWithLimit(server, raw, math.MaxInt)
+}
+
+// JSONWithLimit caps the restored encoding before storing it in memory.
+func (r *MysekaiRestorer) JSONWithLimit(server string, raw []byte, limit int) ([]byte, error) {
+	if limit <= 0 {
+		return nil, ErrRestoredJSONTooLarge
 	}
-	var value any
-	if err := json.UnmarshalRead(bytes.NewReader(raw), &value, jsonvalue.Numbers); err != nil {
-		return nil, err
+	if r.Fingerprint(server) != "" {
+		var value any
+		if err := json.UnmarshalRead(bytes.NewReader(raw), &value, jsonvalue.Numbers); err != nil {
+			return nil, err
+		}
+		restored, changed, err := restoreList(value, r.regions[server].fields, HarvestMaps)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			out := &boundedJSON{limit: limit}
+			if err := json.MarshalWrite(out, restored); err != nil {
+				return nil, err
+			}
+			return out.Bytes(), nil
+		}
 	}
-	restored, changed, err := restoreList(value, r.regions[server].fields, HarvestMaps)
-	if err != nil {
-		return nil, err
+	if len(raw) > limit {
+		return nil, ErrRestoredJSONTooLarge
 	}
-	if !changed {
-		return raw, nil
+	return raw, nil
+}
+
+type boundedJSON struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *boundedJSON) Write(p []byte) (int, error) {
+	if len(p) > b.limit-b.Len() {
+		return 0, ErrRestoredJSONTooLarge
 	}
-	return json.Marshal(restored)
+	return b.Buffer.Write(p)
 }
 
 func restoreList(value any, defs []definition, path string) (any, bool, error) {
