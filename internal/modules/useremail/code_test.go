@@ -330,3 +330,22 @@ func TestUndeliveredEmailChallengeIsDiscarded(t *testing.T) {
 		t.Fatal("an undelivered code remained active")
 	}
 }
+
+func TestVerificationFailsClosedWhenRateStoreIsUnavailable(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	if err := cache.Redis.Set(ctx, key, "fixture:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Redis.Set(ctx, cache.KeyBuilder().BuildOwnedEmailAttemptKey("fixture"), "invalid", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if status := runVerifyEmailHandlerStatus(t, helper, owner, email, "123456"); status != http.StatusServiceUnavailable {
+		t.Fatalf("unavailable attempt store returned %d", status)
+	}
+	if got := cache.Redis.Exists(ctx, key).Val(); got != 1 {
+		t.Fatal("a code was consumed without quota admission")
+	}
+}
