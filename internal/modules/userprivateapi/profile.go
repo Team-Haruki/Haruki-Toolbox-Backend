@@ -83,7 +83,7 @@ func (p *privateProfile) cacheSurface(requestKey string) string {
 	if p == nil {
 		return privateCacheSurface(requestKey)
 	}
-	return p.surface
+	return p.surface + "-bounded"
 }
 
 // flightSuffix keeps a profile's singleflight group apart from the full

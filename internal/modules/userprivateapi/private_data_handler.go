@@ -38,8 +38,8 @@ const privateReadSlowThreshold = 500 * time.Millisecond
 // split also keeps a whitespace-only ?key= (which the cache key trims to
 // nothing but which renders null) from sharing the full document's entry.
 const (
-	privateCacheSurfaceFull  = "private"
-	privateCacheSurfaceKeyed = "private-keyed-v2"
+	privateCacheSurfaceFull  = "private-bounded"
+	privateCacheSurfaceKeyed = "private-keyed-v2-bounded"
 )
 
 // privateCacheSurface picks the cache-key surface for a private request. The

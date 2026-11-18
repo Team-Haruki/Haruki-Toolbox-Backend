@@ -65,6 +65,15 @@ func TestCompactJSONExpansionHonorsByteBudget(t *testing.T) {
 	}
 }
 
+func TestCompactExpansionHonorsRemainingPrivateRowBudget(t *testing.T) {
+	entry := catalog.Entry{Column: "compact_fixture", Storage: catalog.StorageCompactJSON}
+	raw := []byte(`{"id":[1,2]}`)
+	row := &Row{byColumn: map[string][]byte{entry.Column: raw}, expandedBytes: maxPrivateResponseBytes - 8}
+	if raw, ok, err := row.columnValue(&entry); err == nil || ok || raw != nil {
+		t.Fatal("expanded column exceeded the row's remaining budget")
+	}
+}
+
 func TestCompactExpansionConcurrentRows(t *testing.T) {
 	c := catalog.Suite()
 	e, _ := c.Resolve("userMusicResults")

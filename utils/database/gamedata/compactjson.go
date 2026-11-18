@@ -43,9 +43,16 @@ func ExpandCompactJSON(raw []byte) ([]byte, error) {
 	if !IsCompactValue(raw) {
 		return raw, nil
 	}
+	return expandCompactJSONWithLimit(raw, DefaultLimits().MaxKeyBytes)
+}
+
+func expandCompactJSONWithLimit(raw []byte, limit int) ([]byte, error) {
+	if limit <= 0 {
+		return nil, ErrPublishedResponseTooLarge
+	}
 	out := compactJSONOutput{
-		body:  make([]byte, 0, min(len(raw), 1<<20)),
-		limit: DefaultLimits().MaxKeyBytes,
+		body:  make([]byte, 0, min(len(raw), limit, 1<<20)),
+		limit: limit,
 	}
 	if err := renderCompactJSON(raw, &out); err != nil {
 		return nil, err
