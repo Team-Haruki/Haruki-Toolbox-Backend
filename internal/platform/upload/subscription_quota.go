@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -48,6 +49,10 @@ end
 `
 
 const birthdayStoreLua = birthdayReleaseLua + `
+local raw = redis.call('GET', KEYS[5])
+if not raw then return '' end
+local monitor = cjson.decode(raw)
+if monitor.subscription_id ~= ARGV[2] or monitor.subscription_version ~= ARGV[8] then return '' end
 local now = redis.call('TIME')
 local ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
 for _, key in ipairs(redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ms)) do
@@ -92,16 +97,19 @@ func storePendingBirthdayEvent(ctx context.Context, client *redis.Client, event 
 	if len(body) > birthdayPendingBytesPerSubscription {
 		return nil, errBirthdayPendingQuota
 	}
-	keys := make([]string, 0, len(birthdayPendingKeys)+1)
+	keys := make([]string, 0, len(birthdayPendingKeys)+2)
 	keys = append(keys, birthdayPendingKeys...)
-	keys = append(keys, event.PayloadRef)
+	keys = append(keys, event.PayloadRef, harukiRedis.BuildMysekaiBirthdayMonitorKey(event.Region, event.UID))
 	stored, err := client.Eval(ctx, birthdayStoreLua, keys, body, event.SubscriptionID, birthdayPendingGlobal,
-		birthdayPendingBytesGlobal, birthdayPendingPerSubscription, birthdayPendingBytesPerSubscription, ttl.Milliseconds()).Text()
+		birthdayPendingBytesGlobal, birthdayPendingPerSubscription, birthdayPendingBytesPerSubscription, ttl.Milliseconds(), event.SubscriptionVersion).Text()
 	if errors.Is(err, redis.Nil) {
 		return nil, errBirthdayPendingQuota
 	}
 	if err != nil {
 		return nil, err
+	}
+	if stored == "" {
+		return nil, errBirthdayMonitorChanged
 	}
 	var accepted BirthdayMonitorEvent
 	if err := jsoncodec.Unmarshal([]byte(stored), &accepted); err != nil {

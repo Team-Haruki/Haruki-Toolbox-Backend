@@ -370,8 +370,8 @@ func BuildMysekaiBirthdayEventKey(subscriptionID, subscriptionVersion, eventID s
 	)
 }
 
-func BuildMysekaiBirthdaySubscriptionEventsPattern(subscriptionID string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionEvent, strings.TrimSpace(subscriptionID), "*")
+func MysekaiBirthdayEventPrefix() string {
+	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionEvent, "")
 }
 
 // Device-flow keys never carry a raw user code, wrapped device code or flow
