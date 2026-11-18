@@ -22,10 +22,9 @@ const (
 
 var sendSlots = make(chan struct{}, maxConcurrentSends)
 
-// Dispatch runs job on a background goroutine when a worker slot is free and
-// falls back to running it synchronously when all slots are busy — saturation
-// degrades to the pre-async behavior instead of dropping notifications or
-// spawning unbounded goroutines. The job receives a background-derived context:
+// Dispatch runs job in the background when a worker slot is free. Under
+// saturation it waits for a slot and runs synchronously, keeping the same
+// concurrency bound. The job receives a background-derived context:
 // callers must not capture the fiber request context (or any request-buffer
 // backed strings) because fiber recycles them after the handler returns.
 func Dispatch(job func(ctx context.Context)) {
@@ -36,6 +35,8 @@ func Dispatch(job func(ctx context.Context)) {
 			run(job)
 		}()
 	default:
+		sendSlots <- struct{}{}
+		defer func() { <-sendSlots }()
 		run(job)
 	}
 }

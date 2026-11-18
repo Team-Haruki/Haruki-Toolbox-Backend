@@ -56,12 +56,15 @@ func (s Service) AppendUserMessage(ctx context.Context, row *postgresql.Ticket, 
 		return nil, err
 	}
 
-	update := tx.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusPendingAdmin)
+	update := tx.Ticket.UpdateOneID(row.ID).Where(ticket.StatusNEQ(ticket.StatusClosed)).SetStatus(ticket.StatusPendingAdmin)
 	if row.ClosedAt != nil {
 		update.ClearClosedAt()
 	}
 	if _, err := update.Save(ctx); err != nil {
 		rollback()
+		if postgresql.IsNotFound(err) {
+			return nil, ErrTicketClosed
+		}
 		return nil, fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -95,11 +98,11 @@ func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket,
 	}
 
 	if !internal && row.Status != ticket.StatusClosed {
-		update := tx.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusPendingUser)
+		update := tx.Ticket.UpdateOneID(row.ID).Where(ticket.StatusNEQ(ticket.StatusClosed)).SetStatus(ticket.StatusPendingUser)
 		if row.ClosedAt != nil {
 			update.ClearClosedAt()
 		}
-		if _, err := update.Save(ctx); err != nil {
+		if _, err := update.Save(ctx); err != nil && !postgresql.IsNotFound(err) {
 			rollback()
 			return nil, fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
 		}

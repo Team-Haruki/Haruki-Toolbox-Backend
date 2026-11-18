@@ -149,6 +149,7 @@ func sendTicketMail(event Event, recipients []string, kind mailtemplate.TicketEv
 		harukiLogger.Warnf("Failed to render ticket notification mail for ticket %s: %v", event.Ticket.PublicID, err)
 		return
 	}
+	msg.HideRecipients = true
 	if err := event.MailSender.SendMessage(recipients, msg, strings.TrimSpace(event.DisplayName)); err != nil {
 		harukiLogger.Warnf("Failed to send ticket notification mail for ticket %s to %s: %v", event.Ticket.PublicID, strings.Join(recipients, ","), err)
 	}

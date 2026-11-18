@@ -2,6 +2,7 @@ package usertickets
 
 import (
 	"context"
+	json "encoding/json/v2"
 	"errors"
 	"math"
 	"strings"
@@ -36,10 +37,25 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			})
 		}()
 
+		if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+			reason = "invalid_payload"
+			return c.SendStatus(fiber.StatusUnsupportedMediaType)
+		}
+		if len(c.Request().Body()) > 64<<10 {
+			reason = "invalid_payload"
+			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
+		}
 		var payload createUserTicketPayload
 		if err := c.Bind().Body(&payload); err != nil {
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
+		}
+		if payload.Metadata != nil {
+			encoded, err := json.Marshal(payload.Metadata)
+			if err != nil || len(encoded) > 16<<10 {
+				reason = "invalid_metadata"
+				return harukiAPIHelper.ErrorBadRequest(c, "ticket metadata exceeds 16 KiB")
+			}
 		}
 
 		subject, err := normalizeUserTicketSubject(payload.Subject)
@@ -176,8 +192,11 @@ func handleListOwnTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		}
 		rows, err := baseQuery.Clone().
 			Order(ticket.ByUpdatedAt(sql.OrderDesc()), ticket.ByID(sql.OrderDesc())).
-			Offset((page - 1) * pageSize).
+			Offset((page-1)*pageSize).
 			Limit(pageSize).
+			Select(ticket.FieldID, ticket.FieldTicketID, ticket.FieldSubject, ticket.FieldPriority,
+				ticket.FieldStatus, ticket.FieldCategory, ticket.FieldAssigneeAdminID,
+				ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldClosedAt).
 			All(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query tickets")

@@ -45,8 +45,11 @@ func handleAdminListTickets(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 				q.Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1)
 			}).
 			Order(ticket.ByUpdatedAt(sql.OrderDesc()), ticket.ByID(sql.OrderDesc())).
-			Offset((filters.Page - 1) * filters.PageSize).
+			Offset((filters.Page-1)*filters.PageSize).
 			Limit(filters.PageSize).
+			Select(ticket.FieldID, ticket.FieldTicketID, ticket.FieldCreatorUserID, ticket.FieldSubject,
+				ticket.FieldPriority, ticket.FieldStatus, ticket.FieldCategory, ticket.FieldAssigneeAdminID,
+				ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldClosedAt).
 			All(c.Context())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query tickets")
