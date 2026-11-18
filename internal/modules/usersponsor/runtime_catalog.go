@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -20,23 +21,25 @@ import (
 const previewRoute = "/api/misc/sponsor-frames/"
 const maxCatalogBytes = 1 << 20
 const maxPreviewBytes = 8 << 20
+const previewRefreshInterval = 5 * time.Second
 
 var frameIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,95}$`)
 var previewNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,159}\.(png|jpg|jpeg|webp)$`)
 
 // Catalog reads catalog.json and previews/ from an operator-owned directory.
 // Mount the directory (not the JSON file) read-only so atomic rename updates
-// remain visible. Each request reloads the manifest; invalid updates retain the
-// last valid snapshot. An invalid initial manifest fails application startup.
+// remain visible. Public preview requests share a refresh interval. Invalid
+// updates retain the last valid snapshot; an invalid initial manifest fails startup.
 // Preview bytes are held in the same snapshot as their content-addressed URLs.
 type Catalog struct {
-	mu        sync.Mutex
-	directory string
-	publicURL string
-	frames    []Frame
-	previews  map[string]previewImage
-	lastError string
-	logger    *logger.Logger
+	mu                 sync.Mutex
+	directory          string
+	publicURL          string
+	frames             []Frame
+	previews           map[string]previewImage
+	lastError          string
+	logger             *logger.Logger
+	nextPreviewRefresh time.Time
 }
 type previewImage struct {
 	data                []byte
@@ -197,7 +200,10 @@ func lookupFrame(frames []Frame, id string) *Frame {
 // Only validated catalog previews can be served; no request path is opened.
 func (c *Catalog) preview(ctx fiber.Ctx) error {
 	c.mu.Lock()
-	c.refreshLocked()
+	if time.Now().After(c.nextPreviewRefresh) {
+		c.refreshLocked()
+		c.nextPreviewRefresh = time.Now().Add(previewRefreshInterval)
+	}
 	img, ok := c.previews[ctx.Params("filename")]
 	c.mu.Unlock()
 	if !ok {

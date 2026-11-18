@@ -48,15 +48,6 @@ func handleGetSponsors(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 
 func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, cfg AfdianConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Per-IP rate limit: the callback is public and triggers an outbound
-		// Afdian API verification, so bound abuse/amplification per source.
-		if apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil {
-			if count, err := apiHelper.DBManager.Redis.IncrementWithTTL(c.Context(), harukiRedis.BuildAfdianCallbackRateLimitIPKey(c.IP()), afdianCallbackRateLimitWindow); err == nil && count > afdianCallbackRateLimitMax {
-				harukiLogger.Warnf("Afdian webhook rate limited for IP %s", c.IP())
-				return afdianAck(c)
-			}
-		}
-
 		secret := cfg.WebhookSecret()
 		apiConfigured := cfg.CredentialsConfigured()
 
@@ -78,9 +69,24 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 			}
 		}
 
+		if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+			return c.SendStatus(fiber.StatusUnsupportedMediaType)
+		}
+		body := c.Request().Body()
+		if len(body) > 64<<10 {
+			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
+		}
+		// Charge traffic after the URL secret gate when that gate is enabled.
+		// A throttled delivery must remain retryable by the payment provider.
+		if apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil {
+			if count, err := apiHelper.DBManager.Redis.IncrementWithTTL(c.Context(), harukiRedis.BuildAfdianCallbackRateLimitIPKey(c.IP()), afdianCallbackRateLimitWindow); err == nil && count > afdianCallbackRateLimitMax {
+				c.Set("Retry-After", "60")
+				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{"ec": 429})
+			}
+		}
 		var payload map[string]any
 
-		if err := json.UnmarshalRead(bytes.NewReader(c.Body()), &payload, jsonvalue.Numbers); err != nil {
+		if err := json.UnmarshalRead(bytes.NewReader(body), &payload, jsonvalue.Numbers); err != nil {
 			return afdianAck(c)
 		}
 
@@ -97,12 +103,12 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 		case errors.Is(err, ErrAfdianNotConfigured):
 			// Reachable only when the URL secret gate above passed, so the body is
 			// trusted by virtue of the secret even though API re-verification is off.
-			harukiLogger.Warnf("Afdian webhook order %q accepted via URL secret without API verification", parsed.OutTradeNo)
+			harukiLogger.Warnf("Afdian webhook order accepted via URL secret without API verification")
 		case err != nil:
-			harukiLogger.Warnf("Afdian webhook order %q verification request failed: %v", parsed.OutTradeNo, err)
+			harukiLogger.Warnf("Afdian webhook order verification request failed (%T)", err)
 			return afdianAck(c)
 		case !found:
-			harukiLogger.Warnf("Afdian webhook order %q not found via API, rejecting possible forgery", parsed.OutTradeNo)
+			harukiLogger.Warnf("Afdian webhook order not found during API verification")
 			return afdianAck(c)
 		default:
 			parsed = verified
