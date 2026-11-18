@@ -1369,3 +1369,21 @@ func TestVaultReadsDoNotExposeFallbackWhenTombstonesCannotBeRead(t *testing.T) {
 		t.Fatalf("fallback was returned despite unknown tombstone state: %v", err)
 	}
 }
+
+func TestKDFAdmissionHonorsCancelledContext(t *testing.T) {
+	for range cap(kdfSlots) {
+		kdfSlots <- struct{}{}
+	}
+	defer func() {
+		for range cap(kdfSlots) {
+			<-kdfSlots
+		}
+	}()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	params := DefaultKDFParams
+	params.Salt = make([]byte, saltSize)
+	if _, err := deriveSecretKey(ctx, []byte("test-secret"), params); !errors.Is(err, ErrKDFBusy) {
+		t.Fatalf("derive with cancelled context: %v", err)
+	}
+}

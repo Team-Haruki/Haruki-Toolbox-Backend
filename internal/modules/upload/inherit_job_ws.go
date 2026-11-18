@@ -184,8 +184,11 @@ func (s *inheritService) serveWS(conn *websocket.Conn, meta requestMeta, jobID s
 		return
 	}
 	if rt == nil {
-		// Finished (or not running here): the snapshot is all there is.
-		_ = ws.control(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "job finished"))
+		reason := "job finished"
+		if !job.Status.terminal() {
+			reason = "job hosted by another replica"
+		}
+		_ = ws.control(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, reason))
 		return
 	}
 

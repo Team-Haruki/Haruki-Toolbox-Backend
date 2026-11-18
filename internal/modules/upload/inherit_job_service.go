@@ -2,6 +2,7 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -329,7 +330,14 @@ func (s *inheritService) loadJob(ctx context.Context, userID, jobID string) (*in
 	if job == nil || job.OwnerUserID != userID {
 		return nil, nil, errJobNotFound
 	}
-	if !job.Status.terminal() && job.Instance != inheritInstanceID {
+	if !job.Status.terminal() {
+		holder, err := s.redis.Get(ctx, inheritActiveKeyPrefix+userID).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return nil, nil, errStoreUnavailable
+		}
+		if holder == jobID {
+			return job, nil, nil
+		}
 		now := s.now()
 		job.Status, job.FinishedAt, job.Error, job.ConfirmDeadline = jobStatusFailed, &now, jobProblemFor(codeJobInterrupted), nil
 		for i := range job.Steps {
@@ -337,7 +345,6 @@ func (s *inheritService) loadJob(ctx context.Context, userID, jobID string) (*in
 				job.Steps[i].Status = stepSkipped
 			}
 		}
-		_ = s.jobs.save(ctx, job)
 	}
 	return job, nil, nil
 }

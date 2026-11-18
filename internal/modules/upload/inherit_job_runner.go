@@ -242,12 +242,22 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 	ctx, cancel := context.WithTimeout(context.Background(), s.phaseTimeout)
 	defer cancel()
 	job := rt.job
+	reserved, releaseOwner, err := s.vault.ReserveLiveOwner(ctx, job.OwnerUserID)
+	if err != nil {
+		return s.failStep(rt, stepExecute, codeJobInterrupted)
+	}
+	defer releaseOwner()
+	ctx = reserved
+
 	rt.mu.Lock()
 	code := rt.code
 	rt.mu.Unlock()
 
 	// execute
 	s.setStep(rt, stepExecute, stepRunning, "")
+	if err := s.requireActiveLease(ctx, job); err != nil {
+		return s.failStep(rt, stepExecute, codeJobInterrupted)
+	}
 	credential, err := game.Execute(ctx, code)
 	rt.mu.Lock()
 	rt.code = harukiSekai.InheritCode{}
@@ -266,7 +276,7 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 	// vault_store_credential: committed before any further network call.
 	entryID := inheritvault.NewEntryID()
 	s.setStep(rt, stepVaultStoreCredential, stepRunning, "")
-	location, err := s.vault.PutCredential(context.Background(), inheritvault.CredentialInput{
+	location, err := s.vault.PutCredential(context.WithoutCancel(ctx), inheritvault.CredentialInput{
 		EntryID: entryID, UserID: job.OwnerUserID, Server: job.Server, GameUserID: gameUserID, JobID: job.ID,
 		KeyVersion: conf.keyVersion, PublicKey: conf.publicKey, Credential: []byte(credential),
 	})
@@ -306,7 +316,12 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 		newPassword = code.Password
 	}
 	s.setStep(rt, stepIssueNewCode, stepRunning, "")
-	newInheritID, err := s.issueWithRetry(ctx, game, newPassword)
+	newInheritID, err := s.issueWithRetry(ctx, func(ctx context.Context, password string) (string, error) {
+		if err := s.requireActiveLease(ctx, job); err != nil {
+			return "", err
+		}
+		return game.IssueInheritCode(ctx, password)
+	}, newPassword)
 	if err != nil {
 		gameErr = err
 		s.setStep(rt, stepIssueNewCode, stepFailed, codeIssueCodeFailed)
@@ -327,7 +342,7 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 		s.setStep(rt, stepVaultStoreCode, stepRunning, "")
 		if !credentialStored {
 			s.setStep(rt, stepVaultStoreCode, stepSkipped, codeVaultStoreFailed)
-		} else if loc, err := s.vault.PutCode(context.Background(), inheritvault.CodeInput{
+		} else if loc, err := s.vault.PutCode(context.WithoutCancel(ctx), inheritvault.CodeInput{
 			EntryID: entryID, UserID: job.OwnerUserID, Server: job.Server, KeyVersion: conf.keyVersion, PublicKey: conf.publicKey,
 			InheritID: newInheritID, Password: newPassword,
 		}); err != nil {
@@ -340,6 +355,8 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 			s.setStep(rt, stepVaultStoreCode, stepOK, "")
 		}
 	}
+
+	releaseOwner()
 
 	// fetch_suite / fetch_mysekai
 	s.setStep(rt, stepFetchSuite, stepRunning, "")
@@ -413,7 +430,7 @@ func auditResult(ok bool) string {
 }
 
 // issueWithRetry asks for a new code a few times with a growing pause.
-func (s *inheritService) issueWithRetry(ctx context.Context, game inheritGame, password string) (string, error) {
+func (s *inheritService) issueWithRetry(ctx context.Context, issue func(context.Context, string) (string, error), password string) (string, error) {
 	var lastErr error
 	for attempt := range inheritIssueAttempts {
 		if attempt > 0 {
@@ -425,7 +442,7 @@ func (s *inheritService) issueWithRetry(ctx context.Context, game inheritGame, p
 				return "", errors.Join(lastErr, ctx.Err())
 			}
 		}
-		id, err := game.IssueInheritCode(ctx, password)
+		id, err := issue(ctx, password)
 		if err == nil {
 			return id, nil
 		}

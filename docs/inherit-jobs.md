@@ -192,6 +192,8 @@ Server to client (JSON text frames):
 
 The server also sends WebSocket ping control frames every 15 seconds (browsers answer them by themselves) and closes the socket when nothing has arrived for 60 seconds. When the job ends, the last `event` carries the final snapshot and the server closes with code 1000. A job that is already finished gets one `snapshot` and a close.
 
+An unfinished job keeps its shared lease across backend replicas. A replica can report the shared job state while the lease is live. The runner verifies the lease before consuming or issuing an inheritance code. A user may start another job when the previous lease expires. A WebSocket connected to a different replica sends one snapshot. Live updates and confirmation are served by the replica running the job.
+
 Client to server:
 
 ```json

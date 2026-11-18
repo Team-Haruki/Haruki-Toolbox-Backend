@@ -10,6 +10,7 @@
 package inheritvault
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
@@ -23,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -174,8 +176,12 @@ type KDFParams struct {
 // DefaultKDFParams is used for new keys. Tests lower it.
 var DefaultKDFParams = KDFParams{Algorithm: "argon2id", Iterations: 3, MemoryKiB: 64 * 1024, Parallelism: 1}
 
-// kdfSlots bounds concurrent Argon2id derivations (each holds MemoryKiB).
+// ErrKDFBusy means the derivation could not be admitted within its budget.
+var ErrKDFBusy = errors.New("inherit vault: key derivation temporarily busy")
+
+// Bound running derivations and their queue separately.
 var kdfSlots = make(chan struct{}, 4)
+var kdfWaiters = make(chan struct{}, 16)
 
 func (p KDFParams) validate() error {
 	if p.Algorithm != "argon2id" || len(p.Salt) < saltSize ||
@@ -187,15 +193,30 @@ func (p KDFParams) validate() error {
 	return nil
 }
 
-func deriveSecretKey(secret []byte, p KDFParams) ([]byte, error) {
+func deriveSecretKey(ctx context.Context, secret []byte, p KDFParams) ([]byte, error) {
 	if err := p.validate(); err != nil {
 		return nil, err
 	}
 	if len(secret) == 0 || len(secret) > maxSecretBytes {
 		return nil, ErrDecrypt
 	}
-	kdfSlots <- struct{}{}
-	defer func() { <-kdfSlots }()
+	select {
+	case kdfWaiters <- struct{}{}:
+		defer func() { <-kdfWaiters }()
+	default:
+		return nil, ErrKDFBusy
+	}
+	wait, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	select {
+	case <-wait.Done():
+		return nil, ErrKDFBusy
+	case kdfSlots <- struct{}{}:
+		defer func() { <-kdfSlots }()
+		if wait.Err() != nil {
+			return nil, ErrKDFBusy
+		}
+	}
 	return argon2.IDKey(secret, p.Salt, p.Iterations, p.MemoryKiB, p.Parallelism, keySize), nil
 }
 
@@ -222,6 +243,10 @@ func keyMasterAD(userID string, keyVersion, masterVersion int) []byte {
 // GenerateKey creates a key pair for userID and wraps its private key with
 // secret and master.
 func GenerateKey(master *MasterKey, userID string, keyVersion int, secret []byte) (*WrappedKey, error) {
+	return generateKeyContext(context.Background(), master, userID, keyVersion, secret)
+}
+
+func generateKeyContext(ctx context.Context, master *MasterKey, userID string, keyVersion int, secret []byte) (*WrappedKey, error) {
 	priv, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
@@ -231,14 +256,18 @@ func GenerateKey(master *MasterKey, userID string, keyVersion int, secret []byte
 	params := DefaultKDFParams
 	params.Salt = make([]byte, saltSize)
 	_, _ = rand.Read(params.Salt)
-	return wrapPrivateKey(master, userID, keyVersion, raw, priv.PublicKey().Bytes(), secret, params)
+	return wrapPrivateKeyContext(ctx, master, userID, keyVersion, raw, priv.PublicKey().Bytes(), secret, params)
 }
 
 func wrapPrivateKey(master *MasterKey, userID string, keyVersion int, raw, public, secret []byte, params KDFParams) (*WrappedKey, error) {
+	return wrapPrivateKeyContext(context.Background(), master, userID, keyVersion, raw, public, secret, params)
+}
+
+func wrapPrivateKeyContext(ctx context.Context, master *MasterKey, userID string, keyVersion int, raw, public, secret []byte, params KDFParams) (*WrappedKey, error) {
 	if master == nil {
 		return nil, ErrMasterKey
 	}
-	kek, err := deriveSecretKey(secret, params)
+	kek, err := deriveSecretKey(ctx, secret, params)
 	if err != nil {
 		return nil, err
 	}
@@ -263,6 +292,10 @@ func wrapPrivateKey(master *MasterKey, userID string, keyVersion int, raw, publi
 // soon as it is done. ErrDecrypt means secret is not the one the key was
 // wrapped with (or the record was tampered with).
 func UnwrapPrivateKey(master *MasterKey, k *WrappedKey, secret []byte) ([]byte, error) {
+	return unwrapPrivateKeyContext(context.Background(), master, k, secret)
+}
+
+func unwrapPrivateKeyContext(ctx context.Context, master *MasterKey, k *WrappedKey, secret []byte) ([]byte, error) {
 	if master == nil || k == nil {
 		return nil, ErrMasterKey
 	}
@@ -276,7 +309,7 @@ func UnwrapPrivateKey(master *MasterKey, k *WrappedKey, secret []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	kek, err := deriveSecretKey(secret, k.KDF)
+	kek, err := deriveSecretKey(ctx, secret, k.KDF)
 	if err != nil {
 		return nil, err
 	}
@@ -299,10 +332,14 @@ func UnwrapPrivateKey(master *MasterKey, k *WrappedKey, secret []byte) ([]byte, 
 // Rewrap re-protects an unwrapped private key with a new secret (after the
 // owner changed their Toolbox password, for example), with a fresh salt.
 func Rewrap(master *MasterKey, k *WrappedKey, raw, newSecret []byte) (*WrappedKey, error) {
+	return rewrapContext(context.Background(), master, k, raw, newSecret)
+}
+
+func rewrapContext(ctx context.Context, master *MasterKey, k *WrappedKey, raw, newSecret []byte) (*WrappedKey, error) {
 	params := DefaultKDFParams
 	params.Salt = make([]byte, saltSize)
 	_, _ = rand.Read(params.Salt)
-	return wrapPrivateKey(master, k.UserID, k.KeyVersion, raw, k.PublicKey, newSecret, params)
+	return wrapPrivateKeyContext(ctx, master, k.UserID, k.KeyVersion, raw, k.PublicKey, newSecret, params)
 }
 
 // EntryAD binds a sealed value to its vault row, owner, server, key version

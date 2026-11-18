@@ -505,7 +505,7 @@ func TestIssueWithRetryStopsWhenTheContextEnds(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := s.issueWithRetry(ctx, g, "password1")
+	_, err := s.issueWithRetry(ctx, g.IssueInheritCode, "password1")
 	if !errors.Is(err, context.Canceled) || !errors.Is(err, failure) || g.count("issue") != 1 {
 		t.Fatalf("err = %v after %d attempts", err, g.count("issue"))
 	}
