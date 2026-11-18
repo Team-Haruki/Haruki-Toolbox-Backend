@@ -303,3 +303,39 @@ func TestBindingPrivacyAndDeleteDoNotCommitAfterOwnershipChanged(t *testing.T) {
 		})
 	}
 }
+
+func TestGrantRouteRejectsUnverifiedAndBannedParticipantsWithoutWriting(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, "grant-write-denials")
+	for _, id := range []string{"owner", "delegate"} {
+		createDefaultBindingTestUser(t, db, ctx, id)
+	}
+	binding := db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("42").SetUserID("owner").SaveX(ctx)
+	app := fiber.New()
+	app.Put("/:server/:game_user_id/:data_type/:grantee_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", c.Get("Test-Actor"))
+		return c.Next()
+	}, handleUpsertGameAccountDataGrant(helper))
+	request := func(actor, grantee string, want int) {
+		t.Helper()
+		body := `{"expiresAt":"` + time.Now().UTC().Add(time.Hour).Format(time.RFC3339) + `"}`
+		req := httptest.NewRequest(http.MethodPut, "/jp/42/suite/"+grantee, strings.NewReader(body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		req.Header.Set("Test-Actor", actor)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
+			t.Fatalf("grant denial returned %d, want %d, or wrote a grant", resp.StatusCode, want)
+		}
+	}
+	request("owner", "delegate", http.StatusBadRequest)
+	request("owner", "missing", http.StatusNotFound)
+	request("missing", "delegate", http.StatusUnauthorized)
+	db.GameAccountBinding.UpdateOneID(binding.ID).SetVerified(true).ExecX(ctx)
+	db.User.UpdateOneID("delegate").SetBanned(true).ExecX(ctx)
+	request("owner", "delegate", http.StatusForbidden)
+	db.User.UpdateOneID("owner").SetBanned(true).ExecX(ctx)
+	request("owner", "delegate", http.StatusForbidden)
+}
