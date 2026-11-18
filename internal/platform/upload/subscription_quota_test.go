@@ -182,3 +182,42 @@ func TestBirthdayMonitorDeletionIsScopedToCurrentGeneration(t *testing.T) {
 		t.Fatalf("pending ledger count after cleanup = %q, want 1", count)
 	}
 }
+
+func TestBirthdayMonitorValidatesIdentityAndHidesLegacyEvents(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	manager := &harukiRedis.HarukiRedisManager{Redis: client}
+	ctx := t.Context()
+	active := BirthdayMonitorMirror{SubscriptionID: "active", SubscriptionVersion: "v2", Region: "jp", UID: "42", MaterialIDs: []int{1}, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	if err := UpsertBirthdayMonitorMirror(ctx, manager, active); err != nil {
+		t.Fatal(err)
+	}
+	invalid := active
+	invalid.SubscriptionID = "not valid"
+	if err := UpsertBirthdayMonitorMirror(ctx, manager, invalid); err == nil {
+		t.Fatal("invalid subscription identifier was accepted")
+	}
+	moved := active
+	moved.UID = "43"
+	if err := UpsertBirthdayMonitorMirror(ctx, manager, moved); !errors.Is(err, errBirthdayMonitorChanged) {
+		t.Fatalf("moving the same generation returned %v", err)
+	}
+	if err := DeleteBirthdayMonitorMirror(ctx, manager, active.SubscriptionID, ""); err == nil {
+		t.Fatal("unversioned cancellation was accepted")
+	}
+	legacy := BirthdayMonitorEvent{SubscriptionID: active.SubscriptionID, SubscriptionVersion: "v1", EventID: "legacy", Region: active.Region, UID: active.UID}
+	key := harukiRedis.BuildMysekaiBirthdayEventKey(legacy.SubscriptionID, legacy.SubscriptionVersion, legacy.EventID)
+	if err := manager.SetCache(ctx, key, legacy, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FetchBirthdayMonitorEvent(ctx, manager, legacy.EventID, legacy.SubscriptionID, legacy.SubscriptionVersion); !errors.Is(err, errBirthdayMonitorChanged) {
+		t.Fatalf("inactive legacy event returned %v", err)
+	}
+	if err := AckBirthdayMonitorEvent(ctx, manager, legacy.EventID, legacy.SubscriptionID, legacy.SubscriptionVersion); err != nil {
+		t.Fatal(err)
+	}
+	if client.Exists(ctx, key).Val() != 0 {
+		t.Fatal("acknowledgement did not release the exact legacy event")
+	}
+}
