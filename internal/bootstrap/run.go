@@ -242,8 +242,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 			DetailPath:  "/tickets",
 			DisplayName: cfg.UserSystem.SMTP.MailName,
 		},
-		Story:        storyService,
-		InheritVault: inheritVault,
+		AdminFrontendURL: cfg.UserSystem.FrontendURL,
+		Story:            storyService,
+		InheritVault:     inheritVault,
 	})
 
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())

@@ -175,6 +175,8 @@ Hydra 在当前项目里负责：
 
 管理员角色变更、代重置密码、代撤销用户 OAuth 授权、轮换 OAuth 客户端密钥和修改 webhook 签名设置前，需先在当前会话完成管理员重认证。
 
+管理端写请求必须带有与 `user_system.frontend_url` 同源的 `Origin`。代重置密码时，若提交密码则使用 `application/json`。代撤销单个客户端授权时传入 `clientId`，撤销该用户全部 OAuth 授权时显式提交 JSON `{"revokeAll":true}`。
+
 Kratos 的会话校验要求达到身份已配置的最高认证等级。已启用第二因素的用户需要完成第二因素才能访问浏览器受保护 API。
 
 管理员路由另行要求会话达到 AAL2。管理员须先注册第二因素；Oathkeeper 从已验证会话写入 `X-Auth-Proxy-Session-Aal`，直接 Kratos 模式使用同一会话响应中的认证等级。
@@ -397,7 +399,7 @@ Kratos 的会话校验要求达到身份已配置的最高认证等级。已启�
 `/api/oauth2/token` 是令牌端点兼容层（`hydra_token_endpoint.go`）：
 
 - 兼容层接收最多 64 KiB 的未压缩请求体。非设备授权表单通过客户端启用检查后逐字节转发，响应原样返回。`TestTokenShimNonDeviceGrantVerbatim` 和 `TestTokenEndpointsDenyDisabledClientAndPreserveActiveRequest` 覆盖转发契约与停用检查
-- 设备授权许可的请求带的是后端签发的包装设备码 `hdc_…`：兼容层用它找到流程、在本地执行 `slow_down`（早于 `interval` 的轮询不调用 Hydra），其余轮询解封出 Hydra 的 `ory_dc_…` 后转发 `POST /oauth2/token`，由 Hydra 认证客户端，再按流程状态改写 Hydra 的回答（`access_denied`、`expired_token`，或对已拒绝 / 已停用的流程不交出令牌并按 `consent_request_id` 撤销）。客户端认证之前只会本地回答参数错误、`slow_down`、未知码（`invalid_grant`）、功能关闭（`expired_token`）和 503
+- 设备授权的兑换请求使用后端签发的 `hdc_…`。公开客户端过早轮询时由后端直接返回 `slow_down`。机密客户端先将请求交 Hydra 认证，再更新轮询状态。发放令牌前重新核对客户端及已批准 scope 的当前设备授权策略，策略不再允许时扣留并撤销 Hydra 签发的令牌（§10.5.4）。
 - 设备分支的每个响应（包括透传的 Hydra 响应）都带 `Cache-Control: no-store` 与 `Pragma: no-cache`
 - 旧 `/oauth2/token` 由后端兼容层处理，并与发现文档中的令牌端点共用客户端启用检查。设备码继续使用 `/api/oauth2/token`
 
@@ -586,7 +588,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 | H9j | 后端 → Hydra public | `GET` 改写后的 `redirect_to`，带容器 | 预期 302 `FE/device/done?client_id=C`，只校验、不访问 |
 | H9k | 后端 → Redis / 审计 | `deviceFlowFinishApproveScript`（→ `approved`），审计 `user.oauth.device.approve`，丢弃容器 | 200 `{status:"approved",…}` |
 | H10 | 浏览器 → 后端 | `POST API/api/oauth2/device/deny` `{flowHandle, reason}` | `deviceFlowDenyScript` → `denied`；不调用 Hydra reject；有 `crid` 时随后按它撤销 |
-| H11 | 设备 → 后端 | `POST API/api/oauth2/token`，`grant_type=…device_code&device_code=hdc_…` | `deviceFlowPollScript`；过早则本地 `slow_down`，否则 H12 |
+| H11 | 设备 → 后端 | `POST API/api/oauth2/token`，`grant_type=…device_code&device_code=hdc_…` | 校验设备码与客户端。公开客户端过早轮询时直接返回 `slow_down`。 |
 | H12 | 后端 → Hydra public | `POST /oauth2/token`，`device_code=ory_dc_…`、`client_id`，转发原 `Authorization` | 按流程状态改写（§10.5.4）；`deviceFlowSettleScript` 落定 |
 | H13 | 设备 → 后端 | `GET API/api/oauth2/user/profile`（`user:read`） | 设备显示「已授权为 <name>」 |
 | H14 | 回收器 → Hydra admin | `DELETE /admin/oauth2/auth/sessions/consent?consent_request_id=…` | 未兑换集合中到 `exp + 60 s` 仍未签发的流程（§10.5.9） |
@@ -620,7 +622,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 
 #### 10.5.4 令牌端点兼容层 `POST /api/oauth2/token`
 
-`handleHydraTokenEndpoint`（`hydra_token_endpoint.go`）。不是表单、或 `grant_type` 不是设备授权许可的请求经 `handleHydraPublicProxy` 逐字节转发（§10.1）。设备分支：请求客户端 = Basic 用户名，否则表单 `client_id`；顺序为参数检查 → `hdc_` 格式与 `dc` 索引 → 功能闸门 → `deviceFlowPollScript`（传入请求客户端）→ 已批准类（`approving` / `approved` / `unconfirmed`）**预取**客户端启用状态（只在 Hydra 认证通过后使用）→ 解封 → H12 → `deviceFlowSettleScript` → 按下表回答。
+`handleHydraTokenEndpoint`（`hydra_token_endpoint.go`）。不是表单、或 `grant_type` 不是设备授权许可的请求经 `handleHydraPublicProxy` 逐字节转发（§10.1）。设备分支从 Basic 用户名或表单 `client_id` 获取客户端 ID，校验参数、`hdc_`、`dc` 索引、流程归属及功能闸门。公开客户端在调用 Hydra 前运行 `deviceFlowPollScript`。机密客户端使用独立的并发预算，先把解封后的设备码交给 Hydra 认证，收到 `authorization_pending` 后才运行轮询脚本。Hydra 签发令牌后，后端重新读取客户端配置，校验客户端启用状态、设备授权许可和流程 scope，再执行 `deviceFlowSettleScript`。
 
 | 条件 | 响应 | 状态变化 |
 | --- | --- | --- |
@@ -630,8 +632,8 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 | 运行时配置读取出错；Redis 不可用；已批准类预取客户端失败；Hydra 不可达 | 503 `temporarily_unavailable` | — |
 | 早到（`now − lpoll < ivl·1000 − 1000 ms`） | 400 `slow_down`，附 `interval` | `ivl=min(ivl+5, 60)`，`sdn+1`；`pending` / `claimed` 时 `sdn>30` ⇒ `failed` |
 | Hydra 401 或其他非 200 / 非 400 响应 | 透传 | — |
-| Hydra 200，已批准类，客户端启用 | 透传令牌，审计 `user.oauth.device.token_issued` | → `issued`，移出集合，flow 与 `dc` 300 s 后过期 |
-| Hydra 200，已批准类，客户端已停用 | 不交出令牌，按 `crid` 撤销（级联作废刚签发的 AT / RT）；400 `access_denied` | → `denied`；撤销成功才移出集合 |
+| Hydra 200，已批准类，当前策略仍允许兑换相应 scope | 透传令牌，审计 `user.oauth.device.token_issued` | → `issued`，移出集合，flow 与 `dc` 300 s 后过期 |
+| Hydra 200，已批准类，客户端已停用或策略已撤销设备授权权限 | 按 `crid` 撤销刚签发的 AT / RT，返回 400 `access_denied` | → `denied`，撤销成功才移出集合 |
 | Hydra 200，`st∈{pending,claimed,denied,failed,expired}` | 不交出令牌，按 `crid` 撤销；`denied` ⇒ `access_denied`，其余 ⇒ `expired_token`；记 `token_after_terminal` | 不变；撤销成功才移出集合 |
 | Hydra 200，flow 已不存在 | 不交出令牌，按轮询时读到的 `crid` 撤销；`expired_token` | — |
 | `authorization_pending` 且 `denied` / `failed` | `access_denied` / `expired_token` | — |
@@ -643,10 +645,10 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 | `invalid_grant` 且已批准类（客户端启用） | 透传 | → `expired`，移出集合（令牌可能已被一次结算失败的轮询领走，或授权已被撤销） |
 | 其他 | 透传 | — |
 
-- 早到判定只看 `lpoll`：首次轮询一定转发；每次轮询（转发或 `slow_down`）都把 `lpoll` 更新为 now。
-- 客户端认证之前，兼容层只会本地回答：参数错误、`slow_down`、未知码或客户端不符的 `invalid_grant`、功能关闭的 `expired_token`、503。已停用、已拒绝、已过期都在 Hydra 认证之后才透露。
+- 轮询脚本按 `lpoll` 判定早到并更新时间。机密客户端认证失败时透传 Hydra 的响应，保留流程状态、轮询时间和退避计数。
+- 客户端认证之前，兼容层只会本地回答参数错误、公开客户端的 `slow_down`、未知码或客户端不符的 `invalid_grant`、功能关闭的 `expired_token` 和 503。
 - 「不交出令牌」一律用 `RevokeHydraConsentSessionByID(crid)`；`crid` 为空在设计上不会发生，万一发生照样不交出并记 error 日志。
-- 结算失败（Hydra 已 200、Redis 写出错）短退避重试 2 次，仍失败时：已批准类且客户端启用就照常交出令牌并记 `settle_failed`（流程仍在未兑换集合里，回收器会在 `exp + 60 s` 撤销这些令牌，设备需要重新绑定，这是接受的残余代价）；否则不交出令牌并按 `crid` 撤销。Hydra 不是 200 时结算失败一律 503。
+- Hydra 已签发令牌但 Redis 写入失败时，短退避重试两次。若仍失败，仅在流程已批准且最新策略允许所请求 scope 时交出令牌，并记录 `settle_failed`。回收器将在 `exp + 60 s` 撤销仍在未兑换集合中的授权。无法确认策略时返回 503 并尝试撤销签发的令牌。
 - 签发审计用 `WriteSystemLog`（actor 匿名，target = 认领者），不用 `WriteUserAuditLog`（会把 actor 记成目标用户本人）。
 
 #### 10.5.5 浏览器端点：lookup / approve / deny

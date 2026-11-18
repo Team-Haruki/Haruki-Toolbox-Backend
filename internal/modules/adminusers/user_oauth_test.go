@@ -60,8 +60,12 @@ func TestParseAdminRevokeOAuthClientID(t *testing.T) {
 	}{
 		{
 			Name:       "empty body",
-			WantStatus: fiber.StatusOK,
-			WantBody:   "",
+			WantStatus: fiber.StatusBadRequest,
+			WantBody:   "clientId or explicit revokeAll is required",
+		},
+		{
+			Name: "explicit all-client revocation", ContentType: contentTypeApplicationJSON,
+			Body: `{"revokeAll":true}`, WantStatus: fiber.StatusOK,
 		},
 		{
 			Name:        "json camel case",
