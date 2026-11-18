@@ -29,9 +29,10 @@ func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
 	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "owner"); return c.Next() })
 	app.Post("/tickets", handleCreateOwnTicket(helper, tickets.NotificationConfig{}))
 	app.Get("/tickets", handleListOwnTickets(helper))
-	check := func(method, body, encoding string, want int) string {
+	app.Post("/tickets/:ticket_id/messages", handleAppendOwnTicketMessage(helper, tickets.NotificationConfig{}))
+	check := func(method, path, body, encoding string, want int) string {
 		t.Helper()
-		req := httptest.NewRequest(method, "/tickets", strings.NewReader(body))
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Content-Encoding", encoding)
 		resp, err := app.Test(req)
@@ -45,13 +46,13 @@ func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
 		}
 		return string(data)
 	}
-	check(http.MethodPost, "{}", "gzip", http.StatusUnsupportedMediaType)
-	check(http.MethodPost, strings.Repeat(" ", (64<<10)+1), "identity", http.StatusRequestEntityTooLarge)
+	check(http.MethodPost, "/tickets", "{}", "gzip", http.StatusUnsupportedMediaType)
+	check(http.MethodPost, "/tickets", strings.Repeat(" ", (64<<10)+1), "identity", http.StatusRequestEntityTooLarge)
 	body := `{"subject":"New ticket","message":"Example report","metadata":{"reference":"` + strings.Repeat("a", 16<<10) + `"}}`
-	if got := check(http.MethodPost, body, "", http.StatusBadRequest); !strings.Contains(got, "metadata exceeds") {
+	if got := check(http.MethodPost, "/tickets", body, "", http.StatusBadRequest); !strings.Contains(got, "metadata exceeds") {
 		t.Fatal("request did not fail at the metadata boundary")
 	}
-	if got := check(http.MethodGet, "", "", http.StatusOK); !strings.Contains(got, "owner fixture") || strings.Contains(got, "other fixture") {
+	if got := check(http.MethodGet, "/tickets", "", "", http.StatusOK); !strings.Contains(got, "owner fixture") || strings.Contains(got, "other fixture") {
 		t.Fatal("ticket listing did not return only the signed-in user's tickets")
 	}
 	if got := db.Ticket.Query().CountX(t.Context()); got != 2 {
@@ -65,15 +66,24 @@ func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
 		defer reservation.Cancel()
 	}
 	const validTicket = `{"subject":"New ticket","message":"Example report"}`
-	check(http.MethodPost, validTicket, "", http.StatusServiceUnavailable)
+	const validReply = `{"message":"Example reply"}`
+	check(http.MethodPost, "/tickets", validTicket, "", http.StatusServiceUnavailable)
+	check(http.MethodPost, "/tickets/owner-ticket/messages", validReply, "", http.StatusServiceUnavailable)
 	if got := db.Ticket.Query().CountX(t.Context()); got != 2 {
 		t.Fatalf("admission failure saved a ticket: count = %d", got)
+	}
+	if got := db.TicketMessage.Query().CountX(t.Context()); got != 0 {
+		t.Fatalf("admission failure saved a reply: count = %d", got)
 	}
 	for _, reservation := range reservations {
 		reservation.Cancel()
 	}
-	check(http.MethodPost, validTicket, "", http.StatusOK)
+	check(http.MethodPost, "/tickets", validTicket, "", http.StatusOK)
+	check(http.MethodPost, "/tickets/owner-ticket/messages", validReply, "", http.StatusOK)
 	if got := db.Ticket.Query().CountX(t.Context()); got != 3 {
 		t.Fatalf("retry after admission opened saved %d tickets, want 3 total", got)
+	}
+	if got := db.TicketMessage.Query().CountX(t.Context()); got != 2 {
+		t.Fatalf("expected one initial message and one reply, got %d", got)
 	}
 }

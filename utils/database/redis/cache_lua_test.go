@@ -105,6 +105,30 @@ func TestDeleteCacheIfValueMatches(t *testing.T) {
 	}
 }
 
+func TestReplaceCacheStringIfValueMatchesKeepsOriginalExpiry(t *testing.T) {
+	t.Parallel()
+	manager, srv := newTestRedisManager(t)
+	ctx := t.Context()
+	const key = "fixture:claim"
+	if err := manager.SetCache(ctx, key, "current", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	srv.FastForward(45 * time.Second)
+	if swapped, err := manager.ReplaceCacheStringIfValueMatches(ctx, key, "different", "pending"); err != nil || swapped {
+		t.Fatalf("unexpected claim for different value: %t, %v", swapped, err)
+	}
+	if swapped, err := manager.ReplaceCacheStringIfValueMatches(ctx, key, "current", "pending"); err != nil || !swapped {
+		t.Fatalf("exact value was not claimed: %t, %v", swapped, err)
+	}
+	if ttl := srv.TTL(key); ttl != 15*time.Second {
+		t.Fatalf("remaining TTL = %v, want 15s", ttl)
+	}
+	srv.FastForward(15 * time.Second)
+	if swapped, err := manager.ReplaceCacheStringIfValueMatches(ctx, key, "pending", "current"); err != nil || swapped {
+		t.Fatalf("expired claim was restored: %t, %v", swapped, err)
+	}
+}
+
 func TestGetRawCache(t *testing.T) {
 	t.Parallel()
 
