@@ -130,6 +130,7 @@ func TestIOSScriptBudgetDoesNotUseTheSharedProxyAddress(t *testing.T) {
 		{"/ios/script/fixture-alice/upload", fiber.StatusTooManyRequests},
 		{"/api/ios/script/fixture-bob/upload", fiber.StatusBadRequest},
 		{"/api/ios/script/unknown/upload", fiber.StatusUnauthorized},
+		{"/api/ios/script/" + strings.Repeat("q", 129) + "/upload", fiber.StatusBadRequest},
 	} {
 		resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, tc.path, nil))
 		if err != nil {
@@ -142,5 +143,28 @@ func TestIOSScriptBudgetDoesNotUseTheSharedProxyAddress(t *testing.T) {
 		if resp.Header.Get(proxyUploadResultHeader) != "" {
 			t.Fatal("an authenticated script response carried proxy headers")
 		}
+	}
+}
+
+func TestIOSScriptReturnsRetryIfCredentialLookupPoolIsBusy(t *testing.T) {
+	for range cap(iosUploadCredentialSlots) {
+		iosUploadCredentialSlots <- struct{}{}
+	}
+	defer func() {
+		for range cap(iosUploadCredentialSlots) {
+			<-iosUploadCredentialSlots
+		}
+	}()
+	app := fiber.New()
+	helper := newTestAPIHelperWithRedis(t)
+	helper.Router = app
+	registerIOSUploadRoutes(helper, testUploadDependencies())
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, "/api/ios/script/fixture/upload", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusTooManyRequests || resp.Header.Get(fiber.HeaderRetryAfter) == "" {
+		t.Fatalf("busy credential lookup returned %d without retry", resp.StatusCode)
 	}
 }

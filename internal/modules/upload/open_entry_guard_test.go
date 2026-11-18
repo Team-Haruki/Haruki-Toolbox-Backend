@@ -135,3 +135,20 @@ func newTestAPIHelperWithRedis(t *testing.T) *api.HarukiToolboxRouterHelpers {
 		},
 	}
 }
+
+func TestOpenUploadFallbackRetainsIndependentAccountBuckets(t *testing.T) {
+	now := time.Now().UTC()
+	first := iosScriptUploadRateBucket(t.Name() + "-first")
+	second := iosScriptUploadRateBucket(t.Name() + "-second")
+	for range openUploadRateLimitPerMinute {
+		if !fallbackOpenUploadRateLimiter.allow(now, first) {
+			t.Fatal("could not prepare exhausted fallback bucket")
+		}
+	}
+	if delay := openUploadRetryAfter(t.Context(), nil, first, now); delay <= 0 {
+		t.Fatal("unavailable Redis bypassed the exhausted local quota")
+	}
+	if delay := openUploadRetryAfter(t.Context(), nil, second, now); delay != 0 {
+		t.Fatalf("the first caller consumed the second caller's fallback quota: %d", delay)
+	}
+}
