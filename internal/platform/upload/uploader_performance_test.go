@@ -112,7 +112,7 @@ func TestSyncRejectsRecipientsBeforeEncodingAndKeepsFallback(t *testing.T) {
 	sender := func(string, int64, utils.SupportedDataUploadServer, utils.UploadDataType, []byte, string, map[string]string) {
 		sent.Add(1)
 	}
-	runDataSyncerTargets([]syncTarget{{url: "unused", sendJSONZstandard: true, checkEnabled: true, checkURL: check.URL}}, 123, utils.SupportedDataUploadServerJP, utils.UploadDataTypeSuite, []byte("invalid encrypted body"), sekai.ServerCryptor{}, nil, sender)
+	runDataSyncerTargets([]syncTarget{{url: "unused", sendJSONZstandard: true, checkEnabled: true, checkURL: check.URL}}, 123, utils.SupportedDataUploadServerJP, utils.UploadDataTypeSuite, []byte("invalid encrypted body"), sekai.ServerCryptor{}, nil, sender, nil)
 	after := perfstats.Snapshot()
 	if checks.Load() != 1 || sent.Load() != 0 || after["sync_processed"].Count != before["sync_processed"].Count || after["sync_restored"].Count != before["sync_restored"].Count {
 		t.Fatal("rejected recipient caused processing/delivery")
@@ -123,7 +123,7 @@ func TestSyncRejectsRecipientsBeforeEncodingAndKeepsFallback(t *testing.T) {
 		if string(b) != "raw" {
 			t.Error("fallback body changed")
 		}
-	})
+	}, nil)
 	if format != utils.HarukiDataSyncerDataFormatRaw {
 		t.Fatal("raw fallback removed")
 	}
@@ -214,7 +214,7 @@ func TestSyncBothFormatsDeliverAndRestoreFallback(t *testing.T) {
 		mu.Unlock()
 	}
 	targets := []syncTarget{{url: "processed", sendJSONZstandard: true}, {url: "restored", sendJSONZstandard: true, restoreSuite: true}}
-	runDataSyncerTargets(targets, 123, region, utils.UploadDataTypeSuite, raw, c, nil, send)
+	runDataSyncerTargets(targets, 123, region, utils.UploadDataTypeSuite, raw, c, nil, send, nil)
 	if len(results) != 2 || !bytes.Equal(results["processed"], results["restored"]) {
 		t.Fatal("failed restore no longer falls back to available processed format")
 	}
@@ -224,5 +224,5 @@ func TestSyncBothFormatsDeliverAndRestoreFallback(t *testing.T) {
 		if format != utils.HarukiDataSyncerDataFormatRaw || !bytes.Equal(body, raw) {
 			t.Error("restored-only raw fallback changed")
 		}
-	})
+	}, nil)
 }

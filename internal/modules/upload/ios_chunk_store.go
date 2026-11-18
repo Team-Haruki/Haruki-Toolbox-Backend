@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
@@ -24,12 +25,21 @@ const iosChunkUploadTTL = 5 * time.Minute
 // chunk, as one idle for longer than iosChunkUploadTTL always has.
 const iosChunkPartTTL = 3 * iosChunkUploadTTL
 
+const iosChunkClaimTTL = 20 * time.Second
+
 const (
 	iosUploadChunkStateIncomplete int64 = iota
-	iosUploadChunkStateCompleteClaimed
+	iosUploadChunkStateComplete
 	iosUploadChunkStateCompleteAlreadyClaimed
 	iosUploadChunkStateInconsistentTotal = -1
 	iosUploadChunkStateTooLarge          = -2
+	iosUploadChunkStateBudgetExceeded    = -3
+)
+
+const (
+	iosChunkPerOwnerBudget = 128 << 20
+	iosChunkGlobalBudget   = 512 << 20
+	iosChunkMaxUploads     = 4096
 )
 
 type iosUploadChunkPersistResult struct {
@@ -60,18 +70,73 @@ type iosUploadChunkPersistResult struct {
 // Reply: {state, count, size} matching iosUploadChunkPersistResult; a stored
 // meta or index field that fails tonumber() is treated as absent rather than
 // erroring — only this script ever writes those fields.
-var persistIOSUploadChunkScript = goredis.NewScript(`
+const iosChunkBudgetReleaseLua = `
+local budget = KEYS[#KEYS-1]
+local expiry = KEYS[#KEYS]
+local function release(member)
+  local owner = redis.call('HGET', budget, 'owner-of:' .. member)
+  local used = tonumber(redis.call('HGET', budget, 'upload:' .. member) or 0)
+  if owner and used > 0 then
+    local ownerField = 'owner:' .. owner
+    if redis.call('HINCRBY', budget, ownerField, -used) <= 0 then
+      redis.call('HDEL', budget, ownerField)
+    end
+    redis.call('HINCRBY', budget, 'total', -used)
+  end
+  redis.call('HDEL', budget, 'owner-of:' .. member, 'upload:' .. member, 'total-of:' .. member)
+  redis.call('ZREM', expiry, member)
+end
+`
+
+var persistIOSUploadChunkScript = goredis.NewScript(iosChunkBudgetReleaseLua + `
 local total = redis.call('HGET', KEYS[1], 'total')
 if total and total ~= '' and tonumber(total) ~= tonumber(ARGV[1]) then
   return {-1, 0, 0}
 end
 local size = tonumber(redis.call('HGET', KEYS[1], 'size') or 0) or 0
+if redis.call('EXISTS', KEYS[4]) == 1 then
+  return {2, redis.call('HLEN', KEYS[2]), size}
+end
 local oldLen = tonumber(redis.call('HGET', KEYS[2], ARGV[2]) or 0) or 0
 local newLen = string.len(ARGV[3])
 local newSize = size - oldLen + newLen
 if newSize > tonumber(ARGV[4]) then
   return {-2, redis.call('HLEN', KEYS[2]), size}
 end
+local now = redis.call('TIME')
+local nowMs = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+for _, member in ipairs(redis.call('ZRANGEBYSCORE', expiry, '-inf', nowMs, 'LIMIT', 0, 128)) do
+  release(member)
+end
+local uploadField = 'upload:' .. KEYS[1]
+local previous = tonumber(redis.call('HGET', budget, uploadField) or 0)
+local reservedTotal = redis.call('HGET', budget, 'total-of:' .. KEYS[1])
+if reservedTotal and tonumber(reservedTotal) ~= tonumber(ARGV[1]) then
+  return {-1, 0, size}
+end
+local ownerField = 'owner:' .. ARGV[7]
+local totalBytes = tonumber(redis.call('HGET', budget, 'total') or 0)
+local ownerBytes = tonumber(redis.call('HGET', budget, ownerField) or 0)
+-- Include a conservative Redis metadata allowance per upload and chunk.
+local delta = newLen + 256
+if previous == 0 then
+  if redis.call('ZCARD', expiry) >= tonumber(ARGV[10]) then
+    return {-3, 0, size}
+  end
+  delta = delta + 4096
+elseif redis.call('EXISTS', KEYS[3]) == 1 then
+  delta = newLen - redis.call('STRLEN', KEYS[3])
+end
+if totalBytes + delta > tonumber(ARGV[8]) or ownerBytes + delta > tonumber(ARGV[9]) then
+  return {-3, redis.call('HLEN', KEYS[2]), size}
+end
+redis.call('HINCRBY', budget, 'total', delta)
+redis.call('HINCRBY', budget, ownerField, delta)
+redis.call('HINCRBY', budget, uploadField, delta)
+redis.call('HSET', budget, 'owner-of:' .. KEYS[1], ARGV[7], 'total-of:' .. KEYS[1], ARGV[1])
+redis.call('ZADD', expiry, nowMs + tonumber(ARGV[6]), KEYS[1])
+redis.call('PEXPIRE', budget, ARGV[6])
+redis.call('PEXPIRE', expiry, ARGV[6])
 redis.call('HSET', KEYS[1], 'total', ARGV[1], 'size', tostring(newSize))
 redis.call('HSET', KEYS[2], ARGV[2], tostring(newLen))
 redis.call('SET', KEYS[3], ARGV[3], 'PX', ARGV[6])
@@ -79,13 +144,29 @@ redis.call('PEXPIRE', KEYS[1], ARGV[5])
 redis.call('PEXPIRE', KEYS[2], ARGV[5])
 local count = redis.call('HLEN', KEYS[2])
 if count ~= tonumber(ARGV[1]) then
-  redis.call('DEL', KEYS[4])
   return {0, count, newSize}
 end
-if redis.call('SET', KEYS[4], '1', 'NX', 'PX', ARGV[5]) then
-  return {1, count, newSize}
+return {1, count, newSize}
+`)
+
+var claimIOSUploadChunksScript = goredis.NewScript(`
+local total = redis.call('HGET', KEYS[1], 'total')
+if not total or tonumber(total) ~= tonumber(ARGV[1]) or redis.call('HLEN', KEYS[2]) ~= tonumber(total) then
+  return 0
 end
-return {2, count, newSize}
+if redis.call('SET', KEYS[3], ARGV[2], 'NX', 'PX', ARGV[3]) then
+  return 1
+end
+return 0
+`)
+
+var clearIOSUploadChunksScript = goredis.NewScript(iosChunkBudgetReleaseLua + `
+if redis.call('GET', KEYS[3]) ~= ARGV[1] then
+  return 0
+end
+redis.call('UNLINK', unpack(KEYS, 1, #KEYS-2))
+release(KEYS[1])
+return 1
 `)
 
 func iosUploadRedisKeys(uploadKey string) (metaKey string, chunkIndexKey string, claimKey string) {
@@ -115,14 +196,20 @@ func persistIOSUploadChunk(
 	}
 
 	metaKey, chunkIndexKey, claimKey := iosUploadRedisKeys(uploadKey)
+	owner, _, _ := strings.Cut(uploadKey, chunkUploadIDSepChar)
 	vals, err := persistIOSUploadChunkScript.Run(ctx, redisClient,
-		[]string{metaKey, chunkIndexKey, harukiRedis.BuildIOSUploadChunkPartKey(uploadKey, chunkIndex), claimKey},
+		[]string{metaKey, chunkIndexKey, harukiRedis.BuildIOSUploadChunkPartKey(uploadKey, chunkIndex), claimKey,
+			harukiRedis.BuildIOSUploadChunkBudgetKey(), harukiRedis.BuildIOSUploadChunkBudgetExpiryKey()},
 		totalChunks,
 		strconv.Itoa(chunkIndex),
 		chunkData,
 		maxDataChunksSize,
 		iosChunkUploadTTL.Milliseconds(),
 		iosChunkPartTTL.Milliseconds(),
+		owner,
+		iosChunkGlobalBudget,
+		iosChunkPerOwnerBudget,
+		iosChunkMaxUploads,
 	).Int64Slice()
 	if err != nil {
 		return iosUploadChunkPersistResult{}, err
@@ -137,9 +224,16 @@ func persistIOSUploadChunk(
 	}, nil
 }
 
+// claimIOSUploadChunks is called after acquiring local assembly capacity.
+func claimIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int, claim string) (bool, error) {
+	meta, index, key := iosUploadRedisKeys(uploadKey)
+	value, err := claimIOSUploadChunksScript.Run(ctx, redisClient, []string{meta, index, key}, totalChunks, claim, iosChunkClaimTTL.Milliseconds()).Int()
+	return value == 1, err
+}
+
 // loadIOSUploadChunks reads every chunk of a claimed upload in index order with
 // pipelined GETs, so no single Redis command carries the whole upload. No lock is
-// needed: the claim SETNX in the persist script elects a single assembler, and
+// needed: the claim script elects a single assembler, and
 // the claim is only granted once every chunk is stored.
 func loadIOSUploadChunks(
 	ctx context.Context,
@@ -178,21 +272,33 @@ func loadIOSUploadChunks(
 	return chunks, nil
 }
 
-func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int) error {
+func clearIOSUploadChunks(ctx context.Context, redisClient *goredis.Client, uploadKey string, totalChunks int, claim string) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client is nil")
 	}
 
 	metaKey, chunkIndexKey, claimKey := iosUploadRedisKeys(uploadKey)
 	keys := append([]string{metaKey, chunkIndexKey, claimKey}, iosUploadChunkPartKeys(uploadKey, max(totalChunks, 0))...)
-	return redisClient.Unlink(ctx, keys...).Err()
+	keys = append(keys, harukiRedis.BuildIOSUploadChunkBudgetKey(), harukiRedis.BuildIOSUploadChunkBudgetExpiryKey())
+	cleared, err := clearIOSUploadChunksScript.Run(ctx, redisClient, keys, claim).Int()
+	if err == nil && cleared == 0 {
+		return errors.New("upload assembly claim expired")
+	}
+	return err
 }
 
-func resetIOSUploadClaim(ctx context.Context, redisClient *goredis.Client, uploadKey string) error {
+var resetIOSUploadClaimScript = goredis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`)
+
+func resetIOSUploadClaim(ctx context.Context, redisClient *goredis.Client, uploadKey, claim string) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client is nil")
 	}
 
 	_, _, claimKey := iosUploadRedisKeys(uploadKey)
-	return redisClient.Del(ctx, claimKey).Err()
+	return resetIOSUploadClaimScript.Run(ctx, redisClient, []string{claimKey}, claim).Err()
 }

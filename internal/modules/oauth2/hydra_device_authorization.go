@@ -3,6 +3,7 @@ package oauth2
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"mime"
 	"net/http"
 	"net/url"
@@ -201,7 +202,7 @@ func parseDeviceForm(c fiber.Ctx) (url.Values, bool) {
 	if err != nil || mediaType != formURLEncodedMediaType {
 		return nil, false
 	}
-	form, err := url.ParseQuery(string(c.Body()))
+	form, err := url.ParseQuery(string(c.Request().Body()))
 	if err != nil {
 		return nil, false
 	}
@@ -221,10 +222,14 @@ func parseDeviceAuthorizationRequest(c fiber.Ctx) (deviceAuthorizationRequest, s
 	if err != nil || mediaType != formURLEncodedMediaType {
 		return deviceAuthorizationRequest{}, deviceUnsupportedContentTypeText
 	}
-	if len(c.Body()) > deviceAuthorizationMaxBodyBytes {
+	if encoding := c.Get("Content-Encoding"); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		return deviceAuthorizationRequest{}, deviceUnsupportedContentTypeText
+	}
+	body := c.Request().Body()
+	if len(body) > deviceAuthorizationMaxBodyBytes {
 		return deviceAuthorizationRequest{}, deviceRequestTooLargeText
 	}
-	form, err := url.ParseQuery(string(c.Body()))
+	form, err := url.ParseQuery(string(body))
 	if err != nil {
 		return deviceAuthorizationRequest{}, deviceMalformedBodyText
 	}
@@ -277,6 +282,9 @@ func handleHydraDeviceAuthorization(hydraConfig *harukiOAuth2.HydraConfig, cfg D
 
 		client, err := store.clients.get(ctx, lookupClient, request.client.ClientID)
 		if err != nil {
+			if errors.Is(err, errDeviceClientLookupBusy) {
+				return respondDeviceUnavailable(c)
+			}
 			logDeviceEvent(logger, "error", "authorize", "", "", "stage=client_lookup", "reason=hydra_unavailable")
 			return respondDeviceUnavailable(c)
 		}

@@ -95,13 +95,14 @@ func (s *Store) Write(ctx context.Context, userID int64, server string, data map
 	if err != nil {
 		return stats, err
 	}
-	if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes); err != nil {
+	compactExtraBytes, err := s.validateEncodedUpload(enc, &stats, limits)
+	if err != nil {
 		return stats, err
 	}
 
 	switch mode {
 	case WriteSuite:
-		return stats, s.writeSuite(ctx, userID, code, enc, &stats)
+		return stats, s.writeSuite(ctx, userID, code, enc, &stats, limits, compactExtraBytes)
 	case WriteMigrate:
 		return stats, s.writeReplace(ctx, userID, code, enc)
 	case WriteBirthdayParty:
@@ -109,6 +110,40 @@ func (s *Store) Write(ctx context.Context, userID int64, server string, data map
 	default:
 		return stats, s.writeMysekai(ctx, userID, code, enc)
 	}
+}
+
+func (s *Store) validateEncodedUpload(enc *encoded, stats *WriteStats, limits Limits) (int, error) {
+	if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes); err != nil {
+		return 0, err
+	}
+	compactExtraBytes, err := s.compactExpansionBytes(enc, limits)
+	if err != nil {
+		return 0, err
+	}
+	return compactExtraBytes, checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes+compactExtraBytes)
+}
+
+func (s *Store) compactExpansionBytes(enc *encoded, limits Limits) (int, error) {
+	limit := DefaultLimits().MaxKeyBytes
+	if limits.MaxKeyBytes > 0 {
+		limit = min(limit, limits.MaxKeyBytes)
+	}
+	total := 0
+	for _, entry := range s.cat.Entries {
+		if entry.Storage != catalog.StorageCompactJSON {
+			continue
+		}
+		raw := enc.columns[entry.Column]
+		if !IsCompactValue(raw) {
+			continue
+		}
+		out := compactJSONOutput{limit: limit}
+		if err := renderCompactJSON(raw, &out); err != nil {
+			return 0, fmt.Errorf("gamedata: compact key %q: %w", entry.Key, err)
+		}
+		total += max(0, out.size-len(raw))
+	}
+	return total, nil
 }
 
 // encoded is one upload rendered into column values.
@@ -326,7 +361,7 @@ func (s *Store) writeBirthdayParty(ctx context.Context, userID int64, code int16
 
 // writeSuite performs the merge upload inside ONE transaction, because the three
 // history keys are a read-modify-write against the stored row.
-func (s *Store) writeSuite(ctx context.Context, userID int64, code int16, enc *encoded, stats *WriteStats) error {
+func (s *Store) writeSuite(ctx context.Context, userID int64, code int16, enc *encoded, stats *WriteStats, limits Limits, compactExtraBytes int) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("gamedata: begin: %w", err)
@@ -364,6 +399,9 @@ func (s *Store) writeSuite(ctx context.Context, userID int64, code int16, enc *e
 			stats.Bytes += len(b)
 		}
 		stats.Columns = len(enc.columns)
+		if err := checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes+compactExtraBytes); err != nil {
+			return err
+		}
 	}
 
 	if gated := s.gatedColumns(enc); len(gated) > 0 {
@@ -730,5 +768,6 @@ func (s *Store) EncodeOnly(data map[string]any, mode WriteMode, limits Limits) (
 	if err != nil {
 		return stats, err
 	}
-	return stats, checkLimits(limits, enc.perKeyBytes, len(stats.ExtraKeys), enc.extraBytes, stats.Bytes)
+	_, err = s.validateEncodedUpload(enc, &stats, limits)
+	return stats, err
 }

@@ -82,5 +82,5 @@ type DataHandler struct {
 	BirthdaySubscription    BirthdaySubscriptionConfig
 	SuiteRestoreService     *SuiteRestoreService
 	ServerCryptor           harukiSekai.ServerCryptor
-	WebhookEnabled          bool
+	WebhookAllowed          func(context.Context) bool
 }

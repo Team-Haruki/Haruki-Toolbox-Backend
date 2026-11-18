@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 )
 
 const (
@@ -35,6 +37,13 @@ const (
 // response while the script runs, so a slow upload answers 202 and finishes
 // in the background instead of keeping the game waiting.
 var scriptUploadAckWait = 15 * time.Second
+
+// Each assembler can hold both a full upload's chunks and the joined body.
+// Admit before reading any chunks from Redis and hold the slot until processing
+// finishes, including when the client receives an early 202.
+var iosUploadAssemblySlots = make(chan struct{}, 2)
+
+var errIOSUploadAssemblyRetry = errors.New("upload assembly can be retried")
 
 type dataUploadHeader struct {
 	ScriptVersion string `header:"X-Script-Version"`
@@ -142,6 +151,11 @@ func handleIOSProxyMysekaiBirthdayPartyDelivery(apiHelper *harukiAPIHelper.Haruk
 	}
 }
 
+func retryIOSUploadAssembly(c fiber.Ctx) error {
+	c.Set(fiber.HeaderRetryAfter, "3")
+	return c.SendStatus(fiber.StatusTooManyRequests)
+}
+
 func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies, logger *harukiLogger.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
@@ -220,27 +234,63 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorBadRequest(c, "inconsistent X-Total-Chunks for this upload")
 		case iosUploadChunkStateTooLarge:
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusRequestEntityTooLarge, "upload is too large", nil)
-		case iosUploadChunkStateIncomplete, iosUploadChunkStateCompleteAlreadyClaimed:
+		case iosUploadChunkStateBudgetExceeded:
+			c.Set("Retry-After", "30")
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		case iosUploadChunkStateCompleteAlreadyClaimed:
+			return retryIOSUploadAssembly(c)
+		case iosUploadChunkStateIncomplete:
 			return harukiAPIHelper.Responses.SuccessResponse[string](c, "Successfully uploaded data.", nil)
 		}
 
-		completedChunks, err := loadIOSUploadChunks(ctx, redisClient, uploadKey, header.TotalChunks)
-		if err != nil {
-			if resetErr := resetIOSUploadClaim(ctx, redisClient, uploadKey); resetErr != nil {
-				logger.Warnf("Failed to reset upload claim for %s: %v", uploadKey, resetErr)
-			}
-			logger.Errorf("Failed to load completed upload chunks for %s: %v", uploadKey, err)
-			return harukiAPIHelper.ErrorInternal(c, "failed to assemble upload chunks")
+		select {
+		case iosUploadAssemblySlots <- struct{}{}:
+		default:
+			return retryIOSUploadAssembly(c)
 		}
-		if err := clearIOSUploadChunks(ctx, redisClient, uploadKey, header.TotalChunks); err != nil {
-			logger.Warnf("Failed to clear completed upload chunks for %s: %v", uploadKey, err)
+		slotTransferred := false
+		defer func() {
+			if !slotTransferred {
+				<-iosUploadAssemblySlots
+			}
+		}()
+		claim := uuid.NewString()
+		assemblyCtx, cancelAssembly := context.WithTimeout(ctx, 7*time.Second)
+		defer cancelAssembly()
+		claimed, err := claimIOSUploadChunks(assemblyCtx, redisClient, uploadKey, header.TotalChunks, claim)
+		if err != nil || !claimed {
+			return retryIOSUploadAssembly(c)
+		}
+		releaseClaim := func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := resetIOSUploadClaim(cleanup, redisClient, uploadKey, claim); err != nil {
+				logger.Warnf("Failed to reset upload claim for %s: %v", uploadKey, err)
+			}
+		}
+		completedChunks, err := loadIOSUploadChunks(assemblyCtx, redisClient, uploadKey, header.TotalChunks)
+		if err != nil {
+			releaseClaim()
+			logger.Errorf("Failed to load completed upload chunks for %s: %v", uploadKey, err)
+			return retryIOSUploadAssembly(c)
 		}
 
+		totalChunks := header.TotalChunks
 		codeID, codeValue := record.ID, strings.Clone(record.UploadCode)
 		toolboxUserIDCopy := toolboxUserID
 		attempt := newAttempt(harukiUtils.UploadMethodIOSScript, 0)
 		processed := make(chan error, 1)
 		accepted := startBackgroundTask(dependencies.BackgroundTasks, logger, "ios-upload-assembly", func() {
+			defer func() { <-iosUploadAssemblySlots }()
+			cleanup, cancelCleanup := context.WithTimeout(context.Background(), 3*time.Second)
+			err := clearIOSUploadChunks(cleanup, redisClient, uploadKey, totalChunks, claim)
+			cancelCleanup()
+			if err != nil {
+				releaseClaim()
+				logger.Warnf("Failed to consume completed upload chunks for %s: %v", uploadKey, err)
+				processed <- errIOSUploadAssemblyRetry
+				return
+			}
 			chunks := completedChunks
 			sort.Slice(chunks, func(x, y int) bool {
 				return chunks[x].ChunkIndex < chunks[y].ChunkIndex
@@ -276,7 +326,7 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 				return nil
 			}
 			attempt.RequestBytes = int64(len(payload))
-			_, err := runUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
+			_, err = runUpload(uploadCtx, payload, server, harukiUtils.UploadDataType(uploadType), &gameUserId, &toolboxUserIDCopy, apiHelper, innerDependencies, harukiUtils.UploadMethodIOSScript, attempt)
 			if _, skipped := uploadSkipReason(err); err != nil && !skipped {
 				// HandleUpload already logs every failure with full context at
 				// WARNING inside its fail() helper; re-logging at ERROR here
@@ -287,14 +337,19 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			processed <- err
 		})
 		if !accepted {
-			return harukiAPIHelper.ErrorInternal(c, "upload service is shutting down")
+			releaseClaim()
+			return retryIOSUploadAssembly(c)
 		}
+		slotTransferred = true
 		// The upload runs as a tracked background task so shutdown drains it;
 		// the response waits for its result, up to scriptUploadAckWait.
 		timer := time.NewTimer(scriptUploadAckWait)
 		defer timer.Stop()
 		select {
 		case err := <-processed:
+			if errors.Is(err, errIOSUploadAssemblyRetry) {
+				return retryIOSUploadAssembly(c)
+			}
 			if reason, skipped := uploadSkipReason(err); skipped {
 				return uploadSkippedResponse(c, reason)
 			}

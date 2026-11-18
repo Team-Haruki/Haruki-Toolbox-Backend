@@ -7,8 +7,9 @@
 // duplicate keys replace their first position, and extensions become copied
 // payload bytes without their type tag. These are distinct output policies.
 //
-// Unmarshal into other Go types delegates to the existing MessagePack library;
-// callers must ValidateMaxDepth before using that compatibility path with
-// untrusted input. Reader compatibility APIs read a complete document and must
-// be supplied a caller-bounded reader. MarshalWrite buffers before writing.
+// Unmarshal into other Go types delegates to the existing MessagePack library.
+// ValidateMaxDepth checks structure for typed destinations. ValidateGenericDecode
+// also checks map keys before decoding uploads into generic values. Both checks
+// run before the decoder; neither transfers input ownership. Reader compatibility
+// APIs require a caller-bounded reader. MarshalWrite buffers before writing.
 package msgpackcodec

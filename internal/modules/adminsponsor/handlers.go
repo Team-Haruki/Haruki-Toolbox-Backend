@@ -109,7 +109,14 @@ func loadAdminSponsorDetail(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolbo
 	if err != nil {
 		return adminSponsorDetailResponse{}, err
 	}
-	return buildAdminSponsorDetail(c.Context(), apiHelper.DBManager.DB, row, time.Now().UTC())
+	detail, err := buildAdminSponsorDetail(c.Context(), apiHelper.DBManager.DB, row, time.Now().UTC())
+	role, _ := c.Locals("userRole").(string)
+	if role != adminCoreModule.RoleSuperAdmin {
+		for i := range detail.Afdian.Orders {
+			detail.Afdian.Orders[i].OutTradeNo = ""
+		}
+	}
+	return detail, err
 }
 
 func handleAdminGetSponsor(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -194,6 +195,7 @@ func newInheritTestEnv(t *testing.T) *inheritTestEnv {
 	deps := testUploadDependencies()
 	deps.InheritVault = inheritvault.NewStore(vaultClient, rdb.Redis, master)
 	svc := newInheritService(api, deps)
+	svc.wsSessionActive = func(context.Context, string, string, string) bool { return true }
 	svc.limiter = newInheritConcurrencyLimiter(4)
 	svc.breaker = newInheritCircuitBreaker(5, time.Minute, time.Second)
 	svc.confirmTimeout = 2 * time.Second
@@ -1247,4 +1249,137 @@ func TestWebSocketStreamsTheJobAndTakesConfirm(t *testing.T) {
 		}
 		_ = sawEvent
 	}
+}
+
+func TestInheritWSChecksCurrentBrowserSession(t *testing.T) {
+	env := newInheritTestEnv(t)
+	ctx := context.Background()
+	const identity = "owner-browser-identity"
+	env.db.User.UpdateOneID(testOwner).SetKratosIdentityID(identity).ExecX(ctx)
+	admin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("expand") != "Identity" {
+			http.Error(w, "missing identity expansion", http.StatusBadRequest)
+			return
+		}
+		session := strings.TrimPrefix(r.URL.Path, "/admin/sessions/")
+		var status, expires, owner string
+		switch session {
+		case "active":
+			status, expires, owner = "true", "2099-01-01T00:00:00Z", identity
+		case "expired":
+			status, expires, owner = "true", "2000-01-01T00:00:00Z", identity
+		case "revoked":
+			status, expires, owner = "false", "2099-01-01T00:00:00Z", identity
+		case "other-owner":
+			status, expires, owner = "true", "2099-01-01T00:00:00Z", "another-identity"
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"id":%q,"active":%s,"expires_at":%q,"identity":{"id":%q}}`, session, status, expires, owner)
+	}))
+	defer admin.Close()
+	env.svc.api.SessionHandler = &harukiAPIHelper.SessionHandler{KratosAdminURL: admin.URL, KratosHTTPClient: admin.Client()}
+
+	for _, tc := range []struct {
+		identity, session string
+		want              bool
+	}{
+		{identity, "active", true},
+		{identity, "expired", false},
+		{identity, "revoked", false},
+		{identity, "missing", false},
+		{identity, "other-owner", false},
+		{"different-identity", "active", false},
+		{identity, "", false},
+	} {
+		if got := env.svc.checkWSBrowserSession(ctx, testOwner, tc.identity, tc.session); got != tc.want {
+			t.Errorf("session %q for %q active = %v, want %v", tc.session, tc.identity, got, tc.want)
+		}
+	}
+	env.db.User.UpdateOneID(testOwner).SetBanned(true).ExecX(ctx)
+	if env.svc.checkWSBrowserSession(ctx, testOwner, identity, "active") {
+		t.Fatal("banned owner retained websocket access")
+	}
+}
+
+func TestInheritWSSlotsBoundJobAndOwner(t *testing.T) {
+	var slots inheritWSSlots
+	for _, job := range []string{"a", "a", "b", "b"} {
+		release := slots.reserve("owner", job)
+		if release == nil {
+			t.Fatalf("could not reserve slot for %q", job)
+		}
+		defer release()
+	}
+	if release := slots.reserve("owner", "c"); release != nil {
+		release()
+		t.Error("owner exceeded its connection limit")
+	}
+	if release := slots.reserve("another-owner", "a"); release != nil {
+		release()
+		t.Error("job exceeded its connection limit")
+	}
+}
+
+func TestInheritWSRefusesUpgradeAfterSessionRevocation(t *testing.T) {
+	env := newInheritTestEnv(t)
+	env.svc.wsSessionActive = func(context.Context, string, string, string) bool { return false }
+	check := func(ticket string, want int) {
+		t.Helper()
+		env.redis.Set(wsTicketKey(ticket), testOwner+"|job")
+		req := httptest.NewRequest(http.MethodGet, "/api/inherit/jobs/job/ws?ticket="+ticket, nil)
+		req.Header.Set("X-Test-User", testOwner)
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", "websocket")
+		resp, err := env.app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("upgrade status = %d, want %d", resp.StatusCode, want)
+		}
+	}
+	check("revoked", http.StatusUnauthorized)
+	for range 2 {
+		release := env.svc.wsSlots.reserve(testOwner, "job")
+		if release == nil {
+			t.Fatal("failed upgrade retained a connection slot")
+		}
+		defer release()
+	}
+	check("capacity", http.StatusTooManyRequests)
+}
+
+func TestInheritWSStopsCommandsAfterSessionRevocation(t *testing.T) {
+	env := newInheritTestEnv(t)
+	env.svc.confirmTimeout = time.Minute
+	var revoked atomic.Bool
+	env.svc.wsSessionActive = func(context.Context, string, string, string) bool { return !revoked.Load() }
+	base := wsTestServer(t, env)
+	id := env.createJob(validJobRequest())
+	env.waitStatus(id, "awaiting_confirm")
+	conn := dialJobWS(t, env, base, id, "")
+	if snapshot := readWS(t, conn); snapshot.Type != "snapshot" {
+		t.Fatalf("first frame = %q, want snapshot", snapshot.Type)
+	}
+	revoked.Store(true)
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"cancel"}`)); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		_, body, err := conn.ReadMessage()
+		if err != nil {
+			if e, ok := err.(net.Error); ok && e.Timeout() {
+				t.Fatal("revoked socket stayed open")
+			}
+			break
+		}
+		var msg wsMessage
+		if json.Unmarshal(body, &msg) != nil || msg.Type != "event" {
+			t.Fatalf("revoked socket received a command response: %s", body)
+		}
+	}
+	env.waitStatus(id, "awaiting_confirm")
 }

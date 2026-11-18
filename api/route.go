@@ -157,17 +157,18 @@ func oauth2DeviceFlowRuntimeGate(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+	requireReauth := adminModule.RequireRecentAdminReauth(apiHelper)
 	adminModule.RegisterAdminRoutes(apiHelper, adminGroup)
-	adminUsersModule.RegisterAdminUserRoutes(apiHelper, adminGroup, dependencies.HydraConfig, dependencies.UserDataBuilder)
+	adminUsersModule.RegisterAdminUserRoutes(apiHelper, adminGroup, dependencies.HydraConfig, dependencies.UserDataBuilder, requireReauth)
 	adminContentModule.RegisterAdminContentRoutes(apiHelper, adminGroup)
 	adminGameBindingsModule.RegisterAdminGlobalGameAccountBindingRoutes(apiHelper, adminGroup)
-	adminOAuthModule.RegisterAdminOAuthClientRoutes(apiHelper, adminGroup, dependencies.HydraConfig)
+	adminOAuthModule.RegisterAdminOAuthClientRoutes(apiHelper, adminGroup, dependencies.HydraConfig, requireReauth)
 	adminRiskModule.RegisterAdminRiskRoutes(apiHelper, adminGroup)
 	adminSponsorModule.RegisterAdminSponsorRoutes(apiHelper, adminGroup, dependencies.AfdianConfig)
 	adminSyslogModule.RegisterAdminSystemLogRoutes(apiHelper, adminGroup)
 	adminStatsModule.RegisterAdminStatisticsRoutes(apiHelper, adminGroup)
 	adminTicketsModule.RegisterAdminTicketRoutes(apiHelper, adminGroup, dependencies.TicketNotifications)
-	adminWebhookModule.RegisterAdminWebhookRoutes(apiHelper, adminGroup)
+	adminWebhookModule.RegisterAdminWebhookRoutes(apiHelper, adminGroup, requireReauth)
 	botSecurityModule.RegisterAdminRoutes(apiHelper, adminGroup, botSecurityModule.AdminRouteOptions{})
 	storyModule.RegisterAdminRoutes(apiHelper, adminGroup, dependencies.Story)
 }

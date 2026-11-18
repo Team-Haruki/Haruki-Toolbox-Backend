@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"strings"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiApiHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -15,8 +16,12 @@ func ValidateUserPermission(apiHelper *harukiApiHelper.HarukiToolboxRouterHelper
 		if apiHelper == nil {
 			return harukiApiHelper.ErrorInternal(c, "private api is not configured")
 		}
-		expectedToken, requiredAgentKeyword := apiHelper.GetPrivateAPIAuth()
-		if strings.TrimSpace(expectedToken) == "" {
+		snapshot, err := apiHelper.CurrentRuntimeConfig(c.Context())
+		if err != nil {
+			return harukiApiHelper.ErrorInternal(c, "private api authentication unavailable")
+		}
+		expectedToken, requiredAgentKeyword := snapshot.PrivateAPIToken, snapshot.PrivateAPIUserAgent
+		if strings.TrimSpace(expectedToken) == "" || config.IsExampleCredential(expectedToken) {
 			harukiLogger.Errorf("private api token is not configured")
 			return harukiApiHelper.ErrorInternal(c, "private api is not configured")
 		}

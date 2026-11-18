@@ -369,6 +369,21 @@ func TestInternalIntrospectInactiveForDisabledClient(t *testing.T) {
 	})
 }
 
+func TestInternalIntrospectPreservesExplicitAudienceRestriction(t *testing.T) {
+	env := newIntrospectTestEnv(t)
+	const token = "ory_at_audienceFixture0123456789"
+	body := activeTokenBody(testIntrospectIdentityID, testIntrospectClientID, "station:room:write")
+	body["aud"] = []string{"another-service"}
+	env.hydra.setToken(token, body)
+	env.assertInactive(env.introspect(token))
+	body["aud"] = []string{"another-service", testInternalAudience}
+	env.hydra.setToken(token, body)
+	got := env.introspect(token).json(t)
+	if got["active"] != true || !reflect.DeepEqual(got["aud"], []any{testInternalAudience}) {
+		t.Fatalf("introspection returned %v", got)
+	}
+}
+
 func TestInternalIntrospectInactiveTokens(t *testing.T) {
 	env := newIntrospectTestEnv(t)
 	refresh := activeTokenBody(testIntrospectIdentityID, testIntrospectClientID, "user:read")

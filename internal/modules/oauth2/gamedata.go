@@ -58,7 +58,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			return harukiAPIHelper.ErrorBadRequest(c, "Invalid game user_id, it must be integer")
 		}
 
-		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), gameUserIDStr, string(dataType), time.Now().UTC())
+		access, err := apiHelper.DBManager.DB.CanAccessGameAccountData(ctx, authUserID, string(server), strconv.FormatInt(gameUserID, 10), string(dataType), time.Now().UTC())
 		if err != nil {
 			harukiLogger.Errorf("Failed to verify oauth2 game account data access: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to query game account binding")
@@ -68,6 +68,9 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		requestKey := c.Query("key")
+		if err := data.ValidateGameDataKeySelection(requestKey); err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		}
 		// Resolve the document generation once: it drives both the conditional
 		// 304 answer and which versioned cache entry this request may read.
 		stamp, stampConfirmed, stampErr := data.ResolveGameDataStamp(ctx, apiHelper, server, dataType, gameUserID)
@@ -84,9 +87,15 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
+		release, admitted := data.ReservePublishedGameDataRead()
+		if !admitted {
+			c.Set(fiber.HeaderRetryAfter, "1")
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game data reads are busy", nil)
+		}
+		defer release()
 		var cacheKey string
-		if stamp > 0 {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server)))
+		if stamp > 0 && requestKey == "" {
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
 			// Suite bodies are shaped by the public key allowlist, so entries
 			// are keyed by it too — an allowlist edit moves readers to fresh
 			// entries even when the stamp is unchanged. The write side appends
@@ -107,7 +116,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			}
 		}
 
-		body, err := loadOAuth2GameData(apiHelper, cacheKey, server, dataType, gameUserID, requestKey, stamp)
+		body, err := loadOAuth2GameData(apiHelper, cacheKey, server, dataType, gameUserID, requestKey, stamp, suiteAllowedKeys)
 		if err != nil {
 			if fErr, ok := err.(*fiber.Error); ok {
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fErr.Code, fErr.Message, nil)
@@ -138,15 +147,18 @@ func loadOAuth2GameData(
 	gameUserID int64,
 	requestKey string,
 	stamp int64,
+	allowedKeys []string,
 ) (string, error) {
 	// Generation-independent flight key on the raw request key (see
 	// loadPublicGameData): only byte-identical requests may share a result.
 	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(gameUserID, 10) + "\x00" + requestKey
+	if dataType == harukiUtils.UploadDataTypeSuite {
+		flightKey += "\x00" + data.PublicAllowlistDigest(allowedKeys)
+	}
 	v, err, _ := oauth2GameDataGroup.Do(flightKey, func() (any, error) {
 		// Detached from any single caller's request lifetime; still bounded.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), oauth2GameDataReadTimeout)
 		defer cancel()
-		allowedKeys := apiHelper.GetAllowedKeys()
 		allowedKeySet := make(map[string]struct{}, len(allowedKeys))
 		for _, k := range allowedKeys {
 			allowedKeySet[k] = struct{}{}

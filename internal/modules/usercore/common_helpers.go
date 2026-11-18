@@ -88,6 +88,14 @@ func IsCurrentUserEmailVerified(c fiber.Ctx) bool {
 	}
 }
 
+func CurrentUserVerifiedEmail(c fiber.Ctx) string {
+	if !IsCurrentUserEmailVerified(c) {
+		return ""
+	}
+	email, _ := c.Locals("kratosSessionEmail").(string)
+	return strings.TrimSpace(email)
+}
+
 func RequireVerifiedEmail() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if IsCurrentUserEmailVerified(c) {

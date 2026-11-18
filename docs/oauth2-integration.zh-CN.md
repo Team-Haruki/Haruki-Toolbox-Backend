@@ -49,6 +49,8 @@ https://toolbox-api-direct.haruki.seiunx.com
 
 OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码**。`/api/oauth2/authorize` 是浏览器入口（§3.1）。`/api/oauth2/token` 是 Discovery 公布的令牌端点：它是后端的令牌端点兼容层，授权码与刷新令牌请求原样转发给 Hydra、响应原样返回，只额外处理设备授权许可；以前写死的 Hydra 直连 `/oauth2/token` 对授权码与刷新令牌仍然可用，但设备授权只能用 `/api/oauth2/token`（§12.9）。
 
+令牌兼容层接收最多 64 KiB 的未压缩请求体。带明确 audience 的 access token 用于 Toolbox 资源接口时，audience 必须包含 Toolbox API 的公开基址（去掉末尾的 `/`）。
+
 > ⚠️ **Discovery 的 `scopes_supported` 与 `claims_supported` 不完整。** 它们分别只公布
 > `openid` / `offline_access` / `offline` 和 `sub`，这是 Hydra 的默认公告行为 —— 实际可用的
 > scope 由管理员为你的 client 登记（完整清单见 §9），claims 见下文。**不要拿 Discovery 里
@@ -62,7 +64,7 @@ OIDC 客户端应从 Discovery 文档读取端点，**不要在 SDK 内硬编码
 
 - `openid`：签发 ID Token 与标准 `sub`
 - `profile`：增加 `name`
-- `email`：增加 `email` 与 `email_verified`
+- `email`：增加 `email` 与 `email_verified`。当前 Kratos 会话验证过的邮箱与发给客户端的邮箱一致时，`email_verified` 才为 `true`
 
 只有管理员为 client 登记的 scope 才能被请求；`profile`、`email` 不能脱离 `openid` 单独登记。
 
@@ -259,7 +261,7 @@ state / telegram_user_id / created_at / expires_at / used=false
 
 ### 4A.2 发起：`POST /api/oauth2/device/auth`
 
-请求体 `application/x-www-form-urlencoded`，不超过 4 KiB：
+请求体 `application/x-www-form-urlencoded`，使用未压缩的正文，且不超过 4 KiB：
 
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
@@ -920,6 +922,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 一次上传成功后，服务端异步检查：
 
+- 管理端的 Webhook 总开关处于启用状态。该开关同时控制 OAuth2 回调与 public API Webhook，缺省启用
 - 上传账号存在已验证的游戏账号绑定
 - 绑定 owner 未被封禁
 - OAuth2 client 本身处于启用状态（被管理员停用或已删除的 client 不再收到回调，即使用户的 consent session 还在）
@@ -946,6 +949,8 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 - Body：空
 - 默认请求头：`User-Agent: Haruki-Toolbox-Backend/<version>`
 - 如果 endpoint 配置了 bearer，还会包含 `Authorization: Bearer <bearer>`
+
+带 Bearer 凭据的回调只通过 HTTPS 发送。
 
 ### 8.4 Callback URL 占位符
 
@@ -1052,8 +1057,8 @@ station:room:write
 - 编辑时省略 `devicePolicy` 表示保留已保存的策略；传了就写入三项（省略的 `maxCodesPer10m` 按 60），`metadata.haruki.device` 下的其他键保留
 - 把公开客户端改成 `confidential` 时，更新响应会带一次性的 `clientSecret`，与创建时一样只返回这一次
 - 公开客户端没有 secret，对它调用 `rotate-secret` 返回 400，`updatedData.code` 为 `public_client_has_no_secret`
-- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用），Sekai Station 也不再接受它的令牌；设备授权随即对它关闭（客户端状态有最多 5 秒的缓存）：发起返回 `unauthorized_client`，已批准未兑换的流程兑换时返回 `access_denied`。同时后端会逐个用户撤销它能找到的授权，撤销到的授权的 access token 和 refresh token 一并失效。少数授权找不到，不会被撤销，客户端重新启用后它们又能使用，见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
-- 停用一旦生效就返回 200：`revokedSubjects` 是撤销成功的 subject 数，`failedSubjects` 列出撤销失败的 subject，`revocationComplete` 为 false 表示有一步失败、还有授权没撤销掉，这时对该客户端执行「撤销全部授权」补救。「撤销全部授权」部分失败时同样返回 200 和这三个字段；一条授权都没撤销成功时返回 500
+- 停用客户端后，该客户端的 token 不能再访问本服务的资源接口（资源端会检查客户端是否启用），Sekai Station 也不再接受它的令牌；设备授权随即对它关闭（客户端状态有最多 5 秒的缓存）：发起返回 `unauthorized_client`，已批准未兑换的流程兑换时返回 `access_denied`。后端对所有仍有本地账号的用户按 Kratos subject 和旧 subject 撤销该客户端的授权，覆盖列表遗漏的授权。撤销到的授权的 access token 和 refresh token 一并失效。见 [ory-suite-usage.zh-CN.md](./ory-suite-usage.zh-CN.md) §10.4
+- 停用生效后返回 200。`revokedSubjects` 是 Hydra 接受撤销请求的 subject 数，含没有授权记录的本地 subject。`failedSubjects` 列出撤销失败的 subject。`revocationComplete` 表示本地 subject 撤销以及请求的令牌清理均成功。「撤销全部授权」部分失败时同样返回 200 和这三个字段；撤销失败且无法确认有任何授权成功撤销时返回 500
 - 删除客户端时，它的授权和 token 由 Hydra 一并删除
 
 公开客户端示例：

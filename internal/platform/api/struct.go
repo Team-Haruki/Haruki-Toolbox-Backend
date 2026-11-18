@@ -6,8 +6,21 @@ import (
 )
 
 type HarukiToolboxGameAccountPrivacySettings struct {
-	Suite   *schema.SuiteDataPrivacySettings   `json:"suite"`
-	Mysekai *schema.MysekaiDataPrivacySettings `json:"mysekai"`
+	Suite     *schema.SuiteDataPrivacySettings   `json:"suite"`
+	Mysekai   *schema.MysekaiDataPrivacySettings `json:"mysekai"`
+	BindingID int                                `json:"-"`
+	OwnerID   string                             `json:"-"`
+}
+
+func (s HarukiToolboxGameAccountPrivacySettings) AllowsPublicAPI(dataType utils.UploadDataType) bool {
+	switch dataType {
+	case utils.UploadDataTypeSuite:
+		return s.Suite != nil && s.Suite.AllowPublicApi
+	case utils.UploadDataTypeMysekai, utils.UploadDataTypeMysekaiBirthdayParty:
+		return s.Mysekai != nil && s.Mysekai.AllowPublicApi
+	default:
+		return false
+	}
 }
 
 type SocialPlatform string

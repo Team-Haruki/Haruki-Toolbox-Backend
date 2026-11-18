@@ -125,7 +125,7 @@ session:
   cookie:
     domain: haruki.seiunx.com
   whoami:
-    required_aal: aal1
+    required_aal: highest_available
 
 log:
   level: info

@@ -15,7 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func queryAdminUserDetailActivitySummary(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string, now time.Time) (*adminUserDetailActivitySummary, error) {
+func queryAdminUserDetailActivitySummary(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID, actorRole string, now time.Time) (*adminUserDetailActivitySummary, error) {
 	now = now.UTC()
 	from := now.Add(-defaultAdminUserDetailActivityWindowHours * time.Hour)
 
@@ -30,6 +30,10 @@ func queryAdminUserDetailActivitySummary(c fiber.Ctx, apiHelper *harukiAPIHelper
 			),
 		),
 	)
+	systemLogBase, err := adminCoreModule.ScopeSystemLogsForAdminActor(c.Context(), apiHelper.DBManager.DB, systemLogBase, actorRole)
+	if err != nil {
+		return nil, err
+	}
 
 	systemLogTotal, err := systemLogBase.Clone().Count(c.Context())
 	if err != nil {
@@ -133,7 +137,7 @@ func handleGetUserDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			return adminCoreModule.RespondFiberOrForbidden(c, err, "insufficient permissions")
 		}
 
-		activitySummary, err := queryAdminUserDetailActivitySummary(c, apiHelper, targetUserID, adminNow())
+		activitySummary, err := queryAdminUserDetailActivitySummary(c, apiHelper, targetUserID, actorRole, adminNow())
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query user activity summary")
 		}

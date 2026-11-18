@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterAdminOAuthClientRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router, hydraConfig *harukiOAuth2.HydraConfig) {
+func RegisterAdminOAuthClientRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router, hydraConfig *harukiOAuth2.HydraConfig, requireReauth fiber.Handler) {
 	oauthClients := adminGroup.Group("/oauth-clients", adminCoreModule.RequireAdmin(apiHelper))
 	if oauth2Module.HydraOAuthManagementEnabled(hydraConfig) {
 		oauthClients.Post("", adminCoreModule.RequireSuperAdmin(apiHelper), handleCreateHydraOAuthClient(apiHelper, hydraConfig))
@@ -24,9 +24,9 @@ func RegisterAdminOAuthClientRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		oauthClients.Delete("/:client_id/webhooks/:webhook_id", adminCoreModule.RequireSuperAdmin(apiHelper), handleDeleteHydraOAuthClientWebhook(apiHelper))
 		oauthClients.Post("/:client_id/revoke", adminCoreModule.RequireSuperAdmin(apiHelper), handleRevokeHydraOAuthClient(apiHelper, hydraConfig))
 		oauthClients.Post("/:client_id/restore", adminCoreModule.RequireSuperAdmin(apiHelper), handleRestoreHydraOAuthClient(apiHelper, hydraConfig))
-		oauthClients.Put("/:client_id", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateHydraOAuthClient(apiHelper, hydraConfig))
+		oauthClients.Put("/:client_id", adminCoreModule.RequireSuperAdmin(apiHelper), requireReauth, handleUpdateHydraOAuthClient(apiHelper, hydraConfig))
 		oauthClients.Put("/:client_id/active", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateHydraOAuthClientActive(apiHelper, hydraConfig))
-		oauthClients.Post("/:client_id/rotate-secret", adminCoreModule.RequireSuperAdmin(apiHelper), handleRotateHydraOAuthClientSecret(apiHelper, hydraConfig))
+		oauthClients.Post("/:client_id/rotate-secret", adminCoreModule.RequireSuperAdmin(apiHelper), requireReauth, handleRotateHydraOAuthClientSecret(apiHelper, hydraConfig))
 		oauthClients.Delete("/:client_id", adminCoreModule.RequireSuperAdmin(apiHelper), handleDeleteHydraOAuthClient(apiHelper, hydraConfig))
 		return
 	}

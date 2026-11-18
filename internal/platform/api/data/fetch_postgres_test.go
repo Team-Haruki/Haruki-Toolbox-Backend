@@ -1,7 +1,9 @@
 package data
 
 import (
+	"context"
 	json "encoding/json/v2"
+	"strings"
 	"testing"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -12,6 +14,17 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+func TestPublishedGameDataRejectsDuplicateAndOversizedSelections(t *testing.T) {
+	for _, query := range []string{"userCards,userCards", strings.Repeat("userCards,", 256), strings.Repeat("x", 8193)} {
+		if err := ValidateGameDataKeySelection(query); err == nil {
+			t.Fatal("accepted an invalid game data projection")
+		}
+	}
+	if err := ValidateGameDataKeySelection("userCards,userDecks"); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // The PostgreSQL read path hands back an ALREADY RENDERED body as []byte.
 // Marshalling that again does not re-emit it: encoding/json and sonic both
@@ -88,5 +101,45 @@ func TestPrivateProfileBodyFromPostgresErrors(t *testing.T) {
 	_, err = PrivateProfileBodyFromPostgres(t.Context(), nil, 1, "jp", nil)
 	if fe, ok := err.(*fiber.Error); !ok || fe.Code != fiber.StatusInternalServerError {
 		t.Fatalf("read failure: err = %v, want 500", err)
+	}
+}
+
+func TestPublishedGameDataReadAdmissionReleasesCapacity(t *testing.T) {
+	releases := make([]func(), 0, cap(publishedReadSlots))
+	defer func() {
+		for _, release := range releases {
+			release()
+		}
+	}()
+	for range cap(publishedReadSlots) {
+		release, ok := ReservePublishedGameDataRead()
+		if !ok {
+			t.Fatal("capacity exhausted early")
+		}
+		releases = append(releases, release)
+	}
+	if release, ok := ReservePublishedGameDataRead(); ok {
+		release()
+		t.Fatal("admission exceeded capacity")
+	}
+	releases[len(releases)-1]()
+	releases = releases[:len(releases)-1]
+	release, ok := ReservePublishedGameDataRead()
+	if !ok {
+		t.Fatal("released capacity could not be reused")
+	}
+	release()
+}
+
+func TestGameDataEndpointsRejectDuplicateSelectionsBeforeStorage(t *testing.T) {
+	for _, handle := range []func(context.Context, *harukiAPIHelper.HarukiToolboxRouterHelpers, int64, harukiUtils.SupportedDataUploadServer, string) (any, error){
+		func(ctx context.Context, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, id int64, server harukiUtils.SupportedDataUploadServer, keys string) (any, error) {
+			return HandleSuiteRequest(ctx, helper, id, server, keys, nil, nil)
+		},
+		HandleMysekaiRequest,
+	} {
+		if _, err := handle(t.Context(), nil, 123, harukiUtils.SupportedDataUploadServerJP, "example,example"); err == nil {
+			t.Fatal("handler accepted a duplicate projection")
+		}
 	}
 }

@@ -40,12 +40,21 @@ func scopeHydraClientAuthorizationRecordsForActor(records []hydraClientAuthoriza
 }
 
 func collectHydraClientAuthorizationRecords(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraConfig *harukiOAuth2.HydraConfig, clientID string) ([]hydraClientAuthorizationRecord, error) {
-	users, err := apiHelper.DBManager.DB.User.Query().
-		Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldKratosIdentityID).
-		All(ctx)
+	users, err := loadHydraAuthorizationUsers(ctx, apiHelper.DBManager.DB)
 	if err != nil {
 		return nil, err
 	}
+	return collectHydraClientAuthorizationRecordsForUsers(ctx, hydraConfig, clientID, users)
+}
+
+func loadHydraAuthorizationUsers(ctx context.Context, db *postgresql.Client) ([]*postgresql.User, error) {
+	return db.User.Query().
+		Select(userSchema.FieldID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldKratosIdentityID).
+		Order(userSchema.ByID()).
+		All(ctx)
+}
+
+func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, clientID string, users []*postgresql.User) ([]hydraClientAuthorizationRecord, error) {
 	if len(users) == 0 {
 		return []hydraClientAuthorizationRecord{}, nil
 	}

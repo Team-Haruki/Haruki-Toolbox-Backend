@@ -354,7 +354,7 @@ function finish(error, stillProcessing, skipped) {
     $.done({});
 }
 
-function sendChunk(index, totalChunks) {
+function sendChunk(index, totalChunks, retries = 0) {
     const start = index * chunkSize;
     const end = Math.min(start + chunkSize, body.length);
     const chunk = body.slice(start, end);
@@ -381,6 +381,15 @@ function sendChunk(index, totalChunks) {
         if (error) {
             log(\u0060chunk ${index + 1} upload failed: ${error}\u0060);
             finish("连不上 Haruki 工具箱（" + error + "）。游戏本身不受影响，稍后重进游戏即可重试。");
+        } else if (resp.status === 429 && index + 1 === totalChunks && retries < 7) {
+            const headers = resp.headers || {};
+            const key = Object.keys(headers).find(name => name.toLowerCase() === "retry-after");
+            const delay = Number(key ? headers[key] : "");
+            if (Number.isInteger(delay) && delay >= 1 && delay <= 3) {
+                setTimeout(() => sendChunk(index, totalChunks, retries + 1), delay * 1000);
+            } else {
+                finish(failureMessage(resp.status, data));
+            }
         } else if (resp.status !== 200 && !(resp.status === 202 && index + 1 === totalChunks)) {
             log(\u0060chunk ${index + 1} upload failed: HTTP ${resp.status}\u0060);
             finish(failureMessage(resp.status, data));

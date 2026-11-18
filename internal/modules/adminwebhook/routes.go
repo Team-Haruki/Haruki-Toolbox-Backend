@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-func RegisterAdminWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
+func RegisterAdminWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router, requireReauth fiber.Handler) {
 	webhooks := adminGroup.Group("/webhooks", adminCoreModule.RequireAdmin(apiHelper))
 
 	webhooks.Get("", adminCoreModule.RequireSuperAdmin(apiHelper), handleListAdminWebhooks(apiHelper))
@@ -15,7 +15,7 @@ func RegisterAdminWebhookRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 	webhooks.Get("/:webhook_id/subscribers", handleListAdminWebhookSubscribers(apiHelper))
 
 	webhooks.Post("", adminCoreModule.RequireSuperAdmin(apiHelper), handleCreateAdminWebhook(apiHelper))
-	webhooks.Put("/settings", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateAdminWebhookSettings(apiHelper))
+	webhooks.Put("/settings", adminCoreModule.RequireSuperAdmin(apiHelper), requireReauth, handleUpdateAdminWebhookSettings(apiHelper))
 	webhooks.Put("/:webhook_id", adminCoreModule.RequireSuperAdmin(apiHelper), handleUpdateAdminWebhook(apiHelper))
 	webhooks.Delete("/:webhook_id", adminCoreModule.RequireSuperAdmin(apiHelper), handleDeleteAdminWebhook(apiHelper))
 }

@@ -37,18 +37,20 @@ func ParseGameAccountSetting(ctx context.Context, db *postgresql.Client, server 
 	var allowCNMysekai *bool
 	var userBanned *bool
 	var banReason *string
+	settings = harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings{
+		Suite:     record.Suite,
+		Mysekai:   record.Mysekai,
+		BindingID: record.ID,
+	}
 	if record.Edges.User != nil {
 		ownerID := strings.TrimSpace(record.Edges.User.ID)
+		settings.OwnerID = ownerID
 		a := record.Edges.User.AllowCnMysekai
 		allowCNMysekai = &a
 		banned := record.Edges.User.Banned
 		userBanned = &banned
 		banReason = record.Edges.User.BanReason
 		belongs = deriveUploadOwnership(ownerID, userID, uploadMethod)
-	}
-	settings = harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings{
-		Suite:   record.Suite,
-		Mysekai: record.Mysekai,
 	}
 	return true, belongs, settings, allowCNMysekai, userBanned, banReason, nil
 }
@@ -61,19 +63,7 @@ func validateGameAccountBelonging(belongs *bool) error {
 }
 
 func determinePublicAPIPermission(exists bool, dataType harukiUtils.UploadDataType, settings harukiAPIHelper.HarukiToolboxGameAccountPrivacySettings) bool {
-	if !exists {
-		return false
-	}
-	if dataType == harukiUtils.UploadDataTypeMysekai {
-		if settings.Mysekai != nil {
-			return settings.Mysekai.AllowPublicApi
-		}
-		return false
-	}
-	if settings.Suite != nil {
-		return settings.Suite.AllowPublicApi
-	}
-	return false
+	return exists && settings.AllowsPublicAPI(dataType)
 }
 
 func validateCNMysekaiAccess(dataType harukiUtils.UploadDataType, server harukiUtils.SupportedDataUploadServer, allowCNMySekai *bool) error {

@@ -15,7 +15,8 @@ func Marshal(v any) ([]byte, error) {
 }
 
 // Unmarshal supports ordered destinations and the legacy generic decoder.
-// For untrusted generic destinations, call ValidateMaxDepth before Unmarshal.
+// Validate untrusted input before using the generic decoder. Generic
+// destinations may retain references to data after Unmarshal returns.
 func Unmarshal(data []byte, v any) error {
 	switch out := v.(type) {
 	case *orderedmap.OrderedMap:

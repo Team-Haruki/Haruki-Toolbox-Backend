@@ -228,8 +228,8 @@ func handleUpdateHydraOAuthClientActive(apiHelper *harukiAPIHelper.HarukiToolbox
 			// client is already disabled here, so revocation failures are reported in a
 			// 200 and the admin can finish the job with revoke-all.
 			revocation, enumerateErr := revokeHydraClientGrantsPerSubject(c.Context(), apiHelper, hydraConfig, clientID)
-			if enumerateErr != nil {
-				harukiLogger.Warnf("Failed to list grants of disabled oauth client %s: %v", clientID, enumerateErr)
+			if err := errors.Join(enumerateErr, revocation.recordsErr); err != nil {
+				harukiLogger.Warnf("Failed to list grants of disabled oauth client %s: %v", clientID, err)
 				metadata["queryAuthorizationsFailed"] = true
 			}
 			// Access tokens only: refresh tokens die with the consent sessions revoked

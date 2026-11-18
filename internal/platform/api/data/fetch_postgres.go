@@ -45,6 +45,9 @@ func suiteBodyFromPostgres(
 		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 	body, err := row.SuiteBody(keys, unwrapSingle)
+	if errors.Is(err, harukiGameData.ErrPublishedResponseTooLarge) {
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, harukiGameData.ErrPublishedResponseTooLarge.Error())
+	}
 	if err != nil {
 		harukiLogger.Errorf("Failed to render suite body: %v", err)
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get user data")
@@ -72,6 +75,9 @@ func mysekaiBodyFromPostgres(
 		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
 	body, err := row.MysekaiBody(keys)
+	if errors.Is(err, harukiGameData.ErrPublishedResponseTooLarge) {
+		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, harukiGameData.ErrPublishedResponseTooLarge.Error())
+	}
 	if err != nil {
 		harukiLogger.Errorf("Failed to render mysekai body: %v", err)
 		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get user data")

@@ -41,8 +41,13 @@ func handleListHydraOAuthClientWebhooks(apiHelper *harukiAPIHelper.HarukiToolbox
 		}
 
 		items := make([]adminOAuthClientWebhookItem, 0, len(rows))
+		role, _ := c.Locals("userRole").(string)
 		for _, row := range rows {
-			items = append(items, buildAdminOAuthClientWebhookItem(row))
+			item := buildAdminOAuthClientWebhookItem(row)
+			if role != adminCoreModule.RoleSuperAdmin {
+				item.CallbackURL = ""
+			}
+			items = append(items, item)
 		}
 		resp := adminOAuthClientWebhookListResponse{
 			GeneratedAt: adminNowUTC(),

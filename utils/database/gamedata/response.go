@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -12,6 +13,19 @@ import (
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 )
+
+const MaxPublishedResponseBytes = 64 << 20
+
+var ErrPublishedResponseTooLarge = errors.New("game data exceeds the response size limit")
+
+func appendPublishedMember(dst []byte, first *bool, key string, value []byte) ([]byte, error) {
+	// JSON escapes can use up to six bytes per input byte. Reserve the quotes,
+	// colon, optional comma and closing object brace as well.
+	if len(dst)+len(value)+6*len(key)+5 > MaxPublishedResponseBytes {
+		return nil, ErrPublishedResponseTooLarge
+	}
+	return appendMember(dst, first, key, value), nil
+}
 
 // emptyArray is what a requested-but-absent suite key renders as. It is not a
 // stylistic choice: the retired MongoDB path returned bson.A{} from
@@ -75,7 +89,11 @@ func idStringFromRaw(raw []byte) (string, bool) {
 // object, not a bare value.
 func (r *Row) SuiteBody(keys []string, unwrapSingle bool) ([]byte, error) {
 	if unwrapSingle && len(keys) == 1 {
-		return r.suiteBareValue(keys[0])
+		body, err := r.suiteBareValue(keys[0])
+		if len(body) > MaxPublishedResponseBytes {
+			return nil, ErrPublishedResponseTooLarge
+		}
+		return body, err
 	}
 	out := make([]byte, 0, 1024)
 	out = append(out, '{')
@@ -91,7 +109,10 @@ func (r *Row) SuiteBody(keys []string, unwrapSingle bool) ([]byte, error) {
 			if !ok {
 				continue
 			}
-			out = appendMember(out, &first, key, v)
+			out, err = appendPublishedMember(out, &first, key, v)
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
 		v, ok, err := r.RawValue(key)
@@ -101,7 +122,10 @@ func (r *Row) SuiteBody(keys []string, unwrapSingle bool) ([]byte, error) {
 		if !ok {
 			v = emptyArray
 		}
-		out = appendMember(out, &first, key, v)
+		out, err = appendPublishedMember(out, &first, key, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return append(out, '}'), nil
 }
@@ -149,8 +173,14 @@ func (r *Row) MysekaiBody(keys []string) ([]byte, error) {
 		if !ok {
 			continue
 		}
-		out = appendMember(out, &first, key, v)
+		out, err = appendPublishedMember(out, &first, key, v)
+		if err != nil {
+			return nil, err
+		}
 		out = appendIDString(out, &first, key, v)
+		if len(out)+1 > MaxPublishedResponseBytes {
+			return nil, ErrPublishedResponseTooLarge
+		}
 	}
 	return append(out, '}'), nil
 }
@@ -275,6 +305,12 @@ func (r *Row) documentWithout(withIdentity bool, omit map[string]bool) ([]byte, 
 	var flattened []byte
 	flatFirst := true
 	hasFlattened := false
+	appendData := func(dst []byte, first *bool, key string, value []byte) ([]byte, error) {
+		if withIdentity {
+			return appendMember(dst, first, key, value), nil
+		}
+		return appendPublishedMember(dst, first, key, value)
+	}
 
 	for i := range r.cat.Entries {
 		e := &r.cat.Entries[i]
@@ -292,7 +328,10 @@ func (r *Row) documentWithout(withIdentity bool, omit map[string]bool) ([]byte, 
 			if flattened == nil {
 				flattened = append(flattened, '{')
 			}
-			flattened = appendMember(flattened, &flatFirst, e.Child, v)
+			flattened, err = appendData(flattened, &flatFirst, e.Child, v)
+			if err != nil {
+				return nil, err
+			}
 			hasFlattened = true
 			continue
 		}
@@ -306,7 +345,10 @@ func (r *Row) documentWithout(withIdentity bool, omit map[string]bool) ([]byte, 
 			}
 			v = filtered
 		}
-		out = appendMember(out, &first, e.Key, v)
+		out, err = appendData(out, &first, e.Key, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// `extra` members are spliced in at top level, except the re-nested
@@ -326,18 +368,29 @@ func (r *Row) documentWithout(withIdentity bool, omit map[string]bool) ([]byte, 
 			}
 			v = filtered
 		}
-		out = appendMember(out, &first, k, v)
+		var err error
+		out, err = appendData(out, &first, k, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if hasFlattened || len(extraFlattened) > 0 {
 		if flattened == nil {
 			flattened = append(flattened, '{')
 		}
+		var err error
 		for _, kv := range extraFlattened {
-			flattened = appendMember(flattened, &flatFirst, kv.key, kv.val)
+			flattened, err = appendData(flattened, &flatFirst, kv.key, kv.val)
+			if err != nil {
+				return nil, err
+			}
 		}
 		flattened = append(flattened, '}')
-		out = appendMember(out, &first, r.cat.FlattenKey, flattened)
+		out, err = appendData(out, &first, r.cat.FlattenKey, flattened)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return append(out, '}'), nil

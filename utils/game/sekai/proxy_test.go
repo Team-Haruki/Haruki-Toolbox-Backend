@@ -22,7 +22,7 @@ func TestFilterHeaders(t *testing.T) {
 		"x-gp":            "optional-signature",
 		"X-CHANNEL-OP":    "optional-channel",
 	}
-	filtered := filterHeaders(in)
+	filtered := filterHeaders(in, harukiUtils.SupportedDataUploadServerJP)
 
 	if filtered["user-agent"] != "ua" {
 		t.Fatalf("user-agent should be kept")
@@ -44,6 +44,27 @@ func TestFilterHeaders(t *testing.T) {
 	}
 	if _, ok := filtered["x-channel-op"]; ok {
 		t.Fatalf("x-channel-op should be removed")
+	}
+}
+
+func TestProxyForwardsOnlyCloudFrontSignedCookies(t *testing.T) {
+	t.Parallel()
+
+	const common = "CloudFront-Signature=abc_-~; CloudFront-Key-Pair-Id=key"
+	for _, signed := range []string{"CloudFront-Policy=policy; " + common, "CloudFront-Expires=123; " + common} {
+		headers := map[string]string{
+			"cOoKiE": "ory_kratos_session=session; preferences=value; broken; CloudFront-Other=value; " + signed,
+		}
+		got := filterHeaders(headers, harukiUtils.SupportedDataUploadServerJP)
+		if got["cookie"] != signed {
+			t.Fatalf("forwarded cookies = %q, want %q", got["cookie"], signed)
+		}
+		if got := filterHeaders(headers, harukiUtils.SupportedDataUploadServerEN); got["cookie"] != "" {
+			t.Fatalf("forwarded JP cookies to EN: %q", got["cookie"])
+		}
+	}
+	if got := filterHeaders(map[string]string{"Cookie": "ory_kratos_session=session"}, harukiUtils.SupportedDataUploadServerJP); got["cookie"] != "" {
+		t.Fatalf("forwarded non-game cookie: %q", got["cookie"])
 	}
 }
 

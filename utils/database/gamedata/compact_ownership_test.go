@@ -2,6 +2,8 @@ package gamedata
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -43,9 +45,23 @@ func TestOrderedParserStillOwnsScalarBytes(t *testing.T) {
 	for i := range input {
 		input[i] = 'x'
 	}
-	got, err := appendJSON(nil, parsed)
-	if err != nil || !bytes.Equal(want, got) {
+	out := compactJSONOutput{body: make([]byte, 0), limit: DefaultLimits().MaxKeyBytes}
+	out.value(parsed)
+	if out.err != nil || !bytes.Equal(want, out.body) {
 		t.Fatal("ordinary parser borrowed input")
+	}
+}
+
+func TestCompactJSONExpansionHonorsByteBudget(t *testing.T) {
+	raw := []byte(`{"id":[1,2]}`)
+	want := []byte(`[{"id":1},{"id":2}]`)
+	out := compactJSONOutput{body: make([]byte, 0), limit: len(want)}
+	if err := renderCompactJSON(raw, &out); err != nil || !bytes.Equal(out.body, want) {
+		t.Fatalf("renderCompactJSON = %s, %v", out.body, err)
+	}
+	sizing := compactJSONOutput{limit: len(want) - 1}
+	if err := renderCompactJSON(raw, &sizing); !errors.Is(err, ErrPublishedResponseTooLarge) || sizing.size > sizing.limit || sizing.body != nil {
+		t.Fatalf("sizing did not enforce its budget: size=%d, err=%v", sizing.size, err)
 	}
 }
 
@@ -73,4 +89,28 @@ func TestCompactExpansionConcurrentRows(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestWriteChecksExpandedSizeBeforeStorage(t *testing.T) {
+	store := NewStore(&Pool{}, catalog.Suite())
+	data := map[string]any{"compactUserMusicResults": map[string]any{"musicId": []int{1, 2, 3}}}
+	for _, tc := range []struct {
+		name   string
+		limits Limits
+		want   string
+	}{
+		{"expanded column", Limits{MaxKeyBytes: 36}, `compact key "userMusicResults"`},
+		{"expanded row", Limits{MaxRowBytes: 36}, "upload totals"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := store.Write(context.Background(), 1, "jp", data, WriteSuite, tc.limits)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Write error = %v, want %q", err, tc.want)
+			}
+			_, dryRunErr := store.EncodeOnly(data, WriteMigrate, tc.limits)
+			if dryRunErr == nil || dryRunErr.Error() != err.Error() {
+				t.Fatalf("migration dry run error = %v, want %v", dryRunErr, err)
+			}
+		})
+	}
 }

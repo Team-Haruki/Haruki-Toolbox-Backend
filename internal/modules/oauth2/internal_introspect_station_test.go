@@ -152,8 +152,15 @@ func serveIntrospectTestEnv(t *testing.T, env *introspectTestEnv) string {
 		_ = env.app.Listener(ln, fiber.ListenConfig{DisableStartupMessage: true})
 	}()
 	t.Cleanup(func() {
-		_ = env.app.Shutdown()
-		<-done
+		if err := env.app.ShutdownWithTimeout(5 * time.Second); err != nil {
+			_ = ln.Close()
+			t.Errorf("shutdown introspection test server: %v", err)
+		}
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("introspection test server did not stop")
+		}
 	})
 	return "http://" + ln.Addr().String() + InternalIntrospectPath
 }
@@ -169,6 +176,7 @@ func TestInternalIntrospectServesStationClient(t *testing.T) {
 	}
 	// Station's verifier.New client: 5 s timeout, redirects not followed.
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	defer client.CloseIdleConnections()
 	ctx := context.Background()
 
 	env.hydra.setToken("ory_at_noStationScope0123456789", activeTokenBody(testIntrospectIdentityID, testIntrospectClientID, "user:read offline_access"))

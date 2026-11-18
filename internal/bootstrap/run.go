@@ -62,6 +62,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		return nil, err
 	}
 
+	if strings.TrimSpace(cfg.Backend.BackendURL) == "" {
+		return nil, fmt.Errorf("backend.backend_url is required as the OAuth2 resource audience")
+	}
 	if strings.TrimSpace(cfg.GameData.URL) == "" {
 		return nil, fmt.Errorf("game_data.url is required")
 	}
@@ -154,13 +157,14 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	})
 	// One HydraConfig serves the routes and the device-flow reaper.
 	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
-		Provider:       cfg.OAuth2.Provider,
-		PublicURL:      cfg.OAuth2.HydraPublicURL,
-		BrowserURL:     cfg.OAuth2.HydraBrowserURL,
-		AdminURL:       cfg.OAuth2.HydraAdminURL,
-		ClientID:       cfg.OAuth2.HydraClientID,
-		ClientSecret:   cfg.OAuth2.HydraClientSecret,
-		RequestTimeout: time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
+		Provider:         cfg.OAuth2.Provider,
+		PublicURL:        cfg.OAuth2.HydraPublicURL,
+		BrowserURL:       cfg.OAuth2.HydraBrowserURL,
+		AdminURL:         cfg.OAuth2.HydraAdminURL,
+		ResourceAudience: cfg.Backend.BackendURL,
+		ClientID:         cfg.OAuth2.HydraClientID,
+		ClientSecret:     cfg.OAuth2.HydraClientSecret,
+		RequestTimeout:   time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
 	})
 	storyService, err := storyModule.New(cfg.Story, resources.toolboxClient, harukiLogger.NewLoggerFromGlobal("Story"))
 	if err != nil {

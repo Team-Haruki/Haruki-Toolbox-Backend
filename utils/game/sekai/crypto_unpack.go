@@ -1,6 +1,7 @@
 package sekai
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/msgpackcodec"
@@ -18,85 +19,63 @@ func (c *SekaiCryptor) UnpackInto(content []byte, out any) error {
 	}
 	defer releasePooledBytes(pooled)
 
-	switch dst := out.(type) {
-	case *orderedmap.OrderedMap:
-		om, err := msgpackcodec.DecodeOrdered(unpadded)
-		if err != nil {
-			return fmt.Errorf("ordered decode: %w", err)
-		}
-		*dst = *om
-	case **orderedmap.OrderedMap:
-		om, err := msgpackcodec.DecodeOrdered(unpadded)
-		if err != nil {
-			return fmt.Errorf("ordered (**ptr) decode: %w", err)
-		}
-		*dst = om
+	switch out.(type) {
+	case *orderedmap.OrderedMap, **orderedmap.OrderedMap:
+		return msgpackcodec.Unmarshal(unpadded, out)
 	default:
-		// shamaton's decoder recurses per nesting level with no depth limit, so a
-		// deeply nested payload would trigger an unrecoverable stack overflow.
-		// Pre-validate structure/depth before handing untrusted bytes to it.
 		if err := msgpackcodec.ValidateMaxDepth(unpadded, msgpackcodec.DefaultMaxUploadDepth); err != nil {
 			return fmt.Errorf("msgpack validation (len=%d, target=%T): %w", len(unpadded), out, err)
 		}
-		if err := msgpackcodec.Unmarshal(unpadded, out); err != nil {
-			preview := unpadded
-			if len(preview) > 200 {
-				preview = preview[:200]
-			}
-			return fmt.Errorf(
-				"msgpack decode (len=%d, target=%T, first200=%x): %w",
-				len(unpadded),
-				out,
-				preview,
-				err,
-			)
+		// An arbitrary typed destination can retain slices of the decoder's
+		// input even on error. Give it request-owned bytes.
+		if err := unmarshalMsgpack(bytes.Clone(unpadded), out); err != nil {
+			return fmt.Errorf("msgpack decode (len=%d, target=%T): %w", len(unpadded), out, err)
 		}
+		return nil
 	}
-
-	return nil
 }
 
 func (c *SekaiCryptor) Unpack(content []byte) (any, error) {
-	var mapResult map[string]any
-	if err := c.UnpackInto(content, &mapResult); err == nil {
-		sanitizeMapValues(mapResult)
-		return mapResult, nil
-	}
-
-	var sliceResult []any
-	if err := c.UnpackInto(content, &sliceResult); err == nil {
-		sanitizeSliceValues(sliceResult)
-		return sliceResult, nil
-	}
-
-	var anyResult any
-	if err := c.UnpackInto(content, &anyResult); err != nil {
+	unpadded, pooled, err := c.decryptToPooledMsgpack(content)
+	if err != nil {
 		return nil, err
 	}
-	return convertUnpackResult(anyResult), nil
+	defer releasePooledBytes(pooled)
+	return UnpackMsgpack(unpadded)
 }
 
-// UnpackMsgpack decodes already-decrypted, caller-owned bytes with the same
-// value conversion as Unpack. Validate before any recursive decoder invocation.
+// UnpackMsgpack decodes already-decrypted bytes. The input must stay unchanged
+// until the call returns. The decoded result owns its binary values.
 func UnpackMsgpack(content []byte) (any, error) {
-	if err := msgpackcodec.ValidateMaxDepth(content, msgpackcodec.DefaultMaxUploadDepth); err != nil {
+	if err := msgpackcodec.ValidateGenericDecode(content); err != nil {
 		return nil, fmt.Errorf("msgpack validation: %w", err)
 	}
 	var mapResult map[string]any
-	if err := msgpackcodec.Unmarshal(content, &mapResult); err == nil {
+	if err := unmarshalMsgpack(content, &mapResult); err == nil {
 		sanitizeMapValues(mapResult)
 		return mapResult, nil
 	}
 	var sliceResult []any
-	if err := msgpackcodec.Unmarshal(content, &sliceResult); err == nil {
+	if err := unmarshalMsgpack(content, &sliceResult); err == nil {
 		sanitizeSliceValues(sliceResult)
 		return sliceResult, nil
 	}
 	var result any
-	if err := msgpackcodec.Unmarshal(content, &result); err != nil {
-		return nil, err
+	if err := unmarshalMsgpack(content, &result); err != nil {
+		return nil, fmt.Errorf("msgpack decode: %w", err)
 	}
 	return convertUnpackResult(result), nil
+}
+
+func unmarshalMsgpack(content []byte, out any) (err error) {
+	// Structure and depth are checked by the caller before entering the
+	// dependency. Contain unexpected decoder panics without logging plaintext.
+	defer func() {
+		if recover() != nil {
+			err = fmt.Errorf("unexpected panic in msgpack decoder")
+		}
+	}()
+	return msgpackcodec.Unmarshal(content, out)
 }
 
 func sanitizeMapValues(m map[string]any) {
@@ -108,6 +87,8 @@ func sanitizeMapValues(m map[string]any) {
 			sanitizeMapValues(child)
 		case []any:
 			sanitizeSliceValues(child)
+		case []byte:
+			m[k] = bytes.Clone(child)
 		}
 	}
 }
@@ -121,6 +102,8 @@ func sanitizeSliceValues(s []any) {
 			sanitizeMapValues(child)
 		case []any:
 			sanitizeSliceValues(child)
+		case []byte:
+			s[i] = bytes.Clone(child)
 		}
 	}
 }
@@ -132,8 +115,6 @@ func convertUnpackResult(v any) any {
 		for k, val := range x {
 			if keyStr, ok := k.(string); ok {
 				m[keyStr] = convertUnpackResult(val)
-			} else if keyBytes, ok := k.([]byte); ok {
-				m[string(keyBytes)] = convertUnpackResult(val)
 			}
 		}
 		return m
@@ -143,6 +124,8 @@ func convertUnpackResult(v any) any {
 	case []any:
 		sanitizeSliceValues(x)
 		return x
+	case []byte:
+		return bytes.Clone(x)
 	default:
 		return v
 	}

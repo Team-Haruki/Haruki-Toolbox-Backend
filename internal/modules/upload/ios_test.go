@@ -171,7 +171,7 @@ func TestIOSUploadChunkStoreLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("persistIOSUploadChunk(second) returned error: %v", err)
 	}
-	if second.State != iosUploadChunkStateCompleteClaimed || second.Count != 2 || second.Size != 4 {
+	if second.State != iosUploadChunkStateComplete || second.Count != 2 || second.Size != 4 {
 		t.Fatalf("second persist result = %#v", second)
 	}
 
@@ -186,7 +186,11 @@ func TestIOSUploadChunkStoreLifecycle(t *testing.T) {
 		t.Fatalf("unexpected chunk payloads: %#v", chunks)
 	}
 
-	if err := clearIOSUploadChunks(ctx, client, uploadKey, 2); err != nil {
+	const claim = "test-claim"
+	if acquired, err := claimIOSUploadChunks(ctx, client, uploadKey, 2, claim); err != nil || !acquired {
+		t.Fatalf("claim ready upload = %v, %v", acquired, err)
+	}
+	if err := clearIOSUploadChunks(ctx, client, uploadKey, 2, claim); err != nil {
 		t.Fatalf("clearIOSUploadChunks returned error: %v", err)
 	}
 
@@ -198,6 +202,31 @@ func TestIOSUploadChunkStoreLifecycle(t *testing.T) {
 	}
 	if exists != 0 {
 		t.Fatalf("expected upload keys to be cleared")
+	}
+	reserved, err := client.HGet(ctx, harukiRedis.BuildIOSUploadChunkBudgetKey(), "total").Int()
+	if err != nil || reserved != 0 {
+		t.Fatalf("completed upload reservation = %d, %v", reserved, err)
+	}
+}
+
+func TestIOSUploadChunkStoreRespectsOwnerBudget(t *testing.T) {
+	t.Parallel()
+
+	client := newIOSUploadRedisClient(t)
+	ctx := t.Context()
+	budgetKey := harukiRedis.BuildIOSUploadChunkBudgetKey()
+	if err := client.HSet(ctx, budgetKey, "owner:busy", iosChunkPerOwnerBudget, "total", iosChunkPerOwnerBudget).Err(); err != nil {
+		t.Fatal(err)
+	}
+	busy := buildChunkUploadKey("busy", harukiUtils.SupportedDataUploadServerJP, 123, "new")
+	got, err := persistIOSUploadChunk(ctx, client, busy, 2, 0, []byte("one"))
+	if err != nil || got.State != iosUploadChunkStateBudgetExceeded {
+		t.Fatalf("busy owner persist = %#v, %v", got, err)
+	}
+	other := buildChunkUploadKey("other", harukiUtils.SupportedDataUploadServerJP, 456, "new")
+	got, err = persistIOSUploadChunk(ctx, client, other, 2, 0, []byte("one"))
+	if err != nil || got.State != iosUploadChunkStateIncomplete {
+		t.Fatalf("other owner persist = %#v, %v", got, err)
 	}
 }
 
@@ -231,10 +260,19 @@ func TestIOSUploadChunkStoreClaimsCompletionOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
 	}
-	if first.State != iosUploadChunkStateCompleteClaimed {
-		t.Fatalf("first state = %d, want %d", first.State, iosUploadChunkStateCompleteClaimed)
+	if first.State != iosUploadChunkStateComplete {
+		t.Fatalf("first state = %d, want %d", first.State, iosUploadChunkStateComplete)
 	}
 
+	if acquired, err := claimIOSUploadChunks(ctx, client, uploadKey, 1, "first"); err != nil || !acquired {
+		t.Fatalf("claim ready upload = %v, %v", acquired, err)
+	}
+	if acquired, err := claimIOSUploadChunks(ctx, client, uploadKey, 1, "second"); err != nil || acquired {
+		t.Fatalf("competing claim = %v, %v", acquired, err)
+	}
+	if err := resetIOSUploadClaim(ctx, client, uploadKey, "second"); err != nil {
+		t.Fatal(err)
+	}
 	second, err := persistIOSUploadChunk(ctx, client, uploadKey, 1, 0, []byte("ab"))
 	if err != nil {
 		t.Fatalf("persistIOSUploadChunk returned error: %v", err)
@@ -304,7 +342,7 @@ func TestIOSUploadChunkStoreLoadsPartsInIndexOrder(t *testing.T) {
 			t.Fatalf("persistIOSUploadChunk(%d) returned error: %v", idx, err)
 		}
 	}
-	if last.State != iosUploadChunkStateCompleteClaimed || last.Count != total || last.Size != total {
+	if last.State != iosUploadChunkStateComplete || last.Count != total || last.Size != total {
 		t.Fatalf("final persist result = %#v", last)
 	}
 	for i, key := range iosUploadChunkPartKeys(uploadKey, total) {
@@ -380,10 +418,10 @@ func TestIOSUploadChunkStoreNilClient(t *testing.T) {
 	if _, err := loadIOSUploadChunks(ctx, nil, "k", 1); err == nil {
 		t.Fatal("load accepted a nil client")
 	}
-	if err := clearIOSUploadChunks(ctx, nil, "k", 1); err == nil {
+	if err := clearIOSUploadChunks(ctx, nil, "k", 1, "unused"); err == nil {
 		t.Fatal("clear accepted a nil client")
 	}
-	if err := resetIOSUploadClaim(ctx, nil, "k"); err == nil {
+	if err := resetIOSUploadClaim(ctx, nil, "k", "unused"); err == nil {
 		t.Fatal("reset accepted a nil client")
 	}
 }

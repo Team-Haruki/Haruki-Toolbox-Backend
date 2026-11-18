@@ -122,6 +122,14 @@ func BuildGameAccountVerifyAttemptKey(userID, server, gameUserID string) string 
 	return buildKey(KeyPrefixHaruki, KeyModuleGameAccount, KeyActionVerify, KeyActionAttempt, userID, server, gameUserID)
 }
 
+func BuildIOSUploadChunkBudgetKey() string {
+	return buildKey(KeyPrefixHaruki, "ios", "chunk-budget")
+}
+
+func BuildIOSUploadChunkBudgetExpiryKey() string {
+	return buildKey(KeyPrefixHaruki, "ios", "chunk-budget-expiry")
+}
+
 func BuildSocialPlatformVerifyKey(platform, platformUserID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleSocial, KeyActionVerify, platform, platformUserID)
 }

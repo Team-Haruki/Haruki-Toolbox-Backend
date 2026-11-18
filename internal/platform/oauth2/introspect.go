@@ -20,8 +20,10 @@ type AccessTokenIntrospection struct {
 	ClientID string
 	// Scopes are all scopes granted to the token, in Hydra's order.
 	Scopes []string
-	Exp    int64
-	Iat    int64
+	// Audience is the resource restriction, when Hydra granted one.
+	Audience []string
+	Exp      int64
+	Iat      int64
 	// DeviceLabel is ext.device_label, empty for tokens without one.
 	DeviceLabel string
 }
@@ -58,6 +60,7 @@ func IntrospectAccessToken(ctx context.Context, hydraConfig *HydraConfig, db *po
 		UserID:      result.UserID,
 		ClientID:    result.ClientID,
 		Scopes:      scopes,
+		Audience:    result.Audience,
 		Exp:         result.Exp,
 		Iat:         result.Iat,
 		DeviceLabel: result.DeviceLabel,

@@ -29,6 +29,10 @@ func handleModuleGeneration(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelper
 		if filepath == "" {
 			return harukiAPIHelper.ErrorBadRequest(c, "missing module filename")
 		}
+		// A module filename only holds five regions, four data types and an extension.
+		if len(filepath) > 128 {
+			return harukiAPIHelper.ErrorBadRequest(c, "module filename is too long")
+		}
 		record, err := apiHelper.DBManager.DB.IOSScriptCode.Query().
 			Where(iosscriptcode.UploadCodeEQ(uploadCode)).
 			Only(ctx)

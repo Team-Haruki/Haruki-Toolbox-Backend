@@ -3,6 +3,7 @@ package admin
 import (
 	"strings"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
@@ -65,6 +66,9 @@ func sanitizeOptionalRuntimeSecret(raw *string, fieldName string) (*string, erro
 	trimmed := strings.TrimSpace(*raw)
 	if trimmed == "" {
 		return nil, fiber.NewError(fiber.StatusBadRequest, fieldName+" cannot be empty")
+	}
+	if config.IsExampleCredential(trimmed) {
+		return nil, fiber.NewError(fiber.StatusBadRequest, fieldName+" cannot be an example credential")
 	}
 	out := trimmed
 	return &out, nil

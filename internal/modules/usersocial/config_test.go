@@ -22,14 +22,18 @@ func TestBotVerifyConfigInstancesAreIsolated(t *testing.T) {
 	}
 }
 
-func TestBotVerifyConfigZeroValuePreservesEmptySecretComparison(t *testing.T) {
+func TestBotVerifyConfigRejectsUnconfiguredAndExampleCredentials(t *testing.T) {
 	t.Parallel()
 
 	var botVerifyConfig BotVerifyConfig
 	if botVerifyConfig.authorizes("configured-client-token") {
 		t.Fatal("zero-value config must reject non-empty bearer tokens")
 	}
-	if !botVerifyConfig.authorizes("") {
-		t.Fatal("zero-value config should preserve the historical empty-secret comparison")
+	if botVerifyConfig.authorizes("") {
+		t.Fatal("zero-value config must reject an empty token")
+	}
+	example := NewBotVerifyConfig(BotVerifyConfigOptions{Token: "change-me-social-platform-verify-token"})
+	if example.authorizes("change-me-social-platform-verify-token") {
+		t.Fatal("example configuration must not authorize bot verification")
 	}
 }

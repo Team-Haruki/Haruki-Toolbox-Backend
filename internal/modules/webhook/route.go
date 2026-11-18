@@ -3,6 +3,7 @@ package webhook
 import (
 	"strings"
 
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
@@ -16,12 +17,16 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if apiHelper == nil {
 			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
 		}
-		secretKey := apiHelper.GetWebhookJWTSecret()
-		if secretKey == "" {
+		ctx := c.Context()
+		snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "webhook authentication unavailable")
+		}
+		secretKey := snapshot.WebhookJWTSecret
+		if secretKey == "" || config.IsExampleCredential(secretKey) {
 			harukiLogger.Errorf("Webhook secret key is not configured")
 			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
 		}
-		ctx := c.Context()
 		jwtToken := c.Get(TokenHeaderName)
 		if jwtToken == "" {
 			return harukiAPIHelper.ErrorUnauthorized(c, "Missing "+TokenHeaderName+" header")

@@ -89,7 +89,7 @@ func proxyAttempt(c fiber.Ctx) *platform.Attempt {
 	if a, ok := c.Locals(proxyAttemptKey{}).(*platform.Attempt); ok {
 		return a
 	}
-	a := &platform.Attempt{RequestID: uuid.NewString(), ReceivedAt: time.Now().UTC(), RequestBytes: int64(len(c.Body()))}
+	a := &platform.Attempt{RequestID: uuid.NewString(), ReceivedAt: time.Now().UTC(), RequestBytes: int64(len(c.Request().Body()))}
 	c.Locals(proxyAttemptKey{}, a)
 	c.Set("X-Request-ID", a.RequestID)
 	return a

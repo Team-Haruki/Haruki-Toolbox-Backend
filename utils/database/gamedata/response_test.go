@@ -460,3 +460,62 @@ func TestIDStringDerivation(t *testing.T) {
 		}
 	}
 }
+
+func TestPublishedResponseEnforcesSizeOnSingleAndWrappedSuite(t *testing.T) {
+	c := catalog.Suite()
+	cards, _ := c.Resolve("userCards")
+	r := &Row{cat: c, byColumn: map[string][]byte{cards.Column: make([]byte, MaxPublishedResponseBytes+1)}}
+	for _, unwrap := range []bool{true, false} {
+		if body, err := r.SuiteBody([]string{"userCards"}, unwrap); body != nil || err != ErrPublishedResponseTooLarge {
+			t.Fatalf("SuiteBody with unwrap=%v returned %d bytes, err = %v", unwrap, len(body), err)
+		}
+	}
+}
+
+func TestPublishedMysekaiResponseBindsSizeBeforeAddingMembers(t *testing.T) {
+	c := catalog.Mysekai()
+	key := "updatedResources.userMysekaiFixtures"
+	field, place := c.Resolve(key)
+	if place != catalog.PlaceColumn {
+		t.Fatalf("test key %q is not a column (%v)", key, place)
+	}
+	r := &Row{cat: c, byColumn: map[string][]byte{field.Column: make([]byte, MaxPublishedResponseBytes+1)}}
+	if body, err := r.MysekaiBody([]string{key}); body != nil || err != ErrPublishedResponseTooLarge {
+		t.Fatalf("MysekaiBody returned %d bytes, err = %v", len(body), err)
+	}
+}
+
+func TestPublishedWholeDocumentChecksTopLevelAndFlattenedSize(t *testing.T) {
+	c := catalog.Mysekai()
+	raw := make([]byte, MaxPublishedResponseBytes+1)
+	for _, key := range []string{"mysekaiPhenomenaSchedules", "updatedResources.userMysekaiFixtures"} {
+		t.Run(key, func(t *testing.T) {
+			field, place := c.Resolve(key)
+			if place != catalog.PlaceColumn {
+				t.Fatalf("test key %q is not a column (%v)", key, place)
+			}
+			r := &Row{cat: c, byColumn: map[string][]byte{field.Column: raw}}
+			if body, err := r.MysekaiBody(nil); body != nil || err != ErrPublishedResponseTooLarge {
+				t.Fatalf("whole document returned %d bytes, err = %v", len(body), err)
+			}
+		})
+	}
+}
+
+func TestPublishedWholeDocumentPreservesSmallExtraFields(t *testing.T) {
+	c := catalog.Mysekai()
+	r := newTestRow(t, c, map[string]string{"updatedResources.userMysekaiPhotos": "[1]"},
+		`{"additionalField":[2],"updatedResources":{"additionalChild":[3]}}`)
+	body, err := r.MysekaiBody(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	children, _ := got["updatedResources"].(map[string]any)
+	if got["additionalField"] == nil || children["additionalChild"] == nil || children["userMysekaiPhotos"] == nil {
+		t.Fatalf("published document lost an extra field: %s", body)
+	}
+}
