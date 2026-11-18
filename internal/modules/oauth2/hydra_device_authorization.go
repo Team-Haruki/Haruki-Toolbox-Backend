@@ -253,6 +253,8 @@ func parseDeviceAuthorizationRequest(c fiber.Ctx) (deviceAuthorizationRequest, s
 	}, ""
 }
 
+var confidentialDeviceIssueAdmission = make(chan struct{}, 8)
+
 // handleHydraDeviceAuthorization proxies RFC 8628 device authorization
 // (POST /api/oauth2/device/auth) to Hydra, which cannot rate-limit, ignores
 // metadata.haruki.active and points verification_uri at the API host. The
@@ -339,19 +341,33 @@ func handleHydraDeviceAuthorization(hydraConfig *harukiOAuth2.HydraConfig, cfg D
 			{Key: keys.BuildOAuth2DeviceAuthIssuedPoolKey(clientType), Limit: poolLimit, Window: deviceRateWindow},
 			{Key: keys.BuildOAuth2DeviceAuthIssuedClientKey(clientID), Limit: maxCodes, Window: deviceRateWindow},
 		}
-		reservation, err := store.reserve(ctx, counters)
-		if err != nil {
-			return respondDeviceUnavailable(c)
-		}
-		if reservation.LimitedIndex >= 0 {
-			limited := counters[reservation.LimitedIndex]
-			c.Set(fiber.HeaderRetryAfter, strconv.Itoa(store.retryAfterSeconds(ctx, limited.Key, limited.Window)))
-			return respondDeviceOAuthError(c, fiber.StatusTooManyRequests, oauthErrorTemporarilyUnavailable, deviceRateLimitedText)
-		}
-		if reservation.Counts[0] == deviceWarnThreshold(poolLimit) {
-			logDeviceEvent(logger, "warn", "auth_issued_global_warn", "", "", "pool="+clientType)
-		}
+		reserveIssued := func() (bool, error) {
+			reservation, err := store.reserve(ctx, counters)
+			if err != nil {
+				return false, respondDeviceUnavailable(c)
+			}
+			if reservation.LimitedIndex >= 0 {
+				limited := counters[reservation.LimitedIndex]
+				c.Set(fiber.HeaderRetryAfter, strconv.Itoa(store.retryAfterSeconds(ctx, limited.Key, limited.Window)))
+				return false, respondDeviceOAuthError(c, fiber.StatusTooManyRequests, oauthErrorTemporarilyUnavailable, deviceRateLimitedText)
+			}
+			if reservation.Counts[0] == deviceWarnThreshold(poolLimit) {
+				logDeviceEvent(logger, "warn", "auth_issued_global_warn", "", "", "pool="+clientType)
+			}
 
+			return true, nil
+		}
+		confidential := clientType == oauthClientTypeConfidential
+		if confidential {
+			select {
+			case confidentialDeviceIssueAdmission <- struct{}{}:
+				defer func() { <-confidentialDeviceIssueAdmission }()
+			default:
+				return respondDeviceUnavailable(c)
+			}
+		} else if admitted, err := reserveIssued(); !admitted {
+			return err
+		}
 		// H3: only client_id and scope reach Hydra, with the caller's
 		// Authorization so Hydra authenticates the client.
 		hydraBody := url.Values{"client_id": {clientID}, "scope": {strings.Join(request.scopes, " ")}}
@@ -363,14 +379,26 @@ func handleHydraDeviceAuthorization(hydraConfig *harukiOAuth2.HydraConfig, cfg D
 		}
 		resp, _, err := forwardHydraPublicRequest(ctx, hydraConfig, http.MethodPost, deviceHydraDeviceAuthEndpointPath, "", []byte(hydraBody.Encode()), header)
 		if err != nil {
-			releaseDeviceReservation(ctx, store, counters, logger, clientID)
+			if !confidential {
+				releaseDeviceReservation(ctx, store, counters, logger, clientID)
+			}
 			logDeviceEvent(logger, "error", "authorize", "", clientID, "stage=H3", "reason=hydra_unavailable")
 			return respondDeviceUnavailable(c)
 		}
 		if resp.Status != http.StatusOK {
-			releaseDeviceReservation(ctx, store, counters, logger, clientID)
+			if !confidential {
+				releaseDeviceReservation(ctx, store, counters, logger, clientID)
+			}
 			logDeviceEvent(logger, "info", "authorize", "", clientID, "stage=H3", "status="+strconv.Itoa(resp.Status), "hydra_error="+hydraOAuthErrorCode(resp.Body))
 			return respondDeviceHydraPassthrough(c, resp)
+		}
+
+		if confidential {
+			// Hydra authenticated the request. A rejected reservation leaves
+			// only the upstream device record for its existing janitor.
+			if admitted, err := reserveIssued(); !admitted {
+				return err
+			}
 		}
 
 		var hydraResp hydraDeviceAuthorizationResponse

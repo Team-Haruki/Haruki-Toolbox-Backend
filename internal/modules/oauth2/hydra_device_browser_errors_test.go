@@ -101,7 +101,7 @@ func TestDeviceLookupClaimFailureReleasesBudget(t *testing.T) {
 
 func TestDeviceLookupGlobalFailureWarning(t *testing.T) {
 	env := newDeviceBrowserEnv(t, func(options *DeviceFlowConfigOptions) { options.Limits.LookupFailGlobalPer10m = 2 })
-	env.claim()
+	expectBrowserError(t, env.lookup("ZZZZ-ZZZZ", browserCall{}), http.StatusBadRequest, deviceCodeInvalidCode)
 	if !strings.Contains(env.logs.String(), "event=lookup_fail_global_warn") || !strings.Contains(env.logs.String(), "count=1") {
 		t.Fatalf("global warning not logged: %s", env.logs.String())
 	}
@@ -367,5 +367,15 @@ func TestDeviceApproveFailedAfterConsentRevokeFailure(t *testing.T) {
 	}
 	if !strings.Contains(env.logs.String(), "stage=H9j reason="+deviceChainReasonRevoke) {
 		t.Fatalf("revoke failure not logged: %s", env.logs.String())
+	}
+}
+
+func TestGlobalDeviceLookupMissBudgetDoesNotRejectValidCode(t *testing.T) {
+	env := newDeviceBrowserEnv(t, func(options *DeviceFlowConfigOptions) { options.Limits.LookupFailGlobalPer10m = 1 })
+	env.issue(testPublicClientID)
+	expectBrowserError(t, env.lookup("ZZZZ-ZZZZ", browserCall{userID: testOtherUserID, session: "other"}), http.StatusBadRequest, deviceCodeInvalidCode)
+	expectBrowserError(t, env.lookup("ZZZZ-ZZZZ", browserCall{userID: testOtherUserID, session: "other"}), http.StatusTooManyRequests, deviceCodeRateLimited)
+	if response := env.lookup(env.lastUserCode(), browserCall{}); response.Status != http.StatusOK {
+		t.Fatalf("valid lookup failed after global misses: %s", response.Body)
 	}
 }

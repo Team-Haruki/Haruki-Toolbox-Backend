@@ -387,13 +387,11 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 		return respondDeviceBrowserError(c, fiber.StatusBadRequest, deviceCodeMalformedCode)
 	}
 
-	// The failure budget is reserved before any index is read, and given
-	// back only when the claim succeeds or the code turns out to be the
-	// caller's own.
+	// Reserve the per-user abuse budget before reading the index. Charge
+	// the shared failure budget only for a miss so it cannot block valid claims.
 	counters := []deviceRateCounter{
 		{Key: keys.BuildOAuth2DeviceLookupFailUserKey(user.ID), Limit: limits.LookupFailUserPer10m, Window: deviceRateWindow},
 		{Key: keys.BuildOAuth2DeviceLookupFailUserDayKey(user.ID), Limit: limits.LookupFailUserPerDay, Window: deviceRateDayWindow},
-		{Key: keys.BuildOAuth2DeviceLookupFailGlobalKey(), Limit: limits.LookupFailGlobalPer10m, Window: deviceRateWindow},
 	}
 	reservation, err := h.store.reserve(ctx, counters)
 	if err != nil {
@@ -402,9 +400,6 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 	if reservation.LimitedIndex >= 0 {
 		limited := counters[reservation.LimitedIndex]
 		return respondDeviceBrowserRateLimited(c, h.store.retryAfterSeconds(ctx, limited.Key, limited.Window))
-	}
-	if reservation.Counts[2] == int64(max(1, limits.LookupFailGlobalPer10m/deviceLookupGlobalWarnPart)) {
-		logDeviceEvent(h.logger(), "warn", "lookup_fail_global_warn", "", "", "count="+strconv.FormatInt(reservation.Counts[2], 10))
 	}
 	release := func() {
 		if err := h.store.release(ctx, counters); err != nil {
@@ -422,6 +417,17 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 	case deviceClaimNew, deviceClaimRenewed:
 		release()
 	case deviceClaimMissing, deviceClaimExpired, deviceClaimTaken:
+		global := []deviceRateCounter{{Key: keys.BuildOAuth2DeviceLookupFailGlobalKey(), Limit: limits.LookupFailGlobalPer10m, Window: deviceRateWindow}}
+		reservation, err := h.store.reserve(ctx, global)
+		if err != nil {
+			return respondDeviceBrowserUnavailable(c)
+		}
+		if reservation.LimitedIndex >= 0 {
+			return respondDeviceBrowserRateLimited(c, h.store.retryAfterSeconds(ctx, global[0].Key, global[0].Window))
+		}
+		if reservation.Counts[0] == int64(max(1, limits.LookupFailGlobalPer10m/deviceLookupGlobalWarnPart)) {
+			logDeviceEvent(h.logger(), "warn", "lookup_fail_global_warn", "", "", "count="+strconv.FormatInt(reservation.Counts[0], 10))
+		}
 		logDeviceEvent(h.logger(), "info", "lookup_fail", "", "", "reason="+strings.ToLower(claim.Code))
 		if claim.Code == deviceClaimTaken {
 			logDeviceEvent(h.logger(), "warn", "lookup_conflict", claim.FlowID, "")
@@ -619,6 +625,7 @@ func (h *deviceBrowserHandlers) handleDeviceApprove(c fiber.Ctx) error {
 			GrantScope:    scopes,
 			GrantAudience: []string{},
 			UserID:        dbUser.ID,
+			SubjectType:   client.SubjectType,
 			UserName:      dbUser.Name,
 			UserEmail:     dbUser.Email,
 			EmailVerified: verifiedEmail != "" && strings.EqualFold(strings.TrimSpace(dbUser.Email), verifiedEmail),

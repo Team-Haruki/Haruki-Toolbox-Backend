@@ -466,3 +466,30 @@ func TestDeviceAuthCachesClientLookups(t *testing.T) {
 		t.Fatalf("known client lookups after 6 s = %d, want 2", len(calls))
 	}
 }
+
+func TestConfidentialDeviceAuthReservesIssuanceOnlyAfterAuthentication(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	entered := make(chan struct{})
+	finish := make(chan struct{})
+	env.hydra.deviceAuth = func(url.Values) (int, any) {
+		close(entered)
+		<-finish
+		return http.StatusUnauthorized, map[string]any{"error": "invalid_client"}
+	}
+	done := make(chan deviceTestResponse, 1)
+	go func() {
+		done <- env.deviceAuth(url.Values{"scope": {testDeviceScope}}, basicAuth(testConfidentialClientID, "rejected"))
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		close(finish)
+		t.Fatal("device auth did not reach Hydra")
+	}
+	key := env.db.Redis.KeyBuilder().BuildOAuth2DeviceAuthIssuedClientKey(testConfidentialClientID)
+	reserved := env.redis.Exists(key)
+	close(finish)
+	if response := <-done; response.Status != http.StatusUnauthorized || reserved || env.redis.Exists(key) {
+		t.Fatalf("request charged issuance before authentication: status=%d reserved=%t", response.Status, reserved)
+	}
+}
