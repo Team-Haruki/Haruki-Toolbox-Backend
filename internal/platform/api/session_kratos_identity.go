@@ -186,8 +186,17 @@ func (s *SessionHandler) resolveKratosIdentityWithProfile(ctx context.Context, i
 		return "", nil, fmt.Errorf("%w: auto-link by email is disabled", errKratosIdentityUnmapped)
 	}
 
-	_, err = s.DBClient.User.Update().
-		Where(userSchema.IDEQ(targetUser.ID)).
+	release, err := s.DBClient.LockUserMutations(ctx, targetUser.ID)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: reserve identity link: %v", errUserStoreUnavailable, err)
+	}
+	defer release()
+	unlinked := userSchema.KratosIdentityIDIsNil()
+	if targetUser.KratosIdentityID != nil {
+		unlinked = userSchema.KratosIdentityIDEQ(*targetUser.KratosIdentityID)
+	}
+	count, err := s.DBClient.User.Update().
+		Where(userSchema.IDEQ(targetUser.ID), userSchema.EmailEqualFold(email), unlinked).
 		SetKratosIdentityID(identityID).
 		Save(ctx)
 	if err != nil {
@@ -195,6 +204,17 @@ func (s *SessionHandler) resolveKratosIdentityWithProfile(ctx context.Context, i
 			return "", nil, fmt.Errorf("%w: identity already linked", errKratosIdentityUnmapped)
 		}
 		return "", nil, fmt.Errorf("%w: bind identity to user: %v", errUserStoreUnavailable, err)
+	}
+	if count != 1 {
+		// A second request for this exact identity may have won. Otherwise
+		// the stale email lookup cannot authorize this account.
+		bound, err := s.DBClient.User.Query().Where(userSchema.IDEQ(targetUser.ID), userSchema.KratosIdentityIDEQ(identityID)).Exist(ctx)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: recheck identity link: %v", errUserStoreUnavailable, err)
+		}
+		if !bound {
+			return "", nil, fmt.Errorf("%w: account identity link changed", errKratosIdentityUnmapped)
+		}
 	}
 	return targetUser.ID, nil, nil
 }

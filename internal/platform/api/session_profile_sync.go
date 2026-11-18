@@ -38,17 +38,20 @@ func (s *SessionHandler) syncResolvedUserProfile(ctx context.Context, userID str
 		}
 	}
 
-	update := s.DBClient.User.Update().Where(userSchema.IDEQ(userID))
+	update := s.DBClient.User.Update().Where(userSchema.IDEQ(userID), userSchema.EmailEQ(currentUser.Email))
 	needsUpdate := false
 
 	if identityID != "" {
-		currentIdentityID := ""
-		if currentUser.KratosIdentityID != nil {
-			currentIdentityID = strings.TrimSpace(*currentUser.KratosIdentityID)
-		}
-		if currentIdentityID != identityID {
-			update.SetKratosIdentityID(identityID)
+		switch {
+		case currentUser.KratosIdentityID != nil && *currentUser.KratosIdentityID == identityID:
+			update.Where(userSchema.KratosIdentityIDEQ(identityID))
+		case currentUser.KratosIdentityID == nil && s.KratosIdentityResolver != nil:
+			// An explicitly configured resolver supplies the verified mapping.
+			// Do not let synchronization replace a competing persisted link.
+			update.Where(userSchema.KratosIdentityIDIsNil()).SetKratosIdentityID(identityID)
 			needsUpdate = true
+		default:
+			return
 		}
 	}
 
