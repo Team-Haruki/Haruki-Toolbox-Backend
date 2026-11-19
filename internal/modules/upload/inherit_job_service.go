@@ -198,15 +198,23 @@ type jobEvent struct {
 
 // update changes the job under its lock, then stores it and pushes the event
 // and the new snapshot to every WebSocket subscriber.
-func (s *inheritService) update(rt *jobRuntime, event *jobEvent, change func(*inheritJob)) error {
+func (s *inheritService) update(rt *jobRuntime, event *jobEvent, change func(*inheritJob)) {
 	rt.mu.Lock()
 	change(rt.job)
 	rt.job.UpdatedAt = s.now()
 	snap := rt.job.clone()
+	s.publishJobLocked(rt, event, snap)
+	rt.mu.Unlock()
+	_ = s.saveJobSnapshot(snap)
+}
+
+func (s *inheritService) publishJobLocked(rt *jobRuntime, event *jobEvent, snap *inheritJob) {
 	if msg, err := json.Marshal(wsMessage{Type: "event", Event: event, Job: s.view(snap)}); err == nil {
 		rt.publishLocked(msg)
 	}
-	rt.mu.Unlock()
+}
+
+func (s *inheritService) saveJobSnapshot(snap *inheritJob) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return s.jobs.save(ctx, snap)
@@ -282,33 +290,36 @@ func (s *inheritService) addWarning(rt *jobRuntime, code string) {
 	})
 }
 
-// finish ends the job. Steps that never ran are marked skipped. The owner's
-// active-job lock is released before the terminal state is stored or
-// published, so a client that sees the job end can start the next one at
-// once instead of being sent back to the finished job.
+// finish saves the terminal job before releasing its lease, so peers can
+// distinguish completion from interruption. Local readers and subscribers
+// see the result after the release, when they can start another job.
 func (s *inheritService) finish(rt *jobRuntime, status inheritJobStatus, code string) {
 	now := s.now()
-	err := s.update(rt, &jobEvent{Step: stepDone, Status: string(status), Code: code, At: &now}, func(j *inheritJob) {
-		j.Status = status
-		j.FinishedAt = &now
-		j.ConfirmDeadline = nil
-		if code != "" {
-			j.Error = jobProblemFor(code)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	j := rt.job
+	j.Status = status
+	j.UpdatedAt = now
+	j.FinishedAt = &now
+	j.ConfirmDeadline = nil
+	if code != "" {
+		j.Error = jobProblemFor(code)
+	}
+	for i := range j.Steps {
+		switch {
+		case j.Steps[i].Name == stepDone && status == jobStatusSucceeded:
+			j.Steps[i].Status, j.Steps[i].StartedAt, j.Steps[i].FinishedAt = stepOK, &now, &now
+			j.CurrentStep = stepDone
+		case j.Steps[i].Status == stepPending:
+			j.Steps[i].Status = stepSkipped
+		case j.Steps[i].Status == stepRunning:
+			j.Steps[i].Status, j.Steps[i].FinishedAt = stepFailed, &now
 		}
-		for i := range j.Steps {
-			switch {
-			case j.Steps[i].Name == stepDone && status == jobStatusSucceeded:
-				j.Steps[i].Status, j.Steps[i].StartedAt, j.Steps[i].FinishedAt = stepOK, &now, &now
-				j.CurrentStep = stepDone
-			case j.Steps[i].Status == stepPending:
-				j.Steps[i].Status = stepSkipped
-			case j.Steps[i].Status == stepRunning:
-				j.Steps[i].Status, j.Steps[i].FinishedAt = stepFailed, &now
-			}
-		}
-	})
-	rt.terminalSaveFailed = err != nil
-	s.releaseActive(rt.job.OwnerUserID, rt.job.ID)
+	}
+	snap := j.clone()
+	rt.terminalSaveFailed = s.saveJobSnapshot(snap) != nil
+	s.releaseActive(j.OwnerUserID, j.ID)
+	s.publishJobLocked(rt, &jobEvent{Step: stepDone, Status: string(status), Code: code, At: &now}, snap)
 }
 
 // loadJob returns the job if it exists and belongs to userID; a job owned by

@@ -48,7 +48,6 @@ func (s *inheritService) run(rt *jobRuntime, breakerToken uint64) {
 	} else {
 		removeJob()
 	}
-	s.releaseActive(rt.job.OwnerUserID, rt.job.ID)
 	// The one log line per job: no user, game or inherit identifiers.
 	s.logger.Infof("inherit job finished job=%s server=%s upload_type=%s final_step=%s outcome=%s code=%s duration_ms=%d",
 		rt.job.ID, rt.job.Server, rt.job.UploadType, outcome.finalStep, outcome.status, outcome.code, time.Since(started).Milliseconds())
