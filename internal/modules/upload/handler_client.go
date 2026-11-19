@@ -2,8 +2,10 @@ package upload
 
 import (
 	"context"
+	"errors"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 )
 
@@ -21,7 +23,8 @@ func newUploadDataHandler(helper *harukiAPIHelper.HarukiToolboxRouterHelpers, de
 		ServerCryptor:           dependencies.ServerCryptor,
 		WebhookAllowed: func(ctx context.Context) bool {
 			snapshot, err := helper.CurrentRuntimeConfig(ctx)
-			return err == nil && (snapshot.WebhookEnabled == nil || *snapshot.WebhookEnabled)
+			return (err == nil || errors.Is(err, runtimeconfig.ErrRefreshBusy)) &&
+				(snapshot.WebhookEnabled == nil || *snapshot.WebhookEnabled)
 		},
 	}
 }

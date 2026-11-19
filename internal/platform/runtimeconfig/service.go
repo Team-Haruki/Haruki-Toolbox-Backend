@@ -10,7 +10,8 @@ import (
 const defaultStoreTimeout = 500 * time.Millisecond
 const maxConcurrentRefreshes = 16
 
-var errRefreshBusy = errors.New("runtime configuration refresh is busy")
+// ErrRefreshBusy reports that Current returned its last published snapshot.
+var ErrRefreshBusy = errors.New("runtime configuration refresh is busy")
 
 // Update describes a partial runtime configuration update. Nil fields retain
 // their current values.
@@ -27,6 +28,7 @@ type Update struct {
 // Snapshot is the persisted runtime configuration contract. Its JSON field
 // names match the legacy Redis payload imported during the offline cutover.
 type Snapshot struct {
+	Version uint64 `json:"_version,omitzero"`
 	// AllowedKeys keeps the persisted name `publicApiAllowedKeys`.
 	AllowedKeys         []string `json:"publicApiAllowedKeys"`
 	PrivateAPIToken     string   `json:"privateApiToken"`
@@ -52,15 +54,12 @@ type Store interface {
 // Service owns mutable runtime settings. Startup configuration remains
 // immutable and is only used to seed this service at the composition root.
 type Service struct {
-	writeMu      sync.Mutex
-	mu           sync.RWMutex
-	current      Snapshot
-	revision     uint64
-	store        Store
-	timeout      time.Duration
-	readSequence uint64
-	appliedRead  uint64
-	readers      chan struct{}
+	writeMu sync.Mutex
+	mu      sync.RWMutex
+	current Snapshot
+	store   Store
+	timeout time.Duration
+	readers chan struct{}
 }
 
 func New(initial Snapshot, store Store) *Service {
@@ -90,29 +89,15 @@ func (s *Service) Current(ctx context.Context) (Snapshot, error) {
 	case s.readers <- struct{}{}:
 		defer func() { <-s.readers }()
 	default:
-		return s.localSnapshot(), errRefreshBusy
+		return s.localSnapshot(), ErrRefreshBusy
 	}
 	// Start a fresh store read for the request so an earlier lookup cannot
 	// authorize a request that began after a rotation on another replica.
-	s.mu.Lock()
-	revision := s.revision
-	s.readSequence++
-	sequence := s.readSequence
-	s.mu.Unlock()
 	latest, found, err := s.store.Load(wait)
 	if err != nil || !found {
 		return s.localSnapshot(), err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.revision != revision {
-		return cloneSnapshot(s.current), nil
-	}
-	if sequence > s.appliedRead {
-		s.current = cloneSnapshot(latest)
-		s.appliedRead = sequence
-	}
-	return cloneSnapshot(latest), nil
+	return s.publish(latest), nil
 }
 
 // Update applies and persists a partial update before publishing it locally.
@@ -137,11 +122,17 @@ func (s *Service) Update(ctx context.Context, update Update) error {
 	} else {
 		applyUpdate(&next, update)
 	}
-	s.mu.Lock()
-	s.current = cloneSnapshot(next)
-	s.revision++
-	s.mu.Unlock()
+	s.publish(next)
 	return nil
+}
+
+func (s *Service) publish(snapshot Snapshot) Snapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if snapshot.Version >= s.current.Version {
+		s.current = cloneSnapshot(snapshot)
+	}
+	return cloneSnapshot(s.current)
 }
 
 func (s *Service) storeContext(parent context.Context) (context.Context, context.CancelFunc) {

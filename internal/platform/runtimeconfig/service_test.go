@@ -33,6 +33,7 @@ func (s *memoryStore) Apply(_ context.Context, update Update, fallback Snapshot)
 		s.snapshot = cloneSnapshot(fallback)
 	}
 	applyUpdate(&s.snapshot, update)
+	s.snapshot.Version++
 	s.found = true
 	return cloneSnapshot(s.snapshot), nil
 }
@@ -175,7 +176,8 @@ func TestRuntimeReadAdmissionLeavesCredentialRotationIndependent(t *testing.T) {
 	}
 	service := New(Snapshot{}, store)
 	service.timeout = 3 * time.Second
-	defer close(store.unblock)
+	releaseReads := sync.OnceFunc(func() { close(store.unblock) })
+	defer releaseReads()
 	type result struct {
 		snapshot Snapshot
 		err      error
@@ -191,7 +193,7 @@ func TestRuntimeReadAdmissionLeavesCredentialRotationIndependent(t *testing.T) {
 			t.Fatal("refresh did not reach store")
 		}
 	}
-	if _, err := service.Current(t.Context()); !errors.Is(err, errRefreshBusy) {
+	if _, err := service.Current(t.Context()); !errors.Is(err, ErrRefreshBusy) {
 		t.Fatalf("excess refresh: %v", err)
 	}
 	committed := make(chan error, 1)
@@ -207,13 +209,65 @@ func TestRuntimeReadAdmissionLeavesCredentialRotationIndependent(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("credential rotation waited on public reads")
 	}
-	for range maxConcurrentRefreshes {
-		store.unblock <- struct{}{}
-	}
+	releaseReads()
 	for range maxConcurrentRefreshes {
 		item := <-out
 		if item.err != nil || item.snapshot.PrivateAPIToken != "new" {
 			t.Fatalf("stale read survived rotation: %+v", item)
 		}
+	}
+}
+
+type delayedRuntimePublicationStore struct {
+	memoryStore
+	committed chan struct{}
+	unblock   chan struct{}
+}
+
+func (s *delayedRuntimePublicationStore) Apply(ctx context.Context, u Update, fallback Snapshot) (Snapshot, error) {
+	snapshot, err := s.memoryStore.Apply(ctx, u, fallback)
+	close(s.committed)
+	select {
+	case <-s.unblock:
+		return snapshot, err
+	case <-ctx.Done():
+		return Snapshot{}, ctx.Err()
+	}
+}
+
+func TestDelayedLocalUpdateCannotReplaceNewerDistributedSnapshot(t *testing.T) {
+	store := &delayedRuntimePublicationStore{
+		memoryStore: memoryStore{snapshot: Snapshot{PrivateAPIToken: "initial"}, found: true},
+		committed:   make(chan struct{}),
+		unblock:     make(chan struct{}),
+	}
+	release := sync.OnceFunc(func() { close(store.unblock) })
+	defer release()
+	service := New(Snapshot{}, store)
+	service.timeout = 3 * time.Second
+	updated := make(chan error, 1)
+	go func() {
+		token := "local"
+		updated <- service.Update(t.Context(), Update{PrivateAPIToken: &token})
+	}()
+	select {
+	case <-store.committed:
+	case <-time.After(time.Second):
+		t.Fatal("local update did not commit")
+	}
+	remote := "remote"
+	if _, err := store.memoryStore.Apply(t.Context(), Update{PrivateAPIToken: &remote}, Snapshot{}); err != nil {
+		t.Fatal(err)
+	}
+	current, err := service.Current(t.Context())
+	if err != nil || current.PrivateAPIToken != remote || current.Version != 2 {
+		t.Fatal("read missed the remote rotation")
+	}
+	release()
+	if err := <-updated; err != nil {
+		t.Fatal(err)
+	}
+	if service.localSnapshot().PrivateAPIToken != remote {
+		t.Fatal("delayed local publication replaced the remote rotation")
 	}
 }

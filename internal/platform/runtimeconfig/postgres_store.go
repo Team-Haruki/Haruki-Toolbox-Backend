@@ -93,7 +93,9 @@ func (s *postgresStore) Apply(ctx context.Context, update Update, _ Snapshot) (S
 		return Snapshot{}, err
 	}
 	var raw []byte
-	err = s.db.QueryRowContext(ctx, `UPDATE runtime_configurations SET snapshot = snapshot || $2::jsonb
+	err = s.db.QueryRowContext(ctx, `UPDATE runtime_configurations
+		SET snapshot = jsonb_set(snapshot || $2::jsonb, '{_version}',
+			to_jsonb(COALESCE((snapshot->>'_version')::bigint, 0) + 1))
 		WHERE id = $1 RETURNING snapshot`, runtimeConfigurationID, string(encoded)).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Snapshot{}, errMissingRuntimeConfiguration

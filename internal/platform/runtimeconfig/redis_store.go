@@ -18,9 +18,8 @@ type redisStore struct {
 	manager *harukiRedis.HarukiRedisManager
 }
 
-// NewRedisStore adapts the existing Redis manager without changing the stored
-// key or JSON representation. A nil manager means runtime settings are local to
-// this process.
+// NewRedisStore adapts the legacy Redis key and accepts unversioned snapshots.
+// A nil manager means runtime settings are local to this process.
 func NewRedisStore(manager *harukiRedis.HarukiRedisManager) Store {
 	if manager == nil || manager.Redis == nil {
 		return nil
@@ -55,12 +54,14 @@ func (s *redisStore) Apply(ctx context.Context, update Update, fallback Snapshot
 			case err != nil:
 				return err
 			default:
+				current = Snapshot{}
 				if err := unmarshalSnapshot(payload, &current); err != nil {
 					return err
 				}
 			}
 
 			applyUpdate(&current, update)
+			current.Version++
 			encoded, err := marshalSnapshot(current)
 			if err != nil {
 				return err

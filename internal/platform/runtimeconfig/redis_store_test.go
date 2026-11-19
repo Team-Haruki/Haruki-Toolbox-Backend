@@ -91,10 +91,14 @@ func TestRedisStorePreservesSnapshotJSONContract(t *testing.T) {
 		t.Fatalf("decode persisted snapshot: %v", err)
 	}
 	wantFields := []string{
+		"_version",
 		"publicApiAllowedKeys",
 		"privateApiToken",
 		"privateApiUserAgent",
 		"webhookJwtSecret",
+	}
+	if string(fields["_version"]) != "1" {
+		t.Fatalf("the first write did not version the legacy snapshot")
 	}
 	if len(fields) != len(wantFields) {
 		t.Fatalf("persisted fields = %v, want exactly %v", fields, wantFields)
