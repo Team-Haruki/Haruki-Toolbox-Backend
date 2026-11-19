@@ -266,6 +266,43 @@ func TestConfidentialDevicePollingAppliesPacingAfterAuthentication(t *testing.T)
 	}
 }
 
+func TestConfidentialDevicePollHasIndependentAdmission(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	publicCode, _ := env.issue(testPublicClientID)
+	confidentialCode, _ := env.issue(testConfidentialClientID)
+	publicURL, err := env.hydraConfig.PublicEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := make(chan string, 2)
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		PublicURL: publicURL,
+		AdminURL:  publicURL,
+		LockClientGrants: func(_ context.Context, client string, exclusive bool) (func(), error) {
+			if exclusive {
+				t.Error("poll used an exclusive reservation")
+			}
+			locked <- client
+			return func() {}, nil
+		},
+	})
+	env.app = fiber.New()
+	env.app.Post("/api/oauth2/token", handleHydraTokenEndpoint(env.apiHelper, cfg, env.cfg, env.store))
+	for range cap(tokenGrantAdmission) {
+		tokenGrantAdmission <- struct{}{}
+		defer func() { <-tokenGrantAdmission }()
+	}
+	if got := env.poll(publicCode, testPublicClientID); got.Status != http.StatusServiceUnavailable {
+		t.Fatalf("public poll bypassed admission: %d", got.Status)
+	}
+	if got := env.poll(confidentialCode, testConfidentialClientID); got.oauthError(t) != oauthErrorAuthorizationPending {
+		t.Fatalf("public traffic exhausted confidential admission: %d %s", got.Status, got.Body)
+	}
+	if len(locked) != 1 || <-locked != testConfidentialClientID {
+		t.Fatal("the admitted confidential poll must hold the grant lock")
+	}
+}
+
 func TestTokenShimHydra200AfterDenyRevokesAndDenies(t *testing.T) {
 	env := newDeviceTestEnv(t)
 	hdc, flowID := env.issue(testPublicClientID)

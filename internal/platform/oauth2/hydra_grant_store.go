@@ -6,26 +6,20 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/pgadvisory"
 )
 
 // NewHydraClientGrantLocker serializes client lifecycle changes with token grants.
 func NewHydraClientGrantLocker(db *sql.DB) func(context.Context, string, bool) (func(), error) {
 	return func(ctx context.Context, clientID string, exclusive bool) (func(), error) {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
 		query := `SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 618703))`
 		if exclusive {
 			query = `SELECT pg_advisory_xact_lock(hashtextextended($1, 618703))`
 		}
 		waitCtx, cancelWait := context.WithTimeout(ctx, 3*time.Second)
 		defer cancelWait()
-		if _, err := tx.ExecContext(waitCtx, query, clientID); err != nil {
-			_ = tx.Rollback()
-			return nil, err
-		}
-		return func() { _ = tx.Rollback() }, nil
+		return pgadvisory.Lock(waitCtx, db, query, clientID)
 	}
 }
 

@@ -165,24 +165,23 @@ func HandleUpload(
 	}
 	// Only attribute an identity corroborated by the payload or authenticated ownership.
 	attempt.IdentityVerified = (uploadCtx.ParsedGameUserID != nil && *uploadCtx.ParsedGameUserID == uploadCtx.ExpectedGameUserID) || userID != nil
+	if err := resolveAttemptOwner(ctx, helper, uploadCtx); err != nil {
+		return fail(uploadStageAccountPolicy, nil, err)
+	}
 	var release func()
 	if userID != nil {
-		release, err = helper.DBManager.DB.LockGameAccountMutation(ctx, string(server), uploadCtx.expectedGameUserIDString())
+		owner := uploadCtx.ToolboxUserID
+		release, err = helper.DBManager.DB.LockGameAccountAndUserMutations(ctx, string(server), uploadCtx.expectedGameUserIDString(), *userID, owner)
 		if err != nil {
 			return fail(uploadStageAccountPolicy, nil, err)
 		}
 		defer release()
-	}
-	if err := resolveAttemptOwner(ctx, helper, uploadCtx); err != nil {
-		return fail(uploadStageAccountPolicy, nil, err)
-	}
-	var releaseUsers func()
-	if userID != nil {
-		releaseUsers, err = helper.DBManager.DB.LockUserMutations(ctx, *userID, uploadCtx.ToolboxUserID)
-		if err != nil {
+		if err := resolveAttemptOwner(ctx, helper, uploadCtx); err != nil {
 			return fail(uploadStageAccountPolicy, nil, err)
 		}
-		defer releaseUsers()
+		if uploadCtx.ToolboxUserID != owner {
+			return fail(uploadStageAccountPolicy, nil, errUploadOwnershipMismatch)
+		}
 	}
 	if err := authorize(); err != nil {
 		return fail(uploadStageAccountPolicy, nil, err)
@@ -194,9 +193,6 @@ func HandleUpload(
 	}
 	if err := handler.PersistUploadData(ctx, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID); err != nil {
 		return fail(uploadStagePersist, nil, err)
-	}
-	if releaseUsers != nil {
-		releaseUsers()
 	}
 	if release != nil {
 		release()

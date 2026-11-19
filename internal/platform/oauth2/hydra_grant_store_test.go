@@ -40,7 +40,7 @@ func TestHydraGrantLocksReleaseAfterSuccessOrFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer db.Close()
-			mock.ExpectBegin()
+			mock.ExpectExec("^BEGIN$").WillReturnResult(sqlmock.NewResult(0, 0))
 			query := "SELECT pg_advisory_xact_lock"
 			if !tc.exclusive {
 				query += "_shared"
@@ -48,10 +48,11 @@ func TestHydraGrantLocksReleaseAfterSuccessOrFailure(t *testing.T) {
 			exec := mock.ExpectExec(query).WithArgs("client")
 			if tc.fail {
 				exec.WillReturnError(fixtureErr)
+				mock.ExpectClose()
 			} else {
 				exec.WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectExec("^ROLLBACK$").WillReturnResult(sqlmock.NewResult(0, 0))
 			}
-			mock.ExpectRollback()
 			release, err := NewHydraClientGrantLocker(db)(t.Context(), "client", tc.exclusive)
 			if tc.fail {
 				if !errors.Is(err, fixtureErr) {

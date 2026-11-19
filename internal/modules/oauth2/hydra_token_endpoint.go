@@ -47,7 +47,8 @@ func handleHydraTokenEndpoint(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			return c.Status(p.Code).JSON(fiber.Map{"error": "invalid_request", "error_description": p.Message})
 		}
 		form, ok := parseDeviceForm(c)
-		if c.Path() == "/oauth2/token" && ok && form.Get("grant_type") == HydraGrantTypeDeviceCode {
+		deviceGrant := ok && form.Get("grant_type") == HydraGrantTypeDeviceCode
+		if c.Route().Path == "/oauth2/token" && deviceGrant {
 			return respondDeviceOAuthError(c, fiber.StatusBadRequest, oauthErrorInvalidGrant, deviceInvalidGrantText)
 		}
 		if hydraConfig.ProtectClientGrants() {
@@ -58,6 +59,9 @@ func handleHydraTokenEndpoint(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 			if ok && form.Get("grant_type") != "" {
 				if len(form["grant_type"]) != 1 || len(form["client_id"]) > 1 || len(form["client_assertion"]) > 1 {
 					return respondDeviceOAuthError(c, fiber.StatusBadRequest, oauthErrorInvalidRequest, deviceDuplicateParameterText)
+				}
+				if deviceGrant {
+					return shim.handle(c, form)
 				}
 				clientID, valid := tokenRequestClientID(c.Get(fiber.HeaderAuthorization), form)
 				if !valid {
@@ -74,18 +78,16 @@ func handleHydraTokenEndpoint(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 					return respondDeviceUnavailable(c)
 				}
 				defer unlock()
-				if form.Get("grant_type") != HydraGrantTypeDeviceCode {
-					client, err := GetHydraOAuthClient(c.Context(), hydraConfig, clientID)
-					if IsHydraNotFoundError(err) || err == nil && !HydraOAuthClientActive(client) {
-						return respondDeviceOAuthError(c, fiber.StatusUnauthorized, oauthErrorInvalidClient, deviceInvalidClientText)
-					}
-					if err != nil {
-						return respondDeviceUnavailable(c)
-					}
+				client, err := GetHydraOAuthClient(c.Context(), hydraConfig, clientID)
+				if IsHydraNotFoundError(err) || err == nil && !HydraOAuthClientActive(client) {
+					return respondDeviceOAuthError(c, fiber.StatusUnauthorized, oauthErrorInvalidClient, deviceInvalidClientText)
+				}
+				if err != nil {
+					return respondDeviceUnavailable(c)
 				}
 			}
 		}
-		if !ok || form.Get("grant_type") != HydraGrantTypeDeviceCode {
+		if !deviceGrant {
 			return proxy(c)
 		}
 		return shim.handle(c, form)
@@ -197,22 +199,35 @@ func (s *deviceTokenShim) handle(c fiber.Ctx, form url.Values) error {
 		return respondDeviceOAuthError(c, fiber.StatusBadRequest, oauthErrorInvalidGrant, deviceInvalidGrantText)
 	}
 	confidential := flow.ClientType != oauthClientTypePublic
-	if !confidential && s.hydraConfig.ProtectClientGrants() {
-		current, err := GetHydraOAuthClient(ctx, s.hydraConfig, client.ClientID)
-		if err != nil && !IsHydraNotFoundError(err) {
-			return respondDeviceUnavailable(c)
-		}
-		confidential = current == nil || HydraClientTypeFromAuthMethod(current.TokenEndpointAuthMethod) != oauthClientTypePublic
-	}
-	poll := flow
+	protectGrants := s.hydraConfig.ProtectClientGrants()
+	admission := tokenGrantAdmission
 	if confidential {
+		admission = confidentialDeviceAdmission
+	}
+	if confidential || protectGrants {
 		select {
-		case confidentialDeviceAdmission <- struct{}{}:
-			defer func() { <-confidentialDeviceAdmission }()
+		case admission <- struct{}{}:
+			defer func() { <-admission }()
 		default:
 			return respondDeviceUnavailable(c)
 		}
-	} else {
+	}
+	if protectGrants {
+		unlock, err := s.hydraConfig.LockClientGrants(ctx, client.ClientID, false)
+		if err != nil {
+			return respondDeviceUnavailable(c)
+		}
+		defer unlock()
+		if !confidential {
+			current, err := GetHydraOAuthClient(ctx, s.hydraConfig, client.ClientID)
+			if err != nil && !IsHydraNotFoundError(err) {
+				return respondDeviceUnavailable(c)
+			}
+			confidential = current == nil || HydraClientTypeFromAuthMethod(current.TokenEndpointAuthMethod) != oauthClientTypePublic
+		}
+	}
+	poll := flow
+	if !confidential {
 		poll, err = s.store.poll(ctx, flowID, client.ClientID, s.cfg.maxIntervalSeconds(), s.cfg.maxSlowDown())
 		if err != nil {
 			return respondDeviceUnavailable(c)

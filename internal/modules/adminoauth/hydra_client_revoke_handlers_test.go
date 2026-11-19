@@ -539,3 +539,25 @@ func TestRevokeAllRefusesIncompleteGrantSafetyChecks(t *testing.T) {
 		})
 	}
 }
+
+func TestRestoreReservesClientBeforeReadingHydra(t *testing.T) {
+	hydra := newFakeHydraClients(t, confidentialBotClient)
+	adminURL, err := hydra.config.AdminEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := platformOAuth2.NewHydraConfig(platformOAuth2.HydraConfigOptions{
+		AdminURL: adminURL,
+		LockClientGrants: func(_ context.Context, client string, exclusive bool) (func(), error) {
+			if client != "bot-1" || !exclusive {
+				t.Errorf("unexpected restore reservation for %q, exclusive=%v", client, exclusive)
+			}
+			return nil, errors.New("fixture lock failure")
+		},
+	})
+	app := newHydraClientHandlerTestAppAs(newAdminOAuthTestHelper(t), cfg, "super-admin-1", adminCoreModule.RoleSuperAdmin)
+	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/restore", "")
+	if status != http.StatusInternalServerError || envelope.Message != "failed to reserve oauth client" || len(hydra.takeRequests()) != 0 {
+		t.Fatalf("restore without an exclusive lock returned %d: %s", status, envelope.Message)
+	}
+}

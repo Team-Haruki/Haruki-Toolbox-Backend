@@ -75,16 +75,11 @@ func handleUpsertUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminAuditTargetTypeUser, targetUser.ID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
-		releaseGame, err := apiHelper.DBManager.DB.LockGameAccountMutation(c.Context(), string(server), gameUserID)
+		release, err := apiHelper.DBManager.DB.LockGameAccountAndUserMutations(c.Context(), string(server), gameUserID, targetUser.ID)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
 		}
-		defer releaseGame()
-		releaseUser, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUser.ID)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to reserve user")
-		}
-		defer releaseUser()
+		defer release()
 		targetUser, err = resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")
@@ -191,16 +186,11 @@ func handleDeleteUserGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolbox
 			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
 		}
 		gameUserID = strconv.FormatInt(numericID, 10)
-		releaseGame, err := apiHelper.DBManager.DB.LockGameAccountMutation(c.Context(), string(server), gameUserID)
+		release, err := apiHelper.DBManager.DB.LockGameAccountAndUserMutations(c.Context(), string(server), gameUserID, targetUser.ID)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
 		}
-		defer releaseGame()
-		releaseUser, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUser.ID)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "failed to reserve user")
-		}
-		defer releaseUser()
+		defer release()
 		targetUser, err = resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")

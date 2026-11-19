@@ -301,3 +301,46 @@ func TestVerifyOwnershipUsesItsOwnDeadline(t *testing.T) {
 		t.Fatalf("verify waited %s, past its deadline", elapsed)
 	}
 }
+
+func TestBindingTransferRechecksARecentlyBannedOwner(t *testing.T) {
+	env := newProfileTestEnv(t, sekaiapi.Options{})
+	const code = "fixture-otp"
+	key := harukiRedis.BuildGameAccountVerifyKey("grantee", "tw", "123")
+	if err := env.helper.DBManager.Redis.SetCache(t.Context(), key, code, gameAccountVerificationTTL); err != nil {
+		t.Fatal(err)
+	}
+	db := env.helper.DBManager.DB
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		release, err := db.LockUserMutations(r.Context(), "owner")
+		if err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defer release()
+		if err := db.User.UpdateOneID("owner").SetBanned(true).Exec(r.Context()); err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"userProfile":{"userId":123,"word":%q}}`, code)
+	}))
+	defer upstream.Close()
+	env.helper.SekaiAPIClient = sekaiapi.NewHarukiSekaiAPIClientWithOptions(upstream.URL, "token", sekaiapi.Options{})
+	env.app.Post("/:server/:game_user_id", handleCreateGameAccountBinding(env.helper))
+	req := httptest.NewRequest(http.MethodPost, "/tw/123", strings.NewReader(`{"suite":{},"mysekai":{}}`))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	req.Header.Set("X-Test-User", "grantee")
+	resp, err := env.app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden || !env.redis.Exists(key) {
+		t.Fatalf("transfer after previous-owner ban returned %d or consumed its code", resp.StatusCode)
+	}
+	binding, err := queryExistingBinding(t.Context(), env.helper, "tw", "123")
+	if err != nil || bindingOwnerID(binding) != "owner" {
+		t.Fatalf("the rejected transfer changed ownership: %v", err)
+	}
+}

@@ -176,6 +176,11 @@ func handleRestoreHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client")
+		}
+		defer unlock()
 		updatedClient, err := oauth2Module.SetHydraOAuthClientActive(c.Context(), hydraConfig, clientID, true)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {

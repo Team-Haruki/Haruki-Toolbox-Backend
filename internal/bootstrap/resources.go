@@ -34,6 +34,7 @@ type applicationResources struct {
 	sekaiAPIClient  *harukiSekaiAPIClient.HarukiSekaiAPIClient
 	redisClient     *harukiRedis.HarukiRedisManager
 	toolboxSQLDB    *sql.DB
+	hydraGrantLocks *sql.DB
 	toolboxClient   *dbManager.Client
 	gameDataPool    *harukiGameData.Pool
 	gameDataService *harukiGameData.Service
@@ -89,6 +90,13 @@ func acquireApplicationResources(cfg harukiConfig.Config, owner *Application) (*
 	if err := prepareToolboxDatabase(cfg, resources.toolboxClient, resources.logger); err != nil {
 		return nil, err
 	}
+	// Hydra reservation holders read and audit through the Toolbox query pool.
+	// Give advisory locks their own pool so those operations can make progress.
+	resources.hydraGrantLocks, err = openTunedSQLDB(cfg.UserSystem.DBType, cfg.UserSystem.DBURL, 24, 2)
+	if err != nil {
+		return nil, fmt.Errorf("initialize Hydra grant lock pool")
+	}
+	owner.addResourceCloser("Hydra grant lock pool", resources.hydraGrantLocks.Close)
 
 	// Game data is a required PostgreSQL dependency.
 	if cfg.GameData.URL == "" {

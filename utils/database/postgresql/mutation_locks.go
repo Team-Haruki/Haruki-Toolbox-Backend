@@ -8,28 +8,40 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/pgadvisory"
 )
 
 // Leave connections for the operations that run while a reservation is held.
-// The production Toolbox pool has 50 slots, with up to 16 used by token requests.
+// The production Toolbox pool has 50 slots.
 var databaseMutationAdmission = make(chan struct{}, 24)
 
 // LockUserMutations serializes actions that rely on a user's current role or
 // vault identity. The release must cover external changes as well as DB writes.
 func (c *Client) LockUserMutations(ctx context.Context, ids ...string) (func(), error) {
-	keys := make([]string, 0, len(ids))
+	return c.lockMutations(ctx, appendUserMutationKeys(make([]string, 0, len(ids)), ids))
+}
+
+func appendUserMutationKeys(keys []string, ids []string) []string {
 	for _, id := range ids {
 		if id != "" {
 			keys = append(keys, "user:"+id)
 		}
 	}
-	return c.lockMutations(ctx, keys)
+	return keys
 }
 
 // LockGameAccountMutation serializes binding/grant changes with commits to the
-// separate game-data database. Callers needing both scopes take the game lock first.
+// separate game-data database.
 func (c *Client) LockGameAccountMutation(ctx context.Context, server, gameUserID string) (func(), error) {
-	return c.lockMutations(ctx, []string{"game:" + server + ":" + gameUserID})
+	return c.LockGameAccountAndUserMutations(ctx, server, gameUserID)
+}
+
+// LockGameAccountAndUserMutations reserves the game and its associated users
+// in game-then-user order, using one admission slot and one transaction.
+func (c *Client) LockGameAccountAndUserMutations(ctx context.Context, server, gameUserID string, ids ...string) (func(), error) {
+	keys := make([]string, 1, 1+len(ids))
+	keys[0] = "game:" + server + ":" + gameUserID
+	return c.lockMutations(ctx, appendUserMutationKeys(keys, ids))
 }
 
 func (c *Client) lockMutations(ctx context.Context, keys []string) (func(), error) {
@@ -55,29 +67,15 @@ func (c *Client) lockMutations(ctx context.Context, keys []string) (func(), erro
 	case <-wait.Done():
 		return nil, wait.Err()
 	}
-	conn, err := db.Conn(wait)
+	unlock, err := pgadvisory.Lock(wait, db, `SELECT pg_advisory_xact_lock(hashtextextended($1, 452731))`, keys...)
 	if err != nil {
 		<-databaseMutationAdmission
 		return nil, err
 	}
-	tx, err := conn.BeginTx(context.WithoutCancel(ctx), nil)
-	if err != nil {
-		_ = conn.Close()
+	return sync.OnceFunc(func() {
+		unlock()
 		<-databaseMutationAdmission
-		return nil, err
-	}
-	release := sync.OnceFunc(func() {
-		_ = tx.Rollback()
-		_ = conn.Close()
-		<-databaseMutationAdmission
-	})
-	for _, key := range keys {
-		if _, err := tx.ExecContext(wait, `SELECT pg_advisory_xact_lock(hashtextextended($1, 452731))`, key); err != nil {
-			release()
-			return nil, err
-		}
-	}
-	return release, nil
+	}), nil
 }
 
 type localMutationGate struct {

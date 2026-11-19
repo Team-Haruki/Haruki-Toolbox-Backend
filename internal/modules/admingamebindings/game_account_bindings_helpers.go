@@ -346,17 +346,12 @@ func mutateManagedGameBinding(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolbox
 		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
 	}
 	db := helper.DBManager.DB
-	releaseGame, err := db.LockGameAccountMutation(c.Context(), row.Server, row.GameUserID)
+	ownerID := row.Edges.User.ID
+	release, err := db.LockGameAccountAndUserMutations(c.Context(), row.Server, row.GameUserID, ownerID, targetID)
 	if err != nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "binding change in progress")
 	}
-	defer releaseGame()
-	ownerID := row.Edges.User.ID
-	releaseUsers, err := db.LockUserMutations(c.Context(), ownerID, targetID)
-	if err != nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "user change in progress")
-	}
-	defer releaseUsers()
+	defer release()
 	current, err := queryGameBindingWithOwner(c, helper, row.Server, row.GameUserID)
 	if postgresql.IsNotFound(err) {
 		return fiber.NewError(fiber.StatusConflict, "binding owner changed")

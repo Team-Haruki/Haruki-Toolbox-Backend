@@ -172,7 +172,8 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, mapped.Code, mapped.Message, nil)
 		}
 		harukiLogger.Infof("[GameAccountBinding] verifyGameAccountOwnership PASSED, saving binding")
-		release, err := apiHelper.DBManager.DB.LockGameAccountMutation(ctx, serverStr, gameUserIDStr)
+		ownerID := bindingOwnerID(existing)
+		release, err := apiHelper.DBManager.DB.LockGameAccountAndUserMutations(ctx, serverStr, gameUserIDStr, userID, ownerID)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve binding")
 		}
@@ -180,6 +181,13 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		existing, err = queryExistingBinding(ctx, apiHelper, serverStr, gameUserIDStr)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query existing binding")
+		}
+		if bindingOwnerID(existing) != ownerID {
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "binding owner changed", nil)
+		}
+		if ownerID != userID && bindingOwnerBanned(existing) {
+			reason = "binding_owner_banned"
+			return harukiAPIHelper.ErrorForbidden(c, "this account is bound by a banned user")
 		}
 
 		var notification *platformMailNotify.Reservation

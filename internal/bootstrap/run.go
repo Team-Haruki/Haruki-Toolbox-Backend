@@ -159,7 +159,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
 	})
 	// One HydraConfig serves the routes and the device-flow reaper.
-	hydraConfig, err := application.buildHydraProviderConfig(cfg, resources.toolboxSQLDB)
+	hydraConfig, err := application.buildHydraProviderConfig(cfg, resources.hydraGrantLocks)
 	if err != nil {
 		return nil, err
 	}

@@ -23,11 +23,12 @@ func TestPostgresMutationReservationLocksInStableOrder(t *testing.T) {
 	client := postgresql.NewClient(postgresql.Driver(entsql.OpenDB(dialect.Postgres, db)))
 	t.Cleanup(func() { _ = client.Close() })
 	query := regexp.QuoteMeta(`SELECT pg_advisory_xact_lock(hashtextextended($1, 452731))`)
-	mock.ExpectBegin()
+	mock.ExpectExec("^BEGIN$").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(query).WithArgs("game:jp:123").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(query).WithArgs("user:a").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(query).WithArgs("user:z").WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectRollback()
-	release, err := client.LockUserMutations(t.Context(), "z", "a", "a")
+	mock.ExpectExec("^ROLLBACK$").WillReturnResult(sqlmock.NewResult(0, 0))
+	release, err := client.LockGameAccountAndUserMutations(t.Context(), "jp", "123", "z", "a", "a")
 	if err != nil {
 		t.Fatal(err)
 	}
