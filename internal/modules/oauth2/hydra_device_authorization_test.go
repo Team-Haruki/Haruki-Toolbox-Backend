@@ -520,7 +520,26 @@ func TestConfidentialDeviceAuthPreservesQuotaAndBoundedAdmission(t *testing.T) {
 	if count, err := env.redis.Get(key); err != nil || count != "1" {
 		t.Fatalf("confidential pool exceeded its limit: %q, %v", count, err)
 	}
-	if calls := env.hydra.callsTo(http.MethodPost, "/oauth2/device/auth"); len(calls) != 2 {
-		t.Fatal("quota was checked before the confidential client was authenticated")
+	if calls := env.hydra.callsTo(http.MethodPost, "/oauth2/device/auth"); len(calls) != 1 {
+		t.Fatal("over-quota request reached the code issuing endpoint")
 	}
+}
+
+func TestConfidentialIssueAdmissionReservesCapacityForOtherClients(t *testing.T) {
+	for range 2 {
+		release := reserveConfidentialDeviceIssue("first-client")
+		if release == nil {
+			t.Fatal("initial client reservation failed")
+		}
+		defer release()
+	}
+	if release := reserveConfidentialDeviceIssue("first-client"); release != nil {
+		release()
+		t.Fatal("one client exceeded its own admission")
+	}
+	release := reserveConfidentialDeviceIssue("other-client")
+	if release == nil {
+		t.Fatal("unused pool capacity did not reach another client")
+	}
+	release()
 }

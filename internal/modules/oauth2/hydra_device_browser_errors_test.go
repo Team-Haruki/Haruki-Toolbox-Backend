@@ -370,12 +370,19 @@ func TestDeviceApproveFailedAfterConsentRevokeFailure(t *testing.T) {
 	}
 }
 
-func TestGlobalDeviceLookupMissBudgetDoesNotRejectValidCode(t *testing.T) {
+func TestGlobalDeviceLookupBudgetAllowsOnlyPreviousClaims(t *testing.T) {
 	env := newDeviceBrowserEnv(t, func(options *DeviceFlowConfigOptions) { options.Limits.LookupFailGlobalPer10m = 1 })
-	env.issue(testPublicClientID)
+	_, claimedCode, _ := env.claim()
+	_, pendingID := env.issue(testPublicClientID)
+	pendingCode := env.lastUserCode()
 	expectBrowserError(t, env.lookup("ZZZZ-ZZZZ", browserCall{userID: testOtherUserID, session: "other"}), http.StatusBadRequest, deviceCodeInvalidCode)
-	expectBrowserError(t, env.lookup("ZZZZ-ZZZZ", browserCall{userID: testOtherUserID, session: "other"}), http.StatusTooManyRequests, deviceCodeRateLimited)
-	if response := env.lookup(env.lastUserCode(), browserCall{}); response.Status != http.StatusOK {
-		t.Fatalf("valid lookup failed after global misses: %s", response.Body)
+	other := browserCall{userID: testOtherUserID, session: "other"}
+	expectBrowserError(t, env.lookup(pendingCode, other), http.StatusTooManyRequests, deviceCodeRateLimited)
+	expectBrowserError(t, env.lookup(claimedCode, other), http.StatusTooManyRequests, deviceCodeRateLimited)
+	if env.field(pendingID, "st") != deviceFlowStatePending {
+		t.Fatal("a fresh code was claimed after the global budget was exhausted")
+	}
+	if response := env.lookup(claimedCode, browserCall{}); response.Status != http.StatusOK {
+		t.Fatalf("existing owner's lookup failed after global misses: %s", response.Body)
 	}
 }

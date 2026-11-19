@@ -20,6 +20,7 @@ const (
 	deviceClaimHandledOwn    = "HANDLED_OWN"
 	deviceClaimInProgressOwn = "IN_PROGRESS_OWN"
 	deviceClaimMissing       = "MISSING"
+	deviceClaimRateLimited   = "RATE_LIMITED"
 
 	deviceDecisionOK             = "OK"
 	deviceDecisionHandleMismatch = "HANDLE_MISMATCH"
@@ -45,49 +46,69 @@ const (
 	deviceFinishFailed = "failed"
 )
 
-// deviceFlowClaimScript: KEYS uc, fh (the new handle's index); ARGV now ms,
-// uid, csh, hnd, claim TTL ms, flow key prefix. The flow key is derived from
+// deviceFlowClaimScript: KEYS uc, fh, owner-scoped uc, global failures;
+// ARGV now ms, uid, csh, hnd, claim TTL ms, flow key prefix, global failure
+// limit, failure window ms. The flow key is derived from
 // the uc index inside the script (single-node Redis only), so "missing",
 // "expired" and "taken by someone else" cost exactly one round trip each and
 // cannot be told apart by timing, and there is no GET-then-EVAL race.
 // A claim returns {code, fid, cid, ctype, scope, dlb, crt, exp}; every other
 // result {code, fid?}.
 const deviceFlowClaimScript = deviceFlowLazyExpiryLua + `
-local fid = redis.call('GET', KEYS[1])
-if not fid then return {'MISSING'} end
-local flow = ARGV[6] .. fid
-if redis.call('EXISTS', flow) == 0 then return {'MISSING'} end
-local now = tonumber(ARGV[1])
-local st = lazy_expire(flow, now)
-local cby = redis.call('HGET', flow, 'cby') or ''
-local own = cby == ARGV[2]
-local function claim(code)
-  local exp = tonumber(redis.call('HGET', flow, 'exp')) or 0
-  local cuntil = math.min(now + tonumber(ARGV[5]), exp)
-  redis.call('HSET', flow, 'st', 'claimed', 'cby', ARGV[2], 'csh', ARGV[3], 'hnd', ARGV[4], 'cuntil', cuntil)
-  redis.call('SET', KEYS[2], fid, 'PX', math.max(1, cuntil - now))
-  local f = redis.call('HMGET', flow, 'cid', 'ctype', 'scope', 'dlb', 'crt', 'exp')
-  return {code, fid, f[1] or '', f[2] or '', f[3] or '', f[4] or '', f[5] or '0', f[6] or '0'}
-end
-if st == 'pending' then return claim('CLAIMED_NEW') end
-if st == 'claimed' then
-  if own then return claim('CLAIMED_RENEWED') end
-  if (tonumber(redis.call('HGET', flow, 'cuntil')) or 0) < now then return claim('CLAIMED_NEW') end
-  return {'TAKEN', fid}
-end
-if st == 'approving' then
-  if own then return {'IN_PROGRESS_OWN', fid} end
-  return {'TAKEN', fid}
-end
-if st == 'expired' then
-  if own then return {'EXPIRED_OWN', fid} end
+local ownOnly = tonumber(redis.call('GET', KEYS[4]) or '0') >= tonumber(ARGV[7])
+local function lookup()
+  local fid = redis.call('GET', ownOnly and KEYS[3] or KEYS[1])
+  if not fid then return {'MISSING'} end
+  local flow = ARGV[6] .. fid
+  if redis.call('EXISTS', flow) == 0 then return {'MISSING'} end
+  local now = tonumber(ARGV[1])
+  local cby = redis.call('HGET', flow, 'cby') or ''
+  local own = cby == ARGV[2]
+  if ownOnly and not own then return {'MISSING'} end
+  local st = lazy_expire(flow, now)
+  local function claim(code)
+    local exp = tonumber(redis.call('HGET', flow, 'exp')) or 0
+    local cuntil = math.min(now + tonumber(ARGV[5]), exp)
+    redis.call('HSET', flow, 'st', 'claimed', 'cby', ARGV[2], 'csh', ARGV[3], 'hnd', ARGV[4], 'cuntil', cuntil)
+    redis.call('SET', KEYS[2], fid, 'PX', math.max(1, cuntil - now))
+    if not ownOnly then
+      local ttl = redis.call('PTTL', KEYS[1])
+      if ttl > 0 then redis.call('SET', KEYS[3], fid, 'PX', ttl) end
+    end
+    local f = redis.call('HMGET', flow, 'cid', 'ctype', 'scope', 'dlb', 'crt', 'exp')
+    return {code, fid, f[1] or '', f[2] or '', f[3] or '', f[4] or '', f[5] or '0', f[6] or '0'}
+  end
+  if st == 'pending' then return claim('CLAIMED_NEW') end
+  if st == 'claimed' then
+    if own then return claim('CLAIMED_RENEWED') end
+    if (tonumber(redis.call('HGET', flow, 'cuntil')) or 0) < now then return claim('CLAIMED_NEW') end
+    return {'TAKEN', fid}
+  end
+  if st == 'approving' then
+    if own then return {'IN_PROGRESS_OWN', fid} end
+    return {'TAKEN', fid}
+  end
+  if st == 'expired' then
+    if own then return {'EXPIRED_OWN', fid} end
+    if cby == '' then return {'EXPIRED', fid} end
+    return {'TAKEN', fid}
+  end
+  if own then return {'HANDLED_OWN', fid} end
+  -- A flow that failed before anyone claimed it (too many slow_downs).
   if cby == '' then return {'EXPIRED', fid} end
   return {'TAKEN', fid}
 end
-if own then return {'HANDLED_OWN', fid} end
--- A flow that failed before anyone claimed it (too many slow_downs).
-if cby == '' then return {'EXPIRED', fid} end
-return {'TAKEN', fid}
+
+-- Check the global budget, probe the eligible index and charge the miss
+-- atomically, so a request cannot spend or refund a different window.
+local result = lookup()
+if result[1] == 'MISSING' or result[1] == 'EXPIRED' or result[1] == 'TAKEN' then
+  if ownOnly then return {'RATE_LIMITED'} end
+  local failures = redis.call('INCR', KEYS[4])
+  if failures == 1 then redis.call('PEXPIRE', KEYS[4], ARGV[8]) end
+  return {result[1], result[2] or '', tostring(failures)}
+end
+return result
 `
 
 // deviceFlowDecisionGuardLua checks that a decision (approve or deny) comes
@@ -208,19 +229,20 @@ return st
 
 // deviceClaimResult is the outcome of a lookup's claim.
 type deviceClaimResult struct {
-	Code        string
-	FlowID      string
-	ClientID    string
-	ClientType  string
-	Scope       string
-	DeviceLabel string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
+	Code         string
+	FlowID       string
+	ClientID     string
+	ClientType   string
+	Scope        string
+	DeviceLabel  string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	FailureCount int64
 }
 
 // claim runs the claim script for a normalized user code on behalf of a user
 // and session, binding the flow to a new flow handle.
-func (s *deviceFlowStore) claim(ctx context.Context, normalizedUserCode, flowHandle, userID, sessionHash string, claimTTL time.Duration) (deviceClaimResult, error) {
+func (s *deviceFlowStore) claim(ctx context.Context, normalizedUserCode, flowHandle, userID, sessionHash string, claimTTL time.Duration, globalFailureLimit int) (deviceClaimResult, error) {
 	manager, err := s.redisManager()
 	if err != nil {
 		return deviceClaimResult{}, err
@@ -229,7 +251,9 @@ func (s *deviceFlowStore) claim(ctx context.Context, normalizedUserCode, flowHan
 	values, err := manager.Redis.Eval(ctx, deviceFlowClaimScript, []string{
 		keys.BuildOAuth2DeviceUserCodeIndexKey(normalizedUserCode),
 		keys.BuildOAuth2DeviceFlowHandleIndexKey(flowHandle),
-	}, s.nowMillis(), userID, sessionHash, keys.HashOAuth2DeviceIdentifier("fh", flowHandle), claimTTL.Milliseconds(), keys.BuildOAuth2DeviceFlowKey("")).StringSlice()
+		keys.BuildOAuth2DeviceOwnedUserCodeIndexKey(userID, normalizedUserCode),
+		keys.BuildOAuth2DeviceLookupFailGlobalKey(),
+	}, s.nowMillis(), userID, sessionHash, keys.HashOAuth2DeviceIdentifier("fh", flowHandle), claimTTL.Milliseconds(), keys.BuildOAuth2DeviceFlowKey(""), globalFailureLimit, deviceRateWindow.Milliseconds()).StringSlice()
 	if err != nil {
 		return deviceClaimResult{}, err
 	}
@@ -239,6 +263,13 @@ func (s *deviceFlowStore) claim(ctx context.Context, normalizedUserCode, flowHan
 	result := deviceClaimResult{Code: values[0]}
 	if len(values) > 1 {
 		result.FlowID = values[1]
+	}
+	if len(values) == 3 {
+		count, err := strconv.ParseInt(values[2], 10, 64)
+		if err != nil {
+			return deviceClaimResult{}, errors.New("invalid device lookup failure count")
+		}
+		result.FailureCount = count
 	}
 	if result.Code == deviceClaimNew || result.Code == deviceClaimRenewed {
 		if len(values) != 8 {

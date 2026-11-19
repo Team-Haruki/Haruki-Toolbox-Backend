@@ -387,8 +387,8 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 		return respondDeviceBrowserError(c, fiber.StatusBadRequest, deviceCodeMalformedCode)
 	}
 
-	// Reserve the per-user abuse budget before reading the index. Charge
-	// the shared failure budget only for a miss so it cannot block valid claims.
+	// Reserve budgets before reaching the shared code index. When the shared
+	// budget is full, the caller can only look up their own previous claims.
 	counters := []deviceRateCounter{
 		{Key: keys.BuildOAuth2DeviceLookupFailUserKey(user.ID), Limit: limits.LookupFailUserPer10m, Window: deviceRateWindow},
 		{Key: keys.BuildOAuth2DeviceLookupFailUserDayKey(user.ID), Limit: limits.LookupFailUserPerDay, Window: deviceRateDayWindow},
@@ -408,7 +408,7 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 	}
 
 	flowHandle := newDeviceFlowHandle()
-	claim, err := h.store.claim(ctx, userCode, flowHandle, user.ID, user.SessionHash, h.cfg.claimTTL())
+	claim, err := h.store.claim(ctx, userCode, flowHandle, user.ID, user.SessionHash, h.cfg.claimTTL(), limits.LookupFailGlobalPer10m)
 	if err != nil {
 		release()
 		return respondDeviceBrowserUnavailable(c)
@@ -416,17 +416,12 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 	switch claim.Code {
 	case deviceClaimNew, deviceClaimRenewed:
 		release()
+	case deviceClaimRateLimited:
+		release()
+		return respondDeviceBrowserRateLimited(c, h.store.retryAfterSeconds(ctx, keys.BuildOAuth2DeviceLookupFailGlobalKey(), deviceRateWindow))
 	case deviceClaimMissing, deviceClaimExpired, deviceClaimTaken:
-		global := []deviceRateCounter{{Key: keys.BuildOAuth2DeviceLookupFailGlobalKey(), Limit: limits.LookupFailGlobalPer10m, Window: deviceRateWindow}}
-		reservation, err := h.store.reserve(ctx, global)
-		if err != nil {
-			return respondDeviceBrowserUnavailable(c)
-		}
-		if reservation.LimitedIndex >= 0 {
-			return respondDeviceBrowserRateLimited(c, h.store.retryAfterSeconds(ctx, global[0].Key, global[0].Window))
-		}
-		if reservation.Counts[0] == int64(max(1, limits.LookupFailGlobalPer10m/deviceLookupGlobalWarnPart)) {
-			logDeviceEvent(h.logger(), "warn", "lookup_fail_global_warn", "", "", "count="+strconv.FormatInt(reservation.Counts[0], 10))
+		if claim.FailureCount == int64(max(1, limits.LookupFailGlobalPer10m/deviceLookupGlobalWarnPart)) {
+			logDeviceEvent(h.logger(), "warn", "lookup_fail_global_warn", "", "", "count="+strconv.FormatInt(claim.FailureCount, 10))
 		}
 		logDeviceEvent(h.logger(), "info", "lookup_fail", "", "", "reason="+strings.ToLower(claim.Code))
 		if claim.Code == deviceClaimTaken {

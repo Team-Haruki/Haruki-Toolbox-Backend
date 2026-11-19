@@ -175,7 +175,7 @@ Hydra 在当前项目里负责：
 
 管理员角色变更、代重置密码、代撤销用户 OAuth 授权、轮换 OAuth 客户端密钥和修改 webhook 签名设置前，需先在当前会话完成管理员重认证。
 
-Oathkeeper 从环境变量 `OATHKEEPER_SHARED_SECRET` 加载 Toolbox 代理凭据。Event Tracker 的受保护路由使用独立的 `TRACKER_AUTH_PROXY_SECRET`，Event Tracker 需校验同一个独立凭据。
+Toolbox 和 Event Tracker 的受保护路由使用独立的代理凭据。运维资料另行维护。
 
 管理端写请求必须带有与 `user_system.frontend_url` 同源的 `Origin`。代重置密码时，若提交密码则使用 `application/json`。代撤销单个客户端授权时传入 `clientId`，撤销该用户全部 OAuth 授权时显式提交 JSON `{"revokeAll":true}`。
 
@@ -615,7 +615,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 2. 功能闸门 `cfg.Active(ctx)`：明确关闭 ⇒ 400 `unauthorized_client`；运行时配置读取出错（且无 1 s 内缓存值）⇒ 503。
 3. H2，结果按 `client_id` 进程内缓存 5 s（存在与 404 都缓存）。404 ⇒ 计数 `auth-attempt:unknown-client`（只告警）并 401 `invalid_client`；Hydra admin 不可达 ⇒ 503。
 4. `auth-attempt:client:{hx}` 计数，**只告警不拒绝**：机密客户端的 secret 要到 H3 才由 Hydra 校验，按客户端拒绝会让带错误 secret 的匿名洪泛挡住真正的客户端。
-5. 校验允许名单、启用状态、设备授权许可和 scope 策略（§10.5.11）。公开客户端在 H3 前预占当期发码额度。机密客户端通过独立的并发预算进入 H3，认证通过后才预占发码额度。发码额度耗尽时返回 429 `temporarily_unavailable` 并附带 `Retry-After`。
+5. 校验允许名单、启用状态、设备授权许可和 scope 策略（§10.5.11）。公开客户端在 H3 前预占当期发码额度。机密客户端在 H3 前检查剩余额度，并受单客户端与机密客户端池的并发限制，认证通过后才预占发码额度。发码额度耗尽时返回 429 `temporarily_unavailable` 并附带 `Retry-After`。
 6. H3 只发送 `client_id` 和 `scope`，转发原 `Authorization`。上游失败时释放公开客户端的预占。Hydra 的非 200 响应原样透传。已通过认证但未获发码额度的上游记录由清理服务处理。
 7. 自检：`normalizeDeviceUserCode(user_code)` 须成功且等于原值，否则 500 并记 `charset_mismatch`；`expires_in` 不得超过 `user_code_ttl` 5 s 以上，否则 500 并记 `ttl_mismatch`（Hydra 与后端配置漂移时失败关闭）。
 8. 生成 `fid`、`hdc`、密封值，`deviceFlowCreateScript`（`UC_COLLISION` ⇒ 500；Redis 失败 ⇒ 503，已产生的 Hydra 行交给清理服务）→ 200，`interval = max(Hydra interval, min_poll_interval_seconds)`。
@@ -658,7 +658,7 @@ API = `https://toolbox-api-direct.haruki.seiunx.com`，FE = `https://haruki.seiu
 `hydra_device_browser.go`，Oathkeeper `haruki-protected-oauth-consent`（cookie_session）；`/device` 页面消费它们。共同规则见 §10.1；另外：
 
 - **lookup** 返回的审核卡：`flowHandle`（`dfh_…`，只在 JSON 体中传递，前端只放内存）、`userCode`（`XXXX-XXXX`）、`client{clientId, clientName, clientType, firstParty, initiatorVerified}`、`scopes[{scope, risk}]`、`deviceLabel`、`requestedAt` / `expiresAt`（UTC，RFC 3339）、`account{userId, name}`、`writeWarning`。风险分级：`openid`、`profile` → `identity`；`offline_access` → `offline`；`user:read`、`bindings:read`、`game-data:read` → `read`；`game-data:write`、`station:room:write` 以及表里没有的 scope → `write`（任一 `write` 时 `writeWarning=true`）。`firstParty` = 设备策略 `firstParty` ∧ 机密客户端（公共客户端的 `client_id` 任何人都能冒用，永远不报「官方」）；`initiatorVerified` = 机密客户端。
-- **lookup 顺序**：先检查用户请求额度并规范化设备码，再预占用户失败额度，执行一次 `deviceFlowClaimScript`。合法认领和当前用户自己的流程释放预占。查找失败才计入全局失败额度。全局失败额度耗尽时，后续失败查找返回 429，合法认领仍受各自的用户额度保护。
+- **lookup 顺序**：先检查用户请求额度并规范化设备码，再预占用户失败额度。Redis 脚本原子执行全局额度检查、设备码查找及失败计数。额度耗尽时，只允许当前用户查找自己已认领的流程，其余查找返回 429。合法认领、已有流程及全局拒绝的请求释放预占的用户失败额度。
 - **approve 顺序**：`acknowledged === true`（否则 `ack_required`）→ `decision:user-day` 计数 → `fh` 索引（缺失 ⇒ `flow_conflict`）→ 规范化 `userCode` 并与流程的 `uch` 常数时间比较（不等 ⇒ `flow_conflict`）→ 清洗 `label` → H2 刷新 → `deviceFlowBeginApproveScript`（`HANDLE_MISMATCH` / `IN_PROGRESS` ⇒ `flow_conflict`，`SESSION_CHANGED` ⇒ `session_changed`，`NOT_CLAIMER` / `HANDLED` ⇒ `already_handled`，`TOO_LATE` / `EXPIRED` ⇒ `code_expired`，`MAX_ATTEMPTS` ⇒ 502 `approval_failed`、`retryable:false`）→ 代驱链（§10.5.7）→ 200 `{status:"approved", clientName, consentRequestId, accountName}`，或 202 `{status:"unconfirmed"}`（最后一跳结果未知；Hydra 实际已完成时设备仍会拿到令牌）。
 - **标签**：用户填写的非空 `label`（`label_source=user`）> 设备自报 `device_label`（`device`）> 默认 `"{clientName} · {YYYY-MM-DD}"`（Asia/Shanghai 日期，`default`）；非空但清洗后为空 ⇒ `invalid_request`。最终标签写进 consent `context.haruki.label` 与 `session.access_token.device_label`，批准后不能改。
 - **deny**：`reason` 为 `user_denied`（缺省）或 `not_initiated_by_me`（另记 `phishing_signal`），其他值 `invalid_request`；`decision:user-day` 计数 → `fh` 索引 → `deviceFlowDenyScript`（成功返回 `crid`）→ `crid` 非空则按它撤销（期望 204）→ 审计 `user.oauth.device.deny`。允许拒绝的状态是 `claimed` 与批准租约已过期的 `approving`：后者正是「后端在最后一跳后崩溃」或「最后一跳结果未知后用户改点拒绝」，Hydra 可能已完成同意，所以写入 `denied` 后立即撤销，Hydra 级联删除设备码行，之后轮询得到 `invalid_grant` 并被翻译为 `access_denied`。撤销失败仍返回 200，由兼容层和回收器兜底。
@@ -804,7 +804,7 @@ Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory
 | `lookup:user:{hx}` | 10 min | 30 | 计数 | 429 `rate_limited` |
 | `lookup-fail:user:{hx}` | 10 min | 5 | 预占，认领成功释放 | 429 `rate_limited` |
 | `lookup-fail:user-day:{hx}` | 24 h | 20 | 预占，认领成功释放 | 429 `rate_limited` |
-| `lookup-fail:global` | 10 min | **150 硬上限**（50 时记 `lookup_fail_global_warn`） | 预占，认领成功释放；读索引之前检查 | 429 `rate_limited` |
+| `lookup-fail:global` | 10 min | **150 硬上限**（50 时记 `lookup_fail_global_warn`） | 查找共享索引前检查，只计失败的新查找 | 429 `rate_limited` |
 | `decision:user-day:{hx}` | 24 h | 20 | 计数（approve + deny） | 429 `rate_limited` |
 | 流程 `att` | 流程生命周期 | 3 | Lua | `failed`，502 `approval_failed` |
 | 流程 `ivl` / `sdn` | 每次轮询 | 初始 5 s，早到 +5 s（保持），上限 60 s，容差 1 s；`pending` / `claimed` 时早到超过 30 次 ⇒ `failed` | Lua | 400 `slow_down` |

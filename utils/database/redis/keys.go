@@ -359,6 +359,11 @@ func (b KeyBuilder) BuildOAuth2DeviceUserCodeIndexKey(normalizedUserCode string)
 	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "uc", b.hashExactIdentifier("uc", normalizedUserCode))
 }
 
+// BuildOAuth2DeviceOwnedUserCodeIndexKey resolves only an account's prior claims.
+func (b KeyBuilder) BuildOAuth2DeviceOwnedUserCodeIndexKey(userID, normalizedUserCode string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "owned-uc", b.hashExactIdentifier("owned-uc", userID+"\x00"+normalizedUserCode))
+}
+
 // BuildOAuth2DeviceFlowHandleIndexKey maps a browser flow handle (dfh_…) to its flow.
 func (b KeyBuilder) BuildOAuth2DeviceFlowHandleIndexKey(flowHandle string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "fh", b.hashExactIdentifier("fh", flowHandle))
