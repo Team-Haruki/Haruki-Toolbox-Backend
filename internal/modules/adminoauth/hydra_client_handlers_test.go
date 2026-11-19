@@ -2,6 +2,7 @@ package adminoauth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+
+	"entgo.io/ent"
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -908,5 +911,113 @@ func TestAuthorizationScanUsesClientCandidatesBeforeReadingHydra(t *testing.T) {
 		if strings.Contains(req.Query.Get("subject"), "unrelated") {
 			t.Fatal("queried consent for an unrelated Toolbox user")
 		}
+	}
+}
+
+func TestAuthorizationRoutesRefuseIncompleteScans(t *testing.T) {
+	hydra := newFakeHydraClients(t, publicViewerClient)
+	helper := newAdminOAuthTestHelper(t)
+	seedAdminOAuthTestUser(t, helper, "matching", "identity-matching", userSchema.RoleUser)
+	adminURL, err := hydra.config.AdminEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name     string
+		subjects []string
+		indexErr error
+		status   int
+	}{
+		{name: "empty", status: http.StatusOK},
+		{name: "over capacity", subjects: make([]string, maxAuthorizationScanSubjects+1), status: http.StatusServiceUnavailable},
+		{name: "unexpected index failure", indexErr: errors.New("fixture index failure"), status: http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+				AdminURL: adminURL,
+				ConsentSubjects: func(context.Context, string, int) ([]string, error) {
+					return tc.subjects, tc.indexErr
+				},
+			})
+			app := newHydraClientHandlerTestAppAs(helper, cfg, "admin", adminCoreModule.RoleSuperAdmin)
+			app.Get("/oauth-clients/:client_id/authorizations", handleListHydraOAuthClientAuthorizations(helper, cfg))
+			app.Get("/oauth-clients/:client_id/statistics", handleGetHydraOAuthClientStatistics(helper, cfg))
+			for _, suffix := range []string{"/authorizations", "/statistics"} {
+				status, body := doAdminOAuthClientRequest(t, app, http.MethodGet, "/oauth-clients/viewer-1"+suffix, "")
+				if status != tc.status {
+					t.Fatalf("%s status %d, body %+v", suffix, status, body)
+				}
+			}
+			if calls := requestLines(hydra.takeRequests()); !slices.Equal(calls, []string{"GET /admin/clients/viewer-1", "GET /admin/clients/viewer-1"}) {
+				t.Fatalf("unexpected requests during failed or empty consent scan: %v", calls)
+			}
+		})
+	}
+}
+
+func TestOAuthClientLifecycleFailsClosedWithoutExclusiveGrantLock(t *testing.T) {
+	hydra := newFakeHydraClients(t, publicViewerClient)
+	helper := newAdminOAuthTestHelper(t)
+	adminURL, err := hydra.config.AdminEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		AdminURL: adminURL,
+		LockClientGrants: func(_ context.Context, client string, exclusive bool) (func(), error) {
+			if client != "viewer-1" || !exclusive {
+				t.Errorf("unexpected reservation for %q, exclusive=%v", client, exclusive)
+			}
+			return nil, errors.New("fixture lock failure")
+		},
+	})
+	app := newHydraClientHandlerTestAppAs(helper, cfg, "admin", adminCoreModule.RoleSuperAdmin)
+	app.Post("/oauth-clients/:client_id/webhooks", handleCreateHydraOAuthClientWebhook(helper, cfg))
+	const create = `{"clientId":"viewer-1","clientType":"public","name":"Viewer","redirectUris":["https://viewer.example.test/callback"],"scopes":["user:read"]}`
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodPost, "/oauth-clients", create},
+		{http.MethodDelete, "/oauth-clients/viewer-1", ""},
+		{http.MethodPost, "/oauth-clients/viewer-1/webhooks", `{"callbackUrl":"https://viewer.example.test/callback"}`},
+	} {
+		status, body := doAdminOAuthClientRequest(t, app, tc.method, tc.path, tc.body)
+		if status != http.StatusInternalServerError || body.Message != "failed to reserve oauth client" {
+			t.Fatalf("%s %s returned %d: %+v", tc.method, tc.path, status, body)
+		}
+	}
+	if calls := hydra.takeRequests(); len(calls) != 0 {
+		t.Fatalf("lifecycle operations contacted Hydra without a lock: %v", requestLines(calls))
+	}
+}
+
+func TestClientIDReuseWaitsForPreviousWebhooksToBeDeleted(t *testing.T) {
+	hydra := newFakeHydraClients(t, publicViewerClient)
+	helper := newAdminOAuthTestHelper(t)
+	db := helper.DBManager.DB
+	db.OAuth2ClientWebhookEndpoint.Create().SetID("old").SetClientID("viewer-1").
+		SetCallbackURL("https://previous.example.test/callback").SetEnabled(true).SaveX(t.Context())
+	failCleanup := true
+	db.OAuth2ClientWebhookEndpoint.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if failCleanup && mutation.Op().Is(ent.OpDelete) {
+				return nil, errors.New("fixture callback cleanup failure")
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	app := newHydraClientHandlerTestAppAs(helper, hydra.config, "admin", adminCoreModule.RoleSuperAdmin)
+	if status, body := doAdminOAuthClientRequest(t, app, http.MethodDelete, "/oauth-clients/viewer-1", ""); status != http.StatusInternalServerError || body.Message != "oauth client deleted but webhook cleanup failed" {
+		t.Fatalf("delete returned %d: %+v", status, body)
+	}
+	hydra.takeRequests()
+	const payload = `{"clientId":"viewer-1","clientType":"public","name":"Replacement","redirectUris":["https://viewer.example.test/callback"],"scopes":["user:read"]}`
+	if status, body := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", payload); status != http.StatusInternalServerError || body.Message != "failed to clear previous oauth client webhooks" {
+		t.Fatalf("recreate returned %d: %+v", status, body)
+	}
+	if calls := requestLines(hydra.takeRequests()); !slices.Equal(calls, []string{"GET /admin/clients/viewer-1"}) {
+		t.Fatalf("client was recreated before webhook cleanup: %v", calls)
+	}
+	failCleanup = false
+	if status, body := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", payload); status != http.StatusOK || db.OAuth2ClientWebhookEndpoint.Query().CountX(t.Context()) != 0 {
+		t.Fatalf("recreate after cleanup recovered returned %d: %+v", status, body)
 	}
 }

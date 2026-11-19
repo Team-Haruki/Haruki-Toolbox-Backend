@@ -175,3 +175,37 @@ func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
 		t.Fatal("different field policies share a cache generation")
 	}
 }
+
+func TestMysekaiConditionalReadRejectsExcludedProjection(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request string
+		allowed []string
+		stamp   int64
+	}{
+		{"timestamp excluded", "", []string{"userMysekaiGates"}, 1752600000},
+		{"selected field excluded", "upload_time,userMysekaiGates", []string{"upload_time"}, 1752600000},
+		{"missing row", "upload_time", []string{"upload_time"}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const path = "/mysekai/123"
+			app := fiber.New()
+			app.Get(path, func(c fiber.Ctx) error {
+				if CheckNotModified(c, utils.UploadDataTypeMysekai, tc.request, true, tc.allowed, tc.stamp) {
+					return c.SendStatus(http.StatusNotModified)
+				}
+				return c.SendStatus(http.StatusOK)
+			})
+			req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
+			req.Header.Set(fiber.HeaderIfNoneMatch, mysekaiPolicyETag(path, tc.request, tc.allowed, tc.stamp))
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK || resp.Header.Get(fiber.HeaderETag) != "" {
+				t.Fatalf("invalid projection returned status %d, validator %q", resp.StatusCode, resp.Header.Get(fiber.HeaderETag))
+			}
+		})
+	}
+}

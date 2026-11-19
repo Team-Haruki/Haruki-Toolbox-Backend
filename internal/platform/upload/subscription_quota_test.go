@@ -3,6 +3,7 @@ package upload
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -80,5 +81,34 @@ func TestBirthdayPendingByteQuotaReclaimsExpiredEvents(t *testing.T) {
 	server.SetTime(now.Add(time.Second))
 	if err := store("event-four", "sub-2", 15, 10); err != nil {
 		t.Fatalf("capacity after expiry: %v", err)
+	}
+}
+
+func TestBirthdayPendingQuotaRejectsInvalidStorage(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	const key = "event-fixture"
+	event := BirthdayMonitorEvent{EventID: "event", PayloadRef: key, SubscriptionID: "sub"}
+	event.FilteredPayload = map[string]any{"string": strings.Repeat("a", birthdayPendingBytesPerSubscription)}
+	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); !errors.Is(err, errBirthdayPendingQuota) || server.Exists(key) {
+		t.Fatalf("oversized encoded event reached Redis: %v", err)
+	}
+	event.FilteredPayload = map[string]any{"unsupported": make(chan int)}
+	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); err == nil || server.Exists(key) {
+		t.Fatalf("non-serializable event reached Redis: %v", err)
+	}
+	event.FilteredPayload = nil
+	if err := server.Set(key, "invalid event JSON"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); err == nil {
+		t.Fatal("invalid stored event was treated as an admitted retry")
+	}
+	if err := client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); err == nil || errors.Is(err, errBirthdayPendingQuota) {
+		t.Fatalf("Redis failure was reported as an allocation outcome: %v", err)
 	}
 }

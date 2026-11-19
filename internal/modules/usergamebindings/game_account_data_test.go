@@ -2,13 +2,23 @@ package usergamebindings
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	userCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usercore"
+	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestParseOwnedGameAccountDataType(t *testing.T) {
@@ -104,5 +114,50 @@ func TestGameAccountDataRouteRejectsMismatchedUserID(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusForbidden)
+	}
+}
+
+func TestOwnedMysekaiReadUsesCurrentFieldPolicy(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	db.User.Create().SetID("owner").SetName("owner").SetEmail("owner@example.test").ExecX(t.Context())
+	db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetVerified(true).SetUserID("owner").ExecX(t.Context())
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	defer client.Close()
+	manager := &harukiRedis.HarukiRedisManager{Redis: client}
+	helper := &api.HarukiToolboxRouterHelpers{
+		DBManager: &database.HarukiToolboxDBManager{DB: db, Redis: manager},
+		RuntimeConfig: runtimeconfig.New(
+			runtimeconfig.Snapshot{AllowedKeys: []string{"userMysekaiGates"}},
+			runtimeconfig.NewRedisStore(manager),
+		),
+	}
+	app := fiber.New()
+	app.Get("/:server/:game_user_id/:data_type", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleGetOwnedGameAccountData(helper))
+	for _, tc := range []struct {
+		policy  string
+		status  int
+		message string
+	}{
+		{`{"publicApiAllowedKeys":["upload_time"]}`, http.StatusBadRequest, "Invalid request key"},
+		{`{}`, http.StatusBadRequest, "Invalid request key"},
+		{"unreadable policy", http.StatusServiceUnavailable, "game-data field policy unavailable"},
+	} {
+		if err := server.Set(harukiRedis.BuildRuntimeConfigKey(), tc.policy); err != nil {
+			t.Fatal(err)
+		}
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/jp/123/mysekai?key=userMysekaiGates", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil || resp.StatusCode != tc.status || !strings.Contains(string(body), tc.message) {
+			t.Fatalf("policy %q returned %d: %s, %v", tc.policy, resp.StatusCode, body, err)
+		}
 	}
 }

@@ -2,13 +2,23 @@ package harukibotneo
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	api "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/neopg/enttest"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
+
 	"github.com/alicebob/miniredis/v2"
+	"github.com/gofiber/fiber/v3"
+	_ "github.com/mattn/go-sqlite3"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -135,5 +145,66 @@ func TestBotVerificationUsesIndependentActorAndRecipientBudgets(t *testing.T) {
 	limits, err := client.Eval(t.Context(), sendMailRateLimitScript, redisKeys, sendMailIPLimit, sendMailTargetLimit, 60000).Int64Slice()
 	if err != nil || limits[0] != rateLimitLimitedByIP || server.Exists(redisKeys[1]) {
 		t.Fatalf("rejected sender spent recipient budget: %v, %v", limits, err)
+	}
+}
+
+func TestBotRegistrationUsesActorScopedVerification(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	botDB := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = botDB.Close() })
+	manager := &harukiRedis.HarukiRedisManager{Redis: client}
+	helper := &api.HarukiToolboxRouterHelpers{
+		DBManager:              &database.HarukiToolboxDBManager{BotDB: botDB, Redis: manager},
+		BotRegistrationEnabled: true,
+		BotCredentialSignToken: "fixture-signing-token",
+		SMTPClient:             &harukiSMTP.HarukiSMTPClient{Addr: "invalid-smtp-address", From: "test@example.test"},
+	}
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", c.Get("Fixture-Actor"))
+		return c.Next()
+	})
+	app.Post("/register", handleRegister(helper))
+	app.Post("/mail", handleSendMail(helper))
+	post := func(path, actor, body string, want int) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		if actor != "" {
+			req.Header.Set("Fixture-Actor", actor)
+		}
+		resp, err := app.Test(req, fiber.TestConfig{Timeout: 10 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("%s as %q returned %d, want %d", path, actor, resp.StatusCode, want)
+		}
+	}
+	const registration = `{"qq_number":123,"verification_code":"123456"}`
+	const email = `{"qq_number":123}`
+	post("/register", "", registration, http.StatusUnauthorized)
+	post("/mail", "", email, http.StatusUnauthorized)
+	key := manager.KeyBuilder().BuildBotVerifyCodeKey("owner", "123")
+	if err := manager.SetCache(t.Context(), key, "owner-challenge.123456", verifyCodeTTL); err != nil {
+		t.Fatal(err)
+	}
+	for range registerActorLimit {
+		post("/register", "other-actor", registration, http.StatusBadRequest)
+	}
+	post("/register", "other-actor", registration, http.StatusTooManyRequests)
+	post("/mail", "other-actor", email, http.StatusInternalServerError)
+	otherCode := manager.KeyBuilder().BuildBotVerifyCodeKey("other-actor", "123")
+	targetBudget := manager.KeyBuilder().BuildBotSendMailRateLimitTargetKey("123")
+	if server.Exists(otherCode) || server.Exists(targetBudget) || !server.Exists(key) {
+		t.Fatal("failed mail did not roll back its own challenge and budget")
+	}
+	post("/register", "owner", registration, http.StatusCreated)
+	post("/register", "owner", registration, http.StatusBadRequest)
+	if server.Exists(key) || botDB.User.Query().CountX(t.Context()) != 1 {
+		t.Fatal("successful registration did not consume the user's verification challenge")
 	}
 }

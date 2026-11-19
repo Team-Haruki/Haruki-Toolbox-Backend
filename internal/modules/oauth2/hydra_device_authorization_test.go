@@ -493,3 +493,34 @@ func TestConfidentialDeviceAuthReservesIssuanceOnlyAfterAuthentication(t *testin
 		t.Fatalf("request charged issuance before authentication: status=%d reserved=%t", response.Status, reserved)
 	}
 }
+
+func TestConfidentialDeviceAuthPreservesQuotaAndBoundedAdmission(t *testing.T) {
+	env := newDeviceTestEnv(t, func(o *DeviceFlowConfigOptions) {
+		o.Limits.AuthIssuedConfidentialPer10m = 1
+	})
+	form := url.Values{"scope": {testDeviceScope}}
+	auth := basicAuth(testConfidentialClientID, testConfidentialSecret)
+	func() {
+		for range cap(confidentialDeviceIssueAdmission) {
+			confidentialDeviceIssueAdmission <- struct{}{}
+			defer func() { <-confidentialDeviceIssueAdmission }()
+		}
+		if resp := env.deviceAuth(form, auth); resp.Status != http.StatusServiceUnavailable {
+			t.Fatalf("saturated admission returned %d: %s", resp.Status, resp.Body)
+		}
+		if calls := env.hydra.callsTo(http.MethodPost, "/oauth2/device/auth"); len(calls) != 0 {
+			t.Fatal("busy confidential admission sent work to Hydra")
+		}
+	}()
+	env.issue(testConfidentialClientID)
+	if resp := env.deviceAuth(form, auth); resp.Status != http.StatusTooManyRequests || resp.Header.Get("Retry-After") == "" {
+		t.Fatalf("authenticated request over quota returned %d: %s", resp.Status, resp.Body)
+	}
+	key := env.db.Redis.KeyBuilder().BuildOAuth2DeviceAuthIssuedPoolKey("confidential")
+	if count, err := env.redis.Get(key); err != nil || count != "1" {
+		t.Fatalf("confidential pool exceeded its limit: %q, %v", count, err)
+	}
+	if calls := env.hydra.callsTo(http.MethodPost, "/oauth2/device/auth"); len(calls) != 2 {
+		t.Fatal("quota was checked before the confidential client was authenticated")
+	}
+}
