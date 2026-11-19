@@ -309,8 +309,6 @@ func (s *inheritService) handleVaultReissue(c fiber.Ctx) error {
 		InheritID: inheritID, Password: newPassword,
 	})
 	switch {
-	case errors.Is(err, inheritvault.ErrNotFound), errors.Is(err, inheritvault.ErrStale):
-		return fail(errEntryNotFound)
 	case err != nil:
 		resp.Warnings = append(resp.Warnings, *jobProblemFor(codeVaultStoreFailed))
 	case loc == inheritvault.LocationFallback:

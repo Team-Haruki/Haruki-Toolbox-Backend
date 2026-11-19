@@ -1,6 +1,7 @@
 package inheritvault
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -514,7 +515,19 @@ func (s *Store) insertEntry(ctx context.Context, rec fallbackRecord) error {
 	if rec.CodeSealed != nil {
 		create.SetCodeSealed(rec.CodeSealed).SetNillableCodeIssuedAt(rec.CodeIssuedAt).SetNillableCodeExpiresAt(rec.CodeExpiresAt)
 	}
-	return create.Exec(ctx)
+	err = create.Exec(ctx)
+	if !postgresql.IsConstraintError(err) {
+		return err
+	}
+	// The write may have committed before its response was lost. Accept only
+	// the same sealed credential from the same owner and key.
+	row, readErr := s.db.InheritVaultEntry.Query().
+		Where(inheritvaultentry.IDEQ(rec.ID), inheritvaultentry.UserIDEQ(rec.UserID),
+			inheritvaultentry.KeyVersionEQ(rec.KeyVersion), inheritvaultentry.DestroyedAtIsNil()).Only(ctx)
+	if readErr == nil && bytes.Equal(row.CredentialSealed, rec.CredentialSealed) {
+		return nil
+	}
+	return err
 }
 
 func (s *Store) putFallback(rec fallbackRecord) error {
@@ -564,32 +577,59 @@ func (s *Store) putFallback(rec fallbackRecord) error {
 }
 
 func (s *Store) getFallback(ctx context.Context, id string) (*fallbackRecord, error) {
+	rec, _, err := s.getFallbackSnapshot(ctx, id)
+	return rec, err
+}
+
+func (s *Store) getFallbackSnapshot(ctx context.Context, id string) (*fallbackRecord, []byte, error) {
 	if s.redis == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	body, err := s.redis.Get(ctx, fallbackKeyPrefix+id).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var rec fallbackRecord
 	if err := json.Unmarshal(body, &rec); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &rec, nil
+	return &rec, body, nil
 }
 
 func (s *Store) dropFallback(ctx context.Context, id, userID string) error {
 	_, err := s.redis.TxPipelined(ctx, func(p redis.Pipeliner) error {
-		p.Del(ctx, fallbackKeyPrefix+id)
-		p.SRem(ctx, fallbackIndexKey, id)
-		if userID != "" {
-			p.SRem(ctx, fallbackUserPrefix+userID, id)
-		}
-		return nil
+		return removeFallback(ctx, p, id, userID)
 	})
+	return err
+}
+
+func removeFallback(ctx context.Context, p redis.Pipeliner, id, userID string) error {
+	p.Del(ctx, fallbackKeyPrefix+id)
+	p.SRem(ctx, fallbackIndexKey, id)
+	if userID != "" {
+		p.SRem(ctx, fallbackUserPrefix+userID, id)
+	}
+	return nil
+}
+
+func (s *Store) dropFallbackSnapshot(ctx context.Context, id, userID string, snapshot []byte) error {
+	key := fallbackKeyPrefix + id
+	err := s.redis.Watch(ctx, func(tx *redis.Tx) error {
+		current, err := tx.Get(ctx, key).Bytes()
+		if err != nil || !bytes.Equal(current, snapshot) {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+			return removeFallback(ctx, p, id, userID)
+		})
+		return err
+	}, key)
+	if errors.Is(err, redis.Nil) || errors.Is(err, redis.TxFailedErr) {
+		return nil
+	}
 	return err
 }
 
@@ -645,7 +685,7 @@ func (s *Store) reconcileRecord(ctx context.Context, id, owner string) error {
 		return err
 	}
 	defer release()
-	current, err := s.getFallback(ctx, id)
+	current, snapshot, err := s.getFallbackSnapshot(ctx, id)
 	if err != nil || current == nil {
 		return err
 	}
@@ -655,7 +695,7 @@ func (s *Store) reconcileRecord(ctx context.Context, id, owner string) error {
 	if err := s.applyFallback(ctx, *current); err != nil && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrStale) {
 		return err
 	}
-	return s.dropFallback(ctx, id, owner)
+	return s.dropFallbackSnapshot(ctx, id, owner, snapshot)
 }
 
 func (s *Store) applyFallback(ctx context.Context, rec fallbackRecord) error {
@@ -786,7 +826,9 @@ func (s *Store) Get(ctx context.Context, userID, entryID string) (*Entry, error)
 	if !s.Available() {
 		return nil, ErrUnavailable
 	}
-	if !s.ownerReserved(ctx, userID) {
+	if s.ownerReserved(ctx, userID) {
+		_ = s.reconcileRecord(ctx, entryID, userID)
+	} else {
 		_, _ = s.Reconcile(ctx, userID)
 	}
 	destroyed, err := s.destroyed(ctx, userID, entryID)
@@ -862,11 +904,6 @@ func (s *Store) Destroy(ctx context.Context, userID, entryID string) error {
 		return err
 	}
 	defer release()
-	rec, err := s.getFallback(ctx, entryID)
-	if err != nil {
-		return err
-	}
-	parked := rec != nil && rec.UserID == userID
 	tx, err := s.db.Tx(ctx)
 	if err != nil {
 		return err
@@ -880,14 +917,20 @@ func (s *Store) Destroy(ctx context.Context, userID, entryID string) error {
 	if err != nil {
 		return err
 	}
-	if n == 0 && !parked {
-		return ErrNotFound
-	}
 	marked, err := tx.InheritVaultTombstone.Query().Where(inheritvaulttombstone.UserIDEQ(userID), inheritvaulttombstone.EntryIDEQ(entryID)).Exist(ctx)
 	if err != nil {
 		return err
 	}
 	if !marked {
+		if n == 0 {
+			rec, err := s.getFallback(ctx, entryID)
+			if err != nil {
+				return err
+			}
+			if rec == nil || rec.UserID != userID {
+				return ErrNotFound
+			}
+		}
 		if err := tx.InheritVaultTombstone.Create().SetUserID(userID).SetEntryID(entryID).SetExpiresAt(now.Add(CredentialRetention)).Exec(ctx); err != nil {
 			return err
 		}
@@ -896,17 +939,15 @@ func (s *Store) Destroy(ctx context.Context, userID, entryID string) error {
 		return err
 	}
 	if s.redis != nil {
-		_, err := s.redis.TxPipelined(ctx, func(p redis.Pipeliner) error {
-			p.Set(ctx, fallbackTombstonePrefix+userID+":"+entryID, "1", CredentialRetention)
-			if parked {
-				p.Del(ctx, fallbackKeyPrefix+entryID)
-				p.SRem(ctx, fallbackIndexKey, entryID)
-				p.SRem(ctx, fallbackUserPrefix+userID, entryID)
-			}
-			return nil
-		})
+		if err := s.redis.Set(ctx, fallbackTombstonePrefix+userID+":"+entryID, "1", CredentialRetention).Err(); err != nil {
+			return err
+		}
+		rec, snapshot, err := s.getFallbackSnapshot(ctx, entryID)
 		if err != nil {
 			return err
+		}
+		if rec != nil && rec.UserID == userID {
+			return s.dropFallbackSnapshot(ctx, entryID, userID, snapshot)
 		}
 	}
 	return nil

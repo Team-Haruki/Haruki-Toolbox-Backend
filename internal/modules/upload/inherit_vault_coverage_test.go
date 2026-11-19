@@ -590,6 +590,19 @@ func TestVaultReissueGameFailures(t *testing.T) {
 // PostgreSQL going away after the game issued the new code: the code still
 // reaches the owner, with a warning saying where (or whether) it is kept.
 func TestVaultReissueStoreWarnings(t *testing.T) {
+	t.Run("entry gone after game issuance", func(t *testing.T) {
+		env := newInheritTestEnv(t)
+		_, done := env.runToSuccess()
+		entryID := done["vault_entry_id"].(string)
+		env.useScriptedGame(&scriptedInheritGame{issue: func(ctx context.Context) (string, error) {
+			return testIssuedID, env.vaultClient.InheritVaultEntry.DeleteOneID(entryID).Exec(ctx)
+		}})
+		res := env.call(testOwner, "POST", entryPath(entryID)+"/reissue", map[string]any{"password": testOwnerPassword, "new_password_mode": "random"})
+		password, _ := res.data()["password"].(string)
+		if res.Status != http.StatusOK || res.data()["inherit_id"] != testIssuedID || password == "" || !strings.Contains(res.Raw, codeVaultStoreFailed) {
+			t.Fatalf("reissue with expired entry returned %d without the unrecoverable code warning", res.Status)
+		}
+	})
 	t.Run("fallback", func(t *testing.T) {
 		env := newInheritTestEnv(t)
 		_, done := env.runToSuccess()

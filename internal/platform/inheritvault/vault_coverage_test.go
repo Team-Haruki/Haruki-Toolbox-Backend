@@ -986,7 +986,7 @@ func TestDestroyParkedEntry(t *testing.T) {
 	if _, err := env.store.Get(ctx, "u1", "parked"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get after destroy: %v", err)
 	}
-	if err := env.store.Destroy(ctx, "u1", "parked"); !errors.Is(err, ErrNotFound) {
+	if err := env.store.Destroy(ctx, "u1", "parked"); err != nil {
 		t.Fatalf("second Destroy: %v", err)
 	}
 }
@@ -1030,6 +1030,112 @@ func TestDestroyReportsAFailedRedisCleanup(t *testing.T) {
 	}
 	if !env.redis.Exists(fallbackKeyPrefix + "parked") {
 		t.Fatal("record missing although the cleanup failed")
+	}
+}
+
+func TestDestroyRetryCompletesRedisCleanupAfterDatabaseCommit(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	env.redis.SetError("LOADING")
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed marker write returned %v", err)
+	}
+	row := env.store.db.InheritVaultEntry.GetX(ctx, "entry")
+	if row.DestroyedAt == nil || len(row.CredentialSealed) != 0 {
+		t.Fatal("Redis outage prevented PostgreSQL destruction")
+	}
+	if err := env.store.Destroy(ctx, owner.UserID, "unknown"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("unread fallback was treated as absent: %v", err)
+	}
+	env.redis.SetError("")
+	if err := env.store.Destroy(ctx, "u2", "entry"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other owner inherited tombstone authorization: %v", err)
+	}
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); err != nil || !env.redis.Exists(fallbackTombstonePrefix+"u1:entry") {
+		t.Fatalf("retry did not install a Redis tombstone: %v", err)
+	}
+}
+
+func TestReconcileDoesNotDeleteNewerParkedSnapshot(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	rec := fallbackRecord{ID: "entry", UserID: owner.UserID, KeyVersion: owner.KeyVersion, CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(rec); err != nil {
+		t.Fatal(err)
+	}
+	_, snapshot, err := env.store.getFallbackSnapshot(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.CodeSealed = []byte("new fixture ciphertext")
+	if err := env.store.putFallback(rec); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.store.dropFallbackSnapshot(ctx, rec.ID, owner.UserID, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	current, err := env.store.getFallback(ctx, rec.ID)
+	if err != nil || current == nil || !bytes.Equal(current.CodeSealed, rec.CodeSealed) {
+		t.Fatalf("newer parked code was lost: %v", err)
+	}
+	for _, key := range []string{fallbackIndexKey, fallbackUserPrefix + owner.UserID} {
+		if active, err := env.store.redis.SIsMember(ctx, key, rec.ID).Result(); err != nil || !active {
+			t.Fatalf("newer snapshot lost its index: %v", err)
+		}
+	}
+}
+
+func TestGetUnderReservationReconcilesTheRequestedCode(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	fail := failEntryOps(env.store.db, ent.OpUpdate)
+	fail.Store(true)
+	loc, err := env.store.PutCode(ctx, CodeInput{
+		EntryID: "entry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion, PublicKey: owner.PublicKey,
+		InheritID: "issued-id", Password: "new-pass",
+	})
+	if err != nil || loc != LocationFallback {
+		t.Fatalf("unable to park code: %v, %v", loc, err)
+	}
+	fail.Store(false)
+	reserved, release, err := env.store.ReserveLiveOwner(ctx, owner.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	entry, err := env.store.Get(reserved, owner.UserID, "entry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, password, err := owner.OpenCode(entry)
+	if err != nil || id != "issued-id" || password != "new-pass" {
+		t.Fatalf("reserved read missed parked code: %v", err)
+	}
+}
+
+func TestCredentialInsertRecognizesCommittedRetry(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	rec := fallbackRecord{
+		ID: "retry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion,
+		CredentialSealed: []byte("sealed fixture"), WrapScheme: EntryWrapScheme,
+		CredentialExpiresAt: env.now.Add(CredentialRetention), CreatedAt: env.now, UpdatedAt: env.now,
+	}
+	for range 2 {
+		if err := env.store.insertEntry(ctx, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec.CredentialSealed = []byte("different sealed fixture")
+	if err := env.store.insertEntry(ctx, rec); !postgresql.IsConstraintError(err) {
+		t.Fatalf("unrelated duplicate accepted: %v", err)
 	}
 }
 
