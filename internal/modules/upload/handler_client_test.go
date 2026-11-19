@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,17 +23,20 @@ type uploadAuthorizerStub struct{}
 type blockedWebhookConfigStore struct {
 	runtimeconfig.Store
 	entered chan struct{}
+	release chan struct{}
 }
 
-func (s blockedWebhookConfigStore) Load(ctx context.Context) (runtimeconfig.Snapshot, bool, error) {
+func (s blockedWebhookConfigStore) Load(context.Context) (runtimeconfig.Snapshot, bool, error) {
 	s.entered <- struct{}{}
-	<-ctx.Done()
-	return runtimeconfig.Snapshot{}, false, ctx.Err()
+	<-s.release
+	return runtimeconfig.Snapshot{}, false, nil
 }
 
 func TestUploadWebhookRetainsPolicyWhenRefreshIsBusy(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
-		store := blockedWebhookConfigStore{entered: make(chan struct{}, 16)}
+		store := blockedWebhookConfigStore{entered: make(chan struct{}, 16), release: make(chan struct{})}
+		release := sync.OnceFunc(func() { close(store.release) })
+		t.Cleanup(release)
 		service := runtimeconfig.New(runtimeconfig.Snapshot{WebhookEnabled: &enabled}, store)
 		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{RuntimeConfig: service}
 		handler := newUploadDataHandler(helper, testUploadDependencies())
@@ -53,6 +57,7 @@ func TestUploadWebhookRetainsPolicyWhenRefreshIsBusy(t *testing.T) {
 			}
 		}
 		got := handler.WebhookAllowed(ctx)
+		release()
 		cancel()
 		for range cap(store.entered) {
 			<-finished

@@ -12,6 +12,7 @@ const maxConcurrentRefreshes = 16
 
 // ErrRefreshBusy reports that Current returned its last published snapshot.
 var ErrRefreshBusy = errors.New("runtime configuration refresh is busy")
+var errRuntimeConfigVersionRegressed = errors.New("runtime configuration version regressed")
 
 // Update describes a partial runtime configuration update. Nil fields retain
 // their current values.
@@ -74,6 +75,20 @@ func New(initial Snapshot, store Store) *Service {
 // Current returns the latest distributed snapshot. A store failure leaves the
 // last usable in-process snapshot intact and is returned to the caller.
 func (s *Service) Current(ctx context.Context) (Snapshot, error) {
+	return s.readCurrent(ctx, false)
+}
+
+// CurrentForAuthentication waits within the store deadline for its own read.
+// An unavailable store never supplies credentials from the local snapshot.
+func (s *Service) CurrentForAuthentication(ctx context.Context) (Snapshot, error) {
+	snapshot, err := s.readCurrent(ctx, true)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func (s *Service) readCurrent(ctx context.Context, waitForSlot bool) (Snapshot, error) {
 	if s == nil {
 		return Snapshot{}, nil
 	}
@@ -85,17 +100,38 @@ func (s *Service) Current(ctx context.Context) (Snapshot, error) {
 	if err := wait.Err(); err != nil {
 		return s.localSnapshot(), err
 	}
-	select {
-	case s.readers <- struct{}{}:
-		defer func() { <-s.readers }()
-	default:
-		return s.localSnapshot(), ErrRefreshBusy
+	if waitForSlot {
+		select {
+		case s.readers <- struct{}{}:
+		case <-wait.Done():
+			return Snapshot{}, wait.Err()
+		}
+	} else {
+		select {
+		case s.readers <- struct{}{}:
+		default:
+			return s.localSnapshot(), ErrRefreshBusy
+		}
+	}
+	defer func() { <-s.readers }()
+	if err := wait.Err(); err != nil {
+		return s.localSnapshot(), err
 	}
 	// Start a fresh store read for the request so an earlier lookup cannot
 	// authorize a request that began after a rotation on another replica.
+	knownVersion := s.localVersion()
 	latest, found, err := s.store.Load(wait)
-	if err != nil || !found {
+	if err != nil {
 		return s.localSnapshot(), err
+	}
+	if !found {
+		if waitForSlot && (knownVersion > 0 || latest.Version > 0) {
+			return Snapshot{}, errMissingRuntimeConfiguration
+		}
+		return s.localSnapshot(), nil
+	}
+	if waitForSlot && latest.Version < knownVersion {
+		return Snapshot{}, errRuntimeConfigVersionRegressed
 	}
 	return s.publish(latest), nil
 }
@@ -150,6 +186,12 @@ func (s *Service) localSnapshot() Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return cloneSnapshot(s.current)
+}
+
+func (s *Service) localVersion() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.current.Version
 }
 
 func applyUpdate(snapshot *Snapshot, update Update) {

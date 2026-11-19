@@ -27,7 +27,7 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		ctx := c.Context()
 		configUnavailable := false
 		token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (any, error) {
-			snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
+			snapshot, err := apiHelper.CurrentRuntimeConfigForAuthentication(ctx)
 			if err != nil || snapshot.WebhookJWTSecret == "" || config.IsExampleCredential(snapshot.WebhookJWTSecret) {
 				configUnavailable = true
 				return nil, fiber.ErrServiceUnavailable

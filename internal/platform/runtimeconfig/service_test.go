@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -215,6 +216,62 @@ func TestRuntimeReadAdmissionLeavesCredentialRotationIndependent(t *testing.T) {
 		if item.err != nil || item.snapshot.PrivateAPIToken != "new" {
 			t.Fatalf("stale read survived rotation: %+v", item)
 		}
+	}
+}
+
+func TestCredentialRefreshWaitsForItsOwnStoreRead(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &pausingRuntimeStore{
+			memoryStore: memoryStore{snapshot: Snapshot{PrivateAPIToken: "retired", Version: 1}, found: true},
+			entered:     make(chan struct{}, maxConcurrentRefreshes),
+			unblock:     make(chan struct{}),
+		}
+		service := New(Snapshot{PrivateAPIToken: "retired", Version: 1}, store)
+		for range maxConcurrentRefreshes {
+			go func() { _, _ = service.Current(t.Context()) }()
+		}
+		for range maxConcurrentRefreshes {
+			<-store.entered
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+		defer cancel()
+		if snapshot, err := service.CurrentForAuthentication(ctx); !errors.Is(err, context.DeadlineExceeded) || snapshot.PrivateAPIToken != "" {
+			t.Fatal("an expired credential read returned a token or skipped its deadline")
+		}
+
+		type result struct {
+			snapshot Snapshot
+			err      error
+		}
+		read := make(chan result, 1)
+		go func() {
+			snapshot, err := service.CurrentForAuthentication(t.Context())
+			read <- result{snapshot, err}
+		}()
+		synctest.Wait()
+		select {
+		case <-read:
+			t.Fatal("the credential read returned while the slots were full")
+		default:
+		}
+		token := "rotated"
+		if _, err := store.memoryStore.Apply(t.Context(), Update{PrivateAPIToken: &token}, Snapshot{}); err != nil {
+			t.Fatal(err)
+		}
+		close(store.unblock)
+		got := <-read
+		if got.err != nil || got.snapshot.PrivateAPIToken != token || len(store.entered) != 1 {
+			t.Fatalf("credential check missed its fresh store read, version=%d err=%v", got.snapshot.Version, got.err)
+		}
+	})
+}
+
+func TestCredentialRefreshRefusesRegressedVersion(t *testing.T) {
+	store := &memoryStore{snapshot: Snapshot{PrivateAPIToken: "older", Version: 2}, found: true}
+	service := New(Snapshot{PrivateAPIToken: "cached", Version: 3}, store)
+	got, err := service.CurrentForAuthentication(t.Context())
+	if !errors.Is(err, errRuntimeConfigVersionRegressed) || got.PrivateAPIToken != "" {
+		t.Fatal("a regressed credential read returned a token")
 	}
 }
 

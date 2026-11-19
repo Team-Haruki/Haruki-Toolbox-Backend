@@ -317,6 +317,12 @@ func BuildRuntimeConfigKey() string {
 	return buildKey(KeyPrefixHaruki, KeyModuleConfig, KeyActionRuntime)
 }
 
+// BuildRuntimeConfigVersionKey keeps the monotonic version when the runtime
+// snapshot key is recreated.
+func BuildRuntimeConfigVersionKey() string {
+	return buildKey(KeyPrefixHaruki, KeyModuleConfig, KeyActionRuntime, "version")
+}
+
 func BuildMysekaiBirthdayMonitorKey(server, gameUserID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionMonitor, strings.TrimSpace(server), strings.TrimSpace(gameUserID))
 }

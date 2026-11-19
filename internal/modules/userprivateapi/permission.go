@@ -20,7 +20,7 @@ func ValidateUserPermission(apiHelper *harukiApiHelper.HarukiToolboxRouterHelper
 		if len(authorization) > 4096 || strings.TrimSpace(authorization) == "" {
 			return harukiApiHelper.ErrorUnauthorized(c, "unauthorized token")
 		}
-		snapshot, err := apiHelper.CurrentRuntimeConfig(c.Context())
+		snapshot, err := apiHelper.CurrentRuntimeConfigForAuthentication(c.Context())
 		if err != nil {
 			return harukiApiHelper.ErrorInternal(c, "private api authentication unavailable")
 		}
