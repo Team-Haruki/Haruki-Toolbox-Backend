@@ -21,7 +21,6 @@ import (
 	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
@@ -160,16 +159,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
 	})
 	// One HydraConfig serves the routes and the device-flow reaper.
-	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
-		Provider:         cfg.OAuth2.Provider,
-		PublicURL:        cfg.OAuth2.HydraPublicURL,
-		BrowserURL:       cfg.OAuth2.HydraBrowserURL,
-		AdminURL:         cfg.OAuth2.HydraAdminURL,
-		ResourceAudience: cfg.Backend.BackendURL,
-		ClientID:         cfg.OAuth2.HydraClientID,
-		ClientSecret:     cfg.OAuth2.HydraClientSecret,
-		RequestTimeout:   time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
-	})
+	hydraConfig, err := application.buildHydraProviderConfig(cfg, resources.hydraGrantLocks)
+	if err != nil {
+		return nil, err
+	}
 	storyService, err := storyModule.New(cfg.Story, resources.toolboxClient, harukiLogger.NewLoggerFromGlobal("Story"))
 	if err != nil {
 		return nil, err
@@ -231,8 +224,9 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 			DetailPath:  "/tickets",
 			DisplayName: cfg.UserSystem.SMTP.MailName,
 		},
-		Story:        storyService,
-		InheritVault: inheritVault,
+		AdminFrontendURL: cfg.UserSystem.FrontendURL,
+		Story:            storyService,
+		InheritVault:     inheritVault,
 	})
 
 	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())

@@ -344,6 +344,31 @@ var (
 			},
 		},
 	}
+	// InheritVaultTombstonesColumns holds the columns for the "inherit_vault_tombstones" table.
+	InheritVaultTombstonesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "user_id", Type: field.TypeString},
+		{Name: "entry_id", Type: field.TypeString},
+		{Name: "expires_at", Type: field.TypeTime},
+	}
+	// InheritVaultTombstonesTable holds the schema information for the "inherit_vault_tombstones" table.
+	InheritVaultTombstonesTable = &schema.Table{
+		Name:       "inherit_vault_tombstones",
+		Columns:    InheritVaultTombstonesColumns,
+		PrimaryKey: []*schema.Column{InheritVaultTombstonesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "inheritvaulttombstone_user_id_entry_id",
+				Unique:  true,
+				Columns: []*schema.Column{InheritVaultTombstonesColumns[1], InheritVaultTombstonesColumns[2]},
+			},
+			{
+				Name:    "inheritvaulttombstone_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{InheritVaultTombstonesColumns[3]},
+			},
+		},
+	}
 	// Oauth2ClientWebhookEndpointsColumns holds the columns for the "oauth2_client_webhook_endpoints" table.
 	Oauth2ClientWebhookEndpointsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
@@ -977,6 +1002,7 @@ var (
 		IosScriptCodesTable,
 		InheritVaultEntriesTable,
 		InheritVaultKeysTable,
+		InheritVaultTombstonesTable,
 		Oauth2ClientWebhookEndpointsTable,
 		RiskEventsTable,
 		RiskRulesTable,
@@ -1014,6 +1040,9 @@ func init() {
 	IosScriptCodesTable.ForeignKeys[0].RefTable = UsersTable
 	InheritVaultEntriesTable.ForeignKeys[0].RefTable = UsersTable
 	InheritVaultKeysTable.ForeignKeys[0].RefTable = UsersTable
+	InheritVaultTombstonesTable.Annotation = &entsql.Annotation{
+		Table: "inherit_vault_tombstones",
+	}
 	Oauth2ClientWebhookEndpointsTable.Annotation = &entsql.Annotation{
 		Table: "oauth2_client_webhook_endpoints",
 	}

@@ -311,6 +311,7 @@ type OAuth2Config struct {
 	HydraPublicURL            string `yaml:"hydra_public_url"`
 	HydraBrowserURL           string `yaml:"hydra_browser_url"`
 	HydraAdminURL             string `yaml:"hydra_admin_url"`
+	HydraGrantStoreURL        string `yaml:"hydra_grant_store_url"`
 	HydraClientID             string `yaml:"hydra_client_id"`
 	HydraClientSecret         string `yaml:"hydra_client_secret"`
 	HydraRequestTimeoutSecond int    `yaml:"hydra_request_timeout_seconds"`

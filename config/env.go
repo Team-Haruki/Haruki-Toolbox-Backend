@@ -160,6 +160,7 @@ func applyEnvOverrides(cfg *Config) error {
 	overrideString(&cfg.OAuth2.HydraPublicURL, "HYDRA_PUBLIC_URL", "HYDRA_PUBLIC_BASE_URL")
 	overrideString(&cfg.OAuth2.HydraBrowserURL, "HYDRA_BROWSER_URL", "BACKEND_PUBLIC_BASE_URL")
 	overrideString(&cfg.OAuth2.HydraAdminURL, "HYDRA_ADMIN_URL", "HYDRA_ADMIN_BASE_URL")
+	overrideNonEmptyString(&cfg.OAuth2.HydraGrantStoreURL, "HYDRA_GRANT_STORE_URL")
 	overrideString(&cfg.OAuth2.HydraClientID, "HYDRA_CLIENT_ID")
 	overrideString(&cfg.OAuth2.HydraClientSecret, "HYDRA_CLIENT_SECRET")
 	if err := overrideInt(&cfg.OAuth2.HydraRequestTimeoutSecond, "HYDRA_REQUEST_TIMEOUT_SECONDS"); err != nil {

@@ -480,8 +480,11 @@ func TestResetKeyReportsDatabaseErrors(t *testing.T) {
 
 	failKeys := failKeyOps(env.store.db, ent.OpDelete)
 	failKeys.Store(true)
-	if n, err := env.store.ResetKey(ctx, "u1"); n != 1 || !errors.Is(err, errInjected) {
+	if n, err := env.store.ResetKey(ctx, "u1"); n != 0 || !errors.Is(err, errInjected) {
 		t.Fatalf("key delete failure: %d, %v", n, err)
+	}
+	if _, err := env.store.Get(ctx, "u1", "e1"); err != nil {
+		t.Fatalf("entry was not restored by rollback: %v", err)
 	}
 }
 
@@ -945,6 +948,10 @@ func TestDestroyParkedEntry(t *testing.T) {
 	ctx := context.Background()
 	u := newUser(t, env, "u1", "pw-123456")
 	env.withDBDown(t, func() { putCredential(t, env.store, u, "parked", "cred") })
+	parked, err := env.redis.Get(fallbackKeyPrefix + "parked")
+	if err != nil {
+		t.Fatal(err)
+	}
 	failCreate := failEntryOps(env.store.db, ent.OpCreate)
 	failCreate.Store(true) // keep it parked through Get's reconcile
 
@@ -957,15 +964,56 @@ func TestDestroyParkedEntry(t *testing.T) {
 	if err := env.store.Destroy(ctx, "u1", "parked"); err != nil {
 		t.Fatal(err)
 	}
-	if keys := env.redis.Keys(); len(keys) != 0 {
+	if keys := env.redis.Keys(); len(keys) != 1 || keys[0] != fallbackTombstonePrefix+"u1:parked" {
 		t.Fatalf("redis keys left: %v", keys)
 	}
 	failCreate.Store(false)
+	// A stale Redis restore can contain a parked record after the database
+	// transaction already acknowledged destruction.
+	env.redis.Del(fallbackTombstonePrefix + "u1:parked")
+	if err := env.redis.Set(fallbackKeyPrefix+"parked", parked); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.redis.SAdd(fallbackUserPrefix+"u1", "parked"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.Reconcile(ctx, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	if exists, err := env.store.db.InheritVaultEntry.Query().Exist(ctx); err != nil || exists {
+		t.Fatalf("destroyed entry reappeared: %v", err)
+	}
 	if _, err := env.store.Get(ctx, "u1", "parked"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get after destroy: %v", err)
 	}
-	if err := env.store.Destroy(ctx, "u1", "parked"); !errors.Is(err, ErrNotFound) {
+	if err := env.store.Destroy(ctx, "u1", "parked"); err != nil {
 		t.Fatalf("second Destroy: %v", err)
+	}
+}
+
+func TestLiveOwnerReservationBlocksEntryDestruction(t *testing.T) {
+	env := newStoreEnv(t)
+	u := newUser(t, env, "u1", "pw-123456")
+	putCredential(t, env.store, u, "entry", "sealed-fixture")
+	ctx, release, err := env.store.ReserveLiveOwner(t.Context(), "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	wait, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if err := env.store.Destroy(wait, "u1", "entry"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("destroy during use = %v", err)
+	}
+	if _, err := env.store.Get(ctx, "u1", "entry"); err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if err := env.store.Destroy(t.Context(), "u1", "entry"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.store.Get(t.Context(), "u1", "entry"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Get after destruction: %v", err)
 	}
 }
 
@@ -982,6 +1030,112 @@ func TestDestroyReportsAFailedRedisCleanup(t *testing.T) {
 	}
 	if !env.redis.Exists(fallbackKeyPrefix + "parked") {
 		t.Fatal("record missing although the cleanup failed")
+	}
+}
+
+func TestDestroyRetryCompletesRedisCleanupAfterDatabaseCommit(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	env.redis.SetError("LOADING")
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("failed marker write returned %v", err)
+	}
+	row := env.store.db.InheritVaultEntry.GetX(ctx, "entry")
+	if row.DestroyedAt == nil || len(row.CredentialSealed) != 0 {
+		t.Fatal("Redis outage prevented PostgreSQL destruction")
+	}
+	if err := env.store.Destroy(ctx, owner.UserID, "unknown"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("unread fallback was treated as absent: %v", err)
+	}
+	env.redis.SetError("")
+	if err := env.store.Destroy(ctx, "u2", "entry"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("other owner inherited tombstone authorization: %v", err)
+	}
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); err != nil || !env.redis.Exists(fallbackTombstonePrefix+"u1:entry") {
+		t.Fatalf("retry did not install a Redis tombstone: %v", err)
+	}
+}
+
+func TestReconcileDoesNotDeleteNewerParkedSnapshot(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	rec := fallbackRecord{ID: "entry", UserID: owner.UserID, KeyVersion: owner.KeyVersion, CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(rec); err != nil {
+		t.Fatal(err)
+	}
+	_, snapshot, err := env.store.getFallbackSnapshot(ctx, rec.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.CodeSealed = []byte("new fixture ciphertext")
+	if err := env.store.putFallback(rec); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.store.dropFallbackSnapshot(ctx, rec.ID, owner.UserID, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	current, err := env.store.getFallback(ctx, rec.ID)
+	if err != nil || current == nil || !bytes.Equal(current.CodeSealed, rec.CodeSealed) {
+		t.Fatalf("newer parked code was lost: %v", err)
+	}
+	for _, key := range []string{fallbackIndexKey, fallbackUserPrefix + owner.UserID} {
+		if active, err := env.store.redis.SIsMember(ctx, key, rec.ID).Result(); err != nil || !active {
+			t.Fatalf("newer snapshot lost its index: %v", err)
+		}
+	}
+}
+
+func TestGetUnderReservationReconcilesTheRequestedCode(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	fail := failEntryOps(env.store.db, ent.OpUpdate)
+	fail.Store(true)
+	loc, err := env.store.PutCode(ctx, CodeInput{
+		EntryID: "entry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion, PublicKey: owner.PublicKey,
+		InheritID: "issued-id", Password: "new-pass",
+	})
+	if err != nil || loc != LocationFallback {
+		t.Fatalf("unable to park code: %v, %v", loc, err)
+	}
+	fail.Store(false)
+	reserved, release, err := env.store.ReserveLiveOwner(ctx, owner.UserID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	entry, err := env.store.Get(reserved, owner.UserID, "entry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, password, err := owner.OpenCode(entry)
+	if err != nil || id != "issued-id" || password != "new-pass" {
+		t.Fatalf("reserved read missed parked code: %v", err)
+	}
+}
+
+func TestCredentialInsertRecognizesCommittedRetry(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	rec := fallbackRecord{
+		ID: "retry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion,
+		CredentialSealed: []byte("sealed fixture"), WrapScheme: EntryWrapScheme,
+		CredentialExpiresAt: env.now.Add(CredentialRetention), CreatedAt: env.now, UpdatedAt: env.now,
+	}
+	for range 2 {
+		if err := env.store.insertEntry(ctx, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec.CredentialSealed = []byte("different sealed fixture")
+	if err := env.store.insertEntry(ctx, rec); !postgresql.IsConstraintError(err) {
+		t.Fatalf("unrelated duplicate accepted: %v", err)
 	}
 }
 
@@ -1094,5 +1248,124 @@ func TestStartReaperLogsFailuresAndUsesTheDefaultInterval(t *testing.T) {
 	out := logs.String()
 	if !strings.Contains(out, "WARN") || strings.Count(out, "Inherit vault reaper:") != 1 {
 		t.Fatalf("logs = %q", out)
+	}
+}
+
+func TestTombstonesRefuseFallbackAndNewCodeWrites(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); err != nil {
+		t.Fatal(err)
+	}
+	record := fallbackRecord{ID: "entry", UserID: owner.UserID, KeyVersion: owner.KeyVersion, CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(record); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Redis accepted a tombstoned fallback: %v", err)
+	}
+	if err := env.store.insertEntry(ctx, record); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("PostgreSQL accepted a tombstoned entry: %v", err)
+	}
+	if _, err := env.store.PutCode(ctx, CodeInput{
+		EntryID: "entry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion,
+		PublicKey: owner.PublicKey, InheritID: "fixture-id", Password: "fixture-code",
+	}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("tombstoned entry accepted a new code: %v", err)
+	}
+	if _, err := env.store.PutCredential(ctx, CredentialInput{
+		EntryID: "entry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion,
+		PublicKey: owner.PublicKey, Credential: []byte("fixture-credential"),
+	}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("tombstoned entry accepted a new credential: %v", err)
+	}
+}
+
+func TestVaultOwnerReservationRejectsUnavailableAndInactiveAccounts(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	var disabled Store
+	if _, _, err := disabled.ReserveLiveOwner(ctx, "u1"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("disabled reserve returned %v", err)
+	}
+	env.store.db.User.UpdateOneID("u2").SetBanned(true).ExecX(ctx)
+	for _, id := range []string{"u2", "unknown"} {
+		if _, _, err := env.store.ReserveLiveOwner(ctx, id); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("inactive reserve returned %v", err)
+		}
+	}
+	reserved, release, err := env.store.ReserveLiveOwner(ctx, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if !env.store.ownerReserved(reserved, "u1") || env.store.ownerReserved(reserved, "u2") {
+		t.Fatal("reservation scope was not bound to the owner")
+	}
+	_, nestedRelease, err := env.store.reserveOwner(reserved, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nestedRelease()
+	if !env.store.ownerReserved(reserved, "u1") {
+		t.Fatal("nested work released the outer reservation")
+	}
+	release()
+	if env.store.ownerReserved(reserved, "u1") {
+		t.Fatal("expired reservation was still active")
+	}
+}
+
+func TestFallbackReconcileIgnoresChangedOrGoneOwner(t *testing.T) {
+	env := newStoreEnv(t)
+	record := fallbackRecord{ID: "entry", UserID: "u2", CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(record); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"entry", "absent"} {
+		if err := env.store.reconcileRecord(t.Context(), id, "u1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !env.redis.Exists(fallbackKeyPrefix+"entry") || env.store.db.InheritVaultEntry.Query().ExistX(t.Context()) {
+		t.Fatal("a stale owner reservation changed the fallback")
+	}
+}
+
+func TestDestroyRollsBackIfTombstoneCannotBeRecorded(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	env.store.db.InheritVaultTombstone.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if m.Op().Is(ent.OpCreate) {
+				return nil, errInjected
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); !errors.Is(err, errInjected) {
+		t.Fatalf("destroy returned %v", err)
+	}
+	if entry, err := env.store.Get(ctx, owner.UserID, "entry"); err != nil || len(entry.CredentialSealed) == 0 {
+		t.Fatalf("rollback lost the original credential: %v", err)
+	}
+}
+
+func TestVaultReadsDoNotExposeFallbackWhenTombstonesCannotBeRead(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	record := fallbackRecord{ID: "entry", UserID: "u1", CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(record); err != nil {
+		t.Fatal(err)
+	}
+	env.store.db.InheritVaultTombstone.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) { return nil, errInjected })
+	}))
+	if items, err := env.store.List(ctx, "u1"); !errors.Is(err, errInjected) || len(items) != 0 {
+		t.Fatalf("fallback was listed despite unknown tombstone state: %v", err)
+	}
+	if item, err := env.store.Get(ctx, "u1", "entry"); !errors.Is(err, errInjected) || item != nil {
+		t.Fatalf("fallback was returned despite unknown tombstone state: %v", err)
 	}
 }

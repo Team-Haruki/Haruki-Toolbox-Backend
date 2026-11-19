@@ -2,6 +2,8 @@ package adminoauth
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 	"reflect"
 	"slices"
@@ -10,6 +12,7 @@ import (
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	platformOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
@@ -272,6 +275,8 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		helper := newAdminOAuthTestHelper(t)
 		seedAdminOAuthTestUser(t, helper, "u-4", "kratos-4", userSchema.RoleUser)
 		hydra.addConsent("kratos-4", "other-1", "consent-4")
+		hydra.refreshGrants["bot-1"] = []string{"detached-fixture-subject"}
+		hydra.refreshGrants["other-1"] = []string{"unrelated-fixture-subject"}
 		app := newHydraClientHandlerTestAppAs(helper, hydra.config, "super-admin-1", adminCoreModule.RoleSuperAdmin)
 
 		status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/revoke", "")
@@ -280,6 +285,12 @@ func TestAdminRevokeAllPerSubject(t *testing.T) {
 		}
 		var resp adminOAuthClientRevokeResponse
 		decodeUpdatedData(t, envelope, &resp)
+		hydra.mu.Lock()
+		remaining, unrelated := len(hydra.refreshGrants["bot-1"]), len(hydra.refreshGrants["other-1"])
+		hydra.mu.Unlock()
+		if remaining != 0 || unrelated != 1 {
+			t.Fatalf("remaining refresh grants: target=%d unrelated=%d", remaining, unrelated)
+		}
 		if resp.RevokedSubjects != 2 || resp.RevokedAuthorizations != 0 || len(resp.FailedSubjects) != 0 || !resp.RevocationComplete {
 			t.Fatalf("response = %#v", resp)
 		}
@@ -493,5 +504,60 @@ func TestAdminOAuthClientUpdateRequiresReauthentication(t *testing.T) {
 	}
 	if requests := hydra.takeRequests(); len(requests) != 0 {
 		t.Fatalf("update without reauthentication contacted Hydra")
+	}
+}
+
+func TestRevokeAllRefusesIncompleteGrantSafetyChecks(t *testing.T) {
+	for _, stage := range []string{"lock", "purge"} {
+		t.Run(stage, func(t *testing.T) {
+			hydra := newFakeHydraClients(t, confidentialBotClient)
+			helper := newAdminOAuthTestHelper(t)
+			adminURL, err := hydra.config.AdminEndpoint("")
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := platformOAuth2.NewHydraConfig(platformOAuth2.HydraConfigOptions{
+				AdminURL: adminURL,
+				LockClientGrants: func(context.Context, string, bool) (func(), error) {
+					if stage == "lock" {
+						return nil, errors.New("fixture lock failure")
+					}
+					return func() {}, nil
+				},
+				PurgeRefreshGrants: func(context.Context, string) error {
+					return errors.New("fixture purge failure")
+				},
+			})
+			app := newHydraClientHandlerTestAppAs(helper, cfg, "super-admin-1", adminCoreModule.RoleSuperAdmin)
+			status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/revoke", "")
+			if status != http.StatusInternalServerError || !strings.Contains(envelope.Message, map[string]string{"lock": "reserve oauth revocation", "purge": "revoke refresh grants"}[stage]) {
+				t.Fatalf("revocation returned %d: %s", status, envelope.Message)
+			}
+			if got := requestLines(hydra.takeRequests()); !slices.Equal(got, []string{"GET /admin/clients/bot-1"}) {
+				t.Fatalf("revocation requests after safety check failure: %v", got)
+			}
+		})
+	}
+}
+
+func TestRestoreReservesClientBeforeReadingHydra(t *testing.T) {
+	hydra := newFakeHydraClients(t, confidentialBotClient)
+	adminURL, err := hydra.config.AdminEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := platformOAuth2.NewHydraConfig(platformOAuth2.HydraConfigOptions{
+		AdminURL: adminURL,
+		LockClientGrants: func(_ context.Context, client string, exclusive bool) (func(), error) {
+			if client != "bot-1" || !exclusive {
+				t.Errorf("unexpected restore reservation for %q, exclusive=%v", client, exclusive)
+			}
+			return nil, errors.New("fixture lock failure")
+		},
+	})
+	app := newHydraClientHandlerTestAppAs(newAdminOAuthTestHelper(t), cfg, "super-admin-1", adminCoreModule.RoleSuperAdmin)
+	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/restore", "")
+	if status != http.StatusInternalServerError || envelope.Message != "failed to reserve oauth client" || len(hydra.takeRequests()) != 0 {
+		t.Fatalf("restore without an exclusive lock returned %d: %s", status, envelope.Message)
 	}
 }

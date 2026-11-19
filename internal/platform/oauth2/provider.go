@@ -1,6 +1,8 @@
 package oauth2
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,29 +19,33 @@ const (
 // HydraConfigOptions is copied by NewHydraConfig. Callers may freely reuse or
 // mutate the input after construction without changing the resulting config.
 type HydraConfigOptions struct {
-	Provider         string
-	PublicURL        string
-	BrowserURL       string
-	AdminURL         string
-	ResourceAudience string
-	ClientID         string
-	ClientSecret     string
-	RequestTimeout   time.Duration
+	Provider           string
+	PublicURL          string
+	BrowserURL         string
+	AdminURL           string
+	ResourceAudience   string
+	ClientID           string
+	ClientSecret       string
+	RequestTimeout     time.Duration
+	PurgeRefreshGrants func(context.Context, string) error
+	LockClientGrants   func(context.Context, string, bool) (func(), error)
 }
 
 // HydraConfig is an immutable, process-scoped view of Hydra endpoints and
 // credentials. It is constructed by the composition root and explicitly passed
 // to consumers instead of reading mutable global application configuration.
 type HydraConfig struct {
-	provider         string
-	publicURL        string
-	browserURL       string
-	adminURL         string
-	resourceAudience string
-	clientID         string
-	clientSecret     string
-	requestTimeout   time.Duration
-	httpClient       *http.Client
+	provider           string
+	publicURL          string
+	browserURL         string
+	adminURL           string
+	resourceAudience   string
+	clientID           string
+	clientSecret       string
+	requestTimeout     time.Duration
+	purgeRefreshGrants func(context.Context, string) error
+	lockClientGrants   func(context.Context, string, bool) (func(), error)
+	httpClient         *http.Client
 	// noRedirectClient never follows redirects and keeps no cookies: the
 	// device-approval chain inspects every Hydra Location itself and carries
 	// its own per-approval cookie jar. It does not keep connections alive
@@ -64,15 +70,17 @@ func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
 		timeout = defaultHydraRequestTimeout
 	}
 	return &HydraConfig{
-		provider:         provider,
-		publicURL:        publicURL,
-		browserURL:       browserURL,
-		adminURL:         strings.TrimSpace(options.AdminURL),
-		resourceAudience: strings.TrimRight(strings.TrimSpace(options.ResourceAudience), "/"),
-		clientID:         strings.TrimSpace(options.ClientID),
-		clientSecret:     options.ClientSecret,
-		requestTimeout:   timeout,
-		httpClient:       &http.Client{Timeout: timeout},
+		provider:           provider,
+		publicURL:          publicURL,
+		browserURL:         browserURL,
+		adminURL:           strings.TrimSpace(options.AdminURL),
+		resourceAudience:   strings.TrimRight(strings.TrimSpace(options.ResourceAudience), "/"),
+		clientID:           strings.TrimSpace(options.ClientID),
+		clientSecret:       options.ClientSecret,
+		requestTimeout:     timeout,
+		purgeRefreshGrants: options.PurgeRefreshGrants,
+		lockClientGrants:   options.LockClientGrants,
+		httpClient:         &http.Client{Timeout: timeout},
 		noRedirectClient: &http.Client{
 			Timeout:   timeout,
 			Transport: newNoKeepAliveTransport(),
@@ -82,6 +90,22 @@ func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
 		},
 	}
 }
+
+func (c *HydraConfig) PurgeRefreshGrants(ctx context.Context, clientID string) error {
+	if c == nil || c.purgeRefreshGrants == nil {
+		return errors.New("refresh grant store is not configured for Hydra")
+	}
+	return c.purgeRefreshGrants(ctx, clientID)
+}
+
+func (c *HydraConfig) LockClientGrants(ctx context.Context, clientID string, exclusive bool) (func(), error) {
+	if c == nil || c.lockClientGrants == nil {
+		return func() {}, nil
+	}
+	return c.lockClientGrants(ctx, clientID, exclusive)
+}
+
+func (c *HydraConfig) ProtectClientGrants() bool { return c != nil && c.lockClientGrants != nil }
 
 func (c *HydraConfig) Provider() string {
 	if c == nil || c.provider == "" {

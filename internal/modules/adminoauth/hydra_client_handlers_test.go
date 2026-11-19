@@ -1,6 +1,7 @@
 package adminoauth
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -522,13 +523,14 @@ type fakeHydraRequest struct {
 // Consent sessions are kept per subject; revoking or deleting the client removes
 // them, as Hydra's cascade does.
 type fakeHydraClients struct {
-	t        *testing.T
-	config   *harukiOAuth2.HydraConfig
-	mu       sync.Mutex
-	clients  map[string]map[string]any
-	secrets  map[string]string
-	consents map[string][]fakeHydraConsent
-	requests []fakeHydraRequest
+	t             *testing.T
+	config        *harukiOAuth2.HydraConfig
+	mu            sync.Mutex
+	clients       map[string]map[string]any
+	secrets       map[string]string
+	consents      map[string][]fakeHydraConsent
+	refreshGrants map[string][]string
+	requests      []fakeHydraRequest
 
 	// failRevokeSubjects get 500 on consent revocation; failConsentList and
 	// failTokenDelete make those endpoints answer 500.
@@ -549,6 +551,7 @@ func newFakeHydraClients(t *testing.T, clients ...string) *fakeHydraClients {
 		clients:            map[string]map[string]any{},
 		secrets:            map[string]string{},
 		consents:           map[string][]fakeHydraConsent{},
+		refreshGrants:      map[string][]string{},
 		failRevokeSubjects: map[string]bool{},
 	}
 	for _, raw := range clients {
@@ -560,7 +563,14 @@ func newFakeHydraClients(t *testing.T, clients ...string) *fakeHydraClients {
 	}
 	server := httptest.NewServer(http.HandlerFunc(fake.serve))
 	t.Cleanup(server.Close)
-	fake.config = harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: server.URL, RequestTimeout: 5 * time.Second})
+	fake.config = harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: server.URL, RequestTimeout: 5 * time.Second,
+		PurgeRefreshGrants: func(_ context.Context, clientID string) error {
+			fake.mu.Lock()
+			defer fake.mu.Unlock()
+			delete(fake.refreshGrants, clientID)
+			return nil
+		},
+	})
 	return fake
 }
 

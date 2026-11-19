@@ -115,28 +115,28 @@ func HandleUpload(
 	if err := authorize(); err != nil {
 		return fail(uploadStageAccountPolicy, nil, err)
 	}
-	exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(uploadCtx.Server), uploadCtx.expectedGameUserIDString(), uploadCtx.UploadMethod, userID)
-	if err != nil {
-		return fail(uploadStageAccountPolicy, nil, err)
-	}
-	uploadCtx.Settings = settings
-	if userBanned != nil && *userBanned {
-		banMessage := "account owner is banned"
-		if banReason != nil && *banReason != "" {
-			banMessage = "account owner is banned: " + *banReason
+	loadAccountPolicy := func() error {
+		exists, belongs, settings, allowCNMySekai, userBanned, banReason, err := ParseGameAccountSetting(ctx, helper.DBManager.DB, string(uploadCtx.Server), uploadCtx.expectedGameUserIDString(), uploadCtx.UploadMethod, userID)
+		if err != nil {
+			return err
 		}
-		err = fmt.Errorf("%w: %s", errUploadOwnerBanned, banMessage)
-		return fail(uploadStageAccountPolicy, nil, err)
+		if userBanned != nil && *userBanned {
+			banMessage := "account owner is banned"
+			if banReason != nil && *banReason != "" {
+				banMessage += ": " + *banReason
+			}
+			return fmt.Errorf("%w: %s", errUploadOwnerBanned, banMessage)
+		}
+		if userID == nil {
+			if err := validateGameAccountBelonging(belongs); err != nil {
+				return err
+			}
+		}
+		uploadCtx.Settings = settings
+		uploadCtx.AllowPublicAPI = determinePublicAPIPermission(exists, uploadCtx.DataType, settings)
+		return validateCNMysekaiAccess(uploadCtx.DataType, uploadCtx.Server, allowCNMySekai)
 	}
-	if userID != nil {
-		authorized := true
-		belongs = &authorized
-	}
-	if err := validateGameAccountBelonging(belongs); err != nil {
-		return fail(uploadStageAccountPolicy, nil, err)
-	}
-	uploadCtx.AllowPublicAPI = determinePublicAPIPermission(exists, uploadCtx.DataType, uploadCtx.Settings)
-	if err := validateCNMysekaiAccess(uploadCtx.DataType, uploadCtx.Server, allowCNMySekai); err != nil {
+	if err := loadAccountPolicy(); err != nil {
 		return fail(uploadStageAccountPolicy, nil, err)
 	}
 
@@ -164,15 +164,38 @@ func HandleUpload(
 		return fail(uploadStagePreprocess, nil, err)
 	}
 	// Only attribute an identity corroborated by the payload or authenticated ownership.
-	attempt.IdentityVerified = (uploadCtx.ParsedGameUserID != nil && *uploadCtx.ParsedGameUserID == uploadCtx.ExpectedGameUserID) || (userID != nil && belongs != nil && *belongs)
+	attempt.IdentityVerified = (uploadCtx.ParsedGameUserID != nil && *uploadCtx.ParsedGameUserID == uploadCtx.ExpectedGameUserID) || userID != nil
 	if err := resolveAttemptOwner(ctx, helper, uploadCtx); err != nil {
 		return fail(uploadStageAccountPolicy, nil, err)
+	}
+	var release func()
+	if userID != nil {
+		owner := uploadCtx.ToolboxUserID
+		release, err = helper.DBManager.DB.LockGameAccountAndUserMutations(ctx, string(server), uploadCtx.expectedGameUserIDString(), *userID, owner)
+		if err != nil {
+			return fail(uploadStageAccountPolicy, nil, err)
+		}
+		defer release()
+		if err := resolveAttemptOwner(ctx, helper, uploadCtx); err != nil {
+			return fail(uploadStageAccountPolicy, nil, err)
+		}
+		if uploadCtx.ToolboxUserID != owner {
+			return fail(uploadStageAccountPolicy, nil, errUploadOwnershipMismatch)
+		}
 	}
 	if err := authorize(); err != nil {
 		return fail(uploadStageAccountPolicy, nil, err)
 	}
+	if userID != nil {
+		if err := loadAccountPolicy(); err != nil {
+			return fail(uploadStageAccountPolicy, nil, err)
+		}
+	}
 	if err := handler.PersistUploadData(ctx, processedData, uploadCtx.Server, uploadCtx.DataType, &uploadCtx.ExpectedGameUserID); err != nil {
 		return fail(uploadStagePersist, nil, err)
+	}
+	if release != nil {
+		release()
 	}
 	result = &harukiUtils.HandleDataResult{UserID: &uploadCtx.ExpectedGameUserID}
 	if err := validateUploadResult(result); err != nil {

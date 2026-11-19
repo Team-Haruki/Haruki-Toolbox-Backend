@@ -79,6 +79,8 @@ func TestTokenShimHydraUnreachableIs503(t *testing.T) {
 func TestTokenShimApprovedDuringPollChecksClient(t *testing.T) {
 	env := newDeviceTestEnv(t)
 	hdc, flowID := env.issue(testPublicClientID)
+	clientPath := "/admin/clients/" + testPublicClientID
+	initialLookups := len(env.hydra.callsTo(http.MethodGet, clientPath))
 	env.hydra.token = func(url.Values, http.Header) (int, any) {
 		env.approve(flowID, deviceFlowStateApproved, testConsentRequestID)
 		return http.StatusOK, testTokenResponse
@@ -90,8 +92,8 @@ func TestTokenShimApprovedDuringPollChecksClient(t *testing.T) {
 	if env.field(flowID, "st") != deviceFlowStateIssued || env.inUnredeemed(flowID) {
 		t.Fatalf("state = %s, unredeemed = %v", env.field(flowID, "st"), env.inUnredeemed(flowID))
 	}
-	if calls := env.hydra.callsTo(http.MethodGet, "/admin/clients/"+testPublicClientID); len(calls) != 1 {
-		t.Fatalf("client lookups = %d, want 1", len(calls))
+	if lookups := len(env.hydra.callsTo(http.MethodGet, clientPath)) - initialLookups; lookups != 1 {
+		t.Fatalf("client lookups during redemption = %d, want 1", lookups)
 	}
 }
 

@@ -109,6 +109,11 @@ func handleBanUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydraC
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid ban reason")
 		}
 
+		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUserID)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve user ban")
+		}
+		defer release()
 		targetUser, err := apiHelper.DBManager.DB.User.Query().
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(

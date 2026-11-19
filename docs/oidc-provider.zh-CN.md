@@ -41,7 +41,7 @@ https://toolbox-api-direct.haruki.seiunx.com/.well-known/openid-configuration
 支持 `authorization_code` + PKCE（`S256` 与 `plain`），签名算法 RS256。
 
 **Token 端点的两个地址都能用。** Discovery 的 `token_endpoint` 是 `https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/token`：
-它是 Haruki 后端的令牌端点兼容层。未压缩且不超过 64 KiB 的授权码与刷新令牌请求原样转发给 Hydra，响应原样返回。兼容层也处理设备授权许可。
+它是 Haruki 后端的令牌端点兼容层。已启用的客户端可提交未压缩且不超过 64 KiB 的授权码与刷新令牌请求，后端原样转发给 Hydra。旧 `/oauth2/token` 使用同样的校验。兼容层也处理设备授权许可。
 以前写死在配置里的 `/oauth2/token` 仍然可用，不需要改；`private_key_jwt` 的 `aud` 写两个地址中的任何一个都会被接受。
 Issuer、`authorization_endpoint`、`jwks_uri` 与 `userinfo_endpoint` 不变。
 `/.well-known/oauth-authorization-server`（RFC 8414）与上面的 Discovery 公布同样的 `token_endpoint` 和

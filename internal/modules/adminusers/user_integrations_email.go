@@ -32,6 +32,13 @@ func resolveAdminUserEmailUpdateFinalizeOutcome(localMirrorFailed, sessionClearF
 func handleUpdateUserEmail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		const action = adminAuditActionUserEmailUpdate
+		if targetID := strings.TrimSpace(c.Params("target_user_id")); targetID != "" {
+			release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetID)
+			if err != nil {
+				return harukiAPIHelper.ErrorInternal(c, "failed to reserve email update")
+			}
+			defer release()
+		}
 		targetUser, err := resolveManageableTargetUser(c, apiHelper, action)
 		if err != nil {
 			return adminCoreModule.RespondFiberOrInternal(c, err, "failed to resolve target user")

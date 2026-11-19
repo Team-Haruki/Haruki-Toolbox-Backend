@@ -54,7 +54,7 @@ func TestRegisterAdminRoutesRunsSessionMiddlewareOncePerRequest(t *testing.T) {
 		Router:         app,
 		SessionHandler: sessionHandler,
 	}
-	registerAdminRoutes(apiHelper, Dependencies{HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{})})
+	registerAdminRoutes(apiHelper, Dependencies{HydraConfig: harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{}), AdminFrontendURL: "https://admin.example.com"})
 
 	for _, method := range []string{
 		http.MethodGet,
@@ -67,6 +67,7 @@ func TestRegisterAdminRoutesRunsSessionMiddlewareOncePerRequest(t *testing.T) {
 			before := whoamiCalls.Load()
 			req := httptest.NewRequest(method, "/api/admin/__session_middleware_probe__", nil)
 			req.Header.Set("X-Session-Token", "test-session")
+			req.Header.Set("Origin", "https://admin.example.com")
 
 			resp, err := app.Test(req)
 			if err != nil {

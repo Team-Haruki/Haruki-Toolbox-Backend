@@ -67,6 +67,17 @@ func handleRevokeHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true, "targetUserID": targetUser.ID}))
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusNotImplemented, "targeted token revocation is unavailable while oauth2 is backed by hydra", nil)
 		}
+		unlock, lockErr := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if lockErr != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth revocation")
+		}
+		defer unlock()
+		if targetUser == nil {
+			if err := hydraConfig.PurgeRefreshGrants(c.Context(), clientID); err != nil {
+				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRevoke, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonRevokeTokensFailed, map[string]any{"hydraMode": true}))
+				return harukiAPIHelper.ErrorInternal(c, "failed to revoke refresh grants")
+			}
+		}
 		revokedAuthorizations := 0
 		revokedSubjects := 0
 		failedSubjects := []string{}
@@ -165,6 +176,11 @@ func handleRestoreHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientRestore, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client")
+		}
+		defer unlock()
 		updatedClient, err := oauth2Module.SetHydraOAuthClientActive(c.Context(), hydraConfig, clientID, true)
 		if err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {

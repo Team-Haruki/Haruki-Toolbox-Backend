@@ -251,7 +251,18 @@ func (s *inheritService) handleVaultReissue(c fiber.Ctx) error {
 		s.writeAudit(meta, "inherit.vault.reissue", "failure", entryID, map[string]any{"reason": p.Code})
 		return respondProblem(c, p)
 	}
-	unlocked, entry, p := s.openEntry(c.Context(), meta, entryID, req.input())
+	if !s.available() {
+		return fail(errVaultUnavailable)
+	}
+	reserved, release, err := s.vault.ReserveLiveOwner(c.Context(), meta.UserID)
+	if errors.Is(err, inheritvault.ErrNotFound) {
+		return fail(errEntryNotFound)
+	}
+	if err != nil {
+		return fail(errStoreUnavailable)
+	}
+	defer release()
+	unlocked, entry, p := s.openEntry(reserved, meta, entryID, req.input())
 	if p != nil {
 		return fail(p)
 	}
@@ -293,7 +304,7 @@ func (s *inheritService) handleVaultReissue(c fiber.Ctx) error {
 	}
 	expires := s.now().Add(inheritvault.CodeLifetime)
 	resp := &reissueResponse{InheritID: inheritID, Password: newPassword, CodeExpiresAt: &expires}
-	loc, err := s.vault.PutCode(context.WithoutCancel(c.Context()), inheritvault.CodeInput{
+	loc, err := s.vault.PutCode(context.WithoutCancel(reserved), inheritvault.CodeInput{
 		EntryID: entry.ID, UserID: meta.UserID, Server: entry.Server, KeyVersion: keyVersion, PublicKey: publicKey,
 		InheritID: inheritID, Password: newPassword,
 	})

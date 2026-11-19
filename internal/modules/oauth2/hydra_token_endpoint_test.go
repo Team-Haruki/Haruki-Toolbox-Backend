@@ -1,6 +1,9 @@
 package oauth2
 
 import (
+	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,6 +27,59 @@ func hydraTokenAnswer(status int, body map[string]any) func(url.Values, http.Hea
 
 func hydraOAuthError(code string) map[string]any {
 	return map[string]any{"error": code, "error_description": "hydra: " + code}
+}
+
+func TestTokenEndpointsDenyDisabledClientAndPreserveActiveRequest(t *testing.T) {
+	const form = "grant_type=refresh_token&refresh_token=fixture-token"
+	checked := make(chan string, 4)
+	forwarded := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/admin/clients/disabled":
+			_, _ = w.Write([]byte(`{"client_id":"disabled","metadata":{"haruki":{"active":false}}}`))
+		case "/admin/clients/enabled":
+			_, _ = w.Write([]byte(`{"client_id":"enabled","metadata":{"haruki":{"active":true}}}`))
+		case "/oauth2/token":
+			raw := make([]byte, r.ContentLength)
+			_, _ = r.Body.Read(raw)
+			forwarded <- string(raw)
+			_, _ = w.Write([]byte(`{"token_type":"Bearer"}`))
+		}
+	}))
+	defer server.Close()
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: server.URL, PublicURL: server.URL,
+		LockClientGrants: func(_ context.Context, client string, _ bool) (func(), error) {
+			checked <- client
+			return func() {}, nil
+		},
+	})
+	app := fiber.New()
+	handler := handleHydraTokenEndpoint(nil, cfg, DeviceFlowConfig{}, newDeviceFlowStore(nil))
+	for _, path := range []string{"/api/oauth2/token", "/oauth2/token"} {
+		app.Post(path, handler)
+	}
+	for _, path := range []string{"/api/oauth2/token", "/oauth2/token"} {
+		for _, client := range []string{"disabled", "enabled"} {
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form))
+			req.Header.Set("Content-Type", formURLEncodedMediaType)
+			req.SetBasicAuth(client, "fixture-password")
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			want := http.StatusOK
+			if client == "disabled" {
+				want = http.StatusUnauthorized
+			}
+			if resp.StatusCode != want || <-checked != client {
+				t.Fatalf("%s for %s returned %d", path, client, resp.StatusCode)
+			}
+		}
+	}
+	if len(forwarded) != 2 || <-forwarded != form || <-forwarded != form {
+		t.Fatal("unexpected token forwarding")
+	}
 }
 
 // The non-device branch must forward exactly what handleHydraPublicProxy
@@ -161,6 +217,7 @@ func TestTokenShimHydra401PassthroughWithoutStateReveal(t *testing.T) {
 	hdc, flowID := env.issue(testConfidentialClientID)
 	env.approve(flowID, deviceFlowStateApproved, testConsentRequestID)
 	env.setFlow(flowID, "st", deviceFlowStateDenied, "dres", "user_denied")
+	lastPoll, interval, slowDowns := env.field(flowID, "lpoll"), env.field(flowID, "ivl"), env.field(flowID, "sdn")
 	env.hydra.token = hydraTokenAnswer(http.StatusUnauthorized, map[string]any{"error": "invalid_client", "error_description": "Client authentication failed"})
 
 	form := url.Values{"grant_type": {HydraGrantTypeDeviceCode}, "device_code": {hdc}}
@@ -181,6 +238,9 @@ func TestTokenShimHydra401PassthroughWithoutStateReveal(t *testing.T) {
 	if env.field(flowID, "st") != deviceFlowStateDenied || !env.inUnredeemed(flowID) {
 		t.Fatal("a 401 changed the flow")
 	}
+	if env.field(flowID, "lpoll") != lastPoll || env.field(flowID, "ivl") != interval || env.field(flowID, "sdn") != slowDowns {
+		t.Fatal("unauthenticated polling changed the confidential flow's rate state")
+	}
 	if calls := env.hydra.callsTo(http.MethodDelete, "/admin/oauth2/auth/sessions/consent"); len(calls) != 0 {
 		t.Fatal("a 401 triggered a revocation")
 	}
@@ -192,6 +252,55 @@ func TestTokenShimHydra401PassthroughWithoutStateReveal(t *testing.T) {
 		t.Fatalf("Hydra received %q", call.Body)
 	}
 	env.assertNoSecretLeaks()
+}
+
+func TestConfidentialDevicePollingAppliesPacingAfterAuthentication(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	hdc, flowID := env.issue(testConfidentialClientID)
+	env.hydra.token = hydraTokenAnswer(http.StatusBadRequest, map[string]any{"error": oauthErrorAuthorizationPending})
+	if resp := env.poll(hdc, testConfidentialClientID); resp.oauthError(t) != oauthErrorAuthorizationPending || env.field(flowID, "lpoll") == "0" {
+		t.Fatalf("first authenticated poll = %s", resp.Body)
+	}
+	if resp := env.poll(hdc, testConfidentialClientID); resp.oauthError(t) != oauthErrorSlowDown || env.field(flowID, "sdn") != "1" {
+		t.Fatalf("early authenticated poll = %s", resp.Body)
+	}
+}
+
+func TestConfidentialDevicePollHasIndependentAdmission(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	publicCode, _ := env.issue(testPublicClientID)
+	confidentialCode, _ := env.issue(testConfidentialClientID)
+	publicURL, err := env.hydraConfig.PublicEndpoint("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked := make(chan string, 2)
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		PublicURL: publicURL,
+		AdminURL:  publicURL,
+		LockClientGrants: func(_ context.Context, client string, exclusive bool) (func(), error) {
+			if exclusive {
+				t.Error("poll used an exclusive reservation")
+			}
+			locked <- client
+			return func() {}, nil
+		},
+	})
+	env.app = fiber.New()
+	env.app.Post("/api/oauth2/token", handleHydraTokenEndpoint(env.apiHelper, cfg, env.cfg, env.store))
+	for range cap(tokenGrantAdmission) {
+		tokenGrantAdmission <- struct{}{}
+		defer func() { <-tokenGrantAdmission }()
+	}
+	if got := env.poll(publicCode, testPublicClientID); got.Status != http.StatusServiceUnavailable {
+		t.Fatalf("public poll bypassed admission: %d", got.Status)
+	}
+	if got := env.poll(confidentialCode, testConfidentialClientID); got.oauthError(t) != oauthErrorAuthorizationPending {
+		t.Fatalf("public traffic exhausted confidential admission: %d %s", got.Status, got.Body)
+	}
+	if len(locked) != 1 || <-locked != testConfidentialClientID {
+		t.Fatal("the admitted confidential poll must hold the grant lock")
+	}
 }
 
 func TestTokenShimHydra200AfterDenyRevokesAndDenies(t *testing.T) {
@@ -294,6 +403,29 @@ func TestTokenShimIssuesTokenForApprovedFlow(t *testing.T) {
 			}
 			env.assertNoSecretLeaks()
 		})
+	}
+}
+
+func TestTokenShimWithholdsWriteTokensWhenPolicyChangesDuringRedemption(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	setWritePolicy := func(allow bool) {
+		metadata := map[string]any{"haruki": map[string]any{"active": true, "device": map[string]any{"allow_write": allow}}}
+		env.hydra.setClient(testDeviceClient(testPublicClientID, "none", testDeviceScope+" game-data:write", testDeviceGrantTypes, metadata))
+	}
+	setWritePolicy(true)
+	hdc, flowID := env.issue(testPublicClientID)
+	env.setFlow(flowID, "scope", testDeviceScope+" game-data:write")
+	env.approve(flowID, deviceFlowStateApproved, testConsentRequestID)
+	env.hydra.token = func(url.Values, http.Header) (int, any) {
+		setWritePolicy(false)
+		return http.StatusOK, testTokenResponse
+	}
+	resp := env.poll(hdc, testPublicClientID)
+	if resp.oauthError(t) != oauthErrorAccessDenied || env.field(flowID, "st") != deviceFlowStateDenied {
+		t.Fatalf("old write permission accepted: status=%d state=%s", resp.Status, env.field(flowID, "st"))
+	}
+	if calls := env.hydra.callsTo(http.MethodDelete, "/admin/oauth2/auth/sessions/consent"); len(calls) != 1 {
+		t.Fatalf("revoked %d consents, want one", len(calls))
 	}
 }
 
@@ -492,5 +624,106 @@ func TestTokenShimSettleFailureStillHandsOutTokens(t *testing.T) {
 	}
 	if !env.inUnredeemed(flowID) || env.field(flowID, "st") != deviceFlowStateApproved {
 		t.Fatal("an unsettled flow must stay unredeemed for the reaper")
+	}
+}
+
+func TestProtectedTokenRoutesRejectBeforeForwarding(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			t.Error("a rejected token request reached Hydra")
+		}
+		http.Error(w, "fixture", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{PublicURL: server.URL, AdminURL: server.URL,
+		LockClientGrants: func(_ context.Context, client string, _ bool) (func(), error) {
+			if client == "lock-unavailable" {
+				return nil, errors.New("fixture lock failure")
+			}
+			return func() {}, nil
+		},
+	})
+	app := fiber.New()
+	handler := handleHydraTokenEndpoint(nil, cfg, DeviceFlowConfig{}, newDeviceFlowStore(nil))
+	app.Post("/api/oauth2/token", handler)
+	app.Post("/oauth2/token", handler)
+	for _, tc := range []struct {
+		name, route, body, mediaType, encoding string
+		status                                 int
+	}{
+		{"unsupported encoding", "/api/oauth2/token", "fixture", formURLEncodedMediaType, "gzip", http.StatusUnsupportedMediaType},
+		{"legacy device route", "/oauth2/token", "grant_type=" + HydraGrantTypeDeviceCode, formURLEncodedMediaType, "", http.StatusBadRequest},
+		{"multipart", "/api/oauth2/token", "", "multipart/form-data; boundary=fixture", "", http.StatusBadRequest},
+		{"invalid form", "/api/oauth2/token", "grant_type=%", formURLEncodedMediaType, "", http.StatusBadRequest},
+		{"ambiguous grant", "/api/oauth2/token", "grant_type=refresh_token&grant_type=refresh_token&client_id=fixture", formURLEncodedMediaType, "", http.StatusBadRequest},
+		{"missing identity", "/api/oauth2/token", "grant_type=refresh_token", formURLEncodedMediaType, "", http.StatusUnauthorized},
+		{"lock outage", "/api/oauth2/token", "grant_type=refresh_token&client_id=lock-unavailable", formURLEncodedMediaType, "", http.StatusServiceUnavailable},
+		{"provider outage", "/api/oauth2/token", "grant_type=refresh_token&client_id=provider-unavailable", formURLEncodedMediaType, "", http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.route, strings.NewReader(tc.body))
+			req.Header.Set(fiber.HeaderContentType, tc.mediaType)
+			req.Header.Set(fiber.HeaderContentEncoding, tc.encoding)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
+			}
+		})
+	}
+
+	for range cap(tokenGrantAdmission) {
+		tokenGrantAdmission <- struct{}{}
+	}
+	defer func() {
+		for range cap(tokenGrantAdmission) {
+			<-tokenGrantAdmission
+		}
+	}()
+	req := httptest.NewRequest(http.MethodPost, "/oauth2/token", strings.NewReader("grant_type=refresh_token&client_id=fixture"))
+	req.Header.Set(fiber.HeaderContentType, formURLEncodedMediaType)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("saturated grant gate returned %d", resp.StatusCode)
+	}
+}
+
+func TestTokenClientIdentityMustBeUnambiguous(t *testing.T) {
+	assertion := func(claims string) string {
+		return "fixture." + base64.RawURLEncoding.EncodeToString([]byte(claims)) + ".fixture"
+	}
+	valid := assertion(`{"sub":"fixture","iss":"fixture"}`)
+	for _, tc := range []struct {
+		name, id, proof, auth string
+		ok                    bool
+	}{
+		{"form identity", "fixture", "", "", true},
+		{"assertion identity", "", valid, "", true},
+		{"same identity", "fixture", valid, "", true},
+		{"different form identity", "different", valid, "", false},
+		{"malformed authentication", "fixture", valid, "unsupported", false},
+		{"malformed assertion", "", "not-an-assertion", "", false},
+		{"inconsistent assertion", "", assertion(`{"sub":"fixture","iss":"different"}`), "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			form := url.Values{}
+			if tc.id != "" {
+				form.Set("client_id", tc.id)
+			}
+			if tc.proof != "" {
+				form.Set("client_assertion", tc.proof)
+			}
+			got, ok := tokenRequestClientID(tc.auth, form)
+			if ok != tc.ok || (ok && got != "fixture") {
+				t.Fatalf("got %q/%t", got, ok)
+			}
+		})
 	}
 }

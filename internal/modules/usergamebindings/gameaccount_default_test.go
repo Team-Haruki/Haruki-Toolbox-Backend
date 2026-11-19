@@ -2,7 +2,11 @@ package usergamebindings
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -11,6 +15,8 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 
+	"entgo.io/ent"
+	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -24,6 +30,43 @@ func newDefaultBindingTestHelper(t *testing.T, dbName string) (*harukiAPIHelper.
 		DBManager: &database.HarukiToolboxDBManager{DB: client},
 	}
 	return helper, client, context.Background()
+}
+
+func TestDefaultBindingUpdateRollsBackWhenTargetIsNoLongerVerified(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, "binding-default-guard")
+	createDefaultBindingTestUser(t, db, ctx, "owner")
+	createBindingViaSave(t, helper, ctx, "jp", "111", "owner")
+	createBindingViaSave(t, helper, ctx, "jp", "222", "owner")
+	targetID := db.GameAccountBinding.Query().Where(gameaccountbinding.GameUserIDEQ("222")).OnlyIDX(ctx)
+	db.GameAccountBinding.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			binding := mutation.(*postgresql.GameAccountBindingMutation)
+			if value, ok := binding.IsDefault(); binding.Op().Is(ent.OpUpdateOne) && ok && value {
+				if err := binding.Client().GameAccountBinding.Update().Where(gameaccountbinding.IDEQ(targetID)).SetVerified(false).Exec(ctx); err != nil {
+					return nil, err
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	app := fiber.New()
+	app.Put("/:server/:game_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleUpdateGameAccountBinding(helper))
+	req := httptest.NewRequest(http.MethodPut, "/jp/222", strings.NewReader(`{"suite":{},"mysekai":{},"isDefault":true}`))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	response, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", response.StatusCode)
+	}
+	if !queryBindingIsDefault(t, db, ctx, "jp", "111") || queryBindingIsDefault(t, db, ctx, "jp", "222") {
+		t.Fatal("the rejected update changed the user's default binding")
+	}
 }
 
 func createDefaultBindingTestUser(t *testing.T, client *postgresql.Client, ctx context.Context, id string) {
@@ -130,5 +173,89 @@ func TestTransferredBindingBecomesDefaultWhenNewOwnerHasNone(t *testing.T) {
 
 	if !queryBindingIsDefault(t, client, ctx, "jp", "111") {
 		t.Fatalf("binding transferred to an owner without a default should become their default")
+	}
+}
+
+func TestUnlinkAndRebindNeverRestoresOldGrants(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, "binding-grant-lifecycle")
+	for _, id := range []string{"owner", "delegate"} {
+		createDefaultBindingTestUser(t, db, ctx, id)
+	}
+	createBindingViaSave(t, helper, ctx, "jp", "123", "owner")
+	giveGrant := func() {
+		t.Helper()
+		if _, err := db.UpsertGameAccountDataGrant(ctx, "owner", "delegate", "jp", "123", "suite", time.Now().Add(time.Hour), []string{"read", "write"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	giveGrant()
+	app := fiber.New()
+	app.Delete("/:server/:game_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleDeleteGameAccountBinding(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/jp/123", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
+		t.Fatalf("unlink status=%d, remaining grants=%d", resp.StatusCode, db.GameAccountDataGrant.Query().CountX(ctx))
+	}
+	giveGrant() // Legacy orphan from a binding deleted by a previous release.
+	createBindingViaSave(t, helper, ctx, "jp", "123", "owner")
+	access, err := db.CanWriteGameAccountData(ctx, "delegate", "jp", "123", "suite", time.Now())
+	if err != nil || access.Allowed || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
+		t.Fatalf("old grant survived recreation: %+v, %v", access, err)
+	}
+}
+
+func TestBindingPrivacyAndDeleteDoNotCommitAfterOwnershipChanged(t *testing.T) {
+	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			helper, db, ctx := newDefaultBindingTestHelper(t, "binding-write-ownership-"+method)
+			createDefaultBindingTestUser(t, db, ctx, "owner")
+			createDefaultBindingTestUser(t, db, ctx, "new-owner")
+			createBindingViaSave(t, helper, ctx, "jp", "42", "owner")
+			binding := db.GameAccountBinding.Query().OnlyX(ctx)
+			db.GameAccountBinding.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					op := mutation.Op()
+					if op.Is(ent.OpUpdateOne | ent.OpDeleteOne) {
+						writer := mutation.(*postgresql.GameAccountBindingMutation).Client()
+						if err := writer.GameAccountBinding.Update().Where(gameaccountbinding.IDEQ(binding.ID)).SetUserID("new-owner").Exec(ctx); err != nil {
+							return nil, err
+						}
+					}
+					return next.Mutate(ctx, mutation)
+				})
+			})
+			app := fiber.New()
+			app.Use(func(c fiber.Ctx) error { c.Locals("userID", "owner"); return c.Next() })
+			app.Put("/:server/:game_user_id", handleUpdateGameAccountBinding(helper))
+			app.Delete("/:server/:game_user_id", handleDeleteGameAccountBinding(helper))
+			body := `{"suite":{},"mysekai":{}}`
+			for _, tc := range []struct {
+				path   string
+				status int
+			}{
+				{"/jp/not-numeric", http.StatusBadRequest},
+				{"/jp/00042", http.StatusNotFound},
+			} {
+				req := httptest.NewRequest(method, tc.path, strings.NewReader(body))
+				req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+				response, err := app.Test(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = response.Body.Close()
+				if response.StatusCode != tc.status {
+					t.Fatalf("%s %s returned %d, want %d", method, tc.path, response.StatusCode, tc.status)
+				}
+			}
+			if _, err := db.GameAccountBinding.Get(ctx, binding.ID); err != nil {
+				t.Fatalf("stale owner removed the binding: %v", err)
+			}
+		})
 	}
 }

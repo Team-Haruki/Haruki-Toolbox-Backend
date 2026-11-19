@@ -1,18 +1,23 @@
 package adminusers
 
 import (
+	"context"
 	json "encoding/json/v2"
 
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"entgo.io/ent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -51,6 +56,121 @@ func TestHandleListUsersScopesResultsBeforePagination(t *testing.T) {
 	}
 	if payload.UpdatedData.Items[0].UserID != "ordinary-user" {
 		t.Fatalf("visible user = %q, want ordinary-user", payload.UpdatedData.Items[0].UserID)
+	}
+}
+
+func TestBatchBanGuardMissSkipsAccessRevocation(t *testing.T) {
+	helper := newAdminUserTicketNotificationTestHelper(t)
+	db := helper.DBManager.DB
+	seedAdminUserTicketNotificationTestUser(t, helper, "target", "target", "target@example.com", roleUser, false, false)
+	db.User.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if banned, ok := mutation.(*postgresql.UserMutation).Banned(); mutation.Op().Is(ent.OpUpdate) && ok && banned {
+				return 0, nil
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	var revocations atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		revocations.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+	hydra := oauth2.NewHydraConfig(oauth2.HydraConfigOptions{Provider: oauth2.ProviderHydra, AdminURL: server.URL})
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	}, handleBatchBanUsers(helper, hydra))
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"userIds":["target"]}`))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	response, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var payload harukiAPIHelper.GenericResponse[batchUserOperationResponse]
+	if err := json.UnmarshalRead(response.Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || payload.UpdatedData == nil || payload.UpdatedData.Failed != 1 || payload.UpdatedData.Success != 0 {
+		t.Fatalf("status = %d, batch = %+v", response.StatusCode, payload.UpdatedData)
+	}
+	if revocations.Load() != 0 || db.User.GetX(t.Context(), "target").Banned {
+		t.Fatal("a missed ban mutation changed the target's access")
+	}
+}
+
+func TestManagedUserMutationsWaitForTargetRole(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		handler    func(*harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler
+	}{
+		{"password", `{}`, handleResetUserPassword},
+		{"email", `{"email":"updated@example.test"}`, handleUpdateUserEmail},
+		{"ios-regenerate", `{}`, handleRegenerateUserIOSUploadCode},
+		{"ios-clear", `{}`, handleClearUserIOSUploadCode},
+		{"force-logout", `{}`, handleForceLogoutUser},
+		{"revoke-oauth", `{"revokeAll":true}`, func(h *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
+			return handleRevokeUserOAuth(h, nil)
+		}},
+		{"social-link", `{}`, handleUpsertUserSocialPlatform},
+		{"social-unlink", `{}`, handleClearUserSocialPlatform},
+		{"social-grant", `{}`, handleUpsertUserAuthorizedSocialPlatform},
+		{"social-revoke", `{}`, handleDeleteUserAuthorizedSocialPlatform},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			helper := newAdminUserTicketNotificationTestHelper(t)
+			db := helper.DBManager.DB
+			db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetKratosIdentityID("identity-target").SaveX(t.Context())
+			var providerCalls atomic.Int32
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				providerCalls.Add(1)
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			defer provider.Close()
+			helper.SessionHandler = harukiAPIHelper.NewSessionHandler(nil, "test-sign-key")
+			helper.SessionHandler.KratosAdminURL = provider.URL
+
+			entered := make(chan struct{})
+			app := fiber.New()
+			app.Post("/:target_user_id", func(c fiber.Ctx) error {
+				c.Locals("userID", "actor")
+				c.Locals("userRole", roleAdmin)
+				close(entered)
+				return c.Next()
+			}, tc.handler(helper))
+			release, err := db.LockUserMutations(t.Context(), "target")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer release()
+			status := make(chan int, 1)
+			go func() {
+				req := httptest.NewRequest(http.MethodPost, "/target", strings.NewReader(tc.body))
+				req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+				resp, err := app.Test(req)
+				if err != nil {
+					status <- 0
+					return
+				}
+				_ = resp.Body.Close()
+				status <- resp.StatusCode
+			}()
+			<-entered
+			select {
+			case code := <-status:
+				t.Fatalf("credential action returned %d while the role reservation was held", code)
+			case <-time.After(30 * time.Millisecond):
+			}
+			db.User.UpdateOneID("target").SetRole(user.RoleSuperAdmin).SaveX(t.Context())
+			release()
+			if code := <-status; code != http.StatusForbidden || providerCalls.Load() != 0 {
+				t.Fatalf("after promotion: status=%d, provider calls=%d", code, providerCalls.Load())
+			}
+		})
 	}
 }
 
@@ -321,5 +441,37 @@ func TestBuildAdminUserListItems(t *testing.T) {
 	}
 	if items[1].AllowCNMysekai {
 		t.Fatalf("items[1].AllowCNMysekai = true, want false")
+	}
+}
+
+func TestSingleAndBatchRoleChangesCommitOnVisibleAccounts(t *testing.T) {
+	helper := newAdminUserTicketNotificationTestHelper(t)
+	db := helper.DBManager.DB
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").ExecX(t.Context())
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleSuperAdmin)
+		return c.Next()
+	})
+	app.Put("/role/:target_user_id", handleUpdateUserRole(helper))
+	app.Post("/batch", handleBatchUpdateUserRole(helper))
+	for _, tc := range []struct {
+		method, path, body string
+		role               user.Role
+	}{
+		{http.MethodPut, "/role/target", `{"role":"admin"}`, user.RoleAdmin},
+		{http.MethodPost, "/batch", `{"userIds":["target"],"role":"user"}`, user.RoleUser},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || db.User.GetX(t.Context(), "target").Role != tc.role {
+			t.Fatalf("%s returned %d without saving the role", tc.path, resp.StatusCode)
+		}
 	}
 }

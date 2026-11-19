@@ -340,3 +340,45 @@ func ensureAdminCanManageBindingOwner(actorUserID, actorRole string, row *postgr
 	}
 	return adminCoreModule.EnsureAdminCanManageTargetUser(actorUserID, actorRole, row.Edges.User.ID, string(row.Edges.User.Role))
 }
+
+func mutateManagedGameBinding(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, row *postgresql.GameAccountBinding, actorID, actorRole, targetID string) error {
+	if row.Edges.User == nil {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	db := helper.DBManager.DB
+	ownerID := row.Edges.User.ID
+	release, err := db.LockGameAccountAndUserMutations(c.Context(), row.Server, row.GameUserID, ownerID, targetID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "binding change in progress")
+	}
+	defer release()
+	current, err := queryGameBindingWithOwner(c, helper, row.Server, row.GameUserID)
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	if err != nil {
+		return err
+	}
+	if current.ID != row.ID || current.Edges.User == nil || current.Edges.User.ID != ownerID {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	if err := ensureAdminCanManageBindingOwner(actorID, actorRole, current); err != nil {
+		return err
+	}
+	owner := gameaccountbinding.HasUserWith(userSchema.IDEQ(ownerID))
+	if targetID != "" {
+		if _, err := queryManageableTargetUserByID(c, helper, actorID, actorRole, targetID); err != nil {
+			return err
+		}
+	}
+	err = db.ChangeGameAccountBinding(c.Context(), current.Server, current.GameUserID, true, func(db *postgresql.Client) error {
+		if targetID == "" {
+			return db.GameAccountBinding.DeleteOneID(current.ID).Where(owner).Exec(c.Context())
+		}
+		return db.GameAccountBinding.UpdateOneID(current.ID).Where(owner).SetUserID(targetID).ClearSponsorFrameID().Exec(c.Context())
+	})
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusConflict, "binding owner changed")
+	}
+	return err
+}

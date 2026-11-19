@@ -70,6 +70,7 @@ type Dependencies struct {
 	MiscAssets                miscModule.AssetsConfig
 	TicketNotifications       ticketsModule.NotificationConfig
 	HydraConfig               *harukiOAuth2.HydraConfig
+	AdminFrontendURL          string
 	// OAuth2DeviceFlow is the startup device-flow configuration; RegisterRoutes
 	// adds the runtime switch to it.
 	OAuth2DeviceFlow  oauth2Module.DeviceFlowConfig
@@ -157,6 +158,7 @@ func oauth2DeviceFlowRuntimeGate(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 
 func registerAdminRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, dependencies Dependencies) {
 	adminGroup := adminCoreModule.AdminRootGroup(apiHelper)
+	adminGroup.Use(adminCoreModule.RequireTrustedBrowserOrigin(dependencies.AdminFrontendURL))
 	requireReauth := adminModule.RequireRecentAdminReauth(apiHelper)
 	adminModule.RegisterAdminRoutes(apiHelper, adminGroup)
 	adminUsersModule.RegisterAdminUserRoutes(apiHelper, adminGroup, dependencies.HydraConfig, dependencies.UserDataBuilder, requireReauth)

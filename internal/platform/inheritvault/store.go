@@ -1,6 +1,7 @@
 package inheritvault
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultentry"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaultkey"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/inheritvaulttombstone"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -30,11 +32,12 @@ const (
 	purposeCredential = "credential"
 	purposeCode       = "code"
 
-	fallbackKeyPrefix   = "inherit:vault:fallback:"
-	fallbackIndexKey    = "inherit:vault:fallback:index"
-	fallbackUserPrefix  = "inherit:vault:fallback:user:"
-	dbWriteAttemptLimit = 4
-	dbWriteTimeout      = 5 * time.Second
+	fallbackKeyPrefix       = "inherit:vault:fallback:"
+	fallbackIndexKey        = "inherit:vault:fallback:index"
+	fallbackUserPrefix      = "inherit:vault:fallback:user:"
+	fallbackTombstonePrefix = "inherit:vault:destroyed:"
+	dbWriteAttemptLimit     = 4
+	dbWriteTimeout          = 5 * time.Second
 )
 
 var (
@@ -266,12 +269,25 @@ func (s *Store) ResetKey(ctx context.Context, userID string) (int, error) {
 	if !s.Available() {
 		return 0, ErrUnavailable
 	}
-	destroyed, err := s.db.InheritVaultEntry.Delete().Where(inheritvaultentry.UserIDEQ(userID)).Exec(ctx)
+	ctx, release, err := s.reserveOwner(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
-	if _, err := s.db.InheritVaultKey.Delete().Where(inheritvaultkey.UserIDEQ(userID)).Exec(ctx); err != nil {
-		return destroyed, err
+	defer release()
+	tx, err := s.db.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	destroyed, err := tx.InheritVaultEntry.Delete().Where(inheritvaultentry.UserIDEQ(userID)).Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.InheritVaultKey.Delete().Where(inheritvaultkey.UserIDEQ(userID)).Exec(ctx); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
 	}
 	if s.redis != nil {
 		ids, err := s.redis.SMembers(ctx, fallbackUserPrefix+userID).Result()
@@ -348,9 +364,16 @@ func (s *Store) PutCredential(ctx context.Context, in CredentialInput) (Location
 		KeyVersion: in.KeyVersion, WrapScheme: EntryWrapScheme, CredentialSealed: sealed,
 		CredentialExpiresAt: now.Add(CredentialRetention), CreatedAt: now, UpdatedAt: now,
 	}
-	dbErr := s.retryDB(ctx, func(ctx context.Context) error { return s.insertEntry(ctx, rec) })
+	reserved, release, dbErr := s.reserveOwner(ctx, in.UserID)
+	if dbErr == nil {
+		defer release()
+		dbErr = s.retryDB(reserved, func(ctx context.Context) error { return s.insertEntry(ctx, rec) })
+	}
 	if dbErr == nil {
 		return LocationDB, nil
+	}
+	if errors.Is(dbErr, ErrNotFound) || errors.Is(dbErr, ErrStale) || postgresql.IsConstraintError(dbErr) {
+		return "", dbErr
 	}
 	if err := s.putFallback(rec); err != nil {
 		return "", errors.Join(dbErr, err)
@@ -392,14 +415,34 @@ func (s *Store) PutCode(ctx context.Context, in CodeInput) (Location, error) {
 	now := s.now()
 	expires := now.Add(CodeLifetime)
 	var inDB bool
-	dbErr := s.retryDB(ctx, func(ctx context.Context) error {
-		n, err := s.db.InheritVaultEntry.Update().
-			Where(inheritvaultentry.IDEQ(in.EntryID), inheritvaultentry.UserIDEQ(in.UserID), inheritvaultentry.DestroyedAtIsNil()).
-			SetCodeSealed(sealed).SetCodeIssuedAt(now).SetCodeExpiresAt(expires).SetUpdatedAt(now).
-			Save(ctx)
-		inDB = n > 0
-		return err
-	})
+	reserved, release, dbErr := s.reserveOwner(ctx, in.UserID)
+	if dbErr == nil {
+		defer release()
+		dbErr = s.retryDB(reserved, func(ctx context.Context) error {
+			destroyed, err := s.destroyed(ctx, in.UserID, in.EntryID)
+			if err != nil {
+				return err
+			}
+			if destroyed {
+				return ErrNotFound
+			}
+			if err := s.requireKeyVersion(ctx, in.UserID, in.KeyVersion); err != nil {
+				if errors.Is(err, ErrStale) {
+					return ErrNotFound
+				}
+				return err
+			}
+			n, err := s.db.InheritVaultEntry.Update().
+				Where(inheritvaultentry.IDEQ(in.EntryID), inheritvaultentry.UserIDEQ(in.UserID), inheritvaultentry.DestroyedAtIsNil(), inheritvaultentry.KeyVersionEQ(in.KeyVersion)).
+				SetCodeSealed(sealed).SetCodeIssuedAt(now).SetCodeExpiresAt(expires).SetUpdatedAt(now).
+				Save(ctx)
+			inDB = n > 0
+			return err
+		})
+	}
+	if errors.Is(dbErr, ErrNotFound) || errors.Is(dbErr, ErrStale) {
+		return "", dbErr
+	}
 	if dbErr == nil && inDB {
 		return LocationDB, nil
 	}
@@ -411,7 +454,7 @@ func (s *Store) PutCode(ctx context.Context, in CodeInput) (Location, error) {
 		}
 		rec = &fallbackRecord{ID: in.EntryID, UserID: in.UserID, Server: in.Server, KeyVersion: in.KeyVersion, WrapScheme: EntryWrapScheme, CreatedAt: now}
 	}
-	if rec.UserID != in.UserID {
+	if rec.UserID != in.UserID || rec.KeyVersion != in.KeyVersion {
 		return "", ErrNotFound
 	}
 	rec.CodeSealed, rec.CodeIssuedAt, rec.CodeExpiresAt, rec.UpdatedAt = sealed, &now, &expires, now
@@ -439,11 +482,24 @@ func (s *Store) retryDB(ctx context.Context, write func(context.Context) error) 
 		if err == nil {
 			return nil
 		}
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrStale) || postgresql.IsConstraintError(err) {
+			return err
+		}
 	}
 	return err
 }
 
 func (s *Store) insertEntry(ctx context.Context, rec fallbackRecord) error {
+	destroyed, err := s.destroyed(ctx, rec.UserID, rec.ID)
+	if err != nil {
+		return err
+	}
+	if destroyed {
+		return ErrNotFound
+	}
+	if err := s.requireKeyVersion(ctx, rec.UserID, rec.KeyVersion); err != nil {
+		return err
+	}
 	create := s.db.InheritVaultEntry.Create().
 		SetID(rec.ID).
 		SetUserID(rec.UserID).
@@ -459,7 +515,19 @@ func (s *Store) insertEntry(ctx context.Context, rec fallbackRecord) error {
 	if rec.CodeSealed != nil {
 		create.SetCodeSealed(rec.CodeSealed).SetNillableCodeIssuedAt(rec.CodeIssuedAt).SetNillableCodeExpiresAt(rec.CodeExpiresAt)
 	}
-	return create.Exec(ctx)
+	err = create.Exec(ctx)
+	if !postgresql.IsConstraintError(err) {
+		return err
+	}
+	// The write may have committed before its response was lost. Accept only
+	// the same sealed credential from the same owner and key.
+	row, readErr := s.db.InheritVaultEntry.Query().
+		Where(inheritvaultentry.IDEQ(rec.ID), inheritvaultentry.UserIDEQ(rec.UserID),
+			inheritvaultentry.KeyVersionEQ(rec.KeyVersion), inheritvaultentry.DestroyedAtIsNil()).Only(ctx)
+	if readErr == nil && bytes.Equal(row.CredentialSealed, rec.CredentialSealed) {
+		return nil
+	}
+	return err
 }
 
 func (s *Store) putFallback(rec fallbackRecord) error {
@@ -480,47 +548,88 @@ func (s *Store) putFallback(rec fallbackRecord) error {
 			time.Sleep(dbWriteBackoff(attempt))
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
-		_, lastErr = s.redis.TxPipelined(ctx, func(p redis.Pipeliner) error {
-			p.Set(ctx, fallbackKeyPrefix+rec.ID, body, ttl)
-			p.SAdd(ctx, fallbackIndexKey, rec.ID)
-			p.SAdd(ctx, fallbackUserPrefix+rec.UserID, rec.ID)
-			return nil
-		})
+		marker := fallbackTombstonePrefix + rec.UserID + ":" + rec.ID
+		lastErr = s.redis.Watch(ctx, func(tx *redis.Tx) error {
+			destroyed, err := tx.Exists(ctx, marker).Result()
+			if err != nil {
+				return err
+			}
+			if destroyed != 0 {
+				return ErrNotFound
+			}
+			_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+				p.Set(ctx, fallbackKeyPrefix+rec.ID, body, ttl)
+				p.SAdd(ctx, fallbackIndexKey, rec.ID)
+				p.SAdd(ctx, fallbackUserPrefix+rec.UserID, rec.ID)
+				return nil
+			})
+			return err
+		}, marker)
 		cancel()
 		if lastErr == nil {
 			return nil
+		}
+		if errors.Is(lastErr, ErrNotFound) {
+			return lastErr
 		}
 	}
 	return lastErr
 }
 
 func (s *Store) getFallback(ctx context.Context, id string) (*fallbackRecord, error) {
+	rec, _, err := s.getFallbackSnapshot(ctx, id)
+	return rec, err
+}
+
+func (s *Store) getFallbackSnapshot(ctx context.Context, id string) (*fallbackRecord, []byte, error) {
 	if s.redis == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	body, err := s.redis.Get(ctx, fallbackKeyPrefix+id).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var rec fallbackRecord
 	if err := json.Unmarshal(body, &rec); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &rec, nil
+	return &rec, body, nil
 }
 
 func (s *Store) dropFallback(ctx context.Context, id, userID string) error {
 	_, err := s.redis.TxPipelined(ctx, func(p redis.Pipeliner) error {
-		p.Del(ctx, fallbackKeyPrefix+id)
-		p.SRem(ctx, fallbackIndexKey, id)
-		if userID != "" {
-			p.SRem(ctx, fallbackUserPrefix+userID, id)
-		}
-		return nil
+		return removeFallback(ctx, p, id, userID)
 	})
+	return err
+}
+
+func removeFallback(ctx context.Context, p redis.Pipeliner, id, userID string) error {
+	p.Del(ctx, fallbackKeyPrefix+id)
+	p.SRem(ctx, fallbackIndexKey, id)
+	if userID != "" {
+		p.SRem(ctx, fallbackUserPrefix+userID, id)
+	}
+	return nil
+}
+
+func (s *Store) dropFallbackSnapshot(ctx context.Context, id, userID string, snapshot []byte) error {
+	key := fallbackKeyPrefix + id
+	err := s.redis.Watch(ctx, func(tx *redis.Tx) error {
+		current, err := tx.Get(ctx, key).Bytes()
+		if err != nil || !bytes.Equal(current, snapshot) {
+			return err
+		}
+		_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+			return removeFallback(ctx, p, id, userID)
+		})
+		return err
+	}, key)
+	if errors.Is(err, redis.Nil) || errors.Is(err, redis.TxFailedErr) {
+		return nil
+	}
 	return err
 }
 
@@ -545,13 +654,24 @@ func (s *Store) Reconcile(ctx context.Context, userID string) (int, error) {
 			return moved, err
 		}
 		if rec == nil {
-			_ = s.dropFallback(ctx, id, userID)
+			key := fallbackKeyPrefix + id
+			_ = s.redis.Watch(ctx, func(tx *redis.Tx) error {
+				n, err := tx.Exists(ctx, key).Result()
+				if err != nil || n != 0 {
+					return err
+				}
+				_, err = tx.TxPipelined(ctx, func(p redis.Pipeliner) error {
+					p.SRem(ctx, fallbackIndexKey, id)
+					if userID != "" {
+						p.SRem(ctx, setKey, id)
+					}
+					return nil
+				})
+				return err
+			}, key)
 			continue
 		}
-		if err := s.applyFallback(ctx, *rec); err != nil {
-			return moved, err
-		}
-		if err := s.dropFallback(ctx, id, rec.UserID); err != nil {
+		if err := s.reconcileRecord(ctx, id, rec.UserID); err != nil {
 			return moved, err
 		}
 		moved++
@@ -559,17 +679,40 @@ func (s *Store) Reconcile(ctx context.Context, userID string) (int, error) {
 	return moved, nil
 }
 
+func (s *Store) reconcileRecord(ctx context.Context, id, owner string) error {
+	ctx, release, err := s.reserveOwner(ctx, owner)
+	if err != nil {
+		return err
+	}
+	defer release()
+	current, snapshot, err := s.getFallbackSnapshot(ctx, id)
+	if err != nil || current == nil {
+		return err
+	}
+	if current.UserID != owner {
+		return nil
+	}
+	if err := s.applyFallback(ctx, *current); err != nil && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrStale) {
+		return err
+	}
+	return s.dropFallbackSnapshot(ctx, id, owner, snapshot)
+}
+
 func (s *Store) applyFallback(ctx context.Context, rec fallbackRecord) error {
+	destroyed, err := s.destroyed(ctx, rec.UserID, rec.ID)
+	if err != nil || destroyed {
+		return err
+	}
 	row, err := s.db.InheritVaultEntry.Get(ctx, rec.ID)
 	switch {
 	case postgresql.IsNotFound(err):
-		if len(rec.CredentialSealed) == 0 {
-			return nil // a code update for a row that no longer exists
+		if len(rec.CredentialSealed) == 0 || !rec.CredentialExpiresAt.After(s.now()) {
+			return nil
 		}
 		return s.insertEntry(ctx, rec)
 	case err != nil:
 		return err
-	case row.UserID != rec.UserID:
+	case row.UserID != rec.UserID || row.DestroyedAt != nil || row.KeyVersion != rec.KeyVersion:
 		return nil
 	case rec.CodeSealed != nil && (row.CodeIssuedAt == nil || rec.CodeIssuedAt != nil && rec.CodeIssuedAt.After(*row.CodeIssuedAt)):
 		return s.db.InheritVaultEntry.UpdateOneID(rec.ID).
@@ -655,8 +798,21 @@ func (s *Store) List(ctx context.Context, userID string) ([]*Entry, error) {
 			if seen[id] {
 				continue
 			}
+			destroyed, err := s.destroyed(ctx, userID, id)
+			if err != nil {
+				return nil, err
+			}
+			if destroyed {
+				continue
+			}
 			if rec, _ := s.getFallback(ctx, id); rec != nil && rec.UserID == userID {
 				if e := entryFromFallback(rec); e.live(now) {
+					if err := s.requireKeyVersion(ctx, userID, rec.KeyVersion); err != nil {
+						if errors.Is(err, ErrStale) {
+							continue
+						}
+						return nil, err
+					}
 					out = append(out, e)
 				}
 			}
@@ -670,7 +826,18 @@ func (s *Store) Get(ctx context.Context, userID, entryID string) (*Entry, error)
 	if !s.Available() {
 		return nil, ErrUnavailable
 	}
-	_, _ = s.Reconcile(ctx, userID)
+	if s.ownerReserved(ctx, userID) {
+		_ = s.reconcileRecord(ctx, entryID, userID)
+	} else {
+		_, _ = s.Reconcile(ctx, userID)
+	}
+	destroyed, err := s.destroyed(ctx, userID, entryID)
+	if err != nil {
+		return nil, err
+	}
+	if destroyed {
+		return nil, ErrNotFound
+	}
 	now := s.now()
 	row, err := s.db.InheritVaultEntry.Query().
 		Where(inheritvaultentry.IDEQ(entryID), inheritvaultentry.UserIDEQ(userID), inheritvaultentry.DestroyedAtIsNil()).
@@ -686,6 +853,12 @@ func (s *Store) Get(ctx context.Context, userID, entryID string) (*Entry, error)
 	}
 	if rec, _ := s.getFallback(ctx, entryID); rec != nil && rec.UserID == userID {
 		if e := entryFromFallback(rec); e.live(now) {
+			if err := s.requireKeyVersion(ctx, userID, rec.KeyVersion); err != nil {
+				if errors.Is(err, ErrStale) {
+					return nil, ErrNotFound
+				}
+				return nil, err
+			}
 			return e, nil
 		}
 	}
@@ -726,25 +899,56 @@ func (s *Store) Destroy(ctx context.Context, userID, entryID string) error {
 	if !s.Available() {
 		return ErrUnavailable
 	}
+	ctx, release, err := s.reserveOwner(ctx, userID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	tx, err := s.db.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	now := s.now()
-	n, err := s.db.InheritVaultEntry.Update().
+	n, err := tx.InheritVaultEntry.Update().
 		Where(inheritvaultentry.IDEQ(entryID), inheritvaultentry.UserIDEQ(userID), inheritvaultentry.DestroyedAtIsNil()).
 		SetCredentialSealed([]byte{}).ClearCodeSealed().SetDestroyedAt(now).SetUpdatedAt(now).
 		Save(ctx)
 	if err != nil {
 		return err
 	}
-	parked := false
-	if s.redis != nil {
-		if rec, _ := s.getFallback(ctx, entryID); rec != nil && rec.UserID == userID {
-			parked = true
-			if err := s.dropFallback(ctx, entryID, userID); err != nil {
+	marked, err := tx.InheritVaultTombstone.Query().Where(inheritvaulttombstone.UserIDEQ(userID), inheritvaulttombstone.EntryIDEQ(entryID)).Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !marked {
+		if n == 0 {
+			rec, err := s.getFallback(ctx, entryID)
+			if err != nil {
 				return err
 			}
+			if rec == nil || rec.UserID != userID {
+				return ErrNotFound
+			}
+		}
+		if err := tx.InheritVaultTombstone.Create().SetUserID(userID).SetEntryID(entryID).SetExpiresAt(now.Add(CredentialRetention)).Exec(ctx); err != nil {
+			return err
 		}
 	}
-	if n == 0 && !parked {
-		return ErrNotFound
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if s.redis != nil {
+		if err := s.redis.Set(ctx, fallbackTombstonePrefix+userID+":"+entryID, "1", CredentialRetention).Err(); err != nil {
+			return err
+		}
+		rec, snapshot, err := s.getFallbackSnapshot(ctx, entryID)
+		if err != nil {
+			return err
+		}
+		if rec != nil && rec.UserID == userID {
+			return s.dropFallbackSnapshot(ctx, entryID, userID, snapshot)
+		}
 	}
 	return nil
 }
@@ -768,6 +972,8 @@ func (s *Store) Reap(ctx context.Context) (ReapResult, error) {
 	res.Reconciled = moved
 	errs = append(errs, err)
 	now := s.now()
+	_, err = s.db.InheritVaultTombstone.Delete().Where(inheritvaulttombstone.ExpiresAtLTE(now)).Exec(ctx)
+	errs = append(errs, err)
 	res.Deleted, err = s.db.InheritVaultEntry.Delete().
 		Where(inheritvaultentry.Or(inheritvaultentry.DestroyedAtNotNil(), inheritvaultentry.CredentialExpiresAtLTE(now))).
 		Exec(ctx)

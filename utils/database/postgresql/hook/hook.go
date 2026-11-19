@@ -129,6 +129,18 @@ func (f InheritVaultKeyFunc) Mutate(ctx context.Context, m postgresql.Mutation) 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.InheritVaultKeyMutation", m)
 }
 
+// The InheritVaultTombstoneFunc type is an adapter to allow the use of ordinary
+// function as InheritVaultTombstone mutator.
+type InheritVaultTombstoneFunc func(context.Context, *postgresql.InheritVaultTombstoneMutation) (postgresql.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InheritVaultTombstoneFunc) Mutate(ctx context.Context, m postgresql.Mutation) (postgresql.Value, error) {
+	if mv, ok := m.(*postgresql.InheritVaultTombstoneMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *postgresql.InheritVaultTombstoneMutation", m)
+}
+
 // The OAuth2ClientWebhookEndpointFunc type is an adapter to allow the use of ordinary
 // function as OAuth2ClientWebhookEndpoint mutator.
 type OAuth2ClientWebhookEndpointFunc func(context.Context, *postgresql.OAuth2ClientWebhookEndpointMutation) (postgresql.Value, error)

@@ -136,7 +136,10 @@ if result == 'ok' then
     redis.call('HSET', KEYS[1], 'dres', 'client_disabled')
     return {'REVOKE_DENIED', st, crid, cby}
   end
-  if st == 'issued' then return {'PASS', st, crid, cby} end
+  if st == 'issued' then
+    if active == '1' then return {'PASS', st, crid, cby} end
+    return {'REVOKE_DENIED', st, crid, cby}
+  end
   if st == 'denied' then return {'REVOKE_TERMINAL_DENIED', st, crid, cby} end
   return {'REVOKE_TERMINAL_EXPIRED', st, crid, cby}
 elseif result == 'pending' then
@@ -362,6 +365,30 @@ type devicePollResult struct {
 	SealedDeviceCode string
 	ConsentRequestID string
 	IntervalSeconds  int
+	ClientType       string
+	Scope            string
+}
+
+// readPollFlow loads the relay data without charging a poll or changing state.
+func (s *deviceFlowStore) readPollFlow(ctx context.Context, flowID, clientID string) (devicePollResult, error) {
+	manager, err := s.redisManager()
+	if err != nil {
+		return devicePollResult{}, err
+	}
+	fields, err := manager.Redis.HGetAll(ctx, manager.KeyBuilder().BuildOAuth2DeviceFlowKey(flowID)).Result()
+	if err != nil {
+		return devicePollResult{}, err
+	}
+	if len(fields) == 0 {
+		return devicePollResult{Outcome: devicePollMissing}, nil
+	}
+	if fields["cid"] != clientID {
+		return devicePollResult{Outcome: devicePollClientMismatch}, nil
+	}
+	return devicePollResult{
+		Outcome: devicePollForward, State: fields["st"], SealedDeviceCode: fields["wdc"], ConsentRequestID: fields["crid"],
+		ClientType: fields["ctype"], Scope: fields["scope"],
+	}, nil
 }
 
 func (s *deviceFlowStore) poll(ctx context.Context, flowID, clientID string, maxIntervalSeconds, maxSlowDown int) (devicePollResult, error) {

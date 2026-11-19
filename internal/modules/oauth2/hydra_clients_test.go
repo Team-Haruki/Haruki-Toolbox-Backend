@@ -529,3 +529,59 @@ func marshalPatchForTest(t *testing.T, ops []HydraJSONPatchOp) string {
 	}
 	return string(encoded)
 }
+
+func TestHydraCannotReenableUntilBothGrantStoresAreCleared(t *testing.T) {
+	for _, stage := range []string{"refresh", "access", "success"} {
+		t.Run(stage, func(t *testing.T) {
+			steps := make(chan string, 4)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				steps <- r.Method
+				switch r.Method {
+				case http.MethodGet:
+					_, _ = w.Write([]byte(`{"client_id":"client","metadata":{"haruki":{"active":false}}}`))
+				case http.MethodDelete:
+					if stage == "access" {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+					w.WriteHeader(http.StatusNoContent)
+				case http.MethodPatch:
+					_, _ = w.Write([]byte(`{"client_id":"client","metadata":{"haruki":{"active":true}}}`))
+				}
+			}))
+			defer srv.Close()
+			cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: srv.URL,
+				LockClientGrants: func(context.Context, string, bool) (func(), error) { return func() {}, nil },
+				PurgeRefreshGrants: func(ctx context.Context, client string) error {
+					steps <- "refresh"
+					if stage == "refresh" {
+						return errors.New("fixture purge failure")
+					}
+					return nil
+				},
+			})
+			client, err := SetHydraOAuthClientActive(t.Context(), cfg, "client", true)
+			if stage == "success" {
+				if err != nil || !HydraOAuthClientActive(client) {
+					t.Fatalf("enable failed: %v", err)
+				}
+			} else if err == nil {
+				t.Fatal("enabled a client before clearing its tokens")
+			}
+			var got []string
+			for len(steps) > 0 {
+				got = append(got, <-steps)
+			}
+			want := []string{http.MethodGet, "refresh"}
+			if stage != "refresh" {
+				want = append(want, http.MethodDelete)
+			}
+			if stage == "success" {
+				want = append(want, http.MethodPatch)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("calls = %v, want %v", got, want)
+			}
+		})
+	}
+}

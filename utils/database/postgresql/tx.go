@@ -32,6 +32,8 @@ type Tx struct {
 	InheritVaultEntry *InheritVaultEntryClient
 	// InheritVaultKey is the client for interacting with the InheritVaultKey builders.
 	InheritVaultKey *InheritVaultKeyClient
+	// InheritVaultTombstone is the client for interacting with the InheritVaultTombstone builders.
+	InheritVaultTombstone *InheritVaultTombstoneClient
 	// OAuth2ClientWebhookEndpoint is the client for interacting with the OAuth2ClientWebhookEndpoint builders.
 	OAuth2ClientWebhookEndpoint *OAuth2ClientWebhookEndpointClient
 	// RiskEvent is the client for interacting with the RiskEvent builders.
@@ -205,6 +207,7 @@ func (tx *Tx) init() {
 	tx.IOSScriptCode = NewIOSScriptCodeClient(tx.config)
 	tx.InheritVaultEntry = NewInheritVaultEntryClient(tx.config)
 	tx.InheritVaultKey = NewInheritVaultKeyClient(tx.config)
+	tx.InheritVaultTombstone = NewInheritVaultTombstoneClient(tx.config)
 	tx.OAuth2ClientWebhookEndpoint = NewOAuth2ClientWebhookEndpointClient(tx.config)
 	tx.RiskEvent = NewRiskEventClient(tx.config)
 	tx.RiskRule = NewRiskRuleClient(tx.config)

@@ -217,3 +217,19 @@ func generateAdminIOSUploadCode() (string, error) {
 	}
 	return hex.EncodeToString(bytes), nil
 }
+
+// withManagedUserMutation reserves the target before reading its current role.
+func withManagedUserMutation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, next fiber.Handler) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		targetID := strings.TrimSpace(c.Params("target_user_id"))
+		if targetID == "" {
+			return next(c)
+		}
+		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetID)
+		if err != nil {
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "user change in progress", nil)
+		}
+		defer release()
+		return next(c)
+	}
+}

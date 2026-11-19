@@ -1,6 +1,7 @@
 package adminusers
 
 import (
+	"mime"
 	"strings"
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
@@ -26,13 +27,22 @@ func handleResetUserPassword(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		var payload adminResetPasswordPayload
-		if len(c.Body()) > 0 {
-			if err := c.Bind().Body(&payload); err != nil {
+		if len(c.Request().Body()) > 0 {
+			contentType, _, mimeErr := mime.ParseMediaType(c.Get(fiber.HeaderContentType))
+			if mimeErr != nil || contentType != fiber.MIMEApplicationJSON || c.Get(fiber.HeaderContentEncoding) != "" || len(c.Request().Body()) > 8<<10 {
+				return harukiAPIHelper.ErrorBadRequest(c, "invalid JSON password reset payload")
+			}
+			if err := c.Bind().JSON(&payload); err != nil {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserResetPass, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 				return harukiAPIHelper.ErrorBadRequest(c, "invalid request payload")
 			}
 		}
 
+		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetUserID)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve password reset")
+		}
+		defer release()
 		targetUser, err := queryAdminTargetUser(c, apiHelper, targetUserID)
 		if err != nil {
 			if postgresql.IsNotFound(err) {

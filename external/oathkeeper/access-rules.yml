@@ -21,7 +21,7 @@
     # Hydra returns 404 for /oauth2/jwks.json, so that alternative is dropped.
     # oauth2/device/* and oauth2/fallbacks/device are deliberately NOT routed
     # (device approval is backend-mediated; see docs/ory-suite-usage.zh-CN.md).
-    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/token|oauth2/revoke|oauth2/sessions/logout|userinfo>
+    url: <http|https>://<[^/]+>/<oauth2/auth|oauth2/revoke|oauth2/sessions/logout|userinfo>
     methods: [GET, POST]
   upstream:
     url: http://hydra:4444
@@ -36,6 +36,19 @@
   match:
     url: <http|https>://<[^/]+>/api/oauth2/authorize
     methods: [GET]
+  upstream:
+    url: http://backend:16666
+  authenticators:
+    - handler: noop
+  authorizer:
+    handler: allow
+  mutators:
+    - handler: noop
+
+- id: haruki-public-legacy-token
+  match:
+    url: <http|https>://<[^/]+>/oauth2/token
+    methods: [POST]
   upstream:
     url: http://backend:16666
   authenticators:
