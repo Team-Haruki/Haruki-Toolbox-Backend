@@ -799,8 +799,8 @@ Redis 不可用时一律失败关闭（503）。仓库 compose 未设 `maxmemory
 | --- | --- | --- | --- | --- |
 | `auth-attempt:unknown-client` | 10 min | 6000 | 只告警 | 记 `auth_unknown_client_warn` |
 | `auth-attempt:client:{hx}` | 10 min | 10 × 该客户端 `maxCodesPer10m` | 只告警 | 记 `auth_attempt_client_warn` |
-| `auth-issued:global:public` / `…:confidential` | 10 min | 各 600（之和 ≤ `auth_issued_global_per_10m` 1200；各到 300 时记 `auth_issued_global_warn pool=…`） | 预占，Hydra 非 200 释放 | 429 `temporarily_unavailable` |
-| `auth-issued:client:{hx}` | 10 min | 客户端 `maxCodesPer10m`（默认 60） | 预占，Hydra 非 200 释放 | 同上 |
+| `auth-issued:global:public` / `…:confidential` | 10 min | 各 600（之和 ≤ `auth_issued_global_per_10m` 1200；各到 300 时记 `auth_issued_global_warn pool=…`） | 公开客户端请求 Hydra 前预占，非 200 时释放。机密客户端在 Hydra 返回 200 后预占。 | 429 `temporarily_unavailable` |
+| `auth-issued:client:{hx}` | 10 min | 客户端 `maxCodesPer10m`（默认 60） | 预占时机与对应的全局池相同 | 同上 |
 | `lookup:user:{hx}` | 10 min | 30 | 计数 | 429 `rate_limited` |
 | `lookup-fail:user:{hx}` | 10 min | 5 | 预占，认领成功释放 | 429 `rate_limited` |
 | `lookup-fail:user-day:{hx}` | 24 h | 20 | 预占，认领成功释放 | 429 `rate_limited` |
