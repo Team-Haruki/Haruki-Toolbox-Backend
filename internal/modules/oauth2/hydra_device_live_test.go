@@ -26,6 +26,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -60,6 +61,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v3"
@@ -572,7 +574,14 @@ func liveDisabledClientBlocked(t *testing.T, h *liveHydra) {
 	if h.introspect(t, stringField(tokens, "access_token"))["active"] != false {
 		t.Error("the access token survived disabling the client")
 	}
-	expectOAuthError(t, b.refresh(client, stringField(tokens, "refresh_token")), http.StatusBadRequest, "invalid_grant")
+	refreshToken := stringField(tokens, "refresh_token")
+	expectOAuthError(t, b.refresh(client, refreshToken), http.StatusUnauthorized, "invalid_client")
+	// Check the refresh grant directly so the backend's disabled-client guard
+	// cannot conceal a failed deletion in Hydra.
+	rawRefresh := h.postForm(t, h.publicURL+"/oauth2/token", url.Values{
+		"grant_type": {"refresh_token"}, "client_id": {client.id}, "refresh_token": {refreshToken},
+	}, "")
+	expectOAuthError(t, rawRefresh, http.StatusBadRequest, "invalid_grant")
 	// §10.5.1: Hydra does not look at metadata.haruki.active.
 	if raw := h.postForm(t, h.publicURL+"/oauth2/device/auth", url.Values{"client_id": {client.id}, "scope": {"user:read"}}, ""); raw.status != http.StatusOK {
 		t.Errorf("§10.5.1: Hydra refused device/auth for a disabled client (%d %s); it used to ignore haruki.active", raw.status, raw.body)
@@ -1026,8 +1035,20 @@ func connectLiveHydra(t *testing.T) *liveHydra {
 	if want := strings.TrimSpace(os.Getenv("HYDRA_IT_VERSION")); want != "" && h.version != want {
 		t.Fatalf("Hydra reports version %q, HYDRA_IT_VERSION is %q", h.version, want)
 	}
+	grantDB, err := sql.Open("postgres", h.dsn)
+	if err != nil {
+		t.Fatalf("open integration grant store: %v", err)
+	}
+	t.Cleanup(func() { _ = grantDB.Close() })
+	if err := grantDB.PingContext(t.Context()); err != nil {
+		t.Fatalf("connect to integration grant store: %v", err)
+	}
+	// The isolated fixture uses Hydra's PostgreSQL instance for advisory locks.
+	// The deployed backend uses the Toolbox database for those locks.
 	h.config = harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
 		PublicURL: h.publicURL, BrowserURL: h.issuerURL, AdminURL: h.adminURL, RequestTimeout: 10 * time.Second,
+		LockClientGrants:   harukiOAuth2.NewHydraClientGrantLocker(grantDB),
+		PurgeRefreshGrants: harukiOAuth2.NewHydraRefreshGrantPurger(grantDB),
 	})
 	return h
 }
