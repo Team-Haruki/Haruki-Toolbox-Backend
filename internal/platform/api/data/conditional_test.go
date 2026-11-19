@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -159,6 +160,9 @@ func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
 		{"", http.StatusOK},
 		{mysekaiPolicyETag(path, "", []string{"upload_time", "userMysekaiGates"}, stamp), http.StatusOK},
 		{mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
+		{`"quoted,comma", W/` + mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
+		{`"` + strings.Trim(mysekaiPolicyETag(path, "", current, stamp), `"`) + `,other"`, http.StatusOK},
+		{"*", http.StatusOK},
 	} {
 		req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
 		req.Header.Set(fiber.HeaderIfNoneMatch, tc.etag)

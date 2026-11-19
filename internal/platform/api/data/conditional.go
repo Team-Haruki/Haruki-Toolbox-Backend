@@ -3,7 +3,6 @@ package data
 import (
 	"crypto/sha256"
 	"fmt"
-
 	"strconv"
 	"strings"
 	"time"
@@ -75,7 +74,7 @@ func CheckNotModified(
 		etag := mysekaiPolicyETag(c.Path(), requestKey, publicAllowedKeys, stamp)
 		c.Set(fiber.HeaderETag, etag)
 		// A timestamp alone cannot prove the client has this field policy.
-		if c.Get(fiber.HeaderIfNoneMatch) != etag {
+		if !matchesPolicyETag(c.Request().Header.PeekAll(fiber.HeaderIfNoneMatch), etag) {
 			return false
 		}
 	}
@@ -123,6 +122,34 @@ func CheckNotModified(
 	appendVaryAcceptEncoding(c)
 	c.Set(HeaderUploadTime, strconv.FormatInt(stamp, 10))
 	return true
+}
+
+// Match a quoted validator by weak comparison. A wildcard does not
+// establish which field policy the client cached.
+func matchesPolicyETag(values [][]byte, current string) bool {
+	for _, value := range values {
+		remaining := string(value)
+		for {
+			remaining = strings.TrimLeft(remaining, " \t,")
+			remaining = strings.TrimPrefix(remaining, "W/")
+			if len(remaining) < 2 || remaining[0] != '"' {
+				break
+			}
+			end := strings.IndexByte(remaining[1:], '"')
+			if end < 0 {
+				break
+			}
+			tag := remaining[:end+2]
+			remaining = strings.TrimLeft(remaining[end+2:], " \t")
+			if remaining != "" && remaining[0] != ',' {
+				break
+			}
+			if tag == current {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func mysekaiPolicyETag(path, requestKey string, allowedKeys []string, stamp int64) string {

@@ -49,7 +49,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 
 		dataType, err := harukiUtils.ParseUploadDataType(dataTypeStr)
-		if err != nil {
+		if err != nil || (dataType != harukiUtils.UploadDataTypeSuite && dataType != harukiUtils.UploadDataTypeMysekai) {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
 

@@ -30,6 +30,14 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 		c.Locals("userID", "owner")
 		return c.Next()
 	}, handleOAuth2GetGameData(env.apiHelper))
+	unsupported, err := env.app.Test(httptest.NewRequest(http.MethodGet, "/game/jp/mysekai_birthday_party/123", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = unsupported.Body.Close()
+	if unsupported.StatusCode != http.StatusBadRequest {
+		t.Fatalf("upload-only Mysekai type returned %d on the OAuth2 read route", unsupported.StatusCode)
+	}
 
 	check := func(query string, want int) {
 		t.Helper()
