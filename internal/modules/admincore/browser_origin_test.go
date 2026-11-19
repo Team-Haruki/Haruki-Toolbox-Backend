@@ -35,3 +35,37 @@ func TestAdminMutationRequiresExactFrontendOrigin(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminOriginConfigurationDoesNotBlockSafeReads(t *testing.T) {
+	for _, tc := range []struct {
+		configured string
+		origin     string
+		method     string
+		want       int
+	}{
+		{"http://ADMIN.example.test:80/settings", "http://admin.example.test", http.MethodPost, http.StatusNoContent},
+		{"http://admin.example.test:8080", "http://admin.example.test:8080", http.MethodPost, http.StatusNoContent},
+		{"https://admin.example.test:8443", "https://admin.example.test", http.MethodPost, http.StatusForbidden},
+		{"", "", http.MethodGet, http.StatusNoContent},
+		{"", "", http.MethodHead, http.StatusNoContent},
+		{"", "", http.MethodOptions, http.StatusNoContent},
+		{"", "https://admin.example.test", http.MethodPost, http.StatusForbidden},
+	} {
+		app := fiber.New()
+		app.All("/admin", RequireTrustedBrowserOrigin(tc.configured), func(c fiber.Ctx) error {
+			return c.SendStatus(http.StatusNoContent)
+		})
+		req := httptest.NewRequest(tc.method, "/admin", nil)
+		if tc.origin != "" {
+			req.Header.Set("Origin", tc.origin)
+		}
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Errorf("%s configured %q, origin %q returned %d, want %d", tc.method, tc.configured, tc.origin, resp.StatusCode, tc.want)
+		}
+	}
+}

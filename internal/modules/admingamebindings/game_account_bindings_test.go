@@ -264,6 +264,45 @@ func TestManagedBindingReassignmentChecksBothCurrentRoles(t *testing.T) {
 	}
 }
 
+func TestManagedBindingRejectsStaleOwnerSnapshot(t *testing.T) {
+	for _, change := range []string{"deleted", "reassigned", "missing owner"} {
+		t.Run(change, func(t *testing.T) {
+			ctx := t.Context()
+			db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+			defer db.Close()
+			for _, id := range []string{"first", "second"} {
+				db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").ExecX(ctx)
+			}
+			binding := db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetVerified(true).SetUserID("first").SaveX(ctx)
+			stale := db.GameAccountBinding.Query().WithUser().OnlyX(ctx)
+			switch change {
+			case "deleted":
+				db.GameAccountBinding.DeleteOneID(binding.ID).ExecX(ctx)
+			case "reassigned":
+				db.GameAccountBinding.UpdateOneID(binding.ID).SetUserID("second").ExecX(ctx)
+			case "missing owner":
+				stale.Edges.User = nil
+			}
+			helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+			app := fiber.New()
+			app.Delete("/", func(c fiber.Ctx) error {
+				return mutateManagedGameBinding(c, helper, stale, "actor", roleAdmin, "")
+			})
+			resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusConflict {
+				t.Fatalf("deletion with stale ownership returned %d", resp.StatusCode)
+			}
+			if change != "deleted" && db.GameAccountBinding.Query().CountX(ctx) != 1 {
+				t.Fatal("stale deletion removed the current binding")
+			}
+		})
+	}
+}
+
 func TestGlobalBindingActionsRevokeGrantsOnlyAfterSuccessfulCommit(t *testing.T) {
 	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
 	defer db.Close()

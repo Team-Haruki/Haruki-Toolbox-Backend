@@ -8,6 +8,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	database "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,5 +107,67 @@ func TestIdentifiedUploadMethodsShareWritePolicy(t *testing.T) {
 				t.Fatalf("%s write grant rejected: %s %v", method, a.FailureStage, err)
 			}
 		}
+	}
+}
+
+func TestUploadRevalidatesCredentialsBeforePersistence(t *testing.T) {
+	for _, scenario := range []string{"unchanged", "grant revoked", "identity revoked"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx := t.Context()
+			db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "upload-persistence"))
+			defer db.Close()
+			for _, id := range []string{"owner", "delegate"} {
+				db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").ExecX(ctx)
+			}
+			db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetVerified(true).SetUserID("owner").ExecX(ctx)
+			if _, err := db.UpsertGameAccountDataGrant(ctx, "owner", "delegate", "jp", "123", "suite", time.Now().Add(time.Hour), []string{"write"}); err != nil {
+				t.Fatal(err)
+			}
+			helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+			deps := testUploadDependencies()
+			deps.BackgroundTasks = background.InlineRunner{}
+			identityRevoked := errors.New("fixture identity revoked")
+			checks := 0
+			deps.ValidateUploadIdentity = func(ctx context.Context) error {
+				checks++
+				if checks == 2 {
+					switch scenario {
+					case "grant revoked":
+						// Model a grant revoked after the initial check, before persistence.
+						db.GameAccountDataGrant.Delete().ExecX(ctx)
+					case "identity revoked":
+						return identityRevoked
+					}
+				}
+				return nil
+			}
+			data, err := deps.ServerCryptor.Pack(map[string]any{
+				"userProfile": map[string]any{"userId": int64(123)},
+			}, "jp")
+			if err != nil {
+				t.Fatal(err)
+			}
+			actor, game := "delegate", int64(123)
+			attempt := newAttempt(utils.UploadMethodOAuth2, len(data))
+			_, err = HandleUpload(ctx, data, "jp", "suite", &game, &actor, helper, deps, utils.UploadMethodOAuth2, attempt)
+			if checks != 2 {
+				t.Fatalf("upload performed %d identity checks, error %v", checks, err)
+			}
+			switch scenario {
+			case "grant revoked":
+				if !errors.Is(err, errUploadOwnershipMismatch) || attempt.FailureStage != uploadStageAccountPolicy {
+					t.Fatalf("revoked grant reached stage %s: %v", attempt.FailureStage, err)
+				}
+			case "identity revoked":
+				if !errors.Is(err, identityRevoked) || attempt.FailureStage != uploadStageAccountPolicy {
+					t.Fatalf("revoked identity reached stage %s: %v", attempt.FailureStage, err)
+				}
+			default:
+				// With no game store configured, a freshly authorized upload reaches the write and fails there.
+				if err == nil || !strings.Contains(err.Error(), "game data store is not configured") || attempt.FailureStage != uploadStagePersist {
+					t.Fatalf("valid grant reached stage %s: %v", attempt.FailureStage, err)
+				}
+			}
+		})
 	}
 }
