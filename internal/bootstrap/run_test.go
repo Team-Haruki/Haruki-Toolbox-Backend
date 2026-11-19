@@ -1,7 +1,9 @@
 package bootstrap
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -62,23 +64,25 @@ func TestRequestBodyLimitsBeforeFiberRouting(t *testing.T) {
 		{http.MethodPut, "/api/user/test-user/authorize-social-platform/1/", 8 << 10},
 	} {
 		for _, chunked := range []bool{false, true} {
-			for extra, want := range map[int]int{0: http.StatusNoContent, 1: http.StatusRequestEntityTooLarge} {
-				req, err := http.NewRequestWithContext(t.Context(), endpoint.method, baseURL+endpoint.path, strings.NewReader(strings.Repeat(" ", endpoint.limit+extra)))
-				if err != nil {
-					t.Fatal(err)
-				}
-				if chunked {
-					req.ContentLength = -1
-					req.TransferEncoding = []string{"chunked"}
-				}
-				resp, err := client.Do(req)
-				if err != nil {
-					t.Fatal(err)
-				}
-				_ = resp.Body.Close()
-				if resp.StatusCode != want {
-					t.Errorf("%s %s chunked=%v extra=%d: status %d, want %d", endpoint.method, endpoint.path, chunked, extra, resp.StatusCode, want)
-				}
+			req, err := http.NewRequestWithContext(t.Context(), endpoint.method, baseURL+endpoint.path, strings.NewReader(strings.Repeat(" ", endpoint.limit)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if chunked {
+				req.ContentLength = -1
+				req.TransferEncoding = []string{"chunked"}
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusNoContent {
+				t.Errorf("%s %s chunked=%v: at limit returned %d", endpoint.method, endpoint.path, chunked, resp.StatusCode)
+			}
+			status := oversizedRequestStatus(t, listener.Addr().String(), endpoint.method, endpoint.path, endpoint.limit+1, chunked)
+			if status != http.StatusRequestEntityTooLarge {
+				t.Errorf("%s %s chunked=%v: above limit returned %d", endpoint.method, endpoint.path, chunked, status)
 			}
 		}
 	}
@@ -94,6 +98,33 @@ func TestRequestBodyLimitsBeforeFiberRouting(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("unrelated upload status = %d", resp.StatusCode)
 	}
+}
+
+// The server should reject the declared size before reading its payload.
+// Sending the payload before waiting for the status can race the server's close.
+func oversizedRequestStatus(t *testing.T, address, method, path string, size int, chunked bool) int {
+	t.Helper()
+	conn, err := net.DialTimeout("tcp4", address, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	framing := fmt.Sprintf("Content-Length: %d\r\n\r\n", size)
+	if chunked {
+		framing = fmt.Sprintf("Transfer-Encoding: chunked\r\n\r\n%x\r\n", size)
+	}
+	if _, err := fmt.Fprintf(conn, "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n%s", method, path, address, framing); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: method})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestOpenMainLogWriterStdout(t *testing.T) {

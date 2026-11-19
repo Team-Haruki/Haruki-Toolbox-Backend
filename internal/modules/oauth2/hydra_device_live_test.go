@@ -1340,7 +1340,7 @@ func newLiveBackend(t *testing.T, h *liveHydra) *liveBackend {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api.RegisterRoutes(apiHelper, api.Dependencies{HydraConfig: h.config, OAuth2DeviceFlow: deviceFlow, OAuth2InternalAPI: internalAPI})
+	api.RegisterRoutes(apiHelper, api.Dependencies{HydraConfig: h.config, OAuth2DeviceFlow: deviceFlow, OAuth2InternalAPI: internalAPI, AdminFrontendURL: h.frontendURL})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -1470,12 +1470,13 @@ func (b *liveBackend) request(method, rawURL, contentType, body string, header m
 // Kratos session.
 func (b *liveBackend) sessionHeaders(user liveUser) map[string]string {
 	return map[string]string{
-		"X-Auth-Proxy-Secret":   liveAuthProxySecret,
-		"X-Kratos-Identity-Id":  user.identityID,
-		"X-User-Name":           user.name,
-		"X-User-Email":          user.email,
-		"X-User-Email-Verified": "true",
-		liveSessionHeader:       user.session,
+		"X-Auth-Proxy-Secret":      liveAuthProxySecret,
+		"X-Kratos-Identity-Id":     user.identityID,
+		"X-User-Name":              user.name,
+		"X-User-Email":             user.email,
+		"X-User-Email-Verified":    "true",
+		liveSessionHeader:          user.session,
+		"X-Auth-Proxy-Session-Aal": "aal2",
 	}
 }
 
@@ -1501,7 +1502,9 @@ func (b *liveBackend) adminRequest(method, path string, body any) liveResponse {
 	if err != nil {
 		b.t.Fatal(err)
 	}
-	return b.request(method, b.baseURL+path, "application/json", string(encoded), b.sessionHeaders(b.admin))
+	header := b.sessionHeaders(b.admin)
+	header["Origin"] = b.h.frontendURL
+	return b.request(method, b.baseURL+path, "application/json", string(encoded), header)
 }
 
 func (b *liveBackend) bearerGet(token, path string) liveResponse {
