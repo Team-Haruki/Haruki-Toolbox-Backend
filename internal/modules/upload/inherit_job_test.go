@@ -33,6 +33,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v3"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 const (
@@ -1164,6 +1165,9 @@ func TestRemoteInheritJobRemainsLiveUntilLeaseExpires(t *testing.T) {
 	if got := env.job(job.ID); got["status"] != "awaiting_confirm" {
 		t.Fatalf("live remote job = %v", got)
 	}
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs/"+job.ID+"/confirm", ownerPW()); res.Status != http.StatusConflict || res.code() != errJobOtherReplica.Code {
+		t.Fatalf("remote confirmation returned %d %s", res.Status, res.Raw)
+	}
 	if id, problem := env.svc.claimActive(t.Context(), testOwner, "replacement"); id != job.ID || problem != errJobAlreadyRunning {
 		t.Fatalf("claim while remote lease held = %q, %v", id, problem)
 	}
@@ -1182,6 +1186,52 @@ func TestRemoteInheritJobRemainsLiveUntilLeaseExpires(t *testing.T) {
 	}
 }
 
+type inheritLeaseReadHook struct {
+	key    string
+	before func(context.Context) error
+}
+
+func (h inheritLeaseReadHook) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+
+func (h inheritLeaseReadHook) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return next
+}
+
+func (h inheritLeaseReadHook) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, cmd goredis.Cmder) error {
+		if cmd.Name() == "get" && len(cmd.Args()) == 2 && cmd.Args()[1] == h.key {
+			if err := h.before(ctx); err != nil {
+				return err
+			}
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func TestRemoteInheritJobReloadsACompletionBeforeReportingInterruption(t *testing.T) {
+	env := newInheritTestEnv(t)
+	job := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
+	job.Instance = "another-process"
+	job.Status = jobStatusRunning
+	if err := env.svc.jobs.save(t.Context(), job); err != nil {
+		t.Fatal(err)
+	}
+	key := inheritActiveKeyPrefix + testOwner
+	env.redis.Set(key, job.ID)
+	env.svc.redis.AddHook(inheritLeaseReadHook{key: key, before: func(ctx context.Context) error {
+		job.Status = jobStatusSucceeded
+		if err := env.svc.jobs.save(ctx, job); err != nil {
+			return err
+		}
+		env.redis.Del(key)
+		return nil
+	}})
+
+	if got := env.job(job.ID); got["status"] != "succeeded" {
+		t.Fatalf("remote job lost its durable completion: %v", got)
+	}
+}
+
 func TestInheritRunnerWithLostLeaseDoesNotExecute(t *testing.T) {
 	env := newInheritTestEnv(t)
 	id := env.createJob(validJobRequest())
@@ -1193,6 +1243,27 @@ func TestInheritRunnerWithLostLeaseDoesNotExecute(t *testing.T) {
 	job := env.waitStatus(id, "failed")
 	if errorCode(job) != codeJobInterrupted || env.game.called("execute") {
 		t.Fatalf("runner without lease executed: %v", job)
+	}
+}
+
+func TestKDFBusyRefundPreservesPriorUnlockAttempts(t *testing.T) {
+	env := newInheritTestEnv(t)
+	keys := []string{unlockLeasePrefix + testOwner, unlockAttemptPrefix + testOwner}
+	if err := env.redis.Set(keys[0], "current-lease"); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.redis.Set(keys[1], "4"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		lease, want string
+	}{{"other-lease", "4"}, {"current-lease", "3"}, {"current-lease", "3"}} {
+		if err := env.svc.redis.Eval(t.Context(), refundBusyUnlockScript, keys, tc.lease, 4).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := env.redis.Get(keys[1]); err != nil || got != tc.want {
+			t.Fatalf("refund left %q, expected %q", got, tc.want)
+		}
 	}
 }
 

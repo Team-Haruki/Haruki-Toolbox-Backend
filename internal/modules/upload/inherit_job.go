@@ -239,25 +239,30 @@ type confirmation struct {
 // entered lives only here, in memory, and is dropped after the executing
 // call (or when the job ends).
 type jobRuntime struct {
-	mu        sync.Mutex
-	job       *inheritJob
-	code      harukiSekai.InheritCode
-	confirmed bool
-	cancelled bool
-	confirmCh chan confirmation
-	cancelCh  chan struct{}
-	stopPhase context.CancelFunc
-	subs      map[int]chan []byte
-	nextSub   int
+	mu                 sync.Mutex
+	job                *inheritJob
+	code               harukiSekai.InheritCode
+	confirmed          bool
+	cancelled          bool
+	confirmCh          chan confirmation
+	cancelCh           chan struct{}
+	stopPhase          context.CancelFunc
+	subs               map[int]chan []byte
+	nextSub            int
+	recoveryReserved   bool
+	terminalSaveFailed bool
 }
 
 // jobRegistry holds the jobs running in this process.
 type jobRegistry struct {
-	mu   sync.Mutex
-	jobs map[string]*jobRuntime
+	mu            sync.Mutex
+	jobs          map[string]*jobRuntime
+	recoverySlots chan struct{}
 }
 
-func newJobRegistry() *jobRegistry { return &jobRegistry{jobs: map[string]*jobRuntime{}} }
+func newJobRegistry() *jobRegistry {
+	return &jobRegistry{jobs: map[string]*jobRuntime{}, recoverySlots: make(chan struct{}, 64)}
+}
 
 func (r *jobRegistry) add(rt *jobRuntime) {
 	r.mu.Lock()

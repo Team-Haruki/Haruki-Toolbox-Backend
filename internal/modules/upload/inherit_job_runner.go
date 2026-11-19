@@ -31,8 +31,23 @@ func (s *inheritService) run(rt *jobRuntime, breakerToken uint64) {
 	rt.mu.Lock()
 	rt.code = harukiSekai.InheritCode{}
 	rt.closeSubscribersLocked()
+	jobID := rt.job.ID
+	keepRecovery := rt.recoveryReserved && rt.terminalSaveFailed && len(rt.job.LiveCode) > 0 && rt.job.VaultEntryID == ""
+	recoveryTTL := time.Until(rt.job.CreatedAt.Add(inheritJobTTL))
 	rt.mu.Unlock()
-	s.registry.remove(rt.job.ID)
+	removeJob := func() {
+		s.registry.remove(jobID)
+		if rt.recoveryReserved {
+			<-s.registry.recoverySlots
+		}
+	}
+	if keepRecovery && recoveryTTL > 0 {
+		// The encrypted result stays available to the owner on this replica
+		// for the original job lifetime when both stores were unavailable.
+		time.AfterFunc(recoveryTTL, removeJob)
+	} else {
+		removeJob()
+	}
 	s.releaseActive(rt.job.OwnerUserID, rt.job.ID)
 	// The one log line per job: no user, game or inherit identifiers.
 	s.logger.Infof("inherit job finished job=%s server=%s upload_type=%s final_step=%s outcome=%s code=%s duration_ms=%d",
@@ -258,6 +273,12 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 	if err := s.requireActiveLease(ctx, job); err != nil {
 		return s.failStep(rt, stepExecute, codeJobInterrupted)
 	}
+	select {
+	case s.registry.recoverySlots <- struct{}{}:
+		rt.recoveryReserved = true
+	default:
+		return s.failStep(rt, stepExecute, codeServerBusy)
+	}
 	credential, err := game.Execute(ctx, code)
 	rt.mu.Lock()
 	rt.code = harukiSekai.InheritCode{}
@@ -318,7 +339,12 @@ func (s *inheritService) runTransferPhase(rt *jobRuntime, server harukiUtils.Sup
 	s.setStep(rt, stepIssueNewCode, stepRunning, "")
 	newInheritID, err := s.issueWithRetry(ctx, func(ctx context.Context, password string) (string, error) {
 		if err := s.requireActiveLease(ctx, job); err != nil {
-			return "", err
+			if credentialStored || errors.Is(err, errInheritLeaseLost) || ctx.Err() != nil {
+				return "", err
+			}
+			// The transfer already consumed the old code. While we hold the
+			// owner's database lock, another worker cannot mutate the account.
+			// Recover a code if Redis cannot answer the lease check.
 		}
 		return game.IssueInheritCode(ctx, password)
 	}, newPassword)
@@ -445,6 +471,9 @@ func (s *inheritService) issueWithRetry(ctx context.Context, issue func(context.
 		id, err := issue(ctx, password)
 		if err == nil {
 			return id, nil
+		}
+		if errors.Is(err, errInheritLeaseLost) {
+			return "", err
 		}
 		lastErr = err
 	}

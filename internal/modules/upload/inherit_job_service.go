@@ -198,7 +198,7 @@ type jobEvent struct {
 
 // update changes the job under its lock, then stores it and pushes the event
 // and the new snapshot to every WebSocket subscriber.
-func (s *inheritService) update(rt *jobRuntime, event *jobEvent, change func(*inheritJob)) {
+func (s *inheritService) update(rt *jobRuntime, event *jobEvent, change func(*inheritJob)) error {
 	rt.mu.Lock()
 	change(rt.job)
 	rt.job.UpdatedAt = s.now()
@@ -209,7 +209,7 @@ func (s *inheritService) update(rt *jobRuntime, event *jobEvent, change func(*in
 	rt.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = s.jobs.save(ctx, snap)
+	return s.jobs.save(ctx, snap)
 }
 
 func (s *inheritService) setStep(rt *jobRuntime, name string, status stepStatus, code string) {
@@ -287,9 +287,8 @@ func (s *inheritService) addWarning(rt *jobRuntime, code string) {
 // published, so a client that sees the job end can start the next one at
 // once instead of being sent back to the finished job.
 func (s *inheritService) finish(rt *jobRuntime, status inheritJobStatus, code string) {
-	s.releaseActive(rt.job.OwnerUserID, rt.job.ID)
 	now := s.now()
-	s.update(rt, &jobEvent{Step: stepDone, Status: string(status), Code: code, At: &now}, func(j *inheritJob) {
+	err := s.update(rt, &jobEvent{Step: stepDone, Status: string(status), Code: code, At: &now}, func(j *inheritJob) {
 		j.Status = status
 		j.FinishedAt = &now
 		j.ConfirmDeadline = nil
@@ -308,6 +307,8 @@ func (s *inheritService) finish(rt *jobRuntime, status inheritJobStatus, code st
 			}
 		}
 	})
+	rt.terminalSaveFailed = err != nil
+	s.releaseActive(rt.job.OwnerUserID, rt.job.ID)
 }
 
 // loadJob returns the job if it exists and belongs to userID; a job owned by
@@ -320,6 +321,9 @@ func (s *inheritService) loadJob(ctx context.Context, userID, jobID string) (*in
 		rt.mu.Unlock()
 		if job.OwnerUserID != userID {
 			return nil, nil, errJobNotFound
+		}
+		if job.Status.terminal() {
+			return job, nil, nil
 		}
 		return job, rt, nil
 	}
@@ -336,6 +340,16 @@ func (s *inheritService) loadJob(ctx context.Context, userID, jobID string) (*in
 			return nil, nil, errStoreUnavailable
 		}
 		if holder == jobID {
+			return job, nil, nil
+		}
+		job, err = s.jobs.load(ctx, jobID)
+		if err != nil {
+			return nil, nil, errStoreUnavailable
+		}
+		if job == nil || job.OwnerUserID != userID {
+			return nil, nil, errJobNotFound
+		}
+		if job.Status.terminal() {
 			return job, nil, nil
 		}
 		now := s.now()

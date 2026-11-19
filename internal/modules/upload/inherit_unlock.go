@@ -39,7 +39,15 @@ type unlockInput struct {
 type unlockResult struct {
 	created   bool
 	rewrapped bool
+	kdfBusy   bool
 }
+
+const refundBusyUnlockScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] and redis.call('GET', KEYS[2]) == ARGV[2] then
+    return redis.call('DECR', KEYS[2])
+end
+return 0
+`
 
 // unlockVault is the step-up check of the inherit vault. It verifies the
 // owner's secret and returns their private key in memory (Close it). When
@@ -87,6 +95,10 @@ func (s *inheritService) unlockVault(ctx context.Context, meta requestMeta, in u
 	unlocked, res, p := s.unlockOrCreate(ctx, meta, in, allowCreate)
 	if p == nil {
 		_ = s.redis.Del(ctx, attemptKey).Err()
+	} else if res.kdfBusy {
+		refund, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = s.redis.Eval(refund, refundBusyUnlockScript, []string{lockKey, attemptKey}, token, count).Err()
 	}
 	return unlocked, res, p
 }
@@ -108,6 +120,7 @@ func (s *inheritService) unlockOrCreate(ctx context.Context, meta requestMeta, i
 		}
 		u, err := s.vault.CreateKey(ctx, meta.UserID, kind, []byte(secret))
 		if errors.Is(err, inheritvault.ErrKDFBusy) {
+			res.kdfBusy = true
 			return nil, res, errStoreUnavailable
 		}
 		if err != nil {
@@ -129,6 +142,7 @@ func (s *inheritService) unlockOrCreate(ctx context.Context, meta requestMeta, i
 	case err == nil:
 		return u, res, nil
 	case errors.Is(err, inheritvault.ErrKDFBusy):
+		res.kdfBusy = true
 		return nil, res, errStoreUnavailable
 	case !errors.Is(err, inheritvault.ErrDecrypt):
 		return nil, res, errInternal
@@ -141,6 +155,7 @@ func (s *inheritService) unlockOrCreate(ctx context.Context, meta requestMeta, i
 	}
 	u, err = s.vault.Rewrap(ctx, meta.UserID, []byte(in.PreviousPassword), []byte(secret))
 	if errors.Is(err, inheritvault.ErrKDFBusy) {
+		res.kdfBusy = true
 		return nil, res, errStoreUnavailable
 	}
 	if errors.Is(err, inheritvault.ErrDecrypt) {

@@ -60,6 +60,7 @@ var (
 	errGameDegraded         = problem(http.StatusServiceUnavailable, "game_degraded", "游戏服务器暂时不稳定，请稍后再试")
 	errJobNotFound          = problem(http.StatusNotFound, "job_not_found", "任务不存在或已过期")
 	errJobNotAwaiting       = problem(http.StatusConflict, "job_not_awaiting_confirm", "任务当前不在等待确认")
+	errJobOtherReplica      = problem(http.StatusConflict, "job_hosted_by_another_replica", "请在运行引继任务的后端实例重试确认")
 	errCannotCancel         = problem(http.StatusConflict, "cannot_cancel", "引继已开始执行，无法取消")
 	errUnauthenticated      = problem(http.StatusUnauthorized, "unauthenticated", "请先登录")
 	errStoreUnavailable     = problem(http.StatusServiceUnavailable, "store_unavailable", "服务暂时不可用，请稍后再试")

@@ -304,13 +304,15 @@ end
 return 0
 `
 
+var errInheritLeaseLost = errors.New("inherit job lease lost")
+
 func (s *inheritService) requireActiveLease(ctx context.Context, job *inheritJob) error {
 	result, err := s.redis.Eval(ctx, renewActiveLeaseScript, []string{inheritActiveKeyPrefix + job.OwnerUserID}, job.ID, inheritActiveLockTTL.Milliseconds()).Int()
 	if err != nil {
 		return err
 	}
 	if result != 1 {
-		return errors.New("inherit job lease lost")
+		return errInheritLeaseLost
 	}
 	return nil
 }
@@ -359,9 +361,12 @@ func (s *inheritService) handleGetJob(c fiber.Ctx) error {
 // confirm is the confirm step: the step-up unlock (which also creates the
 // owner's key on first use), then the public key goes to the waiting job.
 func (s *inheritService) confirm(ctx context.Context, meta requestMeta, jobID string, in unlockInput) (*jobView, *apiProblem) {
-	_, rt, p := s.loadJob(ctx, meta.UserID, jobID)
+	job, rt, p := s.loadJob(ctx, meta.UserID, jobID)
 	if p != nil {
 		return nil, p
+	}
+	if rt == nil && job.Status == jobStatusAwaitingConfirm {
+		return nil, errJobOtherReplica
 	}
 	if rt == nil || !s.awaiting(rt) {
 		return nil, errJobNotAwaiting
