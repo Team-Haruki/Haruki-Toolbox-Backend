@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestHydraGrantStoreEnvironmentIgnoresEmptyDefaults(t *testing.T) {
+	var cfg Config
+	cfg.OAuth2.HydraGrantStoreURL = "postgres://yaml.example.test/hydra"
+	t.Setenv("HYDRA_GRANT_STORE_URL", "")
+	if err := applyEnvOverrides(&cfg); err != nil || cfg.OAuth2.HydraGrantStoreURL != "postgres://yaml.example.test/hydra" {
+		t.Fatalf("empty deployment default cleared the Hydra grant store: %v", err)
+	}
+	t.Setenv("HYDRA_GRANT_STORE_URL", "postgres://env.example.test/hydra")
+	if err := applyEnvOverrides(&cfg); err != nil || cfg.OAuth2.HydraGrantStoreURL != "postgres://env.example.test/hydra" {
+		t.Fatalf("nonempty deployment override was ignored: %v", err)
+	}
+}
+
 func TestLoad(t *testing.T) {
 	t.Run("reject empty path", func(t *testing.T) {
 		if _, err := Load(""); err == nil {

@@ -411,6 +411,7 @@ func TestValidateUserSystemConfig(t *testing.T) {
 		cfg.UserSystem.AuthProvider = "kratos"
 		cfg.UserSystem.KratosPublicURL = "https://kratos-public.example.com"
 		cfg.UserSystem.KratosAdminURL = "https://kratos-admin.example.com"
+		cfg.UserSystem.FrontendURL = "https://toolbox.example.com/settings"
 		cfg.UserSystem.AuthProxyEnabled = true
 		cfg.UserSystem.AuthProxyTrustedHeader = "X-Auth-Proxy-Secret"
 		cfg.UserSystem.AuthProxyTrustedValue = "a-sufficiently-long-shared-secret"
@@ -423,6 +424,22 @@ func TestValidateUserSystemConfig(t *testing.T) {
 			t.Fatalf("expected complete auth proxy config to pass, got %v", err)
 		}
 	})
+}
+
+func TestValidateUserSystemRequiresTrustedAdminFrontendOrigin(t *testing.T) {
+	var cfg harukiConfig.Config
+	cfg.UserSystem.KratosPublicURL = "https://kratos-public.example.test"
+	cfg.UserSystem.KratosAdminURL = "https://kratos-admin.example.test"
+	for _, address := range []string{"", "ftp://frontend.example.test", "https://user@frontend.example.test", "/settings"} {
+		cfg.UserSystem.FrontendURL = address
+		if err := validateUserSystemConfig(cfg); err == nil || !strings.Contains(err.Error(), "user_system.frontend_url") {
+			t.Fatalf("frontend %q returned %v", address, err)
+		}
+	}
+	cfg.UserSystem.FrontendURL = "https://frontend.example.test:443/settings"
+	if err := validateUserSystemConfig(cfg); err != nil {
+		t.Fatalf("frontend URL with path returned %v", err)
+	}
 }
 
 func TestValidateBackendConfigRequiresExactTrustedProxyAddresses(t *testing.T) {

@@ -8,9 +8,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// RequireTrustedBrowserOrigin protects cookie-authenticated admin mutations.
-// A configured frontend path is irrelevant to its browser origin.
-func RequireTrustedBrowserOrigin(frontendURL string) fiber.Handler {
+// TrustedBrowserOrigin returns the origin for an HTTP(S) URL with no userinfo.
+func TrustedBrowserOrigin(frontendURL string) string {
 	frontend, err := url.Parse(strings.TrimSpace(frontendURL))
 	allowed := ""
 	if err == nil && frontend.Hostname() != "" && frontend.User == nil && (frontend.Scheme == "https" || frontend.Scheme == "http") {
@@ -22,6 +21,12 @@ func RequireTrustedBrowserOrigin(frontendURL string) fiber.Handler {
 			allowed = strings.TrimSuffix(allowed, ":80")
 		}
 	}
+	return allowed
+}
+
+// RequireTrustedBrowserOrigin protects cookie-authenticated admin mutations.
+func RequireTrustedBrowserOrigin(frontendURL string) fiber.Handler {
+	allowed := TrustedBrowserOrigin(frontendURL)
 	return func(c fiber.Ctx) error {
 		switch c.Method() {
 		case fiber.MethodGet, fiber.MethodHead, fiber.MethodOptions:

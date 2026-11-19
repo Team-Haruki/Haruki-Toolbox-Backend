@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	botSecurityModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/botsecurity"
 	oauth2Module "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/oauth2"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
@@ -28,6 +29,9 @@ func validateUserSystemConfig(cfg harukiConfig.Config) error {
 	}
 	if strings.TrimSpace(cfg.UserSystem.KratosAdminURL) == "" {
 		return fmt.Errorf("user_system.kratos_admin_url is required")
+	}
+	if admincore.TrustedBrowserOrigin(cfg.UserSystem.FrontendURL) == "" {
+		return fmt.Errorf("user_system.frontend_url must be an HTTP(S) URL without user info")
 	}
 	if cfg.UserSystem.AuthProxyEnabled {
 		if strings.TrimSpace(cfg.UserSystem.AuthProxyTrustedHeader) == "" {
