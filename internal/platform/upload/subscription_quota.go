@@ -103,10 +103,11 @@ func storePendingBirthdayEvent(ctx context.Context, client *redis.Client, event 
 	if err != nil {
 		return nil, err
 	}
-	if err := jsoncodec.Unmarshal([]byte(stored), &event); err != nil {
+	var accepted BirthdayMonitorEvent
+	if err := jsoncodec.Unmarshal([]byte(stored), &accepted); err != nil {
 		return nil, err
 	}
-	return &event, nil
+	return &accepted, nil
 }
 
 func deletePendingBirthdayEvents(ctx context.Context, client *redis.Client, eventKeys ...string) error {
