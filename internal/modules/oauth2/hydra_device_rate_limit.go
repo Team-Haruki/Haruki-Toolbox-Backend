@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 )
 
@@ -63,6 +64,37 @@ type deviceRateCounter struct {
 type deviceRateReservation struct {
 	LimitedIndex int
 	Counts       []int64
+}
+
+// firstExhausted checks counters without charging unauthenticated requests.
+// Callers must still reserve atomically after authentication.
+func (s *deviceFlowStore) firstExhausted(ctx context.Context, counters []deviceRateCounter) (int, error) {
+	manager, err := s.redisManager()
+	if err != nil {
+		return -1, err
+	}
+	keys := make([]string, 0, len(counters))
+	for _, counter := range counters {
+		keys = append(keys, counter.Key)
+	}
+	values, err := manager.Redis.MGet(ctx, keys...).Result()
+	if err != nil {
+		return -1, err
+	}
+	for i, value := range values {
+		if value == nil {
+			continue
+		}
+		raw, ok := value.(string)
+		count, err := strconv.ParseInt(raw, 10, 64)
+		if !ok || err != nil {
+			return -1, fmt.Errorf("invalid device rate counter")
+		}
+		if count >= int64(counters[i].Limit) {
+			return i, nil
+		}
+	}
+	return -1, nil
 }
 
 func (s *deviceFlowStore) reserve(ctx context.Context, counters []deviceRateCounter) (deviceRateReservation, error) {

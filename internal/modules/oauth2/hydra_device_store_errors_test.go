@@ -56,7 +56,7 @@ func deviceStoreCalls() []deviceStoreCall {
 			return s.requeueUnredeemed(ctx, "flow", testConsentRequestID, 0)
 		}},
 		{"claim", func(ctx context.Context, s *deviceFlowStore) error {
-			_, err := s.claim(ctx, "BCDFGHJK", actor.FlowHandle, actor.UserID, actor.SessionHash, time.Minute)
+			_, err := s.claim(ctx, "BCDFGHJK", actor.FlowHandle, actor.UserID, actor.SessionHash, time.Minute, 150)
 			return err
 		}},
 		{"flowIDForHandle", func(ctx context.Context, s *deviceFlowStore) error {
@@ -162,7 +162,7 @@ func claimedTestFlow(t *testing.T, env *deviceTestEnv) (string, string, deviceDe
 		t.Fatalf("Hydra's user code %q does not normalize", userCode)
 	}
 	actor := deviceDecisionActor{UserID: testUserID, SessionHash: "session-hash", FlowHandle: newDeviceFlowHandle()}
-	claim, err := env.store.claim(t.Context(), normalized, actor.FlowHandle, actor.UserID, actor.SessionHash, time.Minute)
+	claim, err := env.store.claim(t.Context(), normalized, actor.FlowHandle, actor.UserID, actor.SessionHash, time.Minute, 150)
 	if err != nil || claim.Code != deviceClaimNew || claim.FlowID != flowID {
 		t.Fatalf("claim = %+v, err = %v", claim, err)
 	}
@@ -206,7 +206,7 @@ func TestDeviceFlowStoreRejectsCorruptRecords(t *testing.T) {
 		env.hydra.mu.Lock()
 		userCode := env.hydra.userCodes[0]
 		env.hydra.mu.Unlock()
-		_, err := env.store.claim(t.Context(), userCode, newDeviceFlowHandle(), testUserID, "session-hash", time.Minute)
+		_, err := env.store.claim(t.Context(), userCode, newDeviceFlowHandle(), testUserID, "session-hash", time.Minute, 150)
 		if err == nil || err.Error() != "invalid device flow timestamps" {
 			t.Fatalf("err = %v", err)
 		}

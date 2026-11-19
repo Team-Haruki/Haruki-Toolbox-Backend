@@ -5,10 +5,30 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestHydraConfigConsentIndexIsOptionalAndBounded(t *testing.T) {
+	for _, cfg := range []*HydraConfig{nil, NewHydraConfig(HydraConfigOptions{})} {
+		if _, err := cfg.ListConsentSubjects(t.Context(), "viewer", 3); !errors.Is(err, ErrConsentIndexUnavailable) {
+			t.Fatalf("missing consent index returned %v", err)
+		}
+	}
+	cfg := NewHydraConfig(HydraConfigOptions{
+		ConsentSubjects: func(_ context.Context, client string, limit int) ([]string, error) {
+			if client != "viewer" || limit != 3 {
+				t.Errorf("unexpected lookup %q with limit %d", client, limit)
+			}
+			return []string{"subject"}, nil
+		},
+	})
+	if subjects, err := cfg.ListConsentSubjects(t.Context(), "viewer", 3); err != nil || !slices.Equal(subjects, []string{"subject"}) {
+		t.Fatalf("consent subjects = %v, %v", subjects, err)
+	}
+}
 
 func TestHydraConfigDefaultsProvider(t *testing.T) {
 	config := NewHydraConfig(HydraConfigOptions{})

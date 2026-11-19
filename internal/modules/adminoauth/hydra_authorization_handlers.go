@@ -1,6 +1,7 @@
 package adminoauth
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -44,9 +45,12 @@ func handleListHydraOAuthClientAuthorizations(apiHelper *harukiAPIHelper.HarukiT
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
 		}
-		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID)
+		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID, actorRole)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientAuthorizationsList, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{"hydraMode": true}))
+			if errors.Is(err, errAuthorizationScanLimited) {
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "oauth authorization scan capacity exceeded", nil)
+			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth authorizations")
 		}
 		records = scopeHydraClientAuthorizationRecordsForActor(records, actorUserID, actorRole)
@@ -128,9 +132,12 @@ func handleGetHydraOAuthClientStatistics(apiHelper *harukiAPIHelper.HarukiToolbo
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client")
 		}
-		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID)
+		records, err := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID, actorRole)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientStatisticsQuery, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryAuthorizationsFailed, map[string]any{"hydraMode": true}))
+			if errors.Is(err, errAuthorizationScanLimited) {
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "oauth authorization scan capacity exceeded", nil)
+			}
 			return harukiAPIHelper.ErrorInternal(c, "failed to query oauth client statistics")
 		}
 		records = scopeHydraClientAuthorizationRecordsForActor(records, actorUserID, actorRole)

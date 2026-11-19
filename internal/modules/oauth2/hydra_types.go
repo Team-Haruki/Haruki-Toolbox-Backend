@@ -5,10 +5,11 @@ import (
 )
 
 type hydraOAuthClientDetails struct {
-	ClientID   string   `json:"client_id"`
-	ClientName string   `json:"client_name"`
-	GrantTypes []string `json:"grant_types"`
-	Scope      string   `json:"scope"`
+	ClientID    string   `json:"client_id"`
+	ClientName  string   `json:"client_name"`
+	GrantTypes  []string `json:"grant_types"`
+	Scope       string   `json:"scope"`
+	SubjectType string   `json:"subject_type"`
 }
 
 type hydraLoginRequestResponse struct {

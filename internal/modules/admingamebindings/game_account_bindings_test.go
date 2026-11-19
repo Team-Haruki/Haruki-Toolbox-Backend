@@ -325,6 +325,15 @@ func TestGlobalBindingActionsRevokeGrantsOnlyAfterSuccessfulCommit(t *testing.T)
 			return next.Mutate(ctx, m)
 		})
 	})
+	failGrantCleanup := false
+	db.GameAccountDataGrant.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if failGrantCleanup && mutation.Op().Is(ent.OpDelete) {
+				return nil, errors.New("fixture grant cleanup failure")
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
 	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
@@ -362,6 +371,19 @@ func TestGlobalBindingActionsRevokeGrantsOnlyAfterSuccessfulCommit(t *testing.T)
 		t.Fatal("failed operations revoked stored permissions")
 	}
 	inject = false
+	failGrantCleanup = true
+	request(http.MethodPut, "/single/jp/42", reassign, http.StatusInternalServerError, "failed to reassign binding")
+	request(http.MethodDelete, "/single/jp/43", "", http.StatusInternalServerError, "failed to delete binding")
+	for _, id := range []string{"42", "43"} {
+		row := db.GameAccountBinding.Query().Where(gameaccountbinding.GameUserIDEQ(id)).OnlyX(ctx)
+		if row.QueryUser().OnlyIDX(ctx) != "first" {
+			t.Fatalf("failed grant cleanup changed ownership of binding %s", id)
+		}
+	}
+	if db.GameAccountDataGrant.Query().CountX(ctx) != 2 {
+		t.Fatal("failed grant cleanup removed existing permissions")
+	}
+	failGrantCleanup = false
 	request(http.MethodPost, "/batch-reassign", batchReassign, http.StatusOK, `"success":true`)
 	request(http.MethodDelete, "/single/jp/43", "", http.StatusOK, "binding deleted")
 	row := db.GameAccountBinding.Query().Where(gameaccountbinding.GameUserIDEQ("42")).OnlyX(ctx)

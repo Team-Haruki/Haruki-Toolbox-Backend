@@ -96,7 +96,7 @@ scope=openid profile email
 ```text
 sub    ← 稳定标识，用这个
 email  ← 用户可以改，不要用作主键
-uid    ← Haruki 本地用户 ID 的扩展 claim，仅为兼容既有 Toolbox API 保留
+uid    ← 公共 subject 客户端的兼容扩展，pairwise 客户端的 ID token 省略该字段
 ```
 
 ### claims 的实际发放

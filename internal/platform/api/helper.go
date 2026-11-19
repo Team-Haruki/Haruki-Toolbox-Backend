@@ -152,6 +152,15 @@ func (h *HarukiToolboxRouterHelpers) CurrentRuntimeConfig(ctx context.Context) (
 	return snapshot, nil
 }
 
+// CurrentRuntimeConfigForAuthentication waits for a fresh credential read.
+func (h *HarukiToolboxRouterHelpers) CurrentRuntimeConfigForAuthentication(ctx context.Context) (platformRuntimeConfig.Snapshot, error) {
+	snapshot, err := h.runtimeConfigService().CurrentForAuthentication(ctx)
+	if err == nil {
+		h.applyLegacyRuntimeConfigSnapshot(snapshot)
+	}
+	return snapshot, err
+}
+
 func (h *HarukiToolboxRouterHelpers) UpdateRuntimeConfig(update RuntimeConfigUpdate) error {
 	if h == nil {
 		return nil

@@ -123,25 +123,41 @@ func HydraOAuthManagementEnabled(hydraConfig *harukiOAuth2.HydraConfig) bool {
 }
 
 func ListHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject string) ([]HydraConsentSession, error) {
+	sessions := make([]HydraConsentSession, 0)
+	err := WalkHydraConsentSessions(ctx, hydraConfig, subject, func(session HydraConsentSession) error {
+		sessions = append(sessions, session)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return sessions, nil
+}
+
+// WalkHydraConsentSessions visits each page before fetching the next.
+func WalkHydraConsentSessions(ctx context.Context, hydraConfig *harukiOAuth2.HydraConfig, subject string, visit func(HydraConsentSession) error) error {
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
-		return nil, fmt.Errorf("subject is required")
+		return fmt.Errorf("subject is required")
 	}
 
 	pageToken := ""
 	seenPageTokens := make(map[string]struct{})
-	sessions := make([]HydraConsentSession, 0)
 	for {
 		page, nextPageToken, err := listHydraConsentSessionsPage(ctx, hydraConfig, subject, pageToken)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		sessions = append(sessions, page...)
+		for _, session := range page {
+			if err := visit(session); err != nil {
+				return err
+			}
+		}
 		if nextPageToken == "" {
-			return sessions, nil
+			return nil
 		}
 		if _, exists := seenPageTokens[nextPageToken]; exists {
-			return nil, fmt.Errorf("hydra consent session pagination loop detected")
+			return fmt.Errorf("hydra consent session pagination loop detected")
 		}
 		seenPageTokens[nextPageToken] = struct{}{}
 		pageToken = nextPageToken

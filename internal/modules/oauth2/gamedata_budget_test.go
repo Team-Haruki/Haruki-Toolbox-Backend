@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	"github.com/gofiber/fiber/v3"
 )
@@ -19,12 +20,24 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 	env.db.DB.GameAccountBinding.Create().SetUserID("owner").SetServer("jp").SetGameUserID("123").SetVerified(true).ExecX(ctx)
 	env.redis.Set(harukiRedis.BuildGameDataStampMemoKey("jp", "mysekai", 123), "100")
 	key := harukiRedis.BuildVersionedGameDataCacheKey("oauth2", "jp", "mysekai", 123, "", 100, env.db.GameData.HarvestSchemaFingerprint("jp"))
+	allowedKeys := []string{"isEnabled"}
+	env.apiHelper.RuntimeConfig = runtimeconfig.New(runtimeconfig.Snapshot{AllowedKeys: allowedKeys}, nil)
+	currentKey := key + data.PublishedGameDataCacheVersion + ":a=" + data.PublicAllowlistDigest(allowedKeys)
 	env.redis.Set(key, `{"legacy":true}`)
-	env.redis.Set(key+data.PublishedGameDataCacheVersion, `{"example":true}`)
+	env.redis.Set(key+data.PublishedGameDataCacheVersion, `{"legacy":true}`)
+	env.redis.Set(currentKey, `{"isEnabled":true}`)
 	env.app.Get("/game/:server/:data_type/:user_id", func(c fiber.Ctx) error {
 		c.Locals("userID", "owner")
 		return c.Next()
 	}, handleOAuth2GetGameData(env.apiHelper))
+	unsupported, err := env.app.Test(httptest.NewRequest(http.MethodGet, "/game/jp/mysekai_birthday_party/123", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = unsupported.Body.Close()
+	if unsupported.StatusCode != http.StatusBadRequest {
+		t.Fatalf("upload-only Mysekai type returned %d on the OAuth2 read route", unsupported.StatusCode)
+	}
 
 	check := func(query string, want int) {
 		t.Helper()
@@ -49,7 +62,11 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 		check("", http.StatusServiceUnavailable)
 	}()
 	check("", http.StatusOK)
-	env.redis.Del(key + data.PublishedGameDataCacheVersion)
+	env.apiHelper.SetAllowedKeys([]string{"upload_time"})
+	check("", http.StatusInternalServerError)
+	env.apiHelper.SetAllowedKeys(allowedKeys)
+	check("", http.StatusOK)
+	env.redis.Del(currentKey)
 	check("", http.StatusInternalServerError)
 }
 

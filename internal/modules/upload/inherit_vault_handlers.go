@@ -335,7 +335,7 @@ func (s *inheritService) reissue(ctx context.Context, server harukiUtils.Support
 		}
 		return "", errReissueFailed, err
 	}
-	id, err := s.issueWithRetry(ctx, game, password)
+	id, err := s.issueWithRetry(ctx, game.IssueInheritCode, password)
 	if err != nil {
 		if gameFailureCode(err) == codeGameError {
 			return "", errReissueInheritInvalid, err

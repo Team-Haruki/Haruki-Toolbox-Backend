@@ -10,9 +10,14 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
+	"github.com/google/uuid"
 )
 
 const (
+	unlockWorkLimit     = 12
+	unlockWorkWindow    = time.Minute
+	unlockWorkPrefix    = "inherit:vault:unlock-work:"
+	unlockLeasePrefix   = "inherit:vault:unlock-lease:"
 	unlockAttemptLimit  = 10
 	unlockAttemptWindow = 15 * time.Minute
 	unlockAttemptPrefix = "inherit:vault:unlock:"
@@ -34,17 +39,50 @@ type unlockInput struct {
 type unlockResult struct {
 	created   bool
 	rewrapped bool
+	kdfBusy   bool
 }
+
+const refundBusyUnlockScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] and redis.call('GET', KEYS[2]) == ARGV[2] then
+    return redis.call('DECR', KEYS[2])
+end
+return 0
+`
 
 // unlockVault is the step-up check of the inherit vault. It verifies the
 // owner's secret and returns their private key in memory (Close it). When
 // allowCreate is set and the owner has no key yet, the same input creates
 // one. Failed and successful attempts alike count against a per-user limit;
-// a success resets it.
+// a success resets the incorrect-secret budget. The work budget never resets
+// on success.
 func (s *inheritService) unlockVault(ctx context.Context, meta requestMeta, in unlockInput, allowCreate bool) (*inheritvault.Unlocked, unlockResult, *apiProblem) {
 	var res unlockResult
 	if !s.available() {
 		return nil, res, errVaultUnavailable
+	}
+	lockKey := unlockLeasePrefix + meta.UserID
+	token := uuid.NewString()
+	redis := s.api.DBManager.Redis
+	acquired, err := redis.Redis.SetNX(ctx, lockKey, token, 2*time.Minute).Result()
+	if err != nil {
+		return nil, res, errStoreUnavailable
+	}
+	if !acquired {
+		return nil, res, errUnlockRateLimited
+	}
+	defer func() {
+		release, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_, _ = redis.DeleteCacheIfValueMatches(release, lockKey, token)
+	}()
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	work, err := redis.IncrementWithTTL(ctx, unlockWorkPrefix+meta.UserID, unlockWorkWindow)
+	if err != nil {
+		return nil, res, errStoreUnavailable
+	}
+	if work > unlockWorkLimit {
+		return nil, res, errUnlockRateLimited
 	}
 	attemptKey := unlockAttemptPrefix + meta.UserID
 	count, err := s.api.DBManager.Redis.IncrementWithTTL(ctx, attemptKey, unlockAttemptWindow)
@@ -57,6 +95,10 @@ func (s *inheritService) unlockVault(ctx context.Context, meta requestMeta, in u
 	unlocked, res, p := s.unlockOrCreate(ctx, meta, in, allowCreate)
 	if p == nil {
 		_ = s.redis.Del(ctx, attemptKey).Err()
+	} else if res.kdfBusy {
+		refund, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = s.redis.Eval(refund, refundBusyUnlockScript, []string{lockKey, attemptKey}, token, count).Err()
 	}
 	return unlocked, res, p
 }
@@ -77,6 +119,10 @@ func (s *inheritService) unlockOrCreate(ctx context.Context, meta requestMeta, i
 			return nil, res, p
 		}
 		u, err := s.vault.CreateKey(ctx, meta.UserID, kind, []byte(secret))
+		if errors.Is(err, inheritvault.ErrKDFBusy) {
+			res.kdfBusy = true
+			return nil, res, errStoreUnavailable
+		}
 		if err != nil {
 			return nil, res, errInternal
 		}
@@ -95,6 +141,9 @@ func (s *inheritService) unlockOrCreate(ctx context.Context, meta requestMeta, i
 	switch {
 	case err == nil:
 		return u, res, nil
+	case errors.Is(err, inheritvault.ErrKDFBusy):
+		res.kdfBusy = true
+		return nil, res, errStoreUnavailable
 	case !errors.Is(err, inheritvault.ErrDecrypt):
 		return nil, res, errInternal
 	case info.SecretKind == inheritvault.SecretKindPIN:
@@ -105,6 +154,10 @@ func (s *inheritService) unlockOrCreate(ctx context.Context, meta requestMeta, i
 		return nil, res, errVaultPasswordChanged
 	}
 	u, err = s.vault.Rewrap(ctx, meta.UserID, []byte(in.PreviousPassword), []byte(secret))
+	if errors.Is(err, inheritvault.ErrKDFBusy) {
+		res.kdfBusy = true
+		return nil, res, errStoreUnavailable
+	}
 	if errors.Is(err, inheritvault.ErrDecrypt) {
 		return nil, res, errPreviousPwInvalid
 	}

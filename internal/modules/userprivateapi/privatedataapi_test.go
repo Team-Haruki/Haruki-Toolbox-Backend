@@ -23,6 +23,7 @@ func TestValidateUserPermission(t *testing.T) {
 		)
 
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set(fiber.HeaderAuthorization, "candidate-token")
 		resp, err := app.Test(req)
 		if err != nil {
 			t.Fatalf("app.Test returned error: %v", err)

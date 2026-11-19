@@ -123,6 +123,9 @@
     handler: allow
   mutators:
     - handler: header
+      config: &tracker_auth_proxy_headers
+        headers:
+          X-Auth-Proxy-Secret: '{{ $secret := env "TRACKER_AUTH_PROXY_SECRET" }}{{ if and (ge (len $secret) 16) (ne $secret (env "OATHKEEPER_SHARED_SECRET")) }}{{ $secret }}{{ end }}'
 
 - id: haruki-protected-tracker-ws-prefixed
   match:
@@ -137,6 +140,7 @@
     handler: allow
   mutators:
     - handler: header
+      config: *tracker_auth_proxy_headers
 
 - id: haruki-protected-tracker-web-v2-private-prefixed
   match:
@@ -151,6 +155,7 @@
     handler: allow
   mutators:
     - handler: header
+      config: *tracker_auth_proxy_headers
 
 - id: haruki-public-tracker-web-v2-prefixed
   match:
@@ -164,7 +169,17 @@
   authorizer:
     handler: allow
   mutators:
-    - handler: noop
+    - handler: header
+      config:
+        headers:
+          X-Auth-Proxy-Secret: ""
+          X-Kratos-Identity-Id: ""
+          X-User-Name: ""
+          X-User-Email: ""
+          X-User-Email-Verified: ""
+          X-Auth-Proxy-Session-Id: ""
+          X-Auth-Proxy-Session-Aal: ""
+          X-User-Id: ""
 
 - id: haruki-public-bot-neo-status
   match:

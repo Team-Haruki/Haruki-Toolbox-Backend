@@ -26,8 +26,11 @@ serve:
           - Content-Type
           - Cookie
           - X-Requested-With
+          - If-None-Match
       exposed_headers:
           - Content-Type
+          - ETag
+          - X-Upload-Time
       allow_credentials: true
 
 errors:

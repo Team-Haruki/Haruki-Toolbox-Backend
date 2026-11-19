@@ -175,7 +175,7 @@ func (s *Store) CreateKey(ctx context.Context, userID, kind string, secret []byt
 	if kind != SecretKindPassword && kind != SecretKindPIN {
 		return nil, fmt.Errorf("inherit vault: unknown secret kind %q", kind)
 	}
-	k, err := GenerateKey(s.master, userID, nextKeyVersion(), secret)
+	k, err := generateKeyContext(ctx, s.master, userID, nextKeyVersion(), secret)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (s *Store) Unlock(ctx context.Context, userID string, secret []byte) (*Unlo
 	if err != nil {
 		return nil, err
 	}
-	priv, err := UnwrapPrivateKey(s.master, k, secret)
+	priv, err := unwrapPrivateKeyContext(ctx, s.master, k, secret)
 	if err != nil {
 		return nil, err
 	}
@@ -231,12 +231,12 @@ func (s *Store) Rewrap(ctx context.Context, userID string, oldSecret, newSecret 
 	if err != nil {
 		return nil, err
 	}
-	priv, err := UnwrapPrivateKey(s.master, k, oldSecret)
+	priv, err := unwrapPrivateKeyContext(ctx, s.master, k, oldSecret)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(priv)
-	nk, err := Rewrap(s.master, k, priv, newSecret)
+	nk, err := rewrapContext(ctx, s.master, k, priv, newSecret)
 	if err != nil {
 		return nil, err
 	}

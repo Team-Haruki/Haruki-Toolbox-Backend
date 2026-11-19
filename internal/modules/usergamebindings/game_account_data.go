@@ -103,10 +103,15 @@ func handleGetOwnedGameAccountData(apiHelper *harukiAPIHelper.HarukiToolboxRoute
 			}
 			return data.SendGameDataResponse(c, resp)
 		case ownedGameAccountDataTypeMysekai:
-			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeMysekai, requestKey, false, nil) {
+			snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
+			if err != nil {
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game-data field policy unavailable", nil)
+			}
+			allowedKeys := snapshot.AllowedKeys
+			if ownedGameAccountNotModified(ctx, c, apiHelper, gameUserID, server, harukiUtils.UploadDataTypeMysekai, requestKey, true, allowedKeys) {
 				return c.SendStatus(fiber.StatusNotModified)
 			}
-			resp, err := data.HandleMysekaiRequest(ctx, apiHelper, gameUserID, server, requestKey)
+			resp, err := data.HandleMysekaiRequest(ctx, apiHelper, gameUserID, server, requestKey, allowedKeys)
 			if err != nil {
 				return respondVerifiedGameAccountDataError(c, err)
 			}

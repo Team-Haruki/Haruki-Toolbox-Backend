@@ -387,13 +387,11 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 		return respondDeviceBrowserError(c, fiber.StatusBadRequest, deviceCodeMalformedCode)
 	}
 
-	// The failure budget is reserved before any index is read, and given
-	// back only when the claim succeeds or the code turns out to be the
-	// caller's own.
+	// Reserve budgets before reaching the shared code index. When the shared
+	// budget is full, the caller can only look up their own previous claims.
 	counters := []deviceRateCounter{
 		{Key: keys.BuildOAuth2DeviceLookupFailUserKey(user.ID), Limit: limits.LookupFailUserPer10m, Window: deviceRateWindow},
 		{Key: keys.BuildOAuth2DeviceLookupFailUserDayKey(user.ID), Limit: limits.LookupFailUserPerDay, Window: deviceRateDayWindow},
-		{Key: keys.BuildOAuth2DeviceLookupFailGlobalKey(), Limit: limits.LookupFailGlobalPer10m, Window: deviceRateWindow},
 	}
 	reservation, err := h.store.reserve(ctx, counters)
 	if err != nil {
@@ -403,9 +401,6 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 		limited := counters[reservation.LimitedIndex]
 		return respondDeviceBrowserRateLimited(c, h.store.retryAfterSeconds(ctx, limited.Key, limited.Window))
 	}
-	if reservation.Counts[2] == int64(max(1, limits.LookupFailGlobalPer10m/deviceLookupGlobalWarnPart)) {
-		logDeviceEvent(h.logger(), "warn", "lookup_fail_global_warn", "", "", "count="+strconv.FormatInt(reservation.Counts[2], 10))
-	}
 	release := func() {
 		if err := h.store.release(ctx, counters); err != nil {
 			logDeviceEvent(h.logger(), "warn", "lookup_fail", "", "", "reason=release_failed")
@@ -413,7 +408,7 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 	}
 
 	flowHandle := newDeviceFlowHandle()
-	claim, err := h.store.claim(ctx, userCode, flowHandle, user.ID, user.SessionHash, h.cfg.claimTTL())
+	claim, err := h.store.claim(ctx, userCode, flowHandle, user.ID, user.SessionHash, h.cfg.claimTTL(), limits.LookupFailGlobalPer10m)
 	if err != nil {
 		release()
 		return respondDeviceBrowserUnavailable(c)
@@ -421,7 +416,13 @@ func (h *deviceBrowserHandlers) handleDeviceLookup(c fiber.Ctx) error {
 	switch claim.Code {
 	case deviceClaimNew, deviceClaimRenewed:
 		release()
+	case deviceClaimRateLimited:
+		release()
+		return respondDeviceBrowserRateLimited(c, h.store.retryAfterSeconds(ctx, keys.BuildOAuth2DeviceLookupFailGlobalKey(), deviceRateWindow))
 	case deviceClaimMissing, deviceClaimExpired, deviceClaimTaken:
+		if claim.FailureCount == int64(max(1, limits.LookupFailGlobalPer10m/deviceLookupGlobalWarnPart)) {
+			logDeviceEvent(h.logger(), "warn", "lookup_fail_global_warn", "", "", "count="+strconv.FormatInt(claim.FailureCount, 10))
+		}
 		logDeviceEvent(h.logger(), "info", "lookup_fail", "", "", "reason="+strings.ToLower(claim.Code))
 		if claim.Code == deviceClaimTaken {
 			logDeviceEvent(h.logger(), "warn", "lookup_conflict", claim.FlowID, "")
@@ -619,6 +620,7 @@ func (h *deviceBrowserHandlers) handleDeviceApprove(c fiber.Ctx) error {
 			GrantScope:    scopes,
 			GrantAudience: []string{},
 			UserID:        dbUser.ID,
+			SubjectType:   client.SubjectType,
 			UserName:      dbUser.Name,
 			UserEmail:     dbUser.Email,
 			EmailVerified: verifiedEmail != "" && strings.EqualFold(strings.TrimSpace(dbUser.Email), verifiedEmail),

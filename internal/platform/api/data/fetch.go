@@ -139,17 +139,42 @@ func HandleSuiteRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiTo
 
 // HandleMysekaiRequest takes an explicit ctx for the same reason as
 // HandleSuiteRequest: the caller owns the read deadline.
-func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
+func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string, allowedKeys []string) (any, error) {
+	keys, err := mysekaiAllowedProjection(requestKey, allowedKeys)
+	if err != nil {
+		return nil, err
+	}
+	return mysekaiBodyFromPostgres(ctx, apiHelper.DBManager.GameData.Mysekai(), userID, server, keys)
+}
+
+func mysekaiAllowedProjection(requestKey string, allowedKeys []string) ([]string, error) {
 	if err := ValidateGameDataKeySelection(requestKey); err != nil {
 		return nil, err
 	}
-	var keys []string
+	allowed := make(map[string]struct{}, len(allowedKeys))
+	var projection []string
+	for _, key := range allowedKeys {
+		if _, invalid := InvalidMysekaiRequestKey(key); !invalid && key != "" && !strings.Contains(key, ",") {
+			if _, found := allowed[key]; !found {
+				allowed[key] = struct{}{}
+				projection = append(projection, key)
+			}
+		}
+	}
 	if requestKey != "" {
 		if key, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
 			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
 		}
-		keys = strings.Split(requestKey, ",")
+		keys := strings.Split(requestKey, ",")
+		for _, key := range keys {
+			if _, ok := allowed[key]; !ok {
+				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
+			}
+		}
+		return keys, nil
 	}
-
-	return mysekaiBodyFromPostgres(ctx, apiHelper.DBManager.GameData.Mysekai(), userID, server, keys)
+	if len(projection) == 0 {
+		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
+	}
+	return projection, nil
 }

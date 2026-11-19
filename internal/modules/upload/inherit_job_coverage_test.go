@@ -31,13 +31,19 @@ import (
 type testInheritRunner struct {
 	refuse   atomic.Bool
 	shutdown chan struct{}
+	done     chan struct{}
 }
 
 func (r *testInheritRunner) Go(_ string, task func()) bool {
 	if r.refuse.Load() {
 		return false
 	}
-	go task()
+	go func() {
+		if r.done != nil {
+			defer close(r.done)
+		}
+		task()
+	}()
 	return true
 }
 
@@ -343,6 +349,31 @@ func TestJobTransferPhaseGates(t *testing.T) {
 // The account is handed back even when the vault cannot keep it: the job
 // still issues the new code and says what was not stored.
 func TestJobVaultStoreFailures(t *testing.T) {
+	t.Run("both stores unavailable after execute", func(t *testing.T) {
+		env := newInheritTestEnv(t)
+		runner := &testInheritRunner{done: make(chan struct{})}
+		env.svc.runner = runner
+		env.svc.vault = inheritvault.NewStore(env.vaultClient, nil, env.svc.vault.Master())
+		defer env.redis.SetError("")
+		env.useScriptedGame(&scriptedInheritGame{execute: func(context.Context) (string, error) {
+			_ = env.vaultClient.Close()
+			env.redis.SetError("ERR fixture Redis outage")
+			return testGameCredential, nil
+		}})
+		id := env.createJob(validJobRequest())
+		job := env.confirmAndWait(id, "succeeded", "failed")
+		if job["status"] != "succeeded" || job["new_code"] == nil || job["vault_entry_id"] != nil {
+			t.Fatal("the consumed transfer did not leave a recoverable code")
+		}
+		select {
+		case <-runner.done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("runner did not finish after the storage failure")
+		}
+		if retained := env.job(id); retained["new_code"] == nil {
+			t.Fatal("the encrypted recovery result disappeared after the runner finished")
+		}
+	})
 	t.Run("credential lost", func(t *testing.T) {
 		env := newInheritTestEnv(t)
 		env.svc.vault = inheritvault.NewStore(env.vaultClient, nil, env.svc.vault.Master())
@@ -505,9 +536,21 @@ func TestIssueWithRetryStopsWhenTheContextEnds(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := s.issueWithRetry(ctx, g, "password1")
+	_, err := s.issueWithRetry(ctx, g.IssueInheritCode, "password1")
 	if !errors.Is(err, context.Canceled) || !errors.Is(err, failure) || g.count("issue") != 1 {
 		t.Fatalf("err = %v after %d attempts", err, g.count("issue"))
+	}
+}
+
+func TestIssueWithRetryStopsWhenTheLeaseIsLost(t *testing.T) {
+	s := &inheritService{issueBackoff: func(int) time.Duration { return 0 }}
+	attempts := 0
+	_, err := s.issueWithRetry(t.Context(), func(context.Context, string) (string, error) {
+		attempts++
+		return "", errInheritLeaseLost
+	}, "password1")
+	if !errors.Is(err, errInheritLeaseLost) || attempts != 1 {
+		t.Fatalf("err = %v after %d attempts", err, attempts)
 	}
 }
 

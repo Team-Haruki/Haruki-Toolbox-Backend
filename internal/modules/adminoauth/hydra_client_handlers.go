@@ -1,6 +1,8 @@
 package adminoauth
 
 import (
+	"context"
+
 	"errors"
 	"sort"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/oauth2clientwebhookendpoint"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -136,6 +139,14 @@ func handleCreateHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientCreate, adminAuditTargetTypeOAuthClient, payload.ClientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonCreateClientFailed, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorInternal(c, "failed to create oauth client")
 			}
+		}
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), payload.ClientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client")
+		}
+		defer unlock()
+		if err := retireOrphanedClientWebhooks(c.Context(), apiHelper, hydraConfig, payload.ClientID); err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to clear previous oauth client webhooks")
 		}
 		createdClient, err := oauth2Module.CreateHydraOAuthClient(c.Context(), hydraConfig, oauth2Module.HydraOAuthClientUpsertInput{
 			ClientID:               payload.ClientID,
@@ -415,7 +426,7 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingClientID, nil))
 			return harukiAPIHelper.ErrorBadRequest(c, "client_id is required")
 		}
-		_, _, err := adminCoreModule.CurrentAdminActor(c)
+		_, actorRole, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
@@ -425,8 +436,17 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonInvalidRequestPayload, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid request payload")
 		}
+		unlock, err := hydraConfig.LockClientGrants(c.Context(), clientID, true)
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to reserve oauth client")
+		}
+		defer unlock()
 		if _, err := oauth2Module.GetHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			if oauth2Module.IsHydraNotFoundError(err) {
+				if err := deleteOAuth2ClientWebhooks(c.Context(), apiHelper, clientID); err != nil {
+					adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, map[string]any{"reason": "delete_webhooks_failed"})
+					return harukiAPIHelper.ErrorInternal(c, "oauth client deleted but webhook cleanup failed")
+				}
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonClientNotFound, map[string]any{"hydraMode": true}))
 				return harukiAPIHelper.ErrorNotFound(c, "client not found")
 			}
@@ -437,7 +457,7 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		if options.DeleteAuthorizations {
 			// Nothing to revoke first: deleting the client cascades to its consent
 			// sessions and tokens in Hydra. The grants are only counted.
-			if records, listErr := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID); listErr == nil {
+			if records, listErr := collectHydraClientAuthorizationRecords(c.Context(), apiHelper, hydraConfig, clientID, actorRole); listErr == nil {
 				deletedAuthorizations = len(records)
 			}
 		}
@@ -451,6 +471,10 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		if err := oauth2Module.DeleteHydraOAuthClient(c.Context(), hydraConfig, clientID); err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDeleteClientFailed, map[string]any{"hydraMode": true}))
 			return harukiAPIHelper.ErrorInternal(c, "failed to delete oauth client")
+		}
+		if err := deleteOAuth2ClientWebhooks(c.Context(), apiHelper, clientID); err != nil {
+			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultFailure, map[string]any{"reason": "delete_webhooks_failed"})
+			return harukiAPIHelper.ErrorInternal(c, "oauth client deleted but webhook cleanup failed")
 		}
 		resp := adminOAuthClientDeleteResponse{
 			ClientID:              clientID,
@@ -466,4 +490,29 @@ func handleDeleteHydraOAuthClient(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionOAuthClientDelete, adminAuditTargetTypeOAuthClient, clientID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{"hydraMode": true, "deleteAuthorizations": options.DeleteAuthorizations, "deleteTokens": options.DeleteTokens, "deletedAuthorizations": deletedAuthorizations, "deletedTokens": deletedTokens})
 		return harukiAPIHelper.Responses.SuccessResponse(c, "oauth client deleted", &resp)
 	}
+}
+
+// A failed deletion cleanup may leave local callbacks behind. Before creating
+// a client with that ID, require confirmed absence in Hydra and remove them.
+func retireOrphanedClientWebhooks(ctx context.Context, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, hydra *harukiOAuth2.HydraConfig, clientID string) error {
+	if helper.DBManager == nil || helper.DBManager.DB == nil {
+		return errors.New("oauth client webhook storage unavailable")
+	}
+	exists, err := helper.DBManager.DB.OAuth2ClientWebhookEndpoint.Query().Where(oauth2clientwebhookendpoint.ClientIDEQ(clientID)).Exist(ctx)
+	if err != nil || !exists {
+		return err
+	}
+	_, err = oauth2Module.GetHydraOAuthClient(ctx, hydra, clientID)
+	if oauth2Module.IsHydraNotFoundError(err) {
+		return deleteOAuth2ClientWebhooks(ctx, helper, clientID)
+	}
+	return err
+}
+
+func deleteOAuth2ClientWebhooks(ctx context.Context, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, clientID string) error {
+	if helper.DBManager == nil || helper.DBManager.DB == nil {
+		return errors.New("oauth client webhook storage unavailable")
+	}
+	_, err := helper.DBManager.DB.OAuth2ClientWebhookEndpoint.Delete().Where(oauth2clientwebhookendpoint.ClientIDEQ(clientID)).Exec(ctx)
+	return err
 }

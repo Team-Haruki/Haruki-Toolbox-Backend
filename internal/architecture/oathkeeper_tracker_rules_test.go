@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,6 +27,9 @@ type oathkeeperRule struct {
 	} `yaml:"authenticators"`
 	Mutators []struct {
 		Handler string `yaml:"handler"`
+		Config  struct {
+			Headers map[string]string `yaml:"headers"`
+		} `yaml:"config"`
 	} `yaml:"mutators"`
 }
 
@@ -142,5 +146,76 @@ func TestOathkeeperEventTrackerWebRules(t *testing.T) {
 		if len(rule.Authenticators) == 0 || rule.Authenticators[0].Handler == "noop" || rule.Authenticators[0].Handler == "anonymous" {
 			t.Errorf("%s must stay authenticated, got %+v", privateID, rule.Authenticators)
 		}
+	}
+}
+
+func TestTrackerRulesNeverForwardToolboxCredential(t *testing.T) {
+	const toolbox = "toolbox-credential-fixture"
+	const tracker = "tracker-credential-fixture"
+	t.Setenv("OATHKEEPER_SHARED_SECRET", toolbox)
+	global, err := os.ReadFile(filepath.Join(repositoryRoot(t), "external", "oathkeeper", "oathkeeper.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Mutators map[string]struct {
+			Config struct {
+				Headers map[string]string `yaml:"headers"`
+			} `yaml:"config"`
+		} `yaml:"mutators"`
+	}
+	if err := yaml.Unmarshal(global, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	templateFuncs := template.FuncMap{"env": os.Getenv}
+	toolboxHeader := cfg.Mutators["header"].Config.Headers["X-Auth-Proxy-Secret"]
+	render := func(raw string) string {
+		t.Helper()
+		tmpl, err := template.New("header").Funcs(templateFuncs).Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var value strings.Builder
+		if err := tmpl.Execute(&value, nil); err != nil {
+			t.Fatal(err)
+		}
+		return value.String()
+	}
+	if render(toolboxHeader) != toolbox {
+		t.Fatal("Toolbox header did not render the deployment credential")
+	}
+	count := 0
+	for _, rule := range loadOathkeeperRules(t) {
+		if rule.Upstream.StripPath != "/event-tracker" {
+			continue
+		}
+		count++
+		expectedAuthenticator := "cookie_session"
+		if strings.HasPrefix(rule.ID, "haruki-public-") {
+			expectedAuthenticator = "noop"
+		}
+		if len(rule.Authenticators) != 1 || rule.Authenticators[0].Handler != expectedAuthenticator {
+			t.Fatalf("Tracker rule %s changed its authenticator", rule.ID)
+		}
+		if len(rule.Mutators) != 1 || rule.Mutators[0].Handler != "header" {
+			t.Fatalf("rule %s has no header override", rule.ID)
+		}
+		header, ok := rule.Mutators[0].Config.Headers["X-Auth-Proxy-Secret"]
+		if !ok {
+			t.Fatalf("rule %s inherits the Toolbox credential", rule.ID)
+		}
+		for _, tc := range []struct{ value, want string }{{tracker, tracker}, {toolbox, ""}, {"", ""}, {"short", ""}} {
+			t.Setenv("TRACKER_AUTH_PROXY_SECRET", tc.value)
+			want := tc.want
+			if strings.HasPrefix(rule.ID, "haruki-public-") {
+				want = ""
+			}
+			if render(header) != want {
+				t.Fatalf("rule %s rendered the wrong credential", rule.ID)
+			}
+		}
+	}
+	if count != 4 {
+		t.Fatalf("covered %d Tracker routes, want 4", count)
 	}
 }

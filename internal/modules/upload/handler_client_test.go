@@ -2,21 +2,71 @@ package upload
 
 import (
 	"context"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"io"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	harukiDataHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiSekai "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/game/sekai"
 	harukiHttp "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/http"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 )
 
 type uploadAuthorizerStub struct{}
+
+type blockedWebhookConfigStore struct {
+	runtimeconfig.Store
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s blockedWebhookConfigStore) Load(context.Context) (runtimeconfig.Snapshot, bool, error) {
+	s.entered <- struct{}{}
+	<-s.release
+	return runtimeconfig.Snapshot{}, false, nil
+}
+
+func TestUploadWebhookRetainsPolicyWhenRefreshIsBusy(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		store := blockedWebhookConfigStore{entered: make(chan struct{}, 16), release: make(chan struct{})}
+		release := sync.OnceFunc(func() { close(store.release) })
+		t.Cleanup(release)
+		service := runtimeconfig.New(runtimeconfig.Snapshot{WebhookEnabled: &enabled}, store)
+		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{RuntimeConfig: service}
+		handler := newUploadDataHandler(helper, testUploadDependencies())
+		ctx, cancel := context.WithCancel(t.Context())
+		finished := make(chan struct{}, cap(store.entered))
+		for range cap(store.entered) {
+			go func() {
+				_, _ = service.Current(ctx)
+				finished <- struct{}{}
+			}()
+		}
+		for range cap(store.entered) {
+			select {
+			case <-store.entered:
+			case <-time.After(time.Second):
+				cancel()
+				t.Fatal("configuration read did not reach the store")
+			}
+		}
+		got := handler.WebhookAllowed(ctx)
+		release()
+		cancel()
+		for range cap(store.entered) {
+			<-finished
+		}
+		if got != enabled {
+			t.Fatalf("busy refresh changed webhook setting from %t to %t", enabled, got)
+		}
+	}
+}
 
 type uploadBackgroundRunnerStub struct{}
 

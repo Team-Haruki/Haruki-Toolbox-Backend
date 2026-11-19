@@ -52,7 +52,7 @@ const writerProxyClient = `{
 
 func TestCreateDeviceOnlyClientWithoutRedirectURIs(t *testing.T) {
 	hydra := newFakeHydraClients(t)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", `{
 		"clientId": "bot-device",
@@ -146,7 +146,7 @@ func TestCreateDeviceOnlyClientWithoutRedirectURIs(t *testing.T) {
 
 func TestRejectUnknownGrantType(t *testing.T) {
 	hydra := newFakeHydraClients(t, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	for grantTypes, code := range map[string]string{
 		`["authorization_code", "client_credentials"]`: "unsupported_grant_type",
@@ -181,7 +181,7 @@ func TestRejectUnknownGrantType(t *testing.T) {
 
 func TestOfflineAccessRequiresRefreshGrant(t *testing.T) {
 	hydra := newFakeHydraClients(t, authCodeOnlyClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	for _, body := range []string{`{
 		"clientId": "web-2",
@@ -235,7 +235,7 @@ func TestOfflineAccessRequiresRefreshGrant(t *testing.T) {
 
 func TestDeviceWriteRequiresPublicClient(t *testing.T) {
 	hydra := newFakeHydraClients(t, writerProxyClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	for name, body := range map[string]string{
 		"confidential client": `{
@@ -310,7 +310,7 @@ func TestDeviceWriteRequiresPublicClient(t *testing.T) {
 
 func TestDeviceOnlyRejectsPostLogoutURIs(t *testing.T) {
 	hydra := newFakeHydraClients(t, deviceOnlyCLIClient, confidentialBotClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", `{
 		"clientId": "cli-3", "name": "CLI 3", "clientType": "public",
@@ -369,7 +369,7 @@ func TestUpdateDeviceOnlyClientWithoutGrantTypesKeepsEmptyRedirects(t *testing.T
 	for name, redirectMember := range map[string]string{"omitted": "", "empty": `"redirectUris": [],`} {
 		t.Run(name, func(t *testing.T) {
 			hydra := newFakeHydraClients(t, deviceOnlyCLIClient)
-			app := newHydraClientHandlerTestApp(hydra.config)
+			app := newHydraClientHandlerTestApp(t, hydra.config)
 			before := hydra.client("cli-1")
 
 			status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/cli-1", `{
@@ -410,7 +410,7 @@ func TestUpdateDeviceOnlyClientWithoutGrantTypesKeepsEmptyRedirects(t *testing.T
 
 func TestUpdateDevicePolicyPatchesOnlyItsMembers(t *testing.T) {
 	hydra := newFakeHydraClients(t, deviceOnlyCLIClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPut, "/oauth-clients/cli-1", `{
 		"name": "CLI", "clientType": "public",
@@ -453,7 +453,7 @@ func TestUpdateDevicePolicyPatchesOnlyItsMembers(t *testing.T) {
 
 func TestDeviceGrantRequiresUserReadScope(t *testing.T) {
 	hydra := newFakeHydraClients(t, deviceOnlyCLIClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", `{
 		"clientId": "bot-2", "name": "Bot 2", "clientType": "confidential",
@@ -489,7 +489,7 @@ func TestDeviceGrantRequiresUserReadScope(t *testing.T) {
 
 func TestListClientsEchoesGrantTypesAndDevicePolicy(t *testing.T) {
 	hydra := newFakeHydraClients(t, deviceOnlyCLIClient, publicViewerClient)
-	app := newHydraClientHandlerTestApp(hydra.config)
+	app := newHydraClientHandlerTestApp(t, hydra.config)
 
 	status, envelope := doAdminOAuthClientRequest(t, app, http.MethodGet, "/oauth-clients", "")
 	if status != http.StatusOK {

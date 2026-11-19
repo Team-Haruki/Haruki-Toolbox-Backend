@@ -11,6 +11,7 @@ import (
 	harukiSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/ent/toolbox/schema"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/data"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/runtimeconfig"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
@@ -38,11 +39,16 @@ func TestPublicReadAdmitsAuthorizedRequestsBeforeServingVersionedCache(t *testin
 	cache.Set(harukiRedis.BuildGameDataStampMemoKey("jp", "mysekai", 123), "100")
 	dba := &database.HarukiToolboxDBManager{DB: db, Redis: redis}
 	key := harukiRedis.BuildVersionedGameDataCacheKey("public", "jp", "mysekai", 123, "", 100, dba.GameData.HarvestSchemaFingerprint("jp"))
+	allowedKeys := []string{"isEnabled"}
+	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: dba}
+	helper.RuntimeConfig = runtimeconfig.New(runtimeconfig.Snapshot{AllowedKeys: allowedKeys}, nil)
+	currentKey := key + data.PublishedGameDataCacheVersion + ":a=" + data.PublicAllowlistDigest(allowedKeys)
 	cache.Set(key, `{"legacy":true}`)
-	cache.Set(key+data.PublishedGameDataCacheVersion, `{"example":true}`)
+	cache.Set(key+data.PublishedGameDataCacheVersion, `{"legacy":true}`)
+	cache.Set(currentKey, `{"isEnabled":true}`)
 
 	app := fiber.New()
-	app.Get("/public/:server/:data_type/:user_id", handlePublicDataRequest(&harukiAPIHelper.HarukiToolboxRouterHelpers{DBManager: dba}))
+	app.Get("/public/:server/:data_type/:user_id", handlePublicDataRequest(helper))
 	check := func(query string, want int) {
 		t.Helper()
 		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/public/jp/mysekai/123"+query, nil))
@@ -66,6 +72,10 @@ func TestPublicReadAdmitsAuthorizedRequestsBeforeServingVersionedCache(t *testin
 		check("", http.StatusServiceUnavailable)
 	}()
 	check("", http.StatusOK)
-	cache.Del(key + data.PublishedGameDataCacheVersion)
+	helper.SetAllowedKeys([]string{"upload_time"})
+	check("", http.StatusInternalServerError)
+	helper.SetAllowedKeys(allowedKeys)
+	check("", http.StatusOK)
+	cache.Del(currentKey)
 	check("", http.StatusInternalServerError)
 }

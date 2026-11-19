@@ -86,12 +86,12 @@ func NewKeyBuilder(identifierHashSecret string) KeyBuilder {
 	return KeyBuilder{identifierHashSecret: identifierHashSecret}
 }
 
-func (b KeyBuilder) BuildBotVerifyCodeKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, b.hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotVerifyCodeKey(actorID, qq string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, b.hashExactIdentifier("bot-verify-owner", actorID), b.hashNormalizedIdentifier(qq))
 }
 
-func (b KeyBuilder) BuildBotVerifyAttemptKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, b.hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotVerifyAttemptKey(challengeID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionVerify, KeyActionAttempt, b.hashExactIdentifier("bot-verify-challenge", challengeID))
 }
 
 func BuildBotSendMailRateLimitIPKey(clientIP string) string {
@@ -102,8 +102,8 @@ func (b KeyBuilder) BuildBotSendMailRateLimitTargetKey(qq string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(qq))
 }
 
-func (b KeyBuilder) BuildBotRegisterRateLimitTargetKey(qq string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, b.hashNormalizedIdentifier(qq))
+func (b KeyBuilder) BuildBotRegisterRateLimitUserKey(actorID string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleBot, KeyActionRegister, KeyActionAttempt, b.hashExactIdentifier("bot-register-actor", actorID))
 }
 
 func (b KeyBuilder) BuildEmailVerifyKey(email string) string {
@@ -317,6 +317,12 @@ func BuildRuntimeConfigKey() string {
 	return buildKey(KeyPrefixHaruki, KeyModuleConfig, KeyActionRuntime)
 }
 
+// BuildRuntimeConfigVersionKey keeps the monotonic version when the runtime
+// snapshot key is recreated.
+func BuildRuntimeConfigVersionKey() string {
+	return buildKey(KeyPrefixHaruki, KeyModuleConfig, KeyActionRuntime, "version")
+}
+
 func BuildMysekaiBirthdayMonitorKey(server, gameUserID string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionMonitor, strings.TrimSpace(server), strings.TrimSpace(gameUserID))
 }
@@ -357,6 +363,11 @@ func (b KeyBuilder) BuildOAuth2DeviceCodeIndexKey(wrappedDeviceCode string) stri
 // BuildOAuth2DeviceUserCodeIndexKey maps a normalized user code to its flow.
 func (b KeyBuilder) BuildOAuth2DeviceUserCodeIndexKey(normalizedUserCode string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "uc", b.hashExactIdentifier("uc", normalizedUserCode))
+}
+
+// BuildOAuth2DeviceOwnedUserCodeIndexKey resolves only an account's prior claims.
+func (b KeyBuilder) BuildOAuth2DeviceOwnedUserCodeIndexKey(userID, normalizedUserCode string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleOAuth2Device, "owned-uc", b.hashExactIdentifier("owned-uc", userID+"\x00"+normalizedUserCode))
 }
 
 // BuildOAuth2DeviceFlowHandleIndexKey maps a browser flow handle (dfh_…) to its flow.

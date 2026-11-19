@@ -29,6 +29,7 @@ type HydraConfigOptions struct {
 	RequestTimeout     time.Duration
 	PurgeRefreshGrants func(context.Context, string) error
 	LockClientGrants   func(context.Context, string, bool) (func(), error)
+	ConsentSubjects    func(context.Context, string, int) ([]string, error)
 }
 
 // HydraConfig is an immutable, process-scoped view of Hydra endpoints and
@@ -45,6 +46,7 @@ type HydraConfig struct {
 	requestTimeout     time.Duration
 	purgeRefreshGrants func(context.Context, string) error
 	lockClientGrants   func(context.Context, string, bool) (func(), error)
+	consentSubjects    func(context.Context, string, int) ([]string, error)
 	httpClient         *http.Client
 	// noRedirectClient never follows redirects and keeps no cookies: the
 	// device-approval chain inspects every Hydra Location itself and carries
@@ -80,6 +82,7 @@ func NewHydraConfig(options HydraConfigOptions) *HydraConfig {
 		requestTimeout:     timeout,
 		purgeRefreshGrants: options.PurgeRefreshGrants,
 		lockClientGrants:   options.LockClientGrants,
+		consentSubjects:    options.ConsentSubjects,
 		httpClient:         &http.Client{Timeout: timeout},
 		noRedirectClient: &http.Client{
 			Timeout:   timeout,
@@ -103,6 +106,15 @@ func (c *HydraConfig) LockClientGrants(ctx context.Context, clientID string, exc
 		return func() {}, nil
 	}
 	return c.lockClientGrants(ctx, clientID, exclusive)
+}
+
+var ErrConsentIndexUnavailable = errors.New("consent subject index unavailable for Hydra")
+
+func (c *HydraConfig) ListConsentSubjects(ctx context.Context, clientID string, limit int) ([]string, error) {
+	if c == nil || c.consentSubjects == nil {
+		return nil, ErrConsentIndexUnavailable
+	}
+	return c.consentSubjects(ctx, clientID, limit)
 }
 
 func (c *HydraConfig) ProtectClientGrants() bool { return c != nil && c.lockClientGrants != nil }

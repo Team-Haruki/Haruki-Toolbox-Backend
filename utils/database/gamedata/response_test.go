@@ -519,3 +519,15 @@ func TestPublishedWholeDocumentPreservesSmallExtraFields(t *testing.T) {
 		t.Fatalf("published document lost an extra field: %s", body)
 	}
 }
+
+func TestFilteredMysekaiBodyEmitsOnlyProjectedFields(t *testing.T) {
+	row := newTestRow(t, catalog.Mysekai(), nil, `{"visible":true,"otherField":false}`)
+	body, err := row.FilteredMysekaiBody([]string{"_id", "visible"})
+	if err != nil || string(body) != `{"_id":28808221489823746,"visible":true}` {
+		t.Fatalf("filtered body = %s, %v", body, err)
+	}
+	body, err = row.FilteredMysekaiBody(nil)
+	if err != nil || string(body) != "{}" {
+		t.Fatalf("empty projection = %s, %v", body, err)
+	}
+}

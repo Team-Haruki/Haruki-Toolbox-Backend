@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"entgo.io/ent"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -553,5 +555,55 @@ func TestAdminSummary(t *testing.T) {
 		if got.ByKind[i] != want[i] {
 			t.Fatalf("byKind = %+v, want %+v", got.ByKind, want)
 		}
+	}
+}
+
+func TestProtectedReviewerScopesBotAlertsAndWrites(t *testing.T) {
+	env := newAdminTestEnv(t, nil)
+	current := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
+	hidden := mustCreateAlert(t, env.db, "auth_failed", "30042043", "203.0.113.8", "node-a", testNow.Add(-2*time.Minute))
+	hidden.Update().SetStatus(botsecurityalert.StatusResolved).SetHandledByUserID("super-1").SetNote("protected review").SaveX(t.Context())
+	list := env.list(t, url.Values{})
+	if list.Total != 1 || !equalIDs(itemIDs(list.Items), current.ID) {
+		t.Fatalf("ordinary admin list includes protected review: %+v", list)
+	}
+	response := env.patch(t, hidden.ID, "admin-1", `{"status":"resolved","note":"should never persist"}`)
+	if response.Status != fiber.StatusNotFound || env.db.BotSecurityAlert.GetX(t.Context(), hidden.ID).Note != "protected review" {
+		t.Fatalf("ordinary admin changed review: status=%d", response.Status)
+	}
+	response = env.do(t, http.MethodGet, "/api/admin/bot-security/summary", "admin-1", "")
+	data := decodeJSON[envelope[alertSummaryResponse]](t, response.Body)
+	if response.Status != fiber.StatusOK || data.UpdatedData == nil || data.UpdatedData.Last7d != 1 {
+		t.Fatalf("ordinary admin summary counted hidden review: status=%d data=%+v", response.Status, data.UpdatedData)
+	}
+	response = env.patch(t, hidden.ID, "super-1", `{"status":"resolved","note":"current review"}`)
+	if response.Status != fiber.StatusOK || env.db.BotSecurityAlert.GetX(t.Context(), hidden.ID).Note != "current review" {
+		t.Fatalf("super admin lost review access: status=%d", response.Status)
+	}
+}
+
+func TestAlertPatchCannotOverwriteConcurrentProtectedReview(t *testing.T) {
+	env := newAdminTestEnv(t, nil)
+	current := mustCreateAlert(t, env.db, "auth_failed", "30042042", "203.0.113.7", "node-a", testNow.Add(-time.Minute))
+	if response := env.patch(t, current.ID, "admin-1", `{"status":"open","note":"editable"}`); response.Status != fiber.StatusOK {
+		t.Fatalf("unchanged alert returned %d", response.Status)
+	}
+	var pending atomic.Bool
+	pending.Store(true)
+	env.db.BotSecurityAlert.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if mutation.Op().Is(ent.OpUpdateOne) && pending.CompareAndSwap(true, false) {
+				if err := env.db.BotSecurityAlert.UpdateOneID(current.ID).
+					SetStatus(botsecurityalert.StatusResolved).SetHandledByUserID("super-1").SetNote("protected concurrent review").Exec(ctx); err != nil {
+					return nil, err
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	response := env.patch(t, current.ID, "admin-1", `{"status":"ignored","note":"stale edit"}`)
+	row := env.db.BotSecurityAlert.GetX(t.Context(), current.ID)
+	if response.Status != fiber.StatusConflict || row.Note != "protected concurrent review" || row.Status != botsecurityalert.StatusResolved {
+		t.Fatalf("concurrent review was not protected: status=%d stored=%s", response.Status, row.Status)
 	}
 }

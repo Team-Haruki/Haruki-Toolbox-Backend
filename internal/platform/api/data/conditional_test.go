@@ -1,6 +1,14 @@
 package data
 
-import "testing"
+import (
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/gofiber/fiber/v3"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"testing"
+)
 
 func TestNotModifiedDecision(t *testing.T) {
 	const now = int64(1752600100)
@@ -114,6 +122,93 @@ func TestParseKnownUploadTime(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := ParseKnownUploadTime(tc.raw); got != tc.want {
 				t.Fatalf("ParseKnownUploadTime(%q) = %d, want %d", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMysekaiDefaultAndExplicitReadsRespectAllowlist(t *testing.T) {
+	keys, err := mysekaiAllowedProjection("", []string{"upload_time", "userMysekaiGates", "userMysekaiGates", "invalid.path"})
+	if err != nil || !slices.Equal(keys, []string{"upload_time", "userMysekaiGates"}) {
+		t.Fatalf("projection=%v, %v", keys, err)
+	}
+	for _, key := range []string{"upload_time,userMysekaiMaterials", "userGamedata"} {
+		if _, err := mysekaiAllowedProjection(key, keys); err == nil {
+			t.Fatalf("unlisted field accepted: %q", key)
+		}
+	}
+	if _, err := mysekaiAllowedProjection("", nil); err == nil {
+		t.Fatal("empty allowlist could read the whole record")
+	}
+}
+
+func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
+	const stamp = 1752600000
+	const path = "/mysekai/123"
+	current := []string{"upload_time"}
+	app := fiber.New()
+	app.Get(path, func(c fiber.Ctx) error {
+		if CheckNotModified(c, utils.UploadDataTypeMysekai, "", true, current, stamp) {
+			return c.SendStatus(http.StatusNotModified)
+		}
+		return c.SendStatus(http.StatusOK)
+	})
+	for _, tc := range []struct {
+		etag   string
+		status int
+	}{
+		{"", http.StatusOK},
+		{mysekaiPolicyETag(path, "", []string{"upload_time", "userMysekaiGates"}, stamp), http.StatusOK},
+		{mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
+		{`"quoted,comma", W/` + mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
+		{`"` + strings.Trim(mysekaiPolicyETag(path, "", current, stamp), `"`) + `,other"`, http.StatusOK},
+		{"*", http.StatusOK},
+	} {
+		req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
+		req.Header.Set(fiber.HeaderIfNoneMatch, tc.etag)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != tc.status || resp.Header.Get(fiber.HeaderETag) != mysekaiPolicyETag(path, "", current, stamp) {
+			t.Fatalf("conditional read: status=%d etag=%q", resp.StatusCode, resp.Header.Get(fiber.HeaderETag))
+		}
+	}
+	if PublicAllowlistDigest([]string{"a,b"}) == PublicAllowlistDigest([]string{"a", "b"}) {
+		t.Fatal("different field policies share a cache generation")
+	}
+}
+
+func TestMysekaiConditionalReadRejectsExcludedProjection(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request string
+		allowed []string
+		stamp   int64
+	}{
+		{"timestamp excluded", "", []string{"userMysekaiGates"}, 1752600000},
+		{"selected field excluded", "upload_time,userMysekaiGates", []string{"upload_time"}, 1752600000},
+		{"missing row", "upload_time", []string{"upload_time"}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const path = "/mysekai/123"
+			app := fiber.New()
+			app.Get(path, func(c fiber.Ctx) error {
+				if CheckNotModified(c, utils.UploadDataTypeMysekai, tc.request, true, tc.allowed, tc.stamp) {
+					return c.SendStatus(http.StatusNotModified)
+				}
+				return c.SendStatus(http.StatusOK)
+			})
+			req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
+			req.Header.Set(fiber.HeaderIfNoneMatch, mysekaiPolicyETag(path, tc.request, tc.allowed, tc.stamp))
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK || resp.Header.Get(fiber.HeaderETag) != "" {
+				t.Fatalf("invalid projection returned status %d, validator %q", resp.StatusCode, resp.Header.Get(fiber.HeaderETag))
 			}
 		})
 	}

@@ -169,7 +169,7 @@ Errors: `invalid_request`, `invalid_server`, `invalid_upload_type`, `inherit_id_
 
 or, for `unlock.kind: pin`, `{"vault_pin": "…"}`. See §6 for `previous_password`. `202` with the snapshot. The job then executes the transfer.
 
-Errors: `job_not_found` (404); `job_not_awaiting_confirm` (409); every unlock error of §6.
+Errors: `job_not_found` (404); `job_not_awaiting_confirm` (409); `job_hosted_by_another_replica` (409, retry confirmation on the replica running the job); every unlock error of §6.
 
 ### 4.4 Cancel
 
@@ -191,6 +191,8 @@ Server to client (JSON text frames):
 | `ping` | `at` | Every 15 seconds |
 
 The server also sends WebSocket ping control frames every 15 seconds (browsers answer them by themselves) and closes the socket when nothing has arrived for 60 seconds. When the job ends, the last `event` carries the final snapshot and the server closes with code 1000. A job that is already finished gets one `snapshot` and a close.
+
+An unfinished job keeps its shared lease across backend replicas. A replica can report the shared job state while the lease is live. The runner verifies the lease before consuming or issuing an inheritance code. If Redis cannot check the lease after consumption and neither vault store saved the credential, the runner can recover a replacement code while still holding the owner lock. A recovery result that Redis cannot store is available on the running replica until the job expires. A WebSocket connected to another replica sends one snapshot. Live updates and confirmation are served by the replica running the job.
 
 Client to server:
 

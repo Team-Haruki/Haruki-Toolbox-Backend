@@ -3,6 +3,7 @@ package runtimeconfig
 import (
 	"encoding/json/jsontext"
 	json "encoding/json/v2"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -91,10 +92,14 @@ func TestRedisStorePreservesSnapshotJSONContract(t *testing.T) {
 		t.Fatalf("decode persisted snapshot: %v", err)
 	}
 	wantFields := []string{
+		"_version",
 		"publicApiAllowedKeys",
 		"privateApiToken",
 		"privateApiUserAgent",
 		"webhookJwtSecret",
+	}
+	if string(fields["_version"]) != "1" {
+		t.Fatalf("the first write did not version the legacy snapshot")
 	}
 	if len(fields) != len(wantFields) {
 		t.Fatalf("persisted fields = %v, want exactly %v", fields, wantFields)
@@ -149,6 +154,56 @@ func TestRedisStoreSeedsMissingRecordFromServiceSnapshot(t *testing.T) {
 		got.PrivateAPIUserAgent != "startup-agent" ||
 		got.WebhookJWTSecret != secret {
 		t.Fatalf("persisted snapshot did not merge startup fallback: %#v", got)
+	}
+}
+
+func TestRedisSnapshotRecreatedByNewReplicaKeepsVersionsMonotonic(t *testing.T) {
+	store, redisServer := newRuntimeConfigRedisStore(t)
+	initial := New(Snapshot{}, store)
+	oldSecret := "retired-secret"
+	firstToken := "first-token"
+	if err := initial.Update(t.Context(), Update{WebhookJWTSecret: &oldSecret, PrivateAPIToken: &firstToken}); err != nil {
+		t.Fatal(err)
+	}
+	oldToken := "old-token"
+	if err := initial.Update(t.Context(), Update{PrivateAPIToken: &oldToken}); err != nil {
+		t.Fatal(err)
+	}
+
+	redisServer.Del(redis.BuildRuntimeConfigKey())
+	other := New(Snapshot{WebhookJWTSecret: "startup-secret", PrivateAPIToken: "startup-token"}, store)
+	for _, service := range []*Service{initial, other} {
+		if snapshot, err := service.CurrentForAuthentication(t.Context()); !errors.Is(err, errMissingRuntimeConfiguration) || snapshot.PrivateAPIToken != "" || snapshot.WebhookJWTSecret != "" {
+			t.Fatal("a missing distributed snapshot fell back to credentials")
+		}
+	}
+	newToken := "new-token"
+	if err := other.Update(t.Context(), Update{PrivateAPIToken: &newToken}); err != nil {
+		t.Fatal(err)
+	}
+	for _, service := range []*Service{initial, other} {
+		snapshot, err := service.CurrentForAuthentication(t.Context())
+		if err != nil || snapshot.Version != 3 || snapshot.PrivateAPIToken != newToken || snapshot.WebhookJWTSecret != "" {
+			t.Fatalf("recreated config did not advance or kept old credentials, version=%d err=%v", snapshot.Version, err)
+		}
+	}
+}
+
+func TestRedisStoreRejectsRestoredSnapshotBelowVersionCounter(t *testing.T) {
+	store, redisServer := newRuntimeConfigRedisStore(t)
+	redisServer.Set(redis.BuildRuntimeConfigKey(), `{"_version":3,"privateApiToken":"retired-token"}`)
+	redisServer.Set(redis.BuildRuntimeConfigVersionKey(), "4")
+	service := New(Snapshot{}, store)
+	if snapshot, err := service.CurrentForAuthentication(t.Context()); !errors.Is(err, errRuntimeConfigVersionRegressed) || snapshot.PrivateAPIToken != "" {
+		t.Fatal("restored Redis data supplied an old token")
+	}
+	secret := "new-secret"
+	if err := service.Update(t.Context(), Update{WebhookJWTSecret: &secret}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.CurrentForAuthentication(t.Context())
+	if err != nil || snapshot.Version != 5 || snapshot.WebhookJWTSecret != secret || snapshot.PrivateAPIToken != "" {
+		t.Fatalf("config recovery did not advance or kept a retired token, version=%d err=%v", snapshot.Version, err)
 	}
 }
 

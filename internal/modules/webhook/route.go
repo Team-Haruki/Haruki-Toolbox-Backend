@@ -17,26 +17,26 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if apiHelper == nil {
 			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
 		}
-		ctx := c.Context()
-		snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "webhook authentication unavailable")
-		}
-		secretKey := snapshot.WebhookJWTSecret
-		if secretKey == "" || config.IsExampleCredential(secretKey) {
-			harukiLogger.Errorf("Webhook secret key is not configured")
-			return harukiAPIHelper.ErrorInternal(c, "Internal server error")
-		}
 		jwtToken := c.Get(TokenHeaderName)
 		if jwtToken == "" {
 			return harukiAPIHelper.ErrorUnauthorized(c, "Missing "+TokenHeaderName+" header")
 		}
+		if len(jwtToken) > 8192 {
+			return harukiAPIHelper.ErrorForbidden(c, "Invalid or expired JWT")
+		}
+		ctx := c.Context()
+		configUnavailable := false
 		token, err := jwt.Parse(jwtToken, func(t *jwt.Token) (any, error) {
-			if t.Method != jwt.SigningMethodHS256 {
-				return nil, fiber.ErrForbidden
+			snapshot, err := apiHelper.CurrentRuntimeConfigForAuthentication(ctx)
+			if err != nil || snapshot.WebhookJWTSecret == "" || config.IsExampleCredential(snapshot.WebhookJWTSecret) {
+				configUnavailable = true
+				return nil, fiber.ErrServiceUnavailable
 			}
-			return []byte(secretKey), nil
-		})
+			return []byte(snapshot.WebhookJWTSecret), nil
+		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+		if configUnavailable {
+			return harukiAPIHelper.ErrorInternal(c, "webhook authentication unavailable")
+		}
 		if err != nil || !token.Valid {
 			return harukiAPIHelper.ErrorForbidden(c, "Invalid or expired JWT")
 		}

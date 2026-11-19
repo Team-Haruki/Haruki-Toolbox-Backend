@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+
+	"entgo.io/ent"
 	"errors"
 	"fmt"
 	"net/http"
@@ -234,5 +236,37 @@ func TestKratosWhoamiReusesProfileWithoutCachingSession(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatal("whoami was cached across requests")
+	}
+}
+
+func TestKratosAutoLinkChecksCurrentEmailAndIdentity(t *testing.T) {
+	for _, mutation := range []string{"email", "identity"} {
+		t.Run(mutation, func(t *testing.T) {
+			db := newSessionHandlerTestDB(t)
+			db.User.Create().SetID("account").SetName("owner").SetEmail("old@example.test").SaveX(t.Context())
+			var changed atomic.Bool
+			db.User.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+					if m.Op().Is(ent.OpUpdate) && changed.CompareAndSwap(false, true) {
+						update := db.User.UpdateOneID("account")
+						if mutation == "email" {
+							update.SetEmail("new@example.test")
+						} else {
+							update.SetKratosIdentityID("current-identity")
+						}
+						if _, err := update.Save(ctx); err != nil {
+							return nil, err
+						}
+					}
+					return next.Mutate(ctx, m)
+				})
+			})
+			h := NewSessionHandler(nil, "")
+			h.DBClient = db
+			h.KratosAutoLinkByEmail = true
+			if id, err := h.resolveKratosIdentity(t.Context(), "stale-identity", "old@example.test", true); id != "" || !errors.Is(err, errKratosIdentityUnmapped) {
+				t.Fatalf("auto-link accepted a changed account: %q, %v", id, err)
+			}
+		})
 	}
 }

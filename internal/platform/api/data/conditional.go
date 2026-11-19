@@ -1,6 +1,8 @@
 package data
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -62,6 +64,21 @@ func CheckNotModified(
 	publicAllowedKeys []string,
 	stamp int64,
 ) bool {
+	if publicKeyFiltered && dataType == harukiUtils.UploadDataTypeMysekai {
+		if _, err := mysekaiAllowedProjection("upload_time", publicAllowedKeys); err != nil {
+			return false
+		}
+		if _, err := mysekaiAllowedProjection(requestKey, publicAllowedKeys); err != nil || stamp <= 0 {
+			return false
+		}
+		etag := mysekaiPolicyETag(c.Path(), requestKey, publicAllowedKeys, stamp)
+		c.Set(fiber.HeaderETag, etag)
+		// A timestamp alone cannot prove the client has this field policy.
+		if !matchesPolicyETag(c.Request().Header.PeekAll(fiber.HeaderIfNoneMatch), etag) {
+			return false
+		}
+	}
+
 	known := ParseKnownUploadTime(c.Query(QueryKnownUploadTime))
 	if known <= 0 {
 		return false
@@ -105,6 +122,38 @@ func CheckNotModified(
 	appendVaryAcceptEncoding(c)
 	c.Set(HeaderUploadTime, strconv.FormatInt(stamp, 10))
 	return true
+}
+
+// Match a quoted validator by weak comparison. A wildcard does not
+// establish which field policy the client cached.
+func matchesPolicyETag(values [][]byte, current string) bool {
+	for _, value := range values {
+		remaining := string(value)
+		for {
+			remaining = strings.TrimLeft(remaining, " \t,")
+			remaining = strings.TrimPrefix(remaining, "W/")
+			if len(remaining) < 2 || remaining[0] != '"' {
+				break
+			}
+			end := strings.IndexByte(remaining[1:], '"')
+			if end < 0 {
+				break
+			}
+			tag := remaining[:end+2]
+			remaining = strings.TrimLeft(remaining[end+2:], " \t")
+			if remaining != "" && remaining[0] != ',' {
+				break
+			}
+			if tag == current {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func mysekaiPolicyETag(path, requestKey string, allowedKeys []string, stamp int64) string {
+	return fmt.Sprintf(`"%x"`, sha256.Sum256(fmt.Appendf(nil, "%d:%q:%q:%q", stamp, path, requestKey, allowedKeys)))
 }
 
 // notModifiedDecision holds the pure 304 decision: the document must exist with

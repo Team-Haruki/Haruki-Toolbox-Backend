@@ -2,11 +2,10 @@ package data
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
@@ -135,14 +134,14 @@ func GameDataCacheWriteTTL(requestKey string, stamp int64) time.Duration {
 	return ttl
 }
 
-// PublicAllowlistDigest fingerprints the public-API suite key allowlist for
-// use as a cache-key segment: suite bodies on the public and OAuth2 surfaces
+// PublicAllowlistDigest fingerprints the non-private game-data allowlist for
+// use as a cache-key segment: bodies on the public and OAuth2 surfaces
 // are shaped by the allowlist, so an allowlist edit must move readers to new
 // entries — the document stamp alone cannot express that change, and an
 // in-flight leader could otherwise re-cache an old-allowlist body after the
 // admin-side namespace wipe.
 func PublicAllowlistDigest(allowedKeys []string) string {
-	sum := md5.Sum([]byte(strings.Join(allowedKeys, ",")))
+	sum := sha256.Sum256(fmt.Appendf(nil, "%q", allowedKeys))
 	return hex.EncodeToString(sum[:8])
 }
 

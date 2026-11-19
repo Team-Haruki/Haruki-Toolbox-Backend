@@ -215,12 +215,8 @@ func (s *inheritService) handleCreateJob(c fiber.Ctx) error {
 	return harukiAPIHelper.Responses.UpdatedDataResponse(c, fiber.StatusAccepted, "job created", &createJobResponse{JobID: job.ID, Job: view})
 }
 
-// claimActive takes the owner's one-active-job lock. A lock left by a job
-// that has finished, has been cancelled before executing, has expired, or
-// belonged to a process that has since stopped is taken over. When the owner
-// already has a running job it returns errJobAlreadyRunning and that job's
-// ID; the lock key is per owner, and the ID is only returned after checking
-// the job belongs to userID and is not finished.
+// claimActive takes the owner's one-active-job lease. Any replica may recover
+// an expired lease or replace one that points to a terminal job.
 func (s *inheritService) claimActive(ctx context.Context, userID, jobID string) (string, *apiProblem) {
 	key := inheritActiveKeyPrefix + userID
 	for range activeClaimAttempts {
@@ -278,8 +274,8 @@ return 0
 // and its owner. A job in this process counts as running until it is
 // finished or has been cancelled before executing: a cancelled job can never
 // execute, so the owner may start the next one while it winds down. A job
-// known only from the store counts as running while it is unfinished and
-// belongs to this process; one from a stopped process is stale.
+// known only from the store counts as running while the lease is present and
+// the shared job is unfinished.
 func (s *inheritService) activeHolder(ctx context.Context, holder string) (running bool, owner string) {
 	if strings.HasPrefix(holder, harukiRedis.AccountDeletionLockPrefix) {
 		return true, ""
@@ -293,11 +289,32 @@ func (s *inheritService) activeHolder(ctx context.Context, holder string) (runni
 		finishing := rt.job.Status.terminal() || (rt.cancelled && !rt.confirmed)
 		return !finishing, rt.job.OwnerUserID
 	}
-	// An unreadable record cannot be shown to be running; treat it as stale.
-	if previous, err := s.jobs.load(ctx, holder); err == nil && previous != nil && !previous.Status.terminal() && previous.Instance == inheritInstanceID {
-		return true, previous.OwnerUserID
+	// Another replica may have claimed the key and still be saving its job.
+	previous, err := s.jobs.load(ctx, holder)
+	if err != nil || previous == nil {
+		return true, ""
 	}
-	return false, ""
+	return !previous.Status.terminal(), previous.OwnerUserID
+}
+
+const renewActiveLeaseScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`
+
+var errInheritLeaseLost = errors.New("inherit job lease lost")
+
+func (s *inheritService) requireActiveLease(ctx context.Context, job *inheritJob) error {
+	result, err := s.redis.Eval(ctx, renewActiveLeaseScript, []string{inheritActiveKeyPrefix + job.OwnerUserID}, job.ID, inheritActiveLockTTL.Milliseconds()).Int()
+	if err != nil {
+		return err
+	}
+	if result != 1 {
+		return errInheritLeaseLost
+	}
+	return nil
 }
 
 // ownedJobID returns jobID when owner is userID, else "".
@@ -344,9 +361,12 @@ func (s *inheritService) handleGetJob(c fiber.Ctx) error {
 // confirm is the confirm step: the step-up unlock (which also creates the
 // owner's key on first use), then the public key goes to the waiting job.
 func (s *inheritService) confirm(ctx context.Context, meta requestMeta, jobID string, in unlockInput) (*jobView, *apiProblem) {
-	_, rt, p := s.loadJob(ctx, meta.UserID, jobID)
+	job, rt, p := s.loadJob(ctx, meta.UserID, jobID)
 	if p != nil {
 		return nil, p
+	}
+	if rt == nil && job.Status == jobStatusAwaitingConfirm {
+		return nil, errJobOtherReplica
 	}
 	if rt == nil || !s.awaiting(rt) {
 		return nil, errJobNotAwaiting

@@ -82,13 +82,19 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Warnf("Failed to resolve public game data stamp (server=%s,user_id=%d): %v", server, userID, stampErr)
 			stamp = -1 // unresolved: bypass the cache, never 304
 		}
-		// Fetched once per request: resolving the allowlist costs a Redis round
-		// trip, and both the conditional gate and the read-key digest need it.
-		var suiteAllowedKeys []string
-		if dataType == harukiUtils.UploadDataTypeSuite {
-			suiteAllowedKeys = apiHelper.GetAllowedKeys()
+		// Resolve the allowlist once so conditional responses and cache keys
+		// both reflect the policy used to shape the body.
+		var allowedKeys []string
+		if dataType == harukiUtils.UploadDataTypeMysekai {
+			snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
+			if err != nil {
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game-data field policy unavailable", nil)
+			}
+			allowedKeys = snapshot.AllowedKeys
+		} else {
+			allowedKeys = apiHelper.GetAllowedKeys()
 		}
-		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, suiteAllowedKeys, stamp) {
+		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, allowedKeys, stamp) {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
 		release, admitted := data.ReservePublishedGameDataRead()
@@ -102,15 +108,12 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// selections have unbounded cardinality even if rendered bodies match.
 		if stamp > 0 && requestKey == "" {
 			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
-			// Suite bodies are shaped by the public key allowlist, so entries
+			// Published bodies are shaped by the public key allowlist, so entries
 			// are keyed by it too — an allowlist edit moves readers to fresh
 			// entries even when the stamp is unchanged. The write side appends
 			// its own digest inside the flight, from the very slice that shaped
 			// the body, so key and body stay atomic under concurrent edits.
-			readKey := cacheKey
-			if dataType == harukiUtils.UploadDataTypeSuite {
-				readKey += ":a=" + data.PublicAllowlistDigest(suiteAllowedKeys)
-			}
+			readKey := cacheKey + ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			if cached, found, err := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, readKey); err == nil && found {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
 					return nil
@@ -121,7 +124,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 				harukiLogger.Warnf("Failed to read public game data cache: %v", err)
 			}
 		}
-		body, err := loadPublicGameData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp, suiteAllowedKeys)
+		body, err := loadPublicGameData(apiHelper, cacheKey, server, dataType, userID, requestKey, stamp, allowedKeys)
 		if err != nil {
 			if fErr, ok := err.(*fiber.Error); ok {
 				if fErr.Code == fiber.StatusInternalServerError {
@@ -165,9 +168,7 @@ func loadPublicGameData(
 	// requests may share a result, since a padded key fails validation while its
 	// trimmed twin succeeds.
 	flightKey := string(server) + ":" + string(dataType) + ":" + strconv.FormatInt(userID, 10) + "\x00" + requestKey
-	if dataType == harukiUtils.UploadDataTypeSuite {
-		flightKey += "\x00" + data.PublicAllowlistDigest(allowedKeys)
-	}
+	flightKey += "\x00" + data.PublicAllowlistDigest(allowedKeys)
 	v, err, _ := publicDataGroup.Do(flightKey, func() (any, error) {
 		// Detached from any single caller's request lifetime: this fetch serves
 		// every coalesced waiter, so a leader disconnecting must not fail the
@@ -183,7 +184,7 @@ func loadPublicGameData(
 		if dataType == harukiUtils.UploadDataTypeSuite {
 			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeySet, allowedKeys)
 		} else {
-			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, userID, server, requestKey)
+			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeys)
 		}
 		if loadErr != nil {
 			return nil, loadErr
@@ -199,12 +200,7 @@ func loadPublicGameData(
 		}
 		if cacheKey != "" {
 			writeKey := cacheKey
-			if dataType == harukiUtils.UploadDataTypeSuite {
-				// Digest from the same slice that shaped this body, so an
-				// allowlist edit mid-flight cannot pair a new-config key with
-				// an old-config body (or vice versa).
-				writeKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
-			}
+			writeKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			// Detach the cache write from the read deadline so a near-deadline
 			// but successful read still populates the cache for subsequent
 			// requests. The write is fenced (see ConfirmGameDataCacheWrite) so

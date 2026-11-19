@@ -33,6 +33,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v3"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 const (
@@ -1150,21 +1151,119 @@ func TestOwnedJobIDHidesOtherOwners(t *testing.T) {
 	}
 }
 
-// A job record left behind by a stopped process is reported as interrupted,
-// and its active-job lock does not block the owner.
-func TestJobFromAStoppedProcessIsInterrupted(t *testing.T) {
+func TestRemoteInheritJobRemainsLiveUntilLeaseExpires(t *testing.T) {
 	env := newInheritTestEnv(t)
 	job := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
 	job.Instance = "another-process"
 	job.Status = jobStatusAwaitingConfirm
-	if err := env.svc.jobs.save(context.Background(), job); err != nil {
+	if err := env.svc.jobs.save(t.Context(), job); err != nil {
 		t.Fatal(err)
 	}
-	env.redis.Set(inheritActiveKeyPrefix+testOwner, job.ID)
-	env.createJob(validJobRequest())
-	got := env.job(job.ID)
-	if got["status"] != "failed" || errorCode(got) != codeJobInterrupted {
-		t.Fatalf("job = %v", got)
+	key := inheritActiveKeyPrefix + testOwner
+	env.redis.Set(key, job.ID)
+	env.redis.SetTTL(key, time.Minute)
+	if got := env.job(job.ID); got["status"] != "awaiting_confirm" {
+		t.Fatalf("live remote job = %v", got)
+	}
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs/"+job.ID+"/confirm", ownerPW()); res.Status != http.StatusConflict || res.code() != errJobOtherReplica.Code {
+		t.Fatalf("remote confirmation returned %d %s", res.Status, res.Raw)
+	}
+	if id, problem := env.svc.claimActive(t.Context(), testOwner, "replacement"); id != job.ID || problem != errJobAlreadyRunning {
+		t.Fatalf("claim while remote lease held = %q, %v", id, problem)
+	}
+	env.redis.FastForward(time.Minute)
+	if got := env.job(job.ID); got["status"] != "failed" || errorCode(got) != codeJobInterrupted {
+		t.Fatalf("expired remote job = %v", got)
+	}
+	if stored, err := env.svc.jobs.load(t.Context(), job.ID); err != nil || stored.Status != jobStatusAwaitingConfirm {
+		t.Fatalf("read rewrote shared job: %+v, %v", stored, err)
+	}
+	if _, problem := env.svc.claimActive(t.Context(), testOwner, "replacement"); problem != nil {
+		t.Fatalf("claim after lease expiry: %v", problem)
+	}
+	if err := env.svc.requireActiveLease(t.Context(), job); err == nil {
+		t.Fatal("an old runner renewed a new job's lease")
+	}
+}
+
+type inheritLeaseReadHook struct {
+	key    string
+	before func(context.Context) error
+}
+
+func (h inheritLeaseReadHook) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+
+func (h inheritLeaseReadHook) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return next
+}
+
+func (h inheritLeaseReadHook) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, cmd goredis.Cmder) error {
+		if cmd.Name() == "get" && len(cmd.Args()) == 2 && cmd.Args()[1] == h.key {
+			if err := h.before(ctx); err != nil {
+				return err
+			}
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func TestRemoteInheritJobReloadsACompletionBeforeReportingInterruption(t *testing.T) {
+	env := newInheritTestEnv(t)
+	job := newInheritJob(testOwner, "jp", "suite", "random", time.Now().UTC())
+	job.Instance = "another-process"
+	job.Status = jobStatusRunning
+	if err := env.svc.jobs.save(t.Context(), job); err != nil {
+		t.Fatal(err)
+	}
+	key := inheritActiveKeyPrefix + testOwner
+	env.redis.Set(key, job.ID)
+	env.svc.redis.AddHook(inheritLeaseReadHook{key: key, before: func(ctx context.Context) error {
+		job.Status = jobStatusSucceeded
+		if err := env.svc.jobs.save(ctx, job); err != nil {
+			return err
+		}
+		env.redis.Del(key)
+		return nil
+	}})
+
+	if got := env.job(job.ID); got["status"] != "succeeded" {
+		t.Fatalf("remote job lost its durable completion: %v", got)
+	}
+}
+
+func TestInheritRunnerWithLostLeaseDoesNotExecute(t *testing.T) {
+	env := newInheritTestEnv(t)
+	id := env.createJob(validJobRequest())
+	env.waitStatus(id, "awaiting_confirm")
+	env.redis.Set(inheritActiveKeyPrefix+testOwner, "replacement")
+	if res := env.call(testOwner, "POST", "/api/inherit/jobs/"+id+"/confirm", map[string]any{"password": testOwnerPassword}); res.Status != http.StatusAccepted {
+		t.Fatalf("confirm = %d %s", res.Status, res.Raw)
+	}
+	job := env.waitStatus(id, "failed")
+	if errorCode(job) != codeJobInterrupted || env.game.called("execute") {
+		t.Fatalf("runner without lease executed: %v", job)
+	}
+}
+
+func TestKDFBusyRefundPreservesPriorUnlockAttempts(t *testing.T) {
+	env := newInheritTestEnv(t)
+	keys := []string{unlockLeasePrefix + testOwner, unlockAttemptPrefix + testOwner}
+	if err := env.redis.Set(keys[0], "current-lease"); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.redis.Set(keys[1], "4"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		lease, want string
+	}{{"other-lease", "4"}, {"current-lease", "3"}, {"current-lease", "3"}} {
+		if err := env.svc.redis.Eval(t.Context(), refundBusyUnlockScript, keys, tc.lease, 4).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := env.redis.Get(keys[1]); err != nil || got != tc.want {
+			t.Fatalf("refund left %q, expected %q", got, tc.want)
+		}
 	}
 }
 
@@ -1382,4 +1481,31 @@ func TestInheritWSStopsCommandsAfterSessionRevocation(t *testing.T) {
 		}
 	}
 	env.waitStatus(id, "awaiting_confirm")
+}
+
+func TestSuccessfulVaultUnlocksRespectIndependentQuota(t *testing.T) {
+	env := newInheritTestEnv(t)
+	ctx := t.Context()
+	meta := requestMeta{UserID: testOwner}
+	input := unlockInput{Password: testOwnerPassword}
+	env.redis.Set(unlockWorkPrefix+testOwner, strconv.Itoa(unlockWorkLimit-1))
+	key, _, problem := env.svc.unlockVault(ctx, meta, input, true)
+	if problem != nil {
+		t.Fatalf("last admitted operation: %v", problem)
+	}
+	key.Close()
+	if env.redis.Exists(unlockAttemptPrefix + testOwner) {
+		t.Fatal("success did not clear failed-secret budget")
+	}
+	if _, _, problem := env.svc.unlockVault(ctx, meta, input, false); problem != errUnlockRateLimited {
+		t.Fatalf("next successful unlock should be throttled: %v", problem)
+	}
+	env.redis.Del(unlockWorkPrefix + testOwner)
+	env.redis.Set(unlockLeasePrefix+testOwner, "other-replica")
+	if _, _, problem := env.svc.unlockVault(ctx, meta, input, false); problem != errUnlockRateLimited {
+		t.Fatalf("concurrent unlock should be throttled: %v", problem)
+	}
+	if value, _ := env.redis.Get(unlockLeasePrefix + testOwner); value != "other-replica" {
+		t.Fatal("the refused request removed the other replica's reservation")
+	}
 }

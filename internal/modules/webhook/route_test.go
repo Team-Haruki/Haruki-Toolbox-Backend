@@ -17,7 +17,7 @@ import (
 )
 
 func TestValidateWebhookUser(t *testing.T) {
-	t.Run("secret not configured", func(t *testing.T) {
+	t.Run("missing token takes precedence over secret configuration", func(t *testing.T) {
 		helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{}
 		app := fiber.New()
 		app.Get("/",
@@ -30,8 +30,8 @@ func TestValidateWebhookUser(t *testing.T) {
 		if err != nil {
 			t.Fatalf("app.Test returned error: %v", err)
 		}
-		if resp.StatusCode != fiber.StatusInternalServerError {
-			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusInternalServerError)
+		if resp.StatusCode != fiber.StatusUnauthorized {
+			t.Fatalf("status code = %d, want %d", resp.StatusCode, fiber.StatusUnauthorized)
 		}
 	})
 
@@ -149,6 +149,12 @@ func TestValidateWebhookUser(t *testing.T) {
 		helper.SetWebhookJWTSecret("")
 
 		reqAfter := httptest.NewRequest(http.MethodGet, "/", nil)
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"_id": "fixture", "credential": "fixture"})
+		signed, err := token.SignedString([]byte("test-secret"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		reqAfter.Header.Set(TokenHeaderName, signed)
 		respAfter, err := app.Test(reqAfter)
 		if err != nil {
 			t.Fatalf("app.Test returned error: %v", err)
