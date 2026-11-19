@@ -1,6 +1,8 @@
 package oauth2
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -132,5 +134,40 @@ func TestHydraConfigDoWithoutRedirect(t *testing.T) {
 	var nilConfig *HydraConfig
 	if _, err := nilConfig.DoWithoutRedirect(req); err == nil {
 		t.Fatal("nil config must refuse")
+	}
+}
+
+func TestRefreshGrantProtectionDistinguishesUnavailableAndConfiguredStores(t *testing.T) {
+	ctx := t.Context()
+	for _, config := range []*HydraConfig{nil, NewHydraConfig(HydraConfigOptions{})} {
+		if err := config.PurgeRefreshGrants(ctx, "client"); err == nil || config.ProtectClientGrants() {
+			t.Fatal("missing grant store reported a successful purge")
+		}
+		release, err := config.LockClientGrants(ctx, "client", true)
+		if err != nil || release == nil {
+			t.Fatalf("unconfigured compatibility lock returned %v", err)
+		}
+		release()
+	}
+	fixtureErr := errors.New("fixture")
+	config := NewHydraConfig(HydraConfigOptions{
+		PurgeRefreshGrants: func(_ context.Context, id string) error {
+			if id != "client" {
+				t.Fatalf("unexpected purge identity %q", id)
+			}
+			return fixtureErr
+		},
+		LockClientGrants: func(_ context.Context, id string, exclusive bool) (func(), error) {
+			if id != "client" || !exclusive {
+				t.Fatal("wrong client reservation")
+			}
+			return nil, fixtureErr
+		},
+	})
+	if err := config.PurgeRefreshGrants(ctx, "client"); !errors.Is(err, fixtureErr) {
+		t.Fatalf("purge failure was lost: %v", err)
+	}
+	if _, err := config.LockClientGrants(ctx, "client", true); !errors.Is(err, fixtureErr) {
+		t.Fatalf("lock failure was lost: %v", err)
 	}
 }

@@ -1144,3 +1144,122 @@ func TestStartReaperLogsFailuresAndUsesTheDefaultInterval(t *testing.T) {
 		t.Fatalf("logs = %q", out)
 	}
 }
+
+func TestTombstonesRefuseFallbackAndNewCodeWrites(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); err != nil {
+		t.Fatal(err)
+	}
+	record := fallbackRecord{ID: "entry", UserID: owner.UserID, KeyVersion: owner.KeyVersion, CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(record); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Redis accepted a tombstoned fallback: %v", err)
+	}
+	if err := env.store.insertEntry(ctx, record); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("PostgreSQL accepted a tombstoned entry: %v", err)
+	}
+	if _, err := env.store.PutCode(ctx, CodeInput{
+		EntryID: "entry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion,
+		PublicKey: owner.PublicKey, InheritID: "fixture-id", Password: "fixture-code",
+	}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("tombstoned entry accepted a new code: %v", err)
+	}
+	if _, err := env.store.PutCredential(ctx, CredentialInput{
+		EntryID: "entry", UserID: owner.UserID, Server: "jp", KeyVersion: owner.KeyVersion,
+		PublicKey: owner.PublicKey, Credential: []byte("fixture-credential"),
+	}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("tombstoned entry accepted a new credential: %v", err)
+	}
+}
+
+func TestVaultOwnerReservationRejectsUnavailableAndInactiveAccounts(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	var disabled Store
+	if _, _, err := disabled.ReserveLiveOwner(ctx, "u1"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("disabled reserve returned %v", err)
+	}
+	env.store.db.User.UpdateOneID("u2").SetBanned(true).ExecX(ctx)
+	for _, id := range []string{"u2", "unknown"} {
+		if _, _, err := env.store.ReserveLiveOwner(ctx, id); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("inactive reserve returned %v", err)
+		}
+	}
+	reserved, release, err := env.store.ReserveLiveOwner(ctx, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if !env.store.ownerReserved(reserved, "u1") || env.store.ownerReserved(reserved, "u2") {
+		t.Fatal("reservation scope was not bound to the owner")
+	}
+	_, nestedRelease, err := env.store.reserveOwner(reserved, "u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nestedRelease()
+	if !env.store.ownerReserved(reserved, "u1") {
+		t.Fatal("nested work released the outer reservation")
+	}
+	release()
+	if env.store.ownerReserved(reserved, "u1") {
+		t.Fatal("expired reservation was still active")
+	}
+}
+
+func TestFallbackReconcileIgnoresChangedOrGoneOwner(t *testing.T) {
+	env := newStoreEnv(t)
+	record := fallbackRecord{ID: "entry", UserID: "u2", CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(record); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"entry", "absent"} {
+		if err := env.store.reconcileRecord(t.Context(), id, "u1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !env.redis.Exists(fallbackKeyPrefix+"entry") || env.store.db.InheritVaultEntry.Query().ExistX(t.Context()) {
+		t.Fatal("a stale owner reservation changed the fallback")
+	}
+}
+
+func TestDestroyRollsBackIfTombstoneCannotBeRecorded(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	owner := newUser(t, env, "u1", "fixture-password")
+	putCredential(t, env.store, owner, "entry", "fixture-credential")
+	env.store.db.InheritVaultTombstone.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if m.Op().Is(ent.OpCreate) {
+				return nil, errInjected
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	if err := env.store.Destroy(ctx, owner.UserID, "entry"); !errors.Is(err, errInjected) {
+		t.Fatalf("destroy returned %v", err)
+	}
+	if entry, err := env.store.Get(ctx, owner.UserID, "entry"); err != nil || len(entry.CredentialSealed) == 0 {
+		t.Fatalf("rollback lost the original credential: %v", err)
+	}
+}
+
+func TestVaultReadsDoNotExposeFallbackWhenTombstonesCannotBeRead(t *testing.T) {
+	env := newStoreEnv(t)
+	ctx := t.Context()
+	record := fallbackRecord{ID: "entry", UserID: "u1", CredentialExpiresAt: env.now.Add(time.Hour)}
+	if err := env.store.putFallback(record); err != nil {
+		t.Fatal(err)
+	}
+	env.store.db.InheritVaultTombstone.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) { return nil, errInjected })
+	}))
+	if items, err := env.store.List(ctx, "u1"); !errors.Is(err, errInjected) || len(items) != 0 {
+		t.Fatalf("fallback was listed despite unknown tombstone state: %v", err)
+	}
+	if item, err := env.store.Get(ctx, "u1", "entry"); !errors.Is(err, errInjected) || item != nil {
+		t.Fatalf("fallback was returned despite unknown tombstone state: %v", err)
+	}
+}

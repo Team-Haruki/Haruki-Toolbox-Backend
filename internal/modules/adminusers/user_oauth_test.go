@@ -55,6 +55,7 @@ func TestParseAdminRevokeOAuthClientID(t *testing.T) {
 		Name        string
 		ContentType string
 		Body        string
+		Encoding    string
 		WantStatus  int
 		WantBody    string
 	}{
@@ -100,6 +101,10 @@ func TestParseAdminRevokeOAuthClientID(t *testing.T) {
 			WantStatus: fiber.StatusOK,
 			WantBody:   "no-header-form",
 		},
+		{Name: "ambiguous revocation scope", ContentType: contentTypeApplicationJSON, Body: `{"clientId":"one","revokeAll":true}`, WantStatus: fiber.StatusBadRequest},
+		{Name: "empty JSON cannot revoke all", ContentType: contentTypeApplicationJSON, Body: `{}`, WantStatus: fiber.StatusBadRequest},
+		{Name: "form cannot revoke all", ContentType: contentTypeApplicationFormURLEncoded, Body: "revokeAll=true", WantStatus: fiber.StatusBadRequest},
+		{Name: "compressed body", ContentType: contentTypeApplicationJSON, Body: `{"revokeAll":true}`, Encoding: "gzip", WantStatus: fiber.StatusBadRequest},
 		{
 			Name:        "invalid json payload",
 			ContentType: contentTypeApplicationJSON,
@@ -125,6 +130,9 @@ func TestParseAdminRevokeOAuthClientID(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(testCase.Body))
 			if testCase.ContentType != "" {
 				req.Header.Set("Content-Type", testCase.ContentType)
+			}
+			if testCase.Encoding != "" {
+				req.Header.Set(fiber.HeaderContentEncoding, testCase.Encoding)
 			}
 
 			resp, err := app.Test(req)

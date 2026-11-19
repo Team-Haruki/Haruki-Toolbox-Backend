@@ -1,7 +1,13 @@
 package admingamebindings
 
 import (
+	"context"
+	"errors"
 	"io"
+	"time"
+
+	"entgo.io/ent"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -255,5 +261,72 @@ func TestManagedBindingReassignmentChecksBothCurrentRoles(t *testing.T) {
 				t.Fatalf("reassignment with protected %s returned %d", promoted, response.StatusCode)
 			}
 		})
+	}
+}
+
+func TestGlobalBindingActionsRevokeGrantsOnlyAfterSuccessfulCommit(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	ctx := t.Context()
+	for _, id := range []string{"first", "second", "delegate"} {
+		db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").ExecX(ctx)
+	}
+	for _, id := range []string{"42", "43"} {
+		db.GameAccountBinding.Create().SetServer("jp").SetGameUserID(id).SetVerified(true).SetUserID("first").ExecX(ctx)
+		if _, err := db.UpsertGameAccountDataGrant(ctx, "first", "delegate", "jp", id, "suite", time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inject := false
+	db.GameAccountBinding.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if inject && m.Op().Is(ent.OpDeleteOne|ent.OpUpdateOne) {
+				return nil, errors.New("fixture binding database failure")
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	})
+	app.Delete("/single/:server/:game_user_id", handleAdminDeleteGlobalGameAccountBinding(helper))
+	app.Put("/single/:server/:game_user_id", handleAdminReassignGlobalGameAccountBinding(helper))
+	app.Post("/batch-delete", handleAdminBatchDeleteGlobalGameAccountBindings(helper))
+	app.Post("/batch-reassign", handleAdminBatchReassignGlobalGameAccountBindings(helper))
+	request := func(method, path, payload string, want int, message string) {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(payload))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != want || !strings.Contains(string(body), message) {
+			t.Fatalf("%s %s returned %d: %s (%v)", method, path, resp.StatusCode, body, err)
+		}
+	}
+	const reassign = `{"targetUserId":"second"}`
+	const batchDelete = `{"items":[{"server":"jp","gameUserId":"43"}]}`
+	const batchReassign = `{"items":[{"server":"jp","gameUserId":"42","targetUserId":"second"}]}`
+	inject = true
+	request(http.MethodPut, "/single/jp/42", reassign, http.StatusInternalServerError, "failed to reassign binding")
+	request(http.MethodDelete, "/single/jp/43", "", http.StatusInternalServerError, "failed to delete binding")
+	request(http.MethodPost, "/batch-delete", batchDelete, http.StatusOK, adminBatchResultCodeDeleteBindingFailed)
+	request(http.MethodPost, "/batch-reassign", batchReassign, http.StatusOK, adminBatchResultCodeReassignBindingFailed)
+	if db.GameAccountDataGrant.Query().CountX(ctx) != 2 {
+		t.Fatal("failed operations revoked stored permissions")
+	}
+	inject = false
+	request(http.MethodPost, "/batch-reassign", batchReassign, http.StatusOK, `"success":true`)
+	request(http.MethodDelete, "/single/jp/43", "", http.StatusOK, "binding deleted")
+	row := db.GameAccountBinding.Query().Where(gameaccountbinding.GameUserIDEQ("42")).OnlyX(ctx)
+	if row.QueryUser().OnlyIDX(ctx) != "second" || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
+		t.Fatal("committed transfer or deletion preserved the old authorization")
 	}
 }

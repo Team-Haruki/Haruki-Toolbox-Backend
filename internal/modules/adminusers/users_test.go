@@ -443,3 +443,35 @@ func TestBuildAdminUserListItems(t *testing.T) {
 		t.Fatalf("items[1].AllowCNMysekai = true, want false")
 	}
 }
+
+func TestSingleAndBatchRoleChangesCommitOnVisibleAccounts(t *testing.T) {
+	helper := newAdminUserTicketNotificationTestHelper(t)
+	db := helper.DBManager.DB
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").ExecX(t.Context())
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleSuperAdmin)
+		return c.Next()
+	})
+	app.Put("/role/:target_user_id", handleUpdateUserRole(helper))
+	app.Post("/batch", handleBatchUpdateUserRole(helper))
+	for _, tc := range []struct {
+		method, path, body string
+		role               user.Role
+	}{
+		{http.MethodPut, "/role/target", `{"role":"admin"}`, user.RoleAdmin},
+		{http.MethodPost, "/batch", `{"userIds":["target"],"role":"user"}`, user.RoleUser},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || db.User.GetX(t.Context(), "target").Role != tc.role {
+			t.Fatalf("%s returned %d without saving the role", tc.path, resp.StatusCode)
+		}
+	}
+}

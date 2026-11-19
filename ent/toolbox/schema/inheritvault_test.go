@@ -91,3 +91,20 @@ func TestUserCascadesToInheritVault(t *testing.T) {
 		t.Errorf("user edges missing: %v", want)
 	}
 }
+
+func TestVaultTombstoneUsesOwnerScopedUniquenessAndExpiry(t *testing.T) {
+	var schema InheritVaultTombstone
+	fields := fieldsByName(schema)
+	if len(fields) != 3 || fields["user_id"] == nil || fields["entry_id"] == nil || fields["expires_at"] == nil {
+		t.Fatalf("unexpected tombstone fields: %v", fields)
+	}
+	indexes := schema.Indexes()
+	if len(indexes) != 2 ||
+		!indexes[0].Descriptor().Unique || !slices.Equal(indexes[0].Descriptor().Fields, []string{"user_id", "entry_id"}) ||
+		!slices.Equal(indexes[1].Descriptor().Fields, []string{"expires_at"}) {
+		t.Fatal("tombstones must be unique per owner and entry and efficiently reapable")
+	}
+	if table, ok := schema.Annotations()[0].(entsql.Annotation); !ok || table.Table != "inherit_vault_tombstones" {
+		t.Fatalf("unexpected tombstone table annotation: %v", table)
+	}
+}

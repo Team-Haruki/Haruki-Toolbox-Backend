@@ -2,6 +2,8 @@ package adminoauth
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 	"reflect"
 	"slices"
@@ -10,6 +12,7 @@ import (
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	platformOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
@@ -501,5 +504,38 @@ func TestAdminOAuthClientUpdateRequiresReauthentication(t *testing.T) {
 	}
 	if requests := hydra.takeRequests(); len(requests) != 0 {
 		t.Fatalf("update without reauthentication contacted Hydra")
+	}
+}
+
+func TestRevokeAllRefusesIncompleteGrantSafetyChecks(t *testing.T) {
+	for _, stage := range []string{"lock", "purge"} {
+		t.Run(stage, func(t *testing.T) {
+			hydra := newFakeHydraClients(t, confidentialBotClient)
+			helper := newAdminOAuthTestHelper(t)
+			adminURL, err := hydra.config.AdminEndpoint("")
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := platformOAuth2.NewHydraConfig(platformOAuth2.HydraConfigOptions{
+				AdminURL: adminURL,
+				LockClientGrants: func(context.Context, string, bool) (func(), error) {
+					if stage == "lock" {
+						return nil, errors.New("fixture lock failure")
+					}
+					return func() {}, nil
+				},
+				PurgeRefreshGrants: func(context.Context, string) error {
+					return errors.New("fixture purge failure")
+				},
+			})
+			app := newHydraClientHandlerTestAppAs(helper, cfg, "super-admin-1", adminCoreModule.RoleSuperAdmin)
+			status, envelope := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients/bot-1/revoke", "")
+			if status != http.StatusInternalServerError || !strings.Contains(envelope.Message, map[string]string{"lock": "reserve oauth revocation", "purge": "revoke refresh grants"}[stage]) {
+				t.Fatalf("revocation returned %d: %s", status, envelope.Message)
+			}
+			if got := requestLines(hydra.takeRequests()); !slices.Equal(got, []string{"GET /admin/clients/bot-1"}) {
+				t.Fatalf("revocation requests after safety check failure: %v", got)
+			}
+		})
 	}
 }

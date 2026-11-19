@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	harukiConfig "github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
+	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 )
 
 func lockHydraClientGrants(db *sql.DB) func(context.Context, string, bool) (func(), error) {
@@ -45,4 +48,28 @@ func purgeHydraRefreshGrants(db *sql.DB) func(context.Context, string) error {
 		_, err := db.ExecContext(ctx, `DELETE FROM hydra_oauth2_refresh WHERE client_id = $1 AND nid = $2::uuid`, clientID, network)
 		return err
 	}
+}
+
+func (application *Application) buildHydraProviderConfig(cfg harukiConfig.Config, toolboxDB *sql.DB) (*harukiOAuth2.HydraConfig, error) {
+	var purgeRefreshGrants func(context.Context, string) error
+	if cfg.OAuth2.HydraGrantStoreURL != "" {
+		grantDB, err := openTunedSQLDB("postgres", cfg.OAuth2.HydraGrantStoreURL, 4, 1)
+		if err != nil {
+			return nil, fmt.Errorf("initialize Hydra refresh grant store")
+		}
+		application.addResourceCloser("Hydra refresh grant store", grantDB.Close)
+		purgeRefreshGrants = purgeHydraRefreshGrants(grantDB)
+	}
+	return harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
+		Provider:           cfg.OAuth2.Provider,
+		PublicURL:          cfg.OAuth2.HydraPublicURL,
+		BrowserURL:         cfg.OAuth2.HydraBrowserURL,
+		AdminURL:           cfg.OAuth2.HydraAdminURL,
+		ResourceAudience:   cfg.Backend.BackendURL,
+		ClientID:           cfg.OAuth2.HydraClientID,
+		ClientSecret:       cfg.OAuth2.HydraClientSecret,
+		RequestTimeout:     time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
+		PurgeRefreshGrants: purgeRefreshGrants,
+		LockClientGrants:   lockHydraClientGrants(toolboxDB),
+	}), nil
 }

@@ -2,6 +2,8 @@ package oauth2
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -585,5 +587,106 @@ func TestTokenShimSettleFailureStillHandsOutTokens(t *testing.T) {
 	}
 	if !env.inUnredeemed(flowID) || env.field(flowID, "st") != deviceFlowStateApproved {
 		t.Fatal("an unsettled flow must stay unredeemed for the reaper")
+	}
+}
+
+func TestProtectedTokenRoutesRejectBeforeForwarding(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			t.Error("a rejected token request reached Hydra")
+		}
+		http.Error(w, "fixture", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{PublicURL: server.URL, AdminURL: server.URL,
+		LockClientGrants: func(_ context.Context, client string, _ bool) (func(), error) {
+			if client == "lock-unavailable" {
+				return nil, errors.New("fixture lock failure")
+			}
+			return func() {}, nil
+		},
+	})
+	app := fiber.New()
+	handler := handleHydraTokenEndpoint(nil, cfg, DeviceFlowConfig{}, newDeviceFlowStore(nil))
+	app.Post("/api/oauth2/token", handler)
+	app.Post("/oauth2/token", handler)
+	for _, tc := range []struct {
+		name, route, body, mediaType, encoding string
+		status                                 int
+	}{
+		{"unsupported encoding", "/api/oauth2/token", "fixture", formURLEncodedMediaType, "gzip", http.StatusUnsupportedMediaType},
+		{"legacy device route", "/oauth2/token", "grant_type=" + HydraGrantTypeDeviceCode, formURLEncodedMediaType, "", http.StatusBadRequest},
+		{"multipart", "/api/oauth2/token", "", "multipart/form-data; boundary=fixture", "", http.StatusBadRequest},
+		{"invalid form", "/api/oauth2/token", "grant_type=%", formURLEncodedMediaType, "", http.StatusBadRequest},
+		{"ambiguous grant", "/api/oauth2/token", "grant_type=refresh_token&grant_type=refresh_token&client_id=fixture", formURLEncodedMediaType, "", http.StatusBadRequest},
+		{"missing identity", "/api/oauth2/token", "grant_type=refresh_token", formURLEncodedMediaType, "", http.StatusUnauthorized},
+		{"lock outage", "/api/oauth2/token", "grant_type=refresh_token&client_id=lock-unavailable", formURLEncodedMediaType, "", http.StatusServiceUnavailable},
+		{"provider outage", "/api/oauth2/token", "grant_type=refresh_token&client_id=provider-unavailable", formURLEncodedMediaType, "", http.StatusServiceUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.route, strings.NewReader(tc.body))
+			req.Header.Set(fiber.HeaderContentType, tc.mediaType)
+			req.Header.Set(fiber.HeaderContentEncoding, tc.encoding)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
+			}
+		})
+	}
+
+	for range cap(tokenGrantAdmission) {
+		tokenGrantAdmission <- struct{}{}
+	}
+	defer func() {
+		for range cap(tokenGrantAdmission) {
+			<-tokenGrantAdmission
+		}
+	}()
+	req := httptest.NewRequest(http.MethodPost, "/oauth2/token", strings.NewReader("grant_type=refresh_token&client_id=fixture"))
+	req.Header.Set(fiber.HeaderContentType, formURLEncodedMediaType)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("saturated grant gate returned %d", resp.StatusCode)
+	}
+}
+
+func TestTokenClientIdentityMustBeUnambiguous(t *testing.T) {
+	assertion := func(claims string) string {
+		return "fixture." + base64.RawURLEncoding.EncodeToString([]byte(claims)) + ".fixture"
+	}
+	valid := assertion(`{"sub":"fixture","iss":"fixture"}`)
+	for _, tc := range []struct {
+		name, id, proof, auth string
+		ok                    bool
+	}{
+		{"form identity", "fixture", "", "", true},
+		{"assertion identity", "", valid, "", true},
+		{"same identity", "fixture", valid, "", true},
+		{"different form identity", "different", valid, "", false},
+		{"malformed authentication", "fixture", valid, "unsupported", false},
+		{"malformed assertion", "", "not-an-assertion", "", false},
+		{"inconsistent assertion", "", assertion(`{"sub":"fixture","iss":"different"}`), "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			form := url.Values{}
+			if tc.id != "" {
+				form.Set("client_id", tc.id)
+			}
+			if tc.proof != "" {
+				form.Set("client_assertion", tc.proof)
+			}
+			got, ok := tokenRequestClientID(tc.auth, form)
+			if ok != tc.ok || (ok && got != "fixture") {
+				t.Fatalf("got %q/%t", got, ok)
+			}
+		})
 	}
 }

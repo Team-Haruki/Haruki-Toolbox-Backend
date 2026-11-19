@@ -21,7 +21,6 @@ import (
 	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
-	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
 	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
@@ -160,27 +159,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		SyncInterval:   time.Duration(cfg.Afdian.SyncIntervalSeconds) * time.Second,
 	})
 	// One HydraConfig serves the routes and the device-flow reaper.
-	var purgeRefreshGrants func(context.Context, string) error
-	if cfg.OAuth2.HydraGrantStoreURL != "" {
-		grantDB, err := openTunedSQLDB("postgres", cfg.OAuth2.HydraGrantStoreURL, 4, 1)
-		if err != nil {
-			return nil, fmt.Errorf("initialize Hydra refresh grant store")
-		}
-		application.addResourceCloser("Hydra refresh grant store", grantDB.Close)
-		purgeRefreshGrants = purgeHydraRefreshGrants(grantDB)
+	hydraConfig, err := application.buildHydraProviderConfig(cfg, resources.toolboxSQLDB)
+	if err != nil {
+		return nil, err
 	}
-	hydraConfig := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{
-		Provider:           cfg.OAuth2.Provider,
-		PublicURL:          cfg.OAuth2.HydraPublicURL,
-		BrowserURL:         cfg.OAuth2.HydraBrowserURL,
-		AdminURL:           cfg.OAuth2.HydraAdminURL,
-		ResourceAudience:   cfg.Backend.BackendURL,
-		ClientID:           cfg.OAuth2.HydraClientID,
-		ClientSecret:       cfg.OAuth2.HydraClientSecret,
-		RequestTimeout:     time.Duration(cfg.OAuth2.HydraRequestTimeoutSecond) * time.Second,
-		PurgeRefreshGrants: purgeRefreshGrants,
-		LockClientGrants:   lockHydraClientGrants(resources.toolboxSQLDB),
-	})
 	storyService, err := storyModule.New(cfg.Story, resources.toolboxClient, harukiLogger.NewLoggerFromGlobal("Story"))
 	if err != nil {
 		return nil, err
