@@ -108,7 +108,7 @@ func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraCo
 	userCh := make(chan *postgresql.User)
 	records := make([]hydraClientAuthorizationRecord, 0, len(users)) // pre-allocate for expected records
 	var recordsMu sync.Mutex
-	var retained atomic.Int64
+	var scanned atomic.Int64
 
 	for i := 0; i < workerCount; i++ {
 		g.Go(func() error {
@@ -118,22 +118,31 @@ func collectHydraClientAuthorizationRecordsForUsers(ctx context.Context, hydraCo
 				if len(subjects) == 0 {
 					continue
 				}
-				sessions, err := oauth2Module.ListHydraConsentSessionsForSubjects(groupCtx, hydraConfig, subjects)
-				if err != nil {
-					return err
-				}
-				for _, session := range sessions {
-					if strings.TrimSpace(session.ConsentRequest.Client.ClientID) != clientID {
-						continue
-					}
-					if recordLimit > 0 && retained.Add(1) > int64(recordLimit) {
+				seen := make(map[string]struct{})
+				preferred := oauth2Module.PreferredHydraSubject(user.ID, user.KratosIdentityID)
+				visit := func(session oauth2Module.HydraConsentSession) error {
+					if recordLimit > 0 && scanned.Add(1) > int64(recordLimit) {
 						return errAuthorizationScanLimited
 					}
+					if strings.TrimSpace(session.ConsentRequest.Client.ClientID) != clientID {
+						return nil
+					}
+					sessionID := strings.TrimSpace(session.ConsentRequestID)
+					if _, exists := seen[sessionID]; exists {
+						return nil
+					}
+					seen[sessionID] = struct{}{}
 					localRecords = append(localRecords, hydraClientAuthorizationRecord{
 						User:    user,
 						Session: session,
-						Subject: oauth2Module.PreferredHydraSubject(user.ID, user.KratosIdentityID),
+						Subject: preferred,
 					})
+					return nil
+				}
+				for _, subject := range subjects {
+					if err := oauth2Module.WalkHydraConsentSessions(groupCtx, hydraConfig, subject, visit); err != nil {
+						return err
+					}
 				}
 			}
 			if len(localRecords) == 0 {

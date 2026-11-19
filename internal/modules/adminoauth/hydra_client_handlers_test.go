@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -914,6 +915,33 @@ func TestAuthorizationScanUsesClientCandidatesBeforeReadingHydra(t *testing.T) {
 	}
 }
 
+func TestAuthorizationScanStopsPagingAtRecordLimit(t *testing.T) {
+	helper := newAdminOAuthTestHelper(t)
+	seedAdminOAuthTestUser(t, helper, "user-1", "", userSchema.RoleUser)
+	users := helper.DBManager.DB.User.Query().AllX(t.Context())
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Query().Get("page_token") != "" {
+			t.Error("consent scan requested another page after reaching the record budget")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Link", `</admin/oauth2/auth/sessions/consent?subject=user-1&page_size=500&page_token=page-2>; rel="next"`)
+		_, _ = io.WriteString(w, `[
+			{"consent_request_id":"unrelated","consent_request":{"client":{"client_id":"other"}}},
+			{"consent_request_id":"matching","consent_request":{"client":{"client_id":"viewer-1"}}}
+		]`)
+	}))
+	defer server.Close()
+
+	cfg := harukiOAuth2.NewHydraConfig(harukiOAuth2.HydraConfigOptions{AdminURL: server.URL})
+	records, err := collectHydraClientAuthorizationRecordsForUsers(t.Context(), cfg, "viewer-1", users, 1)
+	if !errors.Is(err, errAuthorizationScanLimited) || len(records) != 0 || requests.Load() != 1 {
+		t.Fatalf("scan returned %d records, %v, after %d requests", len(records), err, requests.Load())
+	}
+}
+
 func TestAuthorizationRoutesRefuseIncompleteScans(t *testing.T) {
 	hydra := newFakeHydraClients(t, publicViewerClient)
 	helper := newAdminOAuthTestHelper(t)
@@ -1017,6 +1045,9 @@ func TestClientIDReuseWaitsForPreviousWebhooksToBeDeleted(t *testing.T) {
 		t.Fatalf("client was recreated before webhook cleanup: %v", calls)
 	}
 	failCleanup = false
+	if status, body := doAdminOAuthClientRequest(t, app, http.MethodDelete, "/oauth-clients/viewer-1", ""); status != http.StatusNotFound || db.OAuth2ClientWebhookEndpoint.Query().CountX(t.Context()) != 0 {
+		t.Fatalf("delete retry left the orphaned callback: %d, %+v", status, body)
+	}
 	if status, body := doAdminOAuthClientRequest(t, app, http.MethodPost, "/oauth-clients", payload); status != http.StatusOK || db.OAuth2ClientWebhookEndpoint.Query().CountX(t.Context()) != 0 {
 		t.Fatalf("recreate after cleanup recovered returned %d: %+v", status, body)
 	}
