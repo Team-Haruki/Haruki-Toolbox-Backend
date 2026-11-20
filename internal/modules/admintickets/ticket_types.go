@@ -74,5 +74,5 @@ type adminTicketMessageItem struct {
 type adminTicketDetailResponse struct {
 	Ticket              adminTicketListItem      `json:"ticket"`
 	Messages            []adminTicketMessageItem `json:"messages"`
-	NextBeforeMessageID int                      `json:"nextBeforeMessageId,omitempty"`
+	NextBeforeMessageID int                      `json:"nextBeforeMessageId,omitzero"`
 }

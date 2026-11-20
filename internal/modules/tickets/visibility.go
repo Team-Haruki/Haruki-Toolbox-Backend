@@ -10,9 +10,13 @@ import (
 // LimitAdminTicketVisibility applies the same ticket audience to reads and writes.
 func LimitAdminTicketVisibility(role string) func(*sql.Selector) {
 	return func(s *sql.Selector) {
-		if role != adminCoreModule.RoleSuperAdmin {
-			s.Where(ordinaryAdminTicketVisibility(s))
+		if role == adminCoreModule.RoleSuperAdmin {
+			// Ent combines write predicates separately from the row ID. Leave
+			// a concrete predicate even when the audience is unrestricted.
+			s.Where(sql.ExprP("TRUE"))
+			return
 		}
+		s.Where(ordinaryAdminTicketVisibility(s))
 	}
 }
 
@@ -23,15 +27,14 @@ func ordinaryAdminTicketVisibility(s *sql.Selector) *sql.Predicate {
 const AssignmentEventPrefix = "Assignee changed: "
 
 // LimitAdminMessageVisibility keeps protected authors out of ordinary support
-// views. Legacy assignment events lack authorship and embed participant names
-// and IDs in the message text.
+// views. Assignment events embed both participants in free text, where they
+// cannot be checked against current roles after promotion or unassignment.
 func LimitAdminMessageVisibility(role string) func(*sql.Selector) {
 	return func(s *sql.Selector) {
 		if role != adminCoreModule.RoleSuperAdmin {
 			s.Where(sql.Not(adminCoreModule.HasSuperAdminReference(s, ticketmessage.FieldSenderUserID)))
 			ticketmessage.Not(ticketmessage.And(
 				ticketmessage.SenderRoleEQ(ticketmessage.SenderRoleSystem),
-				ticketmessage.SenderUserIDIsNil(),
 				ticketmessage.MessageHasPrefix(AssignmentEventPrefix),
 			))(s)
 		}

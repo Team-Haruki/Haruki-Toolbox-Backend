@@ -111,7 +111,11 @@ func handleAdminGetTicketDetail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to query ticket messages")
 		}
-		row.Edges.Messages = messages
+		if beforeID == 0 {
+			row.Edges.Messages = messages
+		} else if err := loadLatestAdminTicketMessage(c.Context(), apiHelper.DBManager.DB, actorRole, row); err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to query latest ticket message")
+		}
 		userIDs := append(collectAdminTicketUserIDs([]*postgresql.Ticket{row}), collectAdminTicketMessageSenderUserIDs(messages)...)
 		userNameByUserID, err := loadAdminTicketUserNames(c.Context(), apiHelper.DBManager.DB, userIDs)
 		if err != nil {

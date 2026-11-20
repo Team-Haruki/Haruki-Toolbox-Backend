@@ -38,7 +38,7 @@ func TestOwnTicketDetailPagesMessagesAndRejectsForeignCursors(t *testing.T) {
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "owner"); return c.Next() })
 	app.Get("/tickets/:ticket_id", handleGetOwnTicketDetail(helper))
-	read := func(query string, want int) userTicketDetailResponse {
+	read := func(query string, want int, wantCursor bool) userTicketDetailResponse {
 		t.Helper()
 		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/tickets/owned"+query, nil))
 		if err != nil {
@@ -52,23 +52,30 @@ func TestOwnTicketDetailPagesMessagesAndRejectsForeignCursors(t *testing.T) {
 			UpdatedData userTicketDetailResponse `json:"updatedData"`
 		}
 		if want == http.StatusOK {
-			if err := json.UnmarshalRead(resp.Body, &body); err != nil {
+			raw, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), `"nextBeforeMessageId":`) != wantCursor {
+				t.Fatalf("ticket %s: unexpected continuation field", query)
+			}
+			if err := json.Unmarshal(raw, &body); err != nil {
 				t.Fatal(err)
 			}
 		}
 		return body.UpdatedData
 	}
-	first := read("", http.StatusOK)
+	first := read("", http.StatusOK, true)
 	if len(first.Messages) != 100 || first.NextBeforeMessageID != visible[2].ID || first.Messages[99].ID != visible[101].ID {
 		t.Fatalf("recent page: length=%d cursor=%d", len(first.Messages), first.NextBeforeMessageID)
 	}
-	second := read(fmt.Sprintf("?before_message_id=%d", first.NextBeforeMessageID), http.StatusOK)
+	second := read(fmt.Sprintf("?before_message_id=%d", first.NextBeforeMessageID), http.StatusOK, false)
 	if len(second.Messages) != 2 || second.Messages[0].ID != visible[0].ID || second.Messages[1].ID != visible[1].ID || second.NextBeforeMessageID != 0 {
 		t.Fatalf("older page: %#v", second)
 	}
-	read(fmt.Sprintf("?before_message_id=%d", internal.ID), http.StatusNotFound)
-	read(fmt.Sprintf("?before_message_id=%d", foreign.ID), http.StatusNotFound)
-	read("?before_message_id=0", http.StatusBadRequest)
+	read(fmt.Sprintf("?before_message_id=%d", internal.ID), http.StatusNotFound, false)
+	read(fmt.Sprintf("?before_message_id=%d", foreign.ID), http.StatusNotFound, false)
+	read("?before_message_id=0", http.StatusBadRequest, false)
 }
 
 func TestTicketBodyLimitsAndOwnerList(t *testing.T) {
