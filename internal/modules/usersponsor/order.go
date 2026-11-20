@@ -1,7 +1,6 @@
 package usersponsor
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -13,7 +12,7 @@ import (
 )
 
 // A single full order number, never the OpenAPI's comma-separated batch form.
-// Order numbers are proof credentials: keep them out of URLs, keys and logs.
+// Order numbers identify payments. Ownership comes from the payer OAuth link.
 var orderNumberPattern = regexp.MustCompile(`^[0-9]{16,128}$`)
 
 func (h *handlers) orderRateLimit(c fiber.Ctx) error {
@@ -46,9 +45,6 @@ func (h *handlers) verifyOrder(c fiber.Ctx) error {
 	if !h.orders.CredentialsConfigured() {
 		return fiber.NewError(503, "afdian order verification is not configured")
 	}
-	if err := h.orderRateLimit(c); err != nil {
-		return err
-	}
 	var payload struct {
 		OrderNumber string `json:"orderNumber"`
 	}
@@ -59,29 +55,30 @@ func (h *handlers) verifyOrder(c fiber.Ctx) error {
 	if !orderNumberPattern.MatchString(orderNumber) {
 		return api.ErrorBadRequest(c, "invalid afdian order number")
 	}
+	uid, _ := usercore.CurrentUserID(c)
+	payer, err := h.api.DBManager.DB.User.Get(c.Context(), uid)
+	if err != nil {
+		return api.ErrorInternal(c, "failed to load afdian binding")
+	}
+	if !hasAfdianOAuthProof(payer) {
+		return api.ErrorBadRequest(c, "verify your afdian account with OAuth before verifying an order")
+	}
+	if err := h.orderRateLimit(c); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	order, found, err := sponsor.VerifyAfdianOrder(c.Context(), h.orders, orderNumber, now)
 	if err != nil {
 		return fiber.NewError(502, "afdian order verification temporarily unavailable")
 	}
-	// Unpaid, missing, foreign-creator and already-claimed orders all have the
-	// same public error. Only the authoritative response supplies the user ID.
-	const rejected = "afdian order could not be verified or is already linked"
-	if !found {
-		return api.ErrorBadRequest(c, rejected)
+	if !found || order.AfdianUserID != *payer.AfdianUserID {
+		return api.ErrorBadRequest(c, "afdian order could not be verified for this account")
 	}
-	uid, _ := usercore.CurrentUserID(c)
-	// Record the verified payment using the existing idempotent order pipeline;
-	// this also handles a new payment not yet picked up by scheduled sync.
+	// Refresh a payment only for the proven payer. This never creates or
+	// upgrades an identity claim.
 	if _, err := sponsor.RecordAfdianOrder(c.Context(), h.api.DBManager.DB, order, now); err != nil {
 		return api.ErrorInternal(c, "failed to record verified sponsorship")
 	}
-	if err := h.bindIdentity(c.Context(), uid, order.AfdianUserID, "order"); err != nil {
-		if errors.Is(err, errBindingConflict) {
-			return api.ErrorBadRequest(c, rejected)
-		}
-		return api.ErrorInternal(c, "failed to save afdian binding")
-	}
-	usercore.WriteUserAuditLog(c, h.api, "user.afdian.bind", api.SystemLogResultSuccess, uid, map[string]any{"verificationMethod": "order"})
+	usercore.WriteUserAuditLog(c, h.api, "user.afdian.verify_order", api.SystemLogResultSuccess, uid, nil)
 	return h.status(c)
 }

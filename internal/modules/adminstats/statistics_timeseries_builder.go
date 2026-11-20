@@ -3,6 +3,7 @@ package adminstats
 import (
 	"time"
 
+	adminCore "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 
 	"github.com/gofiber/fiber/v3"
@@ -11,27 +12,31 @@ import (
 func buildStatisticsTimeseries(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, from, to time.Time, bucket, tz string, loc *time.Location) (*statisticsTimeseriesResponse, error) {
 	points := initializeTimeseriesPoints(from, to, bucket, loc)
 
+	actorID, role, err := adminCore.CurrentAdminActor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	all := adminCore.NormalizeRole(role) == adminCore.RoleSuperAdmin
 	db := apiHelper.DBManager.DB
 	var (
 		registrationCounts map[int64]int
 		uploadCounts       map[int64]statisticsUploadBucketCount
-		err                error
 	)
-	if sqlDB := db.SQLDB(); sqlDB != nil {
-		registrationCounts, err = queryRegistrationCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket, tz)
+	if sqlDB := db.PostgresSQLDB(); sqlDB != nil {
+		registrationCounts, err = queryRegistrationCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket, tz, actorID, all)
 		if err != nil {
 			return nil, err
 		}
-		uploadCounts, err = queryUploadCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket, tz)
+		uploadCounts, err = queryUploadCountsRawSQL(ctx.Context(), sqlDB, from, to, bucket, tz, actorID, all)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		registrationCounts, err = queryRegistrationCountsFallback(ctx, apiHelper, from, to, bucket, loc)
+		registrationCounts, err = queryRegistrationCountsFallback(ctx, apiHelper, from, to, bucket, loc, actorID, all)
 		if err != nil {
 			return nil, err
 		}
-		uploadCounts, err = queryUploadCountsFallback(ctx, apiHelper, from, to, bucket, loc)
+		uploadCounts, err = queryUploadCountsFallback(ctx, apiHelper, from, to, bucket, loc, actorID, role)
 		if err != nil {
 			return nil, err
 		}

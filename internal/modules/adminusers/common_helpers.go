@@ -1,6 +1,7 @@
 package adminusers
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -51,16 +52,45 @@ func applyManagedTargetUserUpdateGuards(query *postgresql.UserUpdate, actorUserI
 	return guarded
 }
 
-func scopeAdminUserQueryForActor(query *postgresql.UserQuery, actorUserID, actorRole string) *postgresql.UserQuery {
-	scoped := query.Where(userSchema.IDNEQ(strings.TrimSpace(actorUserID)))
-	if adminCoreModule.NormalizeRole(actorRole) != adminCoreModule.RoleSuperAdmin {
-		scoped = scoped.Where(userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
+func visibleAdminTargetUsers(query *postgresql.UserQuery, actorRole string) *postgresql.UserQuery {
+	if adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin {
+		return query
 	}
-	return scoped
+	return query.Where(userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
+}
+
+func scopeAdminUserQueryForActor(query *postgresql.UserQuery, actorUserID, actorRole string) *postgresql.UserQuery {
+	return visibleAdminTargetUsers(query, actorRole).Where(userSchema.IDNEQ(strings.TrimSpace(actorUserID)))
+}
+
+// Check visibility before waiting on a reservation that could otherwise
+// reveal activity for a hidden target. Callers still authorize after locking.
+func lockVisibleAdminTargets(ctx context.Context, db *postgresql.Client, role string, ids ...string) (func(), []string, error) {
+	if adminCoreModule.NormalizeRole(role) != adminCoreModule.RoleSuperAdmin {
+		visible, err := visibleAdminTargetUsers(db.User.Query(), role).Where(userSchema.IDIn(ids...)).IDs(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		ids = visible
+	}
+	release, err := db.LockUserMutations(ctx, ids...)
+	return release, ids, err
+}
+
+func lockVisibleAdminTarget(ctx context.Context, db *postgresql.Client, role, id string) (func(), error) {
+	release, ids, err := lockVisibleAdminTargets(ctx, db, role, id)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		release()
+		return nil, fiber.NewError(fiber.StatusNotFound, "user not found")
+	}
+	return release, nil
 }
 
 func resolveManagedTargetUserUpdateMiss(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, actorUserID, actorRole, targetUserID string) error {
-	target, err := apiHelper.DBManager.DB.User.Query().
+	target, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 		Where(userSchema.IDEQ(strings.TrimSpace(targetUserID))).
 		Select(userSchema.FieldID, userSchema.FieldRole).
 		Only(c.Context())

@@ -57,19 +57,24 @@ func paidOrder(number string) map[string]any {
 	return map[string]any{"out_trade_no": number, "user_id": "afdian-alice", "status": 2, "product_type": 0, "month": 1, "total_amount": "5.00", "create_time": time.Date(2024, 1, 1, 4, 0, 0, 0, time.UTC).Unix()}
 }
 
-func TestOrderVerificationWorksWithoutOAuthAndKeepsPastSponsorship(t *testing.T) {
+func TestOrderVerificationRequiresOAuthAndKeepsPastSponsorship(t *testing.T) {
 	e := newEnv(t)
 	e.h.oauth = OAuthConfig{}
 	calls := mockOrders(t, e, []map[string]any{paidOrder(testOrderNumber)}, 200, 200)
 	status, body := e.request(t, "GET", "/api/user/alice/afdian", "alice", "session", nil)
-	if status != 200 || !strings.Contains(string(body), `"oauthEnabled":false`) || !strings.Contains(string(body), `"orderVerificationEnabled":true`) {
+	if status != 200 || !strings.Contains(string(body), `"oauthEnabled":false`) || !strings.Contains(string(body), `"orderVerificationEnabled":false`) {
 		t.Fatalf("incorrect method availability: %s", body)
 	}
+	status, body = e.request(t, "POST", "/api/user/alice/afdian/verify-order", "alice", "session", map[string]string{"orderNumber": " " + testOrderNumber + " ", "user_id": "forged-id"})
+	if status != 400 || calls.Load() != 0 || e.db.User.GetX(t.Context(), "alice").AfdianUserID != nil {
+		t.Fatalf("an order number alone reached payment verification: %d %s", status, body)
+	}
+	e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
 	status, body = e.request(t, "POST", "/api/user/alice/afdian/verify-order", "alice", "session", map[string]string{"orderNumber": " " + testOrderNumber + " ", "user_id": "forged-id"})
 	if status != 200 || calls.Load() != 1 {
 		t.Fatalf("verify: %d %s", status, body)
 	}
-	for _, want := range []string{`"verificationMethod":"order"`, `"eligible":true`, `"category":"former"`} {
+	for _, want := range []string{`"verificationMethod":"oauth2"`, `"eligible":true`, `"category":"former"`} {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("missing %s: %s", want, body)
 		}
@@ -109,12 +114,16 @@ func TestOrdersCannotClaimAnotherBoundAfdianAccount(t *testing.T) {
 			e := newEnv(t)
 			mockOrders(t, e, []map[string]any{paidOrder(number)}, 200, 200)
 			e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
+			e.db.User.UpdateOneID("bob").SetAfdianUserID("afdian-bob").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
 			status, body := e.request(t, "POST", "/api/user/bob/afdian/verify-order", "bob", "session", map[string]string{"orderNumber": number})
-			if status != 400 || !strings.Contains(string(body), "could not be verified or is already linked") {
+			if status != 400 || !strings.Contains(string(body), "could not be verified for this account") {
 				t.Fatalf("duplicate claim: %d %s", status, body)
 			}
-			if e.db.User.GetX(t.Context(), "bob").AfdianUserID != nil {
+			if payer := e.db.User.GetX(t.Context(), "bob").AfdianUserID; payer == nil || *payer != "afdian-bob" {
 				t.Fatal("other account acquired sponsor identity")
+			}
+			if count := e.db.SponsorAfdianOrder.Query().CountX(t.Context()); count != 0 {
+				t.Fatal("order from another payer was recorded")
 			}
 		})
 	}
@@ -123,9 +132,13 @@ func TestOrdersCannotClaimAnotherBoundAfdianAccount(t *testing.T) {
 func TestOrderAndOAuthProofsCanUpgradeButNeverDowngrade(t *testing.T) {
 	e := newEnv(t)
 	mockOrders(t, e, []map[string]any{paidOrder(testOrderNumber)}, 200, 200)
-	e.request(t, "POST", "/api/user/alice/afdian/verify-order", "alice", "session", map[string]string{"orderNumber": testOrderNumber})
+	e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").SetAfdianVerificationMethod("order").ExecX(t.Context())
+	status, _ := e.request(t, "POST", "/api/user/alice/afdian/verify-order", "alice", "session", map[string]string{"orderNumber": testOrderNumber})
+	if status != 400 {
+		t.Fatal("legacy order-only link could refresh a payment")
+	}
 	state := e.begin(t, "alice")
-	status, _ := e.request(t, "POST", "/api/user/alice/afdian/callback", "alice", "session", map[string]string{"code": "code", "state": state})
+	status, _ = e.request(t, "POST", "/api/user/alice/afdian/callback", "alice", "session", map[string]string{"code": "code", "state": state})
 	if status != 200 {
 		t.Fatal("OAuth could not confirm order-verified identity")
 	}
@@ -161,11 +174,12 @@ func TestOrderVerificationRejectsInvalidOrUnpaidProviderResults(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newEnv(t)
 			mockOrders(t, e, tc.orders, tc.ec, tc.status)
+			e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
 			status, body := e.request(t, "POST", "/api/user/alice/afdian/verify-order", "alice", "session", map[string]string{"orderNumber": testOrderNumber})
 			if status != tc.want {
 				t.Fatalf("got %d %s", status, body)
 			}
-			if e.db.User.GetX(t.Context(), "alice").AfdianUserID != nil || e.db.SponsorAfdianOrder.Query().CountX(t.Context()) != 0 {
+			if e.db.SponsorAfdianOrder.Query().CountX(t.Context()) != 0 {
 				t.Fatal("unverified response changed sponsorship")
 			}
 		})
@@ -201,6 +215,8 @@ func TestOrderVerificationValidationAuthenticationAndLimits(t *testing.T) {
 	if status != 403 || calls.Load() != 0 {
 		t.Fatal("cross-user request reached provider")
 	}
+	e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
+	e.db.User.UpdateOneID("bob").SetAfdianUserID("afdian-bob").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
 	for batch := 0; batch < 4; batch++ {
 		for i := 0; i < 5; i++ {
 			status, _ = e.request(t, "POST", "/api/user/alice/afdian/verify-order", "alice", "session", map[string]string{"orderNumber": testOrderNumber})

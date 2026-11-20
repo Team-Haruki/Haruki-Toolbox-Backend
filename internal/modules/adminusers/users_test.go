@@ -3,6 +3,7 @@ package adminusers
 import (
 	"context"
 	json "encoding/json/v2"
+	"io"
 
 	"net/http"
 	"net/http/httptest"
@@ -167,7 +168,7 @@ func TestManagedUserMutationsWaitForTargetRole(t *testing.T) {
 			}
 			db.User.UpdateOneID("target").SetRole(user.RoleSuperAdmin).SaveX(t.Context())
 			release()
-			if code := <-status; code != http.StatusForbidden || providerCalls.Load() != 0 {
+			if code := <-status; code != http.StatusNotFound || providerCalls.Load() != 0 {
 				t.Fatalf("after promotion: status=%d, provider calls=%d", code, providerCalls.Load())
 			}
 		})
@@ -473,5 +474,110 @@ func TestSingleAndBatchRoleChangesCommitOnVisibleAccounts(t *testing.T) {
 		if resp.StatusCode != http.StatusOK || db.User.GetX(t.Context(), "target").Role != tc.role {
 			t.Fatalf("%s returned %d without saving the role", tc.path, resp.StatusCode)
 		}
+	}
+}
+
+func TestOrdinaryAdminCannotDistinguishProtectedAndMissingTargets(t *testing.T) {
+	helper := newAdminUserTicketNotificationTestHelper(t)
+	db := helper.DBManager.DB
+	db.User.Create().SetID("hidden").SetName("Protected").SetEmail("protected@example.test").SetRole(user.RoleSuperAdmin).ExecX(t.Context())
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	})
+	app.Get("/role/:target_user_id", handleGetUserRole(helper))
+	app.Get("/detail/:target_user_id", handleGetUserDetail(helper, harukiAPIHelper.UserDataBuilder{}))
+	app.Get("/activity/:target_user_id", handleGetUserActivity(helper))
+	app.Post("/batch", handleBatchBanUsers(helper, nil))
+	app.Post("/password/:target_user_id", handleResetUserPassword(helper))
+	release, err := db.LockUserMutations(t.Context(), "hidden")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	for _, prefix := range []string{"/role/", "/detail/", "/activity/"} {
+		var responses []string
+		for _, id := range []string{"hidden", "missing"} {
+			resp, err := app.Test(httptest.NewRequest(http.MethodGet, prefix+id, nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err != nil || resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("%s returned %d, %v", prefix, resp.StatusCode, err)
+			}
+			responses = append(responses, string(body))
+		}
+		if responses[0] != responses[1] {
+			t.Fatalf("%s distinguishes protected and absent users", prefix)
+		}
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/password/hidden", nil), fiber.TestConfig{Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("hidden password target waited for its lock: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("hidden password target returned %d", resp.StatusCode)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/batch", strings.NewReader(`{"userIds":["hidden","missing"]}`))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	resp, err = app.Test(req, fiber.TestConfig{Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil || strings.Count(string(body), `"code":"`+adminBatchResultCodeUserNotFound+`"`) != 2 {
+		t.Fatalf("batch distinguished protected and absent users: %s, %v", body, err)
+	}
+}
+
+func TestVisibleAccountLifecycleStillWorksForOrdinaryAdmin(t *testing.T) {
+	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
+	db := newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+	helper.DBManager.DB = db
+	db.User.Create().SetID("actor").SetName("Actor").SetEmail("actor@example.test").SetRole(user.RoleAdmin).ExecX(ctx)
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").ExecX(ctx)
+	db.User.Create().SetID("protected").SetName("Protected").SetEmail("protected@example.test").SetRole(user.RoleSuperAdmin).ExecX(ctx)
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error {
+		c.Locals("userID", "actor")
+		c.Locals("userRole", roleAdmin)
+		return c.Next()
+	})
+	app.Put("/ban/:target_user_id", handleBanUser(helper, nil))
+	app.Put("/unban/:target_user_id", handleUnbanUser(helper))
+	app.Post("/restore/:target_user_id", handleRestoreUser(helper))
+	app.Post("/batch", handleBatchUpdateUserAllowCNMysekai(helper))
+	for _, tc := range []struct {
+		method, path, body string
+		want               int
+		banned             bool
+	}{
+		{http.MethodPut, "/ban/protected", `{}`, http.StatusNotFound, false},
+		{http.MethodPut, "/ban/target", `{}`, http.StatusOK, true},
+		{http.MethodPut, "/unban/target", `{}`, http.StatusOK, false},
+		{http.MethodPut, "/ban/target", `{}`, http.StatusOK, true},
+		{http.MethodPost, "/restore/target", `{}`, http.StatusOK, false},
+		{http.MethodPost, "/batch", `{"userIds":["target","protected"],"allowCnMysekai":true}`, http.StatusOK, false},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want || db.User.GetX(ctx, "target").Banned != tc.banned {
+			t.Fatalf("%s returned %d: %s", tc.path, resp.StatusCode, body)
+		}
+	}
+	if !db.User.GetX(ctx, "target").AllowCnMysekai || db.User.GetX(ctx, "protected").AllowCnMysekai {
+		t.Fatal("batch action did not respect user visibility")
 	}
 }

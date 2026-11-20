@@ -242,7 +242,11 @@ func TestUnlinkAndRebindNeverRestoresOldGrants(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
 		t.Fatalf("unlink status=%d, remaining grants=%d", resp.StatusCode, db.GameAccountDataGrant.Query().CountX(ctx))
 	}
-	giveGrant() // Legacy orphan from a binding deleted by a previous release.
+	// Seed an orphan left by an older version directly. Normal writes now
+	// reject an absent binding at the persistence boundary.
+	db.GameAccountDataGrant.Create().SetOwnerUserID("owner").SetGranteeUserID("delegate").
+		SetServer("jp").SetGameUserID("123").SetDataType("suite").
+		SetCanRead(true).SetCanWrite(true).SetExpiresAt(time.Now().Add(time.Hour)).ExecX(ctx)
 	createBindingViaSave(t, helper, ctx, "jp", "123", "owner")
 	access, err := db.CanWriteGameAccountData(ctx, "delegate", "jp", "123", "suite", time.Now())
 	if err != nil || access.Allowed || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
@@ -298,4 +302,40 @@ func TestBindingPrivacyAndDeleteDoNotCommitAfterOwnershipChanged(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGrantRouteRejectsUnverifiedAndBannedParticipantsWithoutWriting(t *testing.T) {
+	helper, db, ctx := newDefaultBindingTestHelper(t, "grant-write-denials")
+	for _, id := range []string{"owner", "delegate"} {
+		createDefaultBindingTestUser(t, db, ctx, id)
+	}
+	binding := db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("42").SetUserID("owner").SaveX(ctx)
+	app := fiber.New()
+	app.Put("/:server/:game_user_id/:data_type/:grantee_user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", c.Get("Test-Actor"))
+		return c.Next()
+	}, handleUpsertGameAccountDataGrant(helper))
+	request := func(actor, grantee string, want int) {
+		t.Helper()
+		body := `{"expiresAt":"` + time.Now().UTC().Add(time.Hour).Format(time.RFC3339) + `"}`
+		req := httptest.NewRequest(http.MethodPut, "/jp/42/suite/"+grantee, strings.NewReader(body))
+		req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+		req.Header.Set("Test-Actor", actor)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want || db.GameAccountDataGrant.Query().CountX(ctx) != 0 {
+			t.Fatalf("grant denial returned %d, want %d, or wrote a grant", resp.StatusCode, want)
+		}
+	}
+	request("owner", "delegate", http.StatusBadRequest)
+	request("owner", "missing", http.StatusNotFound)
+	request("missing", "delegate", http.StatusUnauthorized)
+	db.GameAccountBinding.UpdateOneID(binding.ID).SetVerified(true).ExecX(ctx)
+	db.User.UpdateOneID("delegate").SetBanned(true).ExecX(ctx)
+	request("owner", "delegate", http.StatusForbidden)
+	db.User.UpdateOneID("owner").SetBanned(true).ExecX(ctx)
+	request("owner", "delegate", http.StatusForbidden)
 }

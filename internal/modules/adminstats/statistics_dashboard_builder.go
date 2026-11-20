@@ -3,6 +3,7 @@ package adminstats
 import (
 	"time"
 
+	adminCore "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
@@ -16,31 +17,47 @@ func buildDashboardStatistics(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	db := apiHelper.DBManager.DB
 	dbCtx := ctx.Context()
 
+	actorID, role, err := adminCore.CurrentAdminActor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	all := adminCore.NormalizeRole(role) == adminCore.RoleSuperAdmin
+	visibleUsers := visibleStatisticsUsers(actorID, all)
+	users := db.User.Query().Where(visibleUsers)
+	bindings := db.GameAccountBinding.Query()
+	if !all {
+		bindings.Where(gameaccountbinding.HasUserWith(visibleUsers))
+	}
+	uploads, err := scopeUploadLogsForAdminActor(dbCtx, db, db.UploadLog.Query(), role, actorID)
+	if err != nil {
+		return nil, err
+	}
+
 	now := adminNowUTC()
 	windowStart := now.Add(-time.Duration(windowHours) * time.Hour)
 
-	userTotal, err := db.User.Query().Count(dbCtx)
+	userTotal, err := users.Clone().Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
-	userBanned, err := db.User.Query().Where(userSchema.BannedEQ(true)).Count(dbCtx)
+	userBanned, err := users.Clone().Where(userSchema.BannedEQ(true)).Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
-	adminCount, err := db.User.Query().Where(userSchema.RoleEQ(userSchema.RoleAdmin)).Count(dbCtx)
+	adminCount, err := users.Clone().Where(userSchema.RoleEQ(userSchema.RoleAdmin)).Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
-	superAdminCount, err := db.User.Query().Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).Count(dbCtx)
+	superAdminCount, err := users.Clone().Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	bindingTotal, err := db.GameAccountBinding.Query().Count(dbCtx)
+	bindingTotal, err := bindings.Clone().Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
-	bindingVerified, err := db.GameAccountBinding.Query().Where(gameaccountbinding.VerifiedEQ(true)).Count(dbCtx)
+	bindingVerified, err := bindings.Clone().Where(gameaccountbinding.VerifiedEQ(true)).Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +65,7 @@ func buildDashboardStatistics(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		Key   string `json:"server"`
 		Count int    `json:"count"`
 	}
-	if err := db.GameAccountBinding.Query().
+	if err := bindings.Clone().
 		GroupBy(gameaccountbinding.FieldServer).
 		Aggregate(postgresql.As(postgresql.Count(), "count")).
 		Scan(dbCtx, &bindingByServerRows); err != nil {
@@ -59,15 +76,15 @@ func buildDashboardStatistics(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		bindingByServer = append(bindingByServer, groupedFieldCount{Key: row.Key, Count: row.Count})
 	}
 
-	uploadTotalAllTime, err := db.UploadLog.Query().Count(dbCtx)
+	uploadTotalAllTime, err := uploads.Clone().Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
-	uploadTotalWindow, err := db.UploadLog.Query().Where(uploadlog.UploadTimeGTE(windowStart)).Count(dbCtx)
+	uploadTotalWindow, err := uploads.Clone().Where(uploadlog.UploadTimeGTE(windowStart)).Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
-	uploadSuccessWindow, err := db.UploadLog.Query().Where(uploadlog.UploadTimeGTE(windowStart), uploadlog.SuccessEQ(true)).Count(dbCtx)
+	uploadSuccessWindow, err := uploads.Clone().Where(uploadlog.UploadTimeGTE(windowStart), uploadlog.SuccessEQ(true)).Count(dbCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +97,7 @@ func buildDashboardStatistics(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		Key   string `json:"upload_method"`
 		Count int    `json:"count"`
 	}
-	if err := db.UploadLog.Query().
+	if err := uploads.Clone().
 		Where(uploadlog.UploadTimeGTE(windowStart)).
 		GroupBy(uploadlog.FieldUploadMethod).
 		Aggregate(postgresql.As(postgresql.Count(), "count")).
@@ -96,7 +113,7 @@ func buildDashboardStatistics(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 		Key   string `json:"data_type"`
 		Count int    `json:"count"`
 	}
-	if err := db.UploadLog.Query().
+	if err := uploads.Clone().
 		Where(uploadlog.UploadTimeGTE(windowStart)).
 		GroupBy(uploadlog.FieldDataType).
 		Aggregate(postgresql.As(postgresql.Count(), "count")).
@@ -109,7 +126,7 @@ func buildDashboardStatistics(ctx fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTo
 	}
 
 	var methodDataTypeRows []groupedMethodDataTypeCount
-	if err := db.UploadLog.Query().
+	if err := uploads.Clone().
 		Where(uploadlog.UploadTimeGTE(windowStart)).
 		GroupBy(uploadlog.FieldUploadMethod, uploadlog.FieldDataType).
 		Aggregate(postgresql.As(postgresql.Count(), "count")).

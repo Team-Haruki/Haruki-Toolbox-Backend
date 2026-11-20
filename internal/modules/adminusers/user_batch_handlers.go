@@ -38,14 +38,14 @@ func handleBatchUserOperation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelp
 
 		results := make([]batchUserOperationItemResult, 0, len(userIDs))
 		successCount := 0
-		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), userIDs...)
+		release, visibleIDs, err := lockVisibleAdminTargets(c.Context(), apiHelper.DBManager.DB, actorRole, userIDs...)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve batch user operation")
 		}
 		defer release()
 
 		// Batch fetch all users at once to avoid N+1 queries
-		userMap, err := batchFetchUsers(c.Context(), apiHelper, userIDs)
+		userMap, err := batchFetchUsers(c.Context(), apiHelper, visibleIDs, actorRole)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserBatchPrefix+action, adminAuditTargetTypeUser, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonDatabaseError, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to fetch users")

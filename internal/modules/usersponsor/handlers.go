@@ -31,7 +31,7 @@ type sponsorStatus struct {
 
 func (h *handlers) statusFor(ctx context.Context, u *postgresql.User) (sponsorStatus, error) {
 	access, err := sponsor.QueryToolboxAccess(ctx, h.api.DBManager.DB, u)
-	return sponsorStatus{OAuthEnabled: h.oauth.Enabled(), OrderVerificationEnabled: h.orders.CredentialsConfigured(), ToolboxAccess: access}, err
+	return sponsorStatus{OAuthEnabled: h.oauth.Enabled(), OrderVerificationEnabled: h.orders.CredentialsConfigured() && hasAfdianOAuthProof(u), ToolboxAccess: access}, err
 }
 
 func (h *handlers) currentStatus(c fiber.Ctx) (sponsorStatus, error) {

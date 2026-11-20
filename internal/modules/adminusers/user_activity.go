@@ -60,7 +60,7 @@ func handleGetUserActivity(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		targetUser, err := apiHelper.DBManager.DB.User.Query().
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole).
 			Only(c.Context())

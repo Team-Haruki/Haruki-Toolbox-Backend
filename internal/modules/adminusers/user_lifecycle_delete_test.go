@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -82,7 +84,7 @@ func TestDeletionServiceFailuresRollBackAndReportFailure(t *testing.T) {
 				c.Locals("userRole", roleSuperAdmin)
 				return c.Next()
 			})
-			app.Delete("/users/:target_user_id/permanent", handleDeleteUser(helper, hydra))
+			app.Delete("/users/:target_user_id/permanent", handleDeleteUser(helper, hydra, ""))
 			req := httptest.NewRequest(http.MethodDelete, "/users/target/permanent", strings.NewReader(`{"confirmUserId":"target"}`))
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := app.Test(req)
@@ -109,11 +111,17 @@ func TestPermanentDeletionRouteReturnsAcknowledgementAndAudit(t *testing.T) {
 	helper.DBManager.DB = newAdminUserTicketNotificationTestHelper(t).DBManager.DB
 	db := helper.DBManager.DB
 	db.User.Create().SetID("actor").SetName("Admin").SetEmail("actor@example.test").SetRole(userSchema.RoleSuperAdmin).SaveX(ctx)
-	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SaveX(ctx)
+	avatarDir := t.TempDir()
+	const filename = "2265ef0c-23e6-43ca-b90e-980b6dc2b4e4.png"
+	file := filepath.Join(avatarDir, filename)
+	if err := os.WriteFile(file, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetAvatarPath(filename).SaveX(ctx)
 	db.GameAccountBinding.Create().SetServer("jp").SetGameUserID("123").SetUserID("target").SaveX(ctx)
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "actor"); return c.Next() })
-	RegisterAdminUserRoutes(helper, app.Group("/api/admin"), nil, harukiAPIHelper.UserDataBuilder{}, func(c fiber.Ctx) error { return c.Next() })
+	RegisterAdminUserRoutes(helper, app.Group("/api/admin"), nil, harukiAPIHelper.UserDataBuilder{}, func(c fiber.Ctx) error { return c.Next() }, avatarDir)
 	req := httptest.NewRequest(http.MethodDelete, "/api/admin/users/target/permanent", strings.NewReader(`{"confirmUserId":"target"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -131,6 +139,9 @@ func TestPermanentDeletionRouteReturnsAcknowledgementAndAudit(t *testing.T) {
 	if resp.StatusCode != 200 || body.UpdatedData == nil || body.UpdatedData.UserID != "target" || !body.UpdatedData.Deleted {
 		t.Fatalf("status=%d acknowledgement=%+v", resp.StatusCode, body.UpdatedData)
 	}
+	if _, err := os.Stat(file); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("avatar remained after successful deletion: %v", err)
+	}
 	if db.User.Query().Where(userSchema.IDEQ("target")).ExistX(ctx) {
 		t.Fatal("acknowledged deletion retained account")
 	}
@@ -144,7 +155,7 @@ func TestDeletionRechecksTargetRoleAfterInitialLookup(t *testing.T) {
 	helper.DBManager.DB = newAdminUserTicketNotificationTestHelper(t).DBManager.DB
 	db := helper.DBManager.DB
 	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetRole(userSchema.RoleSuperAdmin).SaveX(ctx)
-	if _, err := permanentlyDeleteUser(ctx, helper, nil, "actor", roleAdmin, "target"); err == nil {
+	if _, err := permanentlyDeleteUser(ctx, helper, nil, "actor", roleAdmin, "target", ""); err == nil {
 		t.Fatal("ordinary admin deleted a target promoted to super-admin")
 	}
 	if db.User.GetX(ctx, "target").Banned {
@@ -200,7 +211,7 @@ func TestPermanentlyDeleteUserCleansBindingsAndIdentity(t *testing.T) {
 			t.Cleanup(server.Close)
 			helper.SessionHandler.KratosAdminURL = server.URL
 			hydra := oauth2.NewHydraConfig(oauth2.HydraConfigOptions{Provider: oauth2.ProviderHydra, AdminURL: server.URL, RequestTimeout: time.Second})
-			bindings, err := permanentlyDeleteUser(ctx, helper, hydra, "admin", roleSuperAdmin, "target")
+			bindings, err := permanentlyDeleteUser(ctx, helper, hydra, "admin", roleSuperAdmin, "target", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -233,14 +244,14 @@ func TestDeleteUserRejectsUnconfirmedAndProtectedTargets(t *testing.T) {
 		{"old-client", "admin", roleAdmin, roleUser, "", 400},
 		{"wrong-confirmation", "admin", roleAdmin, roleUser, `{"confirmUserId":"other"}`, 400},
 		{"self", "target", roleSuperAdmin, roleSuperAdmin, `{"confirmUserId":"target"}`, 400},
-		{"protected", "admin", roleAdmin, roleSuperAdmin, `{"confirmUserId":"target"}`, 403},
+		{"protected", "admin", roleAdmin, roleSuperAdmin, `{"confirmUserId":"target"}`, 404},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			helper := newAdminUserTicketNotificationTestHelper(t)
 			helper.DBManager.DB.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetRole(userSchema.Role(tc.targetRole)).SaveX(t.Context())
 			app := fiber.New()
 			app.Use(func(c fiber.Ctx) error { c.Locals("userID", tc.actor); c.Locals("userRole", tc.role); return c.Next() })
-			app.Delete("/users/:target_user_id", handleDeleteUser(helper, nil))
+			app.Delete("/users/:target_user_id", handleDeleteUser(helper, nil, ""))
 			req := httptest.NewRequest(http.MethodDelete, "/users/target", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			resp, err := app.Test(req)
@@ -268,7 +279,7 @@ func TestDeleteUserFailureKeepsAccountAndBindings(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(503) }))
 	t.Cleanup(server.Close)
 	helper.SessionHandler.KratosAdminURL = server.URL
-	if _, err := permanentlyDeleteUser(ctx, helper, nil, "admin", roleSuperAdmin, "target"); err == nil {
+	if _, err := permanentlyDeleteUser(ctx, helper, nil, "admin", roleSuperAdmin, "target", ""); err == nil {
 		t.Fatal("provider failure was ignored")
 	}
 	if db.User.GetX(ctx, "target").Banned || db.SocialPlatformInfo.Query().CountX(ctx) != 1 {
@@ -277,10 +288,35 @@ func TestDeleteUserFailureKeepsAccountAndBindings(t *testing.T) {
 	if err := manager.Redis.Set(ctx, harukiRedis.InheritActiveKeyPrefix+"target", "running-job", time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := permanentlyDeleteUser(ctx, helper, nil, "admin", roleSuperAdmin, "target"); err == nil {
+	if _, err := permanentlyDeleteUser(ctx, helper, nil, "admin", roleSuperAdmin, "target", ""); err == nil {
 		t.Fatal("deleted account during active transfer")
 	}
 	if _, err := db.User.Get(ctx, "target"); postgresql.IsNotFound(err) {
 		t.Fatal("active account disappeared")
+	}
+}
+
+func TestPermanentDeletionDoesNotCommitWhenAvatarCleanupCannotBeQueued(t *testing.T) {
+	helper, _, ctx := newAdminUserIntegrationSessionHelper(t)
+	db := newAdminUserTicketNotificationTestHelper(t).DBManager.DB
+	helper.DBManager.DB = db
+	dir := t.TempDir()
+	const filename = "2265ef0c-23e6-43ca-b90e-980b6dc2b4e4.png"
+	file := filepath.Join(dir, filename)
+	if err := os.WriteFile(file, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".pending-avatar-deletions"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	db.User.Create().SetID("target").SetName("Target").SetEmail("target@example.test").SetAvatarPath(filename).ExecX(ctx)
+	if _, err := permanentlyDeleteUser(ctx, helper, nil, "actor", roleSuperAdmin, "target", dir); err == nil {
+		t.Fatal("account deletion proceeded when cleanup could not be queued")
+	}
+	if db.User.GetX(ctx, "target").Banned {
+		t.Fatal("failed cleanup changed the account")
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("failed cleanup removed the avatar: %v", err)
 	}
 }

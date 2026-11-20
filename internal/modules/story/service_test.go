@@ -342,7 +342,11 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 		t.Fatalf("list = %d %v", resp.StatusCode, body)
 	}
 
-	// re-translate: the row goes away and the next run redoes it
+	// Leave another exported JP-only episode eligible for the scheduled worker.
+	if n, err := db.StoryTranslation.Delete().Where(storytranslation.ScenarioID("event_02_01")).Exec(ctx); err != nil || n != 1 {
+		t.Fatalf("prepare another pending episode: deleted %d, %v", n, err)
+	}
+	// Retranslation removes and queues only the requested row.
 	req := httptest.NewRequest(http.MethodPost, "/retranslate/event_02_02", nil)
 	if resp, err := app.Test(req); err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("retranslate = %v %v", resp, err)
@@ -350,9 +354,20 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 	if n, _ := db.StoryTranslation.Query().Where(storytranslation.ScenarioID("event_02_02")).Count(ctx); n != 0 {
 		t.Fatalf("row kept after retranslate")
 	}
-	s.translateRun(ctx)
+	select {
+	case id := <-s.retranslate:
+		if id != "event_02_02" {
+			t.Fatalf("queued unexpected episode %q", id)
+		}
+		s.translateQueuedEpisode(ctx, id)
+	default:
+		t.Fatal("no episode was queued")
+	}
 	if len(prompts()) != 4 {
 		t.Fatalf("retranslate did not run once more: %d", len(prompts()))
+	}
+	if exists, err := db.StoryTranslation.Query().Where(storytranslation.ScenarioID("event_02_01")).Exist(ctx); err != nil || exists {
+		t.Fatalf("targeted retranslation changed an unrelated episode: exists=%t, %v", exists, err)
 	}
 }
 
@@ -368,10 +383,15 @@ func TestStartRunsLoopsUntilCancelled(t *testing.T) {
 	for s.currentCatalog() == nil && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	s.Kick()
-	s.Kick() // a second kick while one is queued is dropped
+	s.retranslate <- "missing-scenario"
+	for len(s.retranslate) != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	cancel()
 	wait()
+	if len(s.retranslate) != 0 {
+		t.Fatal("worker did not drain the targeted retranslation")
+	}
 	if s.currentCatalog() == nil {
 		t.Fatal("the loop did not run")
 	}
@@ -447,5 +467,26 @@ func TestRetranslatePreservesStateWhenUnavailable(t *testing.T) {
 				t.Fatalf("retranslation returned %d or changed the stored translation", resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestRetranslateDoesNotDiscardExistingWorkWhenQueueIsFull(t *testing.T) {
+	ctx := t.Context()
+	db := newStoryDB(t)
+	db.StoryTranslation.Create().SetScenarioID("episode").SetLang(TranslationLang).ExecX(ctx)
+	service := &Service{
+		db: db, tr: &translator{}, retranslate: make(chan string, 1),
+		catalog: &Catalog{ByID: map[string]*Episode{"episode": {ScenarioID: "episode"}}},
+	}
+	service.retranslate <- "earlier-episode"
+	app := fiber.New()
+	app.Post("/:scenario_id", service.handleRetranslate)
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/episode", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable || db.StoryTranslation.Query().CountX(ctx) != 1 {
+		t.Fatal("a full queue accepted retranslation or removed the current row")
 	}
 }

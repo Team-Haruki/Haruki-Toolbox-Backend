@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
+
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountbinding"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
@@ -34,8 +37,12 @@ type GameAccountDataGrantRecord struct {
 }
 
 var (
-	ErrGameAccountDataGrantOwnerNotFound   = errors.New("game account data grant owner user not found")
-	ErrGameAccountDataGrantGranteeNotFound = errors.New("game account data grant grantee user not found")
+	ErrGameAccountDataGrantOwnerNotFound     = errors.New("game account data grant owner user not found")
+	ErrGameAccountDataGrantGranteeNotFound   = errors.New("game account data grant grantee user not found")
+	ErrGameAccountDataGrantOwnerBanned       = errors.New("game account data grant owner is banned")
+	ErrGameAccountDataGrantGranteeBanned     = errors.New("game account data grant grantee is banned")
+	ErrGameAccountDataGrantBindingNotFound   = errors.New("game account data grant binding not found")
+	ErrGameAccountDataGrantBindingUnverified = errors.New("game account data grant binding is unverified")
 )
 
 // IsGrantableGameAccountDataType reports whether an owner may share one data
@@ -74,20 +81,6 @@ func normalizeGameAccountDataGrantIdentity(ownerUserID, granteeUserID, server, g
 		return "", "", "", "", "", fmt.Errorf("data type is not grantable")
 	}
 	return ownerUserID, granteeUserID, server, gameUserID, dataType, nil
-}
-
-func (c *Client) canonicalGameAccountDataGrantUserID(ctx context.Context, userID string, missingErr error) (string, error) {
-	row, err := c.User.Query().
-		Where(userSchema.IDEQ(userID)).
-		Select(userSchema.FieldID).
-		Only(ctx)
-	if err != nil {
-		if IsNotFound(err) {
-			return "", missingErr
-		}
-		return "", err
-	}
-	return row.ID, nil
 }
 
 func buildGameAccountDataGrantRecord(row *GameAccountDataGrant) GameAccountDataGrantRecord {
@@ -202,15 +195,60 @@ func (c *Client) UpsertGameAccountDataGrant(ctx context.Context, ownerUserID, gr
 	if err != nil {
 		return nil, err
 	}
-	ownerUserID, err = c.canonicalGameAccountDataGrantUserID(ctx, ownerUserID, ErrGameAccountDataGrantOwnerNotFound)
+	if ownerUserID == granteeUserID {
+		return nil, fmt.Errorf("cannot grant access to yourself")
+	}
+	tx, err := c.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	granteeUserID, err = c.canonicalGameAccountDataGrantUserID(ctx, granteeUserID, ErrGameAccountDataGrantGranteeNotFound)
+	defer func() { _ = tx.Rollback() }()
+	lockRow := func(s *sql.Selector) {
+		if s.Dialect() == dialect.Postgres {
+			s.ForUpdate()
+		}
+	}
+	// Check and lock both principals before the binding. Account deletion and
+	// bans wait for this transaction or are visible to its checks.
+	users, err := tx.User.Query().Where(userSchema.IDIn(ownerUserID, granteeUserID), lockRow).
+		Order(userSchema.ByID()).Select(userSchema.FieldID, userSchema.FieldBanned).All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	existing, err := c.GameAccountDataGrant.Query().
+	var owner, grantee *User
+	for _, row := range users {
+		if row.ID == ownerUserID {
+			owner = row
+		} else {
+			grantee = row
+		}
+	}
+	switch {
+	case owner == nil:
+		return nil, ErrGameAccountDataGrantOwnerNotFound
+	case grantee == nil:
+		return nil, ErrGameAccountDataGrantGranteeNotFound
+	case owner.Banned:
+		return nil, ErrGameAccountDataGrantOwnerBanned
+	case grantee.Banned:
+		return nil, ErrGameAccountDataGrantGranteeBanned
+	}
+	binding, err := tx.GameAccountBinding.Query().Where(
+		gameaccountbinding.ServerEQ(server),
+		gameaccountbinding.GameUserIDEQ(gameUserID),
+		gameaccountbinding.HasUserWith(userSchema.IDEQ(ownerUserID)),
+		lockRow,
+	).Select(gameaccountbinding.FieldID, gameaccountbinding.FieldVerified).Only(ctx)
+	if IsNotFound(err) {
+		return nil, ErrGameAccountDataGrantBindingNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !binding.Verified {
+		return nil, ErrGameAccountDataGrantBindingUnverified
+	}
+	existing, err := tx.GameAccountDataGrant.Query().
 		Where(
 			gameaccountdatagrant.OwnerUserIDEQ(ownerUserID),
 			gameaccountdatagrant.GranteeUserIDEQ(granteeUserID),
@@ -233,21 +271,30 @@ func (c *Client) UpsertGameAccountDataGrant(ctx context.Context, ownerUserID, gr
 			return nil, err
 		}
 	}
+	var grant *GameAccountDataGrant
 	if existing != nil {
 		update := existing.Update().SetExpiresAt(expiresAt)
 		if len(permissions) > 0 {
 			update.SetCanRead(canRead).SetCanWrite(canWrite)
 		}
-		return update.Save(ctx)
+		grant, err = update.Save(ctx)
+	} else {
+		grant, err = tx.GameAccountDataGrant.Create().SetCanRead(canRead).SetCanWrite(canWrite).
+			SetOwnerUserID(ownerUserID).
+			SetGranteeUserID(granteeUserID).
+			SetServer(server).
+			SetGameUserID(gameUserID).
+			SetDataType(dataType).
+			SetExpiresAt(expiresAt).
+			Save(ctx)
 	}
-	return c.GameAccountDataGrant.Create().SetCanRead(canRead).SetCanWrite(canWrite).
-		SetOwnerUserID(ownerUserID).
-		SetGranteeUserID(granteeUserID).
-		SetServer(server).
-		SetGameUserID(gameUserID).
-		SetDataType(dataType).
-		SetExpiresAt(expiresAt).
-		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return grant.Unwrap(), nil
 }
 
 func (c *Client) DeleteGameAccountDataGrant(ctx context.Context, ownerUserID, granteeUserID, server, gameUserID, dataType string) (int, error) {

@@ -2,14 +2,15 @@ package adminstats
 
 import (
 	"context"
-
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/predicate"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/uploadlog"
+	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -51,4 +52,11 @@ var adminNow = time.Now
 
 func adminNowUTC() time.Time {
 	return adminNow().UTC()
+}
+
+func visibleStatisticsUsers(actorID string, all bool) predicate.User {
+	if all {
+		return func(*sql.Selector) {}
+	}
+	return userSchema.And(userSchema.IDNEQ(actorID), userSchema.RoleNEQ(userSchema.RoleSuperAdmin))
 }

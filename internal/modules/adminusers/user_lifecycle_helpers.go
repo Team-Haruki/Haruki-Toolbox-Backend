@@ -29,8 +29,8 @@ func validateAdminPasswordInput(raw string) error {
 	return nil
 }
 
-func queryAdminTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID string) (*postgresql.User, error) {
-	targetUser, err := apiHelper.DBManager.DB.User.Query().
+func queryAdminTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, targetUserID, actorRole string) (*postgresql.User, error) {
+	targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 		Where(userSchema.IDEQ(targetUserID)).
 		Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned, userSchema.FieldBanReason, userSchema.FieldKratosIdentityID).
 		Only(c.Context())

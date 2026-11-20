@@ -26,7 +26,7 @@ func handleListUserOAuthAuthorizations(apiHelper *harukiAPIHelper.HarukiToolboxR
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
-		targetUser, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.IDEQ(targetUserID)).Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldBanned).Only(c.Context())
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).Where(userSchema.IDEQ(targetUserID)).Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID, userSchema.FieldName, userSchema.FieldEmail, userSchema.FieldBanned).Only(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthList, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, nil))
@@ -93,7 +93,7 @@ func handleRevokeUserOAuth(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonMissingUserSession, nil))
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
-		targetUser, err := apiHelper.DBManager.DB.User.Query().Where(userSchema.IDEQ(targetUserID)).Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).Only(c.Context())
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).Where(userSchema.IDEQ(targetUserID)).Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).Only(c.Context())
 		if err != nil {
 			if postgresql.IsNotFound(err) {
 				adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminAuditActionUserOAuthRevoke, adminAuditTargetTypeUser, targetUserID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonTargetUserNotFound, nil))

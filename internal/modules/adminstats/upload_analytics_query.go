@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/lib/pq"
-	"strings"
 
 	core "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 )
@@ -14,8 +14,10 @@ import (
 // Identifiers only come from this allowlist; all user values are SQL parameters.
 var analyticsDimensions = map[string]bool{"upload_method": true, "protocol_version": true, "client_name": true, "client_version": true, "client_channel": true, "platform": true, "os_version": true, "os_arch": true, "app_arch": true, "server": true, "data_type": true, "oauth_client_id": true}
 
+const uploadLogVisibilitySQL = `($3::boolean OR (l.identity_verified = TRUE AND EXISTS (SELECT 1 FROM users u WHERE u.id=l.toolbox_user_id AND u.role <> 'super_admin' AND u.id <> $4) AND (l.actor_user_id IS NULL OR EXISTS (SELECT 1 FROM users a WHERE a.id=l.actor_user_id AND a.role <> 'super_admin' AND a.id <> $4))))`
+
 const analyticsWhereSQL = `COALESCE(l.received_at,l.upload_time) >= $1 AND COALESCE(l.received_at,l.upload_time) < $2
-AND ($3::boolean OR (l.identity_verified = TRUE AND EXISTS (SELECT 1 FROM users u WHERE u.id=l.toolbox_user_id AND u.role <> 'super_admin' AND u.id <> $4) AND (l.actor_user_id IS NULL OR EXISTS (SELECT 1 FROM users a WHERE a.id=l.actor_user_id AND a.role <> 'super_admin' AND a.id <> $4))))
+AND ` + uploadLogVisibilitySQL + `
 AND ($5::boolean IS NULL OR l.success=$5)
 AND ($6::text[] IS NULL OR l.game_user_id=ANY($6::text[]))
 AND ($7::text[] IS NULL OR l.upload_method=ANY($7::text[]))

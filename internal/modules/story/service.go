@@ -23,15 +23,18 @@ const failedRetryAfter = 6 * time.Hour
 // maxFailedAttempts stops retrying an episode that keeps failing.
 const maxFailedAttempts = 5
 
+const maxPendingRetranslations = 32
+
 // Service owns the translation worker.
 type Service struct {
-	cfg    config.StoryConfig
-	db     *postgresql.Client
-	logger *harukiLogger.Logger
-	fetch  *fetcher
-	tr     *translator // nil when translation is disabled
-	gloss  glossaryCache
-	kick   chan struct{}
+	cfg           config.StoryConfig
+	db            *postgresql.Client
+	logger        *harukiLogger.Logger
+	fetch         *fetcher
+	tr            *translator // nil when translation is disabled
+	gloss         glossaryCache
+	retranslate   chan string
+	retranslateMu sync.Mutex
 
 	mu      sync.RWMutex
 	catalog *Catalog
@@ -51,11 +54,11 @@ func New(cfg config.StoryConfig, db *postgresql.Client, logger *harukiLogger.Log
 	}
 	httpClient := &http.Client{Timeout: 2 * time.Minute}
 	s := &Service{
-		cfg:    cfg,
-		db:     db,
-		logger: logger,
-		fetch:  newFetcher(cfg.RegistryBaseURL, cfg.AssetBaseURL, ua, httpClient),
-		kick:   make(chan struct{}, 1),
+		cfg:         cfg,
+		db:          db,
+		logger:      logger,
+		fetch:       newFetcher(cfg.RegistryBaseURL, cfg.AssetBaseURL, ua, httpClient),
+		retranslate: make(chan string, maxPendingRetranslations),
 	}
 	if tc := cfg.Translation; tc.Enabled {
 		if tc.LLMBaseURL == "" || tc.LLMAPIKey == "" || tc.LLMModel == "" {
@@ -87,31 +90,40 @@ func (s *Service) Start(ctx context.Context) func() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		s.loop(ctx, every, s.kick, func() { s.translateRun(ctx) })
+		s.translateRun(ctx)
+		ticker := time.NewTicker(every)
+		defer ticker.Stop()
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.translateRun(ctx)
+			case id := <-s.retranslate:
+				s.translateQueuedEpisode(ctx, id)
+			}
+		}
 	}()
 	return wg.Wait
 }
 
-func (s *Service) loop(ctx context.Context, every time.Duration, kick <-chan struct{}, run func()) {
-	run()
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		case <-kick:
-		}
-		run()
+func (s *Service) translateQueuedEpisode(ctx context.Context, id string) {
+	catalog := s.currentCatalog()
+	if catalog == nil || !catalog.JPOnly(id) {
+		return
 	}
-}
-
-// Kick asks the translation loop for an early pass.
-func (s *Service) Kick() {
-	select {
-	case s.kick <- struct{}{}:
-	default:
+	// Startup or a scheduled pass may have already rebuilt the deleted row.
+	exists, err := s.db.StoryTranslation.Query().
+		Where(storytranslation.ScenarioID(id), storytranslation.Lang(TranslationLang)).
+		Exist(ctx)
+	if err == nil && !exists {
+		err = s.translateEpisode(ctx, catalog, catalog.ByID[id])
+	}
+	if err != nil {
+		s.logger.Warnf("story retranslation %s failed: %v", id, err)
 	}
 }
 

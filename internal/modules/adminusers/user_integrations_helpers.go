@@ -158,7 +158,7 @@ func resolveManageableTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiT
 		return nil, err
 	}
 
-	targetUser, err := apiHelper.DBManager.DB.User.Query().
+	targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 		Where(userSchema.IDEQ(targetUserID)).
 		Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldKratosIdentityID).
 		Only(c.Context())
@@ -218,15 +218,22 @@ func generateAdminIOSUploadCode() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// withManagedUserMutation reserves the target before reading its current role.
+// withManagedUserMutation holds a reservation while the handler rechecks the target.
 func withManagedUserMutation(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, next fiber.Handler) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		targetID := strings.TrimSpace(c.Params("target_user_id"))
 		if targetID == "" {
 			return next(c)
 		}
-		release, err := apiHelper.DBManager.DB.LockUserMutations(c.Context(), targetID)
+		_, role, err := adminCoreModule.CurrentAdminActor(c)
 		if err != nil {
+			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
+		}
+		release, err := lockVisibleAdminTarget(c.Context(), apiHelper.DBManager.DB, role, targetID)
+		if err != nil {
+			if denied, ok := err.(*fiber.Error); ok {
+				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, denied.Code, denied.Message, nil)
+			}
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "user change in progress", nil)
 		}
 		defer release()

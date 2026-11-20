@@ -20,6 +20,7 @@ import (
 	userSocialModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersocial"
 	userSponsorModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/usersponsor"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/avatar"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/inheritvault"
 	harukiHandler "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/upload"
 	harukiBackground "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/background"
@@ -175,6 +176,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 	inheritVault := newInheritVaultStore(cfg, resources, inheritVaultLogger)
 	deviceFlowLogger := harukiLogger.NewLoggerFromGlobal("OAuth2Device")
 	deviceFlowConfig := newOAuth2DeviceFlowConfig(cfg, deviceFlowLogger)
+	userProfileConfig := userProfileModule.NewConfig(userProfileModule.ConfigOptions{
+		AvatarSaveDir: cfg.UserSystem.AvatarSaveDir,
+		AvatarBaseURL: cfg.UserSystem.AvatarURL,
+	})
 	harukiAPI.RegisterRoutes(apiHelper, harukiAPI.Dependencies{
 		HarukiProxyV3ClientPolicy: proxyPolicy,
 		DataSync:                  harukiHandler.NewDataSyncConfig(cfg.ThirdPartyDataProvider),
@@ -209,13 +214,10 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		ServerCryptor: harukiSekai.NewServerCryptor(harukiSekai.ServerCryptorConfig{
 			Regions: cfg.CryptoRegions(),
 		}),
-		UploadProxy:   cfg.Proxy,
-		InheritPacing: harukiSekai.InheritPacingFromConfig(cfg.SekaiClient.InheritPacing),
-		SekaiClient:   cfg.SekaiClient,
-		UserProfileConfig: userProfileModule.NewConfig(userProfileModule.ConfigOptions{
-			AvatarSaveDir: cfg.UserSystem.AvatarSaveDir,
-			AvatarBaseURL: cfg.UserSystem.AvatarURL,
-		}),
+		UploadProxy:       cfg.Proxy,
+		InheritPacing:     harukiSekai.InheritPacingFromConfig(cfg.SekaiClient.InheritPacing),
+		SekaiClient:       cfg.SekaiClient,
+		UserProfileConfig: userProfileConfig,
 		SocialBotVerify: userSocialModule.NewBotVerifyConfig(userSocialModule.BotVerifyConfigOptions{
 			Token: cfg.UserSystem.SocialPlatformVerifyToken,
 		}),
@@ -240,6 +242,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		Logger:      deviceFlowLogger,
 	})
 	waitInheritVaultReaper := inheritvault.StartReaper(schedulerCtx, inheritVault, inheritvault.ReaperInterval, inheritVaultLogger)
+	waitAvatarCleanup := avatar.StartCleanup(schedulerCtx, resources.databaseManager.DB, userProfileConfig.AvatarSaveDir(), resources.logger)
 	waitStory := func() {}
 	if storyService != nil {
 		waitStory = storyService.Start(schedulerCtx)
@@ -260,6 +263,7 @@ func Build(cfg harukiConfig.Config) (*Application, error) {
 		waitAfdianScheduler()
 		waitDeviceFlowReaper()
 		waitInheritVaultReaper()
+		waitAvatarCleanup()
 		waitStory()
 		waitStatsSampler()
 	}

@@ -23,7 +23,7 @@ func handleGetUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fi
 			return adminCoreModule.RespondFiberOrUnauthorized(c, err, "missing user session")
 		}
 
-		dbUser, err := apiHelper.DBManager.DB.User.Query().
+		dbUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).
 			Only(c.Context())
@@ -81,7 +81,7 @@ func handleUpdateUserRole(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve user role update")
 		}
 		defer release()
-		targetUser, err := apiHelper.DBManager.DB.User.Query().
+		targetUser, err := visibleAdminTargetUsers(apiHelper.DBManager.DB.User.Query(), actorRole).
 			Where(userSchema.IDEQ(targetUserID)).
 			Select(userSchema.FieldID, userSchema.FieldRole, userSchema.FieldBanned).
 			Only(c.Context())

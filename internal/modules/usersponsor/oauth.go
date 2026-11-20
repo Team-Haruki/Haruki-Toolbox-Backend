@@ -173,7 +173,7 @@ func (h *handlers) callback(c fiber.Ctx) error {
 		return fiber.NewError(502, "afdian authorization could not be verified")
 	}
 	uid, _ := usercore.CurrentUserID(c)
-	err = h.bindIdentity(c.Context(), uid, afdianID, "oauth2")
+	err = h.bindIdentity(c.Context(), uid, afdianID)
 	if errors.Is(err, errBindingConflict) {
 		return fiber.NewError(409, "afdian account is already bound; unlink before changing accounts")
 	}

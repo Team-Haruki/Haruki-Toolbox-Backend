@@ -1,6 +1,7 @@
 package story
 
 import (
+	"strings"
 	"time"
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
@@ -101,6 +102,16 @@ func (s *Service) handleRetranslate(c fiber.Ctx) error {
 		return harukiAPIHelper.ErrorForbidden(c, "story translation is disabled")
 	}
 	id := c.Params("scenario_id")
+	catalog := s.currentCatalog()
+	if catalog == nil || !catalog.JPOnly(id) {
+		return harukiAPIHelper.ErrorNotFound(c, "translation not found")
+	}
+	s.retranslateMu.Lock()
+	defer s.retranslateMu.Unlock()
+	if len(s.retranslate) == cap(s.retranslate) {
+		c.Set("Retry-After", "10")
+		return c.SendStatus(fiber.StatusServiceUnavailable)
+	}
 	deleted, err := s.db.StoryTranslation.Delete().
 		Where(storytranslation.ScenarioID(id), storytranslation.Lang(TranslationLang)).
 		Exec(c.Context())
@@ -110,6 +121,7 @@ func (s *Service) handleRetranslate(c fiber.Ctx) error {
 	if deleted == 0 {
 		return harukiAPIHelper.ErrorNotFound(c, "translation not found")
 	}
-	s.Kick()
+	// The missing row also makes this episode eligible after a process restart.
+	s.retranslate <- strings.Clone(id)
 	return harukiAPIHelper.Responses.SuccessResponse[string](c, "queued", nil)
 }

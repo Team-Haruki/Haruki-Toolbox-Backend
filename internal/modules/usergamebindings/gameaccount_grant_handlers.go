@@ -11,7 +11,6 @@ import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/gameaccountdatagrant"
-	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -35,39 +34,6 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 		return "", "", "", "", fiber.NewError(fiber.StatusBadRequest, "grantee_user_id is required")
 	}
 	return server, strconv.FormatInt(numericID, 10), dataType, granteeUserID, nil
-}
-
-func validateGrantOwnerBinding(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID string) *fiber.Error {
-	binding, err := queryOwnedBinding(c.Context(), apiHelper.DBManager.DB, ownerUserID, string(server), gameUserID)
-	if postgresql.IsNotFound(err) {
-		return fiber.NewError(fiber.StatusNotFound, "binding not found")
-	}
-	if err != nil {
-		harukiLogger.Errorf("Failed to query game account grant binding: %v", err)
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to query binding")
-	}
-	if !binding.Verified {
-		return fiber.NewError(fiber.StatusBadRequest, "binding is not verified yet")
-	}
-	return nil
-}
-
-func validateGrantTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, granteeUserID string) *fiber.Error {
-	target, err := apiHelper.DBManager.DB.User.Query().
-		Where(userSchema.IDEQ(granteeUserID)).
-		Select(userSchema.FieldID, userSchema.FieldBanned, userSchema.FieldBanReason).
-		Only(c.Context())
-	if err != nil {
-		if postgresql.IsNotFound(err) {
-			return fiber.NewError(fiber.StatusNotFound, "grantee user not found")
-		}
-		harukiLogger.Errorf("Failed to query grant target user: %v", err)
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to query grantee user")
-	}
-	if target.Banned {
-		return fiber.NewError(fiber.StatusForbidden, "grantee user is banned")
-	}
-	return nil
 }
 
 func handleListOwnedGameAccountDataGrants(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
@@ -140,12 +106,6 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			return harukiAPIHelper.ErrorInternal(c, "failed to reserve grant update")
 		}
 		defer release()
-		if err := validateGrantOwnerBinding(c, apiHelper, ownerUserID, server, gameUserID); err != nil {
-			return respondVerifiedGameAccountDataError(c, err)
-		}
-		if err := validateGrantTargetUser(c, apiHelper, granteeUserID); err != nil {
-			return respondVerifiedGameAccountDataError(c, err)
-		}
 
 		var permissions [][]string
 		if payload.Permissions != nil {
@@ -163,13 +123,20 @@ func handleUpsertGameAccountDataGrant(apiHelper *harukiAPIHelper.HarukiToolboxRo
 			previousPermissions = postgresql.GrantPermissions(previous.CanRead, previous.CanWrite)
 		}
 		row, err := apiHelper.DBManager.DB.UpsertGameAccountDataGrant(c.Context(), ownerUserID, granteeUserID, string(server), gameUserID, dataType, expiresAt, permissions...)
-		if err != nil {
-			if errors.Is(err, postgresql.ErrGameAccountDataGrantOwnerNotFound) {
-				return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
-			}
-			if errors.Is(err, postgresql.ErrGameAccountDataGrantGranteeNotFound) {
-				return harukiAPIHelper.ErrorNotFound(c, "grantee user not found")
-			}
+		switch {
+		case errors.Is(err, postgresql.ErrGameAccountDataGrantOwnerNotFound):
+			return harukiAPIHelper.ErrorUnauthorized(c, "invalid user session")
+		case errors.Is(err, postgresql.ErrGameAccountDataGrantOwnerBanned):
+			return harukiAPIHelper.ErrorForbidden(c, "account is banned")
+		case errors.Is(err, postgresql.ErrGameAccountDataGrantGranteeNotFound):
+			return harukiAPIHelper.ErrorNotFound(c, "grantee user not found")
+		case errors.Is(err, postgresql.ErrGameAccountDataGrantGranteeBanned):
+			return harukiAPIHelper.ErrorForbidden(c, "grantee user is banned")
+		case errors.Is(err, postgresql.ErrGameAccountDataGrantBindingNotFound):
+			return harukiAPIHelper.ErrorNotFound(c, "binding not found")
+		case errors.Is(err, postgresql.ErrGameAccountDataGrantBindingUnverified):
+			return harukiAPIHelper.ErrorBadRequest(c, "binding is not verified yet")
+		case err != nil:
 			harukiLogger.Errorf("Failed to upsert game account data grant: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to save game account data grant")
 		}
