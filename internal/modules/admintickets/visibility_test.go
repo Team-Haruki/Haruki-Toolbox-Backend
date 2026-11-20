@@ -13,6 +13,7 @@ import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	ticketsModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
@@ -69,7 +70,7 @@ func seedAdminTicketVisibilityTicket(
 }
 
 func newAdminTicketVisibilityTestApp(actorUserID, actorRole string) *fiber.App {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{JSONEncoder: jsoncodec.Marshal, JSONDecoder: jsoncodec.Unmarshal})
 	app.Use(func(c fiber.Ctx) error {
 		c.Locals("userID", actorUserID)
 		c.Locals("userRole", actorRole)

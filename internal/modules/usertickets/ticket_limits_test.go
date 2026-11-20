@@ -13,6 +13,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/tickets"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/mailnotify"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
@@ -35,7 +36,7 @@ func TestOwnTicketDetailPagesMessagesAndRejectsForeignCursors(t *testing.T) {
 	internal := db.TicketMessage.Create().SetTicketID(row.ID).SetInternal(true).SetMessage("internal note").SaveX(t.Context())
 	foreign := db.TicketMessage.Create().SetTicketID(other.ID).SetMessage("foreign reply").SaveX(t.Context())
 	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
-	app := fiber.New()
+	app := fiber.New(fiber.Config{JSONEncoder: jsoncodec.Marshal, JSONDecoder: jsoncodec.Unmarshal})
 	app.Use(func(c fiber.Ctx) error { c.Locals("userID", "owner"); return c.Next() })
 	app.Get("/tickets/:ticket_id", handleGetOwnTicketDetail(helper))
 	read := func(query string, want int, wantCursor bool) userTicketDetailResponse {
