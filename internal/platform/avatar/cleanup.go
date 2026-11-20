@@ -68,16 +68,19 @@ func QueueDeletion(directory, filename string) (bool, error) {
 	// Sync directory entries so a restart after the database commit still
 	// leaves the cleanup task on the avatar volume.
 	for _, path := range []string{pendingDirectory, "."} {
-		dir, err := root.Open(path)
-		if err != nil {
-			return false, err
-		}
-		syncErr := dir.Sync()
-		if err := errors.Join(syncErr, dir.Close()); err != nil {
+		if err := syncDirectory(root, path); err != nil {
 			return false, err
 		}
 	}
 	return true, nil
+}
+
+func syncDirectory(root *os.Root, path string) error {
+	dir, err := root.Open(path)
+	if err != nil {
+		return err
+	}
+	return errors.Join(dir.Sync(), dir.Close())
 }
 
 func finishDeletion(ctx context.Context, db *postgresql.Client, root *os.Root, filename string) error {
@@ -89,6 +92,10 @@ func finishDeletion(ctx context.Context, db *postgresql.Client, root *os.Root, f
 		return err
 	}
 	if err := root.Remove(filename); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	// Keep the marker until removal of the avatar is durable.
+	if err := syncDirectory(root, "."); err != nil {
 		return err
 	}
 	err = root.Remove(filepath.Join(pendingDirectory, filename))
