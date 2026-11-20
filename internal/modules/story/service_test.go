@@ -342,7 +342,11 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 		t.Fatalf("list = %d %v", resp.StatusCode, body)
 	}
 
-	// re-translate: the row goes away and the next run redoes it
+	// Leave another exported JP-only episode eligible for the scheduled worker.
+	if n, err := db.StoryTranslation.Delete().Where(storytranslation.ScenarioID("event_02_01")).Exec(ctx); err != nil || n != 1 {
+		t.Fatalf("prepare another pending episode: deleted %d, %v", n, err)
+	}
+	// Retranslation removes and queues only the requested row.
 	req := httptest.NewRequest(http.MethodPost, "/retranslate/event_02_02", nil)
 	if resp, err := app.Test(req); err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("retranslate = %v %v", resp, err)
@@ -361,6 +365,9 @@ func TestServiceTranslatesJPOnlyEpisodesAndServesThem(t *testing.T) {
 	}
 	if len(prompts()) != 4 {
 		t.Fatalf("retranslate did not run once more: %d", len(prompts()))
+	}
+	if exists, err := db.StoryTranslation.Query().Where(storytranslation.ScenarioID("event_02_01")).Exist(ctx); err != nil || exists {
+		t.Fatalf("targeted retranslation changed an unrelated episode: exists=%t, %v", exists, err)
 	}
 }
 
