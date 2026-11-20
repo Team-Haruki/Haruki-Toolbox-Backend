@@ -81,9 +81,8 @@ func sendMailWithClient(client *smtp.Client, auth smtp.Auth, from string, to []s
 		// The server may have accepted the message before the reply was lost.
 		return fmt.Errorf("failed to close data writer: %w", err)
 	}
-	if err := client.Quit(); err != nil {
-		return fmt.Errorf("failed to quit SMTP client: %w", err)
-	}
+	// The positive DATA reply confirms acceptance. QUIT only closes the session.
+	_ = client.Quit()
 	return nil
 }
 

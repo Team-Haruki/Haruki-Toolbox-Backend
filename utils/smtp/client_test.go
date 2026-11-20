@@ -37,7 +37,7 @@ func TestSendMailClassifiesDataAcceptance(t *testing.T) {
 		{name: "data command refused", rejectCommand: "DATA", failureStage: "get data writer", definiteRejection: true},
 		{name: "data rejected", dataReply: "550 rejected", failureStage: "close data writer", definiteRejection: true},
 		{name: "reply lost after data", failureStage: "close data writer"},
-		{name: "quit failed after accepted data", dataReply: "250 queued", quitReply: "421 closing", failureStage: "quit"},
+		{name: "quit failed after accepted data", dataReply: "250 queued", quitReply: "421 closing"},
 		{name: "accepted", dataReply: "250 queued", quitReply: "221 closing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
