@@ -59,7 +59,7 @@ func TestConsumeOpenUploadRateLimit(t *testing.T) {
 	key := "127.0.0.1|POST|/api/inherit/:server/:upload_type"
 
 	for i := 0; i < openUploadRateLimitPerMinute; i++ {
-		allowed, retryAfter, err := consumeOpenUploadRateLimit(context.Background(), apiHelper, key, now)
+		allowed, retryAfter, err := openUploadLimiter.consumeRedis(context.Background(), apiHelper, key, now)
 		if err != nil {
 			t.Fatalf("consumeOpenUploadRateLimit error on request %d: %v", i+1, err)
 		}
@@ -68,7 +68,7 @@ func TestConsumeOpenUploadRateLimit(t *testing.T) {
 		}
 	}
 
-	allowed, retryAfter, err := consumeOpenUploadRateLimit(context.Background(), apiHelper, key, now)
+	allowed, retryAfter, err := openUploadLimiter.consumeRedis(context.Background(), apiHelper, key, now)
 	if err != nil {
 		t.Fatalf("consumeOpenUploadRateLimit over-limit error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestConsumeOpenUploadRateLimit(t *testing.T) {
 		t.Fatalf("retryAfter should be positive when blocked, got %d", retryAfter)
 	}
 
-	allowed, retryAfter, err = consumeOpenUploadRateLimit(context.Background(), apiHelper, key, now.Add(openUploadRateLimitWindow))
+	allowed, retryAfter, err = openUploadLimiter.consumeRedis(context.Background(), apiHelper, key, now.Add(openUploadRateLimitWindow))
 	if err != nil {
 		t.Fatalf("consumeOpenUploadRateLimit after window error: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestConsumeOpenUploadRateLimit(t *testing.T) {
 func TestConsumeOpenUploadRateLimitRedisMissing(t *testing.T) {
 	t.Parallel()
 
-	allowed, retryAfter, err := consumeOpenUploadRateLimit(context.Background(), &api.HarukiToolboxRouterHelpers{}, "k", time.Now().UTC())
+	allowed, retryAfter, err := openUploadLimiter.consumeRedis(context.Background(), &api.HarukiToolboxRouterHelpers{}, "k", time.Now().UTC())
 	if err == nil {
 		t.Fatalf("expected redis initialization error")
 	}
@@ -137,18 +137,19 @@ func newTestAPIHelperWithRedis(t *testing.T) *api.HarukiToolboxRouterHelpers {
 }
 
 func TestOpenUploadFallbackRetainsIndependentAccountBuckets(t *testing.T) {
+	limiter := newOpenUploadRateLimiter(openUploadRateLimitPerMinute, openUploadRateLimitWindow)
 	now := time.Now().UTC()
-	first := iosScriptUploadRateBucket(t.Name() + "-first")
-	second := iosScriptUploadRateBucket(t.Name() + "-second")
+	first := iosScriptUploadRateBucket("first")
+	second := iosScriptUploadRateBucket("second")
 	for range openUploadRateLimitPerMinute {
-		if !fallbackOpenUploadRateLimiter.allow(now, first) {
+		if !limiter.allow(now, first) {
 			t.Fatal("could not prepare exhausted fallback bucket")
 		}
 	}
-	if delay := openUploadRetryAfter(t.Context(), nil, first, now); delay <= 0 {
+	if delay := limiter.retryAfter(t.Context(), nil, first, now); delay <= 0 {
 		t.Fatal("unavailable Redis bypassed the exhausted local quota")
 	}
-	if delay := openUploadRetryAfter(t.Context(), nil, second, now); delay != 0 {
+	if delay := limiter.retryAfter(t.Context(), nil, second, now); delay != 0 {
 		t.Fatalf("the first caller consumed the second caller's fallback quota: %d", delay)
 	}
 }

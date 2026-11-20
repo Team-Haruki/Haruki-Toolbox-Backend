@@ -177,6 +177,12 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 		if uploadCode == "" || len(uploadCode) > 128 {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid upload_code")
 		}
+		// Bound lookups per peer across both script route aliases before querying
+		// the database. Only verified codes spend the separate account quota.
+		now := time.Now().UTC()
+		if delay := iosScriptLookupLimiter.retryAfter(ctx, apiHelper, iosScriptLookupRateBucket(c.IP()), now); delay > 0 {
+			return rejectOpenUpload(c, delay)
+		}
 		record, err := lookupIOSUploadCode(ctx, apiHelper.DBManager.DB, uploadCode)
 		if err != nil {
 			if errors.Is(err, errIOSUploadAssemblyRetry) {
@@ -188,9 +194,8 @@ func handleIOSScriptUploadWithValidation(apiHelper *harukiAPIHelper.HarukiToolbo
 			return harukiAPIHelper.ErrorInternal(c, "failed to validate upload code")
 		}
 		toolboxUserID := record.UserID
-		if retryAfter := openUploadRetryAfter(ctx, apiHelper, iosScriptUploadRateBucket(toolboxUserID), time.Now().UTC()); retryAfter > 0 {
-			c.Set(fiber.HeaderRetryAfter, strconv.Itoa(retryAfter))
-			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
+		if delay := openUploadLimiter.retryAfter(ctx, apiHelper, iosScriptUploadRateBucket(toolboxUserID), now); delay > 0 {
+			return rejectOpenUpload(c, delay)
 		}
 		chunkIndex64, err := strconv.ParseInt(c.Get("X-Chunk-Index", ""), 10, 64)
 		if err != nil {

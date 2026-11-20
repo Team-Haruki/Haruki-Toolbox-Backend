@@ -328,7 +328,7 @@ func TestRateLimitedProxyUploadReportsTheResult(t *testing.T) {
 		key := "0.0.0.0|" + r.method + "|" + r.pattern
 		for _, at := range []time.Time{now, now.Add(openUploadRateLimitWindow)} {
 			for range openUploadRateLimitPerMinute {
-				if _, _, err := consumeOpenUploadRateLimit(context.Background(), helper, key, at); err != nil {
+				if _, _, err := openUploadLimiter.consumeRedis(context.Background(), helper, key, at); err != nil {
 					t.Fatal(err)
 				}
 			}

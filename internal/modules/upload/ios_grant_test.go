@@ -114,7 +114,7 @@ func TestIOSScriptBudgetDoesNotUseTheSharedProxyAddress(t *testing.T) {
 	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db, Redis: &redisManager.HarukiRedisManager{Redis: newIOSUploadRedisClient(t)}}}
 	for _, at := range []time.Time{time.Now().UTC(), time.Now().UTC().Add(time.Minute)} {
 		for range openUploadRateLimitPerMinute {
-			if _, _, err := consumeOpenUploadRateLimit(ctx, helper, iosScriptUploadRateBucket("alice"), at); err != nil {
+			if _, _, err := openUploadLimiter.consumeRedis(ctx, helper, iosScriptUploadRateBucket("alice"), at); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -166,5 +166,37 @@ func TestIOSScriptReturnsRetryIfCredentialLookupPoolIsBusy(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusTooManyRequests || resp.Header.Get(fiber.HeaderRetryAfter) == "" {
 		t.Fatalf("busy credential lookup returned %d without retry", resp.StatusCode)
+	}
+}
+
+func TestIOSScriptAliasesSharePreLookupAdmission(t *testing.T) {
+	app := fiber.New()
+	helper := newTestAPIHelperWithRedis(t)
+	helper.Router = app
+	// An attempted credential lookup would fail against this closed database.
+	db := enttest.Open(t, "sqlite3", uniqueUploadAuditSQLiteDSN(t, "closed-credential-db"))
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	helper.DBManager.DB = db
+	registerIOSUploadRoutes(helper, testUploadDependencies())
+	ctx := t.Context()
+	now := time.Now().UTC()
+	for _, at := range []time.Time{now, now.Add(openUploadRateLimitWindow)} {
+		slot := at.UnixNano() / int64(openUploadRateLimitWindow)
+		key := redisManager.BuildUploadIngressRateLimitKey(slot, iosScriptLookupRateBucket("0.0.0.0"))
+		if err := helper.RedisClient().Set(ctx, key, iosScriptLookupLimitPerMinute, 2*openUploadRateLimitWindow).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{"/ios/script/first/upload", "/api/ios/script/second/upload"} {
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != fiber.StatusTooManyRequests || resp.Header.Get(fiber.HeaderRetryAfter) == "" {
+			t.Fatalf("%s returned %d without pre-lookup throttling", path, resp.StatusCode)
+		}
 	}
 }

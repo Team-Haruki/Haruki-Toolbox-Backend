@@ -17,10 +17,14 @@ import (
 const (
 	openUploadRateLimitPerMinute = 180
 	openUploadRateLimitWindow    = time.Minute
-	openUploadRateLimitKeyTTL    = 2 * time.Minute
+	// Leave room for several active accounts behind one proxy or NAT.
+	iosScriptLookupLimitPerMinute = 4 * openUploadRateLimitPerMinute
 )
 
-var fallbackOpenUploadRateLimiter = newOpenUploadRateLimiter(openUploadRateLimitPerMinute, openUploadRateLimitWindow)
+var (
+	openUploadLimiter      = newOpenUploadRateLimiter(openUploadRateLimitPerMinute, openUploadRateLimitWindow)
+	iosScriptLookupLimiter = newOpenUploadRateLimiter(iosScriptLookupLimitPerMinute, openUploadRateLimitWindow)
+)
 
 type openUploadRateLimiter struct {
 	mu          sync.Mutex
@@ -77,16 +81,24 @@ func (l *openUploadRateLimiter) cleanupLocked(now time.Time) {
 // if given, runs on a request it refuses, before the 429 is written.
 func openUploadEntryGuard(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, onLimited ...func(fiber.Ctx)) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		retryAfter := openUploadRetryAfter(c.Context(), apiHelper, buildOpenUploadRateLimitKey(c), time.Now().UTC())
+		retryAfter := openUploadLimiter.retryAfter(c.Context(), apiHelper, buildOpenUploadRateLimitKey(c), time.Now().UTC())
 		if retryAfter == 0 {
 			return c.Next()
 		}
-		c.Set("Retry-After", strconv.Itoa(retryAfter))
 		for _, hook := range onLimited {
 			hook(c)
 		}
-		return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
+		return rejectOpenUpload(c, retryAfter)
 	}
+}
+
+func rejectOpenUpload(c fiber.Ctx, retryAfter int) error {
+	c.Set(fiber.HeaderRetryAfter, strconv.Itoa(retryAfter))
+	return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusTooManyRequests, "too many requests", nil)
+}
+
+func iosScriptLookupRateBucket(ip string) string {
+	return "ios-script-lookup|" + ip
 }
 
 // A verified iOS script uses its own namespace and quota, independently of
@@ -95,11 +107,11 @@ func iosScriptUploadRateBucket(userID string) string {
 	return "ios-script|" + userID
 }
 
-func openUploadRetryAfter(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bucket string, now time.Time) int {
-	allowed, retryAfter, err := consumeOpenUploadRateLimit(ctx, apiHelper, bucket, now)
+func (l *openUploadRateLimiter) retryAfter(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bucket string, now time.Time) int {
+	allowed, retryAfter, err := l.consumeRedis(ctx, apiHelper, bucket, now)
 	if err != nil {
 		harukiLogger.Warnf("Open upload redis rate limiter fallback: %v", err)
-		if fallbackOpenUploadRateLimiter.allow(now, bucket) {
+		if l.allow(now, bucket) {
 			return 0
 		}
 	}
@@ -107,26 +119,26 @@ func openUploadRetryAfter(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 		return 0
 	}
 	if retryAfter <= 0 {
-		return int(openUploadRateLimitWindow / time.Second)
+		return int(l.window / time.Second)
 	}
 	return retryAfter
 }
 
-func consumeOpenUploadRateLimit(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bucketKey string, now time.Time) (bool, int, error) {
+func (l *openUploadRateLimiter) consumeRedis(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, bucketKey string, now time.Time) (bool, int, error) {
 	if apiHelper == nil || apiHelper.DBManager == nil || apiHelper.DBManager.Redis == nil || apiHelper.DBManager.Redis.Redis == nil {
 		return false, 0, fiber.NewError(fiber.StatusInternalServerError, "redis rate limiter not initialized")
 	}
 
-	windowSlot := now.Unix() / int64(openUploadRateLimitWindow/time.Second)
+	windowSlot := now.UnixNano() / int64(l.window)
 	key := harukiRedis.BuildUploadIngressRateLimitKey(windowSlot, bucketKey)
-	count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, key, openUploadRateLimitKeyTTL)
+	count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, key, 2*l.window)
 	if err != nil {
 		return false, 0, err
 	}
-	if count <= int64(openUploadRateLimitPerMinute) {
+	if count <= int64(l.maxRequests) {
 		return true, 0, nil
 	}
-	return false, secondsUntilWindowReset(now, openUploadRateLimitWindow), nil
+	return false, secondsUntilWindowReset(now, l.window), nil
 }
 
 func secondsUntilWindowReset(now time.Time, window time.Duration) int {
