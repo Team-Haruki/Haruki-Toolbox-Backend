@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -85,7 +86,7 @@ func runVerifyEmailHandlerStatus(t *testing.T, helper *harukiAPIHelper.HarukiToo
 
 	app := fiber.New()
 	app.Post("/verify", func(c fiber.Ctx) error {
-		if err := VerifyEmailHandler(c, ownerID, email, otp, helper); err != nil {
+		if err := VerifyEmailHandler(c, ownerID, email, otp, helper, func() error { return nil }); err != nil {
 			return err
 		}
 		return c.SendStatus(fiber.StatusNoContent)
@@ -453,6 +454,110 @@ func TestEmailSendStopsBeforeWritingChallengeWhenQuotaStoreFails(t *testing.T) {
 	count, err := cache.Redis.Exists(ctx, challenge, harukiRedis.BuildQQMailSendRateLimitUserKey(owner)).Result()
 	if err != nil || count != 0 {
 		t.Fatalf("quota failure stored a challenge or charged another bucket, count %d, err %v", count, err)
+	}
+}
+
+func TestEmailVerificationRestoresOnFailureWithoutOverwritingNewCode(t *testing.T) {
+	t.Parallel()
+	for _, scenario := range []struct {
+		name   string
+		rotate bool
+		want   string
+	}{
+		{name: "binding unavailable", want: "first:123456"},
+		{name: "code rotated during binding", rotate: true, want: "second:654321"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			helper, cache, ctx := newEmailVerifyTestHelper(t)
+			const owner, email = "owner", "123456@qq.com"
+			key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+			if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+				t.Fatal(err)
+			}
+			app := fiber.New()
+			app.Post("/", func(c fiber.Ctx) error {
+				return VerifyEmailHandler(c, owner, email, "123456", helper, func() error {
+					if scenario.rotate {
+						if err := cache.Redis.Set(ctx, key, "second:654321", time.Minute).Err(); err != nil {
+							return err
+						}
+					}
+					return fiber.ErrServiceUnavailable
+				})
+			})
+			resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("binding failure returned status %d", resp.StatusCode)
+			}
+			if got, err := cache.Redis.Get(ctx, key).Result(); err != nil || got != scenario.want {
+				t.Fatalf("wrong challenge after failed binding, err %v", err)
+			}
+			if ttl, err := cache.Redis.PTTL(ctx, key).Result(); err != nil || ttl <= 0 || ttl > time.Minute {
+				t.Fatalf("binding failure changed challenge lifetime to %v, err %v", ttl, err)
+			}
+			if !scenario.rotate && runVerifyEmailHandlerStatus(t, helper, owner, email, "123456") != http.StatusNoContent {
+				t.Fatal("a retry could not use the restored challenge")
+			}
+		})
+	}
+}
+
+func TestEmailVerificationReservesCodeUntilBindingCompletes(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	started, unblock := make(chan struct{}, 2), make(chan struct{})
+	release := sync.OnceFunc(func() { close(unblock) })
+	defer release()
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		return VerifyEmailHandler(c, owner, email, "123456", helper, func() error {
+			started <- struct{}{}
+			<-unblock
+			return nil
+		})
+	})
+	response := func() int {
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+		if err != nil {
+			return -1
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	first := make(chan int, 1)
+	go func() { first <- response() }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("binding did not start")
+	}
+	second := make(chan int, 1)
+	go func() { second <- response() }()
+	select {
+	case status := <-second:
+		if status != http.StatusBadRequest {
+			t.Fatalf("a second verification returned %d while the code was reserved", status)
+		}
+	case <-started:
+		t.Fatal("a second binding started with the reserved code")
+	case <-time.After(time.Second):
+		t.Fatal("second verification did not finish")
+	}
+	release()
+	if status := <-first; status != http.StatusOK {
+		t.Fatalf("binding returned status %d", status)
+	}
+	if count, err := cache.Redis.Exists(ctx, key).Result(); err != nil || count != 0 {
+		t.Fatalf("successful binding left the challenge available, count %d, err %v", count, err)
 	}
 }
 

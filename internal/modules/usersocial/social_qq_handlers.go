@@ -67,12 +67,9 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			reason = "invalid_payload"
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid QQ number")
 		}
-		if err := userEmailModule.VerifyEmailHandler(c, userID, req.QQ+"@qq.com", req.OneTimePassword, apiHelper); err != nil {
-			reason = "verify_email_otp_failed"
-			return respondQQVerificationError(c, err)
-		}
-
-		err = verifyOwnedQQBinding(ctx, apiHelper.DBManager.DB, userID, req.QQ)
+		err = userEmailModule.VerifyEmailHandler(c, userID, req.QQ+"@qq.com", req.OneTimePassword, apiHelper, func() error {
+			return verifyOwnedQQBinding(ctx, apiHelper.DBManager.DB, userID, req.QQ)
+		})
 		if errors.Is(err, errQQOwnedByAnotherUser) {
 			reason = "social_platform_conflict"
 			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, errQQOwnedByAnotherUser.Error(), nil)
@@ -82,6 +79,11 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		if err != nil {
+			var verificationErr *fiber.Error
+			if errors.As(err, &verificationErr) {
+				reason = "verify_email_otp_failed"
+				return respondQQVerificationError(c, err)
+			}
 			harukiLogger.Errorf("Failed to verify social platform info: %v", err)
 			reason = "verify_social_platform_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")

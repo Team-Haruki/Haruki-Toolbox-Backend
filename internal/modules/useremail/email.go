@@ -79,12 +79,20 @@ end
 return redis.call('DEL', receipt)
 `
 
+	// A valid code is reserved for the binding write. A rejected write may
+	// restore it without extending the original challenge's expiry.
 	emailAttemptScript = `
-if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+local current = redis.call('GET', KEYS[1])
+if ARGV[3] ~= '' and current == ARGV[3] then return 1 end
+if current ~= ARGV[1] then return 0 end
 local remaining = redis.call('PTTL', KEYS[1])
 if remaining <= 0 then return 0 end
 local count = tonumber(redis.call('GET', KEYS[2]) or '0')
 if count >= tonumber(ARGV[2]) then return -1 end
+if ARGV[3] ~= '' then
+  redis.call('SET', KEYS[1], ARGV[3], 'PX', remaining)
+  return 1
+end
 if redis.call('INCR', KEYS[2]) == 1 then
   redis.call('PEXPIRE', KEYS[2], remaining)
 end
@@ -94,6 +102,14 @@ return 1
 	deleteEmailChallengeScript = `
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
 return redis.call('DEL', unpack(KEYS))
+`
+
+	restoreEmailChallengeScript = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+local remaining = redis.call('PTTL', KEYS[1])
+if remaining <= 0 then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'PX', remaining)
+return 1
 `
 )
 
@@ -196,10 +212,12 @@ func SendEmailHandler(c fiber.Ctx, ownerID, email, challengeToken string, helper
 	}
 	if err := helper.SMTPClient.SendMessage([]string{email}, msg, ""); err != nil {
 		refund = errors.Is(err, harukiSMTP.ErrMessageNotAccepted)
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-		defer cancel()
-		if cleanupErr := cache.Redis.Eval(cleanup, deleteEmailChallengeScript, []string{key}, challenge).Err(); cleanupErr != nil {
-			harukiLogger.Warnf("Failed to discard an undelivered verification challenge: %v", cleanupErr)
+		if refund {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			defer cancel()
+			if cleanupErr := cache.Redis.Eval(cleanup, deleteEmailChallengeScript, []string{key}, challenge).Err(); cleanupErr != nil {
+				harukiLogger.Warnf("Failed to discard an undelivered verification challenge: %v", cleanupErr)
+			}
 		}
 		return fiber.NewError(fiber.StatusServiceUnavailable, "failed to send verification email")
 	}
@@ -207,7 +225,10 @@ func SendEmailHandler(c fiber.Ctx, ownerID, email, challengeToken string, helper
 	return nil
 }
 
-func VerifyEmailHandler(c fiber.Ctx, ownerID, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers) error {
+// VerifyEmailHandler reserves the challenge before running complete and
+// consumes it after that operation succeeds. A failure leaves a current
+// challenge available for retry.
+func VerifyEmailHandler(c fiber.Ctx, ownerID, email, oneTimePassword string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, complete func() error) error {
 	ctx := c.Context()
 	cache := helper.DBManager.Redis
 	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(ownerID, email)
@@ -233,7 +254,11 @@ func VerifyEmailHandler(c fiber.Ctx, ownerID, email, oneTimePassword string, hel
 	}
 	attemptKey := cache.KeyBuilder().BuildOwnedEmailAttemptKey(generation)
 	keys := []string{key, attemptKey}
-	attempt, err := cache.Redis.Eval(ctx, emailAttemptScript, keys, challenge, otpVerifyPerCodeLimit).Int()
+	reservation := ""
+	if subtle.ConstantTimeCompare([]byte(oneTimePassword), []byte(code)) == 1 {
+		reservation = "claimed:" + uuid.NewString()
+	}
+	attempt, err := cache.Redis.Eval(ctx, emailAttemptScript, keys, challenge, otpVerifyPerCodeLimit, reservation).Int()
 	if err != nil {
 		return unavailable
 	}
@@ -243,15 +268,23 @@ func VerifyEmailHandler(c fiber.Ctx, ownerID, email, oneTimePassword string, hel
 	if attempt < 0 {
 		return fiber.NewError(fiber.StatusBadRequest, "too many verification attempts; request a new code")
 	}
-	if subtle.ConstantTimeCompare([]byte(oneTimePassword), []byte(code)) != 1 {
+	if reservation == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid verification code")
 	}
-	deleted, err := cache.Redis.Eval(ctx, deleteEmailChallengeScript, keys, challenge).Int()
-	if err != nil {
-		return unavailable
+
+	// The claimed challenge cannot be used again while the binding is being
+	// written, even if the request is cancelled or the final cleanup fails.
+	actionErr := complete()
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	if actionErr != nil {
+		if err := cache.Redis.Eval(cleanup, restoreEmailChallengeScript, []string{key}, reservation, challenge).Err(); err != nil {
+			harukiLogger.Warnf("Failed to restore an unused verification challenge: %v", err)
+		}
+		return actionErr
 	}
-	if deleted == 0 {
-		return expired
+	if err := cache.Redis.Eval(cleanup, deleteEmailChallengeScript, keys, reservation).Err(); err != nil {
+		harukiLogger.Warnf("Failed to clean up a completed verification challenge: %v", err)
 	}
 	return nil
 }

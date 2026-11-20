@@ -95,6 +95,10 @@ func TestQQLinkageRequiresAnOwnedChallengeAndIsHiddenBeforeVerification(t *testi
 			t.Fatal(err)
 		}
 		request("/verify", "owner", `{"qq":"`+tc.qq+`","oneTimePassword":"012345"}`, tc.want)
+		count, err := cache.Redis.Exists(ctx, key).Result()
+		if err != nil || (count == 0) != (tc.want == http.StatusOK) {
+			t.Fatalf("status %d left an unexpected challenge state, count %d, err %v", tc.want, count, err)
+		}
 	}
 	if current := db.SocialPlatformInfo.GetX(ctx, pending.ID); !current.Verified || current.UserSocialPlatformInfo != "owner" {
 		t.Fatal("verification did not complete the owner's existing row")
