@@ -3,6 +3,7 @@ package adminwebhook
 import (
 	"context"
 	json "encoding/json/v2"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	webhookModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/webhook"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/codec/jsoncodec"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 
@@ -33,7 +35,7 @@ func newAdminWebhookTestHelper(t *testing.T) *harukiAPIHelper.HarukiToolboxRoute
 }
 
 func newAdminWebhookTestApp() *fiber.App {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{JSONEncoder: jsoncodec.Marshal, JSONDecoder: jsoncodec.Unmarshal})
 	app.Use(func(c fiber.Ctx) error {
 		c.Locals("userID", "admin-1")
 		c.Locals("userRole", "super_admin")
@@ -165,12 +167,21 @@ func TestAdminWebhookCRUDHandlers(t *testing.T) {
 	if err := json.UnmarshalRead(subsResp.Body, &page); err != nil || page.Data.Total != 2 || page.Data.NextBeforeID == 0 || len(page.Data.Items) != 1 || page.Data.Items[0].UserID != "124" {
 		t.Fatalf("first subscriber page = %#v, %v", page.Data, err)
 	}
+	_ = subsResp.Body.Close()
 	subsResp, err = app.Test(httptest.NewRequest(http.MethodGet, "/webhooks/1/subscribers?page_size=1&before_id="+strconv.Itoa(page.Data.NextBeforeID), nil))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer subsResp.Body.Close()
+	raw, err := io.ReadAll(subsResp.Body)
+	if err != nil || subsResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("terminal subscriber page status = %d, err = %v", subsResp.StatusCode, err)
+	}
+	if strings.Contains(string(raw), `"nextBeforeId":`) {
+		t.Fatal("terminal subscriber page returned a cursor")
+	}
 	page.Data = adminWebhookSubscribersResponse{}
-	if err := json.UnmarshalRead(subsResp.Body, &page); err != nil || page.Data.Total != 2 || page.Data.NextBeforeID != 0 || len(page.Data.Items) != 1 || page.Data.Items[0].UserID != "123" {
+	if err := json.Unmarshal(raw, &page); err != nil || page.Data.Total != 2 || page.Data.NextBeforeID != 0 || len(page.Data.Items) != 1 || page.Data.Items[0].UserID != "123" {
 		t.Fatalf("second subscriber page = %#v, %v", page.Data, err)
 	}
 	for _, query := range []string{"before_id=0", "page_size=invalid", "page_size=501"} {

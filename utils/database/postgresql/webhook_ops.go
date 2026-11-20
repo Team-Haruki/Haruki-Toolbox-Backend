@@ -213,19 +213,30 @@ func (c *Client) AddWebhookPushUser(ctx context.Context, userID, server, dataTyp
 		return err
 	}
 
-	existing, err := tx.WebhookSubscription.Query().
-		Where(
-			webhooksubscription.UserIDEQ(userID),
-			webhooksubscription.ServerEQ(server),
-			webhooksubscription.DataTypeEQ(dataType),
-			webhooksubscription.WebhookIDEQ(webhookID),
-		).
-		Exist(ctx)
+	subscription := tx.WebhookSubscription.Query().Where(
+		webhooksubscription.ServerEQ(server),
+		webhooksubscription.DataTypeEQ(dataType),
+		webhooksubscription.WebhookIDEQ(webhookID),
+	)
+	existing, err := subscription.Clone().Where(webhooksubscription.UserIDEQ(userID)).Exist(ctx)
 	if err != nil {
 		return err
 	}
 	if existing {
 		return nil
+	}
+	// Repair an existing legacy subscription in place before applying the
+	// quota. Callback delivery uses canonical IDs.
+	aliasID, err := subscription.Where(matchesLegacyWebhookUserID(userID)).
+		Order(webhooksubscription.ByID()).FirstID(ctx)
+	if err == nil {
+		if err := tx.WebhookSubscription.UpdateOneID(aliasID).SetUserID(userID).Exec(ctx); err == nil {
+			return tx.Commit()
+		} else if !IsNotFound(err) {
+			return err
+		}
+	} else if !IsNotFound(err) {
+		return err
 	}
 	last, err := tx.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(webhookID)).
 		Offset(MaxWebhookSubscriptions - 1).Limit(1).IDs(ctx)
@@ -246,6 +257,20 @@ func (c *Client) AddWebhookPushUser(ctx context.Context, userID, server, dataTyp
 		return err
 	}
 	return tx.Commit()
+}
+
+func matchesLegacyWebhookUserID(canonical string) func(*sql.Selector) {
+	return func(s *sql.Selector) {
+		column := s.C(webhooksubscription.FieldUserID)
+		// Old writes trimmed surrounding whitespace. Remove at most one plus
+		// sign and leading zeros without casting unrelated legacy text.
+		s.Where(sql.P(func(b *sql.Builder) {
+			b.WriteString("LTRIM(CASE WHEN SUBSTR(").WriteString(column).
+				WriteString(", 1, 1) = '+' THEN SUBSTR(").WriteString(column).
+				WriteString(", 2) ELSE ").WriteString(column).
+				WriteString(" END, '0') = ").Arg(canonical)
+		}))
+	}
 }
 
 func (c *Client) RemoveWebhookPushUser(ctx context.Context, userID, server, dataType, webhookID string) error {

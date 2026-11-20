@@ -218,7 +218,8 @@ func TestWebhookSubscriptionQuotaIsAtomicAndAllowsRepair(t *testing.T) {
 	ctx := t.Context()
 	const endpoint = "quota-fixture"
 	db.WebhookEndpoint.Create().SetID(endpoint).SetCredential("fixture").SetCallbackURL("https://example.test/").ExecX(ctx)
-	for from := 1; from < dbManager.MaxWebhookSubscriptions; from += 100 {
+	legacy := db.WebhookSubscription.Create().SetWebhookID(endpoint).SetUserID("+00001").SetServer("jp").SetDataType("suite").SaveX(ctx)
+	for from := 2; from < dbManager.MaxWebhookSubscriptions; from += 100 {
 		var builders []*dbManager.WebhookSubscriptionCreate
 		for id := from; id < min(from+100, dbManager.MaxWebhookSubscriptions); id++ {
 			builders = append(builders, db.WebhookSubscription.Create().SetWebhookID(endpoint).SetUserID(strconv.Itoa(id)).SetServer("jp").SetDataType("suite"))
@@ -242,6 +243,16 @@ func TestWebhookSubscriptionQuotaIsAtomicAndAllowsRepair(t *testing.T) {
 	}
 	if err := db.AddWebhookPushUser(ctx, "00001", "jp", "suite", endpoint); err != nil {
 		t.Fatalf("same subscription must remain idempotent at capacity: %v", err)
+	}
+	repaired := db.WebhookSubscription.GetX(ctx, legacy.ID)
+	if repaired.UserID != "1" || !repaired.CreatedAt.Equal(legacy.CreatedAt) {
+		t.Fatal("legacy retry did not canonicalize the existing subscription")
+	}
+	if total := db.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(endpoint)).CountX(ctx); total != dbManager.MaxWebhookSubscriptions {
+		t.Fatalf("legacy retry changed the subscription count to %d", total)
+	}
+	if callbacks, err := db.GetWebhookPushAPI(ctx, 1, "jp", "suite"); err != nil || len(callbacks) != 1 {
+		t.Fatalf("repaired subscription is unavailable to delivery: %v, %v", callbacks, err)
 	}
 	if err := db.RemoveWebhookPushUser(ctx, "00001", "jp", "suite", endpoint); err != nil {
 		t.Fatal(err)

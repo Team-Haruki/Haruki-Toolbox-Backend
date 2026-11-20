@@ -55,5 +55,5 @@ type adminWebhookSubscribersResponse struct {
 	WebhookID    string                       `json:"webhookId"`
 	Total        int                          `json:"total"`
 	Items        []adminWebhookSubscriberItem `json:"items"`
-	NextBeforeID int                          `json:"nextBeforeId,omitempty"`
+	NextBeforeID int                          `json:"nextBeforeId,omitzero"`
 }
