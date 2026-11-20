@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,6 +61,12 @@ func TestGenerateCode(t *testing.T) {
 
 func newEmailVerifyTestHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *harukiRedis.HarukiRedisManager, context.Context) {
 	t.Helper()
+	helper, cache, _ := newEmailVerifyFixture(t)
+	return helper, cache, t.Context()
+}
+
+func newEmailVerifyFixture(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *harukiRedis.HarukiRedisManager, *miniredis.Miniredis) {
+	t.Helper()
 
 	srv, err := miniredis.Run()
 	if err != nil {
@@ -78,7 +85,7 @@ func newEmailVerifyTestHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRoute
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
 		DBManager: &database.HarukiToolboxDBManager{Redis: redisManager},
 	}
-	return helper, redisManager, context.Background()
+	return helper, redisManager, srv
 }
 
 func runVerifyEmailHandlerStatus(t *testing.T, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerID, email, otp string) int {
@@ -373,6 +380,37 @@ func TestUndeliveredEmailChallengeAndReservationAreReleased(t *testing.T) {
 	}
 }
 
+func TestRejectedReplacementRestoresEarlierChallengeAtItsRemainingTTL(t *testing.T) {
+	t.Parallel()
+	helper, cache, server := newEmailVerifyFixture(t)
+	ctx := t.Context()
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	keys := []string{key, key + ":sending", key + ":previous"}
+	if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if staged, err := cache.Redis.Eval(ctx, stageEmailChallengeScript, keys, "second:654321", "second", emailCodeTTL.Milliseconds()).Int(); err != nil || staged != 1 {
+		t.Fatalf("staging replacement: %d, %v", staged, err)
+	}
+	if staged, err := cache.Redis.Eval(ctx, stageEmailChallengeScript, keys, "third:999999", "third", emailCodeTTL.Milliseconds()).Int(); err != nil || staged != 0 {
+		t.Fatalf("overlapping replacement: %d, %v", staged, err)
+	}
+	server.FastForward(17 * time.Second)
+	if err := reconcileEmailState(ctx, cache.Redis, finishEmailChallengeScript, keys, "second:654321", "second", "restore"); err != nil {
+		t.Fatal(err)
+	}
+	if ttl, err := cache.Redis.PTTL(ctx, key).Result(); err != nil || ttl != 43*time.Second {
+		t.Fatalf("restored challenge TTL = %v, err %v", ttl, err)
+	}
+	if runVerifyEmailHandlerStatus(t, helper, owner, email, "123456") != http.StatusNoContent {
+		t.Fatal("the earlier code could not be verified after a rejected resend")
+	}
+	if count, err := cache.Redis.Exists(ctx, keys...).Result(); err != nil || count != 0 {
+		t.Fatalf("verification left resend state, count %d, err %v", count, err)
+	}
+}
+
 func TestEmailSendRefundOnlyAffectsItsOriginalWindowsOnce(t *testing.T) {
 	t.Parallel()
 	helper, cache, ctx := newEmailVerifyTestHelper(t)
@@ -468,15 +506,19 @@ func TestEmailVerificationRestoresOnFailureWithoutOverwritingNewCode(t *testing.
 		{name: "code rotated during binding", rotate: true, want: "second:654321"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			helper, cache, ctx := newEmailVerifyTestHelper(t)
+			helper, cache, server := newEmailVerifyFixture(t)
+			ctx := t.Context()
 			const owner, email = "owner", "123456@qq.com"
 			key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
 			if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
 				t.Fatal(err)
 			}
+			fault := &emailEvalFault{script: restoreEmailChallengeScript}
+			cache.Redis.AddHook(fault)
 			app := fiber.New()
 			app.Post("/", func(c fiber.Ctx) error {
 				return VerifyEmailHandler(c, owner, email, "123456", helper, func() error {
+					server.FastForward(11 * time.Second)
 					if scenario.rotate {
 						if err := cache.Redis.Set(ctx, key, "second:654321", time.Minute).Err(); err != nil {
 							return err
@@ -496,13 +538,66 @@ func TestEmailVerificationRestoresOnFailureWithoutOverwritingNewCode(t *testing.
 			if got, err := cache.Redis.Get(ctx, key).Result(); err != nil || got != scenario.want {
 				t.Fatalf("wrong challenge after failed binding, err %v", err)
 			}
-			if ttl, err := cache.Redis.PTTL(ctx, key).Result(); err != nil || ttl <= 0 || ttl > time.Minute {
+			wantTTL := 49 * time.Second
+			if scenario.rotate {
+				wantTTL = time.Minute
+			}
+			if ttl, err := cache.Redis.PTTL(ctx, key).Result(); err != nil || ttl != wantTTL || !fault.fired.Load() {
 				t.Fatalf("binding failure changed challenge lifetime to %v, err %v", ttl, err)
 			}
 			if !scenario.rotate && runVerifyEmailHandlerStatus(t, helper, owner, email, "123456") != http.StatusNoContent {
 				t.Fatal("a retry could not use the restored challenge")
 			}
 		})
+	}
+}
+
+type emailEvalFault struct {
+	script string
+	after  bool
+	fired  atomic.Bool
+}
+
+func (f *emailEvalFault) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+
+func (f *emailEvalFault) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return next
+}
+
+func (f *emailEvalFault) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, cmd goredis.Cmder) error {
+		if cmd.Name() != "eval" || cmd.Args()[1] != f.script || !f.fired.CompareAndSwap(false, true) {
+			return next(ctx, cmd)
+		}
+		if f.after {
+			if err := next(ctx, cmd); err != nil {
+				return err
+			}
+		}
+		err := errors.New("fixture lost Redis reply")
+		cmd.SetErr(err)
+		return err
+	}
+}
+
+func TestEmailVerificationRestoresClaimAfterLostRedisReply(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	fault := &emailEvalFault{script: emailAttemptScript, after: true}
+	cache.Redis.AddHook(fault)
+	if status := runVerifyEmailHandlerStatus(t, helper, owner, email, "123456"); status != http.StatusServiceUnavailable || !fault.fired.Load() {
+		t.Fatalf("lost reservation reply returned %d", status)
+	}
+	if got, err := cache.Redis.Get(ctx, key).Result(); err != nil || got != "first:123456" {
+		t.Fatalf("lost reservation reply stranded the original challenge, err %v", err)
+	}
+	if status := runVerifyEmailHandlerStatus(t, helper, owner, email, "123456"); status != http.StatusNoContent {
+		t.Fatalf("restored challenge returned %d", status)
 	}
 }
 
