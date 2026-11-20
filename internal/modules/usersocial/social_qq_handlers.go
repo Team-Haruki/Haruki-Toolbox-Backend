@@ -1,6 +1,7 @@
 package usersocial
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -13,6 +14,11 @@ import (
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
+)
+
+var (
+	errQQOwnedByAnotherUser = errors.New("QQ binding already exists")
+	errQQReplacement        = errors.New("unlink the existing social account before binding a different QQ number")
 )
 
 func handleSendQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) fiber.Handler {
@@ -66,33 +72,18 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 			return respondQQVerificationError(c, err)
 		}
 
-		exists, err := apiHelper.DBManager.DB.SocialPlatformInfo.Query().
-			Where(socialplatforminfo.PlatformEQ(
-				string(harukiAPIHelper.SocialPlatformQQ)),
-				socialplatforminfo.PlatformUserID(req.QQ)).
-			Exist(ctx)
-		if err != nil {
-			harukiLogger.Errorf("Failed to query social platform info: %v", err)
-			reason = "query_social_platform_failed"
-			return harukiAPIHelper.ErrorInternal(c, "failed to query database")
-		}
-		if exists {
+		err = verifyOwnedQQBinding(ctx, apiHelper.DBManager.DB, userID, req.QQ)
+		if errors.Is(err, errQQOwnedByAnotherUser) {
 			reason = "social_platform_conflict"
-			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, errQQOwnedByAnotherUser.Error(), nil)
 		}
-		if _, err := apiHelper.DBManager.DB.SocialPlatformInfo.
-			Create().
-			SetPlatform("qq").
-			SetPlatformUserID(req.QQ).
-			SetVerified(true).
-			SetUserID(userID).
-			Save(ctx); err != nil {
-			if postgresql.IsConstraintError(err) {
-				reason = "social_platform_conflict"
-				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, "QQ binding already exists", nil)
-			}
-			harukiLogger.Errorf("Failed to create social platform info: %v", err)
-			reason = "create_social_platform_failed"
+		if errors.Is(err, errQQReplacement) {
+			reason = "existing_social_link"
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
+		}
+		if err != nil {
+			harukiLogger.Errorf("Failed to verify social platform info: %v", err)
+			reason = "verify_social_platform_failed"
 			return harukiAPIHelper.ErrorInternal(c, "failed to update social platform info")
 		}
 
@@ -107,6 +98,47 @@ func handleVerifyQQMail(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) f
 		reason = "ok"
 		return harukiAPIHelper.Responses.SuccessResponse(c, "social platform verified", &ud)
 	}
+}
+
+func verifyOwnedQQBinding(ctx context.Context, db *postgresql.Client, userID, qq string) error {
+	release, err := db.LockUserMutations(ctx, userID)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	const platform = string(harukiAPIHelper.SocialPlatformQQ)
+	query := db.SocialPlatformInfo.Query().Where(socialplatforminfo.PlatformEQ(platform), socialplatforminfo.PlatformUserIDEQ(qq))
+	row, err := query.Clone().Only(ctx)
+	if postgresql.IsNotFound(err) {
+		linked, err := db.SocialPlatformInfo.Query().Where(socialplatforminfo.UserSocialPlatformInfoEQ(userID)).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if linked {
+			return errQQReplacement
+		}
+		err = db.SocialPlatformInfo.Create().SetPlatform(platform).SetPlatformUserID(qq).SetVerified(true).SetUserID(userID).Exec(ctx)
+		if postgresql.IsConstraintError(err) {
+			other, lookupErr := query.Where(socialplatforminfo.UserSocialPlatformInfoNEQ(userID)).Exist(ctx)
+			if lookupErr == nil && other {
+				return errQQOwnedByAnotherUser
+			}
+		}
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	if row.UserSocialPlatformInfo != userID {
+		return errQQOwnedByAnotherUser
+	}
+	if row.Verified {
+		return nil
+	}
+	return db.SocialPlatformInfo.UpdateOneID(row.ID).
+		Where(socialplatforminfo.UserSocialPlatformInfoEQ(userID), socialplatforminfo.PlatformEQ(platform), socialplatforminfo.PlatformUserIDEQ(qq)).
+		SetVerified(true).Exec(ctx)
 }
 
 func validQQMailID(id string) bool {

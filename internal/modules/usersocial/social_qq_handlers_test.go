@@ -28,10 +28,11 @@ func TestQQLinkageRequiresAnOwnedChallengeAndIsHiddenBeforeVerification(t *testi
 	defer db.Close()
 	helper.DBManager.DB = db
 	ctx := t.Context()
-	for _, id := range []string{"owner", "other"} {
+	for _, id := range []string{"owner", "other", "unbound"} {
 		db.User.Create().SetID(id).SetName(id).SetEmail(id + "@example.test").ExecX(ctx)
 	}
 	db.SocialPlatformInfo.Create().SetUserID("other").SetPlatform("qq").SetPlatformUserID("123456").SetVerified(true).ExecX(ctx)
+	pending := db.SocialPlatformInfo.Create().SetUserID("owner").SetPlatform("qq").SetPlatformUserID("999999").SaveX(ctx)
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
 		c.Locals("userID", c.Get("Test-Actor"))
@@ -70,15 +71,36 @@ func TestQQLinkageRequiresAnOwnedChallengeAndIsHiddenBeforeVerification(t *testi
 	request("/verify", "owner", `{"qq":"invalid","oneTimePassword":"012345"}`, http.StatusBadRequest)
 
 	cache := helper.DBManager.Redis
-	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey("owner", "654321@qq.com")
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey("unbound", "654321@qq.com")
 	if err := cache.Redis.Set(ctx, key, "fixture:012345", time.Minute).Err(); err != nil {
 		t.Fatal(err)
 	}
 	request("/verify", "other", `{"qq":"654321","oneTimePassword":"012345"}`, http.StatusBadRequest)
-	request("/verify", "owner", `{"qq":"654321","oneTimePassword":"012345"}`, http.StatusOK)
+	request("/verify", "unbound", `{"qq":"654321","oneTimePassword":"012345"}`, http.StatusOK)
 	id := db.SocialPlatformInfo.Query().Where(socialplatforminfo.PlatformUserIDEQ("654321")).OnlyX(ctx).UserSocialPlatformInfo
-	if id != "owner" {
+	if id != "unbound" {
 		t.Fatalf("verified link belongs to %q", id)
+	}
+	for _, tc := range []struct {
+		qq   string
+		want int
+	}{
+		{qq: "999999", want: http.StatusOK},
+		{qq: "999999", want: http.StatusOK},
+		{qq: "123456", want: http.StatusConflict},
+		{qq: "777777", want: http.StatusBadRequest},
+	} {
+		key := cache.KeyBuilder().BuildOwnedEmailVerifyKey("owner", tc.qq+"@qq.com")
+		if err := cache.Redis.Set(ctx, key, "fixture:012345", time.Minute).Err(); err != nil {
+			t.Fatal(err)
+		}
+		request("/verify", "owner", `{"qq":"`+tc.qq+`","oneTimePassword":"012345"}`, tc.want)
+	}
+	if current := db.SocialPlatformInfo.GetX(ctx, pending.ID); !current.Verified || current.UserSocialPlatformInfo != "owner" {
+		t.Fatal("verification did not complete the owner's existing row")
+	}
+	if count := db.SocialPlatformInfo.Query().CountX(ctx); count != 3 {
+		t.Fatalf("verification changed the number of bindings: %d", count)
 	}
 }
 
