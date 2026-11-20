@@ -44,6 +44,12 @@ func sanitizeAdminTags(values []string) []string {
 }
 
 func parseAdminFriendLinkPayload(c fiber.Ctx) (*adminFriendLinkPayload, error) {
+	if encoding := c.Get(fiber.HeaderContentEncoding); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		return nil, fiber.NewError(fiber.StatusUnsupportedMediaType, "compressed friend link bodies are not supported")
+	}
+	if len(c.Request().Body()) > FriendLinkBodyLimit {
+		return nil, fiber.NewError(fiber.StatusRequestEntityTooLarge, "friend link body is too large")
+	}
 	var payload adminFriendLinkPayload
 	if err := c.Bind().Body(&payload); err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid request payload")
@@ -53,7 +59,13 @@ func parseAdminFriendLinkPayload(c fiber.Ctx) (*adminFriendLinkPayload, error) {
 	payload.Description = strings.TrimSpace(payload.Description)
 	payload.Avatar = strings.TrimSpace(payload.Avatar)
 	payload.URL = strings.TrimSpace(payload.URL)
+	if len(payload.Tags) > postgresql.MaxFriendLinkTags {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "too many friend link tags")
+	}
 	payload.Tags = sanitizeAdminTags(payload.Tags)
+	if err := postgresql.ValidateFriendLinkTags(payload.Tags); err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
 	if payload.SortOrder == 0 {
 		payload.SortOrder = payload.SortOrderSnake
 	}

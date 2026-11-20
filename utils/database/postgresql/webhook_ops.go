@@ -2,12 +2,28 @@ package postgresql
 
 import (
 	"context"
+	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
+)
+
+const (
+	MaxWebhookSubscriptions      = 5000
+	DefaultWebhookSubscriberPage = 200
+	MaxWebhookSubscriberPage     = 500
+)
+
+var (
+	ErrWebhookSubscriptionLimit = errors.New("webhook endpoint subscription limit reached")
+	ErrInvalidWebhookGameUserID = errors.New("game user ID must be a positive 64-bit integer")
 )
 
 type WebhookEndpointRecord struct {
@@ -74,6 +90,14 @@ func normalizeWebhookSubscriptionInput(userID, server, dataType, webhookID strin
 	default:
 		return userID, server, dataType, webhookID, nil
 	}
+}
+
+func NormalizeWebhookGameUserID(raw string) (string, error) {
+	id, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || id <= 0 {
+		return "", ErrInvalidWebhookGameUserID
+	}
+	return strconv.FormatInt(id, 10), nil
 }
 
 func (c *Client) GetWebhookUser(ctx context.Context, id, credential string) (*WebhookEndpointRecord, error) {
@@ -156,40 +180,97 @@ func (c *Client) AddWebhookPushUser(ctx context.Context, userID, server, dataTyp
 	if err != nil {
 		return err
 	}
-
-	exists, err := c.WebhookEndpoint.Query().Where(webhookendpoint.IDEQ(webhookID)).Exist(ctx)
+	userID, err = NormalizeWebhookGameUserID(userID)
 	if err != nil {
 		return err
 	}
-	if !exists {
-		return fmt.Errorf("webhook endpoint %q not found", webhookID)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	// Keep burst traffic for one endpoint waiting outside the shared DB pool.
+	// The endpoint row then serializes mutations across replicas.
+	release, err := lockLocalMutations(ctx, []string{"webhook-subscriptions:" + webhookID})
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	// A writer waiting on the endpoint lock must see subscriptions committed
+	// by the previous writer when it checks the quota in the next statement.
+	opts := &stdsql.TxOptions{}
+	if c.driver.Dialect() == dialect.Postgres {
+		opts.Isolation = stdsql.LevelReadCommitted
+	}
+	tx, err := c.BeginTx(ctx, opts)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.WebhookEndpoint.Query().Where(webhookendpoint.IDEQ(webhookID), func(s *sql.Selector) {
+		if s.Dialect() == dialect.Postgres {
+			s.ForUpdate()
+		}
+	}).OnlyID(ctx); err != nil {
+		return err
 	}
 
-	existing, err := c.WebhookSubscription.Query().
-		Where(
-			webhooksubscription.UserIDEQ(userID),
-			webhooksubscription.ServerEQ(server),
-			webhooksubscription.DataTypeEQ(dataType),
-			webhooksubscription.WebhookIDEQ(webhookID),
-		).
-		Exist(ctx)
+	subscription := tx.WebhookSubscription.Query().Where(
+		webhooksubscription.ServerEQ(server),
+		webhooksubscription.DataTypeEQ(dataType),
+		webhooksubscription.WebhookIDEQ(webhookID),
+	)
+	existing, err := subscription.Clone().Where(webhooksubscription.UserIDEQ(userID)).Exist(ctx)
 	if err != nil {
 		return err
 	}
 	if existing {
 		return nil
 	}
+	// Repair an existing legacy subscription in place before applying the
+	// quota. Callback delivery uses canonical IDs.
+	aliasID, err := subscription.Where(matchesLegacyWebhookUserID(userID)).
+		Order(webhooksubscription.ByID()).FirstID(ctx)
+	if err == nil {
+		if err := tx.WebhookSubscription.UpdateOneID(aliasID).SetUserID(userID).Exec(ctx); err == nil {
+			return tx.Commit()
+		} else if !IsNotFound(err) {
+			return err
+		}
+	} else if !IsNotFound(err) {
+		return err
+	}
+	last, err := tx.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(webhookID)).
+		Offset(MaxWebhookSubscriptions - 1).Limit(1).IDs(ctx)
+	if err != nil {
+		return err
+	}
+	if len(last) != 0 {
+		return ErrWebhookSubscriptionLimit
+	}
 
-	_, err = c.WebhookSubscription.Create().
+	_, err = tx.WebhookSubscription.Create().
 		SetUserID(userID).
 		SetServer(server).
 		SetDataType(dataType).
 		SetWebhookID(webhookID).
 		Save(ctx)
-	if IsConstraintError(err) {
-		return nil
+	if err != nil {
+		return err
 	}
-	return err
+	return tx.Commit()
+}
+
+func matchesLegacyWebhookUserID(canonical string) func(*sql.Selector) {
+	return func(s *sql.Selector) {
+		column := s.C(webhooksubscription.FieldUserID)
+		// Old writes trimmed surrounding whitespace. Remove at most one plus
+		// sign and leading zeros without casting unrelated legacy text.
+		s.Where(sql.P(func(b *sql.Builder) {
+			b.WriteString("LTRIM(CASE WHEN SUBSTR(").WriteString(column).
+				WriteString(", 1, 1) = '+' THEN SUBSTR(").WriteString(column).
+				WriteString(", 2) ELSE ").WriteString(column).
+				WriteString(" END, '0') = ").Arg(canonical)
+		}))
+	}
 }
 
 func (c *Client) RemoveWebhookPushUser(ctx context.Context, userID, server, dataType, webhookID string) error {
@@ -202,9 +283,13 @@ func (c *Client) RemoveWebhookPushUser(ctx context.Context, userID, server, data
 		return err
 	}
 
+	ids := []string{userID}
+	if canonical, err := NormalizeWebhookGameUserID(userID); err == nil && canonical != userID {
+		ids = append(ids, canonical)
+	}
 	_, err = c.WebhookSubscription.Delete().
 		Where(
-			webhooksubscription.UserIDEQ(userID),
+			webhooksubscription.UserIDIn(ids...),
 			webhooksubscription.ServerEQ(server),
 			webhooksubscription.DataTypeEQ(dataType),
 			webhooksubscription.WebhookIDEQ(webhookID),
@@ -213,21 +298,20 @@ func (c *Client) RemoveWebhookPushUser(ctx context.Context, userID, server, data
 	return err
 }
 
-func (c *Client) GetWebhookSubscribers(ctx context.Context, webhookID string) ([]WebhookSubscriber, error) {
+func (c *Client) GetWebhookSubscribers(ctx context.Context, webhookID string, beforeID, pageSize int) ([]WebhookSubscriber, int, error) {
 	if c == nil {
-		return nil, fmt.Errorf("postgresql client is nil")
+		return nil, 0, fmt.Errorf("postgresql client is nil")
 	}
 
 	webhookID = strings.TrimSpace(webhookID)
 	if webhookID == "" {
-		return []WebhookSubscriber{}, nil
+		return []WebhookSubscriber{}, 0, nil
 	}
 
-	subscriptions, err := c.WebhookSubscription.Query().
-		Where(webhooksubscription.WebhookIDEQ(webhookID)).
-		All(ctx)
+	query := c.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(webhookID))
+	subscriptions, nextBeforeID, err := ReadWebhookSubscriberPage(ctx, query, beforeID, pageSize)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	result := make([]WebhookSubscriber, 0, len(subscriptions))
@@ -241,7 +325,28 @@ func (c *Client) GetWebhookSubscribers(ctx context.Context, webhookID string) ([
 			Type:   subscription.DataType,
 		})
 	}
-	return result, nil
+	return result, nextBeforeID, nil
+}
+
+// ReadWebhookSubscriberPage keeps paging scoped by the caller's endpoint and
+// audience predicates. Legacy identifiers exceeding supported field sizes are
+// excluded before retrieving their payload, and can still be removed.
+func ReadWebhookSubscriberPage(ctx context.Context, query *WebhookSubscriptionQuery, beforeID, pageSize int) ([]*WebhookSubscription, int, error) {
+	if pageSize <= 0 || pageSize > MaxWebhookSubscriberPage {
+		return nil, 0, fmt.Errorf("invalid webhook subscriber page size")
+	}
+	if beforeID > 0 {
+		query.Where(webhooksubscription.IDLT(beforeID))
+	}
+	rows, err := query.Where(func(s *sql.Selector) {
+		s.Where(sql.ExprP(octetLengthSQL(s, webhooksubscription.FieldUserID) + " <= 128 AND " +
+			octetLengthSQL(s, webhooksubscription.FieldServer) + " <= 16 AND " +
+			octetLengthSQL(s, webhooksubscription.FieldDataType) + " <= 16"))
+	}).Order(webhooksubscription.ByID(sql.OrderDesc())).Limit(pageSize + 1).All(ctx)
+	if err != nil || len(rows) <= pageSize {
+		return rows, 0, err
+	}
+	return rows[:pageSize], rows[pageSize-1].ID, nil
 }
 
 func (c *Client) UpsertWebhookEndpoint(ctx context.Context, record WebhookEndpointRecord) error {

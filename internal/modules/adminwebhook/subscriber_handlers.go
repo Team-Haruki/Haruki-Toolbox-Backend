@@ -3,6 +3,8 @@ package adminwebhook
 import (
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhookendpoint"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
@@ -17,6 +19,17 @@ func handleListAdminWebhookSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxR
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, "", harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonInvalidWebhookID, nil))
 			return adminCoreModule.RespondFiberOrBadRequest(c, err, "invalid webhook_id")
+		}
+		beforeID, err := pagination.ParsePositiveInt(c.Query("before_id"), 0, "before_id")
+		if err != nil {
+			return err
+		}
+		pageSize, err := pagination.ParsePositiveInt(c.Query("page_size"), postgresql.DefaultWebhookSubscriberPage, "page_size")
+		if err != nil {
+			return err
+		}
+		if pageSize > postgresql.MaxWebhookSubscriberPage {
+			return harukiAPIHelper.ErrorBadRequest(c, "page_size exceeds max allowed size")
 		}
 
 		exists, err := apiHelper.DBManager.DB.WebhookEndpoint.Query().
@@ -44,9 +57,11 @@ func handleListAdminWebhookSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxR
 					))))
 			})
 		}
-		rows, err := query.
-			Order(webhooksubscription.ByCreatedAt(sql.OrderDesc()), webhooksubscription.ByID(sql.OrderAsc())).
-			All(c.Context())
+		total, err := query.Clone().Count(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to count webhook subscribers")
+		}
+		rows, nextBeforeID, err := postgresql.ReadWebhookSubscriberPage(c.Context(), query, beforeID, pageSize)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminWebhookFailureReasonQuerySubscribersFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query webhook subscribers")
@@ -68,10 +83,11 @@ func handleListAdminWebhookSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxR
 		}
 
 		resp := adminWebhookSubscribersResponse{
-			GeneratedAt: adminWebhookNowUTC(),
-			WebhookID:   webhookID,
-			Total:       len(items),
-			Items:       items,
+			GeneratedAt:  adminWebhookNowUTC(),
+			WebhookID:    webhookID,
+			Total:        total,
+			Items:        items,
+			NextBeforeID: nextBeforeID,
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, adminWebhookActionSubscribers, adminWebhookTargetType, webhookID, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,

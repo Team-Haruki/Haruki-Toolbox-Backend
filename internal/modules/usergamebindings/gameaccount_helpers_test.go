@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -413,6 +414,39 @@ func TestGetVerificationCodeTooManyAttempts(t *testing.T) {
 	}
 	if attemptCount != gameAccountVerificationMaxAttempts+1 {
 		t.Fatalf("attempt count = %d, want %d", attemptCount, gameAccountVerificationMaxAttempts+1)
+	}
+}
+
+func TestProfileCheckBudgetSurvivesChallengeRotation(t *testing.T) {
+	helper, redis, ctx := newGameBindingRedisHelper(t)
+	const actor, server, target = "actor", "jp", "123"
+	codeKey := harukiRedis.BuildGameAccountVerifyKey(actor, server, target)
+	for i := range gameAccountProfileChecksPerUser + 1 {
+		code := strconv.Itoa(i + 1)
+		if err := redis.SetCache(ctx, codeKey, code, gameAccountVerificationTTL); err != nil {
+			t.Fatal(err)
+		}
+		got, err := getVerificationCode(ctx, helper, actor, server, target)
+		if i == gameAccountProfileChecksPerUser {
+			if !errors.Is(err, errGameAccountProfileChecksLimited) || mapGameAccountVerificationCodeLookupError(err).Code != http.StatusTooManyRequests {
+				t.Fatalf("replacement challenge bypassed the profile budget: %v", err)
+			}
+		} else if err != nil || got != code {
+			t.Fatalf("profile check %d unexpectedly failed: %v", i, err)
+		}
+	}
+	key := harukiRedis.BuildGameAccountProfileCheckTargetKey(server, target)
+	if err := redis.SetCache(ctx, key, gameAccountProfileChecksPerTarget, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	for _, region := range []string{server, "en"} {
+		if err := redis.SetCache(ctx, harukiRedis.BuildGameAccountVerifyKey("another", region, target), "fixture-challenge", time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		_, err := getVerificationCode(ctx, helper, "another", region, target)
+		if (region == server && !errors.Is(err, errGameAccountProfileChecksLimited)) || (region != server && err != nil) {
+			t.Fatalf("unexpected target budget for region %s: %v", region, err)
+		}
 	}
 }
 

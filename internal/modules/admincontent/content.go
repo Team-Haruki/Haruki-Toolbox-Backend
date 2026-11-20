@@ -6,11 +6,16 @@ import (
 
 	adminCoreModule "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/modules/admincore"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
 
-	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
+)
+
+const (
+	friendLinkRouteSegment = "/friend-links"
+	FriendLinkAdminPath    = "/api/admin/content" + friendLinkRouteSegment
+	FriendLinkBodyLimit    = 16 << 10
 )
 
 type adminFriendLinkPayload struct {
@@ -37,6 +42,7 @@ type adminFriendLinksResponse struct {
 	GeneratedAt time.Time             `json:"generatedAt"`
 	Total       int                   `json:"total"`
 	Items       []adminFriendLinkItem `json:"items"`
+	NextPage    int                   `json:"nextPage,omitempty"`
 }
 
 type adminFriendGroupPayload struct {
@@ -99,15 +105,19 @@ type adminFriendGroupItemResponse struct {
 func handleAdminListFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		const action = adminContentActionFriendLinkList
-		rows, err := apiHelper.DBManager.DB.FriendLink.Query().
-			Order(
-				friendlink.BySortOrder(sql.OrderAsc()),
-				friendlink.ByID(sql.OrderAsc()),
-			).
-			All(c.Context())
+		page, size, err := pagination.ParsePageAndPageSize(c, 1, postgresql.DefaultFriendLinkPageSize, postgresql.MaxFriendLinkPageSize)
+		if err != nil {
+			return err
+		}
+		db := apiHelper.DBManager.DB
+		rows, hasMore, err := db.ReadFriendLinkPage(c.Context(), page, size)
 		if err != nil {
 			adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, adminAuditTargetIDAll, harukiAPIHelper.SystemLogResultFailure, adminCoreModule.AdminFailureMetadata(adminFailureReasonQueryFriendLinksFailed, nil))
 			return harukiAPIHelper.ErrorInternal(c, "failed to query friend links")
+		}
+		total, err := db.FriendLink.Query().Count(c.Context())
+		if err != nil {
+			return harukiAPIHelper.ErrorInternal(c, "failed to count friend links")
 		}
 
 		items := make([]adminFriendLinkItem, 0, len(rows))
@@ -117,8 +127,11 @@ func handleAdminListFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHe
 
 		resp := adminFriendLinksResponse{
 			GeneratedAt: adminNowUTC(),
-			Total:       len(items),
+			Total:       total,
 			Items:       items,
+		}
+		if hasMore {
+			resp.NextPage = page + 1
 		}
 		adminCoreModule.WriteAdminAuditLog(c, apiHelper, action, adminContentTargetTypeFriendLink, adminAuditTargetIDAll, harukiAPIHelper.SystemLogResultSuccess, map[string]any{
 			"total": resp.Total,
@@ -242,7 +255,7 @@ func handleAdminDeleteFriendLink(apiHelper *harukiAPIHelper.HarukiToolboxRouterH
 func RegisterAdminContentRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, adminGroup fiber.Router) {
 	content := adminGroup.Group("/content", adminCoreModule.RequireAdmin(apiHelper))
 
-	friendLinks := content.Group("/friend-links")
+	friendLinks := content.Group(friendLinkRouteSegment)
 	friendLinks.Get("", handleAdminListFriendLinks(apiHelper))
 	friendLinks.Post("", handleAdminCreateFriendLink(apiHelper))
 	friendLinks.Put("/:id", handleAdminUpdateFriendLink(apiHelper))

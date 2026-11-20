@@ -1,10 +1,12 @@
 package misc
 
 import (
-	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/friendlink"
+	"strconv"
 
-	sql "entgo.io/ent/dialect/sql"
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -19,15 +21,17 @@ type FriendLinkData struct {
 
 func handleGetFriendLinks(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, assets AssetsConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		ctx := c.Context()
-		links, err := apiHelper.DBManager.DB.FriendLink.Query().
-			Order(
-				friendlink.BySortOrder(sql.OrderAsc()),
-				friendlink.ByID(sql.OrderAsc()),
-			).
-			All(ctx)
+		page, size, err := pagination.ParsePageAndPageSize(c, 1, postgresql.DefaultFriendLinkPageSize, postgresql.MaxFriendLinkPageSize)
+		if err != nil {
+			return err
+		}
+		links, hasMore, err := apiHelper.DBManager.DB.ReadFriendLinkPage(c.Context(), page, size)
 		if err != nil {
 			return harukiAPIHelper.ErrorInternal(c, "Failed to fetch friend links")
+		}
+		if hasMore {
+			c.Set("X-Next-Page", strconv.Itoa(page+1))
+			c.Append(fiber.HeaderAccessControlExposeHeaders, "X-Next-Page")
 		}
 		var result []FriendLinkData
 		for _, link := range links {

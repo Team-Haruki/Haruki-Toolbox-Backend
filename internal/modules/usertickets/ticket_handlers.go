@@ -91,10 +91,10 @@ func handleCreateOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers
 			return harukiAPIHelper.ErrorInternal(c, "failed to generate ticket id")
 		}
 
-		notification, accepted := reserveTicketNotification(apiHelper)
-		if !accepted {
-			reason = "notification_queue_full"
-			return c.SendStatus(fiber.StatusServiceUnavailable)
+		notification, admissionError := reserveTicketNotification(c, apiHelper, userID)
+		if admissionError != nil {
+			reason = "notification_admission_denied"
+			return respondUserTicketBadRequest(c, admissionError, "ticket notification unavailable")
 		}
 		defer notification.Cancel()
 
@@ -303,9 +303,9 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 			return harukiAPIHelper.ErrorBadRequest(c, "ticket is closed")
 		}
 
-		notification, accepted := reserveTicketNotification(apiHelper)
-		if !accepted {
-			return c.SendStatus(fiber.StatusServiceUnavailable)
+		notification, admissionError := reserveTicketNotification(c, apiHelper, userID)
+		if admissionError != nil {
+			return respondUserTicketBadRequest(c, admissionError, "ticket notification unavailable")
 		}
 		defer notification.Cancel()
 
@@ -336,12 +336,30 @@ func handleAppendOwnTicketMessage(apiHelper *harukiAPIHelper.HarukiToolboxRouter
 	}
 }
 
-func reserveTicketNotification(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) (*platformMailNotify.Reservation, bool) {
+func reserveTicketNotification(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID string) (*platformMailNotify.Reservation, *fiber.Error) {
 	if apiHelper.SMTPClient == nil {
-		return nil, true
+		return nil, nil
 	}
-	reservation := platformMailNotify.Reserve()
-	return reservation, reservation != nil
+	reservation := platformMailNotify.ReserveTicket()
+	if reservation == nil {
+		return nil, fiber.ErrServiceUnavailable
+	}
+	cache := apiHelper.DBManager.Redis
+	if cache == nil || cache.Redis == nil {
+		reservation.Cancel()
+		return nil, fiber.ErrServiceUnavailable
+	}
+	count, err := cache.IncrementWithTTL(c.Context(), cache.KeyBuilder().BuildTicketNotificationRateKey(userID), ticketNotificationWindow)
+	if err != nil {
+		reservation.Cancel()
+		return nil, fiber.ErrServiceUnavailable
+	}
+	if count > ticketNotificationsPerUser {
+		reservation.Cancel()
+		c.Set("Retry-After", "600")
+		return nil, fiber.ErrTooManyRequests
+	}
+	return reservation, nil
 }
 
 func handleCloseOwnTicket(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {

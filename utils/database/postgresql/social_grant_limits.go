@@ -24,15 +24,16 @@ func ValidSocialGrantFields(userID, comment string) bool {
 // scoped and can still remove an excluded legacy row.
 func BoundSocialGrants(q *AuthorizeSocialPlatformInfoQuery) {
 	q.Where(authorizesocialplatforminfo.PlatformIDGT(0), authorizesocialplatforminfo.PlatformIDLTE(MaxSocialGrantSlots), func(s *sql.Selector) {
-		length := func(column string) string {
-			if s.Dialect() == dialect.Postgres {
-				return "octet_length(" + s.C(column) + ")"
-			}
-			return "length(CAST(" + s.C(column) + " AS BLOB))"
-		}
 		s.Where(sql.ExprP(fmt.Sprintf("%s BETWEEN 1 AND %d AND COALESCE(%s,0) <= %d AND %s <= 16",
-			length(authorizesocialplatforminfo.FieldPlatformUserID), MaxSocialGrantUserIDBytes,
-			length(authorizesocialplatforminfo.FieldComment), MaxSocialGrantCommentBytes,
-			length(authorizesocialplatforminfo.FieldPlatform))))
+			octetLengthSQL(s, authorizesocialplatforminfo.FieldPlatformUserID), MaxSocialGrantUserIDBytes,
+			octetLengthSQL(s, authorizesocialplatforminfo.FieldComment), MaxSocialGrantCommentBytes,
+			octetLengthSQL(s, authorizesocialplatforminfo.FieldPlatform))))
 	})
+}
+
+func octetLengthSQL(s *sql.Selector, column string) string {
+	if s.Dialect() == dialect.Postgres {
+		return "octet_length(" + s.C(column) + "::text)"
+	}
+	return "length(CAST(" + s.C(column) + " AS BLOB))"
 }

@@ -27,6 +27,24 @@ func TestAfdianProofAndRateKeysAreOpaqueAndScoped(t *testing.T) {
 	}
 }
 
+func TestResourceBudgetKeysScopeActorsTargetsAndEndpoints(t *testing.T) {
+	keys := NewKeyBuilder("fixture-key")
+	const subject = "fixture-account"
+	unique := map[string]bool{}
+	for _, key := range []string{
+		keys.BuildGameAccountProfileCheckUserKey(subject),
+		BuildGameAccountProfileCheckTargetKey("jp", "42"),
+		BuildGameAccountProfileCheckTargetKey("en", "42"),
+		keys.BuildTicketNotificationRateKey(subject),
+		keys.BuildWebhookSubscriptionWriteKey(subject),
+	} {
+		if unique[key] || strings.Contains(key, subject) {
+			t.Fatal("request budgets collided or exposed the opaque actor")
+		}
+		unique[key] = true
+	}
+}
+
 func TestBuildKeys(t *testing.T) {
 	t.Parallel()
 	keys := NewKeyBuilder("")

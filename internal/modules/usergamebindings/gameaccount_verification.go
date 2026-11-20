@@ -16,6 +16,8 @@ const (
 	gameAccountVerificationTTL         = 5 * time.Minute
 	gameAccountVerificationTargetLimit = 30
 	gameAccountVerificationMaxAttempts = 5
+	gameAccountProfileChecksPerUser    = 12
+	gameAccountProfileChecksPerTarget  = 30
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 	errGameAccountVerificationCodeMismatch    = errors.New("verification code mismatch")
 	errGameAccountVerificationCodeExpired     = errors.New("verification code expired or not found")
 	errGameAccountVerificationTooManyAttempts = errors.New("too many verification attempts, please generate a new code")
+	errGameAccountProfileChecksLimited        = errors.New("too many game profile checks, please try again later")
 	errGameAccountVerificationServiceUnstable = errors.New("verification service unavailable")
 )
 
@@ -55,6 +58,23 @@ func reserveGameAccountVerificationAttempt(ctx context.Context, apiHelper *haruk
 	if count > gameAccountVerificationMaxAttempts {
 		return errGameAccountVerificationTooManyAttempts
 	}
+	// Charge the expensive upstream request to budgets that survive code
+	// replacement and successful consumption.
+	for _, budget := range []struct {
+		key string
+		max int64
+	}{
+		{redis.KeyBuilder().BuildGameAccountProfileCheckUserKey(userID), gameAccountProfileChecksPerUser},
+		{harukiRedis.BuildGameAccountProfileCheckTargetKey(serverStr, gameUserIDStr), gameAccountProfileChecksPerTarget},
+	} {
+		count, err := redis.IncrementWithTTL(ctx, budget.key, gameAccountVerificationTTL)
+		if err != nil {
+			return errGameAccountVerificationServiceUnstable
+		}
+		if count > budget.max {
+			return errGameAccountProfileChecksLimited
+		}
+	}
 	return nil
 }
 
@@ -82,6 +102,8 @@ func mapGameAccountVerificationCodeLookupError(err error) *fiber.Error {
 	switch {
 	case errors.Is(err, errGameAccountVerificationTooManyAttempts):
 		return fiber.NewError(fiber.StatusBadRequest, "too many verification attempts, please generate a new code")
+	case errors.Is(err, errGameAccountProfileChecksLimited):
+		return fiber.NewError(fiber.StatusTooManyRequests, err.Error())
 	case errors.Is(err, errGameAccountVerificationCodeExpired):
 		return fiber.NewError(fiber.StatusBadRequest, "verification code expired or not found")
 	case errors.Is(err, errGameAccountVerificationServiceUnstable):

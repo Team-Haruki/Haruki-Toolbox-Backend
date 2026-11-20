@@ -1,16 +1,23 @@
 package webhook
 
 import (
+	"errors"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/config"
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+const webhookRegistrationPerMinute = 120
 
 func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -61,7 +68,7 @@ func ValidateWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) 
 		if user == nil {
 			return harukiAPIHelper.ErrorForbidden(c, "Webhook user not found or credential mismatch")
 		}
-		c.Locals("webhook_id", _id)
+		c.Locals("webhook_id", user.ID)
 		return c.Next()
 	}
 }
@@ -73,10 +80,25 @@ func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if !ok {
 			return nil
 		}
-		users, err := apiHelper.DBManager.DB.GetWebhookSubscribers(ctx, webhookID)
+		beforeID, err := pagination.ParsePositiveInt(c.Query("before_id"), 0, "before_id")
+		if err != nil {
+			return err
+		}
+		pageSize, err := pagination.ParsePositiveInt(c.Query("page_size"), postgresql.DefaultWebhookSubscriberPage, "page_size")
+		if err != nil {
+			return err
+		}
+		if pageSize > postgresql.MaxWebhookSubscriberPage {
+			return harukiAPIHelper.ErrorBadRequest(c, "page_size exceeds max allowed size")
+		}
+		users, nextBeforeID, err := apiHelper.DBManager.DB.GetWebhookSubscribers(ctx, webhookID, beforeID, pageSize)
 		if err != nil {
 			harukiLogger.Errorf("Failed to get subscribers for webhook %s: %v", webhookID, err)
 			return harukiAPIHelper.ErrorInternal(c, "Failed to get subscribers")
+		}
+		if nextBeforeID != 0 {
+			c.Set("X-Next-Before-ID", strconv.Itoa(nextBeforeID))
+			c.Append(fiber.HeaderAccessControlExposeHeaders, "X-Next-Before-ID")
 		}
 		return harukiAPIHelper.Responses.ResponseWithStruct(c, fiber.StatusOK, &users)
 	}
@@ -85,10 +107,13 @@ func handleGetSubscribers(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		ctx := c.Context()
-		userID := c.Params("user_id")
 		webhookID, ok := resolveWebhookIDFromLocals(c)
 		if !ok {
 			return nil
+		}
+		userID, err := postgresql.NormalizeWebhookGameUserID(c.Params("user_id"))
+		if err != nil {
+			return harukiAPIHelper.ErrorBadRequest(c, err.Error())
 		}
 		serverStr := c.Params("server")
 		server, err := harukiUtils.ParseSupportedDataUploadServer(serverStr)
@@ -100,7 +125,23 @@ func handlePutWebhookUser(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers)
 		if err != nil {
 			return harukiAPIHelper.ErrorBadRequest(c, "invalid data_type")
 		}
+		cache := apiHelper.DBManager.Redis
+		if cache == nil || cache.Redis == nil {
+			return c.SendStatus(fiber.StatusServiceUnavailable)
+		}
+		key := cache.KeyBuilder().BuildWebhookSubscriptionWriteKey(webhookID)
+		count, err := cache.IncrementWithTTL(ctx, key, time.Minute)
+		if err != nil {
+			return c.SendStatus(fiber.StatusServiceUnavailable)
+		}
+		if count > webhookRegistrationPerMinute {
+			c.Set("Retry-After", "60")
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
 		err = apiHelper.DBManager.DB.AddWebhookPushUser(ctx, userID, string(server), string(dataType), webhookID)
+		if errors.Is(err, postgresql.ErrWebhookSubscriptionLimit) {
+			return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusConflict, err.Error(), nil)
+		}
 		if err != nil {
 			harukiLogger.Errorf("Failed to add webhook push user: %v", err)
 			return harukiAPIHelper.ErrorInternal(c, "failed to register webhook push user")

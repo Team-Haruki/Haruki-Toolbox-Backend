@@ -2,15 +2,22 @@ package mailnotify
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
 func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
+	maxAdmittedJobs := cap(securityMail.admitted)
 	started := make(chan struct{}, maxAdmittedJobs)
 	finished := make(chan struct{}, maxAdmittedJobs)
 	unblock := make(chan struct{})
+	release := sync.OnceFunc(func() { close(unblock) })
+	t.Cleanup(func() {
+		release()
+		waitForNotificationQueueDrain(t, securityMail)
+	})
 	var running, peak atomic.Int32
 	for range maxAdmittedJobs {
 		reservation := Reserve()
@@ -32,7 +39,7 @@ func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
 		reservation.Cancel()
 	}
 	deadline := time.After(3 * time.Second)
-	for range maxConcurrentSends {
+	for range securityMailWorkers {
 		select {
 		case <-started:
 		case <-deadline:
@@ -44,7 +51,7 @@ func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
 		t.Error("saturated queue admitted an extra job")
 	}
 	Dispatch(func(context.Context) { t.Error("saturated queue ran a best-effort job") })
-	close(unblock)
+	release()
 	for range maxAdmittedJobs {
 		select {
 		case <-finished:
@@ -52,13 +59,75 @@ func TestDispatchBoundsQueueAndDrainsAcceptedJobs(t *testing.T) {
 			t.Fatal("accepted jobs did not drain")
 		}
 	}
-	if peak.Load() != maxConcurrentSends {
-		t.Fatalf("peak concurrency = %d, want %d", peak.Load(), maxConcurrentSends)
+	if peak.Load() != securityMailWorkers {
+		t.Fatalf("peak concurrency = %d, want %d", peak.Load(), securityMailWorkers)
 	}
+	waitForNotificationQueueDrain(t, securityMail)
 	reservation := Reserve()
 	if reservation == nil {
 		t.Fatal("drained workers did not release admissions")
 	}
 	reservation.Cancel()
 	reservation.Cancel()
+}
+
+func TestSaturatedTicketMailKeepsSecurityWorkersAvailable(t *testing.T) {
+	started := make(chan struct{}, ticketMailWorkers)
+	unblock := make(chan struct{})
+	t.Cleanup(func() {
+		close(unblock)
+		waitForNotificationQueueDrain(t, ticketMail)
+		waitForNotificationQueueDrain(t, securityMail)
+	})
+	for range ticketMailWorkers {
+		reservation := ReserveTicket()
+		if reservation == nil {
+			t.Fatal("ticket worker was not available")
+		}
+		reservation.Send(func(context.Context) {
+			started <- struct{}{}
+			<-unblock
+		})
+	}
+	for range ticketMailBacklog {
+		reservation := ReserveTicket()
+		if reservation == nil {
+			t.Fatal("ticket backlog filled too early")
+		}
+		defer reservation.Cancel()
+	}
+	deadline := time.After(3 * time.Second)
+	for range ticketMailWorkers {
+		select {
+		case <-started:
+		case <-deadline:
+			t.Fatal("ticket workers did not start")
+		}
+	}
+	if extra := ReserveTicket(); extra != nil {
+		extra.Cancel()
+		t.Fatal("extra ticket job admitted while support queue was full")
+	}
+	securitySent := make(chan struct{})
+	Dispatch(func(context.Context) { close(securitySent) })
+	select {
+	case <-securitySent:
+	case <-deadline:
+		t.Fatal("ticket mail blocked the account security queue")
+	}
+}
+
+func waitForNotificationQueueDrain(t *testing.T, queue *notificationQueue) {
+	t.Helper()
+	deadline := time.NewTimer(3 * time.Second)
+	defer deadline.Stop()
+	interval := time.NewTicker(time.Millisecond)
+	defer interval.Stop()
+	for len(queue.admitted) > 0 {
+		select {
+		case <-interval.C:
+		case <-deadline.C:
+			t.Fatalf("notification queue still holds %d admissions", len(queue.admitted))
+		}
+	}
 }

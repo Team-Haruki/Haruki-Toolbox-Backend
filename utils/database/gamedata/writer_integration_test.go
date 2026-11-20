@@ -3,8 +3,10 @@ package gamedata
 import (
 	"context"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,6 +134,34 @@ func TestWriteMysekaiClearsAbsentFlattenedChildren(t *testing.T) {
 	policy, ok := mustValue(t, s, ctx, id, server, "policy")
 	if !ok || policy != `"public"` {
 		t.Fatalf("policy = %s (ok=%v): a top-level field was cleared", policy, ok)
+	}
+}
+
+func TestWriteMysekaiRejectsMergedRowAboveBudget(t *testing.T) {
+	s, ctx := writeTestStore(t, catalog.Mysekai())
+	const id, server = int64(42), "jp"
+	written := strings.Repeat("x", 90)
+	limits := DefaultLimits()
+	limits.MaxRowBytes = 128
+	if _, err := s.Write(ctx, id, server, map[string]any{"policy": written, "upload_time": int64(1)}, WriteMysekai, limits); err != nil {
+		t.Fatal(err)
+	}
+	second := map[string]any{"mysekaiPhenomenaSchedules": strings.Repeat("y", 90), "upload_time": int64(2)}
+	if _, err := s.Write(ctx, id, server, second, WriteMysekai, limits); !errors.Is(err, errStoredMysekaiRowTooLarge) {
+		t.Fatalf("partial upload unexpectedly accepted: %v", err)
+	}
+	if stored, ok := mustValue(t, s, ctx, id, server, "policy"); !ok || stored != `"`+written+`"` {
+		t.Fatalf("rejected write changed the retained field: %v %q", ok, stored)
+	}
+	if _, ok := mustValue(t, s, ctx, id, server, "mysekaiPhenomenaSchedules"); ok {
+		t.Fatal("rejected write committed its new field")
+	}
+	if stamp, found, err := s.UploadTime(ctx, id, server); err != nil || !found || stamp != 1 {
+		t.Fatalf("rejected write updated timestamp: %d %v %v", stamp, found, err)
+	}
+	second["policy"] = ""
+	if _, err := s.Write(ctx, id, server, second, WriteMysekai, limits); err != nil {
+		t.Fatalf("reducing retained size should allow the update: %v", err)
 	}
 }
 

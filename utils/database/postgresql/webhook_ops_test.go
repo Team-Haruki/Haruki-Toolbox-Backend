@@ -2,13 +2,38 @@ package postgresql_test
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"testing"
 
 	dbManager "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/webhooksubscription"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestWebhookPostgresSubscriptionLocksEndpointFirst(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := dbManager.NewClient(dbManager.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	defer client.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "webhook_endpoints"\."id" FROM "webhook_endpoints" WHERE .* FOR UPDATE`).
+		WithArgs("gone").WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectRollback()
+	if err := client.AddWebhookPushUser(t.Context(), "123", "jp", "suite", "gone"); !dbManager.IsNotFound(err) {
+		t.Fatalf("expected missing locked endpoint: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestWebhookEndpointAndSubscriptionRoundTrip(t *testing.T) {
 	t.Parallel()
@@ -83,7 +108,7 @@ func TestWebhookEndpointAndSubscriptionRoundTrip(t *testing.T) {
 		t.Fatalf("len(callbacks) with disabled endpoint = %d, want 1", len(callbacks))
 	}
 
-	subscribers, err := client.GetWebhookSubscribers(context.Background(), "507f1f77bcf86cd799439011")
+	subscribers, _, err := client.GetWebhookSubscribers(context.Background(), "507f1f77bcf86cd799439011", 0, dbManager.DefaultWebhookSubscriberPage)
 	if err != nil {
 		t.Fatalf("GetWebhookSubscribers returned error: %v", err)
 	}
@@ -184,5 +209,55 @@ func TestOAuth2ClientWebhookEndpointRoundTrip(t *testing.T) {
 	}
 	if callbacks[0].Bearer != "oauth-token" {
 		t.Fatalf("bearer = %q, want oauth-token", callbacks[0].Bearer)
+	}
+}
+
+func TestWebhookSubscriptionQuotaIsAtomicAndAllowsRepair(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	ctx := t.Context()
+	const endpoint = "quota-fixture"
+	db.WebhookEndpoint.Create().SetID(endpoint).SetCredential("fixture").SetCallbackURL("https://example.test/").ExecX(ctx)
+	legacy := db.WebhookSubscription.Create().SetWebhookID(endpoint).SetUserID("+00001").SetServer("jp").SetDataType("suite").SaveX(ctx)
+	for from := 2; from < dbManager.MaxWebhookSubscriptions; from += 100 {
+		var builders []*dbManager.WebhookSubscriptionCreate
+		for id := from; id < min(from+100, dbManager.MaxWebhookSubscriptions); id++ {
+			builders = append(builders, db.WebhookSubscription.Create().SetWebhookID(endpoint).SetUserID(strconv.Itoa(id)).SetServer("jp").SetDataType("suite"))
+		}
+		db.WebhookSubscription.CreateBulk(builders...).ExecX(ctx)
+	}
+	results := make(chan error, 8)
+	for i := range cap(results) {
+		go func() { results <- db.AddWebhookPushUser(ctx, strconv.Itoa(9000+i), "jp", "suite", endpoint) }()
+	}
+	accepted := 0
+	for range cap(results) {
+		if err := <-results; err == nil {
+			accepted++
+		} else if !errors.Is(err, dbManager.ErrWebhookSubscriptionLimit) {
+			t.Error(err)
+		}
+	}
+	if total := db.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(endpoint)).CountX(ctx); accepted != 1 || total != dbManager.MaxWebhookSubscriptions {
+		t.Fatalf("concurrent subscriptions accepted=%d total=%d", accepted, total)
+	}
+	if err := db.AddWebhookPushUser(ctx, "00001", "jp", "suite", endpoint); err != nil {
+		t.Fatalf("same subscription must remain idempotent at capacity: %v", err)
+	}
+	repaired := db.WebhookSubscription.GetX(ctx, legacy.ID)
+	if repaired.UserID != "1" || !repaired.CreatedAt.Equal(legacy.CreatedAt) {
+		t.Fatal("legacy retry did not canonicalize the existing subscription")
+	}
+	if total := db.WebhookSubscription.Query().Where(webhooksubscription.WebhookIDEQ(endpoint)).CountX(ctx); total != dbManager.MaxWebhookSubscriptions {
+		t.Fatalf("legacy retry changed the subscription count to %d", total)
+	}
+	if callbacks, err := db.GetWebhookPushAPI(ctx, 1, "jp", "suite"); err != nil || len(callbacks) != 1 {
+		t.Fatalf("repaired subscription is unavailable to delivery: %v, %v", callbacks, err)
+	}
+	if err := db.RemoveWebhookPushUser(ctx, "00001", "jp", "suite", endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddWebhookPushUser(ctx, "10000", "jp", "suite", endpoint); err != nil {
+		t.Fatalf("deletion did not release a slot: %v", err)
 	}
 }

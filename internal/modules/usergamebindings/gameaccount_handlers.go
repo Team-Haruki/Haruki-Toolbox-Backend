@@ -39,8 +39,8 @@ func handleGenerateGameAccountVerificationCode(apiHelper *harukiAPIHelper.Haruki
 		}
 
 		numericID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
-		if err != nil {
-			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
+		if err != nil || numericID <= 0 {
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be a positive integer")
 		}
 		serverStr, gameUserIDStr = string(server), strconv.FormatInt(numericID, 10)
 		count, err := apiHelper.DBManager.Redis.IncrementWithTTL(ctx, harukiRedis.BuildGameAccountVerificationIssueKey(userID), gameAccountVerificationTTL)
@@ -102,9 +102,9 @@ func handleCreateGameAccountBinding(apiHelper *harukiAPIHelper.HarukiToolboxRout
 		harukiLogger.Infof("[GameAccountBinding] START: userID=%s, server=%s, gameUserID=%s", userID, serverStr, gameUserIDStr)
 
 		numericID, err := strconv.ParseInt(gameUserIDStr, 10, 64)
-		if err != nil {
+		if err != nil || numericID <= 0 {
 			reason = "invalid_game_user_id"
-			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be numeric")
+			return harukiAPIHelper.ErrorBadRequest(c, "game_user_id must be a positive integer")
 		}
 		server, err := utils.ParseSupportedDataUploadServer(serverStr)
 		if err != nil {
