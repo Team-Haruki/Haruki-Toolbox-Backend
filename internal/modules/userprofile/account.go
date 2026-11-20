@@ -28,6 +28,8 @@ import (
 )
 
 const (
+	ProfileRouteSegment      = "profile"
+	ProfileRequestBodyLimit  = 3 << 20
 	localMirrorRetryAttempts = 3
 	localMirrorRetryInterval = 150 * time.Millisecond
 	maxAvatarPixels          = int64(4096 * 4096)
@@ -81,7 +83,7 @@ func handleUpdateProfile(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, 
 			reason = "invalid_payload"
 			return c.SendStatus(fiber.StatusUnsupportedMediaType)
 		}
-		if len(c.Request().Body()) > 3<<20 {
+		if len(c.Request().Body()) > ProfileRequestBodyLimit {
 			reason = "avatar_too_large"
 			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
 		}
@@ -343,7 +345,7 @@ func RegisterUserProfileRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHel
 	r := apiHelper.Router.Group("/api/user/:toolbox_user_id")
 
 	profileHandler, profileRest := userCoreModule.RouteHandlerParts(userCoreModule.RequireAuthenticatedSelf(apiHelper, "toolbox_user_id"), handleUpdateProfile(apiHelper, profileConfig))
-	r.Put("/profile", profileHandler, profileRest...)
+	r.Put("/"+ProfileRouteSegment, profileHandler, profileRest...)
 	if apiHelper.SessionHandler.UsesManagedBrowserAuth() {
 		r.Put("/change-password", userauth.LegacyAuthDisabledHandler())
 		return

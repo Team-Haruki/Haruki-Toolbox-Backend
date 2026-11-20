@@ -1,6 +1,10 @@
 package adminsyslog
 
-import harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+import (
+	"time"
+
+	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+)
 
 const (
 	defaultSystemLogPage       = 1
@@ -8,6 +12,8 @@ const (
 	maxSystemLogPageSize       = 200
 	defaultSystemLogExportSize = 1000
 	maxSystemLogExportSize     = 5000
+	maxFailureReasonGroups     = 128
+	systemLogSummaryTimeout    = 5 * time.Second
 	defaultSystemLogSort       = "event_time_desc"
 	systemLogSortEventTimeAsc  = "event_time_asc"
 	systemLogSortEventTimeDesc = "event_time_desc"

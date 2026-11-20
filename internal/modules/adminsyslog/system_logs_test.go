@@ -1,14 +1,25 @@
 package adminsyslog
 
 import (
+	"bytes"
+	"encoding/csv"
+	json "encoding/json/v2"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestParseSystemLogActorTypesFilter(t *testing.T) {
@@ -111,17 +122,20 @@ func TestParseSystemLogQueryFilters(t *testing.T) {
 	})
 }
 
-func TestBuildSystemLogFailureReasonCounts(t *testing.T) {
-	rows := []*postgresql.SystemLog{
-		{Metadata: map[string]any{"reason": "permission_denied"}},
-		{Metadata: map[string]any{"reason": "permission_denied"}},
-		{Metadata: map[string]any{"reason": " invalid_payload "}},
-		{Metadata: map[string]any{"reason": ""}},
-		{Metadata: map[string]any{"reason": 123}},
-		{Metadata: nil},
+func TestSystemLogFailureReasonSummaryGroupsInDatabase(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	stamp := time.Now().UTC().Add(-time.Minute)
+	for _, reason := range []any{"permission_denied", "\tpermission_denied\u00a0", " invalid_payload ", "", 123, nil} {
+		db.SystemLog.Create().SetEventTime(stamp).SetAction("fixture").SetResult(systemlog.ResultFailure).
+			SetMetadata(map[string]any{"reason": reason}).ExecX(t.Context())
 	}
-
-	got := buildSystemLogFailureReasonCounts(rows)
+	db.SystemLog.Create().SetEventTime(stamp).SetAction("fixture").SetResult(systemlog.ResultSuccess).
+		SetMetadata(map[string]any{"reason": "permission_denied"}).ExecX(t.Context())
+	got, err := summarizeSystemLogFailureReasons(t.Context(), db.SystemLog.Query())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 3 {
 		t.Fatalf("len(got) = %d, want 3", len(got))
 	}
@@ -133,5 +147,57 @@ func TestBuildSystemLogFailureReasonCounts(t *testing.T) {
 	}
 	if got[2].Key != "invalid_payload" || got[2].Count != 1 {
 		t.Fatalf("got[2] = %#v, want key=invalid_payload,count=1", got[2])
+	}
+	for i := range maxFailureReasonGroups + 2 {
+		db.SystemLog.Create().SetEventTime(stamp).SetAction("fixture").SetResult(systemlog.ResultFailure).
+			SetMetadata(map[string]any{"reason": fmt.Sprintf("legacy-%04d-%s", i, strings.Repeat("x", 256))}).ExecX(t.Context())
+	}
+	got, err = summarizeSystemLogFailureReasons(t.Context(), db.SystemLog.Query())
+	if err != nil || len(got) != maxFailureReasonGroups || got[0].Key != unknownSystemLogFailureReason || len(got[3].Key) != 128 {
+		t.Fatalf("unexpected bounded summary: groups=%d err=%v", len(got), err)
+	}
+	db.SystemLog.Create().SetEventTime(stamp).SetAction("fixture").SetActorRole("super_admin").SetResult(systemlog.ResultFailure).
+		SetMetadata(map[string]any{"reason": "protected"}).ExecX(t.Context())
+	helper := &api.HarukiToolboxRouterHelpers{DBManager: &database.HarukiToolboxDBManager{DB: db}}
+	app := fiber.New()
+	app.Get("/summary", func(c fiber.Ctx) error {
+		c.Locals("userID", "fixture-admin")
+		c.Locals("userRole", "admin")
+		return c.Next()
+	}, handleGetSystemLogSummary(helper))
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/summary", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		UpdatedData systemLogSummaryResponse `json:"updatedData"`
+	}
+	err = json.UnmarshalRead(resp.Body, &body)
+	result := body.UpdatedData
+	if err != nil || resp.StatusCode != http.StatusOK || len(result.ByReason) != maxFailureReasonGroups || result.OtherFailureReasonCount != 5 || result.Failure != maxFailureReasonGroups+8 {
+		t.Fatalf("summary status=%d groups=%d other=%d failures=%d err=%v", resp.StatusCode, len(result.ByReason), result.OtherFailureReasonCount, result.Failure, err)
+	}
+}
+
+func TestPostgresReasonSummaryUsesBoundedJSONAggregation(t *testing.T) {
+	selector := sql.Dialect(dialect.Postgres).Select().From(sql.Table(systemlog.Table))
+	selector.Select(groupFailureReasons(selector))
+	query, _ := selector.Query()
+	for _, fragment := range []string{"jsonb_typeof(", "->> 'reason'", "GROUP BY", "ORDER BY count DESC", "LIMIT 128"} {
+		if !strings.Contains(query, fragment) {
+			t.Fatalf("PostgreSQL query lost %q: %s", fragment, query)
+		}
+	}
+}
+
+func TestAuditCSVPreservesFormulaLikeCellsAsText(t *testing.T) {
+	data, err := buildSystemLogCSV([]systemLogListItem{{TargetID: "  =1", UserAgent: "browser, test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	if err != nil || len(records) != 2 || records[1][7] != "'  =1" || records[1][10] != "browser, test" {
+		t.Fatalf("unexpected CSV records: %v, %v", records, err)
 	}
 }

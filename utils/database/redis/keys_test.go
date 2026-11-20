@@ -199,6 +199,17 @@ func TestBuildKeys(t *testing.T) {
 	}
 }
 
+func TestAdminAccessDeniedAuditKeysSeparateActorsAndReasons(t *testing.T) {
+	b := NewKeyBuilder("fixture-secret")
+	const userID = "canonical-fixture-user"
+	const reason = "insufficient_permissions"
+	key := b.BuildAdminAccessDeniedAuditKey(userID, reason)
+	if strings.Contains(key, userID) || key != b.BuildAdminAccessDeniedAuditKey(userID, reason) ||
+		key == b.BuildAdminAccessDeniedAuditKey(userID, "banned_user_denied") || key == b.BuildAdminAccessDeniedAuditKey("another-actor", reason) {
+		t.Fatal("audit admission key was not stable, opaque and scoped")
+	}
+}
+
 func TestBuildKeyHelper(t *testing.T) {
 	t.Parallel()
 

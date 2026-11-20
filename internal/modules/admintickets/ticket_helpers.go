@@ -13,8 +13,10 @@ import (
 	platformPagination "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/pagination"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -58,7 +60,7 @@ func buildAdminTicketListItem(row *postgresql.Ticket, creatorNameByUserID map[st
 	return item
 }
 
-func loadAdminTicketUserNames(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userIDs []string) (map[string]string, error) {
+func loadAdminTicketUserNames(ctx context.Context, db *postgresql.Client, userIDs []string) (map[string]string, error) {
 	if len(userIDs) == 0 {
 		return map[string]string{}, nil
 	}
@@ -80,10 +82,10 @@ func loadAdminTicketUserNames(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiTool
 		return map[string]string{}, nil
 	}
 
-	users, err := apiHelper.DBManager.DB.User.Query().
+	users, err := db.User.Query().
 		Where(userSchema.IDIn(uniqueIDs...)).
 		Select(userSchema.FieldID, userSchema.FieldName).
-		All(c.Context())
+		All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +141,14 @@ func applyAdminTicketLatestMessageSummary(item *adminTicketListItem, rows []*pos
 	item.LastMessageAt = &lastMessageAt
 }
 
+func loadLatestAdminTicketMessage(ctx context.Context, db *postgresql.Client, actorRole string, row *postgresql.Ticket) error {
+	messages, err := db.TicketMessage.Query().
+		Where(ticketmessage.TicketIDEQ(row.ID), ticketsModule.LimitAdminMessageVisibility(actorRole)).
+		Order(ticketmessage.ByCreatedAt(sql.OrderDesc()), ticketmessage.ByID(sql.OrderDesc())).Limit(1).All(ctx)
+	row.Edges.Messages = messages
+	return err
+}
+
 func buildAdminTicketStatusEventMessage(previous ticket.Status, next ticket.Status) string {
 	return ticketsModule.BuildStatusEventMessage(previous, next)
 }
@@ -157,7 +167,7 @@ func formatAdminTicketAssigneeLabel(assigneeAdminID string, nameByUserID map[str
 }
 
 func buildAdminTicketAssigneeEventMessage(previous string, next string, nameByUserID map[string]string) string {
-	return fmt.Sprintf("Assignee changed: %s -> %s", formatAdminTicketAssigneeLabel(previous, nameByUserID), formatAdminTicketAssigneeLabel(next, nameByUserID))
+	return fmt.Sprintf("%s%s -> %s", ticketsModule.AssignmentEventPrefix, formatAdminTicketAssigneeLabel(previous, nameByUserID), formatAdminTicketAssigneeLabel(next, nameByUserID))
 }
 
 func buildAdminTicketMessageItems(rows []*postgresql.TicketMessage, userNameByUserID map[string]string) []adminTicketMessageItem {
@@ -308,31 +318,6 @@ func applyAdminTicketFilters(query *postgresql.TicketQuery, filters *adminTicket
 	return q
 }
 
-// scopeAdminTicketQueryForActor applies the same role boundary before both
-// Count and pagination. Tickets do not have an Ent edge to their creator, so
-// the creator IDs must be resolved from the users table first.
-func scopeAdminTicketQueryForActor(
-	ctx context.Context,
-	db *postgresql.Client,
-	query *postgresql.TicketQuery,
-	actorRole string,
-) (*postgresql.TicketQuery, error) {
-	if adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin {
-		return query, nil
-	}
-
-	superAdminIDs, err := db.User.Query().
-		Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).
-		IDs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(superAdminIDs) == 0 {
-		return query, nil
-	}
-	return query.Where(ticket.CreatorUserIDNotIn(superAdminIDs...)), nil
-}
-
 func collectAdminTicketUserIDs(rows []*postgresql.Ticket) []string {
 	userIDs := make([]string, 0, len(rows)*2)
 	for _, row := range rows {
@@ -358,9 +343,9 @@ func collectAdminTicketMessageSenderUserIDs(rows []*postgresql.TicketMessage) []
 	return userIDs
 }
 
-func queryAdminTicketByPublicID(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, publicTicketID string) (*postgresql.Ticket, error) {
+func queryAdminTicketByPublicID(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, publicTicketID, actorRole string) (*postgresql.Ticket, error) {
 	return apiHelper.DBManager.DB.Ticket.Query().
-		Where(ticket.TicketIDEQ(publicTicketID)).
+		Where(ticket.TicketIDEQ(publicTicketID), ticketsModule.LimitAdminTicketVisibility(actorRole)).
 		Only(c.Context())
 }
 

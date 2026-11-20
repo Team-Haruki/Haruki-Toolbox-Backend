@@ -1,6 +1,7 @@
 package adminrisk
 
 import (
+	"context"
 	json "encoding/json/v2"
 	"fmt"
 	"net/http"
@@ -17,9 +18,36 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/riskevent"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"entgo.io/ent"
 	"github.com/gofiber/fiber/v3"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestOrdinaryRiskResolutionCannotReplaceAConcurrentProtectedResolution(t *testing.T) {
+	helper := newAdminRiskTestHelper(t, "admin-risk-concurrent-resolver")
+	db := helper.DBManager.DB
+	seedAdminRiskUser(t, db, "admin", userSchema.RoleAdmin)
+	seedAdminRiskUser(t, db, "super", userSchema.RoleSuperAdmin)
+	row := createAdminRiskTestEvent(t, db, time.Now().UTC(), "", "")
+	db.RiskEvent.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if mutation.Op() == ent.OpUpdateOne {
+				if err := db.RiskEvent.Update().Where(riskevent.IDEQ(row.ID)).SetResolvedBy("super").SetStatus(riskevent.StatusResolved).Exec(ctx); err != nil {
+					return nil, err
+				}
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	})
+	app := newAdminRiskTestApp("admin", "admin")
+	app.Post("/events/:event_id/resolve", handleResolveRiskEvent(helper))
+	if status := postAdminRiskHandler(t, app, fmt.Sprintf("/events/%d/resolve", row.ID), `{"reason":"ordinary review"}`); status != http.StatusNotFound {
+		t.Fatalf("resolution status = %d, want 404", status)
+	}
+	if saved := db.RiskEvent.GetX(t.Context(), row.ID); saved.ResolvedBy == nil || *saved.ResolvedBy != "super" || saved.Metadata != nil {
+		t.Fatal("ordinary admin's resolution changed a newly protected event")
+	}
+}
 
 func newAdminRiskTestHelper(t *testing.T, databaseName string) *harukiAPIHelper.HarukiToolboxRouterHelpers {
 	t.Helper()
@@ -101,6 +129,8 @@ func TestHandleListRiskEventsScopesCountAndPaginationByAdminRole(t *testing.T) {
 	visibleSecond := createAdminRiskTestEvent(t, db, eventTime, "user-1", "")
 	createAdminRiskTestEvent(t, db, eventTime, "user-1", "super-1")
 	visibleThird := createAdminRiskTestEvent(t, db, eventTime, "external-actor", "deleted-target")
+	createAdminRiskTestEvent(t, db, eventTime, "user-1", "").Update().
+		SetResolvedBy("super-1").SetStatus(riskevent.StatusResolved).SaveX(t.Context())
 
 	query := url.Values{}
 	query.Set("from", eventTime.Add(-time.Minute).Format(time.RFC3339))
@@ -132,8 +162,8 @@ func TestHandleListRiskEventsScopesCountAndPaginationByAdminRole(t *testing.T) {
 	superAdminApp := newAdminRiskTestApp("super-1", "super_admin")
 	superAdminApp.Get("/events", handleListRiskEvents(helper))
 	_, superAdminPage := getRiskEventsResponse(t, superAdminApp, "/events?"+query.Encode())
-	if superAdminPage.Total != 5 || len(superAdminPage.Items) != 5 {
-		t.Fatalf("super admin list = total %d, items %d; want 5, 5", superAdminPage.Total, len(superAdminPage.Items))
+	if superAdminPage.Total != 6 || len(superAdminPage.Items) != 6 {
+		t.Fatalf("super admin list = total %d, items %d; want 6, 6", superAdminPage.Total, len(superAdminPage.Items))
 	}
 }
 
@@ -185,8 +215,8 @@ func TestRiskEventMutationsEnforceReferencedUserRoleBoundary(t *testing.T) {
 
 	eventTime := time.Now().UTC()
 	hiddenResolve := createAdminRiskTestEvent(t, db, eventTime, "user-1", "super-1")
-	if status := postAdminRiskHandler(t, app, fmt.Sprintf("/events/%d/resolve", hiddenResolve.ID), `{}`); status != fiber.StatusForbidden {
-		t.Fatalf("resolve event targeting super admin status = %d, want %d", status, fiber.StatusForbidden)
+	if status := postAdminRiskHandler(t, app, fmt.Sprintf("/events/%d/resolve", hiddenResolve.ID), `{}`); status != fiber.StatusNotFound {
+		t.Fatalf("resolve event targeting super admin status = %d, want %d", status, fiber.StatusNotFound)
 	}
 	unchanged, err := db.RiskEvent.Get(t.Context(), hiddenResolve.ID)
 	if err != nil {
@@ -194,6 +224,14 @@ func TestRiskEventMutationsEnforceReferencedUserRoleBoundary(t *testing.T) {
 	}
 	if unchanged.Status != riskevent.StatusOpen || unchanged.ResolvedAt != nil || unchanged.ResolvedBy != nil {
 		t.Fatalf("forbidden resolve mutated event: %#v", unchanged)
+	}
+	protectedResolution := createAdminRiskTestEvent(t, db, eventTime, "user-1", "").Update().
+		SetResolvedBy("super-1").SetResolvedAt(eventTime).SetStatus(riskevent.StatusResolved).SaveX(t.Context())
+	if status := postAdminRiskHandler(t, app, fmt.Sprintf("/events/%d/resolve", protectedResolution.ID), `{"reason":"replacement"}`); status != fiber.StatusNotFound {
+		t.Fatalf("resolve event with protected resolver = %d", status)
+	}
+	if row := db.RiskEvent.GetX(t.Context(), protectedResolution.ID); row.ResolvedBy == nil || *row.ResolvedBy != "super-1" || row.Metadata != nil {
+		t.Fatal("ordinary admin changed the protected resolution")
 	}
 
 	selfActorResolve := createAdminRiskTestEvent(t, db, eventTime, "admin-1", "")

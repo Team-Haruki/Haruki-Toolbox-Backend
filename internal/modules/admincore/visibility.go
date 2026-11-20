@@ -3,10 +3,22 @@ package admincore
 import (
 	"context"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 )
+
+// HasSuperAdminReference checks current roles for nullable user ID columns.
+func HasSuperAdminReference(s *sql.Selector, columns ...string) *sql.Predicate {
+	users := sql.Table(userSchema.Table).As("protected_users")
+	references := make([]*sql.Predicate, 0, len(columns))
+	for _, column := range columns {
+		references = append(references, sql.ColumnsEQ(users.C(userSchema.FieldID), s.C(column)))
+	}
+	return sql.Exists(sql.Select(users.C(userSchema.FieldID)).From(users).
+		Where(sql.And(sql.EQ(users.C(userSchema.FieldRole), userSchema.RoleSuperAdmin), sql.Or(references...))))
+}
 
 // ScopeSystemLogsForAdminActor keeps audit-log counts, aggregations, exports,
 // and details on the same role boundary. A plain admin must not inspect either

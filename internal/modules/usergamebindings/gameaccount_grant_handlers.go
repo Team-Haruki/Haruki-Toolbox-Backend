@@ -38,12 +38,18 @@ func parseGrantRouteParams(c fiber.Ctx) (harukiUtils.SupportedDataUploadServer, 
 }
 
 func validateGrantOwnerBinding(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerUserID string, server harukiUtils.SupportedDataUploadServer, gameUserID string) *fiber.Error {
-	binding, err := queryExistingBinding(c.Context(), apiHelper, string(server), gameUserID)
+	binding, err := queryOwnedBinding(c.Context(), apiHelper.DBManager.DB, ownerUserID, string(server), gameUserID)
+	if postgresql.IsNotFound(err) {
+		return fiber.NewError(fiber.StatusNotFound, "binding not found")
+	}
 	if err != nil {
 		harukiLogger.Errorf("Failed to query game account grant binding: %v", err)
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to query binding")
 	}
-	return validateVerifiedOwnedGameAccountBinding(binding, ownerUserID)
+	if !binding.Verified {
+		return fiber.NewError(fiber.StatusBadRequest, "binding is not verified yet")
+	}
+	return nil
 }
 
 func validateGrantTargetUser(c fiber.Ctx, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, granteeUserID string) *fiber.Error {

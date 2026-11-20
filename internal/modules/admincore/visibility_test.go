@@ -1,13 +1,36 @@
 package admincore
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	userSchema "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/user"
 
+	"entgo.io/ent/dialect/sql"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestHasSuperAdminReferenceRespondsToCurrentRoles(t *testing.T) {
+	db := enttest.Open(t, "sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	defer db.Close()
+	db.User.Create().SetID("assignee").SetName("Assignee").SetEmail("assignee@example.test").SetRole(userSchema.RoleAdmin).ExecX(t.Context())
+	db.Ticket.Create().SetTicketID("unassigned").SetCreatorUserID("creator").SetSubject("fixture").ExecX(t.Context())
+	row := db.Ticket.Create().SetTicketID("assigned").SetCreatorUserID("creator").SetAssigneeAdminID("assignee").SetSubject("fixture").SaveX(t.Context())
+	protected := func() []int {
+		return db.Ticket.Query().Where(func(s *sql.Selector) {
+			s.Where(HasSuperAdminReference(s, ticket.FieldCreatorUserID, ticket.FieldAssigneeAdminID))
+		}).IDsX(t.Context())
+	}
+	if ids := protected(); len(ids) != 0 {
+		t.Fatalf("ordinary role matched a protected reference: %v", ids)
+	}
+	db.User.UpdateOneID("assignee").SetRole(userSchema.RoleSuperAdmin).ExecX(t.Context())
+	if ids := protected(); !slices.Equal(ids, []int{row.ID}) {
+		t.Fatalf("protected references = %v, want [%d]", ids, row.ID)
+	}
+}
 
 func TestScopeSystemLogsForAdminActorHidesSuperAdminActorsAndTargets(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:admin-core-visibility?mode=memory&cache=shared&_fk=1")

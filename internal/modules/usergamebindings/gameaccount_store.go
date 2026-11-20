@@ -86,6 +86,14 @@ func queryExistingBinding(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return existing, nil
 }
 
+func queryOwnedBinding(ctx context.Context, db *postgresql.Client, userID, server, gameUserID string) (*postgresql.GameAccountBinding, error) {
+	return db.GameAccountBinding.Query().Where(
+		gameaccountbinding.ServerEQ(server),
+		gameaccountbinding.GameUserIDEQ(gameUserID),
+		gameaccountbinding.HasUserWith(userSchema.IDEQ(userID)),
+	).Only(ctx)
+}
+
 type gameAccountBindingSaveResult struct {
 	Transferred         bool
 	PreviousOwnerUserID string

@@ -88,6 +88,7 @@ func TestNotifyAdminsOfNewTicketSelectsEnabledAdmins(t *testing.T) {
 	seedTicketNotificationUser(t, client, "admin-banned", "banned@example.com", userSchema.RoleSuperAdmin, true, true)
 
 	sender := &recordingMailSender{}
+	client.Ticket.Create().SetTicketID("TK-1").SetCreatorUserID("creator").SetSubject("Upload failed").ExecX(t.Context())
 	NotifyAdminsOfNewTicket(context.Background(), client, Event{
 		Ticket:      TicketContext{PublicID: "TK-1", CreatorUserID: "creator", Subject: "Upload failed", Status: ticket.StatusOpen},
 		ActorUserID: "creator",
@@ -119,6 +120,7 @@ func TestNotifyAdminsOfUserReplySelectsEnabledAdmins(t *testing.T) {
 	seedTicketNotificationUser(t, client, "admin-off", "off@example.com", userSchema.RoleAdmin, false, false)
 
 	sender := &recordingMailSender{}
+	client.Ticket.Create().SetTicketID("TK-2").SetCreatorUserID("creator").SetSubject("Need help").SetAssigneeAdminID("assigned-admin").ExecX(t.Context())
 	NotifyAdminsOfUserReply(context.Background(), client, Event{
 		Ticket: TicketContext{
 			PublicID:        "TK-2",
@@ -144,6 +146,7 @@ func TestNotifyAdminsOfUserReplySkipsDisabledAssignee(t *testing.T) {
 	seedTicketNotificationUser(t, client, "other-admin", "other@example.com", userSchema.RoleAdmin, true, false)
 
 	sender := &recordingMailSender{}
+	client.Ticket.Create().SetTicketID("TK-3").SetCreatorUserID("creator").SetSubject("fixture").SetAssigneeAdminID("assigned-admin").ExecX(t.Context())
 	NotifyAdminsOfUserReply(context.Background(), client, Event{
 		Ticket:      TicketContext{PublicID: "TK-3", CreatorUserID: "creator", Status: ticket.StatusPendingAdmin, AssigneeAdminID: "assigned-admin"},
 		ActorUserID: "creator",
@@ -184,6 +187,7 @@ func TestTicketNotificationSendFailureDoesNotPanic(t *testing.T) {
 	seedTicketNotificationUser(t, client, "creator", "creator@example.com", userSchema.RoleUser, false, false)
 	seedTicketNotificationUser(t, client, "admin-1", "admin@example.com", userSchema.RoleAdmin, true, false)
 	sender := &recordingMailSender{err: errors.New("smtp down")}
+	client.Ticket.Create().SetTicketID("TK-5").SetCreatorUserID("creator").SetSubject("fixture").ExecX(t.Context())
 	NotifyAdminsOfNewTicket(context.Background(), client, Event{
 		Ticket:      TicketContext{PublicID: "TK-5", CreatorUserID: "creator", Status: ticket.StatusOpen},
 		ActorUserID: "creator",
@@ -191,5 +195,29 @@ func TestTicketNotificationSendFailureDoesNotPanic(t *testing.T) {
 	})
 	if len(sender.calls) != 1 {
 		t.Fatalf("mail calls = %d, want 1", len(sender.calls))
+	}
+}
+
+func TestTicketMailAudienceFollowsPersistedSuperAdminParticipation(t *testing.T) {
+	client := newTicketNotificationTestClient(t)
+	seedTicketNotificationUser(t, client, "creator", "creator@example.com", userSchema.RoleUser, false, false)
+	seedTicketNotificationUser(t, client, "admin", "admin@example.com", userSchema.RoleAdmin, true, false)
+	seedTicketNotificationUser(t, client, "super", "super@example.com", userSchema.RoleSuperAdmin, true, false)
+	for _, tc := range []struct{ name, creator, assignee string }{
+		{name: "protected creator", creator: "super"},
+		{name: "protected assignee", creator: "creator", assignee: "super"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := client.Ticket.Create().SetTicketID(tc.name).SetCreatorUserID(tc.creator).SetSubject("support fixture").SaveX(t.Context())
+			if tc.assignee != "" {
+				client.Ticket.UpdateOneID(row.ID).SetAssigneeAdminID(tc.assignee).ExecX(t.Context())
+			}
+			sender := &recordingMailSender{}
+			// The job might have been queued before assignment changed.
+			NotifyAdminsOfUserReply(t.Context(), client, BuildEvent(row, "sender", "ticket update", sender, NotificationConfig{}))
+			if len(sender.calls) != 1 || strings.Join(sender.calls[0].to, ",") != "super@example.com" {
+				t.Fatalf("recipients = %#v", sender.calls)
+			}
+		})
 	}
 }

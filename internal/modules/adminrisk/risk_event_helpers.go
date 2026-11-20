@@ -89,39 +89,8 @@ func applyRiskEventFilters(query *postgresql.RiskEventQuery, filters *riskEventF
 	return q
 }
 
-// scopeRiskEventsForAdminActor keeps count and pagination on the same role
-// boundary as the returned rows. A plain admin cannot inspect an event that
-// refers to a super admin as either its actor or target.
-func scopeRiskEventsForAdminActor(
-	ctx context.Context,
-	db *postgresql.Client,
-	query *postgresql.RiskEventQuery,
-	actorRole string,
-) (*postgresql.RiskEventQuery, error) {
-	if adminCoreModule.NormalizeRole(actorRole) == adminCoreModule.RoleSuperAdmin {
-		return query, nil
-	}
-
-	superAdminIDs, err := db.User.Query().
-		Where(userSchema.RoleEQ(userSchema.RoleSuperAdmin)).
-		IDs(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("query super admin IDs: %w", err)
-	}
-	if len(superAdminIDs) == 0 {
-		return query, nil
-	}
-
-	return query.Where(
-		riskevent.Or(
-			riskevent.ActorUserIDIsNil(),
-			riskevent.ActorUserIDNotIn(superAdminIDs...),
-		),
-		riskevent.Or(
-			riskevent.TargetUserIDIsNil(),
-			riskevent.TargetUserIDNotIn(superAdminIDs...),
-		),
-	), nil
+func excludeProtectedRiskEventReferences(s *sql.Selector) {
+	s.Where(sql.Not(adminCoreModule.HasSuperAdminReference(s, riskevent.FieldActorUserID, riskevent.FieldTargetUserID, riskevent.FieldResolvedBy)))
 }
 
 func ensureRiskEventUserReferencesManageable(

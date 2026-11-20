@@ -2,6 +2,7 @@ package adminsyslog
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	json "encoding/json/v2"
 	"slices"
@@ -15,44 +16,31 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/systemlog"
 
+	"entgo.io/ent/dialect"
 	sql "entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v3"
 )
 
-func normalizeSystemLogFailureReason(metadata map[string]any) string {
-	if metadata == nil {
-		return unknownSystemLogFailureReason
-	}
-
-	rawReason, ok := metadata["reason"]
-	if !ok {
-		return unknownSystemLogFailureReason
-	}
-
-	reason, ok := rawReason.(string)
-	if !ok {
-		return unknownSystemLogFailureReason
-	}
-
-	reason = strings.TrimSpace(reason)
-	if reason == "" {
-		return unknownSystemLogFailureReason
-	}
-	return reason
+func summarizeSystemLogFailureReasons(ctx context.Context, query *postgresql.SystemLogQuery) ([]categoryCount, error) {
+	var rows []groupedFieldCount
+	err := query.Where(systemlog.ResultEQ(systemlog.ResultFailure)).
+		Aggregate(groupFailureReasons, postgresql.As(postgresql.Count(), "count")).Scan(ctx, &rows)
+	return normalizeCategoryCounts(rows), err
 }
 
-func buildSystemLogFailureReasonCounts(rows []*postgresql.SystemLog) []categoryCount {
-	counter := make(map[string]int, len(rows))
-	for _, row := range rows {
-		reason := normalizeSystemLogFailureReason(row.Metadata)
-		counter[reason]++
+func groupFailureReasons(s *sql.Selector) string {
+	column := s.C(systemlog.FieldMetadata)
+	// A bounded text key preserves the ordinary reason codes while preventing
+	// old free-form metadata from producing large groups or response entries.
+	const whitespace = "' \t\n\v\f\r\u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000'"
+	var reason string
+	if s.Dialect() == dialect.SQLite {
+		reason = "CASE WHEN json_type(" + column + ", '$.reason') = 'text' THEN trim(json_extract(" + column + ", '$.reason'), " + whitespace + ") END"
+	} else {
+		reason = "CASE WHEN jsonb_typeof(" + column + "::jsonb -> 'reason') = 'string' THEN btrim(" + column + "::jsonb ->> 'reason', " + whitespace + ") END"
 	}
-
-	grouped := make([]groupedFieldCount, 0, len(counter))
-	for reason, count := range counter {
-		grouped = append(grouped, groupedFieldCount{Key: reason, Count: count})
-	}
-	return normalizeCategoryCounts(grouped)
+	s.GroupBy("key").OrderExpr(sql.Expr("count DESC, key ASC")).Limit(maxFailureReasonGroups)
+	return sql.As("COALESCE(NULLIF(substr("+reason+", 1, 128), ''), '"+unknownSystemLogFailureReason+"')", "key")
 }
 
 func parseSystemLogActorTypesFilter(raw string) ([]string, error) {

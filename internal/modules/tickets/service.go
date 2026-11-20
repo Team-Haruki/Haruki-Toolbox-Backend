@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticket"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/ticketmessage"
@@ -16,7 +18,10 @@ var (
 	ErrServiceUnavailable  = errors.New("ticket service is unavailable")
 	ErrPersistTicketStatus = errors.New("persist ticket status")
 	ErrAppendSystemMessage = errors.New("append ticket system message")
+	ErrTicketMessageLimit  = errors.New("ticket has reached the user message limit")
 )
+
+const maxUserTicketMessages = 500
 
 type Service struct {
 	db  *postgresql.Client
@@ -44,28 +49,34 @@ func (s Service) AppendUserMessage(ctx context.Context, row *postgresql.Ticket, 
 	}
 	rollback := func() { _ = tx.Rollback() }
 
-	created, err := tx.TicketMessage.Create().
-		SetTicketID(row.ID).
-		SetSenderUserID(actorUserID).
-		SetSenderRole(ticketmessage.SenderRoleUser).
-		SetInternal(false).
-		SetMessage(message).
-		Save(ctx)
-	if err != nil {
-		rollback()
-		return nil, err
-	}
-
-	update := tx.Ticket.UpdateOneID(row.ID).Where(ticket.StatusNEQ(ticket.StatusClosed)).SetStatus(ticket.StatusPendingAdmin)
-	if row.ClosedAt != nil {
-		update.ClearClosedAt()
-	}
+	// Acquire the ticket row lock before reading the budget. The status
+	// change and reply commit together, including when two requests race.
+	update := tx.Ticket.UpdateOneID(row.ID).
+		Where(ticket.StatusNEQ(ticket.StatusClosed), ticket.CreatorUserIDEQ(actorUserID)).
+		SetStatus(ticket.StatusPendingAdmin).ClearClosedAt()
 	if _, err := update.Save(ctx); err != nil {
 		rollback()
 		if postgresql.IsNotFound(err) {
 			return nil, ErrTicketClosed
 		}
 		return nil, fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
+	}
+	last, err := tx.TicketMessage.Query().
+		Where(ticketmessage.TicketIDEQ(row.ID), ticketmessage.SenderRoleEQ(ticketmessage.SenderRoleUser)).
+		Offset(maxUserTicketMessages - 1).Limit(1).IDs(ctx)
+	if err != nil {
+		rollback()
+		return nil, err
+	}
+	if len(last) != 0 {
+		rollback()
+		return nil, ErrTicketMessageLimit
+	}
+	created, err := tx.TicketMessage.Create().SetTicketID(row.ID).SetSenderUserID(actorUserID).
+		SetSenderRole(ticketmessage.SenderRoleUser).SetInternal(false).SetMessage(message).Save(ctx)
+	if err != nil {
+		rollback()
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		rollback()
@@ -74,7 +85,7 @@ func (s Service) AppendUserMessage(ctx context.Context, row *postgresql.Ticket, 
 	return created, nil
 }
 
-func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket, actorUserID, message string, internal bool) (*postgresql.TicketMessage, ticket.Status, error) {
+func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket, actorUserID, actorRole, message string, internal bool) (*postgresql.TicketMessage, ticket.Status, error) {
 	if s.db == nil || row == nil {
 		return nil, "", ErrServiceUnavailable
 	}
@@ -84,6 +95,11 @@ func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket,
 		return nil, "", err
 	}
 	rollback := func() { _ = tx.Rollback() }
+	current, err := LockAdminTicket(ctx, tx, row.ID, actorRole)
+	if err != nil {
+		rollback()
+		return nil, "", err
+	}
 
 	created, err := tx.TicketMessage.Create().
 		SetTicketID(row.ID).
@@ -97,17 +113,8 @@ func (s Service) AppendAdminMessage(ctx context.Context, row *postgresql.Ticket,
 		return nil, "", err
 	}
 
-	var current *postgresql.Ticket
-	if !internal {
-		current, err = tx.Ticket.UpdateOneID(row.ID).Where(ticket.StatusNEQ(ticket.StatusClosed)).
-			SetStatus(ticket.StatusPendingUser).ClearClosedAt().Save(ctx)
-		if err != nil && !postgresql.IsNotFound(err) {
-			rollback()
-			return nil, "", fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
-		}
-	}
-	if current == nil {
-		current, err = tx.Ticket.Get(ctx, row.ID)
+	if !internal && current.Status != ticket.StatusClosed {
+		current, err = tx.Ticket.UpdateOneID(row.ID).SetStatus(ticket.StatusPendingUser).ClearClosedAt().Save(ctx)
 		if err != nil {
 			rollback()
 			return nil, "", fmt.Errorf("%w: %v", ErrPersistTicketStatus, err)
@@ -131,7 +138,7 @@ func (s Service) Close(ctx context.Context, row *postgresql.Ticket) (*postgresql
 	return update.Save(ctx)
 }
 
-func (s Service) UpdateStatus(ctx context.Context, row *postgresql.Ticket, next ticket.Status) (*postgresql.Ticket, error) {
+func (s Service) UpdateStatus(ctx context.Context, row *postgresql.Ticket, actorUserID, actorRole string, next ticket.Status) (*postgresql.Ticket, error) {
 	if s.db == nil || row == nil {
 		return nil, ErrServiceUnavailable
 	}
@@ -140,6 +147,11 @@ func (s Service) UpdateStatus(ctx context.Context, row *postgresql.Ticket, next 
 		return nil, err
 	}
 	rollback := func() { _ = tx.Rollback() }
+	row, err = LockAdminTicket(ctx, tx, row.ID, actorRole)
+	if err != nil {
+		rollback()
+		return nil, err
+	}
 
 	update := tx.Ticket.UpdateOneID(row.ID).SetStatus(next)
 	if next == ticket.StatusClosed {
@@ -155,7 +167,7 @@ func (s Service) UpdateStatus(ctx context.Context, row *postgresql.Ticket, next 
 		return nil, err
 	}
 	if row.Status != next {
-		if err := appendSystemMessage(ctx, tx, row.ID, BuildStatusEventMessage(row.Status, next)); err != nil {
+		if err := AppendSystemMessage(ctx, tx, row.ID, actorUserID, BuildStatusEventMessage(row.Status, next)); err != nil {
 			rollback()
 			return nil, fmt.Errorf("%w: %v", ErrAppendSystemMessage, err)
 		}
@@ -167,20 +179,30 @@ func (s Service) UpdateStatus(ctx context.Context, row *postgresql.Ticket, next 
 	return updated, nil
 }
 
-func AppendSystemMessage(ctx context.Context, tx *postgresql.Tx, ticketID int, message string) error {
+// LockAdminTicket serializes ticket writes, then checks the ticket audience
+// again in a fresh statement while the ticket row is reserved.
+func LockAdminTicket(ctx context.Context, tx *postgresql.Tx, id int, actorRole string) (*postgresql.Ticket, error) {
+	if _, err := tx.Ticket.Query().Where(ticket.IDEQ(id), func(s *sql.Selector) {
+		if s.Dialect() == dialect.Postgres {
+			s.ForUpdate()
+		}
+	}).OnlyID(ctx); err != nil {
+		return nil, err
+	}
+	return tx.Ticket.Query().Where(ticket.IDEQ(id), LimitAdminTicketVisibility(actorRole)).Only(ctx)
+}
+
+func AppendSystemMessage(ctx context.Context, tx *postgresql.Tx, ticketID int, actorUserID, message string) error {
 	if tx == nil {
 		return ErrServiceUnavailable
 	}
-	return appendSystemMessage(ctx, tx, ticketID, message)
-}
-
-func appendSystemMessage(ctx context.Context, tx *postgresql.Tx, ticketID int, message string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil
 	}
 	_, err := tx.TicketMessage.Create().
 		SetTicketID(ticketID).
+		SetSenderUserID(actorUserID).
 		SetSenderRole(ticketmessage.SenderRoleSystem).
 		SetInternal(true).
 		SetMessage(message).
