@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -172,7 +174,7 @@ func TestEnforceSendEmailRateLimit(t *testing.T) {
 	email := "rate-limit@example.com"
 	app := fiber.New()
 	app.Get("/send", func(c fiber.Ctx) error {
-		if err := checkSendEmailRateLimit(c, helper, "owner", email); err != nil {
+		if _, err := reserveEmailSend(c, helper, "owner", email); err != nil {
 			return err
 		}
 		return c.SendStatus(fiber.StatusNoContent)
@@ -242,7 +244,8 @@ func TestEmailQuotaDenialPreservesRecipientAllowance(t *testing.T) {
 	helper, cache, ctx := newEmailVerifyTestHelper(t)
 	app := fiber.New()
 	app.Post("/", func(c fiber.Ctx) error {
-		return checkSendEmailRateLimit(c, helper, c.Query("owner"), c.Query("email"))
+		_, err := reserveEmailSend(c, helper, c.Query("owner"), c.Query("email"))
+		return err
 	})
 	request := func(ownerID, email string, want int) {
 		t.Helper()
@@ -306,14 +309,35 @@ func TestEmailSendDoesNotReserveQuotaBeforeCaptchaAdmission(t *testing.T) {
 	}
 }
 
-func TestUndeliveredEmailChallengeIsDiscarded(t *testing.T) {
+func TestUndeliveredEmailChallengeAndReservationAreReleased(t *testing.T) {
 	t.Parallel()
 	helper, cache, ctx := newEmailVerifyTestHelper(t)
-	// An invalid envelope sender fails before the SMTP client dials.
-	helper.SMTPClient = &smtp.HarukiSMTPClient{From: "\n"}
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	smtpAttempt := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			var count int64
+			count, err = cache.Redis.Exists(ctx, key).Result()
+			if err == nil && count != 1 {
+				err = errors.New("no challenge existed when SMTP transport opened")
+			}
+			_ = conn.Close()
+		}
+		smtpAttempt <- err
+	}()
+	helper.SMTPClient = &smtp.HarukiSMTPClient{Addr: listener.Addr().String(), From: "noreply@example.test", Timeout: 3 * time.Second}
+	ipKeys := make(chan string, 1)
 	app := fiber.New()
 	app.Post("/", func(c fiber.Ctx) error {
-		return SendEmailHandler(c, "owner", "123456@qq.com", "valid", helper, captchaResult{
+		ipKeys <- harukiRedis.BuildEmailVerifySendRateLimitIPKey(c.IP())
+		return SendEmailHandler(c, owner, email, "valid", helper, captchaResult{
 			response: &harukiCloudflare.TurnstileResponse{Success: true},
 		})
 	})
@@ -322,13 +346,83 @@ func TestUndeliveredEmailChallengeIsDiscarded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("mail delivery failure returned %d", resp.StatusCode)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(raw), "failed to send verification email") {
+		t.Fatalf("request did not report a delivery failure, status %d, read error %v", resp.StatusCode, err)
 	}
-	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey("owner", "123456@qq.com")
-	if got := cache.Redis.Exists(ctx, key).Val(); got != 0 {
+	select {
+	case err := <-smtpAttempt:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the SMTP fixture never got a connection")
+	}
+	count, err := cache.Redis.Exists(ctx, key).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
 		t.Fatal("an undelivered code remained active")
 	}
+	for _, key := range []string{harukiRedis.BuildQQMailSendRateLimitUserKey(owner), <-ipKeys, cache.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email)} {
+		if count, err := cache.Redis.Get(ctx, key).Int(); err != nil || count != 0 {
+			t.Fatalf("definite SMTP failure left allowance charged, count %d, err %v", count, err)
+		}
+	}
+}
+
+func TestEmailSendRefundOnlyAffectsItsOriginalWindowsOnce(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	reserved := make(chan []string, 1)
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		reservation, err := reserveEmailSend(c, helper, "owner", "123456@qq.com")
+		if err == nil {
+			reserved <- reservation
+		}
+		return err
+	})
+	reserve := func() []string {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("reservation returned %d", resp.StatusCode)
+		}
+		return <-reserved
+	}
+	refund := func(keys []string) {
+		t.Helper()
+		if err := cache.Redis.Eval(ctx, emailSendRateLimitReleaseScript, keys).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertCounts := func(keys []string, want int) {
+		t.Helper()
+		for _, key := range keys {
+			if count, err := cache.Redis.Get(ctx, key).Int(); err != nil || count != want {
+				t.Fatalf("counter = %d, want %d, err %v", count, want, err)
+			}
+		}
+	}
+	first := reserve()
+	// Model one expired bucket while its receipt and the other buckets live.
+	if err := cache.Redis.Del(ctx, first[0]).Err(); err != nil {
+		t.Fatal(err)
+	}
+	second := reserve()
+	refund(first)
+	assertCounts(second[:3], 1)
+
+	third := reserve()
+	refund(second)
+	refund(second)
+	assertCounts(third[:3], 1)
 }
 
 func TestVerificationFailsClosedWhenRateStoreIsUnavailable(t *testing.T) {

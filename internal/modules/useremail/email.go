@@ -16,6 +16,7 @@ import (
 	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
+	harukiSMTP "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -34,17 +35,48 @@ const (
 	otpVerifyIPWindow     = 10 * time.Minute
 	otpVerifyPerIPLimit   = 50
 
+	// KEYS contains the counters, their window identities, then the receipt.
 	emailSendRateLimitReserveScript = `
-for i = 1, #KEYS do
+local receipt = KEYS[#KEYS]
+if redis.call('EXISTS', receipt) == 1 then return 0 end
+local buckets = (#KEYS - 1) / 2
+for i = 1, buckets do
   local count = tonumber(redis.call('GET', KEYS[i]) or '0')
   if count >= tonumber(ARGV[i]) then return i end
 end
-for i = 1, #KEYS do
-  if redis.call('INCR', KEYS[i]) == 1 then
-    redis.call('PEXPIRE', KEYS[i], ARGV[#KEYS + 1])
+local window = tonumber(ARGV[buckets + 1])
+local identities = {}
+for i = 1, buckets do
+  local ttl = redis.call('PTTL', KEYS[i])
+  local identity = redis.call('GET', KEYS[buckets + i])
+  redis.call('INCR', KEYS[i])
+  if ttl < 0 then
+    -- Retain existing counters that were created without an expiry.
+    redis.call('PEXPIRE', KEYS[i], window)
+    ttl, identity = window, false
+  end
+  if not identity then
+    identity = receipt
+    redis.call('SET', KEYS[buckets + i], identity, 'PX', math.max(1, ttl))
+  end
+  identities[i] = identity
+end
+redis.call('SET', receipt, cjson.encode(identities), 'PX', window)
+return 0
+`
+
+	emailSendRateLimitReleaseScript = `
+local receipt = KEYS[#KEYS]
+local raw = redis.call('GET', receipt)
+if not raw then return 0 end
+local identities = cjson.decode(raw)
+for i = 1, #identities do
+  if redis.call('GET', KEYS[#identities + i]) == identities[i] and
+     tonumber(redis.call('GET', KEYS[i]) or '0') > 0 then
+    redis.call('DECR', KEYS[i])
   end
 end
-return 0
+return redis.call('DEL', receipt)
 `
 
 	emailAttemptScript = `
@@ -83,27 +115,31 @@ type emailSendBucket struct {
 	message string
 }
 
-func checkSendEmailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerID, email string) error {
+func reserveEmailSend(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerID, email string) ([]string, error) {
 	cache := helper.DBManager.Redis
 	buckets := []emailSendBucket{
 		{harukiRedis.BuildQQMailSendRateLimitUserKey(ownerID), emailSendUserLimit, "too many verification emails sent by this user"},
 		{harukiRedis.BuildEmailVerifySendRateLimitIPKey(c.IP()), emailSendIPLimit, "too many requests from this IP"},
 		{cache.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email), emailSendTargetLimit, "too many verification emails sent to this address"},
 	}
-	keys := make([]string, 0, len(buckets))
+	keys := make([]string, 0, 2*len(buckets)+1)
 	args := make([]any, 0, len(buckets)+1)
 	for _, bucket := range buckets {
 		keys = append(keys, bucket.key)
 		args = append(args, bucket.limit)
 	}
+	for _, bucket := range buckets {
+		keys = append(keys, bucket.key+":window")
+	}
+	keys = append(keys, harukiRedis.BuildEmailVerifySendReservationKey(uuid.NewString()))
 	args = append(args, emailSendRateLimitWindow.Milliseconds())
 	rejected, err := cache.Redis.Eval(c.Context(), emailSendRateLimitReserveScript, keys, args...).Int()
 	if err != nil {
 		harukiLogger.Errorf("Failed to reserve email send rate limit: %v", err)
-		return fiber.NewError(fiber.StatusServiceUnavailable, "verification service unavailable")
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "verification service unavailable")
 	}
 	if rejected == 0 {
-		return nil
+		return keys, nil
 	}
 	bucket := buckets[rejected-1]
 	retryAfter := int64(emailSendRateLimitWindow.Seconds())
@@ -111,7 +147,7 @@ func checkSendEmailRateLimit(c fiber.Ctx, helper *harukiAPIHelper.HarukiToolboxR
 		retryAfter = max(1, int64(ttl.Seconds()))
 	}
 	c.Set("Retry-After", fmt.Sprint(retryAfter))
-	return fiber.NewError(fiber.StatusTooManyRequests, bucket.message)
+	return nil, fiber.NewError(fiber.StatusTooManyRequests, bucket.message)
 }
 
 func SendEmailHandler(c fiber.Ctx, ownerID, email, challengeToken string, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, turnstileVerifier harukiCloudflare.Verifier) error {
@@ -127,24 +163,39 @@ func SendEmailHandler(c fiber.Ctx, ownerID, email, challengeToken string, helper
 	if resp == nil || !resp.Success {
 		return fiber.NewError(fiber.StatusBadRequest, "captcha verify failed")
 	}
-	if err := checkSendEmailRateLimit(c, helper, ownerID, email); err != nil {
+	if helper.SMTPClient == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "verification service unavailable")
+	}
+	reservation, err := reserveEmailSend(c, helper, ownerID, email)
+	if err != nil {
 		return err
 	}
+	cache := helper.DBManager.Redis
+	refund := true
+	defer func() {
+		if refund {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			defer cancel()
+			if err := cache.Redis.Eval(cleanup, emailSendRateLimitReleaseScript, reservation).Err(); err != nil {
+				harukiLogger.Warnf("Failed to release email send reservation: %v", err)
+			}
+		}
+	}()
 	code, err := GenerateCode(false)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to generate verification code")
 	}
 	msg, err := mailtemplate.Render(mailtemplate.EmailVerificationCode(code, emailCodeTTL))
-	if err != nil || helper.SMTPClient == nil {
+	if err != nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "verification service unavailable")
 	}
-	cache := helper.DBManager.Redis
 	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(ownerID, email)
 	challenge := uuid.NewString() + ":" + code
 	if err := cache.Redis.Set(ctx, key, challenge, emailCodeTTL).Err(); err != nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "verification service unavailable")
 	}
 	if err := helper.SMTPClient.SendMessage([]string{email}, msg, ""); err != nil {
+		refund = errors.Is(err, harukiSMTP.ErrMessageNotAccepted)
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 		defer cancel()
 		if cleanupErr := cache.Redis.Eval(cleanup, deleteEmailChallengeScript, []string{key}, challenge).Err(); cleanupErr != nil {
@@ -152,6 +203,7 @@ func SendEmailHandler(c fiber.Ctx, ownerID, email, challengeToken string, helper
 		}
 		return fiber.NewError(fiber.StatusServiceUnavailable, "failed to send verification email")
 	}
+	refund = false
 	return nil
 }
 

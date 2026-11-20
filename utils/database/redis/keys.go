@@ -248,6 +248,10 @@ func (b KeyBuilder) BuildEmailVerifySendRateLimitTargetKey(email string) string 
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(email))
 }
 
+func BuildEmailVerifySendReservationKey(id string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, "reservation", id)
+}
+
 func BuildResetPasswordSendRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionSend, KeyDimensionIP, clientIP)
 }
