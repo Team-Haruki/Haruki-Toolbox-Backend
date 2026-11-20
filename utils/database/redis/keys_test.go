@@ -377,3 +377,20 @@ func TestVerificationKeysSeparateActorsTargetsAndChallenges(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnedEmailAndBirthdayEventKeyScopes(t *testing.T) {
+	keys := NewKeyBuilder("fixture-key")
+	first := keys.BuildOwnedEmailVerifyKey("owner", "123456@qq.com")
+	if first == keys.BuildOwnedEmailVerifyKey("other", "123456@qq.com") ||
+		first != keys.BuildOwnedEmailVerifyKey("owner", " 123456@QQ.COM ") ||
+		strings.Contains(first, "123456@qq.com") {
+		t.Fatal("the email verification key ignores ownership, mailbox normalization, or privacy")
+	}
+	if keys.BuildOwnedEmailAttemptKey("generation-1") == keys.BuildOwnedEmailAttemptKey("generation-2") {
+		t.Fatal("distinct challenge generations shared a verification attempt key")
+	}
+	got := BuildMysekaiBirthdayEventKey("monitor", "v2", "event")
+	if want := MysekaiBirthdayEventPrefix() + "monitor:v2:event"; got != want {
+		t.Fatalf("event key = %q, want %q", got, want)
+	}
+}

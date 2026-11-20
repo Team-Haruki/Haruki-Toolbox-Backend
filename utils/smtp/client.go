@@ -2,10 +2,12 @@ package smtp
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"time"
 
@@ -13,6 +15,13 @@ import (
 )
 
 const defaultSMTPTimeout = 10 * time.Second
+
+// ErrMessageNotAccepted marks failures known to precede SMTP acceptance.
+var ErrMessageNotAccepted = errors.New("SMTP message was not accepted")
+
+func messageNotAccepted(err error) error {
+	return fmt.Errorf("%w: %w", ErrMessageNotAccepted, err)
+}
 
 func normalizeSMTPTimeout(timeout time.Duration) time.Duration {
 	if timeout <= 0 {
@@ -29,10 +38,10 @@ func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []by
 		if shouldFallbackToStartTLS(err) {
 			client, err = dialSMTPStartTLS(addr, host, timeout)
 			if err != nil {
-				return fmt.Errorf("failed to dial SMTP via implicit TLS and STARTTLS fallback: %w", err)
+				return messageNotAccepted(fmt.Errorf("failed to dial SMTP via implicit TLS and STARTTLS fallback: %w", err))
 			}
 		} else {
-			return err
+			return messageNotAccepted(err)
 		}
 	}
 	defer func() {
@@ -47,29 +56,33 @@ func SendMailTLS(addr string, auth smtp.Auth, from string, to []string, msg []by
 
 func sendMailWithClient(client *smtp.Client, auth smtp.Auth, from string, to []string, msg []byte) error {
 	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
+		return messageNotAccepted(fmt.Errorf("failed to authenticate: %w", err))
 	}
 	if err := client.Mail(from); err != nil {
-		return fmt.Errorf("failed to set mail from: %w", err)
+		return messageNotAccepted(fmt.Errorf("failed to set mail from: %w", err))
 	}
 	for _, recipient := range to {
 		if err := client.Rcpt(recipient); err != nil {
-			return fmt.Errorf("failed to set recipient %s: %w", recipient, err)
+			return messageNotAccepted(fmt.Errorf("failed to set recipient %s: %w", recipient, err))
 		}
 	}
 	wc, err := client.Data()
 	if err != nil {
-		return fmt.Errorf("failed to get data writer: %w", err)
+		return messageNotAccepted(fmt.Errorf("failed to get data writer: %w", err))
 	}
 	if _, err := wc.Write(msg); err != nil {
-		return fmt.Errorf("failed to write message: %w", err)
+		return messageNotAccepted(fmt.Errorf("failed to write message: %w", err))
 	}
 	if err := wc.Close(); err != nil {
+		var reply *textproto.Error
+		if errors.As(err, &reply) && reply.Code >= 400 && reply.Code < 600 {
+			return messageNotAccepted(fmt.Errorf("failed to close data writer: %w", err))
+		}
+		// The server may have accepted the message before the reply was lost.
 		return fmt.Errorf("failed to close data writer: %w", err)
 	}
-	if err := client.Quit(); err != nil {
-		return fmt.Errorf("failed to quit SMTP client: %w", err)
-	}
+	// The positive DATA reply confirms acceptance. QUIT only closes the session.
+	_ = client.Quit()
 	return nil
 }
 
@@ -164,14 +177,14 @@ func NewSMTPClient(cfg config.SMTPConfig) *HarukiSMTPClient {
 func (c *HarukiSMTPClient) SendMessage(to []string, msg Message, displayName string) error {
 	recipients, err := validRecipients(to)
 	if err != nil {
-		return err
+		return messageNotAccepted(err)
 	}
 	if err := msg.validate(); err != nil {
-		return err
+		return messageNotAccepted(err)
 	}
 	body, err := buildMIME(mail.Address{Name: c.senderName(displayName), Address: c.From}, recipients, msg, time.Now())
 	if err != nil {
-		return err
+		return messageNotAccepted(err)
 	}
 	return SendMailTLS(c.Addr, c.Auth, c.From, recipients, body, c.Timeout)
 }

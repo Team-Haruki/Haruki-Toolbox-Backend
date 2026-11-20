@@ -110,6 +110,14 @@ func (b KeyBuilder) BuildEmailVerifyKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, b.hashNormalizedIdentifier(email))
 }
 
+func (b KeyBuilder) BuildOwnedEmailVerifyKey(ownerID, email string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, b.hashExactIdentifier("email-verify-owner", ownerID), b.hashNormalizedIdentifier(email))
+}
+
+func (b KeyBuilder) BuildOwnedEmailAttemptKey(generation string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionAttempt, b.hashExactIdentifier("email-verify-generation", generation))
+}
+
 func (b KeyBuilder) BuildResetPasswordKey(email string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, b.hashNormalizedIdentifier(email))
 }
@@ -240,6 +248,10 @@ func (b KeyBuilder) BuildEmailVerifySendRateLimitTargetKey(email string) string 
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, KeyDimensionUser, b.hashNormalizedIdentifier(email))
 }
 
+func BuildEmailVerifySendReservationKey(id string) string {
+	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionVerify, KeyActionSend, "reservation", id)
+}
+
 func BuildResetPasswordSendRateLimitIPKey(clientIP string) string {
 	return buildKey(KeyPrefixHaruki, KeyModuleEmail, KeyActionResetPW, KeyActionSend, KeyDimensionIP, clientIP)
 }
@@ -362,8 +374,8 @@ func BuildMysekaiBirthdayEventKey(subscriptionID, subscriptionVersion, eventID s
 	)
 }
 
-func BuildMysekaiBirthdaySubscriptionEventsPattern(subscriptionID string) string {
-	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionEvent, strings.TrimSpace(subscriptionID), "*")
+func MysekaiBirthdayEventPrefix() string {
+	return buildKey(KeyPrefixHaruki, KeyModuleMysekaiBirthday, KeyActionEvent, "")
 }
 
 // Device-flow keys never carry a raw user code, wrapped device code or flow

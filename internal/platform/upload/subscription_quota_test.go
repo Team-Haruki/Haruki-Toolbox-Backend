@@ -18,7 +18,10 @@ func TestBirthdayPendingCountQuotaIsAtomicAndAckReleases(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 	manager := &harukiRedis.HarukiRedisManager{Redis: client}
-	monitor := &BirthdayMonitorMirror{SubscriptionID: "sub", SubscriptionVersion: "v1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	monitor := &BirthdayMonitorMirror{SubscriptionID: "sub", SubscriptionVersion: "v1", Region: "jp", UID: "42", MaterialIDs: []int{1}, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	if err := UpsertBirthdayMonitorMirror(t.Context(), manager, *monitor); err != nil {
+		t.Fatal(err)
+	}
 	const attempts = birthdayPendingPerSubscription + 6
 	type result struct {
 		event *BirthdayMonitorEvent
@@ -68,8 +71,12 @@ func TestBirthdayPendingByteQuotaReclaimsExpiredEvents(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 	store := func(key, sub string, globalLimit, subLimit, ttl int) error {
-		keys := append(append([]string(nil), birthdayPendingKeys...), key)
-		return client.Eval(t.Context(), birthdayStoreLua, keys, "12345678", sub, 10, globalLimit, 10, subLimit, ttl).Err()
+		raw := fmt.Sprintf(`{"subscription_id":%q,"subscription_version":"v1"}`, sub)
+		if err := client.Set(t.Context(), "monitor", raw, time.Minute).Err(); err != nil {
+			return err
+		}
+		keys := append(append([]string(nil), birthdayPendingKeys...), key, "monitor")
+		return client.Eval(t.Context(), birthdayStoreLua, keys, "12345678", sub, 10, globalLimit, 10, subLimit, ttl, "v1").Err()
 	}
 	if err := store("event-one", "sub-1", 15, 10, 1000); err != nil {
 		t.Fatal(err)
@@ -98,7 +105,11 @@ func TestBirthdayPendingQuotaRejectsInvalidStorage(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 	const key = "event-fixture"
-	event := BirthdayMonitorEvent{EventID: "event", PayloadRef: key, SubscriptionID: "sub"}
+	monitor := BirthdayMonitorMirror{SubscriptionID: "sub", SubscriptionVersion: "v1", Region: "jp", UID: "42", MaterialIDs: []int{1}, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	if err := UpsertBirthdayMonitorMirror(t.Context(), &harukiRedis.HarukiRedisManager{Redis: client}, monitor); err != nil {
+		t.Fatal(err)
+	}
+	event := BirthdayMonitorEvent{EventID: "event", PayloadRef: key, SubscriptionID: "sub", SubscriptionVersion: "v1", Region: "jp", UID: "42"}
 	event.FilteredPayload = map[string]any{"string": strings.Repeat("a", birthdayPendingBytesPerSubscription)}
 	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); !errors.Is(err, errBirthdayPendingQuota) || server.Exists(key) {
 		t.Fatalf("oversized encoded event reached Redis: %v", err)
@@ -111,7 +122,7 @@ func TestBirthdayPendingQuotaRejectsInvalidStorage(t *testing.T) {
 	if err := server.Set(key, "invalid event JSON"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); err == nil {
+	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); err == nil || errors.Is(err, errBirthdayMonitorChanged) {
 		t.Fatal("invalid stored event was treated as an admitted retry")
 	}
 	if err := client.Close(); err != nil {
@@ -119,5 +130,94 @@ func TestBirthdayPendingQuotaRejectsInvalidStorage(t *testing.T) {
 	}
 	if _, err := storePendingBirthdayEvent(t.Context(), client, event, time.Minute); err == nil || errors.Is(err, errBirthdayPendingQuota) {
 		t.Fatalf("Redis failure was reported as an allocation outcome: %v", err)
+	}
+}
+
+func TestBirthdayMonitorDeletionIsScopedToCurrentGeneration(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	manager := &harukiRedis.HarukiRedisManager{Redis: client}
+	ctx := t.Context()
+	first := BirthdayMonitorMirror{SubscriptionID: "first", SubscriptionVersion: "v1", Region: "jp", UID: "42", MaterialIDs: []int{1}, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	replace := first
+	replace.SubscriptionID = "replacement"
+	replace.SubscriptionVersion = "v2"
+	other := first
+	other.UID = "43"
+	other.SubscriptionID = "other"
+	write := func(m BirthdayMonitorMirror) {
+		t.Helper()
+		if err := UpsertBirthdayMonitorMirror(ctx, manager, m); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := StoreBirthdayMonitorEvent(ctx, manager, &m, BirthdayMonitorEvent{EventID: "next"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(first)
+	write(other)
+	write(replace)
+	if err := DeleteBirthdayMonitorMirror(ctx, manager, first.SubscriptionID, first.SubscriptionVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteBirthdayMonitorMirror(ctx, manager, replace.SubscriptionID, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StoreBirthdayMonitorEvent(ctx, manager, &first, BirthdayMonitorEvent{EventID: "stale"}); !errors.Is(err, errBirthdayMonitorChanged) {
+		t.Fatalf("superseded monitor event returned %v", err)
+	}
+	for _, m := range []BirthdayMonitorMirror{replace, other} {
+		if _, err := FetchBirthdayMonitorEvent(ctx, manager, "next", m.SubscriptionID, m.SubscriptionVersion); err != nil {
+			t.Fatalf("active monitor lost an event: %v", err)
+		}
+	}
+	if err := DeleteBirthdayMonitorMirror(ctx, manager, replace.SubscriptionID, replace.SubscriptionVersion); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FetchBirthdayMonitorEvent(ctx, manager, "next", replace.SubscriptionID, replace.SubscriptionVersion); err == nil {
+		t.Fatal("cancelled monitor still exposes the event")
+	}
+	if count := client.HGet(ctx, birthdayPendingKeys[2], "count").Val(); count != "1" {
+		t.Fatalf("pending ledger count after cleanup = %q, want 1", count)
+	}
+}
+
+func TestBirthdayMonitorValidatesIdentityAndHidesLegacyEvents(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	manager := &harukiRedis.HarukiRedisManager{Redis: client}
+	ctx := t.Context()
+	active := BirthdayMonitorMirror{SubscriptionID: "active", SubscriptionVersion: "v2", Region: "jp", UID: "42", MaterialIDs: []int{1}, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	if err := UpsertBirthdayMonitorMirror(ctx, manager, active); err != nil {
+		t.Fatal(err)
+	}
+	invalid := active
+	invalid.SubscriptionID = "not valid"
+	if err := UpsertBirthdayMonitorMirror(ctx, manager, invalid); err == nil {
+		t.Fatal("invalid subscription identifier was accepted")
+	}
+	moved := active
+	moved.UID = "43"
+	if err := UpsertBirthdayMonitorMirror(ctx, manager, moved); !errors.Is(err, errBirthdayMonitorChanged) {
+		t.Fatalf("moving the same generation returned %v", err)
+	}
+	if err := DeleteBirthdayMonitorMirror(ctx, manager, active.SubscriptionID, ""); err == nil {
+		t.Fatal("unversioned cancellation was accepted")
+	}
+	legacy := BirthdayMonitorEvent{SubscriptionID: active.SubscriptionID, SubscriptionVersion: "v1", EventID: "legacy", Region: active.Region, UID: active.UID}
+	key := harukiRedis.BuildMysekaiBirthdayEventKey(legacy.SubscriptionID, legacy.SubscriptionVersion, legacy.EventID)
+	if err := manager.SetCache(ctx, key, legacy, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FetchBirthdayMonitorEvent(ctx, manager, legacy.EventID, legacy.SubscriptionID, legacy.SubscriptionVersion); !errors.Is(err, errBirthdayMonitorChanged) {
+		t.Fatalf("inactive legacy event returned %v", err)
+	}
+	if err := AckBirthdayMonitorEvent(ctx, manager, legacy.EventID, legacy.SubscriptionID, legacy.SubscriptionVersion); err != nil {
+		t.Fatal(err)
+	}
+	if client.Exists(ctx, key).Val() != 0 {
+		t.Fatal("acknowledgement did not release the exact legacy event")
 	}
 }

@@ -2,15 +2,23 @@ package useremail
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	harukiAPIHelper "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api"
+	harukiCloudflare "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/cloudflare"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/smtp"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v3"
@@ -53,6 +61,12 @@ func TestGenerateCode(t *testing.T) {
 
 func newEmailVerifyTestHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *harukiRedis.HarukiRedisManager, context.Context) {
 	t.Helper()
+	helper, cache, _ := newEmailVerifyFixture(t)
+	return helper, cache, t.Context()
+}
+
+func newEmailVerifyFixture(t *testing.T) (*harukiAPIHelper.HarukiToolboxRouterHelpers, *harukiRedis.HarukiRedisManager, *miniredis.Miniredis) {
+	t.Helper()
 
 	srv, err := miniredis.Run()
 	if err != nil {
@@ -71,20 +85,16 @@ func newEmailVerifyTestHelper(t *testing.T) (*harukiAPIHelper.HarukiToolboxRoute
 	helper := &harukiAPIHelper.HarukiToolboxRouterHelpers{
 		DBManager: &database.HarukiToolboxDBManager{Redis: redisManager},
 	}
-	return helper, redisManager, context.Background()
+	return helper, redisManager, srv
 }
 
-func runVerifyEmailHandlerStatus(t *testing.T, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, email, otp string) int {
+func runVerifyEmailHandlerStatus(t *testing.T, helper *harukiAPIHelper.HarukiToolboxRouterHelpers, ownerID, email, otp string) int {
 	t.Helper()
 
 	app := fiber.New()
 	app.Post("/verify", func(c fiber.Ctx) error {
-		ok, err := VerifyEmailHandler(c, email, otp, helper)
-		if err != nil {
+		if err := VerifyEmailHandler(c, ownerID, email, otp, helper, func() error { return nil }); err != nil {
 			return err
-		}
-		if !ok {
-			return c.SendStatus(fiber.StatusBadRequest)
 		}
 		return c.SendStatus(fiber.StatusNoContent)
 	})
@@ -106,17 +116,17 @@ func TestVerifyEmailHandlerConsumesCodeAndClearsAttempts(t *testing.T) {
 	helper, redisManager, ctx := newEmailVerifyTestHelper(t)
 	email := "test@example.com"
 	code := "123456"
-	verifyKey := redisManager.KeyBuilder().BuildEmailVerifyKey(email)
-	attemptKey := redisManager.KeyBuilder().BuildOTPAttemptKey(email)
+	verifyKey := redisManager.KeyBuilder().BuildOwnedEmailVerifyKey("owner", email)
+	attemptKey := redisManager.KeyBuilder().BuildOwnedEmailAttemptKey("generation")
 
-	if err := redisManager.SetCache(ctx, verifyKey, code, 5*time.Minute); err != nil {
+	if err := redisManager.Redis.Set(ctx, verifyKey, "generation:"+code, 5*time.Minute).Err(); err != nil {
 		t.Fatalf("seed verify code error: %v", err)
 	}
 	if err := redisManager.SetCache(ctx, attemptKey, 2, 5*time.Minute); err != nil {
 		t.Fatalf("seed attempt count error: %v", err)
 	}
 
-	status := runVerifyEmailHandlerStatus(t, helper, email, code)
+	status := runVerifyEmailHandlerStatus(t, helper, "owner", email, code)
 	if status != fiber.StatusNoContent {
 		t.Fatalf("status = %d, want %d", status, fiber.StatusNoContent)
 	}
@@ -129,7 +139,7 @@ func TestVerifyEmailHandlerConsumesCodeAndClearsAttempts(t *testing.T) {
 		t.Fatalf("verification code and attempt key should be deleted, exists=%d", exists)
 	}
 
-	status = runVerifyEmailHandlerStatus(t, helper, email, code)
+	status = runVerifyEmailHandlerStatus(t, helper, "owner", email, code)
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("reused code status = %d, want %d", status, fiber.StatusBadRequest)
 	}
@@ -140,14 +150,14 @@ func TestVerifyEmailHandlerWrongCodeIncrementsAttempts(t *testing.T) {
 
 	helper, redisManager, ctx := newEmailVerifyTestHelper(t)
 	email := "wrong@example.com"
-	verifyKey := redisManager.KeyBuilder().BuildEmailVerifyKey(email)
-	attemptKey := redisManager.KeyBuilder().BuildOTPAttemptKey(email)
+	verifyKey := redisManager.KeyBuilder().BuildOwnedEmailVerifyKey("owner", email)
+	attemptKey := redisManager.KeyBuilder().BuildOwnedEmailAttemptKey("generation")
 
-	if err := redisManager.SetCache(ctx, verifyKey, "654321", 5*time.Minute); err != nil {
+	if err := redisManager.Redis.Set(ctx, verifyKey, "generation:654321", 5*time.Minute).Err(); err != nil {
 		t.Fatalf("seed verify code error: %v", err)
 	}
 
-	status := runVerifyEmailHandlerStatus(t, helper, email, "000000")
+	status := runVerifyEmailHandlerStatus(t, helper, "owner", email, "000000")
 	if status != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", status, fiber.StatusBadRequest)
 	}
@@ -170,16 +180,10 @@ func TestEnforceSendEmailRateLimit(t *testing.T) {
 
 	helper, _, _ := newEmailVerifyTestHelper(t)
 	email := "rate-limit@example.com"
-	clientIP := "127.0.0.1"
-
 	app := fiber.New()
 	app.Get("/send", func(c fiber.Ctx) error {
-		limited, key, message, err := checkSendEmailRateLimit(c, helper, clientIP, email)
-		if err != nil {
-			return harukiAPIHelper.ErrorInternal(c, "verification service unavailable")
-		}
-		if limited {
-			return respondEmailSendRateLimited(c, key, message, helper)
+		if _, err := reserveEmailSend(c, helper, "owner", email); err != nil {
+			return err
 		}
 		return c.SendStatus(fiber.StatusNoContent)
 	})
@@ -207,5 +211,466 @@ func TestEnforceSendEmailRateLimit(t *testing.T) {
 	}
 	if resp.Header.Get("Retry-After") == "" {
 		t.Fatalf("expected Retry-After header on rate limit response")
+	}
+}
+
+func TestVerificationAttemptsAreScopedToOwnedChallenge(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const email = "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey("owner", email)
+	if err := cache.Redis.Set(ctx, key, "first:123456", emailCodeTTL).Err(); err != nil {
+		t.Fatal(err)
+	}
+	for range otpVerifyPerCodeLimit + 1 {
+		if status := runVerifyEmailHandlerStatus(t, helper, "other", email, "123456"); status != http.StatusBadRequest {
+			t.Fatalf("verification by another owner returned %d", status)
+		}
+	}
+	firstAttempts := cache.KeyBuilder().BuildOwnedEmailAttemptKey("first")
+	if count := cache.Redis.Exists(ctx, firstAttempts).Val(); count != 0 {
+		t.Fatal("verification by another owner spent the owner's attempts")
+	}
+	for range otpVerifyPerCodeLimit {
+		if status := runVerifyEmailHandlerStatus(t, helper, "owner", email, "000000"); status != http.StatusBadRequest {
+			t.Fatalf("wrong code returned %d", status)
+		}
+	}
+	if status := runVerifyEmailHandlerStatus(t, helper, "owner", email, "123456"); status != http.StatusBadRequest {
+		t.Fatalf("exhausted challenge returned %d", status)
+	}
+	if err := cache.Redis.Set(ctx, key, "second:123456", emailCodeTTL).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if status := runVerifyEmailHandlerStatus(t, helper, "owner", email, "123456"); status != http.StatusNoContent {
+		t.Fatalf("new generation returned %d", status)
+	}
+}
+
+func TestEmailQuotaDenialPreservesRecipientAllowance(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		_, err := reserveEmailSend(c, helper, c.Query("owner"), c.Query("email"))
+		return err
+	})
+	request := func(ownerID, email string, want int) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/?owner="+ownerID+"&email="+email, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("quota returned %d, want %d", resp.StatusCode, want)
+		}
+	}
+	for i := range emailSendUserLimit {
+		request("first", fmt.Sprintf("fixture%d@qq.com", i), http.StatusOK)
+	}
+	const recipient = "123456@qq.com"
+	request("first", recipient, http.StatusTooManyRequests)
+	key := cache.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(recipient)
+	if count := cache.Redis.Exists(ctx, key).Val(); count != 0 {
+		t.Fatal("rejected sender consumed recipient allowance")
+	}
+	request("second", recipient, http.StatusOK)
+}
+
+type captchaResult struct {
+	response *harukiCloudflare.TurnstileResponse
+	err      error
+}
+
+func (v captchaResult) Verify(context.Context, string, string) (*harukiCloudflare.TurnstileResponse, error) {
+	return v.response, v.err
+}
+
+func TestEmailSendDoesNotReserveQuotaBeforeCaptchaAdmission(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	for _, tc := range []struct {
+		verifier captchaResult
+		want     int
+	}{
+		{captchaResult{response: &harukiCloudflare.TurnstileResponse{Success: false}}, http.StatusBadRequest},
+		{captchaResult{err: errors.New("fixture outage")}, http.StatusServiceUnavailable},
+	} {
+		app := fiber.New()
+		app.Post("/", func(c fiber.Ctx) error {
+			return SendEmailHandler(c, owner, email, "challenge", helper, tc.verifier)
+		})
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Fatalf("captcha rejection returned %d, want %d", resp.StatusCode, tc.want)
+		}
+	}
+	keys := cache.KeyBuilder()
+	if count := cache.Redis.Exists(ctx, keys.BuildEmailVerifySendRateLimitTargetKey(email), keys.BuildOwnedEmailVerifyKey(owner, email)).Val(); count != 0 {
+		t.Fatalf("captcha rejection stored %d quota or code keys", count)
+	}
+}
+
+func TestUndeliveredEmailChallengeAndReservationAreReleased(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	smtpAttempt := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			var count int64
+			count, err = cache.Redis.Exists(ctx, key).Result()
+			if err == nil && count != 1 {
+				err = errors.New("no challenge existed when SMTP transport opened")
+			}
+			_ = conn.Close()
+		}
+		smtpAttempt <- err
+	}()
+	helper.SMTPClient = &smtp.HarukiSMTPClient{Addr: listener.Addr().String(), From: "noreply@example.test", Timeout: 3 * time.Second}
+	ipKeys := make(chan string, 1)
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		ipKeys <- harukiRedis.BuildEmailVerifySendRateLimitIPKey(c.IP())
+		return SendEmailHandler(c, owner, email, "valid", helper, captchaResult{
+			response: &harukiCloudflare.TurnstileResponse{Success: true},
+		})
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(raw), "failed to send verification email") {
+		t.Fatalf("request did not report a delivery failure, status %d, read error %v", resp.StatusCode, err)
+	}
+	select {
+	case err := <-smtpAttempt:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the SMTP fixture never got a connection")
+	}
+	count, err := cache.Redis.Exists(ctx, key).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("an undelivered code remained active")
+	}
+	for _, key := range []string{harukiRedis.BuildQQMailSendRateLimitUserKey(owner), <-ipKeys, cache.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email)} {
+		if count, err := cache.Redis.Get(ctx, key).Int(); err != nil || count != 0 {
+			t.Fatalf("definite SMTP failure left allowance charged, count %d, err %v", count, err)
+		}
+	}
+}
+
+func TestRejectedReplacementRestoresEarlierChallengeAtItsRemainingTTL(t *testing.T) {
+	t.Parallel()
+	helper, cache, server := newEmailVerifyFixture(t)
+	ctx := t.Context()
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	keys := []string{key, key + ":sending", key + ":previous"}
+	if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if staged, err := cache.Redis.Eval(ctx, stageEmailChallengeScript, keys, "second:654321", "second", emailCodeTTL.Milliseconds()).Int(); err != nil || staged != 1 {
+		t.Fatalf("staging replacement: %d, %v", staged, err)
+	}
+	if staged, err := cache.Redis.Eval(ctx, stageEmailChallengeScript, keys, "third:999999", "third", emailCodeTTL.Milliseconds()).Int(); err != nil || staged != 0 {
+		t.Fatalf("overlapping replacement: %d, %v", staged, err)
+	}
+	server.FastForward(17 * time.Second)
+	if err := reconcileEmailState(ctx, cache.Redis, finishEmailChallengeScript, keys, "second:654321", "second", "restore"); err != nil {
+		t.Fatal(err)
+	}
+	if ttl, err := cache.Redis.PTTL(ctx, key).Result(); err != nil || ttl != 43*time.Second {
+		t.Fatalf("restored challenge TTL = %v, err %v", ttl, err)
+	}
+	if runVerifyEmailHandlerStatus(t, helper, owner, email, "123456") != http.StatusNoContent {
+		t.Fatal("the earlier code could not be verified after a rejected resend")
+	}
+	if count, err := cache.Redis.Exists(ctx, keys...).Result(); err != nil || count != 0 {
+		t.Fatalf("verification left resend state, count %d, err %v", count, err)
+	}
+}
+
+func TestEmailSendRefundOnlyAffectsItsOriginalWindowsOnce(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	reserved := make(chan []string, 1)
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		reservation, err := reserveEmailSend(c, helper, "owner", "123456@qq.com")
+		if err == nil {
+			reserved <- reservation
+		}
+		return err
+	})
+	reserve := func() []string {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("reservation returned %d", resp.StatusCode)
+		}
+		return <-reserved
+	}
+	refund := func(keys []string) {
+		t.Helper()
+		if err := cache.Redis.Eval(ctx, emailSendRateLimitReleaseScript, keys).Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertCounts := func(keys []string, want int) {
+		t.Helper()
+		for _, key := range keys {
+			if count, err := cache.Redis.Get(ctx, key).Int(); err != nil || count != want {
+				t.Fatalf("counter = %d, want %d, err %v", count, want, err)
+			}
+		}
+	}
+	first := reserve()
+	// Model one expired bucket while its receipt and the other buckets live.
+	if err := cache.Redis.Del(ctx, first[0]).Err(); err != nil {
+		t.Fatal(err)
+	}
+	second := reserve()
+	refund(first)
+	assertCounts(second[:3], 1)
+
+	third := reserve()
+	refund(second)
+	refund(second)
+	assertCounts(third[:3], 1)
+}
+
+func TestEmailSendStopsBeforeWritingChallengeWhenQuotaStoreFails(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	helper.SMTPClient = &smtp.HarukiSMTPClient{}
+	target := cache.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email)
+	if err := cache.Redis.Set(ctx, target, "invalid counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		return SendEmailHandler(c, owner, email, "valid", helper, captchaResult{
+			response: &harukiCloudflare.TurnstileResponse{Success: true},
+		})
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(raw), "verification service unavailable") {
+		t.Fatalf("quota failure returned status %d, read error %v", resp.StatusCode, err)
+	}
+	challenge := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	count, err := cache.Redis.Exists(ctx, challenge, harukiRedis.BuildQQMailSendRateLimitUserKey(owner)).Result()
+	if err != nil || count != 0 {
+		t.Fatalf("quota failure stored a challenge or charged another bucket, count %d, err %v", count, err)
+	}
+}
+
+func TestEmailVerificationRestoresOnFailureWithoutOverwritingNewCode(t *testing.T) {
+	t.Parallel()
+	for _, scenario := range []struct {
+		name   string
+		rotate bool
+		want   string
+	}{
+		{name: "binding unavailable", want: "first:123456"},
+		{name: "code rotated during binding", rotate: true, want: "second:654321"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			helper, cache, server := newEmailVerifyFixture(t)
+			ctx := t.Context()
+			const owner, email = "owner", "123456@qq.com"
+			key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+			if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+				t.Fatal(err)
+			}
+			fault := &emailEvalFault{script: restoreEmailChallengeScript}
+			cache.Redis.AddHook(fault)
+			app := fiber.New()
+			app.Post("/", func(c fiber.Ctx) error {
+				return VerifyEmailHandler(c, owner, email, "123456", helper, func() error {
+					server.FastForward(11 * time.Second)
+					if scenario.rotate {
+						if err := cache.Redis.Set(ctx, key, "second:654321", time.Minute).Err(); err != nil {
+							return err
+						}
+					}
+					return fiber.ErrServiceUnavailable
+				})
+			})
+			resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("binding failure returned status %d", resp.StatusCode)
+			}
+			if got, err := cache.Redis.Get(ctx, key).Result(); err != nil || got != scenario.want {
+				t.Fatalf("wrong challenge after failed binding, err %v", err)
+			}
+			wantTTL := 49 * time.Second
+			if scenario.rotate {
+				wantTTL = time.Minute
+			}
+			if ttl, err := cache.Redis.PTTL(ctx, key).Result(); err != nil || ttl != wantTTL || !fault.fired.Load() {
+				t.Fatalf("binding failure changed challenge lifetime to %v, err %v", ttl, err)
+			}
+			if !scenario.rotate && runVerifyEmailHandlerStatus(t, helper, owner, email, "123456") != http.StatusNoContent {
+				t.Fatal("a retry could not use the restored challenge")
+			}
+		})
+	}
+}
+
+type emailEvalFault struct {
+	script string
+	after  bool
+	fired  atomic.Bool
+}
+
+func (f *emailEvalFault) DialHook(next goredis.DialHook) goredis.DialHook { return next }
+
+func (f *emailEvalFault) ProcessPipelineHook(next goredis.ProcessPipelineHook) goredis.ProcessPipelineHook {
+	return next
+}
+
+func (f *emailEvalFault) ProcessHook(next goredis.ProcessHook) goredis.ProcessHook {
+	return func(ctx context.Context, cmd goredis.Cmder) error {
+		if cmd.Name() != "eval" || cmd.Args()[1] != f.script || !f.fired.CompareAndSwap(false, true) {
+			return next(ctx, cmd)
+		}
+		if f.after {
+			if err := next(ctx, cmd); err != nil {
+				return err
+			}
+		}
+		err := errors.New("fixture lost Redis reply")
+		cmd.SetErr(err)
+		return err
+	}
+}
+
+func TestEmailVerificationRestoresClaimAfterLostRedisReply(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	fault := &emailEvalFault{script: emailAttemptScript, after: true}
+	cache.Redis.AddHook(fault)
+	if status := runVerifyEmailHandlerStatus(t, helper, owner, email, "123456"); status != http.StatusServiceUnavailable || !fault.fired.Load() {
+		t.Fatalf("lost reservation reply returned %d", status)
+	}
+	if got, err := cache.Redis.Get(ctx, key).Result(); err != nil || got != "first:123456" {
+		t.Fatalf("lost reservation reply stranded the original challenge, err %v", err)
+	}
+	if status := runVerifyEmailHandlerStatus(t, helper, owner, email, "123456"); status != http.StatusNoContent {
+		t.Fatalf("restored challenge returned %d", status)
+	}
+}
+
+func TestEmailVerificationReservesCodeUntilBindingCompletes(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	if err := cache.Redis.Set(ctx, key, "first:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	started, unblock := make(chan struct{}, 2), make(chan struct{})
+	release := sync.OnceFunc(func() { close(unblock) })
+	defer release()
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		return VerifyEmailHandler(c, owner, email, "123456", helper, func() error {
+			started <- struct{}{}
+			<-unblock
+			return nil
+		})
+	})
+	response := func() int {
+		resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+		if err != nil {
+			return -1
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	first := make(chan int, 1)
+	go func() { first <- response() }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("binding did not start")
+	}
+	second := make(chan int, 1)
+	go func() { second <- response() }()
+	select {
+	case status := <-second:
+		if status != http.StatusBadRequest {
+			t.Fatalf("a second verification returned %d while the code was reserved", status)
+		}
+	case <-started:
+		t.Fatal("a second binding started with the reserved code")
+	case <-time.After(time.Second):
+		t.Fatal("second verification did not finish")
+	}
+	release()
+	if status := <-first; status != http.StatusOK {
+		t.Fatalf("binding returned status %d", status)
+	}
+	if count, err := cache.Redis.Exists(ctx, key).Result(); err != nil || count != 0 {
+		t.Fatalf("successful binding left the challenge available, count %d, err %v", count, err)
+	}
+}
+
+func TestVerificationFailsClosedWhenRateStoreIsUnavailable(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	key := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	if err := cache.Redis.Set(ctx, key, "fixture:123456", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.Redis.Set(ctx, cache.KeyBuilder().BuildOwnedEmailAttemptKey("fixture"), "invalid", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if status := runVerifyEmailHandlerStatus(t, helper, owner, email, "123456"); status != http.StatusServiceUnavailable {
+		t.Fatalf("unavailable attempt store returned %d", status)
+	}
+	if got := cache.Redis.Exists(ctx, key).Val(); got != 1 {
+		t.Fatal("a code was consumed without quota admission")
 	}
 }

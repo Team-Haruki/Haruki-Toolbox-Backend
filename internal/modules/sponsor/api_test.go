@@ -403,3 +403,48 @@ func TestAfdianCallbackLimitsBeforeOrderVerification(t *testing.T) {
 		t.Fatalf("rejected callback wrote %d orders", n)
 	}
 }
+
+func TestAfdianCallbackCapsConcurrentWorkAndReadsVerificationFields(t *testing.T) {
+	for range afdianCallbackConcurrency {
+		afdianCallbackSlots <- struct{}{}
+	}
+	t.Cleanup(func() {
+		for range afdianCallbackConcurrency {
+			<-afdianCallbackSlots
+		}
+	})
+	app := fiber.New()
+	cfg := NewAfdianConfig(AfdianConfigOptions{WebhookSecret: "fixture-callback"})
+	app.Post("/:secret", handleAfdianCallback(&harukiAPIHelper.HarukiToolboxRouterHelpers{}, cfg))
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/fixture-callback", strings.NewReader("{}")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable || resp.Header.Get("Retry-After") == "" {
+		t.Fatalf("busy callback returned %d without retry signaling", resp.StatusCode)
+	}
+
+	now := time.Now()
+	parsed, ok := parseAfdianCallbackBody([]byte(`{"data":{"order":{"status":2,"outTradeNo":"fixture","userId":7,"remark":{"untrusted":[1,2]}}}}`), now, true)
+	if !ok || parsed.OutTradeNo != "fixture" || parsed.AfdianUserID != "7" || parsed.Remark != "" {
+		t.Fatalf("unexpected callback verification fields: %+v", parsed)
+	}
+	_, ok = parseAfdianCallbackBody([]byte(`{"order":{"status":2,"out_trade_no":{"nested":1},"user_id":"7"}}`), now, true)
+	if ok {
+		t.Fatal("invalid order reference accepted")
+	}
+}
+
+func TestAfdianCallbackSecretOnlyAcceptsDocumentedOrderFields(t *testing.T) {
+	now := time.Now()
+	actual, ok := parseAfdianCallbackBody([]byte(`{"order":{"status":2,"out_trade_no":"fixture","user_id":"7","remark":"receipt"}}`), now, false)
+	if !ok || actual.Remark != "receipt" {
+		t.Fatalf("authenticated callback lost its order details: %+v", actual)
+	}
+	for _, apiConfigured := range []bool{false, true} {
+		if _, ok := parseAfdianCallbackBody([]byte(`{"order":`), now, apiConfigured); ok {
+			t.Fatal("incomplete callback payload was accepted")
+		}
+	}
+}

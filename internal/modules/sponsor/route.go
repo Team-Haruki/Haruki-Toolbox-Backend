@@ -3,6 +3,7 @@ package sponsor
 import (
 	"bytes"
 	"crypto/subtle"
+	"encoding/json/jsontext"
 	json "encoding/json/v2"
 	"errors"
 	"strings"
@@ -22,7 +23,10 @@ const (
 	AfdianCallbackBodyLimit       = 64 << 10
 	afdianCallbackRateLimitWindow = time.Minute
 	afdianCallbackRateLimitMax    = 60
+	afdianCallbackConcurrency     = 8
 )
+
+var afdianCallbackSlots = make(chan struct{}, afdianCallbackConcurrency)
 
 func RegisterSponsorRoutes(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, afdianConfig AfdianConfig) {
 	apiHelper.Router.Get("/api/misc/sponsors", handleGetSponsors(apiHelper))
@@ -78,6 +82,13 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 		if len(body) > AfdianCallbackBodyLimit {
 			return c.SendStatus(fiber.StatusRequestEntityTooLarge)
 		}
+		select {
+		case afdianCallbackSlots <- struct{}{}:
+			defer func() { <-afdianCallbackSlots }()
+		default:
+			c.Set("Retry-After", "2")
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"ec": 503})
+		}
 		// Charge traffic after the URL secret gate when that gate is enabled.
 		// A throttled delivery must remain retryable by the payment provider.
 		if apiHelper.DBManager != nil && apiHelper.DBManager.Redis != nil {
@@ -86,14 +97,8 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{"ec": 429})
 			}
 		}
-		var payload map[string]any
-
-		if err := json.UnmarshalRead(bytes.NewReader(body), &payload, jsonvalue.Numbers); err != nil {
-			return afdianAck(c)
-		}
-
 		now := time.Now().UTC()
-		parsed, ok := ParseAfdianWebhookPayload(payload, now)
+		parsed, ok := parseAfdianCallbackBody(body, now, apiConfigured)
 		if !ok {
 			return afdianAck(c)
 		}
@@ -125,4 +130,50 @@ func handleAfdianCallback(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers,
 
 		return afdianAck(c)
 	}
+}
+
+// For API-backed delivery, only extract the order reference and the fields
+// needed to check its shape. The authenticated provider supplies the details.
+func parseAfdianCallbackBody(body []byte, now time.Time, apiConfigured bool) (parsedAfdianOrder, bool) {
+	if !apiConfigured {
+		var payload map[string]any
+		if err := json.UnmarshalRead(bytes.NewReader(body), &payload, jsonvalue.Numbers); err != nil {
+			return parsedAfdianOrder{}, false
+		}
+		return ParseAfdianWebhookPayload(payload, now)
+	}
+	var envelope struct {
+		Order jsontext.Value `json:"order"`
+		Data  jsontext.Value `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return parsedAfdianOrder{}, false
+	}
+	var data struct {
+		Order jsontext.Value `json:"order"`
+	}
+	order := envelope.Order
+	if envelope.Data.Kind() == '{' && json.Unmarshal(envelope.Data, &data) == nil && data.Order.Kind() == '{' {
+		order = data.Order
+	}
+	var fields struct {
+		Status       jsontext.Value `json:"status"`
+		TradeNo      jsontext.Value `json:"out_trade_no"`
+		TradeNoCamel jsontext.Value `json:"outTradeNo"`
+		UserID       jsontext.Value `json:"user_id"`
+		UserIDCamel  jsontext.Value `json:"userId"`
+	}
+	if order.Kind() != '{' || json.Unmarshal(order, &fields) != nil {
+		return parsedAfdianOrder{}, false
+	}
+	selected := make(map[string]any, 5)
+	for name, raw := range map[string]jsontext.Value{"status": fields.Status, "out_trade_no": fields.TradeNo, "outTradeNo": fields.TradeNoCamel, "user_id": fields.UserID, "userId": fields.UserIDCamel} {
+		if kind := raw.Kind(); kind == '"' || kind == '0' {
+			var value any
+			if json.Unmarshal(raw, &value, jsonvalue.Numbers) == nil {
+				selected[name] = value
+			}
+		}
+	}
+	return parseAfdianOrder(selected, now)
 }

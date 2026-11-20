@@ -16,6 +16,7 @@ import (
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
 	harukiDatabase "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql"
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/postgresql/enttest"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 
@@ -330,5 +331,29 @@ func TestPrivateProfileCacheClearedOnUpload(t *testing.T) {
 	}
 	if env.cacheKey(cloudProfile, ownedGameUserID, testStamp+1) == profileKey {
 		t.Fatal("a new upload_time does not move the profile key")
+	}
+}
+
+func TestUnlinkedSocialAccountCannotDelegatePrivateAccess(t *testing.T) {
+	env := newPrivateTestEnv(t, nil)
+	ctx := t.Context()
+	db := env.helper.DBManager.DB
+	link := db.SocialPlatformInfo.Query().OnlyX(ctx)
+	if got := db.AuthorizeSocialPlatformInfo.Query().CountX(ctx); got != 2 {
+		t.Fatalf("expected both legacy and valid grants, got %d", got)
+	}
+	active := db.AuthorizeSocialPlatformInfo.Query()
+	postgresql.ActiveSocialGrants(active)
+	if count := active.Clone().CountX(ctx); count != 1 {
+		t.Fatalf("active grants before unlink = %d, want 1", count)
+	}
+	if _, err := db.ClearSocialLinkAndGrants(ctx, link.UserSocialPlatformInfo); err != nil {
+		t.Fatal(err)
+	}
+	if count := active.Clone().CountX(ctx); count != 0 {
+		t.Fatalf("active grants after unlink = %d, want 0", count)
+	}
+	if count := db.AuthorizeSocialPlatformInfo.Query().CountX(ctx); count != 1 {
+		t.Fatalf("unlink should preserve the other owner's grant, found %d", count)
 	}
 }

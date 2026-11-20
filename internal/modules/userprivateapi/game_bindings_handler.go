@@ -47,7 +47,7 @@ func handleGetGameBindings(apiHelper *harukiApiHelper.HarukiToolboxRouterHelpers
 						bQuery.Where(gameaccountbinding.VerifiedEQ(true))
 					})
 				})
-			postgresql.BoundSocialGrants(grantQuery)
+			postgresql.ActiveSocialGrants(grantQuery)
 			entries, err := grantQuery.All(gCtx)
 			if err != nil {
 				return err
