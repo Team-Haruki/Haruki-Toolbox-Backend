@@ -27,12 +27,18 @@ func TestNormalizeSMTPTimeout(t *testing.T) {
 
 func TestSendMailClassifiesDataAcceptance(t *testing.T) {
 	for _, tc := range []struct {
-		name, dataReply, quitReply string
-		definiteRejection          bool
+		name, rejectCommand, dataReply, quitReply string
+		failureStage                              string
+		definiteRejection                         bool
 	}{
-		{name: "data rejected", dataReply: "550 rejected", definiteRejection: true},
-		{name: "reply lost after data"},
-		{name: "quit failed after accepted data", dataReply: "250 queued", quitReply: "421 closing"},
+		{name: "authentication refused", rejectCommand: "AUTH PLAIN ", failureStage: "authenticate", definiteRejection: true},
+		{name: "sender refused", rejectCommand: "MAIL FROM:", failureStage: "mail from", definiteRejection: true},
+		{name: "recipient refused", rejectCommand: "RCPT TO:", failureStage: "recipient", definiteRejection: true},
+		{name: "data command refused", rejectCommand: "DATA", failureStage: "get data writer", definiteRejection: true},
+		{name: "data rejected", dataReply: "550 rejected", failureStage: "close data writer", definiteRejection: true},
+		{name: "reply lost after data", failureStage: "close data writer"},
+		{name: "quit failed after accepted data", dataReply: "250 queued", quitReply: "421 closing", failureStage: "quit"},
+		{name: "accepted", dataReply: "250 queued", quitReply: "221 closing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			clientConn, serverConn := net.Pipe()
@@ -44,7 +50,7 @@ func TestSendMailClassifiesDataAcceptance(t *testing.T) {
 			serverResult := make(chan error, 1)
 			go func() {
 				defer serverConn.Close()
-				serverResult <- simulateSMTPAcceptance(textproto.NewConn(serverConn), tc.dataReply, tc.quitReply)
+				serverResult <- simulateSMTPAcceptance(textproto.NewConn(serverConn), tc.rejectCommand, tc.dataReply, tc.quitReply)
 			}()
 
 			client, err := stdsmtp.NewClient(clientConn, "localhost")
@@ -54,7 +60,11 @@ func TestSendMailClassifiesDataAcceptance(t *testing.T) {
 			defer client.Close()
 			err = sendMailWithClient(client, stdsmtp.PlainAuth("", "fixture", "fixture", "localhost"),
 				"sender@example.test", []string{"recipient@example.test"}, []byte("fixture message"))
-			if err == nil || errors.Is(err, ErrMessageNotAccepted) != tc.definiteRejection {
+			if tc.failureStage == "" {
+				if err != nil {
+					t.Fatalf("accepted message returned an error: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.failureStage) || errors.Is(err, ErrMessageNotAccepted) != tc.definiteRejection {
 				t.Fatalf("unexpected classification: %v", err)
 			}
 			if err := <-serverResult; err != nil {
@@ -64,7 +74,7 @@ func TestSendMailClassifiesDataAcceptance(t *testing.T) {
 	}
 }
 
-func simulateSMTPAcceptance(server *textproto.Conn, dataReply, quitReply string) error {
+func simulateSMTPAcceptance(server *textproto.Conn, rejectCommand, dataReply, quitReply string) error {
 	if err := server.PrintfLine("220 fixture"); err != nil {
 		return err
 	}
@@ -79,6 +89,9 @@ func simulateSMTPAcceptance(server *textproto.Conn, dataReply, quitReply string)
 		line, err := server.ReadLine()
 		if err != nil || !strings.HasPrefix(line, exchange.command) {
 			return fmt.Errorf("waiting for %s: unexpected command or read error %v", exchange.command, err)
+		}
+		if exchange.command == rejectCommand {
+			return server.PrintfLine("550 refused")
 		}
 		if err := server.PrintfLine("%s", exchange.reply); err != nil {
 			return err

@@ -425,6 +425,37 @@ func TestEmailSendRefundOnlyAffectsItsOriginalWindowsOnce(t *testing.T) {
 	assertCounts(third[:3], 1)
 }
 
+func TestEmailSendStopsBeforeWritingChallengeWhenQuotaStoreFails(t *testing.T) {
+	t.Parallel()
+	helper, cache, ctx := newEmailVerifyTestHelper(t)
+	const owner, email = "owner", "123456@qq.com"
+	helper.SMTPClient = &smtp.HarukiSMTPClient{}
+	target := cache.KeyBuilder().BuildEmailVerifySendRateLimitTargetKey(email)
+	if err := cache.Redis.Set(ctx, target, "invalid counter", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	app.Post("/", func(c fiber.Ctx) error {
+		return SendEmailHandler(c, owner, email, "valid", helper, captchaResult{
+			response: &harukiCloudflare.TurnstileResponse{Success: true},
+		})
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusServiceUnavailable || !strings.Contains(string(raw), "verification service unavailable") {
+		t.Fatalf("quota failure returned status %d, read error %v", resp.StatusCode, err)
+	}
+	challenge := cache.KeyBuilder().BuildOwnedEmailVerifyKey(owner, email)
+	count, err := cache.Redis.Exists(ctx, challenge, harukiRedis.BuildQQMailSendRateLimitUserKey(owner)).Result()
+	if err != nil || count != 0 {
+		t.Fatalf("quota failure stored a challenge or charged another bucket, count %d, err %v", count, err)
+	}
+}
+
 func TestVerificationFailsClosedWhenRateStoreIsUnavailable(t *testing.T) {
 	t.Parallel()
 	helper, cache, ctx := newEmailVerifyTestHelper(t)
