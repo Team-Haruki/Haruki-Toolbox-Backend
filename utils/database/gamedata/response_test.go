@@ -506,7 +506,7 @@ func TestPublishedWholeDocumentPreservesSmallExtraFields(t *testing.T) {
 	c := catalog.Mysekai()
 	r := newTestRow(t, c, map[string]string{"updatedResources.userMysekaiPhotos": "[1]"},
 		`{"additionalField":[2],"updatedResources":{"additionalChild":[3]}}`)
-	body, err := r.MysekaiBody(nil)
+	body, err := r.PublishedMysekaiBody(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,14 +520,10 @@ func TestPublishedWholeDocumentPreservesSmallExtraFields(t *testing.T) {
 	}
 }
 
-func TestFilteredMysekaiBodyEmitsOnlyProjectedFields(t *testing.T) {
+func TestPublishedMysekaiBodyEmitsOnlyProjectedFields(t *testing.T) {
 	row := newTestRow(t, catalog.Mysekai(), nil, `{"visible":true,"otherField":false}`)
-	body, err := row.FilteredMysekaiBody([]string{"_id", "visible"})
+	body, err := row.PublishedMysekaiBody([]string{"_id", "visible"})
 	if err != nil || string(body) != `{"_id":28808221489823746,"visible":true}` {
 		t.Fatalf("filtered body = %s, %v", body, err)
-	}
-	body, err = row.FilteredMysekaiBody(nil)
-	if err != nil || string(body) != "{}" {
-		t.Fatalf("empty projection = %s, %v", body, err)
 	}
 }

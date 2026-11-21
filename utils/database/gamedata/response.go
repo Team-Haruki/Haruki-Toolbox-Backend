@@ -167,11 +167,9 @@ func (r *Row) MysekaiBody(keys []string) ([]byte, error) {
 	return r.mysekaiBody(keys, true)
 }
 
-// FilteredMysekaiBody renders exactly the supplied top-level projection.
-func (r *Row) FilteredMysekaiBody(keys []string) ([]byte, error) {
-	if len(keys) == 0 {
-		return []byte("{}"), nil
-	}
+// PublishedMysekaiBody renders exactly the selected fields. Callers that allow
+// an unfiltered read pass nil to render the full game-data document.
+func (r *Row) PublishedMysekaiBody(keys []string) ([]byte, error) {
 	return r.mysekaiBody(keys, false)
 }
 

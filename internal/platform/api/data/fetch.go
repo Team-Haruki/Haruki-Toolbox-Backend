@@ -147,8 +147,32 @@ func HandleMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.Haruki
 	return mysekaiBodyFromPostgres(ctx, apiHelper.DBManager.GameData.Mysekai(), userID, server, keys)
 }
 
-func mysekaiAllowedProjection(requestKey string, allowedKeys []string) ([]string, error) {
+// HandleUnfilteredMysekaiRequest reads a Mysekai document after the caller has
+// authorized access to the account. An explicit key selects only that projection.
+func HandleUnfilteredMysekaiRequest(ctx context.Context, apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpers, userID int64, server harukiUtils.SupportedDataUploadServer, requestKey string) (any, error) {
+	keys, err := mysekaiRequestedKeys(requestKey)
+	if err != nil {
+		return nil, err
+	}
+	return mysekaiBodyFromPostgres(ctx, apiHelper.DBManager.GameData.Mysekai(), userID, server, keys)
+}
+
+func mysekaiRequestedKeys(requestKey string) ([]string, error) {
 	if err := ValidateGameDataKeySelection(requestKey); err != nil {
+		return nil, err
+	}
+	if requestKey == "" {
+		return nil, nil
+	}
+	if key, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
+		return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
+	}
+	return strings.Split(requestKey, ","), nil
+}
+
+func mysekaiAllowedProjection(requestKey string, allowedKeys []string) ([]string, error) {
+	keys, err := mysekaiRequestedKeys(requestKey)
+	if err != nil {
 		return nil, err
 	}
 	allowed := make(map[string]struct{}, len(allowedKeys))
@@ -161,11 +185,7 @@ func mysekaiAllowedProjection(requestKey string, allowedKeys []string) ([]string
 			}
 		}
 	}
-	if requestKey != "" {
-		if key, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
-			return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
-		}
-		keys := strings.Split(requestKey, ",")
+	if len(keys) != 0 {
 		for _, key := range keys {
 			if _, ok := allowed[key]; !ok {
 				return nil, fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("Invalid request key: %s", key))
