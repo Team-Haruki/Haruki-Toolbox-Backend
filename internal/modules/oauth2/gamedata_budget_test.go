@@ -23,12 +23,12 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 	key := harukiRedis.BuildVersionedGameDataCacheKey("oauth2", "jp", "mysekai", 123, "", 100, env.db.GameData.HarvestSchemaFingerprint("jp"))
 	allowedKeys := []string{"isEnabled"}
 	env.apiHelper.RuntimeConfig = runtimeconfig.New(runtimeconfig.Snapshot{AllowedKeys: allowedKeys}, nil)
-	cachePrefix := key + data.PublishedGameDataCacheVersion + ":a="
-	currentKey := cachePrefix + data.PublicAllowlistDigest([]string{"isEnabled", "updatedResources"})
+	cachePrefix := key + data.PublishedGameDataCacheVersion
+	currentKey := cachePrefix + ":mysekai-full"
 	env.redis.Set(key, `{"legacy":true}`)
-	env.redis.Set(key+data.PublishedGameDataCacheVersion, `{"legacy":true}`)
-	env.redis.Set(cachePrefix+data.PublicAllowlistDigest(allowedKeys), `{"isEnabled":true}`)
-	const currentBody = `{"isEnabled":true,"updatedResources":{"userMysekaiItems":[1]}}`
+	env.redis.Set(cachePrefix, `{"legacy":true}`)
+	env.redis.Set(cachePrefix+":a="+data.PublicAllowlistDigest([]string{"isEnabled", "updatedResources"}), `{"isEnabled":true}`)
+	const currentBody = `{"isEnabled":true,"updatedResources":{"userMysekaiItems":[1]},"fixtureUnlistedField":true}`
 	env.redis.Set(currentKey, currentBody)
 	env.app.Get("/game/:server/:data_type/:user_id", func(c fiber.Ctx) error {
 		c.Locals("userID", "owner")
@@ -72,11 +72,7 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 		check("", http.StatusServiceUnavailable)
 	}()
 	check("", http.StatusOK)
-	env.apiHelper.SetAllowedKeys([]string{"isEnabled", "updatedResources"})
-	check("", http.StatusOK)
 	env.apiHelper.SetAllowedKeys([]string{"upload_time"})
-	check("", http.StatusInternalServerError)
-	env.apiHelper.SetAllowedKeys(allowedKeys)
 	check("", http.StatusOK)
 	env.redis.Del(currentKey)
 	check("", http.StatusInternalServerError)

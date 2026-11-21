@@ -294,9 +294,8 @@ type SekaiAPIConfig struct {
 }
 
 type OthersConfig struct {
-	// AllowedKeys controls top-level field projection on the public API,
-	// OAuth2 game-data and owned-account endpoints. OAuth2 Mysekai also serves
-	// updatedResources after checking account ownership or a read grant.
+	// AllowedKeys controls top-level field projection for public and owned-account
+	// game-data reads and for OAuth2 Suite reads.
 	//
 	// DeprecatedPublicAPIAllowedKeys is the former name of the same field, still
 	// read so an existing config file keeps working; it is folded into

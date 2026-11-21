@@ -74,7 +74,12 @@ func mysekaiBodyFromPostgres(
 	if len(keys) > 0 && !row.HasAny(keys) {
 		return nil, fiber.NewError(fiber.StatusNotFound, "Player data not found.")
 	}
-	body, err := row.FilteredMysekaiBody(keys)
+	var body []byte
+	if len(keys) == 0 {
+		body, err = row.MysekaiBody(nil)
+	} else {
+		body, err = row.FilteredMysekaiBody(keys)
+	}
 	if errors.Is(err, harukiGameData.ErrPublishedResponseTooLarge) {
 		return nil, fiber.NewError(fiber.StatusUnprocessableEntity, harukiGameData.ErrPublishedResponseTooLarge.Error())
 	}

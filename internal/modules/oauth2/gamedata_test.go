@@ -45,7 +45,7 @@ func TestOAuth2GameDataGrantableTypes(t *testing.T) {
 	}
 }
 
-func TestOAuth2MysekaiReadsUpdatedResourcesFromPostgres(t *testing.T) {
+func TestOAuth2MysekaiFieldSelectionFromPostgres(t *testing.T) {
 	dsn := os.Getenv("GAMEDATA_OAUTH_TEST_PG")
 	if dsn == "" {
 		t.Skip("set GAMEDATA_OAUTH_TEST_PG to a disposable database")
@@ -120,13 +120,22 @@ func TestOAuth2MysekaiReadsUpdatedResourcesFromPostgres(t *testing.T) {
 			string(resources["userMysekaiItems"]) != "[1,2]" || string(resources["userMysekaiGates"]) != "[3]" {
 			t.Fatalf("GET %s returned unexpected nested resources: %s (%v)", query, body["updatedResources"], err)
 		}
-		if body["fixtureUnlistedField"] != nil || query != "" && len(body) != 1 || query == "" && string(body["upload_time"]) != strconv.FormatInt(stamp, 10) {
+		if query != "" && len(body) != 1 || query == "" &&
+			(len(body) != 3 || string(body["fixtureUnlistedField"]) != "true" || string(body["upload_time"]) != strconv.FormatInt(stamp, 10)) {
 			t.Fatalf("GET %s returned unexpected projection: %v", query, body)
 		}
 	}
-	get("owner", "?key=fixtureUnlistedField", "", http.StatusBadRequest)
+	body, _ := get("owner", "?key=fixtureUnlistedField", "", http.StatusOK)
+	if len(body) != 1 || string(body["fixtureUnlistedField"]) != "true" {
+		t.Fatalf("explicit key returned unexpected projection: %v", body)
+	}
+	get("owner", "?key=fixtureMissingField", "", http.StatusNotFound)
+	get("owner", "?key=updatedResources.userMysekaiItems", "", http.StatusBadRequest)
 	query := "?key=updatedResources,upload_time&known_upload_time=" + strconv.FormatInt(stamp, 10)
-	_, header := get("grantee", query, "", http.StatusOK)
+	body, header := get("grantee", query, "", http.StatusOK)
+	if len(body) != 2 || len(body["updatedResources"]) == 0 || string(body["upload_time"]) != strconv.FormatInt(stamp, 10) {
+		t.Fatalf("multiple keys returned unexpected projection: %v", body)
+	}
 	etag := header.Get(fiber.HeaderETag)
 	if etag == "" {
 		t.Fatal("response did not carry a validator for the OAuth2 projection")

@@ -35,21 +35,11 @@ const (
 // reports true when the client already holds the current document, in which
 // case the caller responds 304.
 //
-// publicKeyFiltered is true on the public and OAuth2 surfaces, whose responses
-// are filtered through the public-API key allowlist; those callers pass the
-// allowlist they already fetched for this request (resolving it is a Redis
-// round trip, so it is fetched once per request and shared with the read-key
-// digest). The private surface passes false and nil. The conditional read is
-// disabled whenever answering 304 could diverge
-// from what the full path would say about the same request: a non-empty key
-// filter must include upload_time (otherwise the client cannot maintain its
-// stamp, and on allowlisted surfaces an existing document can project to an
-// empty result, which the full path 404s), on filtered surfaces the operator
-// must not have excluded upload_time from the allowlist (the 304/200
-// distinction is an equality oracle on a stamp the body itself would not
-// reveal) and the key filter must be one the full path accepts, and on the
-// private surface `$`-containing, dotted and empty key segments are skipped so the
-// full path keeps owning their outcome.
+// publicKeyFiltered is true when the response uses the shared field allowlist.
+// Those callers pass the allowlist they fetched for this request. A conditional
+// response requires a projection the full read accepts and that exposes
+// upload_time. This lets the client maintain its stamp and keeps the conditional
+// response consistent with the full read's data and error semantics.
 //
 // The check is a pure optimization and never introduces a new failure mode:
 // malformed values are ignored the way HTTP ignores an unparsable
@@ -71,10 +61,7 @@ func CheckNotModified(
 		if _, err := mysekaiAllowedProjection(requestKey, publicAllowedKeys); err != nil || stamp <= 0 {
 			return false
 		}
-		etag := mysekaiPolicyETag(c.Path(), requestKey, publicAllowedKeys, stamp)
-		c.Set(fiber.HeaderETag, etag)
-		// A timestamp alone cannot prove the client has this field policy.
-		if !matchesPolicyETag(c.Request().Header.PeekAll(fiber.HeaderIfNoneMatch), etag) {
+		if !matchesMysekaiETag(c, requestKey, publicAllowedKeys, stamp) {
 			return false
 		}
 	}
@@ -106,11 +93,7 @@ func CheckNotModified(
 			return false
 		}
 	} else if _, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
-		// The private surface has no key allowlist, but a dotted, empty, or
-		// $-containing key segment is one the full path has always handled on
-		// its own (under MongoDB a nested projection or a projection error);
-		// skip the conditional answer and let the full path behave exactly as
-		// it always has.
+		// Let the full read handle unsupported key syntax.
 		return false
 	}
 	if !notModifiedDecision(known, stamp, time.Now().Unix(), stamp > 0) {
@@ -122,6 +105,25 @@ func CheckNotModified(
 	appendVaryAcceptEncoding(c)
 	c.Set(HeaderUploadTime, strconv.FormatInt(stamp, 10))
 	return true
+}
+
+// CheckUnfilteredMysekaiNotModified uses a validator for the full field policy,
+// so clients refresh any response cached under the former OAuth2 allowlist.
+func CheckUnfilteredMysekaiNotModified(c fiber.Ctx, requestKey string, stamp int64) bool {
+	if stamp <= 0 {
+		return false
+	}
+	if _, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
+		return false
+	}
+	return matchesMysekaiETag(c, requestKey, nil, stamp) &&
+		CheckNotModified(c, harukiUtils.UploadDataTypeMysekai, requestKey, false, nil, stamp)
+}
+
+func matchesMysekaiETag(c fiber.Ctx, requestKey string, allowedKeys []string, stamp int64) bool {
+	etag := mysekaiPolicyETag(c.Path(), requestKey, allowedKeys, stamp)
+	c.Set(fiber.HeaderETag, etag)
+	return matchesPolicyETag(c.Request().Header.PeekAll(fiber.HeaderIfNoneMatch), etag)
 }
 
 // Match a quoted validator by weak comparison. A wildcard does not

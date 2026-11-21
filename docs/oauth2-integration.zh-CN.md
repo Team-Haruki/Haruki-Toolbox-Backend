@@ -860,7 +860,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 - `GET /api/oauth2/game-data/:server/:data_type/:user_id`
 - 需要 scope：`game-data:read`
-- MYSEKAI 的默认响应包含已保存的 `updatedResources` 对象，也支持用 `key=updatedResources` 单独查询该对象。其他顶层字段按配置的白名单返回。MYSEKAI 客户端用 `If-None-Match` 回传同一资源的 `ETag`，并提供 `known_upload_time`，才能在字段策略和数据都匹配时收到 304。
+- MYSEKAI 默认返回该账号已保存的游戏数据。`key` 接受一个或多个用逗号分隔的顶层字段名，响应对象只包含请求中存在的字段。例如 `key=updatedResources` 返回 `{"updatedResources":{...}}`，保留其中的嵌套结构。请求的字段全部不存在时返回 404。
 
 该接口还会校验 token 对应的用户拥有这个已验证的绑定，或持有当前所有者授予的有效读授权（见 §7.4）；不满足时返回 404。
 
@@ -876,7 +876,8 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 - 若数据未更新，返回 `304 Not Modified`（空响应体，附带 `X-Upload-Time` 响应头），客户端应继续使用本地数据；原本"先探测 `upload_time` 再拉全量"的两次请求可以合并为一次
 - 若数据已更新（或服务端无法确认未变化），返回完整数据，行为与不带该参数时完全一致；此时应从响应体的 `upload_time` 刷新本地记录 —— 完整响应**不附带** `X-Upload-Time` 头，时间戳一律以响应体为准
 - 参数值非法时按未携带处理（类比 HTTP 对不可解析 `If-Modified-Since` 的处理），不会报错
-- 该参数不改变鉴权与字段可见性：非私有接口的字段白名单不含 `upload_time` 时，该参数会被忽略；`key` 过滤无效时不会返回 304，而是照常返回原有错误
+- MYSEKAI 客户端还需通过 `If-None-Match` 回传同一路径和 `key` 投影的 `ETag`。服务端在数据和投影都匹配时才返回 304
+- 使用字段白名单的读取若未放行 `upload_time`，会忽略该参数。`key` 过滤无效时按原有错误处理
 - 时间戳精度为 unix 秒，同一秒内的多次上传无法区分；服务端对时间戳有至多约 60 秒的短记忆，数据刚更新后的极短窗口内可能仍返回 304。**对一致性极敏感的场景请直接拉取完整数据**
 - public API 与 private token API 的同形数据读取接口同样支持该参数
 

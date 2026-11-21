@@ -180,6 +180,43 @@ func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
 	}
 }
 
+func TestUnfilteredMysekaiConditionalReadRefreshesAllowlistedBody(t *testing.T) {
+	const stamp = 1752600000
+	const path = "/mysekai/123"
+	current := mysekaiPolicyETag(path, "", nil, stamp)
+	old := mysekaiPolicyETag(path, "", []string{"upload_time", "updatedResources"}, stamp)
+	app := fiber.New()
+	app.Get(path, func(c fiber.Ctx) error {
+		if CheckUnfilteredMysekaiNotModified(c, c.Query("key"), stamp) {
+			return c.SendStatus(http.StatusNotModified)
+		}
+		return c.SendStatus(http.StatusOK)
+	})
+	for _, tc := range []struct {
+		name, key, validator, wantETag string
+		status                         int
+	}{
+		{"no validator", "", "", current, http.StatusOK},
+		{"old allowlist", "", old, current, http.StatusOK},
+		{"same projection", "", current, current, http.StatusNotModified},
+		{"other projection", "upload_time", current, mysekaiPolicyETag(path, "upload_time", nil, stamp), http.StatusOK},
+		{"dotted key", "updatedResources.items", current, "", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000&key="+tc.key, nil)
+			req.Header.Set(fiber.HeaderIfNoneMatch, tc.validator)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if got := resp.Header.Get(fiber.HeaderETag); resp.StatusCode != tc.status || got != tc.wantETag {
+				t.Fatalf("got status=%d etag=%q, want %d %q", resp.StatusCode, got, tc.status, tc.wantETag)
+			}
+		})
+	}
+}
+
 func TestMysekaiConditionalReadRejectsExcludedProjection(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
