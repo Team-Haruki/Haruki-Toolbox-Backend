@@ -61,6 +61,7 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 		}
 	}
 	check("?key=sample,sample", http.StatusBadRequest)
+	check("?key=updatedResources.items", http.StatusBadRequest)
 	func() {
 		for range 4 {
 			release, ok := data.ReservePublishedGameDataRead()
@@ -76,6 +77,44 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 	check("", http.StatusOK)
 	env.redis.Del(currentKey)
 	check("", http.StatusInternalServerError)
+	env.redis.Set(harukiRedis.BuildGameDataStampMemoKey("jp", "mysekai", 123), "0")
+	check("?known_upload_time=100", http.StatusInternalServerError)
+}
+
+func TestOAuth2SuiteKeepsAllowlistAndCachedProjection(t *testing.T) {
+	env := newDeviceTestEnv(t)
+	ctx := t.Context()
+	env.db.DB.User.Create().SetID("owner").SetName("Owner").SetEmail("owner@example.test").ExecX(ctx)
+	env.db.DB.GameAccountBinding.Create().SetUserID("owner").SetServer("jp").SetGameUserID("123").SetVerified(true).ExecX(ctx)
+	allowed := []string{"upload_time", "userCards"}
+	env.apiHelper.SetAllowedKeys(allowed)
+	env.redis.Set(harukiRedis.BuildGameDataStampMemoKey("jp", "suite", 123), "100")
+	key := harukiRedis.BuildVersionedGameDataCacheKey("oauth2", "jp", "suite", 123, "", 100, env.db.GameData.HarvestSchemaFingerprint("jp"))
+	const cached = `{"upload_time":100,"userCards":[]}`
+	env.redis.Set(key+data.PublishedGameDataCacheVersion+":a="+data.PublicAllowlistDigest(allowed), cached)
+	env.app.Get("/game/:server/:data_type/:user_id", func(c fiber.Ctx) error {
+		c.Locals("userID", "owner")
+		return c.Next()
+	}, handleOAuth2GetGameData(env.apiHelper))
+
+	for _, tc := range []struct {
+		query string
+		want  int
+	}{
+		{"", http.StatusOK},
+		{"?known_upload_time=100", http.StatusNotModified},
+		{"?key=updatedResources&known_upload_time=100", http.StatusBadRequest},
+	} {
+		resp, err := env.app.Test(httptest.NewRequest(http.MethodGet, "/game/jp/suite/123"+tc.query, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil || resp.StatusCode != tc.want || tc.want == http.StatusOK && string(body) != cached {
+			t.Fatalf("GET %s returned %d %s, %v, want %d", tc.query, resp.StatusCode, body, err, tc.want)
+		}
+	}
 }
 
 func TestHydraPublicProxyRejectsUnsupportedRepresentations(t *testing.T) {
