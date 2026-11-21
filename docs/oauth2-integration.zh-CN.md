@@ -860,7 +860,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 - `GET /api/oauth2/game-data/:server/:data_type/:user_id`
 - 需要 scope：`game-data:read`
-- MYSEKAI 的默认响应与 `key` 投影均受字段白名单约束。MYSEKAI 客户端用 `If-None-Match` 回传同一资源的 `ETag`，并提供 `known_upload_time`，才能在字段策略和数据都匹配时收到 304。
+- MYSEKAI 的默认响应包含已保存的 `updatedResources` 对象，也支持用 `key=updatedResources` 单独查询该对象。其他顶层字段按配置的白名单返回。MYSEKAI 客户端用 `If-None-Match` 回传同一资源的 `ETag`，并提供 `known_upload_time`，才能在字段策略和数据都匹配时收到 304。
 
 该接口还会校验 token 对应的用户拥有这个已验证的绑定，或持有当前所有者授予的有效读授权（见 §7.4）；不满足时返回 404。
 
@@ -868,7 +868,7 @@ curl -X POST 'https://toolbox-api-direct.haruki.seiunx.com/api/oauth2/revoke' \
 
 - `suite` 数据中的 `userGamedata.userId` 保持原有 number 字段
 - 同时返回 `userGamedata.userIdString` 作为字符串镜像，**JS / TS 客户端应优先读取该字段**以避免 64 位整数精度丢失
-- Suite 响应暴露顶层 `_id` 时会同时返回 `_idString`。MYSEKAI 顶层字段按白名单返回。
+- Suite 响应暴露顶层 `_id` 时会同时返回 `_idString`。
 
 **条件拉取**（避免重复拉取未变化的数据）：
 

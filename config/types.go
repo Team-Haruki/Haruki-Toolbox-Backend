@@ -294,10 +294,9 @@ type SekaiAPIConfig struct {
 }
 
 type OthersConfig struct {
-	// AllowedKeys bounds which top-level game-data keys every NON-PRIVATE API
-	// may serve. One list, shared by the public API, the OAuth2 game-data
-	// endpoint and the owned-account endpoint. The private API is not bound by
-	// it — it is an internal surface with no external callers.
+	// AllowedKeys controls top-level field projection on the public API,
+	// OAuth2 game-data and owned-account endpoints. OAuth2 Mysekai also serves
+	// updatedResources after checking account ownership or a read grant.
 	//
 	// DeprecatedPublicAPIAllowedKeys is the former name of the same field, still
 	// read so an existing config file keeps working; it is folded into

@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/api/data"
 	harukiOAuth2 "github.com/Team-Haruki/Haruki-Toolbox-Backend/internal/platform/oauth2"
 	harukiUtils "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils"
+	"github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/gamedata/catalog"
 	harukiRedis "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/database/redis"
 	harukiLogger "github.com/Team-Haruki/Haruki-Toolbox-Backend/utils/logger"
 
@@ -87,6 +89,12 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game-data field policy unavailable", nil)
 			}
 			allowedKeys = snapshot.AllowedKeys
+			// updatedResources is part of the authorized OAuth2 Mysekai
+			// contract. Include it in the policy used by projection, caches and ETags.
+			resourcesKey := catalog.Mysekai().FlattenKey
+			if !slices.Contains(allowedKeys, resourcesKey) {
+				allowedKeys = append(slices.Clone(allowedKeys), resourcesKey)
+			}
 		} else {
 			allowedKeys = apiHelper.GetAllowedKeys()
 		}
