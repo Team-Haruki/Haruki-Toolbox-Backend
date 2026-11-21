@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,10 +23,13 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 	key := harukiRedis.BuildVersionedGameDataCacheKey("oauth2", "jp", "mysekai", 123, "", 100, env.db.GameData.HarvestSchemaFingerprint("jp"))
 	allowedKeys := []string{"isEnabled"}
 	env.apiHelper.RuntimeConfig = runtimeconfig.New(runtimeconfig.Snapshot{AllowedKeys: allowedKeys}, nil)
-	currentKey := key + data.PublishedGameDataCacheVersion + ":a=" + data.PublicAllowlistDigest(allowedKeys)
+	cachePrefix := key + data.PublishedGameDataCacheVersion + ":a="
+	currentKey := cachePrefix + data.PublicAllowlistDigest([]string{"isEnabled", "updatedResources"})
 	env.redis.Set(key, `{"legacy":true}`)
 	env.redis.Set(key+data.PublishedGameDataCacheVersion, `{"legacy":true}`)
-	env.redis.Set(currentKey, `{"isEnabled":true}`)
+	env.redis.Set(cachePrefix+data.PublicAllowlistDigest(allowedKeys), `{"isEnabled":true}`)
+	const currentBody = `{"isEnabled":true,"updatedResources":{"userMysekaiItems":[1]}}`
+	env.redis.Set(currentKey, currentBody)
 	env.app.Get("/game/:server/:data_type/:user_id", func(c fiber.Ctx) error {
 		c.Locals("userID", "owner")
 		return c.Next()
@@ -45,9 +49,15 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		defer resp.Body.Close()
 		if resp.StatusCode != want {
 			t.Fatalf("GET %s returned %d, want %d", query, resp.StatusCode, want)
+		}
+		if want == http.StatusOK {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil || string(body) != currentBody {
+				t.Fatalf("GET %s returned %q, %v, want %s", query, body, err, currentBody)
+			}
 		}
 	}
 	check("?key=sample,sample", http.StatusBadRequest)
@@ -61,6 +71,8 @@ func TestGameDataOAuthReadChecksSelectionAndUsesBoundedCache(t *testing.T) {
 		}
 		check("", http.StatusServiceUnavailable)
 	}()
+	check("", http.StatusOK)
+	env.apiHelper.SetAllowedKeys([]string{"isEnabled", "updatedResources"})
 	check("", http.StatusOK)
 	env.apiHelper.SetAllowedKeys([]string{"upload_time"})
 	check("", http.StatusInternalServerError)

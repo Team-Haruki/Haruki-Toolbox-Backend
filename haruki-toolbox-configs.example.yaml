@@ -317,9 +317,8 @@ subscription:
   request_timeout_seconds: 5
 
 others:
-  # One allowlist for EVERY non-private API: the public endpoints, the OAuth2
-  # game-data endpoint and the owned-account endpoint all use this list. The
-  # private API is not bound by it (internal surface, no external callers).
+  # Shared field allowlist for public, OAuth2 game-data and owned-account reads.
+  # OAuth2 Mysekai also serves updatedResources after its account access check.
   #
   # `public_api_allowed_keys` is the former name and is still accepted.
   allowed_keys:
