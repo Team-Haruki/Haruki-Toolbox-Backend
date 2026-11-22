@@ -11,25 +11,34 @@ import (
 
 var errBindingConflict = errors.New("afdian binding conflict")
 
-// Before the method field was introduced, OAuth was the only binding path.
-func hasAfdianOAuthProof(u *postgresql.User) bool {
-	return u != nil && u.AfdianUserID != nil && *u.AfdianUserID != "" &&
-		(u.AfdianVerificationMethod == nil || *u.AfdianVerificationMethod == user.AfdianVerificationMethodOauth2)
-}
-
-func (h *handlers) bindIdentity(ctx context.Context, uid, afdianID string) error {
-	n, err := h.api.DBManager.DB.User.Update().Where(user.IDEQ(uid),
-		user.Or(user.AfdianUserIDIsNil(), user.AfdianUserIDEQ(afdianID))).
-		SetAfdianUserID(afdianID).SetAfdianBoundAt(time.Now().UTC()).
-		SetAfdianVerificationMethod(user.AfdianVerificationMethodOauth2).Save(ctx)
+// Both proofs share the same unique identity claim. Neither another order
+// from the same sponsor nor another verification method bypasses ownership.
+func (h *handlers) bindIdentity(ctx context.Context, uid, afdianID, method string) error {
+	update := h.api.DBManager.DB.User.Update().Where(user.IDEQ(uid),
+		user.Or(user.AfdianUserIDIsNil(), user.AfdianUserIDEQ(afdianID)))
+	if method == "order" {
+		// Do not downgrade an OAuth proof, including pre-method-column links.
+		update.Where(user.Or(user.AfdianUserIDIsNil(), user.AfdianVerificationMethodEQ("order")))
+	}
+	n, err := update.SetAfdianUserID(afdianID).SetAfdianBoundAt(time.Now().UTC()).
+		SetAfdianVerificationMethod(user.AfdianVerificationMethod(method)).Save(ctx)
 	if postgresql.IsConstraintError(err) {
 		return errBindingConflict
 	}
 	if err != nil {
 		return err
 	}
-	if n != 1 {
-		return errBindingConflict
+	if n == 1 {
+		return nil
 	}
-	return nil
+	if method == "order" {
+		matches, err := h.api.DBManager.DB.User.Query().Where(user.IDEQ(uid), user.AfdianUserIDEQ(afdianID)).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if matches {
+			return nil
+		}
+	}
+	return errBindingConflict
 }
