@@ -5,7 +5,7 @@ package version
 // to inject them; a missing -X target is silently dropped, which is why they are
 // kept in sync with the build args that set them.
 var (
-	Version   = "v9.5.2"
+	Version   = "v9.5.3"
 	Commit    = "unknown"
 	BuildDate = "unknown"
 )
