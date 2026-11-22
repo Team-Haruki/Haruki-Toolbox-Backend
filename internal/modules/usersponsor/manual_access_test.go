@@ -25,7 +25,7 @@ func TestManualSponsorAccessControlsOwnerAndBotWithoutAfdian(t *testing.T) {
 	}
 	e.db.User.UpdateOneID("alice").SetSponsorAccessOverride(user.SponsorAccessOverrideBlocked).ExecX(ctx)
 	// Even a new successful verification must not undo an administrative block.
-	if err := e.h.bindIdentity(ctx, "alice", "afdian-alice"); err != nil {
+	if err := e.h.bindIdentity(ctx, "alice", "afdian-alice", "order"); err != nil {
 		t.Fatal(err)
 	}
 	e.db.Sponsor.Create().SetID("afdian_alice").SetAfdianUserID("afdian-alice").SaveX(ctx)

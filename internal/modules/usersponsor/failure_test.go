@@ -88,7 +88,6 @@ func TestVerificationRefusesUnavailableRateLimitStore(t *testing.T) {
 		t.Fatal("unconfigured orders were enabled")
 	}
 	calls := mockOrders(t, e, nil, 200, 200)
-	e.db.User.UpdateOneID("alice").SetAfdianUserID("afdian-alice").SetAfdianVerificationMethod("oauth2").ExecX(t.Context())
 	manager := e.h.api.DBManager.Redis
 	for _, nilManager := range []bool{true, false} {
 		if nilManager {
