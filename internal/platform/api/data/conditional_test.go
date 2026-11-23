@@ -158,10 +158,10 @@ func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
 		status int
 	}{
 		{"", http.StatusOK},
-		{mysekaiPolicyETag(path, "", []string{"upload_time", "userMysekaiGates"}, stamp), http.StatusOK},
-		{mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
-		{`"quoted,comma", W/` + mysekaiPolicyETag(path, "", current, stamp), http.StatusNotModified},
-		{`"` + strings.Trim(mysekaiPolicyETag(path, "", current, stamp), `"`) + `,other"`, http.StatusOK},
+		{mysekaiPolicyETag(path, "", []string{"upload_time", "userMysekaiGates"}, stamp, ""), http.StatusOK},
+		{mysekaiPolicyETag(path, "", current, stamp, ""), http.StatusNotModified},
+		{`"quoted,comma", W/` + mysekaiPolicyETag(path, "", current, stamp, ""), http.StatusNotModified},
+		{`"` + strings.Trim(mysekaiPolicyETag(path, "", current, stamp, ""), `"`) + `,other"`, http.StatusOK},
 		{"*", http.StatusOK},
 	} {
 		req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
@@ -171,7 +171,7 @@ func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
 			t.Fatal(err)
 		}
 		resp.Body.Close()
-		if resp.StatusCode != tc.status || resp.Header.Get(fiber.HeaderETag) != mysekaiPolicyETag(path, "", current, stamp) {
+		if resp.StatusCode != tc.status || resp.Header.Get(fiber.HeaderETag) != mysekaiPolicyETag(path, "", current, stamp, "") {
 			t.Fatalf("conditional read: status=%d etag=%q", resp.StatusCode, resp.Header.Get(fiber.HeaderETag))
 		}
 	}
@@ -180,14 +180,16 @@ func TestMysekaiConditionalReadRequiresCurrentPolicy(t *testing.T) {
 	}
 }
 
-func TestUnfilteredMysekaiConditionalReadRefreshesAllowlistedBody(t *testing.T) {
+func TestUnfilteredMysekaiConditionalReadUsesCurrentRepresentation(t *testing.T) {
 	const stamp = 1752600000
 	const path = "/mysekai/123"
-	current := mysekaiPolicyETag(path, "", nil, stamp)
-	old := mysekaiPolicyETag(path, "", []string{"upload_time", "updatedResources"}, stamp)
+	const currentHarvest = "restoration-v2"
+	current := mysekaiPolicyETag(path, "", nil, stamp, currentHarvest)
+	oldHarvest := mysekaiPolicyETag(path, "", nil, stamp, "restoration-v1")
+	old := mysekaiPolicyETag(path, "", []string{"upload_time", "updatedResources"}, stamp, "")
 	app := fiber.New()
 	app.Get(path, func(c fiber.Ctx) error {
-		if CheckUnfilteredMysekaiNotModified(c, c.Query("key"), stamp) {
+		if CheckUnfilteredMysekaiNotModified(c, c.Query("key"), stamp, currentHarvest) {
 			return c.SendStatus(http.StatusNotModified)
 		}
 		return c.SendStatus(http.StatusOK)
@@ -198,8 +200,9 @@ func TestUnfilteredMysekaiConditionalReadRefreshesAllowlistedBody(t *testing.T) 
 	}{
 		{"no validator", "", "", current, http.StatusOK},
 		{"old allowlist", "", old, current, http.StatusOK},
+		{"old restoration", "", oldHarvest, current, http.StatusOK},
 		{"same projection", "", current, current, http.StatusNotModified},
-		{"other projection", "upload_time", current, mysekaiPolicyETag(path, "upload_time", nil, stamp), http.StatusOK},
+		{"other projection", "upload_time", current, mysekaiPolicyETag(path, "upload_time", nil, stamp, currentHarvest), http.StatusOK},
 		{"dotted key", "updatedResources.items", current, "", http.StatusOK},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -238,7 +241,7 @@ func TestMysekaiConditionalReadRejectsExcludedProjection(t *testing.T) {
 				return c.SendStatus(http.StatusOK)
 			})
 			req := httptest.NewRequest(http.MethodGet, path+"?known_upload_time=1752600000", nil)
-			req.Header.Set(fiber.HeaderIfNoneMatch, mysekaiPolicyETag(path, tc.request, tc.allowed, tc.stamp))
+			req.Header.Set(fiber.HeaderIfNoneMatch, mysekaiPolicyETag(path, tc.request, tc.allowed, tc.stamp, ""))
 			resp, err := app.Test(req)
 			if err != nil {
 				t.Fatal(err)

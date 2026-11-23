@@ -80,11 +80,12 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		var allowedKeys []string
 		var notModified bool
+		harvestFingerprint := apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))
 		if dataType == harukiUtils.UploadDataTypeSuite {
 			allowedKeys = apiHelper.GetAllowedKeys()
 			notModified = stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, allowedKeys, stamp)
 		} else {
-			notModified = stampConfirmed && data.CheckUnfilteredMysekaiNotModified(c, requestKey, stamp)
+			notModified = stampConfirmed && data.CheckUnfilteredMysekaiNotModified(c, requestKey, stamp, harvestFingerprint)
 		}
 		if notModified {
 			return c.SendStatus(fiber.StatusNotModified)
@@ -97,7 +98,7 @@ func handleOAuth2GetGameData(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		defer release()
 		var cacheKey string
 		if stamp > 0 && requestKey == "" {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("oauth2", string(server), string(dataType), gameUserID, requestKey, stamp, harvestFingerprint) + data.PublishedGameDataCacheVersion
 			if dataType == harukiUtils.UploadDataTypeSuite {
 				cacheKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			} else {

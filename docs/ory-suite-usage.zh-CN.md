@@ -375,6 +375,12 @@ Kratos 的会话校验要求达到身份已配置的最高认证等级。已启�
 - 后端将其放入 `Locals("authProxySessionID")`
 - 管理员重认证逻辑根据这个值生成和校验 marker
 
+### 9.3 Public API 游戏数据读取
+
+- `GET /api/public/:server/mysekai/:user_id` 与 `GET /public/:server/mysekai/:user_id` 行为一致。绑定必须已验证，账号必须开启 Mysekai 公开访问。
+- 不带 `key` 时返回该账号已保存的 Mysekai 游戏数据。`key` 接受逗号分隔的顶层字段名，只返回请求中存在的字段，保留 JSON 对象和嵌套结构。请求的字段全部不存在时返回 `404`。
+- 客户端用 `If-None-Match` 回传同一路径和字段选择的 `ETag`，并附带 `known_upload_time`。指定 `key` 时需包含 `upload_time` 才可能收到 `304`。
+
 ## 10. Hydra 在项目里的具体作用
 
 ### 10.1 OAuth2 浏览器兼容入口
