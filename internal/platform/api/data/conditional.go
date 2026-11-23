@@ -108,7 +108,7 @@ func CheckNotModified(
 }
 
 // CheckUnfilteredMysekaiNotModified uses a validator for the full field policy,
-// so clients refresh any response cached under the former OAuth2 allowlist.
+// so clients refresh any response cached under the former allowlist.
 func CheckUnfilteredMysekaiNotModified(c fiber.Ctx, requestKey string, stamp int64) bool {
 	if stamp <= 0 {
 		return false

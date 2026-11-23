@@ -317,7 +317,7 @@ subscription:
   request_timeout_seconds: 5
 
 others:
-  # Shared field allowlist for public, owned-account and OAuth2 Suite reads.
+  # Shared field allowlist for owned-account reads and public or OAuth2 Suite reads.
   #
   # `public_api_allowed_keys` is the former name and is still accepted.
   allowed_keys:

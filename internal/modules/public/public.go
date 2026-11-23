@@ -82,19 +82,15 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 			harukiLogger.Warnf("Failed to resolve public game data stamp (server=%s,user_id=%d): %v", server, userID, stampErr)
 			stamp = -1 // unresolved: bypass the cache, never 304
 		}
-		// Resolve the allowlist once so conditional responses and cache keys
-		// both reflect the policy used to shape the body.
 		var allowedKeys []string
+		var notModified bool
 		if dataType == harukiUtils.UploadDataTypeMysekai {
-			snapshot, err := apiHelper.CurrentRuntimeConfig(ctx)
-			if err != nil {
-				return harukiAPIHelper.Responses.UpdatedDataResponse[string](c, fiber.StatusServiceUnavailable, "game-data field policy unavailable", nil)
-			}
-			allowedKeys = snapshot.AllowedKeys
+			notModified = stampConfirmed && data.CheckUnfilteredMysekaiNotModified(c, requestKey, stamp)
 		} else {
 			allowedKeys = apiHelper.GetAllowedKeys()
+			notModified = stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, allowedKeys, stamp)
 		}
-		if stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, allowedKeys, stamp) {
+		if notModified {
 			return c.SendStatus(fiber.StatusNotModified)
 		}
 		release, admitted := data.ReservePublishedGameDataRead()
@@ -108,13 +104,13 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// selections have unbounded cardinality even if rendered bodies match.
 		if stamp > 0 && requestKey == "" {
 			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
-			// Published bodies are shaped by the public key allowlist, so entries
-			// are keyed by it too — an allowlist edit moves readers to fresh
-			// entries even when the stamp is unchanged. The write side appends
-			// its own digest inside the flight, from the very slice that shaped
-			// the body, so key and body stay atomic under concurrent edits.
-			readKey := cacheKey + ":a=" + data.PublicAllowlistDigest(allowedKeys)
-			if cached, found, err := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, readKey); err == nil && found {
+			if dataType == harukiUtils.UploadDataTypeMysekai {
+				// Keep whole documents separate from old allowlisted responses.
+				cacheKey += ":mysekai-full"
+			} else {
+				cacheKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
+			}
+			if cached, found, err := apiHelper.DBManager.Redis.GetRawCacheBytes(ctx, cacheKey); err == nil && found {
 				if sErr := data.ServeGameDataBody(c, cached); sErr == nil {
 					return nil
 				} else {
@@ -175,16 +171,16 @@ func loadPublicGameData(
 		// others. Still bounded so it cannot run away.
 		fetchCtx, cancel := context.WithTimeout(context.Background(), publicReadTimeout)
 		defer cancel()
-		allowedKeySet := make(map[string]struct{}, len(allowedKeys))
-		for _, k := range allowedKeys {
-			allowedKeySet[k] = struct{}{}
-		}
 		var resp any
 		var loadErr error
 		if dataType == harukiUtils.UploadDataTypeSuite {
+			allowedKeySet := make(map[string]struct{}, len(allowedKeys))
+			for _, k := range allowedKeys {
+				allowedKeySet[k] = struct{}{}
+			}
 			resp, loadErr = data.HandleSuiteRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeySet, allowedKeys)
 		} else {
-			resp, loadErr = data.HandleMysekaiRequest(fetchCtx, apiHelper, userID, server, requestKey, allowedKeys)
+			resp, loadErr = data.HandleUnfilteredMysekaiRequest(fetchCtx, apiHelper, userID, server, requestKey)
 		}
 		if loadErr != nil {
 			return nil, loadErr
@@ -199,8 +195,6 @@ func loadPublicGameData(
 			body = string(encoded)
 		}
 		if cacheKey != "" {
-			writeKey := cacheKey
-			writeKey += ":a=" + data.PublicAllowlistDigest(allowedKeys)
 			// Detach the cache write from the read deadline so a near-deadline
 			// but successful read still populates the cache for subsequent
 			// requests. The write is fenced (see ConfirmGameDataCacheWrite) so
@@ -209,7 +203,7 @@ func loadPublicGameData(
 			cacheCtx, cancelCache := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancelCache()
 			if data.ConfirmGameDataCacheWrite(cacheCtx, apiHelper, server, dataType, userID, stamp) {
-				if cErr := apiHelper.DBManager.Redis.SetGameDataBodyCache(cacheCtx, string(server), string(dataType), userID, writeKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
+				if cErr := apiHelper.DBManager.Redis.SetGameDataBodyCache(cacheCtx, string(server), string(dataType), userID, cacheKey, body, data.GameDataCacheWriteTTL(requestKey, stamp)); cErr != nil {
 					harukiLogger.Warnf("Failed to write public game data cache: %v", cErr)
 				}
 			}
