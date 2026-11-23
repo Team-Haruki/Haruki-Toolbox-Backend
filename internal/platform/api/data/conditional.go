@@ -61,7 +61,7 @@ func CheckNotModified(
 		if _, err := mysekaiAllowedProjection(requestKey, publicAllowedKeys); err != nil || stamp <= 0 {
 			return false
 		}
-		if !matchesMysekaiETag(c, requestKey, publicAllowedKeys, stamp) {
+		if !matchesMysekaiETag(c, mysekaiPolicyETag(c.Path(), requestKey, publicAllowedKeys, stamp, "")) {
 			return false
 		}
 	}
@@ -107,21 +107,21 @@ func CheckNotModified(
 	return true
 }
 
-// CheckUnfilteredMysekaiNotModified uses a validator for the full field policy,
-// so clients refresh any response cached under the former allowlist.
-func CheckUnfilteredMysekaiNotModified(c fiber.Ctx, requestKey string, stamp int64) bool {
+// CheckUnfilteredMysekaiNotModified validates the full field policy and the
+// restoration fingerprint used to render the Mysekai response.
+func CheckUnfilteredMysekaiNotModified(c fiber.Ctx, requestKey string, stamp int64, harvestFingerprint string) bool {
 	if stamp <= 0 {
 		return false
 	}
 	if _, invalid := InvalidMysekaiRequestKey(requestKey); invalid {
 		return false
 	}
-	return matchesMysekaiETag(c, requestKey, nil, stamp) &&
+	etag := mysekaiPolicyETag(c.Path(), requestKey, nil, stamp, harvestFingerprint)
+	return matchesMysekaiETag(c, etag) &&
 		CheckNotModified(c, harukiUtils.UploadDataTypeMysekai, requestKey, false, nil, stamp)
 }
 
-func matchesMysekaiETag(c fiber.Ctx, requestKey string, allowedKeys []string, stamp int64) bool {
-	etag := mysekaiPolicyETag(c.Path(), requestKey, allowedKeys, stamp)
+func matchesMysekaiETag(c fiber.Ctx, etag string) bool {
 	c.Set(fiber.HeaderETag, etag)
 	return matchesPolicyETag(c.Request().Header.PeekAll(fiber.HeaderIfNoneMatch), etag)
 }
@@ -154,8 +154,12 @@ func matchesPolicyETag(values [][]byte, current string) bool {
 	return false
 }
 
-func mysekaiPolicyETag(path, requestKey string, allowedKeys []string, stamp int64) string {
-	return fmt.Sprintf(`"%x"`, sha256.Sum256(fmt.Appendf(nil, "%d:%q:%q:%q", stamp, path, requestKey, allowedKeys)))
+func mysekaiPolicyETag(path, requestKey string, allowedKeys []string, stamp int64, harvestFingerprint string) string {
+	representation := fmt.Appendf(nil, "%d:%q:%q:%q", stamp, path, requestKey, allowedKeys)
+	if harvestFingerprint != "" {
+		representation = fmt.Appendf(representation, ":%q", harvestFingerprint)
+	}
+	return fmt.Sprintf(`"%x"`, sha256.Sum256(representation))
 }
 
 // notModifiedDecision holds the pure 304 decision: the document must exist with

@@ -84,8 +84,9 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		}
 		var allowedKeys []string
 		var notModified bool
+		harvestFingerprint := apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))
 		if dataType == harukiUtils.UploadDataTypeMysekai {
-			notModified = stampConfirmed && data.CheckUnfilteredMysekaiNotModified(c, requestKey, stamp)
+			notModified = stampConfirmed && data.CheckUnfilteredMysekaiNotModified(c, requestKey, stamp, harvestFingerprint)
 		} else {
 			allowedKeys = apiHelper.GetAllowedKeys()
 			notModified = stampConfirmed && data.CheckNotModified(c, dataType, requestKey, true, allowedKeys, stamp)
@@ -103,7 +104,7 @@ func handlePublicDataRequest(apiHelper *harukiAPIHelper.HarukiToolboxRouterHelpe
 		// Only the default projection gets a cache entry. Arbitrary field
 		// selections have unbounded cardinality even if rendered bodies match.
 		if stamp > 0 && requestKey == "" {
-			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, apiHelper.DBManager.GameData.HarvestSchemaFingerprint(string(server))) + data.PublishedGameDataCacheVersion
+			cacheKey = harukiRedis.BuildVersionedGameDataCacheKey("public", string(server), string(dataType), userID, requestKey, stamp, harvestFingerprint) + data.PublishedGameDataCacheVersion
 			if dataType == harukiUtils.UploadDataTypeMysekai {
 				// Keep whole documents separate from old allowlisted responses.
 				cacheKey += ":mysekai-full"
